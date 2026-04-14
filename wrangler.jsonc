@@ -18,7 +18,7 @@
   "d1_databases": [
     {
       "binding": "D1",
-      "database_id": "DATABASE_ID",
+      "database_id": "c5e6c9e1-6020-4772-a568-714a57e0bf0f",
       "database_name": "milesvault",
       "remote": true,
     },
