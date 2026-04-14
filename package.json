@@ -31,6 +31,7 @@
     "@payloadcms/richtext-lexical": "3.82.1",
     "@payloadcms/storage-r2": "3.82.1",
     "@payloadcms/ui": "3.82.1",
+    "beancount": "^0.2.5",
     "cross-env": "^7.0.3",
     "dotenv": "16.4.7",
     "graphql": "^16.8.1",
