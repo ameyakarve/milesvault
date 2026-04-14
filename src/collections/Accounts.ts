@@ -5,14 +5,61 @@ export const Accounts: CollectionConfig = {
   admin: {
     group: 'Directory',
     useAsTitle: 'path',
-    defaultColumns: ['path', 'type', 'openDate', 'closeDate'],
+    defaultColumns: ['path', 'type', 'user', 'openDate', 'closeDate'],
+  },
+  // TODO: duplicate (user, path) surfaces as HTTP 500 because the DB unique
+  // violation isn't translated to a ValidationError. Add a beforeValidate
+  // hook that pre-checks and throws a friendly error.
+  indexes: [{ fields: ['user', 'path'], unique: true }],
+  access: {
+    read: ({ req: { user } }) => {
+      if (!user) return false
+      return { user: { equals: user.id } }
+    },
+    create: ({ req: { user } }) => !!user,
+    update: ({ req: { user } }) => {
+      if (!user) return false
+      return { user: { equals: user.id } }
+    },
+    delete: ({ req: { user } }) => {
+      if (!user) return false
+      return { user: { equals: user.id } }
+    },
+  },
+  hooks: {
+    beforeValidate: [
+      ({ data, req, operation, originalDoc }) => {
+        if (!data) return data
+        if (operation === 'create' && req.user) {
+          data.user = req.user.id
+        }
+        if (operation === 'update' && originalDoc) {
+          data.user = originalDoc.user
+        }
+        return data
+      },
+    ],
   },
   fields: [
+    {
+      name: 'user',
+      type: 'relationship',
+      relationTo: 'users',
+      required: true,
+      index: true,
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+      },
+      access: {
+        create: () => false,
+        update: () => false,
+      },
+    },
     {
       name: 'path',
       type: 'text',
       required: true,
-      unique: true,
       index: true,
     },
     {

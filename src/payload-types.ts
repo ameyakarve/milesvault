@@ -217,6 +217,7 @@ export interface Commodity {
  */
 export interface Account {
   id: number;
+  user: number | User;
   path: string;
   type: 'Assets' | 'Liabilities' | 'Income' | 'Expenses' | 'Equity';
   openDate: string;
@@ -695,6 +696,7 @@ export interface CommoditiesSelect<T extends boolean = true> {
  * via the `definition` "accounts_select".
  */
 export interface AccountsSelect<T extends boolean = true> {
+  user?: T;
   path?: T;
   type?: T;
   openDate?: T;
