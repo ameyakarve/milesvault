@@ -69,6 +69,9 @@ export interface Config {
   collections: {
     users: User;
     media: Media;
+    commodities: Commodity;
+    accounts: Account;
+    txns: Txn;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -78,6 +81,9 @@ export interface Config {
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    commodities: CommoditiesSelect<false> | CommoditiesSelect<true>;
+    accounts: AccountsSelect<false> | AccountsSelect<true>;
+    txns: TxnsSelect<false> | TxnsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -161,6 +167,91 @@ export interface Media {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "commodities".
+ */
+export interface Commodity {
+  id: number;
+  code: string;
+  name: string;
+  kind: 'currency' | 'points' | 'miles' | 'pass';
+  issuer?: string | null;
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "accounts".
+ */
+export interface Account {
+  id: number;
+  path: string;
+  type: 'Assets' | 'Liabilities' | 'Income' | 'Expenses' | 'Equity';
+  defaultCommodity?: (number | null) | Commodity;
+  openDate: string;
+  closeDate?: string | null;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "txns".
+ */
+export interface Txn {
+  id: number;
+  date: string;
+  type:
+    | 'purchase'
+    | 'refund'
+    | 'bill_payment'
+    | 'cash_advance'
+    | 'card_fee'
+    | 'fee_waiver'
+    | 'reward_earn'
+    | 'pass_earn'
+    | 'reward_clawback'
+    | 'reward_expiry'
+    | 'transfer'
+    | 'redemption'
+    | 'emi_conversion'
+    | 'emi_installment'
+    | 'opening_balance';
+  payee?: string | null;
+  narration?: string | null;
+  postings: {
+    account: number | Account;
+    amount: number;
+    commodity: number | Commodity;
+    priceTotalValue?: number | null;
+    priceCommodity?: (number | null) | Commodity;
+    metadata?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    id?: string | null;
+  }[];
+  links?: string[] | null;
+  source?: ('chat' | 'email' | 'manual' | 'import') | null;
+  externalId?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -190,6 +281,18 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'media';
         value: number | Media;
+      } | null)
+    | ({
+        relationTo: 'commodities';
+        value: number | Commodity;
+      } | null)
+    | ({
+        relationTo: 'accounts';
+        value: number | Account;
+      } | null)
+    | ({
+        relationTo: 'txns';
+        value: number | Txn;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -270,6 +373,59 @@ export interface MediaSelect<T extends boolean = true> {
   filesize?: T;
   width?: T;
   height?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "commodities_select".
+ */
+export interface CommoditiesSelect<T extends boolean = true> {
+  code?: T;
+  name?: T;
+  kind?: T;
+  issuer?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "accounts_select".
+ */
+export interface AccountsSelect<T extends boolean = true> {
+  path?: T;
+  type?: T;
+  defaultCommodity?: T;
+  openDate?: T;
+  closeDate?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "txns_select".
+ */
+export interface TxnsSelect<T extends boolean = true> {
+  date?: T;
+  type?: T;
+  payee?: T;
+  narration?: T;
+  postings?:
+    | T
+    | {
+        account?: T;
+        amount?: T;
+        commodity?: T;
+        priceTotalValue?: T;
+        priceCommodity?: T;
+        metadata?: T;
+        id?: T;
+      };
+  links?: T;
+  source?: T;
+  externalId?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
