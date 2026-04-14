@@ -3,8 +3,9 @@ import type { CollectionConfig } from 'payload'
 export const Txns: CollectionConfig = {
   slug: 'txns',
   admin: {
+    group: 'Ledger',
     useAsTitle: 'narration',
-    defaultColumns: ['date', 'type', 'payee', 'narration'],
+    defaultColumns: ['date', 'flag', 'payee', 'narration'],
   },
   fields: [
     {
@@ -14,27 +15,14 @@ export const Txns: CollectionConfig = {
       index: true,
     },
     {
-      name: 'type',
-      type: 'select',
+      name: 'flag',
+      type: 'text',
       required: true,
-      index: true,
-      options: [
-        { label: 'Purchase', value: 'purchase' },
-        { label: 'Refund', value: 'refund' },
-        { label: 'Bill Payment', value: 'bill_payment' },
-        { label: 'Cash Advance', value: 'cash_advance' },
-        { label: 'Card Fee', value: 'card_fee' },
-        { label: 'Fee Waiver', value: 'fee_waiver' },
-        { label: 'Reward Earn', value: 'reward_earn' },
-        { label: 'Pass Earn', value: 'pass_earn' },
-        { label: 'Reward Clawback', value: 'reward_clawback' },
-        { label: 'Reward Expiry', value: 'reward_expiry' },
-        { label: 'Transfer', value: 'transfer' },
-        { label: 'Redemption', value: 'redemption' },
-        { label: 'EMI Conversion', value: 'emi_conversion' },
-        { label: 'EMI Installment', value: 'emi_installment' },
-        { label: 'Opening Balance', value: 'opening_balance' },
-      ],
+      defaultValue: '*',
+      maxLength: 1,
+      admin: {
+        description: 'Single char. * cleared, ! pending, P pad-generated, or custom',
+      },
     },
     {
       name: 'payee',
@@ -45,11 +33,34 @@ export const Txns: CollectionConfig = {
       type: 'text',
     },
     {
+      name: 'tags',
+      type: 'text',
+      hasMany: true,
+    },
+    {
+      name: 'links',
+      type: 'text',
+      hasMany: true,
+      index: true,
+    },
+    {
+      name: 'metadata',
+      type: 'json',
+    },
+    {
       name: 'postings',
       type: 'array',
       required: true,
-      minRows: 2,
+      minRows: 1,
       fields: [
+        {
+          name: 'flag',
+          type: 'text',
+          maxLength: 1,
+          admin: {
+            description: 'Optional per-posting flag',
+          },
+        },
         {
           name: 'account',
           type: 'relationship',
@@ -57,52 +68,61 @@ export const Txns: CollectionConfig = {
           required: true,
         },
         {
-          name: 'amount',
-          type: 'number',
-          required: true,
-        },
-        {
-          name: 'commodity',
-          type: 'relationship',
-          relationTo: 'commodities',
-          required: true,
-        },
-        {
-          name: 'priceTotalValue',
+          name: 'amountNumber',
           type: 'number',
         },
         {
-          name: 'priceCommodity',
+          name: 'amountCommodity',
           type: 'relationship',
           relationTo: 'commodities',
+        },
+        {
+          name: 'cost',
+          type: 'group',
+          fields: [
+            {
+              name: 'kind',
+              type: 'select',
+              options: [
+                { label: 'Per unit {}', value: 'per_unit' },
+                { label: 'Total {{}}', value: 'total' },
+              ],
+            },
+            { name: 'number', type: 'number' },
+            {
+              name: 'commodity',
+              type: 'relationship',
+              relationTo: 'commodities',
+            },
+            { name: 'date', type: 'date' },
+            { name: 'label', type: 'text' },
+          ],
+        },
+        {
+          name: 'price',
+          type: 'group',
+          fields: [
+            {
+              name: 'kind',
+              type: 'select',
+              options: [
+                { label: 'Per unit @', value: 'per_unit' },
+                { label: 'Total @@', value: 'total' },
+              ],
+            },
+            { name: 'number', type: 'number' },
+            {
+              name: 'commodity',
+              type: 'relationship',
+              relationTo: 'commodities',
+            },
+          ],
         },
         {
           name: 'metadata',
           type: 'json',
         },
       ],
-    },
-    {
-      name: 'links',
-      type: 'text',
-      hasMany: true,
-    },
-    {
-      name: 'source',
-      type: 'select',
-      defaultValue: 'manual',
-      options: [
-        { label: 'Chat', value: 'chat' },
-        { label: 'Email', value: 'email' },
-        { label: 'Manual', value: 'manual' },
-        { label: 'Import', value: 'import' },
-      ],
-    },
-    {
-      name: 'externalId',
-      type: 'text',
-      unique: true,
-      index: true,
     },
   ],
 }

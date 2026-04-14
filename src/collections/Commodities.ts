@@ -3,8 +3,9 @@ import type { CollectionConfig } from 'payload'
 export const Commodities: CollectionConfig = {
   slug: 'commodities',
   admin: {
+    group: 'Directory',
     useAsTitle: 'code',
-    defaultColumns: ['code', 'name', 'kind', 'issuer'],
+    defaultColumns: ['code', 'openDate'],
   },
   fields: [
     {
@@ -15,28 +16,13 @@ export const Commodities: CollectionConfig = {
       index: true,
     },
     {
-      name: 'name',
-      type: 'text',
+      name: 'openDate',
+      type: 'date',
       required: true,
     },
     {
-      name: 'kind',
-      type: 'select',
-      required: true,
-      options: [
-        { label: 'Currency', value: 'currency' },
-        { label: 'Points', value: 'points' },
-        { label: 'Miles', value: 'miles' },
-        { label: 'Pass', value: 'pass' },
-      ],
-    },
-    {
-      name: 'issuer',
-      type: 'text',
-    },
-    {
-      name: 'notes',
-      type: 'textarea',
+      name: 'metadata',
+      type: 'json',
     },
   ],
 }

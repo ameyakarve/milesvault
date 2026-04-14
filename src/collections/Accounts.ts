@@ -3,8 +3,9 @@ import type { CollectionConfig } from 'payload'
 export const Accounts: CollectionConfig = {
   slug: 'accounts',
   admin: {
+    group: 'Directory',
     useAsTitle: 'path',
-    defaultColumns: ['path', 'type', 'defaultCommodity', 'openDate'],
+    defaultColumns: ['path', 'type', 'openDate', 'closeDate'],
   },
   fields: [
     {
@@ -27,11 +28,6 @@ export const Accounts: CollectionConfig = {
       ],
     },
     {
-      name: 'defaultCommodity',
-      type: 'relationship',
-      relationTo: 'commodities',
-    },
-    {
       name: 'openDate',
       type: 'date',
       required: true,
@@ -39,6 +35,26 @@ export const Accounts: CollectionConfig = {
     {
       name: 'closeDate',
       type: 'date',
+    },
+    {
+      name: 'constraintCommodities',
+      type: 'relationship',
+      relationTo: 'commodities',
+      hasMany: true,
+    },
+    {
+      name: 'bookingMethod',
+      type: 'select',
+      defaultValue: 'STRICT',
+      options: [
+        { label: 'STRICT', value: 'STRICT' },
+        { label: 'STRICT_WITH_SIZE', value: 'STRICT_WITH_SIZE' },
+        { label: 'NONE', value: 'NONE' },
+        { label: 'FIFO', value: 'FIFO' },
+        { label: 'LIFO', value: 'LIFO' },
+        { label: 'AVERAGE', value: 'AVERAGE' },
+        { label: 'HISTORICAL', value: 'HISTORICAL' },
+      ],
     },
     {
       name: 'metadata',

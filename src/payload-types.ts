@@ -72,6 +72,17 @@ export interface Config {
     commodities: Commodity;
     accounts: Account;
     txns: Txn;
+    prices: Price;
+    balances: Balance;
+    pads: Pad;
+    notes: Note;
+    documents: Document;
+    events: Event;
+    queries: Query;
+    customs: Custom;
+    options: Option;
+    plugins: Plugin;
+    includes: Include;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -84,6 +95,17 @@ export interface Config {
     commodities: CommoditiesSelect<false> | CommoditiesSelect<true>;
     accounts: AccountsSelect<false> | AccountsSelect<true>;
     txns: TxnsSelect<false> | TxnsSelect<true>;
+    prices: PricesSelect<false> | PricesSelect<true>;
+    balances: BalancesSelect<false> | BalancesSelect<true>;
+    pads: PadsSelect<false> | PadsSelect<true>;
+    notes: NotesSelect<false> | NotesSelect<true>;
+    documents: DocumentsSelect<false> | DocumentsSelect<true>;
+    events: EventsSelect<false> | EventsSelect<true>;
+    queries: QueriesSelect<false> | QueriesSelect<true>;
+    customs: CustomsSelect<false> | CustomsSelect<true>;
+    options: OptionsSelect<false> | OptionsSelect<true>;
+    plugins: PluginsSelect<false> | PluginsSelect<true>;
+    includes: IncludesSelect<false> | IncludesSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -172,10 +194,16 @@ export interface Media {
 export interface Commodity {
   id: number;
   code: string;
-  name: string;
-  kind: 'currency' | 'points' | 'miles' | 'pass';
-  issuer?: string | null;
-  notes?: string | null;
+  openDate: string;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -187,9 +215,10 @@ export interface Account {
   id: number;
   path: string;
   type: 'Assets' | 'Liabilities' | 'Income' | 'Expenses' | 'Equity';
-  defaultCommodity?: (number | null) | Commodity;
   openDate: string;
   closeDate?: string | null;
+  constraintCommodities?: (number | Commodity)[] | null;
+  bookingMethod?: ('STRICT' | 'STRICT_WITH_SIZE' | 'NONE' | 'FIFO' | 'LIFO' | 'AVERAGE' | 'HISTORICAL') | null;
   metadata?:
     | {
         [k: string]: unknown;
@@ -209,30 +238,43 @@ export interface Account {
 export interface Txn {
   id: number;
   date: string;
-  type:
-    | 'purchase'
-    | 'refund'
-    | 'bill_payment'
-    | 'cash_advance'
-    | 'card_fee'
-    | 'fee_waiver'
-    | 'reward_earn'
-    | 'pass_earn'
-    | 'reward_clawback'
-    | 'reward_expiry'
-    | 'transfer'
-    | 'redemption'
-    | 'emi_conversion'
-    | 'emi_installment'
-    | 'opening_balance';
+  /**
+   * Single char. * cleared, ! pending, P pad-generated, or custom
+   */
+  flag: string;
   payee?: string | null;
   narration?: string | null;
+  tags?: string[] | null;
+  links?: string[] | null;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   postings: {
+    /**
+     * Optional per-posting flag
+     */
+    flag?: string | null;
     account: number | Account;
-    amount: number;
-    commodity: number | Commodity;
-    priceTotalValue?: number | null;
-    priceCommodity?: (number | null) | Commodity;
+    amountNumber?: number | null;
+    amountCommodity?: (number | null) | Commodity;
+    cost?: {
+      kind?: ('per_unit' | 'total') | null;
+      number?: number | null;
+      commodity?: (number | null) | Commodity;
+      date?: string | null;
+      label?: string | null;
+    };
+    price?: {
+      kind?: ('per_unit' | 'total') | null;
+      number?: number | null;
+      commodity?: (number | null) | Commodity;
+    };
     metadata?:
       | {
           [k: string]: unknown;
@@ -244,9 +286,223 @@ export interface Txn {
       | null;
     id?: string | null;
   }[];
-  links?: string[] | null;
-  source?: ('chat' | 'email' | 'manual' | 'import') | null;
-  externalId?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "prices".
+ */
+export interface Price {
+  id: number;
+  date: string;
+  base: number | Commodity;
+  amountNumber: number;
+  amountCommodity: number | Commodity;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "balances".
+ */
+export interface Balance {
+  id: number;
+  date: string;
+  account: number | Account;
+  amountNumber: number;
+  amountCommodity: number | Commodity;
+  tolerance?: number | null;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pads".
+ */
+export interface Pad {
+  id: number;
+  date: string;
+  account: number | Account;
+  accountPad: number | Account;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "notes".
+ */
+export interface Note {
+  id: number;
+  date: string;
+  account: number | Account;
+  description: string;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "documents".
+ */
+export interface Document {
+  id: number;
+  date: string;
+  account: number | Account;
+  path: string;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "events".
+ */
+export interface Event {
+  id: number;
+  date: string;
+  name: string;
+  value: string;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "queries".
+ */
+export interface Query {
+  id: number;
+  date: string;
+  name: string;
+  /**
+   * Beancount Query Language (BQL)
+   */
+  sql: string;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customs".
+ */
+export interface Custom {
+  id: number;
+  date: string;
+  typeName: string;
+  /**
+   * Array of typed values (string/date/bool/amount/number/account)
+   */
+  values?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "options".
+ */
+export interface Option {
+  id: number;
+  name: string;
+  value: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "plugins".
+ */
+export interface Plugin {
+  id: number;
+  moduleName: string;
+  configString?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "includes".
+ */
+export interface Include {
+  id: number;
+  filename: string;
   updatedAt: string;
   createdAt: string;
 }
@@ -293,6 +549,50 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'txns';
         value: number | Txn;
+      } | null)
+    | ({
+        relationTo: 'prices';
+        value: number | Price;
+      } | null)
+    | ({
+        relationTo: 'balances';
+        value: number | Balance;
+      } | null)
+    | ({
+        relationTo: 'pads';
+        value: number | Pad;
+      } | null)
+    | ({
+        relationTo: 'notes';
+        value: number | Note;
+      } | null)
+    | ({
+        relationTo: 'documents';
+        value: number | Document;
+      } | null)
+    | ({
+        relationTo: 'events';
+        value: number | Event;
+      } | null)
+    | ({
+        relationTo: 'queries';
+        value: number | Query;
+      } | null)
+    | ({
+        relationTo: 'customs';
+        value: number | Custom;
+      } | null)
+    | ({
+        relationTo: 'options';
+        value: number | Option;
+      } | null)
+    | ({
+        relationTo: 'plugins';
+        value: number | Plugin;
+      } | null)
+    | ({
+        relationTo: 'includes';
+        value: number | Include;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -380,10 +680,8 @@ export interface MediaSelect<T extends boolean = true> {
  */
 export interface CommoditiesSelect<T extends boolean = true> {
   code?: T;
-  name?: T;
-  kind?: T;
-  issuer?: T;
-  notes?: T;
+  openDate?: T;
+  metadata?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -394,9 +692,10 @@ export interface CommoditiesSelect<T extends boolean = true> {
 export interface AccountsSelect<T extends boolean = true> {
   path?: T;
   type?: T;
-  defaultCommodity?: T;
   openDate?: T;
   closeDate?: T;
+  constraintCommodities?: T;
+  bookingMethod?: T;
   metadata?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -407,23 +706,166 @@ export interface AccountsSelect<T extends boolean = true> {
  */
 export interface TxnsSelect<T extends boolean = true> {
   date?: T;
-  type?: T;
+  flag?: T;
   payee?: T;
   narration?: T;
+  tags?: T;
+  links?: T;
+  metadata?: T;
   postings?:
     | T
     | {
+        flag?: T;
         account?: T;
-        amount?: T;
-        commodity?: T;
-        priceTotalValue?: T;
-        priceCommodity?: T;
+        amountNumber?: T;
+        amountCommodity?: T;
+        cost?:
+          | T
+          | {
+              kind?: T;
+              number?: T;
+              commodity?: T;
+              date?: T;
+              label?: T;
+            };
+        price?:
+          | T
+          | {
+              kind?: T;
+              number?: T;
+              commodity?: T;
+            };
         metadata?: T;
         id?: T;
       };
-  links?: T;
-  source?: T;
-  externalId?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "prices_select".
+ */
+export interface PricesSelect<T extends boolean = true> {
+  date?: T;
+  base?: T;
+  amountNumber?: T;
+  amountCommodity?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "balances_select".
+ */
+export interface BalancesSelect<T extends boolean = true> {
+  date?: T;
+  account?: T;
+  amountNumber?: T;
+  amountCommodity?: T;
+  tolerance?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "pads_select".
+ */
+export interface PadsSelect<T extends boolean = true> {
+  date?: T;
+  account?: T;
+  accountPad?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "notes_select".
+ */
+export interface NotesSelect<T extends boolean = true> {
+  date?: T;
+  account?: T;
+  description?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "documents_select".
+ */
+export interface DocumentsSelect<T extends boolean = true> {
+  date?: T;
+  account?: T;
+  path?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "events_select".
+ */
+export interface EventsSelect<T extends boolean = true> {
+  date?: T;
+  name?: T;
+  value?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "queries_select".
+ */
+export interface QueriesSelect<T extends boolean = true> {
+  date?: T;
+  name?: T;
+  sql?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customs_select".
+ */
+export interface CustomsSelect<T extends boolean = true> {
+  date?: T;
+  typeName?: T;
+  values?: T;
+  metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "options_select".
+ */
+export interface OptionsSelect<T extends boolean = true> {
+  name?: T;
+  value?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "plugins_select".
+ */
+export interface PluginsSelect<T extends boolean = true> {
+  moduleName?: T;
+  configString?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "includes_select".
+ */
+export interface IncludesSelect<T extends boolean = true> {
+  filename?: T;
   updatedAt?: T;
   createdAt?: T;
 }

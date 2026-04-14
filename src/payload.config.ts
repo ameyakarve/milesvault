@@ -13,6 +13,17 @@ import { Media } from './collections/Media'
 import { Commodities } from './collections/Commodities'
 import { Accounts } from './collections/Accounts'
 import { Txns } from './collections/Txns'
+import { Prices } from './collections/Prices'
+import { Balances } from './collections/Balances'
+import { Pads } from './collections/Pads'
+import { Notes } from './collections/Notes'
+import { Documents } from './collections/Documents'
+import { Events } from './collections/Events'
+import { Queries } from './collections/Queries'
+import { Customs } from './collections/Customs'
+import { Options } from './collections/Options'
+import { Plugins } from './collections/Plugins'
+import { Includes } from './collections/Includes'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -53,7 +64,24 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media, Commodities, Accounts, Txns],
+  collections: [
+    Users,
+    Media,
+    Commodities,
+    Accounts,
+    Txns,
+    Prices,
+    Balances,
+    Pads,
+    Notes,
+    Documents,
+    Events,
+    Queries,
+    Customs,
+    Options,
+    Plugins,
+    Includes,
+  ],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
