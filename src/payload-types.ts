@@ -193,6 +193,10 @@ export interface Media {
  */
 export interface Commodity {
   id: number;
+  /**
+   * Owner. Null = global (seed-only).
+   */
+  user?: (number | null) | User;
   code: string;
   openDate: string;
   metadata?:
@@ -679,6 +683,7 @@ export interface MediaSelect<T extends boolean = true> {
  * via the `definition` "commodities_select".
  */
 export interface CommoditiesSelect<T extends boolean = true> {
+  user?: T;
   code?: T;
   openDate?: T;
   metadata?: T;
