@@ -7,6 +7,9 @@ export const Commodities: CollectionConfig = {
     useAsTitle: 'code',
     defaultColumns: ['code', 'user', 'openDate'],
   },
+  // TODO: duplicate (user, code) surfaces as HTTP 500 because the DB unique
+  // violation isn't translated to a ValidationError. Add a beforeValidate
+  // hook that pre-checks and throws a friendly error.
   indexes: [{ fields: ['user', 'code'], unique: true }],
   access: {
     read: ({ req: { user } }) => {
