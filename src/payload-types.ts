@@ -242,6 +242,7 @@ export interface Account {
  */
 export interface Txn {
   id: number;
+  user: number | User;
   date: string;
   /**
    * Single char. * cleared, ! pending, P pad-generated, or custom
@@ -712,6 +713,7 @@ export interface AccountsSelect<T extends boolean = true> {
  * via the `definition` "txns_select".
  */
 export interface TxnsSelect<T extends boolean = true> {
+  user?: T;
   date?: T;
   flag?: T;
   payee?: T;
