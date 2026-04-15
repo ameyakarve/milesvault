@@ -27,7 +27,7 @@ export function ChatClient({ userEmail }: { userEmail: string }) {
       <main className="chat-messages">
         {messages.length === 0 && (
           <div className="chat-empty">
-            Describe a transaction in plain language. Example: <em>"Dinner at Someplace for ₹1500 on Infinia, earned 50 SmartBuy points"</em>
+            Describe a transaction in plain language. Example: <em>&ldquo;Dinner at Someplace for ₹1500 on Infinia, earned 50 SmartBuy points&rdquo;</em>
           </div>
         )}
         {messages.map((m) => (
