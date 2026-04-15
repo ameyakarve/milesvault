@@ -86,6 +86,16 @@
   font-size: 13px;
 }
 
+.chat-error {
+  color: #ff9999;
+  background: #3a1a1a;
+  border: 1px solid #5a2a2a;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
 .chat-input {
   display: flex;
   gap: 8px;

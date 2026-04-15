@@ -8,7 +8,7 @@ import { TxnEditCard } from './txn-edit-card'
 
 export function ChatClient({ userEmail }: { userEmail: string }) {
   const [input, setInput] = useState('')
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
       credentials: 'include',
@@ -75,6 +75,7 @@ export function ChatClient({ userEmail }: { userEmail: string }) {
           </div>
         ))}
         {isBusy && <div className="chat-busy">thinking…</div>}
+        {error && <div className="chat-error">Error: {error.message}</div>}
       </main>
 
       <form
