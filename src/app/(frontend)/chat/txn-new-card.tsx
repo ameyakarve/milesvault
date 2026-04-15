@@ -16,7 +16,7 @@ type UpdateResponse = {
   detail?: string
 }
 
-type DeleteErrorResponse = { errors?: Array<{ message: string }>; message?: string }
+type View = 'code' | 'form'
 
 const PLACEHOLDER = `2026-04-15 * "Someplace" "Dinner"
   Expenses:Food:Dining           1500 INR
@@ -24,12 +24,10 @@ const PLACEHOLDER = `2026-04-15 * "Someplace" "Dinner"
 
 export function TxnNewCard({ initialText = '' }: { initialText?: string }) {
   const [text, setText] = useState(initialText)
+  const [view, setView] = useState<View>('code')
   const [savedId, setSavedId] = useState<number | null>(null)
-  const [dismissed, setDismissed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  if (dismissed) return null
 
   const confirm = async () => {
     setError(null)
@@ -76,30 +74,6 @@ export function TxnNewCard({ initialText = '' }: { initialText?: string }) {
     }
   }
 
-  const remove = async () => {
-    setError(null)
-    if (savedId == null) {
-      setDismissed(true)
-      return
-    }
-    setBusy(true)
-    try {
-      const res = await fetch(`/api/txns/${savedId}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      })
-      if (!res.ok) {
-        const data = (await res.json()) as DeleteErrorResponse
-        throw new Error(data.errors?.[0]?.message || `HTTP ${res.status}`)
-      }
-      setDismissed(true)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const isSaved = savedId != null
   const rows = Math.max(5, text.split('\n').length + 1)
 
@@ -111,22 +85,43 @@ export function TxnNewCard({ initialText = '' }: { initialText?: string }) {
         ) : (
           <span className="txn-card-badge txn-card-badge-draft">new</span>
         )}
+        <div className="txn-card-view-toggle" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'code'}
+            className={view === 'code' ? 'active' : ''}
+            onClick={() => setView('code')}
+          >
+            Code
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === 'form'}
+            className={view === 'form' ? 'active' : ''}
+            onClick={() => setView('form')}
+          >
+            Form
+          </button>
+        </div>
       </div>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        readOnly={busy}
-        spellCheck={false}
-        placeholder={PLACEHOLDER}
-        rows={rows}
-      />
+      {view === 'code' ? (
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          readOnly={busy}
+          spellCheck={false}
+          placeholder={PLACEHOLDER}
+          rows={rows}
+        />
+      ) : (
+        <div className="txn-card-form-empty">Form view coming soon</div>
+      )}
       {error && <div className="txn-card-error">{error}</div>}
       <div className="txn-card-actions">
         <button type="button" onClick={confirm} disabled={busy} title={isSaved ? 'Update' : 'Save'}>
           {isSaved ? '✓ Update' : '✓ Save'}
-        </button>
-        <button type="button" onClick={remove} disabled={busy} title="Delete">
-          🗑 Delete
         </button>
       </div>
     </div>

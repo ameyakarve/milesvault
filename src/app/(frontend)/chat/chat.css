@@ -167,6 +167,43 @@
   background: #444;
 }
 
+.txn-card-view-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid #333;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.txn-card-view-toggle button {
+  padding: 3px 10px;
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.txn-card-view-toggle button:hover:not(.active) {
+  color: #ccc;
+}
+
+.txn-card-view-toggle button.active {
+  background: #2a2a2a;
+  color: #e6e6e6;
+}
+
+.txn-card-form-empty {
+  padding: 40px 16px;
+  color: #666;
+  font-size: 13px;
+  text-align: center;
+  font-style: italic;
+}
+
 .txn-card textarea {
   display: block;
   width: 100%;
