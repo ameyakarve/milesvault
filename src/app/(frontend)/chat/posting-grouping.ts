@@ -61,22 +61,16 @@ function isTransferEligibleAccount(p: Posting): boolean {
   return false
 }
 
-function isWalletAccount(p: Posting): boolean {
-  return !!p.account && p.account.startsWith(WALLET_ACCOUNT_PREFIX)
-}
-
-function isGiftCardAccount(p: Posting): boolean {
-  return !!p.account && p.account.startsWith(GIFT_CARD_ACCOUNT_PREFIX)
-}
-
-function isCCAccount(p: Posting): boolean {
-  return !!p.account && p.account.startsWith(CC_ACCOUNT_PREFIX)
-}
+const VARIANT_PREFIXES: readonly [string, TransferVariant][] = [
+  [GIFT_CARD_ACCOUNT_PREFIX, 'gift-card'],
+  [WALLET_ACCOUNT_PREFIX, 'wallet-topup'],
+  [CC_ACCOUNT_PREFIX, 'cc-payment'],
+]
 
 function chooseTransferVariant(from: Posting, to: Posting): TransferVariant {
-  if (isGiftCardAccount(from) || isGiftCardAccount(to)) return 'gift-card'
-  if (isWalletAccount(from) || isWalletAccount(to)) return 'wallet-topup'
-  if (isCCAccount(from) || isCCAccount(to)) return 'cc-payment'
+  for (const [prefix, variant] of VARIANT_PREFIXES) {
+    if (from.account?.startsWith(prefix) || to.account?.startsWith(prefix)) return variant
+  }
   return 'transfer'
 }
 
@@ -106,11 +100,7 @@ function tryPointsTransferPair(
   if (source.currency === sink.currency) return null
   if (sink.priceCurrency !== source.currency) return null
 
-  // Source.amount and sink.priceAmount are two names for the same quantity
-  // (the value being transferred, expressed in the source commodity). If they
-  // disagree, this isn't a points transfer — the form never produces it, and
-  // a text-edited mismatch should fall back to raw postings so the existing
-  // validators surface the break.
+  // Source amount must equal sink @@ total (same quantity, source commodity)
   if (source.amount == null || sink.priceAmount == null) return null
   const sourceMagnitude = Math.abs(parseFloat(source.amount))
   const priceTotal = parseFloat(sink.priceAmount)
@@ -152,6 +142,10 @@ function tryTransferPair(
   return { from, to, fromIsFirst, variant: chooseTransferVariant(from, to) }
 }
 
+function pairIndices(firstIsA: boolean, i: number): [number, number] {
+  return firstIsA ? [i, i + 1] : [i + 1, i]
+}
+
 export function groupPostings(postings: readonly Posting[]): PostingGroup[] {
   const groups: PostingGroup[] = []
   let i = 0
@@ -159,30 +153,15 @@ export function groupPostings(postings: readonly Posting[]): PostingGroup[] {
     if (i + 1 < postings.length) {
       const pt = tryPointsTransferPair(postings[i], postings[i + 1])
       if (pt) {
-        const sourceIndex = pt.sourceIsFirst ? i : i + 1
-        const sinkIndex = pt.sourceIsFirst ? i + 1 : i
-        groups.push({
-          kind: 'points-transfer',
-          source: pt.source,
-          sink: pt.sink,
-          sourceIndex,
-          sinkIndex,
-        })
+        const [sourceIndex, sinkIndex] = pairIndices(pt.sourceIsFirst, i)
+        groups.push({ kind: 'points-transfer', source: pt.source, sink: pt.sink, sourceIndex, sinkIndex })
         i += 2
         continue
       }
       const tr = tryTransferPair(postings[i], postings[i + 1])
       if (tr) {
-        const fromIndex = tr.fromIsFirst ? i : i + 1
-        const toIndex = tr.fromIsFirst ? i + 1 : i
-        groups.push({
-          kind: 'transfer',
-          from: tr.from,
-          to: tr.to,
-          fromIndex,
-          toIndex,
-          variant: tr.variant,
-        })
+        const [fromIndex, toIndex] = pairIndices(tr.fromIsFirst, i)
+        groups.push({ kind: 'transfer', from: tr.from, to: tr.to, fromIndex, toIndex, variant: tr.variant })
         i += 2
         continue
       }

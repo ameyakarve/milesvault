@@ -38,7 +38,6 @@ type PostingTypeConfig = {
   prefix: string
   placeholder: string
   signMultiplier: 1 | -1
-  signless: boolean
 }
 
 const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeConfig> = {
@@ -48,7 +47,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Expenses:',
     placeholder: 'Food:Dining',
     signMultiplier: 1,
-    signless: true,
   },
   'expense-refund': {
     label: 'REFUND',
@@ -56,7 +54,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Expenses:',
     placeholder: 'Food:Dining',
     signMultiplier: -1,
-    signless: true,
   },
   fee: {
     label: 'FEE',
@@ -64,7 +61,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Expenses:Fees:',
     placeholder: 'Annual:HDFC:Infinia',
     signMultiplier: 1,
-    signless: true,
   },
   'cc-spend': {
     label: 'CC SPEND',
@@ -72,7 +68,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Liabilities:CC:',
     placeholder: 'HDFC:Infinia',
     signMultiplier: -1,
-    signless: true,
   },
   'cc-refund': {
     label: 'CC REFUND',
@@ -80,7 +75,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Liabilities:CC:',
     placeholder: 'HDFC:Infinia',
     signMultiplier: 1,
-    signless: true,
   },
   'reward-earn': {
     label: 'REWARD',
@@ -88,7 +82,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Assets:Rewards:',
     placeholder: 'HDFC:SmartBuy',
     signMultiplier: 1,
-    signless: true,
   },
   redemption: {
     label: 'REDEMPTION',
@@ -96,7 +89,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Assets:Rewards:',
     placeholder: 'HDFC:SmartBuy',
     signMultiplier: -1,
-    signless: true,
   },
   discount: {
     label: 'DISCOUNT',
@@ -104,7 +96,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Equity:Discount:',
     placeholder: 'HDFC:Infinia',
     signMultiplier: -1,
-    signless: true,
   },
   cashback: {
     label: 'CASHBACK',
@@ -112,7 +103,6 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     prefix: 'Income:Cashback:',
     placeholder: 'HDFC:Infinia',
     signMultiplier: -1,
-    signless: true,
   },
 }
 
@@ -166,6 +156,40 @@ function sumByCommodity(
   return out
 }
 
+function validateSymmetricPair(
+  push: (msg: string) => void,
+  postings: readonly Posting[],
+  label: string,
+  aPrefix: string,
+  bPrefix: string,
+  aSuffix = '',
+  aPredicate?: (p: Posting) => boolean,
+) {
+  const aSums = sumByCommodity(postings, aPredicate ?? ((p) => p.account.startsWith(aPrefix)))
+  const bSums = sumByCommodity(postings, (p) => p.account.startsWith(bPrefix))
+  const hasA = Object.keys(aSums).length > 0
+  const hasB = Object.keys(bSums).length > 0
+  if (!hasA && !hasB) return
+  if (!hasA) {
+    push(`${label}: ${bPrefix}* needs a matching ${aPrefix}* reverse entry.`)
+    return
+  }
+  if (!hasB) {
+    push(`${label}: ${aPrefix}*${aSuffix} needs a matching ${bPrefix}* reverse entry.`)
+    return
+  }
+  const commodities = new Set([...Object.keys(aSums), ...Object.keys(bSums)])
+  for (const c of commodities) {
+    const a = aSums[c] ?? 0
+    const b = bSums[c] ?? 0
+    if (Math.abs(a + b) > 0.005) {
+      push(
+        `${label} ${c} mismatch: ${aPrefix}* = ${formatAmount(a)}, ${bPrefix}* = ${formatAmount(b)} (must cancel out).`,
+      )
+    }
+  }
+}
+
 function validatePairedPostings(result: ParseResult): Map<number, string[]> {
   const errors = new Map<number, string[]>()
   const push = (i: number, msg: string) => {
@@ -188,67 +212,30 @@ function validatePairedPostings(result: ParseResult): Map<number, string[]> {
     }
     const nonPairedPostings = t.postings.filter((_, idx) => !pairIndices.has(idx))
     for (const { label, assetPrefix, incomePrefix } of PAIRED_PREFIXES) {
-      const assetSums = sumByCommodity(t.postings, (p) => p.account.startsWith(assetPrefix))
-      const incomeSums = sumByCommodity(t.postings, (p) => p.account.startsWith(incomePrefix))
-      const hasAsset = Object.keys(assetSums).length > 0
-      const hasIncome = Object.keys(incomeSums).length > 0
-      if (!hasAsset && !hasIncome) continue
-      if (!hasAsset) {
-        push(i, `${label}: ${incomePrefix}* needs a matching ${assetPrefix}* reverse entry.`)
-        continue
-      }
-      if (!hasIncome) {
-        push(i, `${label}: ${assetPrefix}* needs a matching ${incomePrefix}* reverse entry.`)
-        continue
-      }
-      const commodities = new Set([...Object.keys(assetSums), ...Object.keys(incomeSums)])
-      for (const c of commodities) {
-        const a = assetSums[c] ?? 0
-        const inc = incomeSums[c] ?? 0
-        if (Math.abs(a + inc) > 0.005) {
-          push(
-            i,
-            `${label} ${c} mismatch: ${assetPrefix}* = ${formatAmount(a)}, ${incomePrefix}* = ${formatAmount(inc)} (must cancel out).`,
-          )
-        }
-      }
+      validateSymmetricPair(
+        (msg) => push(i, msg),
+        t.postings,
+        label,
+        assetPrefix,
+        incomePrefix,
+      )
     }
 
     // Reward earn legs (positive Assets:Rewards) must pair with Income:Rewards.
     // Redemption legs (negative Assets:Rewards) must carry a price clause.
     // Points-transfer pair indices are excluded so they don't double-fire.
-    const earnSums = sumByCommodity(
+    validateSymmetricPair(
+      (msg) => push(i, msg),
       nonPairedPostings,
+      'Reward',
+      'Assets:Rewards:',
+      'Income:Rewards:',
+      ' (earn)',
       (p) =>
         p.account.startsWith('Assets:Rewards:') &&
         p.amount != null &&
         parseFloat(p.amount) > 0,
     )
-    const incomeRewardSums = sumByCommodity(nonPairedPostings, (p) =>
-      p.account.startsWith('Income:Rewards:'),
-    )
-    const hasEarn = Object.keys(earnSums).length > 0
-    const hasIncomeReward = Object.keys(incomeRewardSums).length > 0
-    if (hasEarn && !hasIncomeReward) {
-      push(i, `Reward: Assets:Rewards:* (earn) needs a matching Income:Rewards:* reverse entry.`)
-    } else if (!hasEarn && hasIncomeReward) {
-      push(i, `Reward: Income:Rewards:* needs a matching Assets:Rewards:* reverse entry.`)
-    } else if (hasEarn && hasIncomeReward) {
-      const commodities = new Set([
-        ...Object.keys(earnSums),
-        ...Object.keys(incomeRewardSums),
-      ])
-      for (const c of commodities) {
-        const a = earnSums[c] ?? 0
-        const inc = incomeRewardSums[c] ?? 0
-        if (Math.abs(a + inc) > 0.005) {
-          push(
-            i,
-            `Reward ${c} mismatch: Assets:Rewards:* = ${formatAmount(a)}, Income:Rewards:* = ${formatAmount(inc)} (must cancel out).`,
-          )
-        }
-      }
-    }
 
     for (let idx = 0; idx < t.postings.length; idx++) {
       if (pairIndices.has(idx)) continue
@@ -1574,25 +1561,14 @@ function PostingRow({
   const currency = posting.currency || ''
 
   const displayAmount =
-    typeConfig?.signless && rawAmount != null ? Math.abs(rawAmount) : rawAmount
+    typeConfig && rawAmount != null ? Math.abs(rawAmount) : rawAmount
 
   const handleAmountCommit = (next: number) => {
     const signed = typeConfig ? typeConfig.signMultiplier * Math.abs(next) : next
     onAmount(signed)
   }
 
-  if (
-    (type === 'expense' ||
-      type === 'expense-refund' ||
-      type === 'fee' ||
-      type === 'cc-spend' ||
-      type === 'cc-refund' ||
-      type === 'reward-earn' ||
-      type === 'redemption' ||
-      type === 'discount' ||
-      type === 'cashback') &&
-    typeConfig
-  ) {
+  if (typeConfig) {
     const common: PostingCardCommonProps = {
       posting,
       editable,
@@ -2047,6 +2023,22 @@ function TxnCard({
           }
           const posting = group.posting
           const originalIndex = group.index
+          const makeForexHandler = (atSigns: 1 | 2) => (next: number | null) =>
+            mutate((r) => {
+              const target = r.transactions[index].postings[originalIndex]
+              const targetCurrency =
+                target.priceCurrency || homeCommodityByAccount[target.account]
+              if (!targetCurrency) return
+              if (next == null) {
+                target.priceAmount = undefined
+                target.priceCurrency = undefined
+                target.atSigns = undefined
+              } else {
+                target.priceAmount = next.toString()
+                target.priceCurrency = targetCurrency
+                target.atSigns = atSigns
+              }
+            })
           return (
           <PostingRow
             key={originalIndex}
@@ -2088,40 +2080,8 @@ function TxnCard({
                 target.currency = next
               })
             }
-            onForexRate={(next) =>
-              mutate((r) => {
-                const target = r.transactions[index].postings[originalIndex]
-                const targetCurrency =
-                  target.priceCurrency || homeCommodityByAccount[target.account]
-                if (!targetCurrency) return
-                if (next == null) {
-                  target.priceAmount = undefined
-                  target.priceCurrency = undefined
-                  target.atSigns = undefined
-                } else {
-                  target.priceAmount = next.toString()
-                  target.priceCurrency = targetCurrency
-                  target.atSigns = 1
-                }
-              })
-            }
-            onForexTotal={(next) =>
-              mutate((r) => {
-                const target = r.transactions[index].postings[originalIndex]
-                const targetCurrency =
-                  target.priceCurrency || homeCommodityByAccount[target.account]
-                if (!targetCurrency) return
-                if (next == null) {
-                  target.priceAmount = undefined
-                  target.priceCurrency = undefined
-                  target.atSigns = undefined
-                } else {
-                  target.priceAmount = next.toString()
-                  target.priceCurrency = targetCurrency
-                  target.atSigns = 2
-                }
-              })
-            }
+            onForexRate={makeForexHandler(1)}
+            onForexTotal={makeForexHandler(2)}
             onPriceCurrency={(next) =>
               mutate((r) => {
                 const target = r.transactions[index].postings[originalIndex]
