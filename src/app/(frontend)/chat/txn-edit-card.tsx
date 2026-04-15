@@ -130,11 +130,6 @@ export function TxnEditCard({
     }
   }
 
-  const cancel = () => {
-    if (savedId != null) return
-    setDismissed(true)
-  }
-
   const isSaved = savedId != null
 
   return (
@@ -158,11 +153,6 @@ export function TxnEditCard({
         <button type="button" onClick={confirm} disabled={busy || locked} title={isSaved ? 'Update' : 'Confirm'}>
           {isSaved ? '✓ Update' : '✓ Confirm'}
         </button>
-        {!isSaved && (
-          <button type="button" onClick={cancel} disabled={busy} title="Cancel">
-            ✕ Cancel
-          </button>
-        )}
         <button type="button" onClick={remove} disabled={busy} title="Delete">
           🗑 Delete
         </button>
