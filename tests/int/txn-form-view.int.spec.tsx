@@ -495,3 +495,554 @@ describe('TxnFormView round-trip — cc-spend-reward', () => {
     expect(getText()).toMatch(/Assets:Rewards:HDFC:SmartBuy[^\n]*75/)
   })
 })
+
+describe('TxnFormView paired-posting validation', () => {
+  function errorMessages(container: Element | Document): string[] {
+    return Array.from(container.querySelectorAll('.txn-form-validation-errors li')).map(
+      (el) => el.textContent ?? '',
+    )
+  }
+
+  const VALID_CASHBACK = `2026-04-14 * "Amudham" "Dinner — 5% cashback"
+  Expenses:Food:Dining                    1500 INR
+  Liabilities:CC:HDFC:Infinia            -1500 INR
+  Assets:Cashback:Pending:HDFC:Infinia      75 INR
+  Income:Cashback:HDFC:Infinia             -75 INR`
+
+  const VALID_REWARD = `2026-04-14 * "Amudham" "Dinner with points"
+  Expenses:Food:Dining              1500 INR
+  Liabilities:CC:HDFC:Infinia      -1500 INR
+  Assets:Rewards:HDFC:SmartBuy        50 SMARTBUY_POINTS
+  Income:Rewards:HDFC:Earned         -50 SMARTBUY_POINTS`
+
+  it('paired cashback produces no validation errors', () => {
+    const { container } = render(<Harness initial={VALID_CASHBACK} />)
+    expect(errorMessages(container)).toEqual([])
+  })
+
+  it('paired reward produces no validation errors', () => {
+    const { container } = render(<Harness initial={VALID_REWARD} />)
+    expect(errorMessages(container)).toEqual([])
+  })
+
+  it('Income:Cashback without Assets:Cashback:Pending fires an error', () => {
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken cashback"
+  Expenses:Food:Dining           1500 INR
+  Liabilities:CC:HDFC:Infinia   -1425 INR
+  Income:Cashback:HDFC:Infinia    -75 INR`
+    const { container } = render(<Harness initial={ORPHAN} />)
+    const msgs = errorMessages(container)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0]).toMatch(/Cashback/)
+    expect(msgs[0]).toMatch(/Assets:Cashback:Pending/)
+  })
+
+  it('Assets:Cashback:Pending without Income:Cashback fires an error', () => {
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken cashback"
+  Expenses:Food:Dining                    1500 INR
+  Liabilities:CC:HDFC:Infinia            -1500 INR
+  Assets:Cashback:Pending:HDFC:Infinia      75 INR
+  Equity:Adjustment                       -75 INR`
+    const { container } = render(<Harness initial={ORPHAN} />)
+    const msgs = errorMessages(container)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0]).toMatch(/Cashback/)
+    expect(msgs[0]).toMatch(/Income:Cashback/)
+  })
+
+  it('mismatched cashback amounts fire a balance error', () => {
+    const MISMATCH = `2026-04-14 * "Amudham" "Dinner — mismatched cashback"
+  Expenses:Food:Dining                    1500 INR
+  Liabilities:CC:HDFC:Infinia            -1450 INR
+  Assets:Cashback:Pending:HDFC:Infinia      75 INR
+  Income:Cashback:HDFC:Infinia            -125 INR`
+    const { container } = render(<Harness initial={MISMATCH} />)
+    const msgs = errorMessages(container)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0]).toMatch(/Cashback/)
+    expect(msgs[0]).toMatch(/INR/)
+    expect(msgs[0]).toMatch(/cancel/)
+  })
+
+  it('Assets:Rewards without Income:Rewards fires an error', () => {
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken reward"
+  Expenses:Food:Dining              1500 INR
+  Liabilities:CC:HDFC:Infinia      -1500 INR
+  Assets:Rewards:HDFC:SmartBuy        50 SMARTBUY_POINTS
+  Equity:Adjustment                  -50 SMARTBUY_POINTS`
+    const { container } = render(<Harness initial={ORPHAN} />)
+    const msgs = errorMessages(container)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0]).toMatch(/Reward/)
+    expect(msgs[0]).toMatch(/Income:Rewards/)
+  })
+
+  it('Income:Rewards without Assets:Rewards fires an error', () => {
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken reward"
+  Expenses:Food:Dining              1500 INR
+  Liabilities:CC:HDFC:Infinia      -1500 INR
+  Income:Rewards:HDFC:Earned         -50 SMARTBUY_POINTS
+  Equity:Adjustment                   50 SMARTBUY_POINTS`
+    const { container } = render(<Harness initial={ORPHAN} />)
+    const msgs = errorMessages(container)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0]).toMatch(/Reward/)
+    expect(msgs[0]).toMatch(/Assets:Rewards/)
+  })
+
+  it('kitchen-sink txn with discount + cashback + reward stays clean', () => {
+    const KITCHEN = `2020-01-01 open Assets:Rewards:HDFC:SmartBuy SMARTBUY_POINTS
+2020-01-01 open Income:Rewards:HDFC:Earned SMARTBUY_POINTS
+
+2026-04-14 * "Amudham" "Dinner — discount + cashback + points"
+  Expenses:Food:Dining                    1500 INR
+  Liabilities:CC:HDFC:Infinia            -1400 INR
+  Equity:Discount                         -100 INR
+  Assets:Cashback:Pending:HDFC:Infinia      70 INR
+  Income:Cashback:HDFC:Infinia             -70 INR
+  Assets:Rewards:HDFC:SmartBuy              50 SMARTBUY_POINTS
+  Income:Rewards:HDFC:Earned               -50 SMARTBUY_POINTS`
+    const { container } = render(<Harness initial={KITCHEN} />)
+    expect(errorMessages(container)).toEqual([])
+  })
+
+  it('errors are scoped per-transaction (one bad txn doesn’t taint a sibling)', () => {
+    const MIXED = `2026-04-14 * "Amudham" "Good cashback"
+  Expenses:Food:Dining                    1500 INR
+  Liabilities:CC:HDFC:Infinia            -1500 INR
+  Assets:Cashback:Pending:HDFC:Infinia      75 INR
+  Income:Cashback:HDFC:Infinia             -75 INR
+
+2026-04-13 * "Chai Point" "Bad cashback"
+  Expenses:Food:Coffee           120 INR
+  Liabilities:CC:HDFC:Infinia   -114 INR
+  Income:Cashback:HDFC:Infinia    -6 INR`
+    const { container } = render(<Harness initial={MIXED} />)
+    const cards = container.querySelectorAll('.txn-form-card')
+    expect(cards).toHaveLength(2)
+    expect(cards[0].querySelectorAll('.txn-form-validation-errors li')).toHaveLength(0)
+    expect(cards[1].querySelectorAll('.txn-form-validation-errors li')).toHaveLength(1)
+  })
+
+  it('valid redemption with @@ price annotation produces no errors', () => {
+    const OK = `2026-04-15 * "Accor" "Hotel stay — points + cash"
+  Expenses:Travel:Hotel                10000 INR
+  Assets:Rewards:HDFC:SmartBuy         -4000 SMARTBUY_POINTS @@ 8000 INR
+  Assets:Cash                          -2000 INR`
+    const { container } = render(<Harness initial={OK} />)
+    expect(errorMessages(container)).toEqual([])
+  })
+
+  it('valid redemption with @ rate annotation produces no errors', () => {
+    const OK = `2026-04-15 * "Accor" "Hotel stay — points + cash"
+  Expenses:Travel:Hotel                10000 INR
+  Assets:Rewards:HDFC:SmartBuy         -4000 SMARTBUY_POINTS @ 2 INR
+  Assets:Cash                          -2000 INR`
+    const { container } = render(<Harness initial={OK} />)
+    expect(errorMessages(container)).toEqual([])
+  })
+
+  it('redemption without price clause fires an error', () => {
+    const BAD = `2026-04-15 * "Accor" "Hotel — redemption missing price"
+  Expenses:Travel:Hotel            10000 SMARTBUY_POINTS
+  Assets:Rewards:HDFC:SmartBuy    -10000 SMARTBUY_POINTS`
+    const { container } = render(<Harness initial={BAD} />)
+    const msgs = errorMessages(container)
+    expect(msgs.some((m) => /Redemption/.test(m) && /price clause/.test(m))).toBe(true)
+  })
+
+  it('positive Assets:Rewards still triggers earn pairing check (not redemption check)', () => {
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — earn with no income leg"
+  Expenses:Food:Dining              1500 INR
+  Liabilities:CC:HDFC:Infinia      -1500 INR
+  Assets:Rewards:HDFC:SmartBuy        50 SMARTBUY_POINTS
+  Equity:Adjustment                  -50 SMARTBUY_POINTS`
+    const { container } = render(<Harness initial={ORPHAN} />)
+    const msgs = errorMessages(container)
+    expect(msgs.some((m) => /Reward/.test(m) && /Income:Rewards/.test(m))).toBe(true)
+    expect(msgs.some((m) => /Redemption/.test(m))).toBe(false)
+  })
+})
+
+describe('TxnFormView redemption home-currency picker', () => {
+  const REDEMPTION = `2026-04-15 * "Accor" "Hotel stay — points + cash"
+  Expenses:Travel:Hotel                10000 INR
+  Assets:Rewards:HDFC:SmartBuy         -4000 SMARTBUY_POINTS @@ 8000 INR
+  Assets:Cash                          -2000 INR`
+
+  it('renders an editable currency picker inside the redemption forex strip', () => {
+    const { container } = render(<Harness initial={REDEMPTION} />)
+    const card = container.querySelector('[data-posting-type="redemption"]')
+    expect(card).toBeTruthy()
+    const strip = card!.querySelector('[data-testid="forex-strip"]')
+    expect(strip).toBeTruthy()
+    const picker = strip!.querySelector('.rs-currency')
+    expect(picker).toBeTruthy()
+    expect(strip!.querySelector('.rs-currency__single-value')?.textContent).toBe('INR')
+  })
+
+  it('CC-spend forex keeps a static home currency (no picker)', () => {
+    const CC_FOREX = `2026-04-14 * "Amazon US" "USD charge" ^amazon-us
+  Expenses:Online          100 USD
+  Liabilities:CC:HDFC:Infinia  -100 USD @ 85 INR`
+    const { container } = render(
+      <Harness initial={CC_FOREX} accounts={{ 'Liabilities:CC:HDFC:Infinia': 'INR' }} />,
+    )
+    const card = container.querySelector('[data-posting-type="cc-spend"]')
+    const strip = card!.querySelector('[data-testid="forex-strip"]')
+    expect(strip!.querySelector('.rs-currency')).toBeNull()
+    expect(strip!.querySelector('.txn-form-posting-card-forex-unit')?.textContent).toBe('USD')
+  })
+})
+
+describe('TxnFormView points-transfer', () => {
+  function errorMessages(container: Element | Document): string[] {
+    return Array.from(container.querySelectorAll('.txn-form-validation-errors li')).map(
+      (el) => el.textContent ?? '',
+    )
+  }
+
+  const VALID = `2026-04-16 * "HDFC" "SmartBuy → Finnair"
+  Assets:Rewards:HDFC:SmartBuy    -4000 SMARTBUY_POINTS
+  Assets:Rewards:Finnair           2000 FINNAIR_POINTS @@ 4000 SMARTBUY_POINTS`
+
+  it('renders a single points-transfer card for a valid pair', () => {
+    const { container } = render(<Harness initial={VALID} />)
+    const card = container.querySelector('[data-posting-type="points-transfer"]')
+    expect(card).toBeTruthy()
+    const singles = container.querySelectorAll(
+      '[data-posting-type]:not([data-posting-type="points-transfer"])',
+    )
+    expect(singles).toHaveLength(0)
+  })
+
+  it('does not fire redemption or earn errors on a valid pair', () => {
+    const { container } = render(<Harness initial={VALID} />)
+    const msgs = errorMessages(container)
+    expect(msgs.some((m) => /Redemption/.test(m))).toBe(false)
+    expect(msgs.some((m) => /Reward/.test(m))).toBe(false)
+    expect(msgs).toEqual([])
+  })
+
+  it('falls back to singles when source magnitude does not match @@ total', () => {
+    const MISMATCH = `2026-04-16 * "Amex" "MR → Avios"
+  Assets:Rewards:Amex:MR          -5000 MR_POINTS
+  Assets:Rewards:Avios             2500 AVIOS_POINTS @@ 4000 MR_POINTS`
+    const { container } = render(<Harness initial={MISMATCH} />)
+    expect(container.querySelector('[data-posting-type="points-transfer"]')).toBeNull()
+  })
+
+  it('falls back to singles when the sink has no price clause', () => {
+    const BAD = `2026-04-16 * "HDFC" "SmartBuy → Finnair (orphan)"
+  Assets:Rewards:HDFC:SmartBuy    -4000 SMARTBUY_POINTS
+  Assets:Rewards:Finnair           2000 FINNAIR_POINTS`
+    const { container } = render(<Harness initial={BAD} />)
+    expect(container.querySelector('[data-posting-type="points-transfer"]')).toBeNull()
+    const msgs = errorMessages(container)
+    expect(
+      msgs.some((m) => /Redemption/.test(m) && /price clause/.test(m)),
+    ).toBe(true)
+  })
+
+  it('hides the rewards program account currency label (currency is implied)', () => {
+    const { container } = render(<Harness initial={VALID} />)
+    const card = container.querySelector('[data-posting-type="points-transfer"]')
+    const currencyStatics = card!.querySelectorAll('.txn-form-posting-card-currency-static')
+    expect(currencyStatics).toHaveLength(0)
+  })
+
+  it('serializes the source amount back through @@ total on edit', () => {
+    const { container } = render(<Harness initial={VALID} />)
+    const card = container.querySelector(
+      '[data-posting-type="points-transfer"]',
+    ) as HTMLElement
+    const amountInputs = card.querySelectorAll(
+      '.txn-form-posting-amount-input',
+    ) as NodeListOf<HTMLInputElement>
+    expect(amountInputs.length).toBeGreaterThanOrEqual(2)
+    const sourceInput = amountInputs[0]
+    fireEvent.focus(sourceInput)
+    fireEvent.change(sourceInput, { target: { value: '5000' } })
+    fireEvent.blur(sourceInput)
+    const text = getText()
+    expect(text).toMatch(/-5000 SMARTBUY_POINTS/)
+    expect(text).toMatch(/@@ 5000 SMARTBUY_POINTS/)
+  })
+
+  it('renders the ratio strip with source total and sink amount', () => {
+    const { container } = render(<Harness initial={VALID} />)
+    const card = container.querySelector('[data-posting-type="points-transfer"]')
+    const strip = card!.querySelector('[data-testid="forex-strip"]')
+    expect(strip).toBeTruthy()
+    expect(strip!.textContent).toMatch(/RATIO/)
+    expect(strip!.textContent).toMatch(/2,000/)
+    expect(strip!.textContent).toMatch(/4,000/)
+  })
+})
+
+describe('TxnFormView transfer family', () => {
+  function errorMessages(container: Element | Document): string[] {
+    return Array.from(container.querySelectorAll('.txn-form-validation-errors li')).map(
+      (el) => el.textContent ?? '',
+    )
+  }
+
+  const TRANSFER = `2026-04-16 * "Self" "Savings to Checking"
+  Assets:Bank:Savings    -10000 INR
+  Assets:Bank:Checking    10000 INR`
+
+  const CC_PAYMENT = `2026-04-16 * "HDFC" "April statement payment"
+  Assets:Bank:Checking          -18000 INR
+  Liabilities:CC:HDFC:Infinia    18000 INR`
+
+  const WALLET_TOPUP = `2026-04-16 * "Paytm" "Load wallet from CC"
+  Liabilities:CC:HDFC:Infinia   -1000 INR
+  Assets:Wallet:Paytm            1000 INR`
+
+  const GIFT_CARD_TOPUP = `2026-04-16 * "Amazon" "Gift card reload"
+  Assets:Bank:Checking       -500 INR
+  Assets:GiftCard:Amazon      500 INR`
+
+  it('renders a TRANSFER card for Assets:* ↔ Assets:*', () => {
+    const { container } = render(<Harness initial={TRANSFER} />)
+    const card = container.querySelector('[data-posting-type="transfer"]')
+    expect(card).toBeTruthy()
+    expect(card!.textContent).toMatch(/TRANSFER/)
+  })
+
+  it('renders exactly one card (no fallback singles) for a valid transfer', () => {
+    const { container } = render(<Harness initial={TRANSFER} />)
+    expect(container.querySelectorAll('[data-posting-type]')).toHaveLength(1)
+  })
+
+  it('renders a CC PAYMENT card when one leg is Liabilities:CC:*', () => {
+    const { container } = render(<Harness initial={CC_PAYMENT} />)
+    const card = container.querySelector('[data-posting-type="cc-payment"]')
+    expect(card).toBeTruthy()
+    expect(card!.textContent).toMatch(/CC PAYMENT/)
+  })
+
+  it('renders a WALLET TOP-UP card when one leg is Assets:Wallet:*', () => {
+    const { container } = render(<Harness initial={WALLET_TOPUP} />)
+    const card = container.querySelector('[data-posting-type="wallet-topup"]')
+    expect(card).toBeTruthy()
+    expect(card!.textContent).toMatch(/WALLET TOP-UP/)
+  })
+
+  it('wallet variant takes precedence over cc-payment when both are present', () => {
+    const { container } = render(<Harness initial={WALLET_TOPUP} />)
+    expect(container.querySelector('[data-posting-type="cc-payment"]')).toBeNull()
+    expect(container.querySelector('[data-posting-type="wallet-topup"]')).toBeTruthy()
+  })
+
+  it('renders a GIFT CARD card for gift cards (Assets:GiftCard:*)', () => {
+    const { container } = render(<Harness initial={GIFT_CARD_TOPUP} />)
+    const card = container.querySelector('[data-posting-type="gift-card"]')
+    expect(card).toBeTruthy()
+    expect(card!.textContent).toMatch(/GIFT CARD/)
+    expect(card!.textContent).toMatch(/Assets:GiftCard:Amazon/)
+  })
+
+  it('gift-card variant takes precedence over wallet-topup and cc-payment', () => {
+    const CC_GIFT = `2026-04-16 * "Amazon" "CC-paid gift card"
+  Liabilities:CC:HDFC:Infinia  -500 INR
+  Assets:GiftCard:Amazon        500 INR`
+    const { container } = render(<Harness initial={CC_GIFT} />)
+    expect(container.querySelector('[data-posting-type="gift-card"]')).toBeTruthy()
+    expect(container.querySelector('[data-posting-type="wallet-topup"]')).toBeNull()
+    expect(container.querySelector('[data-posting-type="cc-payment"]')).toBeNull()
+  })
+
+  it('does not fire any validation errors on a valid transfer', () => {
+    const { container } = render(<Harness initial={TRANSFER} />)
+    expect(errorMessages(container)).toEqual([])
+  })
+
+  it('does not fire any validation errors on a valid cc-payment', () => {
+    const { container } = render(<Harness initial={CC_PAYMENT} />)
+    expect(errorMessages(container)).toEqual([])
+  })
+
+  it('does not fire any validation errors on a valid wallet-topup', () => {
+    const { container } = render(<Harness initial={WALLET_TOPUP} />)
+    expect(errorMessages(container)).toEqual([])
+  })
+
+  it('edits the single amount and keeps both legs in sync (opposite signs)', () => {
+    const { container } = render(<Harness initial={TRANSFER} />)
+    const card = container.querySelector('[data-posting-type="transfer"]') as HTMLElement
+    const amountInputs = card.querySelectorAll(
+      '.txn-form-posting-amount-input',
+    ) as NodeListOf<HTMLInputElement>
+    expect(amountInputs.length).toBeGreaterThanOrEqual(1)
+    const input = amountInputs[0]
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '12345' } })
+    fireEvent.blur(input)
+    const text = getText()
+    expect(text).toMatch(/-12345 INR/)
+    expect(text).toMatch(/12345 INR/)
+  })
+
+  it('falls back to singles when magnitudes do not balance', () => {
+    const BAD = `2026-04-16 * "Self" "Unbalanced"
+  Assets:Bank:Savings    -10000 INR
+  Assets:Bank:Checking    9000 INR`
+    const { container } = render(<Harness initial={BAD} />)
+    expect(container.querySelector('[data-posting-type="transfer"]')).toBeNull()
+    expect(container.querySelector('[data-posting-type="cc-payment"]')).toBeNull()
+    expect(container.querySelector('[data-posting-type="wallet-topup"]')).toBeNull()
+  })
+
+  it('falls back to singles when a price clause is present (points transfer territory)', () => {
+    const PRICED = `2026-04-16 * "Self" "With price"
+  Assets:Bank:Savings    -100 USD
+  Assets:Bank:Checking    100 USD @@ 8500 INR`
+    const { container } = render(<Harness initial={PRICED} />)
+    expect(container.querySelector('[data-posting-type="transfer"]')).toBeNull()
+  })
+
+  it('composes with an unrelated posting in the same transaction', () => {
+    const MIXED = `2026-04-16 * "Mixed" "Transfer + fee"
+  Assets:Bank:Savings    -10000 INR
+  Assets:Bank:Checking    10000 INR
+  Expenses:Fees:Wire         50 INR
+  Liabilities:CC:HDFC:Infinia  -50 INR`
+    const { container } = render(<Harness initial={MIXED} />)
+    expect(container.querySelectorAll('[data-posting-type="transfer"]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-posting-type="fee"]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-posting-type="cc-spend"]')).toHaveLength(1)
+  })
+
+  it('hides account currency label once (same currency on both legs, shown once)', () => {
+    const { container } = render(<Harness initial={TRANSFER} />)
+    const card = container.querySelector('[data-posting-type="transfer"]')
+    const statics = card!.querySelectorAll('.txn-form-posting-card-currency-static')
+    expect(statics.length).toBe(1)
+    expect(statics[0].textContent).toBe('INR')
+  })
+
+  it('shows From and To labels', () => {
+    const { container } = render(<Harness initial={TRANSFER} />)
+    const card = container.querySelector('[data-posting-type="transfer"]')
+    const labels = Array.from(
+      card!.querySelectorAll('.txn-form-posting-card-label'),
+    ).map((l) => l.textContent)
+    expect(labels).toContain('From')
+    expect(labels).toContain('To')
+  })
+})
+
+describe('TxnFormView refund + fee overlays', () => {
+  const CC_REFUND = `2026-04-16 * "Myntra" "Returned shirt" ^myntra-return
+  Expenses:Shopping:Clothing     -2500 INR
+  Liabilities:CC:HDFC:Infinia     2500 INR`
+
+  const ANNUAL_FEE = `2026-04-16 * "HDFC" "Infinia annual fee" ^infinia-fee-2026
+  Expenses:Fees:Annual:HDFC:Infinia    12500 INR
+  Liabilities:CC:HDFC:Infinia         -12500 INR`
+
+  const FEE_WAIVED = `2026-04-16 * "HDFC" "Fee waiver credit" ^infinia-waive
+  Expenses:Fees:Annual:HDFC:Infinia    -12500 INR
+  Liabilities:CC:HDFC:Infinia           12500 INR`
+
+  it('renders REFUND pill for negative Expenses: posting', () => {
+    const { container } = render(<Harness initial={CC_REFUND} />)
+    const card = container.querySelector('[data-posting-type="expense-refund"]')
+    expect(card).toBeTruthy()
+    expect(card!.querySelector('.txn-form-posting-card-type-pill')?.textContent).toBe('REFUND')
+  })
+
+  it('renders CC REFUND pill for positive Liabilities:CC: posting', () => {
+    const { container } = render(<Harness initial={CC_REFUND} />)
+    const card = container.querySelector('[data-posting-type="cc-refund"]')
+    expect(card).toBeTruthy()
+    expect(card!.querySelector('.txn-form-posting-card-type-pill')?.textContent).toBe('CC REFUND')
+  })
+
+  it('refund txn has no plain EXPENSE or CC SPEND cards', () => {
+    const { container } = render(<Harness initial={CC_REFUND} />)
+    expect(container.querySelector('[data-posting-type="expense"]')).toBeNull()
+    expect(container.querySelector('[data-posting-type="cc-spend"]')).toBeNull()
+  })
+
+  it('refund txn renders no validation errors', () => {
+    const { container } = render(<Harness initial={CC_REFUND} />)
+    expect(container.querySelector('.txn-form-posting-card-errors')).toBeNull()
+  })
+
+  it('renders FEE pill for Expenses:Fees: posting', () => {
+    const { container } = render(<Harness initial={ANNUAL_FEE} />)
+    const card = container.querySelector('[data-posting-type="fee"]')
+    expect(card).toBeTruthy()
+    expect(card!.querySelector('.txn-form-posting-card-type-pill')?.textContent).toBe('FEE')
+  })
+
+  it('renders CC SPEND pill on the paying leg of an annual fee', () => {
+    const { container } = render(<Harness initial={ANNUAL_FEE} />)
+    const card = container.querySelector('[data-posting-type="cc-spend"]')
+    expect(card).toBeTruthy()
+    expect(card!.querySelector('.txn-form-posting-card-type-pill')?.textContent).toBe('CC SPEND')
+  })
+
+  it('annual fee renders no EXPENSE pill (fee takes precedence)', () => {
+    const { container } = render(<Harness initial={ANNUAL_FEE} />)
+    expect(container.querySelector('[data-posting-type="expense"]')).toBeNull()
+  })
+
+  it('Expenses:Fees: with negative amount still classifies as FEE', () => {
+    const { container } = render(<Harness initial={FEE_WAIVED} />)
+    const card = container.querySelector('[data-posting-type="fee"]')
+    expect(card).toBeTruthy()
+    expect(card!.querySelector('.txn-form-posting-card-type-pill')?.textContent).toBe('FEE')
+    expect(container.querySelector('[data-posting-type="expense-refund"]')).toBeNull()
+  })
+
+  it('displays refund amount as positive (signless) even though stored negative', () => {
+    const { container } = render(<Harness initial={CC_REFUND} />)
+    const card = container.querySelector('[data-posting-type="expense-refund"]')!
+    const input = card.querySelector('input[inputmode="decimal"]') as HTMLInputElement
+    const value = input.value.replace(/,/g, '')
+    expect(parseFloat(value)).toBe(2500)
+    expect(value.startsWith('-')).toBe(false)
+  })
+
+  it('editing refund amount keeps the Expense leg negative in text', () => {
+    const { container } = render(<Harness initial={CC_REFUND} />)
+    const card = container.querySelector('[data-posting-type="expense-refund"]')!
+    const amountInput = card.querySelector('input[inputmode="decimal"]') as HTMLInputElement
+    fireEvent.focus(amountInput)
+    fireEvent.change(amountInput, { target: { value: '1800' } })
+    fireEvent.blur(amountInput)
+    const t = getText()
+    expect(t).toContain('Expenses:Shopping:Clothing')
+    expect(t).toMatch(/Expenses:Shopping:Clothing\s+-1800/)
+  })
+
+  it('editing cc-refund amount keeps the CC leg positive in text', () => {
+    const { container } = render(<Harness initial={CC_REFUND} />)
+    const card = container.querySelector('[data-posting-type="cc-refund"]')!
+    const amountInput = card.querySelector('input[inputmode="decimal"]') as HTMLInputElement
+    fireEvent.focus(amountInput)
+    fireEvent.change(amountInput, { target: { value: '1800' } })
+    fireEvent.blur(amountInput)
+    const t = getText()
+    expect(t).toMatch(/Liabilities:CC:HDFC:Infinia\s+1800/)
+  })
+
+  it('editing fee amount keeps the Expenses:Fees leg positive in text', () => {
+    const { container } = render(<Harness initial={ANNUAL_FEE} />)
+    const card = container.querySelector('[data-posting-type="fee"]')!
+    const amountInput = card.querySelector('input[inputmode="decimal"]') as HTMLInputElement
+    fireEvent.focus(amountInput)
+    fireEvent.change(amountInput, { target: { value: '10000' } })
+    fireEvent.blur(amountInput)
+    const t = getText()
+    expect(t).toMatch(/Expenses:Fees:Annual:HDFC:Infinia\s+10000/)
+  })
+
+  it('annual fee renders no validation errors', () => {
+    const { container } = render(<Harness initial={ANNUAL_FEE} />)
+    expect(container.querySelector('.txn-form-posting-card-errors')).toBeNull()
+  })
+})

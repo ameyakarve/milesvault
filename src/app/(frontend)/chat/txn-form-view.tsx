@@ -11,9 +11,26 @@ import {
   type Transaction,
 } from 'beancount'
 
+import {
+  groupPostings,
+  type PointsTransferGroup,
+  type TransferGroup,
+  type TransferVariant,
+} from './posting-grouping'
+
 type SelectOption = { value: string; label: string }
 
-type PostingType = 'expense' | 'cc-spend' | 'reward-earn' | 'discount' | 'cashback' | 'generic'
+type PostingType =
+  | 'expense'
+  | 'expense-refund'
+  | 'fee'
+  | 'cc-spend'
+  | 'cc-refund'
+  | 'reward-earn'
+  | 'redemption'
+  | 'discount'
+  | 'cashback'
+  | 'generic'
 
 type PostingTypeConfig = {
   label: string
@@ -33,6 +50,22 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     signMultiplier: 1,
     signless: true,
   },
+  'expense-refund': {
+    label: 'REFUND',
+    tagClass: 'txn-form-posting-tag-expense-refund',
+    prefix: 'Expenses:',
+    placeholder: 'Food:Dining',
+    signMultiplier: -1,
+    signless: true,
+  },
+  fee: {
+    label: 'FEE',
+    tagClass: 'txn-form-posting-tag-fee',
+    prefix: 'Expenses:Fees:',
+    placeholder: 'Annual:HDFC:Infinia',
+    signMultiplier: 1,
+    signless: true,
+  },
   'cc-spend': {
     label: 'CC SPEND',
     tagClass: 'txn-form-posting-tag-cc',
@@ -41,12 +74,28 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     signMultiplier: -1,
     signless: true,
   },
+  'cc-refund': {
+    label: 'CC REFUND',
+    tagClass: 'txn-form-posting-tag-cc-refund',
+    prefix: 'Liabilities:CC:',
+    placeholder: 'HDFC:Infinia',
+    signMultiplier: 1,
+    signless: true,
+  },
   'reward-earn': {
     label: 'REWARD',
     tagClass: 'txn-form-posting-tag-reward',
     prefix: 'Assets:Rewards:',
     placeholder: 'HDFC:SmartBuy',
     signMultiplier: 1,
+    signless: true,
+  },
+  redemption: {
+    label: 'REDEMPTION',
+    tagClass: 'txn-form-posting-tag-redemption',
+    prefix: 'Assets:Rewards:',
+    placeholder: 'HDFC:SmartBuy',
+    signMultiplier: -1,
     signless: true,
   },
   discount: {
@@ -68,9 +117,19 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
 }
 
 function classifyPosting(p: Posting): PostingType {
-  if (p.account.startsWith('Expenses:')) return 'expense'
-  if (p.account.startsWith('Liabilities:CC:')) return 'cc-spend'
-  if (p.account.startsWith('Assets:Rewards:')) return 'reward-earn'
+  if (p.account.startsWith('Expenses:Fees:')) return 'fee'
+  if (p.account.startsWith('Expenses:')) {
+    const n = p.amount != null ? parseFloat(p.amount) : 0
+    return n < 0 ? 'expense-refund' : 'expense'
+  }
+  if (p.account.startsWith('Liabilities:CC:')) {
+    const n = p.amount != null ? parseFloat(p.amount) : 0
+    return n > 0 ? 'cc-refund' : 'cc-spend'
+  }
+  if (p.account.startsWith('Assets:Rewards:')) {
+    const n = p.amount != null ? parseFloat(p.amount) : 0
+    return n < 0 ? 'redemption' : 'reward-earn'
+  }
   if (p.account === 'Equity:Discount' || p.account.startsWith('Equity:Discount:')) return 'discount'
   if (p.account.startsWith('Income:Cashback:')) return 'cashback'
   return 'generic'
@@ -82,6 +141,150 @@ function isHiddenPosting(p: Posting): boolean {
   return false
 }
 
+const PAIRED_PREFIXES = [
+  {
+    label: 'Cashback',
+    assetPrefix: 'Assets:Cashback:Pending:',
+    incomePrefix: 'Income:Cashback:',
+  },
+] as const
+
+function sumByCommodity(
+  postings: readonly Posting[],
+  predicate: (p: Posting) => boolean,
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const p of postings) {
+    if (!predicate(p)) continue
+    const c = p.currency
+    const raw = p.amount
+    if (!c || raw == null) continue
+    const n = parseFloat(raw)
+    if (!Number.isFinite(n)) continue
+    out[c] = (out[c] ?? 0) + n
+  }
+  return out
+}
+
+function validatePairedPostings(result: ParseResult): Map<number, string[]> {
+  const errors = new Map<number, string[]>()
+  const push = (i: number, msg: string) => {
+    const list = errors.get(i) ?? []
+    list.push(msg)
+    errors.set(i, list)
+  }
+  for (let i = 0; i < result.transactions.length; i++) {
+    const t = result.transactions[i]
+    const groups = groupPostings(t.postings)
+    const pairIndices = new Set<number>()
+    for (const g of groups) {
+      if (g.kind === 'points-transfer') {
+        pairIndices.add(g.sourceIndex)
+        pairIndices.add(g.sinkIndex)
+      } else if (g.kind === 'transfer') {
+        pairIndices.add(g.fromIndex)
+        pairIndices.add(g.toIndex)
+      }
+    }
+    const nonPairedPostings = t.postings.filter((_, idx) => !pairIndices.has(idx))
+    for (const { label, assetPrefix, incomePrefix } of PAIRED_PREFIXES) {
+      const assetSums = sumByCommodity(t.postings, (p) => p.account.startsWith(assetPrefix))
+      const incomeSums = sumByCommodity(t.postings, (p) => p.account.startsWith(incomePrefix))
+      const hasAsset = Object.keys(assetSums).length > 0
+      const hasIncome = Object.keys(incomeSums).length > 0
+      if (!hasAsset && !hasIncome) continue
+      if (!hasAsset) {
+        push(i, `${label}: ${incomePrefix}* needs a matching ${assetPrefix}* reverse entry.`)
+        continue
+      }
+      if (!hasIncome) {
+        push(i, `${label}: ${assetPrefix}* needs a matching ${incomePrefix}* reverse entry.`)
+        continue
+      }
+      const commodities = new Set([...Object.keys(assetSums), ...Object.keys(incomeSums)])
+      for (const c of commodities) {
+        const a = assetSums[c] ?? 0
+        const inc = incomeSums[c] ?? 0
+        if (Math.abs(a + inc) > 0.005) {
+          push(
+            i,
+            `${label} ${c} mismatch: ${assetPrefix}* = ${formatAmount(a)}, ${incomePrefix}* = ${formatAmount(inc)} (must cancel out).`,
+          )
+        }
+      }
+    }
+
+    // Reward earn legs (positive Assets:Rewards) must pair with Income:Rewards.
+    // Redemption legs (negative Assets:Rewards) must carry a price clause.
+    // Points-transfer pair indices are excluded so they don't double-fire.
+    const earnSums = sumByCommodity(
+      nonPairedPostings,
+      (p) =>
+        p.account.startsWith('Assets:Rewards:') &&
+        p.amount != null &&
+        parseFloat(p.amount) > 0,
+    )
+    const incomeRewardSums = sumByCommodity(nonPairedPostings, (p) =>
+      p.account.startsWith('Income:Rewards:'),
+    )
+    const hasEarn = Object.keys(earnSums).length > 0
+    const hasIncomeReward = Object.keys(incomeRewardSums).length > 0
+    if (hasEarn && !hasIncomeReward) {
+      push(i, `Reward: Assets:Rewards:* (earn) needs a matching Income:Rewards:* reverse entry.`)
+    } else if (!hasEarn && hasIncomeReward) {
+      push(i, `Reward: Income:Rewards:* needs a matching Assets:Rewards:* reverse entry.`)
+    } else if (hasEarn && hasIncomeReward) {
+      const commodities = new Set([
+        ...Object.keys(earnSums),
+        ...Object.keys(incomeRewardSums),
+      ])
+      for (const c of commodities) {
+        const a = earnSums[c] ?? 0
+        const inc = incomeRewardSums[c] ?? 0
+        if (Math.abs(a + inc) > 0.005) {
+          push(
+            i,
+            `Reward ${c} mismatch: Assets:Rewards:* = ${formatAmount(a)}, Income:Rewards:* = ${formatAmount(inc)} (must cancel out).`,
+          )
+        }
+      }
+    }
+
+    for (let idx = 0; idx < t.postings.length; idx++) {
+      if (pairIndices.has(idx)) continue
+      const p = t.postings[idx]
+      if (!p.account.startsWith('Assets:Rewards:')) continue
+      const n = p.amount != null ? parseFloat(p.amount) : NaN
+      if (!Number.isFinite(n) || n >= 0) continue
+      if (!p.priceCurrency || !p.priceAmount || p.priceCurrency === p.currency) {
+        push(
+          i,
+          `Redemption: ${p.account} must convert via @@/@ price clause to a real currency.`,
+        )
+      }
+    }
+
+    for (const g of groups) {
+      if (g.kind !== 'points-transfer') continue
+      const srcRaw = g.source.amount != null ? parseFloat(g.source.amount) : NaN
+      const sinkRaw = g.sink.amount != null ? parseFloat(g.sink.amount) : NaN
+      if (Number.isFinite(srcRaw) && srcRaw >= 0) {
+        push(
+          i,
+          `Points transfer: ${g.source.account} must be negative (the program you're drawing points from).`,
+        )
+      }
+      if (Number.isFinite(sinkRaw) && sinkRaw <= 0) {
+        push(
+          i,
+          `Points transfer: ${g.sink.account} must be positive (the program receiving points).`,
+        )
+      }
+    }
+  }
+  return errors
+}
+
 type ForexInfo = {
   foreignAmount: number
   foreignCurrency: string
@@ -91,19 +294,19 @@ type ForexInfo = {
   source: 'rate' | 'total' | null
 }
 
-function buildForexForCcLeg(cc: Posting, homeCurrency: string | undefined): ForexInfo | null {
-  if (!homeCurrency) return null
-  if (!cc.currency || cc.currency === homeCurrency) return null
-  const foreignAmount = cc.amount != null ? Math.abs(parseFloat(cc.amount)) : NaN
+function buildForexInfo(p: Posting, targetCurrency: string | undefined): ForexInfo | null {
+  if (!targetCurrency) return null
+  if (!p.currency || p.currency === targetCurrency) return null
+  const foreignAmount = p.amount != null ? Math.abs(parseFloat(p.amount)) : NaN
   if (!Number.isFinite(foreignAmount) || foreignAmount === 0) return null
 
   let homeAmount: number | null = null
   let rate: number | null = null
   let source: 'rate' | 'total' | null = null
-  if (cc.priceAmount && cc.priceCurrency === homeCurrency) {
-    const pa = parseFloat(cc.priceAmount)
+  if (p.priceAmount && p.priceCurrency === targetCurrency) {
+    const pa = parseFloat(p.priceAmount)
     if (Number.isFinite(pa)) {
-      if (cc.atSigns === 2) {
+      if (p.atSigns === 2) {
         homeAmount = pa
         rate = pa / foreignAmount
         source = 'total'
@@ -117,8 +320,8 @@ function buildForexForCcLeg(cc: Posting, homeCurrency: string | undefined): Fore
 
   return {
     foreignAmount,
-    foreignCurrency: cc.currency,
-    homeCurrency,
+    foreignCurrency: p.currency,
+    homeCurrency: targetCurrency,
     homeAmount,
     rate,
     source,
@@ -162,8 +365,7 @@ function currenciesIn(
   const seen = new Set<string>(DEFAULT_CURRENCIES)
   for (const t of result.transactions) {
     for (const p of t.postings) {
-      if (isRewardAccount(p.account)) continue
-      if (p.currency) seen.add(p.currency)
+      if (!isRewardAccount(p.account) && p.currency) seen.add(p.currency)
       if (p.priceCurrency) seen.add(p.priceCurrency)
     }
   }
@@ -208,10 +410,6 @@ function formatAmount(value: number, fractionDigits = 2): string {
 }
 
 type Mutator = (result: ParseResult) => void
-
-function FieldLabel({ children }: { children: ReactNode }) {
-  return <span className="txn-form-field-label">{children}</span>
-}
 
 function EditableText({
   value,
@@ -646,7 +844,9 @@ function PostingCardShell({
           title={canRemove ? 'Remove posting' : 'A transaction needs at least 2 postings'}
           onClick={onRemove}
         >
-          ×
+          <span className="material-symbols-outlined" aria-hidden>
+            delete
+          </span>
         </button>
       )}
     </div>
@@ -726,15 +926,23 @@ function ForexStrip({
   editable,
   onRate,
   onTotal,
+  homeCurrencyOptions,
+  onHomeCurrency,
+  listIdBase,
+  label = 'FOREX',
 }: {
   forex: ForexInfo
   editable: boolean
   onRate: (next: number | null) => void
   onTotal: (next: number | null) => void
+  homeCurrencyOptions?: string[]
+  onHomeCurrency?: (next: string) => void
+  listIdBase: string
+  label?: string
 }) {
   return (
     <div className="txn-form-posting-card-forex" data-testid="forex-strip">
-      <span className="txn-form-posting-card-forex-label">FOREX</span>
+      <span className="txn-form-posting-card-forex-label">{label}</span>
       <div className="txn-form-posting-card-forex-calc">
         <div className="txn-form-posting-card-forex-term">
           <span className="txn-form-posting-card-forex-value tnum">
@@ -769,7 +977,17 @@ function ForexStrip({
             ariaLabel="Home amount"
             onCommit={onTotal}
           />
-          <span className="txn-form-posting-card-forex-unit">{forex.homeCurrency}</span>
+          {onHomeCurrency && homeCurrencyOptions ? (
+            <EditableCurrency
+              value={forex.homeCurrency}
+              options={homeCurrencyOptions}
+              editable={editable}
+              inputId={`${listIdBase}-forex-home-currency`}
+              onCommit={onHomeCurrency}
+            />
+          ) : (
+            <span className="txn-form-posting-card-forex-unit">{forex.homeCurrency}</span>
+          )}
           {forex.source === 'rate' && (
             <span className="txn-form-posting-card-forex-auto">auto</span>
           )}
@@ -793,24 +1011,28 @@ type PostingCardCommonProps = {
   onRemove: () => void
 }
 
-function ExpenseCard(props: PostingCardCommonProps) {
-  const cfg = POSTING_TYPE_CONFIG.expense
+function ExpenseCard(
+  props: PostingCardCommonProps & { typeKey: 'expense' | 'expense-refund' | 'fee' },
+) {
+  const cfg = POSTING_TYPE_CONFIG[props.typeKey]
+  const icon = props.typeKey === 'fee' ? 'receipt_long' : 'restaurant'
+  const label = props.typeKey === 'fee' ? 'Fee' : 'Category'
   return (
     <PostingCardShell
-      type="expense"
+      type={props.typeKey}
       pillLabel={cfg.label}
       editable={props.editable}
       canRemove={props.canRemove}
       onRemove={props.onRemove}
       accountField={
         <AccountField
-          label="Category"
-          icon="restaurant"
+          label={label}
+          icon={icon}
           value={props.posting.account}
           prefix={cfg.prefix}
           placeholder={cfg.placeholder}
           options={props.accountOptions}
-          inputId={`${props.listIdBase}-account-expense`}
+          inputId={`${props.listIdBase}-account-${props.typeKey}`}
           editable={props.editable}
           onCommit={props.onAccount}
         />
@@ -825,7 +1047,7 @@ function ExpenseCard(props: PostingCardCommonProps) {
               value={props.posting.currency || ''}
               options={props.allCurrencies}
               editable={props.editable}
-              inputId={`${props.listIdBase}-currency-expense`}
+              inputId={`${props.listIdBase}-currency-${props.typeKey}`}
               onCommit={props.onCurrency}
             />
           }
@@ -837,15 +1059,16 @@ function ExpenseCard(props: PostingCardCommonProps) {
 
 function CCSpendCard(
   props: PostingCardCommonProps & {
+    typeKey: 'cc-spend' | 'cc-refund'
     forex: ForexInfo | null
     onForexRate: (next: number | null) => void
     onForexTotal: (next: number | null) => void
   },
 ) {
-  const cfg = POSTING_TYPE_CONFIG['cc-spend']
+  const cfg = POSTING_TYPE_CONFIG[props.typeKey]
   return (
     <PostingCardShell
-      type="cc-spend"
+      type={props.typeKey}
       pillLabel={cfg.label}
       editable={props.editable}
       canRemove={props.canRemove}
@@ -858,7 +1081,7 @@ function CCSpendCard(
           prefix={cfg.prefix}
           placeholder={cfg.placeholder}
           options={props.accountOptions}
-          inputId={`${props.listIdBase}-account-cc-spend`}
+          inputId={`${props.listIdBase}-account-${props.typeKey}`}
           editable={props.editable}
           onCommit={props.onAccount}
         />
@@ -873,7 +1096,7 @@ function CCSpendCard(
               value={props.posting.currency || ''}
               options={props.allCurrencies}
               editable={props.editable}
-              inputId={`${props.listIdBase}-currency-cc-spend`}
+              inputId={`${props.listIdBase}-currency-${props.typeKey}`}
               onCommit={props.onCurrency}
             />
           }
@@ -886,6 +1109,7 @@ function CCSpendCard(
             editable={props.editable}
             onRate={props.onForexRate}
             onTotal={props.onForexTotal}
+            listIdBase={`${props.listIdBase}-${props.typeKey}`}
           />
         )
       }
@@ -991,17 +1215,321 @@ function RewardCard(props: PostingCardCommonProps) {
           amount={props.displayAmount}
           editable={props.editable}
           onAmount={props.onAmount}
-          currencySlot={
-            <span
-              className="txn-form-posting-card-currency-static"
-              aria-label="Currency"
-            >
-              {props.posting.currency || ''}
-            </span>
-          }
+          currencySlot={null}
         />
       }
     />
+  )
+}
+
+function RedemptionCard(
+  props: PostingCardCommonProps & {
+    forex: ForexInfo | null
+    onForexRate: (next: number | null) => void
+    onForexTotal: (next: number | null) => void
+    onPriceCurrency: (next: string) => void
+  },
+) {
+  const cfg = POSTING_TYPE_CONFIG.redemption
+  return (
+    <PostingCardShell
+      type="redemption"
+      pillLabel={cfg.label}
+      editable={props.editable}
+      canRemove={props.canRemove}
+      onRemove={props.onRemove}
+      accountField={
+        <AccountField
+          label="Program"
+          icon="redeem"
+          value={props.posting.account}
+          prefix={cfg.prefix}
+          placeholder={cfg.placeholder}
+          options={props.accountOptions}
+          inputId={`${props.listIdBase}-account-redemption`}
+          editable={props.editable}
+          onCommit={props.onAccount}
+        />
+      }
+      amountField={
+        <AmountField
+          amount={props.displayAmount}
+          editable={props.editable}
+          onAmount={props.onAmount}
+          currencySlot={null}
+        />
+      }
+      forexStrip={
+        props.forex && (
+          <ForexStrip
+            forex={props.forex}
+            editable={props.editable}
+            onRate={props.onForexRate}
+            onTotal={props.onForexTotal}
+            homeCurrencyOptions={props.allCurrencies}
+            onHomeCurrency={props.onPriceCurrency}
+            listIdBase={`${props.listIdBase}-redemption`}
+            label="VALUE"
+          />
+        )
+      }
+    />
+  )
+}
+
+function PointsTransferCard({
+  source,
+  sink,
+  editable,
+  canRemove,
+  accountOptions,
+  listIdBase,
+  onSourceAccount,
+  onSinkAccount,
+  onSourceAmount,
+  onSinkAmount,
+  onRemove,
+}: {
+  source: Posting
+  sink: Posting
+  editable: boolean
+  canRemove: boolean
+  accountOptions: string[]
+  listIdBase: string
+  onSourceAccount: (next: string) => void
+  onSinkAccount: (next: string) => void
+  onSourceAmount: (next: number) => void
+  onSinkAmount: (next: number) => void
+  onRemove: () => void
+}) {
+  const rewardsAccounts = accountOptions.filter((a) => a.startsWith('Assets:Rewards:'))
+  const sourceMagnitude =
+    source.amount != null && Number.isFinite(parseFloat(source.amount))
+      ? Math.abs(parseFloat(source.amount))
+      : null
+  const sinkMagnitude =
+    sink.amount != null && Number.isFinite(parseFloat(sink.amount))
+      ? Math.abs(parseFloat(sink.amount))
+      : null
+  const priceTotal =
+    sink.priceAmount != null && Number.isFinite(parseFloat(sink.priceAmount))
+      ? parseFloat(sink.priceAmount)
+      : null
+
+  const forex: ForexInfo | null =
+    sink.currency && source.currency && sinkMagnitude != null && priceTotal != null
+      ? {
+          foreignAmount: sinkMagnitude,
+          foreignCurrency: sink.currency,
+          homeCurrency: source.currency,
+          homeAmount: priceTotal,
+          rate: sinkMagnitude > 0 ? priceTotal / sinkMagnitude : null,
+          source: 'total',
+        }
+      : null
+
+  return (
+    <div
+      className="txn-form-posting-card txn-form-posting-card-points-transfer"
+      data-posting-type="points-transfer"
+    >
+      <span className="txn-form-posting-card-type-pill">POINTS TRANSFER</span>
+      <div className="txn-form-posting-card-main">
+        <AccountField
+          label="From"
+          icon="arrow_upward"
+          value={source.account}
+          prefix="Assets:Rewards:"
+          placeholder="HDFC:SmartBuy"
+          options={rewardsAccounts}
+          inputId={`${listIdBase}-points-transfer-source`}
+          editable={editable}
+          onCommit={onSourceAccount}
+        />
+        <AmountField
+          amount={sourceMagnitude}
+          editable={editable}
+          onAmount={(next) => onSourceAmount(Math.abs(next))}
+          currencySlot={null}
+        />
+      </div>
+      <div className="txn-form-posting-card-main txn-form-posting-card-main-secondary">
+        <AccountField
+          label="To"
+          icon="arrow_downward"
+          value={sink.account}
+          prefix="Assets:Rewards:"
+          placeholder="Finnair"
+          options={rewardsAccounts}
+          inputId={`${listIdBase}-points-transfer-sink`}
+          editable={editable}
+          onCommit={onSinkAccount}
+        />
+        <AmountField
+          amount={sinkMagnitude}
+          editable={editable}
+          onAmount={(next) => onSinkAmount(Math.abs(next))}
+          currencySlot={null}
+        />
+      </div>
+      {forex && (
+        <ForexStrip
+          forex={forex}
+          editable={false}
+          onRate={() => {}}
+          onTotal={() => {}}
+          listIdBase={`${listIdBase}-points-transfer`}
+          label="RATIO"
+        />
+      )}
+      {editable && (
+        <button
+          type="button"
+          className="txn-form-posting-card-remove"
+          aria-label="Remove points transfer"
+          disabled={!canRemove}
+          title={
+            canRemove
+              ? 'Remove points transfer'
+              : 'Cannot remove — transaction would be empty'
+          }
+          onClick={onRemove}
+        >
+          <span className="material-symbols-outlined" aria-hidden>
+            delete
+          </span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+const TRANSFER_VARIANT_CONFIG: Record<
+  TransferVariant,
+  { pill: string; fromPlaceholder: string; toPlaceholder: string }
+> = {
+  transfer: {
+    pill: 'TRANSFER',
+    fromPlaceholder: 'Bank:Savings',
+    toPlaceholder: 'Bank:Checking',
+  },
+  'cc-payment': {
+    pill: 'CC PAYMENT',
+    fromPlaceholder: 'Bank:Checking',
+    toPlaceholder: 'HDFC:Infinia',
+  },
+  'wallet-topup': {
+    pill: 'WALLET TOP-UP',
+    fromPlaceholder: 'Bank:Checking',
+    toPlaceholder: 'Paytm',
+  },
+  'gift-card': {
+    pill: 'GIFT CARD',
+    fromPlaceholder: 'Bank:Checking',
+    toPlaceholder: 'Amazon',
+  },
+}
+
+function TransferCard({
+  from,
+  to,
+  variant,
+  editable,
+  canRemove,
+  accountOptions,
+  listIdBase,
+  onFromAccount,
+  onToAccount,
+  onAmount,
+  onRemove,
+}: {
+  from: Posting
+  to: Posting
+  variant: TransferVariant
+  editable: boolean
+  canRemove: boolean
+  accountOptions: string[]
+  listIdBase: string
+  onFromAccount: (next: string) => void
+  onToAccount: (next: string) => void
+  onAmount: (next: number) => void
+  onRemove: () => void
+}) {
+  const transferEligible = accountOptions.filter(
+    (a) =>
+      (a.startsWith('Assets:') && !a.startsWith('Assets:Rewards:')) ||
+      a.startsWith('Liabilities:CC:'),
+  )
+  const magnitude =
+    to.amount != null && Number.isFinite(parseFloat(to.amount))
+      ? Math.abs(parseFloat(to.amount))
+      : from.amount != null && Number.isFinite(parseFloat(from.amount))
+        ? Math.abs(parseFloat(from.amount))
+        : null
+  const currency = to.currency || from.currency || ''
+  const cfg = TRANSFER_VARIANT_CONFIG[variant]
+
+  return (
+    <div
+      className={`txn-form-posting-card txn-form-posting-card-transfer txn-form-posting-card-transfer-${variant}`}
+      data-posting-type={variant}
+    >
+      <span className="txn-form-posting-card-type-pill">{cfg.pill}</span>
+      <div className="txn-form-posting-card-main">
+        <AccountField
+          label="From"
+          icon="arrow_upward"
+          value={from.account}
+          prefix=""
+          placeholder={cfg.fromPlaceholder}
+          options={transferEligible}
+          inputId={`${listIdBase}-transfer-from`}
+          editable={editable}
+          onCommit={onFromAccount}
+        />
+        <AmountField
+          amount={magnitude}
+          editable={editable}
+          onAmount={(next) => onAmount(Math.abs(next))}
+          currencySlot={
+            currency ? (
+              <span className="txn-form-posting-card-currency-static">{currency}</span>
+            ) : null
+          }
+        />
+      </div>
+      <div className="txn-form-posting-card-main txn-form-posting-card-main-secondary">
+        <AccountField
+          label="To"
+          icon="arrow_downward"
+          value={to.account}
+          prefix=""
+          placeholder={cfg.toPlaceholder}
+          options={transferEligible}
+          inputId={`${listIdBase}-transfer-to`}
+          editable={editable}
+          onCommit={onToAccount}
+        />
+      </div>
+      {editable && (
+        <button
+          type="button"
+          className="txn-form-posting-card-remove"
+          aria-label={`Remove ${cfg.pill.toLowerCase()}`}
+          disabled={!canRemove}
+          title={
+            canRemove
+              ? `Remove ${cfg.pill.toLowerCase()}`
+              : 'Cannot remove — transaction would be empty'
+          }
+          onClick={onRemove}
+        >
+          <span className="material-symbols-outlined" aria-hidden>
+            delete
+          </span>
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -1018,6 +1546,7 @@ function PostingRow({
   onCurrency,
   onForexRate,
   onForexTotal,
+  onPriceCurrency,
   onRemove,
 }: {
   posting: Posting
@@ -1032,6 +1561,7 @@ function PostingRow({
   onCurrency: (next: string) => void
   onForexRate: (next: number | null) => void
   onForexTotal: (next: number | null) => void
+  onPriceCurrency: (next: string) => void
   onRemove: () => void
 }) {
   const type = classifyPosting(posting)
@@ -1053,8 +1583,12 @@ function PostingRow({
 
   if (
     (type === 'expense' ||
+      type === 'expense-refund' ||
+      type === 'fee' ||
       type === 'cc-spend' ||
+      type === 'cc-refund' ||
       type === 'reward-earn' ||
+      type === 'redemption' ||
       type === 'discount' ||
       type === 'cashback') &&
     typeConfig
@@ -1072,14 +1606,28 @@ function PostingRow({
       onCurrency,
       onRemove,
     }
-    if (type === 'expense') return <ExpenseCard {...common} />
-    if (type === 'cc-spend') {
+    if (type === 'expense' || type === 'expense-refund' || type === 'fee') {
+      return <ExpenseCard {...common} typeKey={type} />
+    }
+    if (type === 'cc-spend' || type === 'cc-refund') {
       return (
         <CCSpendCard
+          {...common}
+          typeKey={type}
+          forex={forex ?? null}
+          onForexRate={onForexRate}
+          onForexTotal={onForexTotal}
+        />
+      )
+    }
+    if (type === 'redemption') {
+      return (
+        <RedemptionCard
           {...common}
           forex={forex ?? null}
           onForexRate={onForexRate}
           onForexTotal={onForexTotal}
+          onPriceCurrency={onPriceCurrency}
         />
       )
     }
@@ -1204,7 +1752,19 @@ function FlagToggle({
   )
 }
 
-type AddPostingKind = 'generic' | 'expense' | 'cc-spend' | 'reward-earn' | 'discount' | 'cashback'
+type AddPostingKind =
+  | 'generic'
+  | 'expense'
+  | 'cc-spend'
+  | 'reward-earn'
+  | 'redemption'
+  | 'points-transfer'
+  | 'transfer'
+  | 'cc-payment'
+  | 'wallet-topup'
+  | 'gift-card'
+  | 'discount'
+  | 'cashback'
 
 function AddPostingMenu({ onAdd }: { onAdd: (kind: AddPostingKind) => void }) {
   const [open, setOpen] = useState(false)
@@ -1212,6 +1772,12 @@ function AddPostingMenu({ onAdd }: { onAdd: (kind: AddPostingKind) => void }) {
     { kind: 'expense', label: 'Expense' },
     { kind: 'cc-spend', label: 'CC Spend' },
     { kind: 'reward-earn', label: 'Reward Earn' },
+    { kind: 'redemption', label: 'Redemption' },
+    { kind: 'points-transfer', label: 'Points Transfer' },
+    { kind: 'transfer', label: 'Transfer' },
+    { kind: 'cc-payment', label: 'CC Payment' },
+    { kind: 'wallet-topup', label: 'Wallet Top-up' },
+    { kind: 'gift-card', label: 'Gift Card' },
     { kind: 'discount', label: 'Discount' },
     { kind: 'cashback', label: 'Cashback' },
     { kind: 'generic', label: 'Generic' },
@@ -1273,6 +1839,7 @@ function TxnCard({
   allCurrencies,
   accountCurrencyConstraints,
   homeCommodityByAccount,
+  validationErrors,
 }: {
   txn: Transaction
   index: number
@@ -1282,97 +1849,205 @@ function TxnCard({
   allCurrencies: string[]
   accountCurrencyConstraints: Record<string, string[]>
   homeCommodityByAccount: Record<string, string>
+  validationErrors: string[]
 }) {
   const dateStr = txn.date.toString()
   const firstLink = [...txn.links][0] || ''
   const listIdBase = `txn-${index}`
-  const visiblePostings = txn.postings
-    .map((p, i) => ({ posting: p, originalIndex: i }))
-    .filter(({ posting }) => !isHiddenPosting(posting))
+  const groups = groupPostings(txn.postings)
+  const visibleGroups = groups.filter((g) =>
+    g.kind === 'single' ? !isHiddenPosting(g.posting) : true,
+  )
 
   return (
     <div className="txn-form-card">
-      <div className="txn-form-top-row">
-        <div className="txn-form-field txn-form-field-date">
-          <FieldLabel>Date</FieldLabel>
-          <DateField
-            value={dateStr}
-            editable={editable}
-            onCommit={(next) =>
-              mutate((r) => {
-                const stub = parse(
-                  `${next} * "_" "_"\n  Expenses:X 1 USD\n  Assets:Y -1 USD`,
-                )
-                if (stub.transactions.length > 0) {
-                  r.transactions[index].date = stub.transactions[0].date
-                }
-              })
-            }
-          />
+      <div className="txn-form-header-card">
+        <span className="txn-form-header-pill">TRANSACTION</span>
+        <div className="txn-form-header-row">
+          <div className="txn-form-header-field txn-form-header-field-date">
+            <label className="txn-form-header-field-label">Date</label>
+            <DateField
+              value={dateStr}
+              editable={editable}
+              onCommit={(next) =>
+                mutate((r) => {
+                  const stub = parse(
+                    `${next} * "_" "_"\n  Expenses:X 1 USD\n  Assets:Y -1 USD`,
+                  )
+                  if (stub.transactions.length > 0) {
+                    r.transactions[index].date = stub.transactions[0].date
+                  }
+                })
+              }
+            />
+          </div>
+          <div className="txn-form-header-field txn-form-header-field-payee">
+            <label className="txn-form-header-field-label">Payee</label>
+            <EditableText
+              value={txn.payee || ''}
+              placeholder="Who got paid?"
+              editable={editable}
+              required
+              fieldLabel="Payee"
+              onCommit={(next) =>
+                mutate((r) => {
+                  r.transactions[index].payee = next
+                })
+              }
+            />
+          </div>
+          <div className="txn-form-header-field txn-form-header-field-status">
+            <label className="txn-form-header-field-label">Status</label>
+            <FlagToggle
+              flag={txn.flag}
+              editable={editable}
+              onChange={(next) =>
+                mutate((r) => {
+                  r.transactions[index].flag = next
+                })
+              }
+            />
+          </div>
         </div>
-        <div className="txn-form-field txn-form-field-grow">
-          <FieldLabel>Payee</FieldLabel>
+
+        <div className="txn-form-header-field txn-form-header-field-notes">
+          <label className="txn-form-header-field-label">Notes</label>
           <EditableText
-            value={txn.payee || ''}
-            placeholder="Who got paid?"
+            value={txn.narration || ''}
+            placeholder="Describe this transaction…"
             editable={editable}
             required
-            fieldLabel="Payee"
+            fieldLabel="Notes"
             onCommit={(next) =>
               mutate((r) => {
-                r.transactions[index].payee = next
+                r.transactions[index].narration = next
               })
             }
           />
         </div>
-        <FlagToggle
-          flag={txn.flag}
-          editable={editable}
-          onChange={(next) =>
-            mutate((r) => {
-              r.transactions[index].flag = next
-            })
-          }
-        />
+
+        <div className="txn-form-header-field txn-form-header-field-link">
+          <label className="txn-form-header-field-label">Link</label>
+          <LinkField
+            value={firstLink}
+            editable={editable}
+            onCommit={(next) =>
+              mutate((r) => {
+                const t = r.transactions[index]
+                const links = [...t.links]
+                if (links.length > 0) links[0] = next
+                else links.push(next)
+                t.links = new Set(links)
+              })
+            }
+          />
+        </div>
       </div>
 
-      <div className="txn-form-field">
-        <FieldLabel>Notes</FieldLabel>
-        <EditableText
-          value={txn.narration || ''}
-          placeholder="Describe this transaction…"
-          editable={editable}
-          required
-          fieldLabel="Notes"
-          onCommit={(next) =>
-            mutate((r) => {
-              r.transactions[index].narration = next
-            })
-          }
-        />
-      </div>
-
-      <div className="txn-form-field">
-        <FieldLabel>Link</FieldLabel>
-        <LinkField
-          value={firstLink}
-          editable={editable}
-          onCommit={(next) =>
-            mutate((r) => {
-              const t = r.transactions[index]
-              const links = [...t.links]
-              if (links.length > 0) links[0] = next
-              else links.push(next)
-              t.links = new Set(links)
-            })
-          }
-        />
-      </div>
-
-      <hr className="txn-form-divider" />
+      {validationErrors.length > 0 && (
+        <ul className="txn-form-validation-errors">
+          {validationErrors.map((m, i) => (
+            <li key={i}>{m}</li>
+          ))}
+        </ul>
+      )}
 
       <div className="txn-form-postings">
-        {visiblePostings.map(({ posting, originalIndex }) => (
+        {visibleGroups.map((group) => {
+          if (group.kind === 'transfer') {
+            const tr: TransferGroup = group
+            return (
+              <TransferCard
+                key={`transfer-${tr.fromIndex}-${tr.toIndex}`}
+                from={tr.from}
+                to={tr.to}
+                variant={tr.variant}
+                editable={editable}
+                canRemove={txn.postings.length >= 3}
+                accountOptions={allAccounts}
+                listIdBase={listIdBase}
+                onFromAccount={(next) =>
+                  mutate((r) => {
+                    r.transactions[index].postings[tr.fromIndex].account = next
+                  })
+                }
+                onToAccount={(next) =>
+                  mutate((r) => {
+                    r.transactions[index].postings[tr.toIndex].account = next
+                  })
+                }
+                onAmount={(next) =>
+                  mutate((r) => {
+                    const magnitude = Math.abs(next)
+                    const fromPosting = r.transactions[index].postings[tr.fromIndex]
+                    const toPosting = r.transactions[index].postings[tr.toIndex]
+                    fromPosting.amount = (-magnitude).toString()
+                    toPosting.amount = magnitude.toString()
+                  })
+                }
+                onRemove={() =>
+                  mutate((r) => {
+                    const hi = Math.max(tr.fromIndex, tr.toIndex)
+                    const lo = Math.min(tr.fromIndex, tr.toIndex)
+                    r.transactions[index].postings.splice(hi, 1)
+                    r.transactions[index].postings.splice(lo, 1)
+                  })
+                }
+              />
+            )
+          }
+          if (group.kind === 'points-transfer') {
+            const pair: PointsTransferGroup = group
+            return (
+              <PointsTransferCard
+                key={`pair-${pair.sourceIndex}-${pair.sinkIndex}`}
+                source={pair.source}
+                sink={pair.sink}
+                editable={editable}
+                canRemove={txn.postings.length >= 4}
+                accountOptions={allAccounts}
+                listIdBase={listIdBase}
+                onSourceAccount={(next) =>
+                  mutate((r) => {
+                    r.transactions[index].postings[pair.sourceIndex].account = next
+                  })
+                }
+                onSinkAccount={(next) =>
+                  mutate((r) => {
+                    r.transactions[index].postings[pair.sinkIndex].account = next
+                  })
+                }
+                onSourceAmount={(next) =>
+                  mutate((r) => {
+                    const magnitude = Math.abs(next)
+                    const sourcePosting =
+                      r.transactions[index].postings[pair.sourceIndex]
+                    const sinkPosting = r.transactions[index].postings[pair.sinkIndex]
+                    sourcePosting.amount = (-magnitude).toString()
+                    sinkPosting.priceAmount = magnitude.toString()
+                    if (!sinkPosting.atSigns) sinkPosting.atSigns = 2
+                  })
+                }
+                onSinkAmount={(next) =>
+                  mutate((r) => {
+                    r.transactions[index].postings[pair.sinkIndex].amount =
+                      Math.abs(next).toString()
+                  })
+                }
+                onRemove={() =>
+                  mutate((r) => {
+                    const hi = Math.max(pair.sourceIndex, pair.sinkIndex)
+                    const lo = Math.min(pair.sourceIndex, pair.sinkIndex)
+                    r.transactions[index].postings.splice(hi, 1)
+                    r.transactions[index].postings.splice(lo, 1)
+                  })
+                }
+              />
+            )
+          }
+          const posting = group.posting
+          const originalIndex = group.index
+          return (
           <PostingRow
             key={originalIndex}
             posting={posting}
@@ -1381,11 +2056,16 @@ function TxnCard({
             allAccounts={allAccounts}
             allCurrencies={allCurrencies}
             listIdBase={listIdBase}
-            forex={
-              classifyPosting(posting) === 'cc-spend'
-                ? buildForexForCcLeg(posting, homeCommodityByAccount[posting.account])
-                : null
-            }
+            forex={(() => {
+              const t = classifyPosting(posting)
+              if (t === 'cc-spend') {
+                return buildForexInfo(posting, homeCommodityByAccount[posting.account])
+              }
+              if (t === 'redemption') {
+                return buildForexInfo(posting, posting.priceCurrency)
+              }
+              return null
+            })()}
             onAccount={(next) =>
               mutate((r) => {
                 const target = r.transactions[index].postings[originalIndex]
@@ -1411,15 +2091,16 @@ function TxnCard({
             onForexRate={(next) =>
               mutate((r) => {
                 const target = r.transactions[index].postings[originalIndex]
-                const home = homeCommodityByAccount[target.account]
-                if (!home) return
+                const targetCurrency =
+                  target.priceCurrency || homeCommodityByAccount[target.account]
+                if (!targetCurrency) return
                 if (next == null) {
                   target.priceAmount = undefined
                   target.priceCurrency = undefined
                   target.atSigns = undefined
                 } else {
                   target.priceAmount = next.toString()
-                  target.priceCurrency = home
+                  target.priceCurrency = targetCurrency
                   target.atSigns = 1
                 }
               })
@@ -1427,17 +2108,25 @@ function TxnCard({
             onForexTotal={(next) =>
               mutate((r) => {
                 const target = r.transactions[index].postings[originalIndex]
-                const home = homeCommodityByAccount[target.account]
-                if (!home) return
+                const targetCurrency =
+                  target.priceCurrency || homeCommodityByAccount[target.account]
+                if (!targetCurrency) return
                 if (next == null) {
                   target.priceAmount = undefined
                   target.priceCurrency = undefined
                   target.atSigns = undefined
                 } else {
                   target.priceAmount = next.toString()
-                  target.priceCurrency = home
+                  target.priceCurrency = targetCurrency
                   target.atSigns = 2
                 }
+              })
+            }
+            onPriceCurrency={(next) =>
+              mutate((r) => {
+                const target = r.transactions[index].postings[originalIndex]
+                target.priceCurrency = next
+                if (!target.atSigns) target.atSigns = 2
               })
             }
             onRemove={() =>
@@ -1446,7 +2135,8 @@ function TxnCard({
               })
             }
           />
-        ))}
+          )
+        })}
         {editable && (
           <AddPostingMenu
             onAdd={(kind) =>
@@ -1479,6 +2169,95 @@ function TxnCard({
                       account: 'Income:Rewards:Todo',
                       amount: '0',
                       currency: 'POINTS',
+                    }),
+                  )
+                } else if (kind === 'redemption') {
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Rewards:Todo',
+                      amount: '-1',
+                      currency: 'POINTS',
+                      priceAmount: '0',
+                      priceCurrency: defaultCurrency,
+                      atSigns: 2,
+                    }),
+                  )
+                } else if (kind === 'points-transfer') {
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Rewards:Todo:Source',
+                      amount: '-1',
+                      currency: 'POINTS_A',
+                    }),
+                  )
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Rewards:Todo:Sink',
+                      amount: '1',
+                      currency: 'POINTS_B',
+                      priceAmount: '1',
+                      priceCurrency: 'POINTS_A',
+                      atSigns: 2,
+                    }),
+                  )
+                } else if (kind === 'transfer') {
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Bank:Savings',
+                      amount: '-1',
+                      currency: defaultCurrency,
+                    }),
+                  )
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Bank:Checking',
+                      amount: '1',
+                      currency: defaultCurrency,
+                    }),
+                  )
+                } else if (kind === 'cc-payment') {
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Bank:Checking',
+                      amount: '-1',
+                      currency: defaultCurrency,
+                    }),
+                  )
+                  t.postings.push(
+                    new Posting({
+                      account: 'Liabilities:CC:Todo',
+                      amount: '1',
+                      currency: defaultCurrency,
+                    }),
+                  )
+                } else if (kind === 'wallet-topup') {
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Bank:Checking',
+                      amount: '-1',
+                      currency: defaultCurrency,
+                    }),
+                  )
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Wallet:Todo',
+                      amount: '1',
+                      currency: defaultCurrency,
+                    }),
+                  )
+                } else if (kind === 'gift-card') {
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:Bank:Checking',
+                      amount: '-1',
+                      currency: defaultCurrency,
+                    }),
+                  )
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:GiftCard:Todo',
+                      amount: '1',
+                      currency: defaultCurrency,
                     }),
                   )
                 } else if (kind === 'discount') {
@@ -1561,6 +2340,7 @@ export function TxnFormView({
   const allAccounts = accountsMatching(result, '')
   const allCurrencies = currenciesIn(result, homeCommodityByAccount)
   const accountCurrencyConstraints = constraintCurrenciesByAccount(result)
+  const validationErrorsByTxn = validatePairedPostings(result)
 
   return (
     <div className="txn-form-list">
@@ -1575,6 +2355,7 @@ export function TxnFormView({
           allCurrencies={allCurrencies}
           accountCurrencyConstraints={accountCurrencyConstraints}
           homeCommodityByAccount={homeCommodityByAccount}
+          validationErrors={validationErrorsByTxn.get(i) ?? []}
         />
       ))}
     </div>
