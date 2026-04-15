@@ -14,12 +14,22 @@ const nextConfig = {
   serverExternalPackages: ['jose', 'pg-cloudflare'],
 
   // Your Next.js config here
-  webpack: (webpackConfig: any) => {
+  webpack: (webpackConfig: any, { webpack }: { webpack: any }) => {
     webpackConfig.resolve.extensionAlias = {
       '.cjs': ['.cts', '.cjs'],
       '.js': ['.ts', '.tsx', '.js', '.jsx'],
       '.mjs': ['.mts', '.mjs'],
     }
+
+    // beancount's parseFile.mjs pulls in node:fs/promises and node:path via
+    // fileSystemHelpers.mjs; we only use parse() on in-memory text, so stub
+    // the parseFile re-export out of the bundle.
+    webpackConfig.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^\.\/parseFile\.mjs$/,
+        contextRegExp: /beancount/,
+      }),
+    )
 
     return webpackConfig
   },
