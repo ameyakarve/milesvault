@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
+const ADMIN_USER_ID = 1
+
 export const Commodities: CollectionConfig = {
   slug: 'commodities',
   admin: {
@@ -21,10 +23,12 @@ export const Commodities: CollectionConfig = {
     create: ({ req: { user } }) => !!user,
     update: ({ req: { user } }) => {
       if (!user) return false
+      if (user.id === ADMIN_USER_ID) return true
       return { user: { equals: user.id } }
     },
     delete: ({ req: { user } }) => {
       if (!user) return false
+      if (user.id === ADMIN_USER_ID) return true
       return { user: { equals: user.id } }
     },
   },
@@ -32,10 +36,11 @@ export const Commodities: CollectionConfig = {
     beforeValidate: [
       ({ data, req, operation, originalDoc }) => {
         if (!data) return data
-        if (operation === 'create' && req.user) {
+        const isAdmin = req.user?.id === ADMIN_USER_ID
+        if (operation === 'create' && req.user && !isAdmin) {
           data.user = req.user.id
         }
-        if (operation === 'update' && originalDoc) {
+        if (operation === 'update' && originalDoc && !isAdmin) {
           data.user = originalDoc.user
         }
         return data
@@ -49,13 +54,12 @@ export const Commodities: CollectionConfig = {
       relationTo: 'users',
       index: true,
       admin: {
-        description: 'Owner. Null = global (seed-only).',
+        description: 'Owner. Null = global. Only admin can mutate globals.',
         position: 'sidebar',
-        readOnly: true,
       },
       access: {
-        create: () => false,
-        update: () => false,
+        create: ({ req: { user } }) => user?.id === ADMIN_USER_ID,
+        update: ({ req: { user } }) => user?.id === ADMIN_USER_ID,
       },
     },
     {
