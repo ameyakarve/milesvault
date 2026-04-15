@@ -194,7 +194,7 @@ export interface Media {
 export interface Commodity {
   id: number;
   /**
-   * Owner. Null = global (seed-only).
+   * Owner. Null = global. Only admin can mutate globals.
    */
   user?: (number | null) | User;
   code: string;
@@ -222,6 +222,10 @@ export interface Account {
   type: 'Assets' | 'Liabilities' | 'Income' | 'Expenses' | 'Equity';
   openDate: string;
   closeDate?: string | null;
+  /**
+   * Native commodity for this account. For credit cards, postings in other commodities trigger forex conversion.
+   */
+  homeCommodity?: (number | null) | Commodity;
   constraintCommodities?: (number | Commodity)[] | null;
   bookingMethod?: ('STRICT' | 'STRICT_WITH_SIZE' | 'NONE' | 'FIFO' | 'LIFO' | 'AVERAGE' | 'HISTORICAL') | null;
   metadata?:
@@ -251,7 +255,7 @@ export interface Txn {
   payee?: string | null;
   narration?: string | null;
   tags?: string[] | null;
-  links?: string[] | null;
+  links: string[];
   metadata?:
     | {
         [k: string]: unknown;
@@ -702,6 +706,7 @@ export interface AccountsSelect<T extends boolean = true> {
   type?: T;
   openDate?: T;
   closeDate?: T;
+  homeCommodity?: T;
   constraintCommodities?: T;
   bookingMethod?: T;
   metadata?: T;

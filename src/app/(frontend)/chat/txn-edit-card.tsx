@@ -2,13 +2,13 @@
 
 import { useMemo, useState } from 'react'
 
-type Posting = {
+export type Posting = {
   account: string
   amount: number
   commodity: string
 }
 
-type Draft = {
+export type Draft = {
   date: string
   flag?: string
   payee?: string
@@ -16,7 +16,7 @@ type Draft = {
   postings: Posting[]
 }
 
-function formatDraft(d: Draft): string {
+export function formatDraft(d: Draft): string {
   const header = [
     d.date,
     d.flag || '*',

@@ -84,6 +84,15 @@ export const Accounts: CollectionConfig = {
       type: 'date',
     },
     {
+      name: 'homeCommodity',
+      type: 'relationship',
+      relationTo: 'commodities',
+      admin: {
+        description:
+          'Native commodity for this account. For credit cards, postings in other commodities trigger forex conversion.',
+      },
+    },
+    {
       name: 'constraintCommodities',
       type: 'relationship',
       relationTo: 'commodities',

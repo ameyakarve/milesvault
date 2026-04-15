@@ -168,6 +168,13 @@ export const Txns: CollectionConfig = {
       type: 'text',
       hasMany: true,
       index: true,
+      required: true,
+      validate: (value) => {
+        if (!Array.isArray(value) || value.length === 0) {
+          return 'At least one link is required'
+        }
+        return true
+      },
     },
     {
       name: 'metadata',

@@ -1,6 +1,59 @@
 'use client'
 
 import { useState } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
+import { EditorView, placeholder as placeholderExt } from '@codemirror/view'
+
+import { beancountAutocomplete } from './beancount-autocomplete'
+import { beancountLinter } from './beancount-linter'
+import { beancountSupport } from './beancount-language'
+import { TxnFormView } from './txn-form-view'
+
+const editorTheme = EditorView.theme(
+  {
+    '&': {
+      fontSize: '13px',
+      backgroundColor: 'transparent',
+    },
+    '.cm-content': {
+      fontFamily: "'SF Mono', 'Monaco', 'Menlo', monospace",
+      color: '#e6e6e6',
+      caretColor: '#e6e6e6',
+      padding: '12px 0',
+    },
+    '.cm-gutters': {
+      backgroundColor: 'transparent',
+      color: '#555',
+      border: 'none',
+    },
+    '.cm-activeLine': { backgroundColor: '#222' },
+    '.cm-activeLineGutter': { backgroundColor: '#222' },
+    '.cm-selectionBackground, ::selection': { backgroundColor: '#2a4a6a' },
+    '&.cm-focused': { outline: 'none' },
+    '.cm-tooltip': {
+      backgroundColor: '#1a1a1a',
+      border: '1px solid #5a2a2a',
+      color: '#ff9999',
+    },
+    '.cm-diagnostic-error': {
+      borderLeft: '3px solid #ff6b6b',
+    },
+  },
+  { dark: true },
+)
+
+const PLACEHOLDER = `2026-04-15 * "Someplace" "Dinner"
+  Expenses:Food:Dining           1500 INR
+  Liabilities:CC:HDFC:Infinia   -1500 INR`
+
+const cmExtensions = [
+  editorTheme,
+  beancountSupport,
+  beancountLinter,
+  beancountAutocomplete,
+  placeholderExt(PLACEHOLDER),
+  EditorView.lineWrapping,
+]
 
 type CreateResponse = {
   created: Array<{ index: number; id: number }>
@@ -18,13 +71,15 @@ type UpdateResponse = {
 
 type View = 'code' | 'form'
 
-const PLACEHOLDER = `2026-04-15 * "Someplace" "Dinner"
-  Expenses:Food:Dining           1500 INR
-  Liabilities:CC:HDFC:Infinia   -1500 INR`
-
-export function TxnNewCard({ initialText = '' }: { initialText?: string }) {
+export function TxnNewCard({
+  initialText = '',
+  homeCommodityByAccount,
+}: {
+  initialText?: string
+  homeCommodityByAccount?: Record<string, string>
+}) {
   const [text, setText] = useState(initialText)
-  const [view, setView] = useState<View>('code')
+  const [view, setView] = useState<View>('form')
   const [savedId, setSavedId] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,7 +130,6 @@ export function TxnNewCard({ initialText = '' }: { initialText?: string }) {
   }
 
   const isSaved = savedId != null
-  const rows = Math.max(5, text.split('\n').length + 1)
 
   return (
     <div className={`txn-card ${isSaved ? 'txn-card-saved' : ''}`}>
@@ -107,16 +161,30 @@ export function TxnNewCard({ initialText = '' }: { initialText?: string }) {
         </div>
       </div>
       {view === 'code' ? (
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          readOnly={busy}
-          spellCheck={false}
-          placeholder={PLACEHOLDER}
-          rows={rows}
-        />
+        <div className="txn-card-editor">
+          <CodeMirror
+            value={text}
+            onChange={(v) => setText(v)}
+            editable={!busy}
+            extensions={cmExtensions}
+            basicSetup={{
+              lineNumbers: true,
+              foldGutter: false,
+              highlightActiveLineGutter: true,
+              highlightActiveLine: true,
+              bracketMatching: false,
+              indentOnInput: false,
+              autocompletion: false,
+            }}
+            theme="dark"
+          />
+        </div>
       ) : (
-        <div className="txn-card-form-empty">Form view coming soon</div>
+        <TxnFormView
+          text={text}
+          onChange={busy ? undefined : setText}
+          homeCommodityByAccount={homeCommodityByAccount}
+        />
       )}
       {error && <div className="txn-card-error">{error}</div>}
       <div className="txn-card-actions">

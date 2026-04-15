@@ -19,6 +19,46 @@ export const defaultTxnRoutes: Routes = {
     body: { id: 42 },
     delay: 300,
   }),
+  'GET /api/accounts': async () => ({
+    body: {
+      docs: [
+        { id: 1, path: 'Expenses:Food:Dining' },
+        { id: 2, path: 'Expenses:Food:Groceries' },
+        { id: 3, path: 'Expenses:Food:Coffee' },
+        { id: 4, path: 'Expenses:Travel:Hotel' },
+        { id: 5, path: 'Expenses:Travel:Flights' },
+        { id: 6, path: 'Expenses:Rent' },
+        { id: 7, path: 'Liabilities:CC:HDFC:Infinia' },
+        { id: 8, path: 'Liabilities:CC:Axis:Magnus' },
+        { id: 9, path: 'Assets:Bank:HDFC:Checking' },
+        { id: 10, path: 'Assets:Cash' },
+      ],
+      totalDocs: 10,
+    },
+  }),
+  'GET /api/commodities': async () => ({
+    body: {
+      docs: [
+        { id: 1, code: 'INR' },
+        { id: 2, code: 'USD' },
+        { id: 3, code: 'EUR' },
+        { id: 4, code: 'GBP' },
+        { id: 5, code: 'AED' },
+      ],
+      totalDocs: 5,
+    },
+  }),
+  'GET /api/txns': async () => ({
+    body: {
+      docs: [
+        { id: 1, date: '2026-04-14', links: ['dinner-amudham'] },
+        { id: 2, date: '2026-04-10', links: ['grocery-2026-04'] },
+        { id: 3, date: '2026-04-05', links: ['hotel-goa-trip'] },
+        { id: 4, date: '2026-04-01', links: ['rent-2026-04'] },
+      ],
+      totalDocs: 4,
+    },
+  }),
 }
 
 export function installFakeFetch(routes: Routes) {

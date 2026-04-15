@@ -4,7 +4,8 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useState } from 'react'
 
-import { TxnEditCard } from './txn-edit-card'
+import { formatDraft, type Draft } from './txn-edit-card'
+import { TxnNewCard } from './txn-new-card'
 
 export function ChatClient({ userEmail }: { userEmail: string }) {
   const [input, setInput] = useState('')
@@ -44,20 +45,18 @@ export function ChatClient({ userEmail }: { userEmail: string }) {
                 }
                 if (part.type === 'tool-createTxn') {
                   const key = `${m.id}-${i}`
-                  if (part.state === 'input-streaming' || part.state === 'input-available') {
+                  if (part.state === 'input-streaming') {
                     return (
-                      <TxnEditCard
-                        key={key}
-                        initialDraft={part.input as any}
-                        locked={part.state === 'input-streaming'}
-                      />
+                      <div key={key} className="chat-busy">
+                        preparing draft…
+                      </div>
                     )
                   }
-                  if (part.state === 'output-available') {
+                  if (part.state === 'input-available' || part.state === 'output-available') {
                     return (
-                      <TxnEditCard
+                      <TxnNewCard
                         key={key}
-                        initialDraft={part.input as any}
+                        initialText={formatDraft(part.input as Draft)}
                       />
                     )
                   }
