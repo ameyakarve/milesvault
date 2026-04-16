@@ -787,19 +787,20 @@ describe('TxnFormView transfer family', () => {
   Assets:Bank:Checking          -18000 INR
   Liabilities:CC:HDFC:Infinia    18000 INR`
 
-  const WALLET_TOPUP = `2026-04-16 * "Paytm" "Load wallet from CC" ^wallet-topup-paytm
+  const WALLET_LOAD_INR = `2026-04-16 * "Paytm" "Load wallet from CC" ^wallet-topup-paytm
   Liabilities:CC:HDFC:Infinia   -1000 INR
   Assets:Wallet:Paytm            1000 INR`
 
-  const GIFT_CARD_ACQUISITION = `2026-04-16 * "SmartBuy" "Amazon voucher @ discount" ^sb-amzn-abc
+  const WALLET_LOAD_DISCOUNT = `2026-04-16 * "SmartBuy" "Amazon voucher @ discount" ^sb-amzn-abc
   Liabilities:CC:HDFC:Infinia      -450 INR
-  Assets:GiftCard:Amazon            500 AMZN_GC @@ 450 INR
+  Assets:Wallet:Amazon              500 AMZN_GC @@ 450 INR
     card: "1234-5678-9012-3456"
     expires: 2027-04-16`
 
-  const GIFT_CARD_REDEEM_TO_WALLET = `2026-04-20 * "Amazon" "Reload Amazon Pay" ^load-apay
-  Assets:GiftCard:Amazon     -500 AMZN_GC @@ 500 INR
-  Assets:Wallet:AmazonPay     500 INR`
+  const WALLET_SPEND_MIXED = `2026-04-22 * "Amazon" "Echo Dot — wallet + card" ^echo-buy
+  Expenses:Electronics              4500 INR
+  Assets:Wallet:Amazon              -500 AMZN_GC @@ 500 INR
+  Liabilities:CC:HDFC:Infinia      -4000 INR`
 
   it('renders a TRANSFER card for Assets:* ↔ Assets:*', () => {
     const { container } = render(<Harness initial={TRANSFER} />)
@@ -820,42 +821,35 @@ describe('TxnFormView transfer family', () => {
     expect(card!.textContent).toMatch(/CC PAYMENT/)
   })
 
-  it('renders a WALLET TOP-UP card when one leg is Assets:Wallet:*', () => {
-    const { container } = render(<Harness initial={WALLET_TOPUP} />)
-    const card = container.querySelector('[data-posting-type="wallet-topup"]')
-    expect(card).toBeTruthy()
-    expect(card!.textContent).toMatch(/WALLET TOP-UP/)
+  it('renders WALLET LOAD + CC SPEND cards for a same-currency load (no pairing)', () => {
+    const { container } = render(<Harness initial={WALLET_LOAD_INR} />)
+    expect(container.querySelector('[data-posting-type="wallet-load"]')).toBeTruthy()
+    expect(container.querySelector('[data-posting-type="cc-spend"]')).toBeTruthy()
   })
 
-  it('wallet variant takes precedence over cc-payment when both are present', () => {
-    const { container } = render(<Harness initial={WALLET_TOPUP} />)
-    expect(container.querySelector('[data-posting-type="cc-payment"]')).toBeNull()
-    expect(container.querySelector('[data-posting-type="wallet-topup"]')).toBeTruthy()
-  })
-
-  it('renders GIFT CARD LOAD + CC SPEND cards for an acquisition (no pairing)', () => {
-    const { container } = render(<Harness initial={GIFT_CARD_ACQUISITION} />)
-    const load = container.querySelector('[data-posting-type="gift-card-load"]')
+  it('renders WALLET LOAD + CC SPEND cards for a cross-commodity voucher load', () => {
+    const { container } = render(<Harness initial={WALLET_LOAD_DISCOUNT} />)
+    const load = container.querySelector('[data-posting-type="wallet-load"]')
     expect(load).toBeTruthy()
-    expect(load!.textContent).toMatch(/GIFT CARD LOAD/)
+    expect(load!.textContent).toMatch(/WALLET LOAD/)
     expect(load!.textContent).toMatch(/Amazon/)
     expect(load!.textContent).toMatch(/AMZN_GC/)
     expect(container.querySelector('[data-posting-type="cc-spend"]')).toBeTruthy()
   })
 
-  it('shows posting metadata (card, expires) on the gift-card-load card', () => {
-    const { container } = render(<Harness initial={GIFT_CARD_ACQUISITION} />)
-    const meta = container.querySelector('[data-testid="gift-card-meta"]')
+  it('shows posting metadata (card, expires) on the wallet-load card', () => {
+    const { container } = render(<Harness initial={WALLET_LOAD_DISCOUNT} />)
+    const meta = container.querySelector('[data-testid="wallet-meta"]')
     expect(meta).toBeTruthy()
     expect(meta!.textContent).toMatch(/1234-5678-9012-3456/)
     expect(meta!.textContent).toMatch(/2027-04-16/)
   })
 
-  it('renders GIFT CARD REDEEM + generic wallet posting for a wallet reload', () => {
-    const { container } = render(<Harness initial={GIFT_CARD_REDEEM_TO_WALLET} />)
-    expect(container.querySelector('[data-posting-type="gift-card-redeem"]')).toBeTruthy()
-    // Wallet leg is generic INR — not paired, stands alone
-    expect(container.querySelector('[data-posting-type="wallet-topup"]')).toBeNull()
+  it('renders WALLET SPEND + EXPENSE + CC SPEND for a mixed spend', () => {
+    const { container } = render(<Harness initial={WALLET_SPEND_MIXED} />)
+    expect(container.querySelector('[data-posting-type="wallet-redeem"]')).toBeTruthy()
+    expect(container.querySelector('[data-posting-type="expense"]')).toBeTruthy()
+    expect(container.querySelector('[data-posting-type="cc-spend"]')).toBeTruthy()
   })
 
   it('does not fire any validation errors on a valid transfer', () => {
@@ -868,8 +862,8 @@ describe('TxnFormView transfer family', () => {
     expect(errorMessages(container)).toEqual([])
   })
 
-  it('does not fire any validation errors on a valid wallet-topup', () => {
-    const { container } = render(<Harness initial={WALLET_TOPUP} />)
+  it('does not fire any validation errors on a valid wallet load', () => {
+    const { container } = render(<Harness initial={WALLET_LOAD_INR} />)
     expect(errorMessages(container)).toEqual([])
   })
 
@@ -896,7 +890,6 @@ describe('TxnFormView transfer family', () => {
     const { container } = render(<Harness initial={BAD} />)
     expect(container.querySelector('[data-posting-type="transfer"]')).toBeNull()
     expect(container.querySelector('[data-posting-type="cc-payment"]')).toBeNull()
-    expect(container.querySelector('[data-posting-type="wallet-topup"]')).toBeNull()
   })
 
   it('falls back to singles when a price clause is present (points transfer territory)', () => {

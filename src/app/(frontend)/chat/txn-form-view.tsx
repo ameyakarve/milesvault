@@ -29,8 +29,8 @@ type PostingType =
   | 'cc-refund'
   | 'reward-earn'
   | 'redemption'
-  | 'gift-card-load'
-  | 'gift-card-redeem'
+  | 'wallet-load'
+  | 'wallet-redeem'
   | 'discount'
   | 'cashback'
   | 'generic'
@@ -93,17 +93,17 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     placeholder: 'HDFC:SmartBuy',
     signMultiplier: -1,
   },
-  'gift-card-load': {
-    label: 'GIFT CARD LOAD',
-    tagClass: 'txn-form-posting-tag-gift-card-load',
-    prefix: 'Assets:GiftCard:',
+  'wallet-load': {
+    label: 'WALLET LOAD',
+    tagClass: 'txn-form-posting-tag-wallet-load',
+    prefix: 'Assets:Wallet:',
     placeholder: 'Amazon',
     signMultiplier: 1,
   },
-  'gift-card-redeem': {
-    label: 'GIFT CARD REDEEM',
-    tagClass: 'txn-form-posting-tag-gift-card-redeem',
-    prefix: 'Assets:GiftCard:',
+  'wallet-redeem': {
+    label: 'WALLET SPEND',
+    tagClass: 'txn-form-posting-tag-wallet-redeem',
+    prefix: 'Assets:Wallet:',
     placeholder: 'Amazon',
     signMultiplier: -1,
   },
@@ -137,9 +137,9 @@ function classifyPosting(p: Posting): PostingType {
     const n = p.amount != null ? parseFloat(p.amount) : 0
     return n < 0 ? 'redemption' : 'reward-earn'
   }
-  if (p.account.startsWith('Assets:GiftCard:')) {
+  if (p.account.startsWith('Assets:Wallet:')) {
     const n = p.amount != null ? parseFloat(p.amount) : 0
-    return n < 0 ? 'gift-card-redeem' : 'gift-card-load'
+    return n < 0 ? 'wallet-redeem' : 'wallet-load'
   }
   if (p.account === 'Equity:Discount' || p.account.startsWith('Equity:Discount:')) return 'discount'
   if (p.account.startsWith('Income:Cashback:')) return 'cashback'
@@ -1155,9 +1155,9 @@ function RedemptionCard(
   )
 }
 
-function GiftCardCard(
+function WalletCard(
   props: PostingCardCommonProps & {
-    typeKey: 'gift-card-load' | 'gift-card-redeem'
+    typeKey: 'wallet-load' | 'wallet-redeem'
     forex: ForexInfo | null
     onForexRate: (next: number | null) => void
     onForexTotal: (next: number | null) => void
@@ -1179,8 +1179,8 @@ function GiftCardCard(
       onRemove={props.onRemove}
       accountField={
         <AccountField
-          label="Issuer"
-          icon="card_giftcard"
+          label="Provider"
+          icon="account_balance_wallet"
           value={props.posting.account}
           prefix={cfg.prefix}
           placeholder={cfg.placeholder}
@@ -1215,11 +1215,11 @@ function GiftCardCard(
               homeCurrencyOptions={props.allCurrencies}
               onHomeCurrency={props.onPriceCurrency}
               listIdBase={`${props.listIdBase}-${props.typeKey}`}
-              label={props.typeKey === 'gift-card-load' ? 'BASIS' : 'VALUE'}
+              label={props.typeKey === 'wallet-load' ? 'BASIS' : 'VALUE'}
             />
           )}
           {showMeta && (
-            <div className="txn-form-posting-card-meta" data-testid="gift-card-meta">
+            <div className="txn-form-posting-card-meta" data-testid="wallet-meta">
               {cardStr && (
                 <span className="txn-form-posting-card-meta-item">
                   <span className="txn-form-posting-card-meta-label">Card</span>
@@ -1380,11 +1380,6 @@ const TRANSFER_VARIANT_CONFIG: Record<
     pill: 'CC PAYMENT',
     fromPlaceholder: 'Bank:Checking',
     toPlaceholder: 'HDFC:Infinia',
-  },
-  'wallet-topup': {
-    pill: 'WALLET TOP-UP',
-    fromPlaceholder: 'Bank:Checking',
-    toPlaceholder: 'Paytm',
   },
 }
 
@@ -1578,9 +1573,9 @@ function PostingRow({
         />
       )
     }
-    if (type === 'gift-card-load' || type === 'gift-card-redeem') {
+    if (type === 'wallet-load' || type === 'wallet-redeem') {
       return (
-        <GiftCardCard
+        <WalletCard
           {...common}
           typeKey={type}
           forex={forex ?? null}
@@ -1720,9 +1715,8 @@ type AddPostingKind =
   | 'points-transfer'
   | 'transfer'
   | 'cc-payment'
-  | 'wallet-topup'
-  | 'gift-card-load'
-  | 'gift-card-redeem'
+  | 'wallet-load'
+  | 'wallet-redeem'
   | 'discount'
   | 'cashback'
 
@@ -1736,9 +1730,8 @@ function AddPostingMenu({ onAdd }: { onAdd: (kind: AddPostingKind) => void }) {
     { kind: 'points-transfer', label: 'Points Transfer' },
     { kind: 'transfer', label: 'Transfer' },
     { kind: 'cc-payment', label: 'CC Payment' },
-    { kind: 'wallet-topup', label: 'Wallet Top-up' },
-    { kind: 'gift-card-load', label: 'Gift Card Load' },
-    { kind: 'gift-card-redeem', label: 'Gift Card Redeem' },
+    { kind: 'wallet-load', label: 'Wallet Load' },
+    { kind: 'wallet-redeem', label: 'Wallet Spend' },
     { kind: 'discount', label: 'Discount' },
     { kind: 'cashback', label: 'Cashback' },
     { kind: 'generic', label: 'Generic' },
@@ -2038,7 +2031,7 @@ function TxnCard({
               if (t === 'cc-spend') {
                 return buildForexInfo(posting, homeCommodityByAccount[posting.account])
               }
-              if (t === 'redemption' || t === 'gift-card-load' || t === 'gift-card-redeem') {
+              if (t === 'redemption' || t === 'wallet-load' || t === 'wallet-redeem') {
                 return buildForexInfo(posting, posting.priceCurrency)
               }
               return null
@@ -2175,10 +2168,10 @@ function TxnCard({
                       currency: defaultCurrency,
                     }),
                   )
-                } else if (kind === 'wallet-topup') {
+                } else if (kind === 'wallet-load') {
                   t.postings.push(
                     new Posting({
-                      account: 'Assets:Bank:Checking',
+                      account: 'Liabilities:CC:Todo',
                       amount: '-1',
                       currency: defaultCurrency,
                     }),
@@ -2190,33 +2183,12 @@ function TxnCard({
                       currency: defaultCurrency,
                     }),
                   )
-                } else if (kind === 'gift-card-load') {
+                } else if (kind === 'wallet-redeem') {
                   t.postings.push(
                     new Posting({
-                      account: 'Liabilities:CC:Todo',
+                      account: 'Assets:Wallet:Todo',
                       amount: '-1',
                       currency: defaultCurrency,
-                    }),
-                  )
-                  t.postings.push(
-                    new Posting({
-                      account: 'Assets:GiftCard:Todo',
-                      amount: '1',
-                      currency: 'GC_POINTS',
-                      priceAmount: '1',
-                      priceCurrency: defaultCurrency,
-                      atSigns: 2,
-                    }),
-                  )
-                } else if (kind === 'gift-card-redeem') {
-                  t.postings.push(
-                    new Posting({
-                      account: 'Assets:GiftCard:Todo',
-                      amount: '-1',
-                      currency: 'GC_POINTS',
-                      priceAmount: '1',
-                      priceCurrency: defaultCurrency,
-                      atSigns: 2,
                     }),
                   )
                 } else if (kind === 'discount') {

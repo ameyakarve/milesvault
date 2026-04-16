@@ -40,7 +40,7 @@ function expectTransfer(
   toAccount: string,
   fromIndex: number,
   toIndex: number,
-  variant: 'transfer' | 'cc-payment' | 'wallet-topup',
+  variant: 'transfer' | 'cc-payment',
 ) {
   expect(group.kind).toBe('transfer')
   if (group.kind !== 'transfer') return
@@ -377,76 +377,39 @@ describe('groupPostings — cc-payment variant', () => {
   })
 })
 
-describe('groupPostings — wallet-topup variant', () => {
-  it('pairs bank → wallet as wallet-topup', () => {
-    const postings = postingsFromText(
-      `  Assets:Bank:Checking     -1000 INR
-  Assets:Wallet:Paytm       1000 INR`,
-    )
-    const groups = groupPostings(postings)
-    expect(groups).toHaveLength(1)
-    expectTransfer(
-      groups[0],
-      'Assets:Bank:Checking',
-      'Assets:Wallet:Paytm',
-      0,
-      1,
-      'wallet-topup',
-    )
-  })
-
-  it('pairs CC → wallet as wallet-topup (wallet takes precedence over cc)', () => {
+describe('groupPostings — wallet postings are singles', () => {
+  it('CC → wallet INR load: both legs stand alone', () => {
     const postings = postingsFromText(
       `  Liabilities:CC:HDFC:Infinia  -1000 INR
   Assets:Wallet:Paytm           1000 INR`,
     )
     const groups = groupPostings(postings)
-    expect(groups).toHaveLength(1)
-    expectTransfer(
-      groups[0],
-      'Liabilities:CC:HDFC:Infinia',
-      'Assets:Wallet:Paytm',
-      0,
-      1,
-      'wallet-topup',
-    )
+    expect(groups).toHaveLength(2)
+    expectSingle(groups[0], 0, 'Liabilities:CC:HDFC:Infinia')
+    expectSingle(groups[1], 1, 'Assets:Wallet:Paytm')
   })
 
-})
-
-describe('groupPostings — gift-card postings are singles', () => {
-  it('CC → GC acquisition: both legs stand alone', () => {
+  it('CC → wallet cross-commodity load (voucher): both legs stand alone', () => {
     const postings = postingsFromText(
       `  Liabilities:CC:HDFC:Infinia      -450 INR
-  Assets:GiftCard:Amazon            500 AMZN_GC @@ 450 INR`,
+  Assets:Wallet:Amazon              500 AMZN_GC @@ 450 INR`,
     )
     const groups = groupPostings(postings)
     expect(groups).toHaveLength(2)
     expectSingle(groups[0], 0, 'Liabilities:CC:HDFC:Infinia')
-    expectSingle(groups[1], 1, 'Assets:GiftCard:Amazon')
+    expectSingle(groups[1], 1, 'Assets:Wallet:Amazon')
   })
 
-  it('GC → wallet reload: both legs stand alone (not a wallet-topup)', () => {
-    const postings = postingsFromText(
-      `  Assets:GiftCard:Amazon     -500 AMZN_GC @@ 500 INR
-  Assets:Wallet:AmazonPay     500 INR`,
-    )
-    const groups = groupPostings(postings)
-    expect(groups).toHaveLength(2)
-    expectSingle(groups[0], 0, 'Assets:GiftCard:Amazon')
-    expectSingle(groups[1], 1, 'Assets:Wallet:AmazonPay')
-  })
-
-  it('GC mixed spend: each leg a single', () => {
+  it('wallet mixed spend: each leg a single', () => {
     const postings = postingsFromText(
       `  Expenses:Electronics              4500 INR
-  Assets:GiftCard:Amazon            -500 AMZN_GC @@ 500 INR
+  Assets:Wallet:Amazon              -500 AMZN_GC @@ 500 INR
   Liabilities:CC:HDFC:Infinia      -4000 INR`,
     )
     const groups = groupPostings(postings)
     expect(groups).toHaveLength(3)
     expectSingle(groups[0], 0, 'Expenses:Electronics')
-    expectSingle(groups[1], 1, 'Assets:GiftCard:Amazon')
+    expectSingle(groups[1], 1, 'Assets:Wallet:Amazon')
     expectSingle(groups[2], 2, 'Liabilities:CC:HDFC:Infinia')
   })
 })

@@ -843,9 +843,8 @@
 .txn-form-posting-card[data-posting-type='points-transfer']{ --pill-color: #2f7a7a; --pill-bg: rgba(47, 122, 122, 0.14); }
 .txn-form-posting-card[data-posting-type='transfer']       { --pill-color: #4a6fa5; --pill-bg: rgba(74, 111, 165, 0.14); }
 .txn-form-posting-card[data-posting-type='cc-payment']     { --pill-color: #2e4a6b; --pill-bg: rgba(46, 74, 107, 0.14); }
-.txn-form-posting-card[data-posting-type='wallet-topup']   { --pill-color: #8e4585; --pill-bg: rgba(142, 69, 133, 0.14); }
-.txn-form-posting-card[data-posting-type='gift-card-load']   { --pill-color: #c55a11; --pill-bg: rgba(197, 90, 17, 0.14); }
-.txn-form-posting-card[data-posting-type='gift-card-redeem'] { --pill-color: #b26a28; --pill-bg: rgba(178, 106, 40, 0.14); }
+.txn-form-posting-card[data-posting-type='wallet-load']    { --pill-color: #8e4585; --pill-bg: rgba(142, 69, 133, 0.14); }
+.txn-form-posting-card[data-posting-type='wallet-redeem']  { --pill-color: #b26a28; --pill-bg: rgba(178, 106, 40, 0.14); }
 .txn-form-posting-card[data-posting-type='expense-refund'] { --pill-color: #5a9a3a; --pill-bg: rgba(90, 154, 58, 0.14); }
 .txn-form-posting-card[data-posting-type='cc-refund']      { --pill-color: #3d8b7a; --pill-bg: rgba(61, 139, 122, 0.14); }
 .txn-form-posting-card[data-posting-type='fee']            { --pill-color: #a0522d; --pill-bg: rgba(160, 82, 45, 0.14); }

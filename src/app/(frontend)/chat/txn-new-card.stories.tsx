@@ -15,7 +15,7 @@ const REWARD_OPENS = `2020-01-01 open Assets:Rewards:HDFC:SmartBuy SMARTBUY_POIN
 
 `
 
-const GC_OPENS = `2020-01-01 open Assets:GiftCard:Amazon AMZN_GC
+const AMZN_WALLET_OPENS = `2020-01-01 open Assets:Wallet:Amazon AMZN_GC
 
 `
 
@@ -201,29 +201,21 @@ export const WalletTopUp: Story = {
   },
 }
 
-export const GiftCardAcquisition: Story = {
+export const WalletLoadDiscount: Story = {
   args: {
-    initialText: `${GC_OPENS}2026-04-16 * "SmartBuy" "Amazon voucher ₹500 face @ ₹450" ^sb-amzn-abc
+    initialText: `${AMZN_WALLET_OPENS}2026-04-16 * "SmartBuy" "Amazon voucher ₹500 face @ ₹450" ^sb-amzn-abc
   Liabilities:CC:HDFC:Infinia      -450 INR
-  Assets:GiftCard:Amazon            500 AMZN_GC @@ 450 INR
+  Assets:Wallet:Amazon              500 AMZN_GC @@ 450 INR
     card: "1234-5678-9012-3456"
     expires: 2027-04-16`,
   },
 }
 
-export const GiftCardReloadWallet: Story = {
+export const WalletSpendMixed: Story = {
   args: {
-    initialText: `${GC_OPENS}2026-04-20 * "Amazon" "Reload Amazon Pay from voucher" ^load-apay
-  Assets:GiftCard:Amazon     -500 AMZN_GC @@ 500 INR
-  Assets:Wallet:AmazonPay     500 INR`,
-  },
-}
-
-export const GiftCardSpendMixed: Story = {
-  args: {
-    initialText: `${GC_OPENS}2026-04-22 * "Amazon" "Echo Dot — voucher + card" ^echo-buy
+    initialText: `${AMZN_WALLET_OPENS}2026-04-22 * "Amazon" "Echo Dot — wallet + card" ^echo-buy
   Expenses:Electronics              4500 INR
-  Assets:GiftCard:Amazon            -500 AMZN_GC @@ 500 INR
+  Assets:Wallet:Amazon              -500 AMZN_GC @@ 500 INR
   Liabilities:CC:HDFC:Infinia      -4000 INR`,
   },
 }
