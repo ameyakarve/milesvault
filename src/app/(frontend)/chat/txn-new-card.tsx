@@ -103,13 +103,12 @@ export function TxnNewCard({
           body: JSON.stringify({ text }),
         })
         const data = (await res.json()) as CreateResponse
-        if (!res.ok && res.status !== 207) {
-          throw new Error(data.detail || data.error || `HTTP ${res.status}`)
-        }
-        if (data.errors && data.errors.length > 0) {
-          throw new Error(
-            data.errors.map((e) => `#${e.index + 1}: ${e.message}`).join('; '),
-          )
+        if (!res.ok) {
+          const detail =
+            data.errors && data.errors.length > 0
+              ? data.errors.map((e) => `#${e.index + 1}: ${e.message}`).join('; ')
+              : null
+          throw new Error(detail || data.detail || data.error || `HTTP ${res.status}`)
         }
         if (!data.created || data.created.length === 0) {
           throw new Error('No transaction created')

@@ -116,6 +116,9 @@ export const POST = async (request: Request): Promise<Response> => {
   }
 
   const transactions = result.transactions
+  if (transactions.length === 0) {
+    return Response.json({ created: [], total: 0 }, { status: 200 })
+  }
 
   const [accountsRes, commoditiesRes] = await Promise.all([
     payload.find({ collection: 'accounts', limit: 500, user, overrideAccess: false, depth: 0 }),
@@ -124,27 +127,59 @@ export const POST = async (request: Request): Promise<Response> => {
   const accountMap = new Map(accountsRes.docs.map((a) => [a.path, a.id]))
   const commodityMap = new Map(commoditiesRes.docs.map((c) => [c.code, c.id]))
 
-  const created: Array<{ index: number; id: number }> = []
-  const errors: Array<{ index: number; message: string }> = []
-
+  const mapped: Array<{ data: TxnInput & { source: string } } | { error: string }> = []
   for (let i = 0; i < transactions.length; i++) {
     try {
       const txn = transactions[i]
       const data = { ...mapTxn(txn, accountMap, commodityMap), source: txn.toString() }
-      const doc = await payload.create({
-        collection: 'txns',
-        data: data as unknown as RequiredDataFromCollectionSlug<'txns'>,
-        user,
-        overrideAccess: false,
-      })
-      created.push({ index: i, id: doc.id })
+      mapped.push({ data })
     } catch (err) {
-      errors.push({ index: i, message: err instanceof Error ? err.message : String(err) })
+      mapped.push({ error: err instanceof Error ? err.message : String(err) })
     }
   }
 
-  return Response.json(
-    { created, errors, total: transactions.length },
-    { status: errors.length === 0 ? 200 : 207 },
-  )
+  const preflightErrors = mapped
+    .map((m, i) => ('error' in m ? { index: i, message: m.error } : null))
+    .filter((x): x is { index: number; message: string } => x != null)
+
+  if (preflightErrors.length > 0) {
+    return Response.json(
+      { errors: preflightErrors, created: [], total: transactions.length },
+      { status: 422 },
+    )
+  }
+
+  const transactionID = await payload.db.beginTransaction()
+  const txReq = transactionID != null ? { transactionID } : undefined
+
+  const created: Array<{ index: number; id: number }> = []
+  try {
+    for (let i = 0; i < mapped.length; i++) {
+      const entry = mapped[i]
+      if ('error' in entry) continue
+      const doc = await payload.create({
+        collection: 'txns',
+        data: entry.data as unknown as RequiredDataFromCollectionSlug<'txns'>,
+        user,
+        overrideAccess: false,
+        req: txReq as never,
+      })
+      created.push({ index: i, id: doc.id })
+    }
+    if (transactionID != null) await payload.db.commitTransaction(transactionID)
+  } catch (err) {
+    if (transactionID != null) await payload.db.rollbackTransaction(transactionID)
+    const message = err instanceof Error ? err.message : String(err)
+    return Response.json(
+      {
+        errors: [{ index: created.length, message }],
+        created: [],
+        total: transactions.length,
+        rolledBack: transactionID != null,
+      },
+      { status: 500 },
+    )
+  }
+
+  return Response.json({ created, total: transactions.length }, { status: 200 })
 }

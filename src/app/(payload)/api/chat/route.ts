@@ -13,6 +13,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { z } from 'zod'
 
 import config from '@/payload.config'
+import { buildExamplesPrompt } from '@/lib/beancount/examples'
 
 const router = createOpenAICompatible({
   name: 'dd-model-router',
@@ -24,18 +25,13 @@ const model = wrapLanguageModel({
   middleware: simulateStreamingMiddleware(),
 })
 
-const postingSchema = z.object({
-  account: z.string().describe('Full account path, e.g. "Expenses:Food:Dining"'),
-  amount: z.number().describe('Signed decimal amount. Negative for credits, positive for debits.'),
-  commodity: z.string().describe('Commodity code, e.g. "INR" or "SMARTBUY_POINTS"'),
-})
-
 const createTxnSchema = z.object({
-  date: z.string().describe('ISO date, e.g. "2026-04-14"'),
-  flag: z.string().max(1).default('*').describe('* cleared, ! pending'),
-  payee: z.string().optional(),
-  narration: z.string().optional(),
-  postings: z.array(postingSchema).min(2).describe('At least 2 postings. Must balance per commodity.'),
+  text: z
+    .string()
+    .min(1)
+    .describe(
+      'Raw beancount source. One or more transactions separated by blank lines. Each transaction header is "YYYY-MM-DD FLAG \\"payee\\" \\"narration\\" ^optional-link". Postings are indented two spaces.',
+    ),
 })
 
 const listTxnsSchema = z.object({
@@ -97,19 +93,34 @@ export const POST = async (request: Request): Promise<Response> => {
   const accountList = accountsRes.docs.map((a) => `  - ${a.path} (${a.type})`).join('\n')
   const commodityList = commoditiesRes.docs.map((c) => `  - ${c.code}`).join('\n')
 
-  const systemPrompt = `You are MilesVault's transaction assistant. You help the user record credit card purchases, reward earnings, redemptions, and transfers as beancount-style double-entry transactions.
+  const systemPrompt = `You are MilesVault's transaction assistant. You produce beancount source for the user to review and save.
 
-Current user accounts:
-${accountList}
+A beancount DOCUMENT is one or more TRANSACTIONS separated by blank lines.
+A TRANSACTION is a header line plus one or more POSTING lines indented two spaces.
+Header: \`YYYY-MM-DD <flag> "payee" "narration" ^optional-link\`
+Flag: \`*\` for cleared, \`!\` for pending.
+Posting: \`  Account:Path    AMOUNT COMMODITY [@@ PRICE_AMOUNT PRICE_COMMODITY]\`.
+Every transaction must balance per commodity — the signed postings in each commodity must sum to zero.
+Transactions that belong together (a subscription, a trip, a statement) should share a \`^link-id\` (kebab-case, short, semantic).
 
-Available commodities:
-${commodityList}
+Below are the building blocks. Primitives are atomic posting patterns. Compositions show how primitives stack within one transaction or across multiple.
 
-When the user describes a NEW transaction, call the createTxn tool with structured data. Use ONLY account paths and commodity codes from the lists above — do not invent new ones. If a needed account or commodity doesn't exist, tell the user what's missing and ask them to create it first. Every transaction must balance: per commodity, the signed postings must sum to zero.
+${buildExamplesPrompt()}
 
-When the user asks about EXISTING transactions (history, summaries, filtering by date/account/payee), call the listTxns tool first, then answer from its results. Do not fabricate transactions you haven't fetched.
+## Your accounts
+${accountList || '  (none)'}
 
-Prefer concise clarifying questions over guessing.`
+## Your commodities
+${commodityList || '  (none)'}
+
+## Rules when emitting
+- Call the \`createTxn\` tool with a single \`text\` field holding the full beancount document.
+- Use ONLY account paths and commodity codes from the lists above. Never invent new ones. If the user asks for something that requires an account or commodity you don't have, tell them what's missing and ask them to create it before you draft.
+- Prefer concise clarifying questions over guessing dates, amounts, or accounts.
+- Date today is the user's current date unless they say otherwise.
+
+## Reading existing data
+When the user asks about history, balances, or filtering, call the \`listTxns\` tool first and answer from its results. Do not fabricate transactions you haven't fetched.`
 
   const result = streamText({
     model,
@@ -118,7 +129,8 @@ Prefer concise clarifying questions over guessing.`
     stopWhen: stepCountIs(5),
     tools: {
       createTxn: tool({
-        description: 'Propose a new transaction for the user to review and confirm.',
+        description:
+          'Propose one or more beancount transactions for the user to review, edit, and save.',
         inputSchema: createTxnSchema,
       }),
       listTxns: tool({

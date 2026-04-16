@@ -4,7 +4,6 @@ import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { useState } from 'react'
 
-import { formatDraft, type Draft } from './txn-edit-card'
 import { TxnNewCard } from './txn-new-card'
 
 export function ChatClient({ userEmail }: { userEmail: string }) {
@@ -53,12 +52,11 @@ export function ChatClient({ userEmail }: { userEmail: string }) {
                     )
                   }
                   if (part.state === 'input-available' || part.state === 'output-available') {
-                    return (
-                      <TxnNewCard
-                        key={key}
-                        initialText={formatDraft(part.input as Draft)}
-                      />
-                    )
+                    const text =
+                      part.input && typeof (part.input as { text?: unknown }).text === 'string'
+                        ? (part.input as { text: string }).text
+                        : ''
+                    return <TxnNewCard key={key} initialText={text} />
                   }
                   if (part.state === 'output-error') {
                     return (
