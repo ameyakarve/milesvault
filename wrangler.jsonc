@@ -23,6 +23,10 @@
       "remote": true,
     },
   ],
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["VaultAgent"] },
+    { "tag": "v2", "deleted_classes": ["VaultAgent"] },
+  ],
   "services": [
     // The service should match the "name" of your worker
     // {
