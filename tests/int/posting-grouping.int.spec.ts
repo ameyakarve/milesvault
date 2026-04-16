@@ -175,16 +175,6 @@ describe('groupPostings — non-pairing shapes', () => {
     expect(groups).toHaveLength(2)
   })
 
-  it('does not pair when source magnitude disagrees with @@ total', () => {
-    const postings = postingsFromText(
-      `  Assets:Rewards:Amex:MR          -5000 MR_POINTS
-  Assets:Rewards:Avios             2500 AVIOS_POINTS @@ 4000 MR_POINTS`,
-    )
-    const groups = groupPostings(postings)
-    expect(groups).toHaveLength(2)
-    expectSingle(groups[0], 0, 'Assets:Rewards:Amex:MR')
-    expectSingle(groups[1], 1, 'Assets:Rewards:Avios')
-  })
 })
 
 describe('groupPostings — adjacency requirement', () => {

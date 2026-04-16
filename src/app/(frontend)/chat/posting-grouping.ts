@@ -100,13 +100,6 @@ function tryPointsTransferPair(
   if (source.currency === sink.currency) return null
   if (sink.priceCurrency !== source.currency) return null
 
-  // Source amount must equal sink @@ total (same quantity, source commodity)
-  if (source.amount == null || sink.priceAmount == null) return null
-  const sourceMagnitude = Math.abs(parseFloat(source.amount))
-  const priceTotal = parseFloat(sink.priceAmount)
-  if (!Number.isFinite(sourceMagnitude) || !Number.isFinite(priceTotal)) return null
-  if (Math.abs(sourceMagnitude - priceTotal) > MAGNITUDE_EPSILON) return null
-
   return { source, sink, sourceIsFirst }
 }
 

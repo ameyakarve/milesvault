@@ -724,14 +724,6 @@ describe('TxnFormView points-transfer', () => {
     expect(msgs).toEqual([])
   })
 
-  it('falls back to singles when source magnitude does not match @@ total', () => {
-    const MISMATCH = `2026-04-16 * "Amex" "MR → Avios"
-  Assets:Rewards:Amex:MR          -5000 MR_POINTS
-  Assets:Rewards:Avios             2500 AVIOS_POINTS @@ 4000 MR_POINTS`
-    const { container } = render(<Harness initial={MISMATCH} />)
-    expect(container.querySelector('[data-posting-type="points-transfer"]')).toBeNull()
-  })
-
   it('falls back to singles when the sink has no price clause', () => {
     const BAD = `2026-04-16 * "HDFC" "SmartBuy → Finnair (orphan)"
   Assets:Rewards:HDFC:SmartBuy    -4000 SMARTBUY_POINTS
