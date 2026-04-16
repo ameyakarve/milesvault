@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { ValidationError } from 'payload'
 
 export const Accounts: CollectionConfig = {
   slug: 'accounts',
@@ -7,9 +8,6 @@ export const Accounts: CollectionConfig = {
     useAsTitle: 'path',
     defaultColumns: ['path', 'type', 'user', 'openDate', 'closeDate'],
   },
-  // TODO: duplicate (user, path) surfaces as HTTP 500 because the DB unique
-  // violation isn't translated to a ValidationError. Add a beforeValidate
-  // hook that pre-checks and throws a friendly error.
   indexes: [{ fields: ['user', 'path'], unique: true }],
   access: {
     read: ({ req: { user } }) => {
@@ -28,7 +26,7 @@ export const Accounts: CollectionConfig = {
   },
   hooks: {
     beforeValidate: [
-      ({ data, req, operation, originalDoc }) => {
+      async ({ data, req, operation, originalDoc }) => {
         if (!data) return data
         if (operation === 'create' && req.user) {
           data.user = req.user.id
@@ -36,6 +34,30 @@ export const Accounts: CollectionConfig = {
         if (operation === 'update' && originalDoc) {
           data.user = originalDoc.user
         }
+
+        if (data.path && data.user != null) {
+          const clauses: Array<Record<string, unknown>> = [
+            { user: { equals: data.user } },
+            { path: { equals: data.path } },
+          ]
+          if (operation === 'update' && originalDoc) {
+            clauses.push({ id: { not_equals: originalDoc.id } })
+          }
+          const existing = await req.payload.find({
+            collection: 'accounts',
+            where: { and: clauses },
+            limit: 1,
+            overrideAccess: true,
+            depth: 0,
+          })
+          if (existing.docs.length > 0) {
+            throw new ValidationError({
+              collection: 'accounts',
+              errors: [{ path: 'path', message: `Account "${data.path}" already exists` }],
+            })
+          }
+        }
+
         return data
       },
     ],

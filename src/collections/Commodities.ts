@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { ValidationError } from 'payload'
 
 const ADMIN_USER_ID = 1
 
@@ -9,9 +10,6 @@ export const Commodities: CollectionConfig = {
     useAsTitle: 'code',
     defaultColumns: ['code', 'user', 'openDate'],
   },
-  // TODO: duplicate (user, code) surfaces as HTTP 500 because the DB unique
-  // violation isn't translated to a ValidationError. Add a beforeValidate
-  // hook that pre-checks and throws a friendly error.
   indexes: [{ fields: ['user', 'code'], unique: true }],
   access: {
     read: ({ req: { user } }) => {
@@ -34,7 +32,7 @@ export const Commodities: CollectionConfig = {
   },
   hooks: {
     beforeValidate: [
-      ({ data, req, operation, originalDoc }) => {
+      async ({ data, req, operation, originalDoc }) => {
         if (!data) return data
         const isAdmin = req.user?.id === ADMIN_USER_ID
         if (operation === 'create' && req.user && !isAdmin) {
@@ -43,6 +41,37 @@ export const Commodities: CollectionConfig = {
         if (operation === 'update' && originalDoc && !isAdmin) {
           data.user = originalDoc.user
         }
+
+        if (data.code) {
+          const userClause =
+            data.user == null
+              ? { user: { equals: null } }
+              : { user: { equals: data.user } }
+          const clauses: Array<Record<string, unknown>> = [
+            userClause,
+            { code: { equals: data.code } },
+          ]
+          if (operation === 'update' && originalDoc) {
+            clauses.push({ id: { not_equals: originalDoc.id } })
+          }
+          const existing = await req.payload.find({
+            collection: 'commodities',
+            where: { and: clauses },
+            limit: 1,
+            overrideAccess: true,
+            depth: 0,
+          })
+          if (existing.docs.length > 0) {
+            const scope = data.user == null ? 'global' : 'user'
+            throw new ValidationError({
+              collection: 'commodities',
+              errors: [
+                { path: 'code', message: `Commodity "${data.code}" already exists (${scope})` },
+              ],
+            })
+          }
+        }
+
         return data
       },
     ],
