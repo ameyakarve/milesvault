@@ -133,6 +133,50 @@ export const MultipleTxns: Story = {
   },
 }
 
+export const PointsSubscription: Story = {
+  args: {
+    initialText: `${REWARD_OPENS}2026-04-16 * "HDFC SmartBuy" "Annual fee — Elite segment" ^subs-smartbuy-elite-2026
+  Expenses:Fees:Annual:HDFC:Infinia    12000 INR
+  Liabilities:CC:HDFC:Infinia         -12000 INR
+
+2026-05-01 ! "HDFC SmartBuy" "May points credit" ^subs-smartbuy-elite-2026
+  Assets:Rewards:HDFC:SmartBuy        1000 SMARTBUY_POINTS
+  Income:Rewards:HDFC:Earned         -1000 SMARTBUY_POINTS
+
+2026-06-01 ! "HDFC SmartBuy" "June points credit" ^subs-smartbuy-elite-2026
+  Assets:Rewards:HDFC:SmartBuy        1000 SMARTBUY_POINTS
+  Income:Rewards:HDFC:Earned         -1000 SMARTBUY_POINTS`,
+  },
+}
+
+export const LinkedMixedBatch: Story = {
+  args: {
+    initialText: `2026-04-14 * "Amudham" "Team dinner" ^team-dinners
+  Expenses:Food:Dining           1500 INR
+  Liabilities:CC:HDFC:Infinia   -1500 INR
+
+2026-04-21 * "Amudham" "Team lunch" ^team-dinners
+  Expenses:Food:Dining            900 INR
+  Liabilities:CC:HDFC:Infinia    -900 INR
+
+2026-04-22 * "Chai Point" "Solo coffee" ^coffee-2026-04-22
+  Expenses:Food:Coffee      120 INR
+  Assets:Cash              -120 INR`,
+  },
+}
+
+export const BatchWithError: Story = {
+  args: {
+    initialText: `2026-04-14 * "Amudham" "Dinner" ^dinner-amudham
+  Expenses:Food:Dining           1500 INR
+  Liabilities:CC:HDFC:Infinia   -1500 INR
+
+2026-04-15 * "Chai Point" "Coffee — unbalanced" ^coffee-broken
+  Expenses:Food:Coffee      120 INR
+  Assets:Cash              -100 INR`,
+  },
+}
+
 export const OrphanCashbackIncome: Story = {
   args: {
     initialText: `2026-04-14 * "Amudham" "Dinner — cashback missing reverse" ^dinner-amudham
