@@ -14,7 +14,7 @@ export type PointsTransferGroup = {
   sinkIndex: number
 }
 
-export type TransferVariant = 'transfer' | 'cc-payment' | 'wallet-topup' | 'gift-card'
+export type TransferVariant = 'transfer' | 'cc-payment' | 'wallet-topup'
 
 export type TransferGroup = {
   kind: 'transfer'
@@ -56,13 +56,13 @@ function isPointsTransferSink(p: Posting): boolean {
 function isTransferEligibleAccount(p: Posting): boolean {
   if (!p.account) return false
   if (p.account.startsWith(REWARDS_ACCOUNT_PREFIX)) return false
+  if (p.account.startsWith(GIFT_CARD_ACCOUNT_PREFIX)) return false
   if (p.account.startsWith(ASSETS_PREFIX)) return true
   if (p.account.startsWith(CC_ACCOUNT_PREFIX)) return true
   return false
 }
 
 const VARIANT_PREFIXES: readonly [string, TransferVariant][] = [
-  [GIFT_CARD_ACCOUNT_PREFIX, 'gift-card'],
   [WALLET_ACCOUNT_PREFIX, 'wallet-topup'],
   [CC_ACCOUNT_PREFIX, 'cc-payment'],
 ]

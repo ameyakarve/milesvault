@@ -844,7 +844,8 @@
 .txn-form-posting-card[data-posting-type='transfer']       { --pill-color: #4a6fa5; --pill-bg: rgba(74, 111, 165, 0.14); }
 .txn-form-posting-card[data-posting-type='cc-payment']     { --pill-color: #2e4a6b; --pill-bg: rgba(46, 74, 107, 0.14); }
 .txn-form-posting-card[data-posting-type='wallet-topup']   { --pill-color: #8e4585; --pill-bg: rgba(142, 69, 133, 0.14); }
-.txn-form-posting-card[data-posting-type='gift-card']      { --pill-color: #c55a11; --pill-bg: rgba(197, 90, 17, 0.14); }
+.txn-form-posting-card[data-posting-type='gift-card-load']   { --pill-color: #c55a11; --pill-bg: rgba(197, 90, 17, 0.14); }
+.txn-form-posting-card[data-posting-type='gift-card-redeem'] { --pill-color: #b26a28; --pill-bg: rgba(178, 106, 40, 0.14); }
 .txn-form-posting-card[data-posting-type='expense-refund'] { --pill-color: #5a9a3a; --pill-bg: rgba(90, 154, 58, 0.14); }
 .txn-form-posting-card[data-posting-type='cc-refund']      { --pill-color: #3d8b7a; --pill-bg: rgba(61, 139, 122, 0.14); }
 .txn-form-posting-card[data-posting-type='fee']            { --pill-color: #a0522d; --pill-bg: rgba(160, 82, 45, 0.14); }
@@ -1621,4 +1622,34 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.txn-form-posting-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 6px 10px;
+  border-top: 1px dashed rgba(84, 97, 102, 0.18);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: #546166;
+}
+
+.txn-form-posting-card-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.txn-form-posting-card-meta-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  font-size: 10px;
+  color: #8a9499;
+}
+
+.txn-form-posting-card-meta-value {
+  font-weight: 500;
+  color: #2b3538;
 }

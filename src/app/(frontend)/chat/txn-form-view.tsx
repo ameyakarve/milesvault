@@ -29,6 +29,8 @@ type PostingType =
   | 'cc-refund'
   | 'reward-earn'
   | 'redemption'
+  | 'gift-card-load'
+  | 'gift-card-redeem'
   | 'discount'
   | 'cashback'
   | 'generic'
@@ -91,6 +93,20 @@ const POSTING_TYPE_CONFIG: Record<Exclude<PostingType, 'generic'>, PostingTypeCo
     placeholder: 'HDFC:SmartBuy',
     signMultiplier: -1,
   },
+  'gift-card-load': {
+    label: 'GIFT CARD LOAD',
+    tagClass: 'txn-form-posting-tag-gift-card-load',
+    prefix: 'Assets:GiftCard:',
+    placeholder: 'Amazon',
+    signMultiplier: 1,
+  },
+  'gift-card-redeem': {
+    label: 'GIFT CARD REDEEM',
+    tagClass: 'txn-form-posting-tag-gift-card-redeem',
+    prefix: 'Assets:GiftCard:',
+    placeholder: 'Amazon',
+    signMultiplier: -1,
+  },
   discount: {
     label: 'DISCOUNT',
     tagClass: 'txn-form-posting-tag-discount',
@@ -120,6 +136,10 @@ function classifyPosting(p: Posting): PostingType {
   if (p.account.startsWith('Assets:Rewards:')) {
     const n = p.amount != null ? parseFloat(p.amount) : 0
     return n < 0 ? 'redemption' : 'reward-earn'
+  }
+  if (p.account.startsWith('Assets:GiftCard:')) {
+    const n = p.amount != null ? parseFloat(p.amount) : 0
+    return n < 0 ? 'gift-card-redeem' : 'gift-card-load'
   }
   if (p.account === 'Equity:Discount' || p.account.startsWith('Equity:Discount:')) return 'discount'
   if (p.account.startsWith('Income:Cashback:')) return 'cashback'
@@ -1135,6 +1155,91 @@ function RedemptionCard(
   )
 }
 
+function GiftCardCard(
+  props: PostingCardCommonProps & {
+    typeKey: 'gift-card-load' | 'gift-card-redeem'
+    forex: ForexInfo | null
+    onForexRate: (next: number | null) => void
+    onForexTotal: (next: number | null) => void
+    onPriceCurrency: (next: string) => void
+  },
+) {
+  const cfg = POSTING_TYPE_CONFIG[props.typeKey]
+  const card = props.posting.metadata?.card
+  const expires = props.posting.metadata?.expires
+  const cardStr = card != null ? String(card) : null
+  const expiresStr = expires != null ? String(expires) : null
+  const showMeta = cardStr || expiresStr
+  return (
+    <PostingCardShell
+      type={props.typeKey}
+      pillLabel={cfg.label}
+      editable={props.editable}
+      canRemove={props.canRemove}
+      onRemove={props.onRemove}
+      accountField={
+        <AccountField
+          label="Issuer"
+          icon="card_giftcard"
+          value={props.posting.account}
+          prefix={cfg.prefix}
+          placeholder={cfg.placeholder}
+          options={props.accountOptions}
+          inputId={`${props.listIdBase}-account-${props.typeKey}`}
+          editable={props.editable}
+          onCommit={props.onAccount}
+        />
+      }
+      amountField={
+        <AmountField
+          amount={props.displayAmount}
+          editable={props.editable}
+          onAmount={props.onAmount}
+          currencySlot={
+            props.posting.currency ? (
+              <span className="txn-form-posting-card-currency-static">
+                {props.posting.currency}
+              </span>
+            ) : null
+          }
+        />
+      }
+      forexStrip={
+        <>
+          {props.forex && (
+            <ForexStrip
+              forex={props.forex}
+              editable={props.editable}
+              onRate={props.onForexRate}
+              onTotal={props.onForexTotal}
+              homeCurrencyOptions={props.allCurrencies}
+              onHomeCurrency={props.onPriceCurrency}
+              listIdBase={`${props.listIdBase}-${props.typeKey}`}
+              label={props.typeKey === 'gift-card-load' ? 'BASIS' : 'VALUE'}
+            />
+          )}
+          {showMeta && (
+            <div className="txn-form-posting-card-meta" data-testid="gift-card-meta">
+              {cardStr && (
+                <span className="txn-form-posting-card-meta-item">
+                  <span className="txn-form-posting-card-meta-label">Card</span>
+                  <span className="txn-form-posting-card-meta-value">{cardStr}</span>
+                </span>
+              )}
+              {expiresStr && (
+                <span className="txn-form-posting-card-meta-item">
+                  <span className="txn-form-posting-card-meta-label">Expires</span>
+                  <span className="txn-form-posting-card-meta-value">{expiresStr}</span>
+                </span>
+              )}
+            </div>
+          )}
+        </>
+      }
+    />
+  )
+}
+
 function PointsTransferCard({
   source,
   sink,
@@ -1280,11 +1385,6 @@ const TRANSFER_VARIANT_CONFIG: Record<
     pill: 'WALLET TOP-UP',
     fromPlaceholder: 'Bank:Checking',
     toPlaceholder: 'Paytm',
-  },
-  'gift-card': {
-    pill: 'GIFT CARD',
-    fromPlaceholder: 'Bank:Checking',
-    toPlaceholder: 'Amazon',
   },
 }
 
@@ -1478,6 +1578,18 @@ function PostingRow({
         />
       )
     }
+    if (type === 'gift-card-load' || type === 'gift-card-redeem') {
+      return (
+        <GiftCardCard
+          {...common}
+          typeKey={type}
+          forex={forex ?? null}
+          onForexRate={onForexRate}
+          onForexTotal={onForexTotal}
+          onPriceCurrency={onPriceCurrency}
+        />
+      )
+    }
     if (type === 'discount') return <DiscountCard {...common} />
     if (type === 'cashback') return <CashbackCard {...common} />
     return <RewardCard {...common} />
@@ -1609,7 +1721,8 @@ type AddPostingKind =
   | 'transfer'
   | 'cc-payment'
   | 'wallet-topup'
-  | 'gift-card'
+  | 'gift-card-load'
+  | 'gift-card-redeem'
   | 'discount'
   | 'cashback'
 
@@ -1624,7 +1737,8 @@ function AddPostingMenu({ onAdd }: { onAdd: (kind: AddPostingKind) => void }) {
     { kind: 'transfer', label: 'Transfer' },
     { kind: 'cc-payment', label: 'CC Payment' },
     { kind: 'wallet-topup', label: 'Wallet Top-up' },
-    { kind: 'gift-card', label: 'Gift Card' },
+    { kind: 'gift-card-load', label: 'Gift Card Load' },
+    { kind: 'gift-card-redeem', label: 'Gift Card Redeem' },
     { kind: 'discount', label: 'Discount' },
     { kind: 'cashback', label: 'Cashback' },
     { kind: 'generic', label: 'Generic' },
@@ -1924,7 +2038,7 @@ function TxnCard({
               if (t === 'cc-spend') {
                 return buildForexInfo(posting, homeCommodityByAccount[posting.account])
               }
-              if (t === 'redemption') {
+              if (t === 'redemption' || t === 'gift-card-load' || t === 'gift-card-redeem') {
                 return buildForexInfo(posting, posting.priceCurrency)
               }
               return null
@@ -2076,10 +2190,10 @@ function TxnCard({
                       currency: defaultCurrency,
                     }),
                   )
-                } else if (kind === 'gift-card') {
+                } else if (kind === 'gift-card-load') {
                   t.postings.push(
                     new Posting({
-                      account: 'Assets:Bank:Checking',
+                      account: 'Liabilities:CC:Todo',
                       amount: '-1',
                       currency: defaultCurrency,
                     }),
@@ -2088,7 +2202,21 @@ function TxnCard({
                     new Posting({
                       account: 'Assets:GiftCard:Todo',
                       amount: '1',
-                      currency: defaultCurrency,
+                      currency: 'GC_POINTS',
+                      priceAmount: '1',
+                      priceCurrency: defaultCurrency,
+                      atSigns: 2,
+                    }),
+                  )
+                } else if (kind === 'gift-card-redeem') {
+                  t.postings.push(
+                    new Posting({
+                      account: 'Assets:GiftCard:Todo',
+                      amount: '-1',
+                      currency: 'GC_POINTS',
+                      priceAmount: '1',
+                      priceCurrency: defaultCurrency,
+                      atSigns: 2,
                     }),
                   )
                 } else if (kind === 'discount') {

@@ -140,3 +140,35 @@ describe('validateBeancount — points transfer signs', () => {
     expect(messages(src)).toHaveLength(0)
   })
 })
+
+describe('validateBeancount — gift card (commodity model)', () => {
+  it('accepts CC → GC acquisition with @@ INR basis', () => {
+    const src = `2026-04-16 * "SmartBuy" "Amazon voucher" ^sb-amzn
+  Liabilities:CC:HDFC:Infinia    -450 INR
+  Assets:GiftCard:Amazon          500 AMZN_GC @@ 450 INR`
+    expect(messages(src)).toHaveLength(0)
+  })
+
+  it('accepts GC → wallet reload with @@ INR face value', () => {
+    const src = `2026-04-20 * "Amazon" "Reload AmazonPay" ^load-apay
+  Assets:GiftCard:Amazon    -500 AMZN_GC @@ 500 INR
+  Assets:Wallet:AmazonPay    500 INR`
+    expect(messages(src)).toHaveLength(0)
+  })
+
+  it('accepts mixed GC + CC spend on an expense', () => {
+    const src = `2026-04-22 * "Amazon" "Echo Dot" ^echo-buy
+  Expenses:Electronics              4500 INR
+  Assets:GiftCard:Amazon            -500 AMZN_GC @@ 500 INR
+  Liabilities:CC:HDFC:Infinia      -4000 INR`
+    expect(messages(src)).toHaveLength(0)
+  })
+
+  it('flags a GC acquisition where the @@ basis does not match the CC outflow', () => {
+    const src = `2026-04-16 * "SmartBuy" "mismatched basis" ^sb-bad
+  Liabilities:CC:HDFC:Infinia    -450 INR
+  Assets:GiftCard:Amazon          500 AMZN_GC @@ 400 INR`
+    const msgs = messages(src)
+    expect(msgs.some((m) => m.startsWith('Unbalanced transaction:'))).toBe(true)
+  })
+})
