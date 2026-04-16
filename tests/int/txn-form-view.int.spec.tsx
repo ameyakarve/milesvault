@@ -503,13 +503,13 @@ describe('TxnFormView paired-posting validation', () => {
     )
   }
 
-  const VALID_CASHBACK = `2026-04-14 * "Amudham" "Dinner — 5% cashback"
+  const VALID_CASHBACK = `2026-04-14 * "Amudham" "Dinner — 5% cashback" ^cashback-5pct
   Expenses:Food:Dining                    1500 INR
   Liabilities:CC:HDFC:Infinia            -1500 INR
   Assets:Cashback:Pending:HDFC:Infinia      75 INR
   Income:Cashback:HDFC:Infinia             -75 INR`
 
-  const VALID_REWARD = `2026-04-14 * "Amudham" "Dinner with points"
+  const VALID_REWARD = `2026-04-14 * "Amudham" "Dinner with points" ^dinner-points-earn
   Expenses:Food:Dining              1500 INR
   Liabilities:CC:HDFC:Infinia      -1500 INR
   Assets:Rewards:HDFC:SmartBuy        50 SMARTBUY_POINTS
@@ -526,7 +526,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('Income:Cashback without Assets:Cashback:Pending fires an error', () => {
-    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken cashback"
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken cashback" ^orphan-no-pending
   Expenses:Food:Dining           1500 INR
   Liabilities:CC:HDFC:Infinia   -1425 INR
   Income:Cashback:HDFC:Infinia    -75 INR`
@@ -538,7 +538,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('Assets:Cashback:Pending without Income:Cashback fires an error', () => {
-    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken cashback"
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken cashback" ^orphan-no-income-cb
   Expenses:Food:Dining                    1500 INR
   Liabilities:CC:HDFC:Infinia            -1500 INR
   Assets:Cashback:Pending:HDFC:Infinia      75 INR
@@ -551,7 +551,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('mismatched cashback amounts fire a balance error', () => {
-    const MISMATCH = `2026-04-14 * "Amudham" "Dinner — mismatched cashback"
+    const MISMATCH = `2026-04-14 * "Amudham" "Dinner — mismatched cashback" ^mismatch-cb-amt
   Expenses:Food:Dining                    1500 INR
   Liabilities:CC:HDFC:Infinia            -1450 INR
   Assets:Cashback:Pending:HDFC:Infinia      75 INR
@@ -565,7 +565,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('Assets:Rewards without Income:Rewards fires an error', () => {
-    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken reward"
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken reward" ^orphan-no-income-rwd
   Expenses:Food:Dining              1500 INR
   Liabilities:CC:HDFC:Infinia      -1500 INR
   Assets:Rewards:HDFC:SmartBuy        50 SMARTBUY_POINTS
@@ -578,7 +578,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('Income:Rewards without Assets:Rewards fires an error', () => {
-    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken reward"
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — broken reward" ^orphan-no-assets-rwd
   Expenses:Food:Dining              1500 INR
   Liabilities:CC:HDFC:Infinia      -1500 INR
   Income:Rewards:HDFC:Earned         -50 SMARTBUY_POINTS
@@ -594,7 +594,7 @@ describe('TxnFormView paired-posting validation', () => {
     const KITCHEN = `2020-01-01 open Assets:Rewards:HDFC:SmartBuy SMARTBUY_POINTS
 2020-01-01 open Income:Rewards:HDFC:Earned SMARTBUY_POINTS
 
-2026-04-14 * "Amudham" "Dinner — discount + cashback + points"
+2026-04-14 * "Amudham" "Dinner — discount + cashback + points" ^kitchen-discount-cb-pts
   Expenses:Food:Dining                    1500 INR
   Liabilities:CC:HDFC:Infinia            -1400 INR
   Equity:Discount                         -100 INR
@@ -607,13 +607,13 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('errors are scoped per-transaction (one bad txn doesn’t taint a sibling)', () => {
-    const MIXED = `2026-04-14 * "Amudham" "Good cashback"
+    const MIXED = `2026-04-14 * "Amudham" "Good cashback" ^mixed-good-cb
   Expenses:Food:Dining                    1500 INR
   Liabilities:CC:HDFC:Infinia            -1500 INR
   Assets:Cashback:Pending:HDFC:Infinia      75 INR
   Income:Cashback:HDFC:Infinia             -75 INR
 
-2026-04-13 * "Chai Point" "Bad cashback"
+2026-04-13 * "Chai Point" "Bad cashback" ^mixed-bad-cb
   Expenses:Food:Coffee           120 INR
   Liabilities:CC:HDFC:Infinia   -114 INR
   Income:Cashback:HDFC:Infinia    -6 INR`
@@ -625,7 +625,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('valid redemption with @@ price annotation produces no errors', () => {
-    const OK = `2026-04-15 * "Accor" "Hotel stay — points + cash"
+    const OK = `2026-04-15 * "Accor" "Hotel stay — points + cash" ^hotel-redeem-total
   Expenses:Travel:Hotel                10000 INR
   Assets:Rewards:HDFC:SmartBuy         -4000 SMARTBUY_POINTS @@ 8000 INR
   Assets:Cash                          -2000 INR`
@@ -634,7 +634,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('valid redemption with @ rate annotation produces no errors', () => {
-    const OK = `2026-04-15 * "Accor" "Hotel stay — points + cash"
+    const OK = `2026-04-15 * "Accor" "Hotel stay — points + cash" ^hotel-redeem-rate
   Expenses:Travel:Hotel                10000 INR
   Assets:Rewards:HDFC:SmartBuy         -4000 SMARTBUY_POINTS @ 2 INR
   Assets:Cash                          -2000 INR`
@@ -643,7 +643,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('redemption without price clause fires an error', () => {
-    const BAD = `2026-04-15 * "Accor" "Hotel — redemption missing price"
+    const BAD = `2026-04-15 * "Accor" "Hotel — redemption missing price" ^hotel-redeem-no-price
   Expenses:Travel:Hotel            10000 SMARTBUY_POINTS
   Assets:Rewards:HDFC:SmartBuy    -10000 SMARTBUY_POINTS`
     const { container } = render(<Harness initial={BAD} />)
@@ -652,7 +652,7 @@ describe('TxnFormView paired-posting validation', () => {
   })
 
   it('positive Assets:Rewards still triggers earn pairing check (not redemption check)', () => {
-    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — earn with no income leg"
+    const ORPHAN = `2026-04-14 * "Amudham" "Dinner — earn with no income leg" ^orphan-earn-no-income
   Expenses:Food:Dining              1500 INR
   Liabilities:CC:HDFC:Infinia      -1500 INR
   Assets:Rewards:HDFC:SmartBuy        50 SMARTBUY_POINTS
@@ -665,7 +665,7 @@ describe('TxnFormView paired-posting validation', () => {
 })
 
 describe('TxnFormView redemption home-currency picker', () => {
-  const REDEMPTION = `2026-04-15 * "Accor" "Hotel stay — points + cash"
+  const REDEMPTION = `2026-04-15 * "Accor" "Hotel stay — points + cash" ^hotel-redeem-picker
   Expenses:Travel:Hotel                10000 INR
   Assets:Rewards:HDFC:SmartBuy         -4000 SMARTBUY_POINTS @@ 8000 INR
   Assets:Cash                          -2000 INR`
@@ -702,7 +702,7 @@ describe('TxnFormView points-transfer', () => {
     )
   }
 
-  const VALID = `2026-04-16 * "HDFC" "SmartBuy → Finnair"
+  const VALID = `2026-04-16 * "HDFC" "SmartBuy → Finnair" ^pts-xfer-smartbuy-finnair
   Assets:Rewards:HDFC:SmartBuy    -4000 SMARTBUY_POINTS
   Assets:Rewards:Finnair           2000 FINNAIR_POINTS @@ 4000 SMARTBUY_POINTS`
 
@@ -725,7 +725,7 @@ describe('TxnFormView points-transfer', () => {
   })
 
   it('falls back to singles when the sink has no price clause', () => {
-    const BAD = `2026-04-16 * "HDFC" "SmartBuy → Finnair (orphan)"
+    const BAD = `2026-04-16 * "HDFC" "SmartBuy → Finnair (orphan)" ^pts-xfer-orphan
   Assets:Rewards:HDFC:SmartBuy    -4000 SMARTBUY_POINTS
   Assets:Rewards:Finnair           2000 FINNAIR_POINTS`
     const { container } = render(<Harness initial={BAD} />)
@@ -779,19 +779,19 @@ describe('TxnFormView transfer family', () => {
     )
   }
 
-  const TRANSFER = `2026-04-16 * "Self" "Savings to Checking"
+  const TRANSFER = `2026-04-16 * "Self" "Savings to Checking" ^savings-to-checking
   Assets:Bank:Savings    -10000 INR
   Assets:Bank:Checking    10000 INR`
 
-  const CC_PAYMENT = `2026-04-16 * "HDFC" "April statement payment"
+  const CC_PAYMENT = `2026-04-16 * "HDFC" "April statement payment" ^cc-payment-april
   Assets:Bank:Checking          -18000 INR
   Liabilities:CC:HDFC:Infinia    18000 INR`
 
-  const WALLET_TOPUP = `2026-04-16 * "Paytm" "Load wallet from CC"
+  const WALLET_TOPUP = `2026-04-16 * "Paytm" "Load wallet from CC" ^wallet-topup-paytm
   Liabilities:CC:HDFC:Infinia   -1000 INR
   Assets:Wallet:Paytm            1000 INR`
 
-  const GIFT_CARD_TOPUP = `2026-04-16 * "Amazon" "Gift card reload"
+  const GIFT_CARD_TOPUP = `2026-04-16 * "Amazon" "Gift card reload" ^amazon-gc-reload
   Assets:Bank:Checking       -500 INR
   Assets:GiftCard:Amazon      500 INR`
 
@@ -836,7 +836,7 @@ describe('TxnFormView transfer family', () => {
   })
 
   it('gift-card variant takes precedence over wallet-topup and cc-payment', () => {
-    const CC_GIFT = `2026-04-16 * "Amazon" "CC-paid gift card"
+    const CC_GIFT = `2026-04-16 * "Amazon" "CC-paid gift card" ^amazon-gc-cc-paid
   Liabilities:CC:HDFC:Infinia  -500 INR
   Assets:GiftCard:Amazon        500 INR`
     const { container } = render(<Harness initial={CC_GIFT} />)
@@ -877,7 +877,7 @@ describe('TxnFormView transfer family', () => {
   })
 
   it('falls back to singles when magnitudes do not balance', () => {
-    const BAD = `2026-04-16 * "Self" "Unbalanced"
+    const BAD = `2026-04-16 * "Self" "Unbalanced" ^transfer-unbalanced
   Assets:Bank:Savings    -10000 INR
   Assets:Bank:Checking    9000 INR`
     const { container } = render(<Harness initial={BAD} />)
@@ -887,7 +887,7 @@ describe('TxnFormView transfer family', () => {
   })
 
   it('falls back to singles when a price clause is present (points transfer territory)', () => {
-    const PRICED = `2026-04-16 * "Self" "With price"
+    const PRICED = `2026-04-16 * "Self" "With price" ^transfer-with-price
   Assets:Bank:Savings    -100 USD
   Assets:Bank:Checking    100 USD @@ 8500 INR`
     const { container } = render(<Harness initial={PRICED} />)
@@ -895,7 +895,7 @@ describe('TxnFormView transfer family', () => {
   })
 
   it('composes with an unrelated posting in the same transaction', () => {
-    const MIXED = `2026-04-16 * "Mixed" "Transfer + fee"
+    const MIXED = `2026-04-16 * "Mixed" "Transfer + fee" ^transfer-plus-fee
   Assets:Bank:Savings    -10000 INR
   Assets:Bank:Checking    10000 INR
   Expenses:Fees:Wire         50 INR

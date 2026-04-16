@@ -1,36 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { ValidationError } from 'payload'
 
-const BALANCE_TOLERANCE = 0.005
-
-type RawPosting = {
-  account?: unknown
-  amountNumber?: number | null
-  amountCommodity?: unknown
-  price?: {
-    kind?: 'per_unit' | 'total' | null
-    number?: number | null
-    commodity?: unknown
-  } | null
-  cost?: {
-    kind?: 'per_unit' | 'total' | null
-    number?: number | null
-    commodity?: unknown
-  } | null
-}
-
-function postingWeight(p: RawPosting): { number: number; commodity: unknown } | null {
-  if (p.amountNumber == null || p.amountCommodity == null) return null
-  const priceOrCost = p.price?.number != null ? p.price : p.cost?.number != null ? p.cost : null
-  if (priceOrCost?.kind === 'per_unit' && priceOrCost.number != null && priceOrCost.commodity != null) {
-    return { number: p.amountNumber * priceOrCost.number, commodity: priceOrCost.commodity }
-  }
-  if (priceOrCost?.kind === 'total' && priceOrCost.number != null && priceOrCost.commodity != null) {
-    const sign = p.amountNumber < 0 ? -1 : 1
-    return { number: sign * priceOrCost.number, commodity: priceOrCost.commodity }
-  }
-  return { number: p.amountNumber, commodity: p.amountCommodity }
-}
+import { validateBeancount } from '@/lib/beancount/validate'
 
 export const Txns: CollectionConfig = {
   slug: 'txns',
@@ -65,53 +36,15 @@ export const Txns: CollectionConfig = {
           data.user = originalDoc.user
         }
 
-        const postings = (data.postings as RawPosting[] | undefined) ?? []
-        if (postings.length === 0) return data
-
-        const sums = new Map<unknown, number>()
-        const elided: RawPosting[] = []
-        for (const p of postings) {
-          const w = postingWeight(p)
-          if (w == null) {
-            elided.push(p)
-            continue
-          }
-          sums.set(w.commodity, (sums.get(w.commodity) ?? 0) + w.number)
-        }
-
-        if (elided.length > 1) {
-          throw new ValidationError({
-            collection: 'txns',
-            errors: [{ path: 'postings', message: 'At most one posting may have an elided amount' }],
-          })
-        }
-
-        if (elided.length === 1) {
-          const unbalanced = [...sums].filter(([, v]) => Math.abs(v) > BALANCE_TOLERANCE)
-          if (unbalanced.length !== 1) {
+        const source = typeof data.source === 'string' ? data.source : ''
+        if (source.trim()) {
+          const diagnostics = validateBeancount(source)
+          if (diagnostics.length > 0) {
             throw new ValidationError({
               collection: 'txns',
-              errors: [
-                {
-                  path: 'postings',
-                  message: `Cannot auto-balance elided posting: need exactly one unbalanced commodity, found ${unbalanced.length}`,
-                },
-              ],
+              errors: diagnostics.map((d) => ({ path: 'source', message: d.message })),
             })
           }
-          const [plugCcy, plugSum] = unbalanced[0]
-          elided[0].amountNumber = -plugSum
-          elided[0].amountCommodity = plugCcy
-          sums.set(plugCcy, 0)
-        }
-
-        const stillUnbalanced = [...sums].filter(([, v]) => Math.abs(v) > BALANCE_TOLERANCE)
-        if (stillUnbalanced.length > 0) {
-          const detail = stillUnbalanced.map(([c, v]) => `${String(c)}=${v}`).join(', ')
-          throw new ValidationError({
-            collection: 'txns',
-            errors: [{ path: 'postings', message: `Unbalanced transaction: ${detail}` }],
-          })
         }
 
         return data
@@ -132,6 +65,14 @@ export const Txns: CollectionConfig = {
       access: {
         create: () => false,
         update: () => false,
+      },
+    },
+    {
+      name: 'source',
+      type: 'textarea',
+      required: true,
+      admin: {
+        description: 'The raw beancount directive. Source of truth; structured fields below are a derived cache.',
       },
     },
     {

@@ -3,6 +3,7 @@ import { getPayload, type RequiredDataFromCollectionSlug } from 'payload'
 import { parse, BeancountParseError, type Transaction, type Posting } from 'beancount'
 
 import config from '@/payload.config'
+import { validateBeancount } from '@/lib/beancount/validate'
 
 type PostingInput = {
   flag?: string
@@ -88,6 +89,14 @@ export const POST = async (request: Request): Promise<Response> => {
     return Response.json({ error: 'Expected { text: string }' }, { status: 400 })
   }
 
+  const diagnostics = validateBeancount(body.text)
+  if (diagnostics.length > 0) {
+    return Response.json(
+      { error: 'Validation failed', diagnostics },
+      { status: 422 },
+    )
+  }
+
   let result
   try {
     result = parse(body.text)
@@ -107,9 +116,6 @@ export const POST = async (request: Request): Promise<Response> => {
   }
 
   const transactions = result.transactions
-  if (transactions.length === 0) {
-    return Response.json({ error: 'No transactions in input' }, { status: 400 })
-  }
 
   const [accountsRes, commoditiesRes] = await Promise.all([
     payload.find({ collection: 'accounts', limit: 500, user, overrideAccess: false, depth: 0 }),
@@ -123,7 +129,8 @@ export const POST = async (request: Request): Promise<Response> => {
 
   for (let i = 0; i < transactions.length; i++) {
     try {
-      const data = mapTxn(transactions[i], accountMap, commodityMap)
+      const txn = transactions[i]
+      const data = { ...mapTxn(txn, accountMap, commodityMap), source: txn.toString() }
       const doc = await payload.create({
         collection: 'txns',
         data: data as unknown as RequiredDataFromCollectionSlug<'txns'>,

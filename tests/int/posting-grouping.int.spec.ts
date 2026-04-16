@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parse, type Posting } from 'beancount'
 
-import { groupPostings, type PostingGroup } from '../../src/app/(frontend)/chat/posting-grouping'
+import { groupPostings, type PostingGroup } from '../../src/lib/beancount/posting-grouping'
 
 function postingsFromText(body: string): Posting[] {
   const text = `2026-04-16 * "test" "case"\n${body}`

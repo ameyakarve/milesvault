@@ -17,7 +17,6 @@ const STORIES = [
   'hotel-with-redemption',
   'orphan-redemption-no-price',
   'points-transfer-basic',
-  'points-transfer-no-price',
   'transfer-basic',
   'cc-payment',
   'wallet-top-up',

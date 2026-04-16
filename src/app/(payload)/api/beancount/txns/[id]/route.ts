@@ -3,6 +3,7 @@ import { getPayload, type RequiredDataFromCollectionSlug } from 'payload'
 import { parse, BeancountParseError, type Transaction, type Posting } from 'beancount'
 
 import config from '@/payload.config'
+import { validateBeancount } from '@/lib/beancount/validate'
 
 type PostingInput = {
   flag?: string
@@ -97,6 +98,14 @@ export const PATCH = async (
     return Response.json({ error: 'Expected { text: string }' }, { status: 400 })
   }
 
+  const diagnostics = validateBeancount(body.text)
+  if (diagnostics.length > 0) {
+    return Response.json(
+      { error: 'Validation failed', diagnostics },
+      { status: 422 },
+    )
+  }
+
   let result
   try {
     result = parse(body.text)
@@ -129,9 +138,10 @@ export const PATCH = async (
   const accountMap = new Map(accountsRes.docs.map((a) => [a.path, a.id]))
   const commodityMap = new Map(commoditiesRes.docs.map((c) => [c.code, c.id]))
 
-  let data: TxnInput
+  let data: TxnInput & { source: string }
   try {
-    data = mapTxn(result.transactions[0], accountMap, commodityMap)
+    const txn = result.transactions[0]
+    data = { ...mapTxn(txn, accountMap, commodityMap), source: txn.toString() }
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : String(err) },

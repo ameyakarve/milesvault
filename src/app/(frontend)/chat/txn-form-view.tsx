@@ -16,7 +16,8 @@ import {
   type PointsTransferGroup,
   type TransferGroup,
   type TransferVariant,
-} from './posting-grouping'
+} from '@/lib/beancount/posting-grouping'
+import { validateBeancount } from '@/lib/beancount/validate'
 
 type SelectOption = { value: string; label: string }
 
@@ -131,143 +132,13 @@ function isHiddenPosting(p: Posting): boolean {
   return false
 }
 
-const PAIRED_PREFIXES = [
-  {
-    label: 'Cashback',
-    assetPrefix: 'Assets:Cashback:Pending:',
-    incomePrefix: 'Income:Cashback:',
-  },
-] as const
-
-function sumByCommodity(
-  postings: readonly Posting[],
-  predicate: (p: Posting) => boolean,
-): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const p of postings) {
-    if (!predicate(p)) continue
-    const c = p.currency
-    const raw = p.amount
-    if (!c || raw == null) continue
-    const n = parseFloat(raw)
-    if (!Number.isFinite(n)) continue
-    out[c] = (out[c] ?? 0) + n
-  }
-  return out
-}
-
-function validateSymmetricPair(
-  push: (msg: string) => void,
-  postings: readonly Posting[],
-  label: string,
-  aPrefix: string,
-  bPrefix: string,
-  aSuffix = '',
-  aPredicate?: (p: Posting) => boolean,
-) {
-  const aSums = sumByCommodity(postings, aPredicate ?? ((p) => p.account.startsWith(aPrefix)))
-  const bSums = sumByCommodity(postings, (p) => p.account.startsWith(bPrefix))
-  const hasA = Object.keys(aSums).length > 0
-  const hasB = Object.keys(bSums).length > 0
-  if (!hasA && !hasB) return
-  if (!hasA) {
-    push(`${label}: ${bPrefix}* needs a matching ${aPrefix}* reverse entry.`)
-    return
-  }
-  if (!hasB) {
-    push(`${label}: ${aPrefix}*${aSuffix} needs a matching ${bPrefix}* reverse entry.`)
-    return
-  }
-  const commodities = new Set([...Object.keys(aSums), ...Object.keys(bSums)])
-  for (const c of commodities) {
-    const a = aSums[c] ?? 0
-    const b = bSums[c] ?? 0
-    if (Math.abs(a + b) > 0.005) {
-      push(
-        `${label} ${c} mismatch: ${aPrefix}* = ${formatAmount(a)}, ${bPrefix}* = ${formatAmount(b)} (must cancel out).`,
-      )
-    }
-  }
-}
-
-function validatePairedPostings(result: ParseResult): Map<number, string[]> {
+function validateByTxn(source: string): Map<number, string[]> {
   const errors = new Map<number, string[]>()
-  const push = (i: number, msg: string) => {
-    const list = errors.get(i) ?? []
-    list.push(msg)
-    errors.set(i, list)
-  }
-  for (let i = 0; i < result.transactions.length; i++) {
-    const t = result.transactions[i]
-    const groups = groupPostings(t.postings)
-    const pairIndices = new Set<number>()
-    for (const g of groups) {
-      if (g.kind === 'points-transfer') {
-        pairIndices.add(g.sourceIndex)
-        pairIndices.add(g.sinkIndex)
-      } else if (g.kind === 'transfer') {
-        pairIndices.add(g.fromIndex)
-        pairIndices.add(g.toIndex)
-      }
-    }
-    const nonPairedPostings = t.postings.filter((_, idx) => !pairIndices.has(idx))
-    for (const { label, assetPrefix, incomePrefix } of PAIRED_PREFIXES) {
-      validateSymmetricPair(
-        (msg) => push(i, msg),
-        t.postings,
-        label,
-        assetPrefix,
-        incomePrefix,
-      )
-    }
-
-    // Reward earn legs (positive Assets:Rewards) must pair with Income:Rewards.
-    // Redemption legs (negative Assets:Rewards) must carry a price clause.
-    // Points-transfer pair indices are excluded so they don't double-fire.
-    validateSymmetricPair(
-      (msg) => push(i, msg),
-      nonPairedPostings,
-      'Reward',
-      'Assets:Rewards:',
-      'Income:Rewards:',
-      ' (earn)',
-      (p) =>
-        p.account.startsWith('Assets:Rewards:') &&
-        p.amount != null &&
-        parseFloat(p.amount) > 0,
-    )
-
-    for (let idx = 0; idx < t.postings.length; idx++) {
-      if (pairIndices.has(idx)) continue
-      const p = t.postings[idx]
-      if (!p.account.startsWith('Assets:Rewards:')) continue
-      const n = p.amount != null ? parseFloat(p.amount) : NaN
-      if (!Number.isFinite(n) || n >= 0) continue
-      if (!p.priceCurrency || !p.priceAmount || p.priceCurrency === p.currency) {
-        push(
-          i,
-          `Redemption: ${p.account} must convert via @@/@ price clause to a real currency.`,
-        )
-      }
-    }
-
-    for (const g of groups) {
-      if (g.kind !== 'points-transfer') continue
-      const srcRaw = g.source.amount != null ? parseFloat(g.source.amount) : NaN
-      const sinkRaw = g.sink.amount != null ? parseFloat(g.sink.amount) : NaN
-      if (Number.isFinite(srcRaw) && srcRaw >= 0) {
-        push(
-          i,
-          `Points transfer: ${g.source.account} must be negative (the program you're drawing points from).`,
-        )
-      }
-      if (Number.isFinite(sinkRaw) && sinkRaw <= 0) {
-        push(
-          i,
-          `Points transfer: ${g.sink.account} must be positive (the program receiving points).`,
-        )
-      }
-    }
+  for (const d of validateBeancount(source)) {
+    if (d.transactionIndex == null) continue
+    const list = errors.get(d.transactionIndex) ?? []
+    list.push(d.message)
+    errors.set(d.transactionIndex, list)
   }
   return errors
 }
@@ -2300,7 +2171,7 @@ export function TxnFormView({
   const allAccounts = accountsMatching(result, '')
   const allCurrencies = currenciesIn(result, homeCommodityByAccount)
   const accountCurrencyConstraints = constraintCurrenciesByAccount(result)
-  const validationErrorsByTxn = validatePairedPostings(result)
+  const validationErrorsByTxn = validateByTxn(text)
 
   return (
     <div className="txn-form-list">

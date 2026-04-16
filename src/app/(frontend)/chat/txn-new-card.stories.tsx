@@ -221,14 +221,6 @@ export const AnnualFee: Story = {
   },
 }
 
-export const PointsTransferNoPrice: Story = {
-  args: {
-    initialText: `2026-04-16 * "HDFC" "SmartBuy → Finnair (missing price)" ^smartbuy-to-finnair
-  Assets:Rewards:HDFC:SmartBuy    -4000 SMARTBUY_POINTS
-  Assets:Rewards:Finnair           2000 FINNAIR_POINTS`,
-  },
-}
-
 export const ServerRejects: Story = {
   args: CCSpend.args,
   parameters: {
