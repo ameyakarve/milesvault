@@ -7,10 +7,15 @@ export type FakeResponse = {
 export type Routes = Record<string, (req: Request) => FakeResponse | Promise<FakeResponse>>
 
 export const defaultTxnRoutes: Routes = {
-  'POST /api/beancount/txns': async () => ({
-    body: { created: [{ index: 0, id: 42 }], errors: [], total: 1 },
-    delay: 400,
-  }),
+  'POST /api/beancount/txns': async (req) => {
+    const { text = '' } = (await req.json().catch(() => ({}))) as { text?: string }
+    const count = Math.max(1, (text.match(/^\d{4}-\d{2}-\d{2}\s+[*!]/gm) ?? []).length)
+    const created = Array.from({ length: count }, (_, i) => ({ index: i, id: 42 + i }))
+    return {
+      body: { created, errors: [], total: count },
+      delay: 400,
+    }
+  },
   'PATCH /api/beancount/txns/:id': async () => ({
     body: { doc: { id: 42 } },
     delay: 400,

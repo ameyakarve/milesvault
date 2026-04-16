@@ -80,9 +80,12 @@ export function TxnNewCard({
 }) {
   const [text, setText] = useState(initialText)
   const [view, setView] = useState<View>('form')
-  const [savedId, setSavedId] = useState<number | null>(null)
+  const [savedIds, setSavedIds] = useState<number[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const isSaved = savedIds.length > 0
+  const canUpdate = savedIds.length === 1
 
   const confirm = async () => {
     setError(null)
@@ -92,7 +95,7 @@ export function TxnNewCard({
     }
     setBusy(true)
     try {
-      if (savedId == null) {
+      if (!isSaved) {
         const res = await fetch('/api/beancount/txns', {
           method: 'POST',
           credentials: 'include',
@@ -104,14 +107,16 @@ export function TxnNewCard({
           throw new Error(data.detail || data.error || `HTTP ${res.status}`)
         }
         if (data.errors && data.errors.length > 0) {
-          throw new Error(data.errors[0].message)
+          throw new Error(
+            data.errors.map((e) => `#${e.index + 1}: ${e.message}`).join('; '),
+          )
         }
         if (!data.created || data.created.length === 0) {
           throw new Error('No transaction created')
         }
-        setSavedId(data.created[0].id)
-      } else {
-        const res = await fetch(`/api/beancount/txns/${savedId}`, {
+        setSavedIds(data.created.map((c) => c.id))
+      } else if (canUpdate) {
+        const res = await fetch(`/api/beancount/txns/${savedIds[0]}`, {
           method: 'PATCH',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
@@ -129,13 +134,15 @@ export function TxnNewCard({
     }
   }
 
-  const isSaved = savedId != null
-
   return (
     <div className={`txn-card ${isSaved ? 'txn-card-saved' : ''}`}>
       <div className="txn-card-header">
         {isSaved ? (
-          <span className="txn-card-badge">saved #{savedId}</span>
+          savedIds.length === 1 ? (
+            <span className="txn-card-badge">saved #{savedIds[0]}</span>
+          ) : (
+            <span className="txn-card-badge">saved ({savedIds.length})</span>
+          )
         ) : (
           <span className="txn-card-badge txn-card-badge-draft">new</span>
         )}
@@ -188,7 +195,18 @@ export function TxnNewCard({
       )}
       {error && <div className="txn-card-error">{error}</div>}
       <div className="txn-card-actions">
-        <button type="button" onClick={confirm} disabled={busy} title={isSaved ? 'Update' : 'Save'}>
+        <button
+          type="button"
+          onClick={confirm}
+          disabled={busy || (isSaved && !canUpdate)}
+          title={
+            isSaved && !canUpdate
+              ? 'Multi-txn update not supported — edit individual txns in their own cards'
+              : isSaved
+                ? 'Update'
+                : 'Save'
+          }
+        >
           {isSaved ? '✓ Update' : '✓ Save'}
         </button>
       </div>
