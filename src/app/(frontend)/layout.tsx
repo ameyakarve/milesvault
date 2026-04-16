@@ -1,3 +1,4 @@
+import Script from 'next/script'
 import React from 'react'
 import './styles.css'
 
@@ -39,8 +40,13 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
         />
-        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries" />
-        <script dangerouslySetInnerHTML={{ __html: tailwindConfig }} />
+        <Script
+          src="https://cdn.tailwindcss.com?plugins=forms,container-queries"
+          strategy="beforeInteractive"
+        />
+        <Script id="tailwind-config" strategy="beforeInteractive">
+          {tailwindConfig}
+        </Script>
       </head>
       <body className="bg-[#FBFCFD]">{children}</body>
     </html>
