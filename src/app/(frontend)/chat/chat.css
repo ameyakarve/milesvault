@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300,0,0&display=swap');
 
 .material-symbols-outlined {
@@ -241,56 +241,513 @@
 }
 
 .txn-form-validation-errors {
-  margin: 0 12px 8px;
+  margin: 0;
   padding: 8px 12px;
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  border-radius: 4px;
 }
 
 .txn-form-validation-errors li {
   font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
 }
 
-.txn-form-list {
+/* ============================================================
+ * Batch container + footer
+ * ============================================================ */
+.txn-form-batch {
   display: flex;
   flex-direction: column;
-  gap: 14px;
   background: #eff4f7;
-}
-
-.txn-form-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
   color: #283439;
   font-family: 'Inter', -apple-system, sans-serif;
 }
 
-.txn-form-header-card {
-  background: #ffffff;
-  border: 1px solid #a7b4ba;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  padding: 14px 18px 18px;
+.txn-form-batch-body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
+  padding: 14px;
+}
+
+.txn-form-batch-body-empty {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.txn-form-batch-empty-msg {
+  margin: 0;
+  color: #707d82;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.txn-form-batch-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  background: #dfeaef;
+  border-top: 1px solid rgba(167, 180, 186, 0.6);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+.txn-form-batch-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid #707d82;
+  border-radius: 4px;
+  color: #455f88;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.txn-form-batch-add:hover {
+  background: #ffffff;
+  border-color: #455f88;
+}
+
+.txn-form-batch-add .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.txn-form-batch-counts {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.txn-form-batch-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.txn-form-batch-count-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.txn-form-batch-count-cleared {
+  color: #2f7a4f;
+}
+.txn-form-batch-count-cleared .txn-form-batch-count-dot {
+  background: #34a76a;
+}
+
+.txn-form-batch-count-pending {
+  color: #a16a14;
+}
+.txn-form-batch-count-pending .txn-form-batch-count-dot {
+  background: #d8930b;
+}
+
+.txn-form-batch-count-error {
+  color: #9f403d;
+}
+.txn-form-batch-count-error .txn-form-batch-count-dot {
+  background: #9f403d;
+}
+
+.txn-form-batch-save {
+  padding: 8px 18px;
+  background: #455f88;
+  color: #f6f7ff;
+  border: none;
+  border-radius: 4px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(69, 95, 136, 0.2);
+  transition: background 0.15s;
+}
+
+.txn-form-batch-save:hover:not(:disabled) {
+  background: #38527b;
+}
+
+.txn-form-batch-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ============================================================
+ * Per-txn card (summary bar + collapsible body)
+ * ============================================================ */
+.txn-form-card {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid rgba(167, 180, 186, 0.6);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  font-family: 'Inter', -apple-system, sans-serif;
+  color: #283439;
+}
+
+.txn-form-card-error {
+  border-left: 3px solid #9f403d;
+}
+
+/* Summary bar (always visible) */
+.txn-form-summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(167, 180, 186, 0.3);
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  transition: background 0.15s;
+}
+
+.txn-form-card[data-state='error'] .txn-form-summary {
+  background: rgba(254, 137, 131, 0.08);
+  border-bottom-color: rgba(159, 64, 61, 0.2);
+}
+
+.txn-form-summary:hover {
+  background: #f7fafc;
+}
+
+.txn-form-summary-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  opacity: 0.85;
+}
+
+.txn-form-summary-dot-cleared {
+  background: #34a76a;
+  color: rgba(52, 167, 106, 0.45);
+}
+.txn-form-summary-dot-pending {
+  background: #d8930b;
+  color: rgba(216, 147, 11, 0.45);
+}
+.txn-form-summary-dot-error {
+  background: #9f403d;
+  color: rgba(159, 64, 61, 0.45);
+}
+
+.txn-form-summary-line {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 6px;
+  font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', monospace;
+  font-size: 12px;
+  color: #546166;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.txn-form-card[data-state='error'] .txn-form-summary-line {
+  color: #9f403d;
+}
+
+.txn-form-summary-sep {
+  color: #a7b4ba;
+}
+
+.txn-form-summary-index {
+  color: #707d82;
+  font-weight: 500;
+}
+
+.txn-form-summary-payee {
+  color: #283439;
+  font-weight: 500;
+}
+
+.txn-form-summary-amount {
+  color: #283439;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.txn-form-summary-note {
+  color: #707d82;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.txn-form-summary-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  color: #707d82;
+}
+
+.txn-form-summary-chevron {
+  font-size: 18px;
+}
+
+.txn-form-summary-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #707d82;
+  transition: background 0.15s, color 0.15s;
+}
+
+.txn-form-summary-menu-btn:hover {
+  background: rgba(167, 180, 186, 0.25);
+  color: #455f88;
+}
+
+.txn-form-summary-menu-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.txn-form-summary-menu {
+  position: absolute;
+  right: 10px;
+  top: 100%;
+  margin-top: 2px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  background: #ffffff;
+  border: 1px solid rgba(167, 180, 186, 0.7);
+  border-radius: 4px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+}
+
+.txn-form-summary-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12px;
+  color: #283439;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.txn-form-summary-menu-item:hover {
+  background: #eff4f7;
+}
+
+.txn-form-summary-menu-item-destructive {
+  color: #9f403d;
+}
+
+.txn-form-summary-menu-item-destructive:hover {
+  background: rgba(159, 64, 61, 0.1);
+}
+
+/* Expanded body (contains fields + errors + postings + add posting) */
+.txn-form-body {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(247, 250, 252, 0.6);
+}
+
+.txn-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Was the old rounded sub-card; now a flat fields container. */
+.txn-form-header-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .txn-form-header-pill {
-  align-self: flex-start;
-  background: rgba(40, 52, 57, 0.08);
-  color: #283439;
-  font-family: 'Inter', sans-serif;
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  padding: 4px 10px;
+  display: none;
+}
+
+/* ============================================================
+ * Linked-txn group: pill header + vertical rail
+ * ============================================================ */
+.txn-form-link-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.txn-form-link-group-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  background: linear-gradient(
+    to right,
+    rgba(223, 234, 239, 0.7),
+    rgba(223, 234, 239, 0)
+  );
+  border: 1px solid rgba(167, 180, 186, 0.3);
   border-radius: 999px;
-  line-height: 1.4;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.txn-form-link-group-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  color: #455f88;
+  flex-shrink: 0;
+}
+
+.txn-form-link-group-icon .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.txn-form-link-group-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.txn-form-link-group-link {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: #283439;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.txn-form-link-group-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 500;
+  color: #707d82;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+}
+
+.txn-form-link-group-rail {
+  position: relative;
+  padding-left: 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.txn-form-link-group-rail::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 8px;
+  width: 2px;
+  background: rgba(167, 180, 186, 0.65);
+  border-radius: 1px;
+  z-index: 0;
+}
+
+.txn-form-link-group-item {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+ * Dashed insert-transaction divider
+ * ============================================================ */
+.txn-form-insert-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 4px;
+}
+
+.txn-form-insert-line {
+  flex: 1;
+  height: 1px;
+  border-top: 1px dashed rgba(167, 180, 186, 0.75);
+}
+
+.txn-form-insert-btn {
+  padding: 4px 10px;
+  background: transparent;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(112, 125, 130, 0.8);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.txn-form-insert-btn:hover {
+  color: #455f88;
+}
+
+.txn-form-solo {
+  display: block;
 }
 
 .txn-form-header-row {

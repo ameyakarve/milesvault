@@ -191,25 +191,40 @@ export function TxnNewCard({
           text={text}
           onChange={busy ? undefined : setText}
           homeCommodityByAccount={homeCommodityByAccount}
+          save={{
+            onSave: confirm,
+            label: isSaved ? `Update (${savedIds.length})` : 'Save all',
+            busy,
+            disabled: isSaved && !canUpdate,
+            title:
+              isSaved && !canUpdate
+                ? 'Multi-txn update not supported — edit individual txns in their own cards'
+                : isSaved
+                  ? 'Update'
+                  : 'Save all',
+            error,
+          }}
         />
       )}
       {error && <div className="txn-card-error">{error}</div>}
-      <div className="txn-card-actions">
-        <button
-          type="button"
-          onClick={confirm}
-          disabled={busy || (isSaved && !canUpdate)}
-          title={
-            isSaved && !canUpdate
-              ? 'Multi-txn update not supported — edit individual txns in their own cards'
-              : isSaved
-                ? 'Update'
-                : 'Save'
-          }
-        >
-          {isSaved ? '✓ Update' : '✓ Save'}
-        </button>
-      </div>
+      {view === 'code' && (
+        <div className="txn-card-actions">
+          <button
+            type="button"
+            onClick={confirm}
+            disabled={busy || (isSaved && !canUpdate)}
+            title={
+              isSaved && !canUpdate
+                ? 'Multi-txn update not supported — edit individual txns in their own cards'
+                : isSaved
+                  ? 'Update'
+                  : 'Save'
+            }
+          >
+            {isSaved ? '✓ Update' : '✓ Save'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

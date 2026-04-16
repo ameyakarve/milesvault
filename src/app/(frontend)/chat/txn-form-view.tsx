@@ -17,6 +17,11 @@ import {
   type TransferGroup,
   type TransferVariant,
 } from '@/lib/beancount/posting-grouping'
+import {
+  appendTxnStub,
+  insertTxnAt,
+  removeTxnAt,
+} from '@/lib/beancount/text-ops'
 import { validateBeancount } from '@/lib/beancount/validate'
 
 type SelectOption = { value: string; label: string }
@@ -285,6 +290,100 @@ function formatAmount(value: number, fractionDigits = 2): string {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: Math.max(fractionDigits, 4),
   })
+}
+
+const MONTH_ABBR = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]
+
+function formatShortDate(dateStr: string): string {
+  const [, m, d] = dateStr.split('-').map((n) => parseInt(n, 10))
+  if (!m || !d) return dateStr
+  return `${String(d).padStart(2, '0')} ${MONTH_ABBR[m - 1]}`
+}
+
+type TxnState = 'cleared' | 'pending' | 'error'
+
+function computeTxnState(flag: string | undefined, hasErrors: boolean): TxnState {
+  if (hasErrors) return 'error'
+  if (flag === '!') return 'pending'
+  return 'cleared'
+}
+
+function summaryAmount(
+  t: Transaction,
+): { signed: number; currency: string } | null {
+  const postings = Array.from(t.postings)
+  const candidates = postings.filter(
+    (p) => !isHiddenPosting(p) && p.amount != null && p.currency,
+  )
+  if (candidates.length === 0) return null
+  const byMagnitude = [...candidates].sort(
+    (a, b) => Math.abs(parseFloat(b.amount as string)) - Math.abs(parseFloat(a.amount as string)),
+  )
+  const primary = candidates.find((p) => {
+    const type = classifyPosting(p)
+    return (
+      type === 'expense' ||
+      type === 'fee' ||
+      type === 'reward-earn' ||
+      type === 'wallet-load'
+    )
+  }) ?? byMagnitude[0]
+  const n = parseFloat(primary.amount as string)
+  if (!Number.isFinite(n)) return null
+  return { signed: n, currency: primary.currency as string }
+}
+
+function formatSummaryAmount(amt: { signed: number; currency: string } | null): string {
+  if (!amt) return ''
+  const magnitude = Math.abs(amt.signed)
+  const formatted = formatAmount(magnitude, amt.currency === 'INR' ? 0 : 2)
+  if (amt.currency === 'INR') {
+    const sign = amt.signed < 0 ? '−' : ''
+    return `${sign}₹${formatted}`
+  }
+  const sign = amt.signed < 0 ? '−' : '+'
+  return `${sign}${formatted} ${amt.currency}`
+}
+
+type BatchSection =
+  | { kind: 'linked-group'; link: string; items: Array<{ txn: Transaction; index: number }> }
+  | { kind: 'solo'; txn: Transaction; index: number }
+
+function sectionsOf(txns: readonly Transaction[]): BatchSection[] {
+  const out: BatchSection[] = []
+  let i = 0
+  while (i < txns.length) {
+    const link = [...txns[i].links][0] || ''
+    if (!link) {
+      out.push({ kind: 'solo', txn: txns[i], index: i })
+      i += 1
+      continue
+    }
+    const items: Array<{ txn: Transaction; index: number }> = []
+    while (i < txns.length && ([...txns[i].links][0] || '') === link) {
+      items.push({ txn: txns[i], index: i })
+      i += 1
+    }
+    if (items.length === 1) {
+      out.push({ kind: 'solo', txn: items[0].txn, index: items[0].index })
+    } else {
+      out.push({ kind: 'linked-group', link, items })
+    }
+  }
+  return out
 }
 
 type Mutator = (result: ParseResult) => void
@@ -1787,8 +1886,10 @@ function AddPostingMenu({ onAdd }: { onAdd: (kind: AddPostingKind) => void }) {
 function TxnCard({
   txn,
   index,
+  displayIndex,
   editable,
   mutate,
+  onRemove,
   allAccounts,
   allCurrencies,
   accountCurrencyConstraints,
@@ -1797,14 +1898,18 @@ function TxnCard({
 }: {
   txn: Transaction
   index: number
+  displayIndex: number
   editable: boolean
   mutate: (fn: Mutator) => void
+  onRemove?: () => void
   allAccounts: string[]
   allCurrencies: string[]
   accountCurrencyConstraints: Record<string, string[]>
   homeCommodityByAccount: Record<string, string>
   validationErrors: string[]
 }) {
+  const [expanded, setExpanded] = useState(true)
+  const [menuOpen, setMenuOpen] = useState(false)
   const dateStr = txn.date.toString()
   const firstLink = [...txn.links][0] || ''
   const listIdBase = `txn-${index}`
@@ -1812,12 +1917,93 @@ function TxnCard({
   const visibleGroups = groups.filter((g) =>
     g.kind === 'single' ? !isHiddenPosting(g.posting) : true,
   )
+  const state = computeTxnState(txn.flag, validationErrors.length > 0)
+  const amtSummary = summaryAmount(txn)
+  const payeeText = txn.payee || 'No payee'
+  const narrationSnippet = txn.narration || ''
 
   return (
-    <div className="txn-form-card">
-      <div className="txn-form-header-card">
-        <span className="txn-form-header-pill">TRANSACTION</span>
-        <div className="txn-form-header-row">
+    <div className={`txn-form-card txn-form-card-${state}`} data-state={state}>
+      <button
+        type="button"
+        className="txn-form-summary"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <span className={`txn-form-summary-dot txn-form-summary-dot-${state}`} aria-hidden />
+        <span className="txn-form-summary-line">
+          <span className="txn-form-summary-index">{String(displayIndex).padStart(2, '0')}</span>
+          <span className="txn-form-summary-sep">·</span>
+          <span className="txn-form-summary-date">{formatShortDate(dateStr)}</span>
+          <span className="txn-form-summary-sep">·</span>
+          <span className="txn-form-summary-payee">{payeeText}</span>
+          {amtSummary && (
+            <>
+              <span className="txn-form-summary-sep">·</span>
+              <span className="txn-form-summary-amount">{formatSummaryAmount(amtSummary)}</span>
+            </>
+          )}
+          {narrationSnippet && (
+            <>
+              <span className="txn-form-summary-sep">·</span>
+              <span className="txn-form-summary-note">{narrationSnippet}</span>
+            </>
+          )}
+        </span>
+        <span className="txn-form-summary-icons">
+          <span className="material-symbols-outlined txn-form-summary-chevron" aria-hidden>
+            {expanded ? 'expand_less' : 'expand_more'}
+          </span>
+          {editable && onRemove && (
+            <span
+              role="button"
+              tabIndex={0}
+              className="txn-form-summary-menu-btn"
+              aria-label="Transaction actions"
+              onClick={(e) => {
+                e.stopPropagation()
+                setMenuOpen((v) => !v)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setMenuOpen((v) => !v)
+                }
+              }}
+            >
+              <span className="material-symbols-outlined" aria-hidden>
+                more_vert
+              </span>
+            </span>
+          )}
+        </span>
+        {menuOpen && editable && onRemove && (
+          <span
+            role="menu"
+            className="txn-form-summary-menu"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="txn-form-summary-menu-item txn-form-summary-menu-item-destructive"
+              onClick={(e) => {
+                e.stopPropagation()
+                setMenuOpen(false)
+                onRemove()
+              }}
+            >
+              Delete transaction
+            </button>
+          </span>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="txn-form-body">
+          <div className="txn-form-fields">
+            <div className="txn-form-header-row">
           <div className="txn-form-header-field txn-form-header-field-date">
             <label className="txn-form-header-field-label">Date</label>
             <DateField
@@ -2220,21 +2406,112 @@ function TxnCard({
           />
         )}
       </div>
+        </div>
+      )}
     </div>
   )
+}
+
+function todayIso(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+export type BatchSaveControl = {
+  onSave: () => void
+  label: string
+  busy?: boolean
+  disabled?: boolean
+  title?: string
+  error?: string | null
 }
 
 export function TxnFormView({
   text,
   onChange,
   homeCommodityByAccount = {},
+  save,
 }: {
   text: string
   onChange?: (next: string) => void
   homeCommodityByAccount?: Record<string, string>
+  save?: BatchSaveControl
 }) {
+  const editable = onChange != null
+
+  const handleAdd = () => {
+    if (!onChange) return
+    onChange(appendTxnStub(text, { date: todayIso() }))
+  }
+  const handleInsertAt = (index: number) => {
+    if (!onChange) return
+    onChange(insertTxnAt(text, index, { date: todayIso() }))
+  }
+  const handleRemoveAt = (index: number) => {
+    if (!onChange) return
+    onChange(removeTxnAt(text, index))
+  }
+
+  const renderFooter = (counts: { cleared: number; pending: number; errored: number }) => {
+    if (!editable && !save) return null
+    return (
+      <div className="txn-form-batch-footer">
+        {editable && (
+          <button type="button" className="txn-form-batch-add" onClick={handleAdd}>
+            <span className="material-symbols-outlined" aria-hidden>
+              add
+            </span>
+            Add transaction
+          </button>
+        )}
+        <div className="txn-form-batch-counts">
+          <span className="txn-form-batch-count txn-form-batch-count-cleared">
+            <span className="txn-form-batch-count-dot" aria-hidden />
+            {counts.cleared} cleared
+          </span>
+          <span className="txn-form-batch-count txn-form-batch-count-pending">
+            <span className="txn-form-batch-count-dot" aria-hidden />
+            {counts.pending} pending
+          </span>
+          <span className="txn-form-batch-count txn-form-batch-count-error">
+            <span className="txn-form-batch-count-dot" aria-hidden />
+            {counts.errored} error
+          </span>
+        </div>
+        {save && (
+          <button
+            type="button"
+            className="txn-form-batch-save"
+            onClick={save.onSave}
+            disabled={save.busy || save.disabled}
+            title={save.title}
+          >
+            {save.label}
+          </button>
+        )}
+      </div>
+    )
+  }
+
   if (!text.trim()) {
-    return <div className="txn-card-form-empty">Start typing in the Code view to see the form.</div>
+    if (!editable) {
+      return (
+        <div className="txn-card-form-empty">Start typing in the Code view to see the form.</div>
+      )
+    }
+    return (
+      <div className="txn-form-batch">
+        <div className="txn-form-batch-body txn-form-batch-body-empty">
+          <p className="txn-form-batch-empty-msg">
+            No transactions yet. Click + Add transaction to start.
+          </p>
+        </div>
+        {renderFooter({ cleared: 0, pending: 0, errored: 0 })}
+      </div>
+    )
   }
 
   let result: ParseResult
@@ -2251,10 +2528,20 @@ export function TxnFormView({
   }
 
   if (result.transactions.length === 0) {
-    return <div className="txn-card-form-empty">No transactions recognized yet.</div>
+    if (!editable) {
+      return <div className="txn-card-form-empty">No transactions recognized yet.</div>
+    }
+    return (
+      <div className="txn-form-batch">
+        <div className="txn-form-batch-body txn-form-batch-body-empty">
+          <p className="txn-form-batch-empty-msg">
+            No transactions yet. Click + Add transaction to start.
+          </p>
+        </div>
+        {renderFooter({ cleared: 0, pending: 0, errored: 0 })}
+      </div>
+    )
   }
-
-  const editable = onChange != null
 
   const mutate = (fn: Mutator) => {
     if (!onChange) return
@@ -2272,23 +2559,108 @@ export function TxnFormView({
   const allCurrencies = currenciesIn(result, homeCommodityByAccount)
   const accountCurrencyConstraints = constraintCurrenciesByAccount(result)
   const validationErrorsByTxn = validateByTxn(text)
+  const sections = sectionsOf(result.transactions)
+
+  const counts = { cleared: 0, pending: 0, errored: 0 }
+  for (let i = 0; i < result.transactions.length; i++) {
+    const t = result.transactions[i]
+    const s = computeTxnState(t.flag, (validationErrorsByTxn.get(i) ?? []).length > 0)
+    if (s === 'error') counts.errored += 1
+    else if (s === 'pending') counts.pending += 1
+    else counts.cleared += 1
+  }
+
+  const renderCard = (t: Transaction, index: number) => (
+    <TxnCard
+      key={index}
+      txn={t}
+      index={index}
+      displayIndex={index + 1}
+      editable={editable}
+      mutate={mutate}
+      onRemove={editable ? () => handleRemoveAt(index) : undefined}
+      allAccounts={allAccounts}
+      allCurrencies={allCurrencies}
+      accountCurrencyConstraints={accountCurrencyConstraints}
+      homeCommodityByAccount={homeCommodityByAccount}
+      validationErrors={validationErrorsByTxn.get(index) ?? []}
+    />
+  )
+
+  const renderSection = (section: BatchSection, sectionIdx: number) => {
+    if (section.kind === 'solo') {
+      return <div className="txn-form-solo" key={`s-${sectionIdx}`}>{renderCard(section.txn, section.index)}</div>
+    }
+    const linkedCounts = section.items.reduce(
+      (acc, { txn, index }) => {
+        const s = computeTxnState(
+          txn.flag,
+          (validationErrorsByTxn.get(index) ?? []).length > 0,
+        )
+        if (s === 'cleared') acc.cleared += 1
+        else if (s === 'pending') acc.pending += 1
+        else acc.errored += 1
+        return acc
+      },
+      { cleared: 0, pending: 0, errored: 0 },
+    )
+    const subtitle = [
+      `${section.items.length} linked entries`,
+      `${linkedCounts.cleared} cleared`,
+      `${linkedCounts.pending} pending`,
+      linkedCounts.errored > 0 ? `${linkedCounts.errored} error` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    return (
+      <div className="txn-form-link-group" key={`g-${sectionIdx}`}>
+        <div className="txn-form-link-group-header">
+          <span className="txn-form-link-group-icon" aria-hidden>
+            <span className="material-symbols-outlined">link</span>
+          </span>
+          <span className="txn-form-link-group-title">
+            <span className="txn-form-link-group-link">^{section.link}</span>
+            <span className="txn-form-link-group-subtitle">{subtitle}</span>
+          </span>
+        </div>
+        <div className="txn-form-link-group-rail">
+          {section.items.map(({ txn, index }) => (
+            <div className="txn-form-link-group-item" key={index}>
+              {renderCard(txn, index)}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="txn-form-list">
-      {result.transactions.map((t, i) => (
-        <TxnCard
-          key={i}
-          txn={t}
-          index={i}
-          editable={editable}
-          mutate={mutate}
-          allAccounts={allAccounts}
-          allCurrencies={allCurrencies}
-          accountCurrencyConstraints={accountCurrencyConstraints}
-          homeCommodityByAccount={homeCommodityByAccount}
-          validationErrors={validationErrorsByTxn.get(i) ?? []}
-        />
-      ))}
+    <div className="txn-form-batch">
+      <div className="txn-form-batch-body">
+        {sections.flatMap((section, si) => {
+          const firstIndex =
+            section.kind === 'solo' ? section.index : section.items[0].index
+          const nodes: ReactNode[] = []
+          if (si > 0 && editable) {
+            nodes.push(
+              <div className="txn-form-insert-divider" key={`d-${si}`}>
+                <span className="txn-form-insert-line" aria-hidden />
+                <button
+                  type="button"
+                  className="txn-form-insert-btn"
+                  onClick={() => handleInsertAt(firstIndex)}
+                >
+                  + Insert transaction here
+                </button>
+                <span className="txn-form-insert-line" aria-hidden />
+              </div>,
+            )
+          }
+          nodes.push(renderSection(section, si))
+          return nodes
+        })}
+      </div>
+      {renderFooter(counts)}
     </div>
   )
 }
