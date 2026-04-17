@@ -7,7 +7,7 @@ import { TextEditor } from './text-editor'
 
 type ViewMode = 'cards' | 'text'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 10
 
 type FetchStatus = 'idle' | 'loading' | 'loadingMore' | 'error'
 
