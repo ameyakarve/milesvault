@@ -119,7 +119,8 @@ export type ValidationResult = { ok: true } | { ok: false; errors: string[] }
 
 export function validateTxn(source: string): ValidationResult {
   const r = extractTxn(source)
-  return r.ok ? { ok: true } : { ok: false, errors: r.errors }
+  if (r.ok !== true) return { ok: false, errors: r.errors }
+  return { ok: true }
 }
 
 export function extractTxn(source: string): ExtractResult {
