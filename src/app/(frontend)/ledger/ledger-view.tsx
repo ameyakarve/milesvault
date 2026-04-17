@@ -28,16 +28,22 @@ const INITIAL_STATE: FetchState = {
 export function LedgerView({ email }: { email: string }) {
   const [q, setQ] = useState('')
   const [mode, setMode] = useState<ViewMode>('cards')
+  const [page, setPage] = useState(1)
   const [state, setState] = useState<FetchState>(INITIAL_STATE)
   const [reloadNonce, setReloadNonce] = useState(0)
   const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
 
   useEffect(() => {
+    setPage(1)
+  }, [q])
+
+  useEffect(() => {
     const controller = new AbortController()
     const timer = setTimeout(() => {
       setState({ status: 'loading', rows: [], total: 0, errorMsg: null })
+      const offset = (page - 1) * PAGE_SIZE
       fetch(
-        `/api/ledger/transactions?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=0`,
+        `/api/ledger/transactions?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=${offset}`,
         { signal: controller.signal, credentials: 'include' },
       )
         .then(async (res) => {
@@ -66,7 +72,7 @@ export function LedgerView({ email }: { email: string }) {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [q, reloadNonce])
+  }, [q, page, reloadNonce])
 
   return (
     <div className="min-h-screen bg-[#FAFAF9] text-[#09090B]">
@@ -78,6 +84,8 @@ export function LedgerView({ email }: { email: string }) {
           mode={mode}
           onMode={setMode}
           state={state}
+          page={page}
+          onPage={setPage}
           onReload={reload}
         />
         <AssistantPane />
@@ -135,6 +143,8 @@ function LedgerPane({
   mode,
   onMode,
   state,
+  page,
+  onPage,
   onReload,
 }: {
   q: string
@@ -142,13 +152,21 @@ function LedgerPane({
   mode: ViewMode
   onMode: (m: ViewMode) => void
   state: FetchState
+  page: number
+  onPage: (p: number) => void
   onReload: () => void
 }) {
   return (
     <section className="w-1/2 h-full overflow-hidden px-6 py-6 flex flex-col gap-4">
-      <LedgerHeader mode={mode} onMode={onMode} state={state} />
+      <LedgerHeader mode={mode} onMode={onMode} state={state} page={page} />
       <SearchBar q={q} onQ={onQ} />
-      <LedgerBody mode={mode} state={state} onReload={onReload} />
+      <LedgerBody
+        mode={mode}
+        state={state}
+        page={page}
+        onPage={onPage}
+        onReload={onReload}
+      />
     </section>
   )
 }
@@ -157,23 +175,32 @@ function LedgerHeader({
   mode,
   onMode,
   state,
+  page,
 }: {
   mode: ViewMode
   onMode: (m: ViewMode) => void
   state: FetchState
+  page: number
 }) {
   const counter =
     state.status === 'loading'
       ? '…'
       : state.status === 'error' && state.rows.length === 0
         ? 'ERR'
-        : `${state.rows.length} / ${state.total}`
+        : rangeLabel(state, page)
   return (
     <div className="flex items-center justify-between">
       <SegmentedToggle mode={mode} onMode={onMode} />
       <span className="font-mono text-[11px] text-zinc-500 tabular-nums">{counter}</span>
     </div>
   )
+}
+
+function rangeLabel(state: FetchState, page: number): string {
+  if (state.total === 0) return '0 / 0'
+  const first = (page - 1) * PAGE_SIZE + 1
+  const last = (page - 1) * PAGE_SIZE + state.rows.length
+  return `${first}–${last} / ${state.total}`
 }
 
 function SegmentedToggle({
@@ -233,10 +260,14 @@ function SearchBar({ q, onQ }: { q: string; onQ: (v: string) => void }) {
 function LedgerBody({
   mode,
   state,
+  page,
+  onPage,
   onReload,
 }: {
   mode: ViewMode
   state: FetchState
+  page: number
+  onPage: (p: number) => void
   onReload: () => void
 }) {
   if (state.status === 'loading') {
@@ -263,15 +294,69 @@ function LedgerBody({
       </div>
     )
   }
-  return <CardsList state={state} />
+  return <CardsList state={state} page={page} onPage={onPage} />
 }
 
-function CardsList({ state }: { state: FetchState }) {
+function CardsList({
+  state,
+  page,
+  onPage,
+}: {
+  state: FetchState
+  page: number
+  onPage: (p: number) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto flex flex-col pb-16 border-t border-zinc-100">
-      {state.rows.map((row) => (
-        <TxnCard key={row.id} raw={row.raw_text} />
-      ))}
+    <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+        {state.rows.map((row) => (
+          <TxnCard key={row.id} raw={row.raw_text} />
+        ))}
+      </div>
+      <PageControls page={page} totalPages={totalPages} onPage={onPage} />
+    </div>
+  )
+}
+
+function PageControls({
+  page,
+  totalPages,
+  onPage,
+}: {
+  page: number
+  totalPages: number
+  onPage: (p: number) => void
+}) {
+  const prevDisabled = page <= 1
+  const nextDisabled = page >= totalPages
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-100 bg-white">
+      <button
+        onClick={() => onPage(page - 1)}
+        disabled={prevDisabled}
+        className={
+          prevDisabled
+            ? 'font-mono text-[12px] text-zinc-300 cursor-not-allowed'
+            : 'font-mono text-[12px] text-zinc-600 hover:text-[#09090B]'
+        }
+      >
+        ← prev
+      </button>
+      <span className="font-mono text-[11px] text-zinc-500 tabular-nums">
+        page {page} of {totalPages}
+      </span>
+      <button
+        onClick={() => onPage(page + 1)}
+        disabled={nextDisabled}
+        className={
+          nextDisabled
+            ? 'font-mono text-[12px] text-zinc-300 cursor-not-allowed'
+            : 'font-mono text-[12px] text-zinc-600 hover:text-[#09090B]'
+        }
+      >
+        next →
+      </button>
     </div>
   )
 }
