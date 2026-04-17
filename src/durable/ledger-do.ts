@@ -1,10 +1,15 @@
 import { DurableObject } from 'cloudflare:workers'
 
-export interface Txn extends Record<string, SqlStorageValue> {
+export interface Transaction extends Record<string, SqlStorageValue> {
   id: number
   raw_text: string
+  tokens: string
   created_at: number
   updated_at: number
+}
+
+export function tokenize(raw_text: string): string[] {
+  return raw_text.toLowerCase().split(/\s+/).filter(Boolean)
 }
 
 export class LedgerDO extends DurableObject<CloudflareEnv> {
@@ -17,31 +22,46 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       CREATE TABLE IF NOT EXISTS transactions (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         raw_text    TEXT    NOT NULL,
+        tokens      TEXT    NOT NULL DEFAULT '',
         created_at  INTEGER NOT NULL,
         updated_at  INTEGER NOT NULL
       )
     `)
+    const hasTokens = this.sql
+      .exec<{ name: string }>("PRAGMA table_info(transactions)")
+      .toArray()
+      .some((r) => r.name === 'tokens')
+    if (!hasTokens) {
+      this.sql.exec("ALTER TABLE transactions ADD COLUMN tokens TEXT NOT NULL DEFAULT ''")
+    }
   }
 
-  async list(): Promise<Txn[]> {
+  async list(): Promise<Transaction[]> {
     return this.sql
-      .exec<Txn>('SELECT id, raw_text, created_at, updated_at FROM transactions ORDER BY id')
+      .exec<Transaction>(
+        'SELECT id, raw_text, tokens, created_at, updated_at FROM transactions ORDER BY id',
+      )
       .toArray()
   }
 
-  async get(id: number): Promise<Txn | null> {
+  async get(id: number): Promise<Transaction | null> {
     const row = this.sql
-      .exec<Txn>('SELECT id, raw_text, created_at, updated_at FROM transactions WHERE id = ?', id)
+      .exec<Transaction>(
+        'SELECT id, raw_text, tokens, created_at, updated_at FROM transactions WHERE id = ?',
+        id,
+      )
       .toArray()[0]
     return row ?? null
   }
 
-  async create(raw_text: string): Promise<Txn> {
+  async create(raw_text: string): Promise<Transaction> {
     const now = Date.now()
+    const tokens = tokenize(raw_text).join(' ')
     const row = this.sql
-      .exec<Txn>(
-        'INSERT INTO transactions (raw_text, created_at, updated_at) VALUES (?, ?, ?) RETURNING id, raw_text, created_at, updated_at',
+      .exec<Transaction>(
+        'INSERT INTO transactions (raw_text, tokens, created_at, updated_at) VALUES (?, ?, ?, ?) RETURNING id, raw_text, tokens, created_at, updated_at',
         raw_text,
+        tokens,
         now,
         now,
       )
@@ -49,12 +69,14 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     return row
   }
 
-  async update(id: number, raw_text: string): Promise<Txn | null> {
+  async update(id: number, raw_text: string): Promise<Transaction | null> {
     const now = Date.now()
+    const tokens = tokenize(raw_text).join(' ')
     const row = this.sql
-      .exec<Txn>(
-        'UPDATE transactions SET raw_text = ?, updated_at = ? WHERE id = ? RETURNING id, raw_text, created_at, updated_at',
+      .exec<Transaction>(
+        'UPDATE transactions SET raw_text = ?, tokens = ?, updated_at = ? WHERE id = ? RETURNING id, raw_text, tokens, created_at, updated_at',
         raw_text,
+        tokens,
         now,
         id,
       )
@@ -65,5 +87,13 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   async remove(id: number): Promise<boolean> {
     this.sql.exec('DELETE FROM transactions WHERE id = ?', id)
     return true
+  }
+
+  async exportAll(): Promise<Transaction[]> {
+    return []
+  }
+
+  async importAll(_rows: Transaction[]): Promise<{ copied: number }> {
+    return { copied: 0 }
   }
 }

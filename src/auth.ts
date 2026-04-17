@@ -8,5 +8,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     authorized({ auth: session }) {
       return !!session
     },
+    signIn({ profile }) {
+      const allow = (process.env.ALLOWED_EMAILS ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+      if (allow.length === 0) return true
+      return !!profile?.email && allow.includes(profile.email)
+    },
   },
 })
