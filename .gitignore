@@ -59,3 +59,4 @@ node_modules/
 
 # local verification scripts
 .sb-check.mjs
+.sb-shot.mjs

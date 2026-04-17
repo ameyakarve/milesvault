@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
-import { extractTxn, type ExtractedTxn } from './beancount-extract'
+import { extractTxn, type ExtractedTxn } from '@/lib/beancount/extract'
 import type {
   TransactionRow,
   BatchApplyInput,

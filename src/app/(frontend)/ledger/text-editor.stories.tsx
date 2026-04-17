@@ -32,6 +32,27 @@ const FIXTURES: Record<string, Transaction[]> = {
   Assets:Cash                 5000.00 INR`,
     ),
   ],
+  invalid: [
+    mkTxn(
+      1,
+      `2026-04-17 * "Unbalanced" "amounts don't sum"
+  Liabilities:CreditCards:HDFC:Infinia  -100.00 INR
+  Expenses:Misc                           99.00 INR`,
+    ),
+    mkTxn(
+      2,
+      `2026-04-16 ? "BadFlag" "unknown flag character"
+  Assets:Bank:HDFC:Savings   -50.00 INR
+  Expenses:Misc               50.00 INR`,
+    ),
+    mkTxn(
+      3,
+      `2026-04-15 * "Elided" "two elided postings"
+  Assets:Cash                -10.00 INR
+  Expenses:Misc
+  Expenses:Food`,
+    ),
+  ],
   atCap: Array.from({ length: 10 }, (_, i) =>
     mkTxn(
       100 + i,
@@ -77,6 +98,17 @@ export const Empty: Story = {
 
 export const Small: Story = {
   args: { rows: FIXTURES.small, total: FIXTURES.small.length },
+}
+
+export const Invalid: Story = {
+  args: { rows: FIXTURES.invalid, total: FIXTURES.invalid.length },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Three txns that should each trigger a different validator error.',
+      },
+    },
+  },
 }
 
 export const AtCap: Story = {
