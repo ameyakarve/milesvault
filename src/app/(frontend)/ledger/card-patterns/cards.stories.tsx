@@ -28,7 +28,7 @@ export const SimpleExpense: Story = {
 
 export const CashbackExpense: Story = {
   args: {
-    raw: `2026-04-17 * "Amudham" "coffee, 10% HSBC cashback"
+    raw: `2026-04-17 * "Amudham" "coffee"
   Liabilities:CreditCards:HSBC:Cashback   -35.00 INR
   Expenses:Food:Coffee                     35.00 INR
   Liabilities:CreditCards:HSBC:Cashback     3.50 INR

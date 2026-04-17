@@ -1,9 +1,10 @@
 import { complexPattern } from './complex'
-import { expensePattern } from './expense'
 import { RawCard } from './raw'
+import { simpleCashbackPattern } from './simple-cashback'
+import { simpleExpensePattern } from './simple-expense'
 import { safeParse, type CardPattern } from './types'
 
-const PATTERNS: CardPattern[] = [expensePattern, complexPattern]
+const PATTERNS: CardPattern[] = [simpleExpensePattern, simpleCashbackPattern, complexPattern]
 
 export function TxnCard({ raw }: { raw: string }) {
   const parsed = safeParse(raw)

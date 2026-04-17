@@ -1,29 +1,9 @@
-export type DisplayDate =
-  | { kind: 'recent'; label: string }
-  | { kind: 'date'; month: string; day: string; year: string | null }
+export type DisplayDate = { month: string; day: string }
 
-export function formatDate(
-  year: number,
-  month: number,
-  day: number,
-  now: Date = new Date(),
-): DisplayDate {
+export function formatDate(year: number, month: number, day: number): DisplayDate {
   const txn = new Date(Date.UTC(year, month - 1, day))
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-  const diffDays = Math.round((today.getTime() - txn.getTime()) / 86400000)
-
-  if (diffDays === 0) return { kind: 'recent', label: 'Today' }
-  if (diffDays === 1) return { kind: 'recent', label: 'Yesterday' }
-  if (diffDays > 1 && diffDays < 7) {
-    return {
-      kind: 'recent',
-      label: txn.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }),
-    }
-  }
   const monthStr = txn.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
-  const dayStr = String(day)
-  const sameYear = txn.getUTCFullYear() === today.getUTCFullYear()
-  return { kind: 'date', month: monthStr, day: dayStr, year: sameYear ? null : String(year) }
+  return { month: monthStr, day: String(day) }
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -36,50 +16,16 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 
 export function formatAmount(amount: number, currency: string): string {
   const symbol = CURRENCY_SYMBOLS[currency] ?? `${currency} `
-  const isInr = currency === 'INR'
   const abs = Math.abs(amount)
   const sign = amount < 0 ? '−' : amount > 0 ? '+' : ''
   const hasDecimals = Math.round(abs * 100) % 100 !== 0
-  const body = isInr
-    ? formatInr(abs, hasDecimals)
-    : abs.toLocaleString('en-US', {
-        minimumFractionDigits: hasDecimals ? 2 : 0,
-        maximumFractionDigits: 2,
-      })
+  const body = abs.toLocaleString('en-US', {
+    minimumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: 2,
+  })
   return `${sign}${symbol}${body}`
 }
 
-function formatInr(n: number, hasDecimals: boolean): string {
-  const fixed = n.toFixed(hasDecimals ? 2 : 0)
-  const [integer, decimal] = fixed.split('.')
-  const grouped =
-    integer.length <= 3
-      ? integer
-      : integer.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' + integer.slice(-3)
-  return decimal ? `${grouped}.${decimal}` : grouped
-}
-
-const TOP_LEVELS = new Set(['Assets', 'Liabilities', 'Expenses', 'Income', 'Equity'])
-const GROUP_LABELS = new Set(['CreditCards', 'CreditCard', 'Bank', 'Banking', 'Accounts'])
-const SUB_BUCKETS = new Set(['Cashback', 'Rewards', 'Points', 'Miles'])
-
-export function humanizeAccount(path: string): string {
-  const parts = path.split(':').filter(Boolean)
-  if (parts.length === 0) return path
-
-  const hasCreditCard = parts.some((p) => p === 'CreditCards' || p === 'CreditCard')
-
-  const meaningful = parts.filter(
-    (p) => !TOP_LEVELS.has(p) && !GROUP_LABELS.has(p) && !SUB_BUCKETS.has(p),
-  )
-  const label = meaningful.map(prettyCase).join(' ')
-  if (hasCreditCard) return label ? `${label} Credit Card` : 'Credit Card'
-  return label || prettyCase(parts[parts.length - 1])
-}
-
-function prettyCase(s: string): string {
-  return s.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
-}
 
 export type Category = { label: string; icon: string }
 
