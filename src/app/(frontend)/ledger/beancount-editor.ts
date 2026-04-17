@@ -9,7 +9,7 @@ import { RangeSetBuilder } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 import { parser } from 'lezer-beancount'
-import { validateTxn } from '@/lib/beancount/extract'
+import { validateTxn, type Diagnostic as BeanDiagnostic } from '@/lib/beancount/extract'
 
 const beancountLanguage = LRLanguage.define({
   name: 'beancount',
@@ -51,6 +51,7 @@ const highlight = HighlightStyle.define([
 const beancountSupport = new LanguageSupport(beancountLanguage, [syntaxHighlighting(highlight)])
 
 const blockDivider = Decoration.line({ attributes: { class: 'cm-txn-divider' } })
+const unparseableLine = Decoration.line({ attributes: { class: 'cm-txn-unparseable' } })
 
 function buildBlockDividers(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
@@ -95,12 +96,13 @@ function collectBlocks(doc: EditorView['state']['doc']): Block[] {
   return blocks
 }
 
-function diagnosticAnchor(doc: EditorView['state']['doc'], block: Block): number {
-  for (let i = block.fromLine; i <= block.toLine; i++) {
-    const line = doc.line(i)
-    if (!line.text.trimStart().startsWith(';')) return i
-  }
-  return block.fromLine
+function resolveLine(
+  doc: EditorView['state']['doc'],
+  block: Block,
+  d: BeanDiagnostic,
+) {
+  const lineNum = Math.min(block.fromLine + d.lineOffset, block.toLine)
+  return doc.line(lineNum)
 }
 
 const beancountLinter = linter(
@@ -109,22 +111,37 @@ const beancountLinter = linter(
     const doc = view.state.doc
     for (const block of collectBlocks(doc)) {
       const r = validateTxn(block.text)
-      if (r.ok !== true) {
-        const anchor = doc.line(diagnosticAnchor(doc, block))
-        for (const msg of r.errors) {
-          diagnostics.push({
-            from: anchor.from,
-            to: anchor.to,
-            severity: 'error',
-            message: msg,
-          })
-        }
+      if (r.ok === true) continue
+      for (const d of r.diagnostics) {
+        if (d.kind !== 'rule-violation') continue
+        const line = resolveLine(doc, block, d)
+        diagnostics.push({
+          from: line.from,
+          to: line.to,
+          severity: 'error',
+          message: d.message,
+        })
       }
     }
     return diagnostics
   },
   { delay: 400 },
 )
+
+function buildUnparseableLines(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>()
+  const doc = view.state.doc
+  for (const block of collectBlocks(doc)) {
+    const r = validateTxn(block.text)
+    if (r.ok === true) continue
+    for (const d of r.diagnostics) {
+      if (d.kind !== 'parser-unparseable') continue
+      const line = resolveLine(doc, block, d)
+      builder.add(line.from, line.from, unparseableLine)
+    }
+  }
+  return builder.finish()
+}
 
 const txnDividers = ViewPlugin.fromClass(
   class {
@@ -134,6 +151,19 @@ const txnDividers = ViewPlugin.fromClass(
     }
     update(u: ViewUpdate) {
       if (u.docChanged) this.decorations = buildBlockDividers(u.view)
+    }
+  },
+  { decorations: (v) => v.decorations },
+)
+
+const unparseableLines = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+    constructor(view: EditorView) {
+      this.decorations = buildUnparseableLines(view)
+    }
+    update(u: ViewUpdate) {
+      if (u.docChanged) this.decorations = buildUnparseableLines(u.view)
     }
   },
   { decorations: (v) => v.decorations },
@@ -159,6 +189,7 @@ const theme = EditorView.theme(
     },
     '.cm-line': { padding: '0 12px' },
     '.cm-txn-divider': { borderTop: '1px solid #E4E4E7' },
+    '.cm-txn-unparseable': { color: MUTED, fontStyle: 'italic' },
     '.cm-lintRange-error': {
       backgroundImage: 'none',
       textDecoration: 'underline wavy #b91c1c',
@@ -217,6 +248,7 @@ const theme = EditorView.theme(
 export const beancountExtensions = [
   beancountSupport,
   txnDividers,
+  unparseableLines,
   beancountLinter,
   lintGutter(),
   theme,

@@ -170,7 +170,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const trimmed = raw_text.trim()
     if (trimmed.length === 0) return { ok: false, errors: ['Empty input.'] }
     const result = extractTxn(trimmed)
-    if (result.ok !== true) return { ok: false, errors: result.errors }
+    if (result.ok !== true) {
+      return { ok: false, errors: result.diagnostics.map((d) => d.message) }
+    }
     const { date, flag, t_payee, t_account, t_currency, t_tag, t_link } = result.value
     const now = Date.now()
     const row = this.sql
@@ -209,7 +211,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }
       const result = extractTxn(trimmed)
       if (result.ok !== true) {
-        errors.push({ index: i, errors: result.errors })
+        errors.push({ index: i, errors: result.diagnostics.map((d) => d.message) })
         continue
       }
       validated.push({ trimmed, extracted: result.value })
@@ -286,7 +288,11 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }
       const result = extractTxn(trimmed)
       if (result.ok !== true) {
-        validationErrors.push({ section: 'updates', index: i, errors: result.errors })
+        validationErrors.push({
+          section: 'updates',
+          index: i,
+          errors: result.diagnostics.map((d) => d.message),
+        })
         continue
       }
       parsedUpdates.push({
@@ -305,7 +311,11 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }
       const result = extractTxn(trimmed)
       if (result.ok !== true) {
-        validationErrors.push({ section: 'creates', index: i, errors: result.errors })
+        validationErrors.push({
+          section: 'creates',
+          index: i,
+          errors: result.diagnostics.map((d) => d.message),
+        })
         continue
       }
       parsedCreates.push({ trimmed, extracted: result.value })
