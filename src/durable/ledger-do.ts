@@ -1,6 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
-import { extractTxn } from './beancount-extract'
+import { extractTxn, type ExtractedTxn } from './beancount-extract'
 import type { TransactionRow } from './ledger-types'
+
+type BatchError = { index: number; errors: string[] }
 
 const ROW_COLS =
   'id, raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at'
@@ -113,6 +115,57 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       )
       .toArray()[0]
     return row ? { ok: true, row } : { ok: false, errors: ['Insert failed.'] }
+  }
+
+  async createBatch(
+    raw_texts: string[],
+  ): Promise<
+    { ok: true; rows: TransactionRow[] } | { ok: false; errors: BatchError[] }
+  > {
+    const validated: { trimmed: string; extracted: ExtractedTxn }[] = []
+    const errors: BatchError[] = []
+    for (let i = 0; i < raw_texts.length; i++) {
+      const trimmed = raw_texts[i].trim()
+      if (trimmed.length === 0) {
+        errors.push({ index: i, errors: ['Empty input.'] })
+        continue
+      }
+      const result = extractTxn(trimmed)
+      if (result.ok !== true) {
+        errors.push({ index: i, errors: result.errors })
+        continue
+      }
+      validated.push({ trimmed, extracted: result.value })
+    }
+    if (errors.length > 0) return { ok: false, errors }
+
+    const rows: TransactionRow[] = []
+    this.ctx.storage.transactionSync(() => {
+      const now = Date.now()
+      for (const { trimmed, extracted } of validated) {
+        const { date, flag, t_payee, t_account, t_currency, t_tag, t_link } = extracted
+        const row = this.sql
+          .exec<TransactionRow>(
+            `INSERT INTO transactions
+               (raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             RETURNING ${ROW_COLS}`,
+            trimmed,
+            date,
+            flag,
+            t_payee,
+            t_account,
+            t_currency,
+            t_tag,
+            t_link,
+            now,
+            now,
+          )
+          .toArray()[0]
+        if (row) rows.push(row)
+      }
+    })
+    return { ok: true, rows }
   }
 
   async update(_id: number, _raw_text: string): Promise<TransactionRow | null> {
