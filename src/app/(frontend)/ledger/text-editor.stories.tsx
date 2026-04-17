@@ -32,6 +32,23 @@ const FIXTURES: Record<string, Transaction[]> = {
   Assets:Cash                 5000.00 INR`,
     ),
   ],
+  unparseable: [
+    mkTxn(
+      1,
+      `1990-01-01 * Fail whale
+asfaf
+fsdfs
+sdfsfs
+fdsf`,
+    ),
+    mkTxn(
+      2,
+      `2026-04-17 * "Shop" "coffee"
+garbage-line
+  Liabilities:CreditCards:HDFC   -35.00 INR
+  Expenses:Food:Coffee             35.00 INR`,
+    ),
+  ],
   invalid: [
     mkTxn(
       1,
@@ -98,6 +115,18 @@ export const Empty: Story = {
 
 export const Small: Story = {
   args: { rows: FIXTURES.small, total: FIXTURES.small.length },
+}
+
+export const Unparseable: Story = {
+  args: { rows: FIXTURES.unparseable, total: FIXTURES.unparseable.length },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Rows whose body has unindented garbage lines. Those lines should render dim italic (parser-unparseable); rule violations show red squiggles on the header.',
+      },
+    },
+  },
 }
 
 export const Invalid: Story = {
