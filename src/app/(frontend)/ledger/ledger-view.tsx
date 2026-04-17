@@ -1,30 +1,60 @@
-import React from 'react'
+'use client'
 
-export type ProseTxn = {
-  kind: 'prose'
-  id: string
-  date: string
-  body: string
-}
+import React, { useCallback, useEffect, useState } from 'react'
+import type { Transaction } from '@/durable/ledger-types'
+import { TextEditor } from './text-editor'
 
-export type RecessedTxn = {
-  kind: 'recessed'
-  id: string
-  date: string
-  payee: string
-  narration: string
-  amount: string | { line1: string; line2: string }
-  postings: Array<{ account: string; amount: string }>
-}
+type ViewMode = 'cards' | 'text'
 
-export type Txn = ProseTxn | RecessedTxn
+type FetchState =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ok'; rows: Transaction[]; total: number }
+  | { kind: 'error'; message: string }
 
-export function LedgerView({ txns, email }: { txns: Txn[]; email: string }) {
+export function LedgerView({ email }: { email: string }) {
+  const [q, setQ] = useState('')
+  const [mode, setMode] = useState<ViewMode>('cards')
+  const [state, setState] = useState<FetchState>({ kind: 'idle' })
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      setState({ kind: 'loading' })
+      fetch(`/api/ledger/transactions?q=${encodeURIComponent(q)}`, {
+        signal: controller.signal,
+        credentials: 'include',
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          return (await res.json()) as { rows: Transaction[]; total: number }
+        })
+        .then((data) => setState({ kind: 'ok', rows: data.rows, total: data.total }))
+        .catch((e: unknown) => {
+          if (e instanceof DOMException && e.name === 'AbortError') return
+          setState({ kind: 'error', message: (e as Error).message })
+        })
+    }, 250)
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
+  }, [q, reloadNonce])
+
   return (
     <div className="min-h-screen bg-[#F7F3EC] text-[#0F1B2E]">
       <TopNav email={email} />
       <main className="flex w-full max-w-[2560px] mx-auto" style={{ height: 'calc(100vh - 64px)' }}>
-        <LedgerPane txns={txns} />
+        <LedgerPane
+          q={q}
+          onQ={setQ}
+          mode={mode}
+          onMode={setMode}
+          state={state}
+          onReload={reload}
+        />
         <AssistantPane />
       </main>
     </div>
@@ -64,45 +94,94 @@ function TopNav({ email }: { email: string }) {
   )
 }
 
-function LedgerPane({ txns }: { txns: Txn[] }) {
+function LedgerPane({
+  q,
+  onQ,
+  mode,
+  onMode,
+  state,
+  onReload,
+}: {
+  q: string
+  onQ: (v: string) => void
+  mode: ViewMode
+  onMode: (m: ViewMode) => void
+  state: FetchState
+  onReload: () => void
+}) {
+  const count = state.kind === 'ok' ? state.rows.length : 0
+  const total = state.kind === 'ok' ? state.total : 0
   return (
     <section className="w-[62%] h-full overflow-y-auto px-12 py-8 flex flex-col gap-6">
-      <LedgerHeader count={txns.length} />
-      <SearchBar />
-      <LedgerStream txns={txns} />
+      <LedgerHeader mode={mode} onMode={onMode} count={count} total={total} state={state} />
+      <SearchBar q={q} onQ={onQ} />
+      <LedgerBody mode={mode} state={state} onReload={onReload} />
     </section>
   )
 }
 
-function LedgerHeader({ count }: { count: number }) {
+function LedgerHeader({
+  mode,
+  onMode,
+  count,
+  total,
+  state,
+}: {
+  mode: ViewMode
+  onMode: (m: ViewMode) => void
+  count: number
+  total: number
+  state: FetchState
+}) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex bg-[#F1EDE6] rounded-full p-1 border border-black/10">
-        <button className="px-4 py-1.5 rounded-full bg-white text-ink text-sm font-semibold shadow-sm">
-          Cards
-        </button>
-        <button className="px-4 py-1.5 rounded-full text-muted text-sm font-medium hover:text-ink">
-          Text
-        </button>
+        <ModeToggle label="Cards" active={mode === 'cards'} onClick={() => onMode('cards')} />
+        <ModeToggle label="Text" active={mode === 'text'} onClick={() => onMode('text')} />
       </div>
       <span className="text-[13px] text-muted font-medium">
-        {count === 0 ? 'No transactions' : `Showing ${count} of ${count}`}
+        {state.kind === 'loading'
+          ? 'Loading…'
+          : state.kind === 'error'
+            ? 'Error'
+            : count === 0
+              ? 'No transactions'
+              : `Showing ${count} of ${total}`}
       </span>
     </div>
   )
 }
 
-function SearchBar() {
+function ModeToggle({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        active
+          ? 'px-4 py-1.5 rounded-full bg-white text-ink text-sm font-semibold shadow-sm'
+          : 'px-4 py-1.5 rounded-full text-muted text-sm font-medium hover:text-ink'
+      }
+    >
+      {label}
+    </button>
+  )
+}
+
+function SearchBar({ q, onQ }: { q: string; onQ: (v: string) => void }) {
   return (
     <div className="relative w-full flex items-center bg-white border border-black/10 rounded-full p-2 pl-4">
-      <div className="flex items-center gap-2 bg-[#F1EDE6] px-2 py-1 rounded text-[11px] font-mono text-ink">
-        <span>2026-04</span>
-        <span className="material-symbols-outlined !text-[14px] cursor-pointer hover:text-[#ba1a1a]">
-          close
-        </span>
-      </div>
       <input
         type="text"
+        value={q}
+        onChange={(e) => onQ(e.target.value)}
         placeholder="@account #tag ^link >2026-03-01 2026-03-01..2026-04-01"
         className="w-full bg-transparent border-none py-2 pl-4 pr-4 font-mono text-sm text-ink placeholder-muted focus:outline-none focus:ring-0"
       />
@@ -110,20 +189,39 @@ function SearchBar() {
   )
 }
 
-function LedgerStream({ txns }: { txns: Txn[] }) {
-  if (txns.length === 0) return <EmptyLedger />
+function LedgerBody({
+  mode,
+  state,
+  onReload,
+}: {
+  mode: ViewMode
+  state: FetchState
+  onReload: () => void
+}) {
+  if (state.kind === 'error') {
+    return (
+      <div className="py-24 text-center text-[#ba1a1a] font-mono text-sm">
+        Failed to load — {state.message}
+      </div>
+    )
+  }
+  if (state.kind === 'idle' || state.kind === 'loading') {
+    return (
+      <div className="py-24 text-center font-serif italic text-muted text-sm">Loading…</div>
+    )
+  }
+  if (mode === 'text') {
+    return <TextEditor rows={state.rows} total={state.total} onReload={onReload} />
+  }
+  if (state.rows.length === 0) return <EmptyLedger />
   return (
     <div className="flex flex-col gap-4 pb-24">
-      {txns.map((txn) =>
-        txn.kind === 'prose' ? (
-          <ProseTxnCard key={txn.id} txn={txn} />
-        ) : (
-          <RecessedTxnCard key={txn.id} txn={txn} />
-        ),
-      )}
+      {state.rows.map((row) => (
+        <TxnCard key={row.id} row={row} />
+      ))}
       <div className="text-center pt-8">
         <span className="font-serif italic text-muted text-sm">
-          — end · {txns.length} of {txns.length} —
+          — end · {state.rows.length} of {state.total} —
         </span>
       </div>
     </div>
@@ -148,61 +246,12 @@ function EmptyLedger() {
   )
 }
 
-function ProseTxnCard({ txn }: { txn: ProseTxn }) {
+function TxnCard({ row }: { row: Transaction }) {
   return (
-    <article className="relative bg-white rounded-full p-4 pl-6 pr-4 border border-black/10 flex items-center transition-colors hover:bg-black/5">
-      <span className="font-mono text-[10px] text-muted tracking-wide w-24 shrink-0">{txn.date}</span>
-      <p className="font-serif text-[15px] text-ink flex-1">{txn.body}</p>
-      <div className="absolute right-4 top-0 h-full flex items-center gap-2 text-[#9B8B7A]">
-        <span className="material-symbols-outlined !text-[16px] cursor-pointer hover:text-ink">edit</span>
-        <span className="material-symbols-outlined !text-[16px] cursor-pointer hover:text-[#ba1a1a]">
-          delete
-        </span>
-      </div>
-    </article>
-  )
-}
-
-function RecessedTxnCard({ txn }: { txn: RecessedTxn }) {
-  const isStacked = typeof txn.amount !== 'string'
-  return (
-    <article className="bg-white rounded-[12px] p-6 border border-black/10 flex flex-col gap-4 transition-colors hover:bg-black/5">
-      <header className="flex items-center relative">
-        <span className="font-mono text-[10px] text-muted tracking-wide w-24 shrink-0">{txn.date}</span>
-        <h3 className="font-serif text-lg font-semibold text-ink flex-1">{txn.payee}</h3>
-        <div className="absolute top-0 right-0 flex items-start gap-6">
-          {isStacked ? (
-            <div className="flex flex-col items-end">
-              <span className="font-mono text-[14px] font-medium text-[#0A2540]">
-                {(txn.amount as { line1: string; line2: string }).line1}
-              </span>
-              <span className="font-mono text-[14px] font-medium text-[#0A2540]">
-                {(txn.amount as { line1: string; line2: string }).line2}
-              </span>
-            </div>
-          ) : (
-            <span className="font-mono text-[20px] font-medium text-[#0A2540]">{txn.amount as string}</span>
-          )}
-          <div className={`flex gap-2 text-[#9B8B7A] ${isStacked ? 'self-start mt-1' : ''}`}>
-            <span className="material-symbols-outlined !text-[16px] cursor-pointer hover:text-ink">edit</span>
-            <span className="material-symbols-outlined !text-[16px] cursor-pointer hover:text-[#ba1a1a]">
-              delete
-            </span>
-          </div>
-        </div>
-      </header>
-      <div className="relative bg-[#F2EDE3] border border-[#E5DDD0] rounded-[10px] p-4 pl-5 flex flex-col gap-2 overflow-hidden">
-        <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#B8642F]" />
-        <div className="font-mono text-[12px] text-muted mb-1">
-          {txn.date} * &quot;{txn.payee}&quot; &quot;{txn.narration}&quot;
-        </div>
-        {txn.postings.map((p, i) => (
-          <div key={i} className="flex justify-between font-mono text-[12px] text-[#2A2520]">
-            <span className="text-[#4A4238]">{p.account}</span>
-            <span>{p.amount}</span>
-          </div>
-        ))}
-      </div>
+    <article className="bg-white rounded-[12px] p-4 pl-5 pr-5 border border-black/10 transition-colors hover:bg-black/5">
+      <pre className="font-mono text-[12px] text-[#2A2520] whitespace-pre-wrap m-0">
+        {row.raw_text}
+      </pre>
     </article>
   )
 }
@@ -212,149 +261,17 @@ function AssistantPane() {
     <aside className="w-[38%] h-full bg-[#F1EDE6] border-l border-black/10 flex flex-col relative">
       <header className="h-20 px-8 flex items-center justify-between border-b border-black/10 bg-[#F1EDE6]">
         <h2 className="font-serif text-lg text-ink font-semibold">Assistant</h2>
-        <span className="font-mono text-[10px] text-muted uppercase tracking-wider">CLERK · ALWAYS ON</span>
+        <span className="font-mono text-[10px] text-muted uppercase tracking-wider">
+          CLERK · ALWAYS ON
+        </span>
       </header>
       <div className="flex-1 overflow-y-auto p-8 flex flex-col gap-10 pb-32">
-        <UserTurn body="what did i spend on travel in Q1?" />
-        <ClerkAnswer
-          intro="You've spent ₹1,24,300 across 9 transactions in Q1 2026."
-          tableCaption="TRAVEL · Q1 2026 · 9 TRANSACTIONS"
-          rows={[
-            ['Flights', '₹88,200.00'],
-            ['Hotels', '₹24,300.00'],
-            ['Transit', '₹11,800.00'],
-          ]}
-          sources="SOURCES · LEDGER.BEANCOUNT"
-        />
-        <ClerkMarginalia body="Forex card underused — only ₹18,400 loaded across three trips this quarter, against a ₹2L annual zero-markup ceiling. Consider shifting Amazon US spend off Infinia." />
-        <UserTurn body="log dinner at amudham 400 on infinia" />
-        <ClerkDraft
-          confirmation="I'll file this under Food · Restaurant"
-          preview="Dinner at Amudham — paid using HDFC Infinia — ₹400"
-        />
+        <p className="font-serif italic text-muted text-sm">
+          Assistant panel — to be wired up next.
+        </p>
       </div>
       <Composer />
     </aside>
-  )
-}
-
-function UserTurn({ body }: { body: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <span className="inline-block w-1 h-3 bg-[#B8642F]" />
-        <span className="font-mono text-[10px] text-[#B8642F] uppercase tracking-wider font-semibold">
-          YOU ·
-        </span>
-      </div>
-      <p className="text-[14px] text-[#0F1B2E] leading-relaxed">{body}</p>
-    </div>
-  )
-}
-
-function ClerkAnswer({
-  intro,
-  tableCaption,
-  rows,
-  sources,
-}: {
-  intro: string
-  tableCaption: string
-  rows: Array<[string, string]>
-  sources: string
-}) {
-  return (
-    <div className="flex flex-col gap-2 pl-5 border-l-2 border-black/15">
-      <span className="font-mono text-[10px] text-[#9B8B7A] uppercase tracking-wider font-semibold">
-        CLERK ·
-      </span>
-      <p className="text-[14px] text-[#3C3632] leading-relaxed">{intro}</p>
-      <div className="font-mono text-[10px] text-muted uppercase tracking-wider font-semibold mt-3">
-        {tableCaption}
-      </div>
-      <div className="flex flex-col">
-        {rows.map(([label, value]) => (
-          <div
-            key={label}
-            className="flex justify-between items-center py-2 border-b border-black/10"
-          >
-            <span className="font-serif text-[15px] text-ink">{label}</span>
-            <span className="font-mono text-sm">{value}</span>
-          </div>
-        ))}
-      </div>
-      <div className="font-mono text-[10px] text-muted uppercase tracking-wider mt-2">{sources}</div>
-    </div>
-  )
-}
-
-function ClerkMarginalia({ body }: { body: string }) {
-  return (
-    <div className="flex flex-col gap-2 pl-5 border-l-2 border-black/15">
-      <span className="font-mono text-[10px] text-[#9B8B7A] uppercase tracking-wider font-semibold">
-        CLERK ·
-      </span>
-      <p className="font-serif italic text-[14px] text-[#3C3632] leading-relaxed">
-        <span className="text-[#B8642F] not-italic mr-1">†</span>
-        {body}
-      </p>
-      <div className="flex gap-3 mt-1">
-        <a className="text-xs text-muted hover:text-ink underline underline-offset-2" href="#">
-          view
-        </a>
-        <a className="text-xs text-muted hover:text-ink underline underline-offset-2" href="#">
-          dismiss
-        </a>
-      </div>
-    </div>
-  )
-}
-
-function ClerkDraft({ confirmation, preview }: { confirmation: string; preview: string }) {
-  return (
-    <div className="flex flex-col gap-3 pl-5 border-l-2 border-black/15">
-      <span className="font-mono text-[10px] text-[#9B8B7A] uppercase tracking-wider font-semibold">
-        CLERK ·
-      </span>
-      <p className="text-[14px] text-[#3C3632] leading-relaxed">{confirmation}</p>
-      <div className="bg-[#F2EDE3] border border-[#E5DDD0] rounded-full py-3 px-6">
-        <p className="font-serif text-[14px] text-ink">{preview}</p>
-      </div>
-      <div className="flex gap-6 mt-1">
-        <DraftAction icon="check_circle" label="ACCEPT" color="#B8642F" filled />
-        <DraftAction icon="edit" label="EDIT" color="#4A4238" />
-        <DraftAction icon="close" label="DISMISS" color="#9B8B7A" />
-      </div>
-    </div>
-  )
-}
-
-function DraftAction({
-  icon,
-  label,
-  color,
-  filled,
-}: {
-  icon: string
-  label: string
-  color: string
-  filled?: boolean
-}) {
-  return (
-    <div className="flex flex-col items-center gap-1 cursor-pointer group">
-      <span
-        className="material-symbols-outlined !text-[20px] group-hover:opacity-80"
-        style={{
-          color,
-          fontVariationSettings: filled
-            ? "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20"
-            : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20",
-        }}
-      >
-        {icon}
-      </span>
-      <span className="font-mono text-[9px] text-muted">{label}</span>
-    </div>
   )
 }
 
