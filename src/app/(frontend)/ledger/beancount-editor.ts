@@ -1,15 +1,25 @@
+import { indentLess, indentMore } from '@codemirror/commands'
 import {
   HighlightStyle,
   LanguageSupport,
   LRLanguage,
+  indentService,
+  indentUnit,
   syntaxHighlighting,
 } from '@codemirror/language'
 import { type Diagnostic, linter, lintGutter } from '@codemirror/lint'
 import { RangeSetBuilder } from '@codemirror/state'
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+  keymap,
+} from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 import { parser } from 'lezer-beancount'
-import { validateTxn, type Diagnostic as BeanDiagnostic } from '@/lib/beancount/extract'
+import { isUnparseableLine, splitEntries, validateTxn } from '@/lib/beancount/extract'
 
 const beancountLanguage = LRLanguage.define({
   name: 'beancount',
@@ -50,71 +60,63 @@ const highlight = HighlightStyle.define([
 
 const beancountSupport = new LanguageSupport(beancountLanguage, [syntaxHighlighting(highlight)])
 
-const blockDivider = Decoration.line({ attributes: { class: 'cm-txn-divider' } })
+const INDENT = '  '
+
+const beancountIndentService = indentService.of((ctx, pos) => {
+  const line = ctx.state.doc.lineAt(pos)
+  for (let n = line.number - 1; n >= 1; n--) {
+    const prev = ctx.state.doc.line(n).text
+    if (prev.trim() === '') return 0
+    const lead = prev.match(/^[ \t]*/)
+    const leadLen = lead ? lead[0].length : 0
+    if (leadLen > 0) return leadLen
+    if (/^\d{4}-\d{2}-\d{2}/.test(prev)) return INDENT.length
+    return 0
+  }
+  return 0
+})
+
+const beancountTabKeymap = keymap.of([
+  {
+    key: 'Tab',
+    run: (view) => {
+      const { state } = view
+      const multiLine = state.selection.ranges.some(
+        (r) => state.doc.lineAt(r.from).number !== state.doc.lineAt(r.to).number,
+      )
+      if (multiLine) return indentMore(view)
+      view.dispatch(state.replaceSelection(INDENT))
+      return true
+    },
+    shift: indentLess,
+  },
+])
+
+const entryDivider = Decoration.line({ attributes: { class: 'cm-txn-divider' } })
 const unparseableLine = Decoration.line({ attributes: { class: 'cm-txn-unparseable' } })
 
-function buildBlockDividers(view: EditorView): DecorationSet {
+function buildEntryDividers(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const doc = view.state.doc
-  let sawFirstBlock = false
-  let prevBlank = true
-  for (let i = 1; i <= doc.lines; i++) {
-    const line = doc.line(i)
-    const isBlank = line.text.trim() === ''
-    if (!isBlank && prevBlank) {
-      if (sawFirstBlock) builder.add(line.from, line.from, blockDivider)
-      sawFirstBlock = true
-    }
-    prevBlank = isBlank
+  const entries = splitEntries(doc.toString())
+  for (let i = 1; i < entries.length; i++) {
+    const line = doc.line(entries[i].startLine + 1)
+    builder.add(line.from, line.from, entryDivider)
   }
   return builder.finish()
-}
-
-type Block = { fromLine: number; toLine: number; text: string }
-
-function collectBlocks(doc: EditorView['state']['doc']): Block[] {
-  const blocks: Block[] = []
-  let startLine = 0
-  let bodyLines: string[] = []
-  for (let i = 1; i <= doc.lines; i++) {
-    const line = doc.line(i)
-    const isBlank = line.text.trim() === ''
-    if (isBlank) {
-      if (startLine > 0) {
-        blocks.push({ fromLine: startLine, toLine: i - 1, text: bodyLines.join('\n') })
-        startLine = 0
-        bodyLines = []
-      }
-    } else {
-      if (startLine === 0) startLine = i
-      bodyLines.push(line.text)
-    }
-  }
-  if (startLine > 0) {
-    blocks.push({ fromLine: startLine, toLine: doc.lines, text: bodyLines.join('\n') })
-  }
-  return blocks
-}
-
-function resolveLine(
-  doc: EditorView['state']['doc'],
-  block: Block,
-  d: BeanDiagnostic,
-) {
-  const lineNum = Math.min(block.fromLine + d.lineOffset, block.toLine)
-  return doc.line(lineNum)
 }
 
 const beancountLinter = linter(
   (view) => {
     const diagnostics: Diagnostic[] = []
     const doc = view.state.doc
-    for (const block of collectBlocks(doc)) {
-      const r = validateTxn(block.text)
+    for (const entry of splitEntries(doc.toString())) {
+      const r = validateTxn(entry.text)
       if (r.ok === true) continue
       for (const d of r.diagnostics) {
         if (d.kind !== 'rule-violation') continue
-        const line = resolveLine(doc, block, d)
+        const lineNum = Math.min(entry.startLine + d.lineOffset, entry.endLine) + 1
+        const line = doc.line(lineNum)
         diagnostics.push({
           from: line.from,
           to: line.to,
@@ -131,12 +133,9 @@ const beancountLinter = linter(
 function buildUnparseableLines(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const doc = view.state.doc
-  for (const block of collectBlocks(doc)) {
-    const r = validateTxn(block.text)
-    if (r.ok === true) continue
-    for (const d of r.diagnostics) {
-      if (d.kind !== 'parser-unparseable') continue
-      const line = resolveLine(doc, block, d)
+  for (let i = 1; i <= doc.lines; i++) {
+    const line = doc.line(i)
+    if (isUnparseableLine(line.text)) {
       builder.add(line.from, line.from, unparseableLine)
     }
   }
@@ -147,10 +146,10 @@ const txnDividers = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet
     constructor(view: EditorView) {
-      this.decorations = buildBlockDividers(view)
+      this.decorations = buildEntryDividers(view)
     }
     update(u: ViewUpdate) {
-      if (u.docChanged) this.decorations = buildBlockDividers(u.view)
+      if (u.docChanged) this.decorations = buildEntryDividers(u.view)
     }
   },
   { decorations: (v) => v.decorations },
@@ -247,6 +246,9 @@ const theme = EditorView.theme(
 
 export const beancountExtensions = [
   beancountSupport,
+  indentUnit.of(INDENT),
+  beancountIndentService,
+  beancountTabKeymap,
   txnDividers,
   unparseableLines,
   beancountLinter,
