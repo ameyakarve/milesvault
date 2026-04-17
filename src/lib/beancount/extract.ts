@@ -115,6 +115,26 @@ function checkBalance(
   }
 }
 
+const ACCOUNT_SEGMENT = /^[A-Z][A-Za-z0-9-]*$/
+
+function checkAccountSegments(
+  postings: readonly Posting[],
+  headerOffset: number,
+  diagnostics: Diagnostic[],
+): void {
+  for (const p of postings) {
+    const parts = p.account.split(':')
+    const bad = parts.find((seg) => !ACCOUNT_SEGMENT.test(seg))
+    if (bad !== undefined) {
+      diagnostics.push({
+        kind: 'rule-violation',
+        lineOffset: headerOffset,
+        message: `Invalid account segment '${bad}' in '${p.account}'; segments must match [A-Z][A-Za-z0-9-]*.`,
+      })
+    }
+  }
+}
+
 function checkCreditCardShape(
   postings: readonly Posting[],
   headerOffset: number,
@@ -248,6 +268,7 @@ export function extractTxn(source: string): ExtractResult {
       message: `Date year must be >= 1900; got ${t.date.year}.`,
     })
   }
+  checkAccountSegments(t.postings, headerOffset, diagnostics)
   checkBalance(t.postings, headerOffset, diagnostics)
   checkCreditCardShape(t.postings, headerOffset, diagnostics)
 
