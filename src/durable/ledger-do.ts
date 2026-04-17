@@ -36,57 +36,20 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     }
   }
 
-  async list(): Promise<Transaction[]> {
-    return this.sql
-      .exec<Transaction>(
-        'SELECT id, raw_text, tokens, created_at, updated_at FROM transactions ORDER BY id',
-      )
-      .toArray()
+  async get(_id: number): Promise<Transaction | null> {
+    return null
   }
 
-  async get(id: number): Promise<Transaction | null> {
-    const row = this.sql
-      .exec<Transaction>(
-        'SELECT id, raw_text, tokens, created_at, updated_at FROM transactions WHERE id = ?',
-        id,
-      )
-      .toArray()[0]
-    return row ?? null
+  async create(_raw_text: string): Promise<Transaction | null> {
+    return null
   }
 
-  async create(raw_text: string): Promise<Transaction> {
-    const now = Date.now()
-    const tokens = tokenize(raw_text).join(' ')
-    const row = this.sql
-      .exec<Transaction>(
-        'INSERT INTO transactions (raw_text, tokens, created_at, updated_at) VALUES (?, ?, ?, ?) RETURNING id, raw_text, tokens, created_at, updated_at',
-        raw_text,
-        tokens,
-        now,
-        now,
-      )
-      .toArray()[0]
-    return row
+  async update(_id: number, _raw_text: string): Promise<Transaction | null> {
+    return null
   }
 
-  async update(id: number, raw_text: string): Promise<Transaction | null> {
-    const now = Date.now()
-    const tokens = tokenize(raw_text).join(' ')
-    const row = this.sql
-      .exec<Transaction>(
-        'UPDATE transactions SET raw_text = ?, tokens = ?, updated_at = ? WHERE id = ? RETURNING id, raw_text, tokens, created_at, updated_at',
-        raw_text,
-        tokens,
-        now,
-        id,
-      )
-      .toArray()[0]
-    return row ?? null
-  }
-
-  async remove(id: number): Promise<boolean> {
-    this.sql.exec('DELETE FROM transactions WHERE id = ?', id)
-    return true
+  async remove(_id: number): Promise<boolean> {
+    return false
   }
 
   async exportAll(): Promise<Transaction[]> {
