@@ -7,6 +7,7 @@ import type {
   BatchValidationError,
   BatchConflict,
 } from './ledger-types'
+import type { SearchFilter } from './search-parser'
 
 type BatchError = { index: number; errors: string[] }
 
@@ -14,6 +15,10 @@ const ROW_COLS =
   'id, raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at'
 
 const SCHEMA_VERSION = 1
+
+function escapeFts(s: string): string {
+  return s.replace(/"/g, '""')
+}
 
 export class LedgerDO extends DurableObject<CloudflareEnv> {
   private sql: SqlStorage
@@ -91,6 +96,55 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       )
       .toArray()[0]
     return row ?? null
+  }
+
+  async search(
+    filter: SearchFilter,
+    limit: number,
+    offset: number,
+  ): Promise<{ rows: TransactionRow[]; total: number }> {
+    const ftsTerms: string[] = []
+    for (const t of filter.accountTokens) ftsTerms.push(`t_account:"${escapeFts(t)}"`)
+    for (const t of filter.tagTokens) ftsTerms.push(`t_tag:"${escapeFts(t)}"`)
+    for (const t of filter.linkTokens) ftsTerms.push(`t_link:"${escapeFts(t)}"`)
+    for (const t of filter.freeTokens) ftsTerms.push(`"${escapeFts(t)}"`)
+    const ftsQuery = ftsTerms.join(' ')
+
+    const whereParts: string[] = []
+    const params: SqlStorageValue[] = []
+    if (ftsQuery.length > 0) {
+      whereParts.push(
+        't.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ?)',
+      )
+      params.push(ftsQuery)
+    }
+    if (filter.dateFrom != null) {
+      whereParts.push('t.date >= ?')
+      params.push(filter.dateFrom)
+    }
+    if (filter.dateTo != null) {
+      whereParts.push('t.date <= ?')
+      params.push(filter.dateTo)
+    }
+    const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : ''
+
+    const totalRow = this.sql
+      .exec<{ c: number }>(`SELECT COUNT(*) AS c FROM transactions t ${whereSql}`, ...params)
+      .toArray()[0]
+    const total = totalRow?.c ?? 0
+
+    const rows = this.sql
+      .exec<TransactionRow>(
+        `SELECT ${ROW_COLS} FROM transactions t
+         ${whereSql}
+         ORDER BY t.date DESC, t.id DESC
+         LIMIT ? OFFSET ?`,
+        ...params,
+        limit,
+        offset,
+      )
+      .toArray()
+    return { rows, total }
   }
 
   async create(
