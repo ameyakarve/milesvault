@@ -1,6 +1,12 @@
 import { DurableObject } from 'cloudflare:workers'
 import { extractTxn, type ExtractedTxn } from './beancount-extract'
-import type { TransactionRow } from './ledger-types'
+import type {
+  TransactionRow,
+  BatchApplyInput,
+  BatchApplyResult,
+  BatchValidationError,
+  BatchConflict,
+} from './ledger-types'
 
 type BatchError = { index: number; errors: string[] }
 
@@ -166,6 +172,177 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }
     })
     return { ok: true, rows }
+  }
+
+  async applyBatch(input: BatchApplyInput): Promise<BatchApplyResult> {
+    const updates = input.updates ?? []
+    const creates = input.creates ?? []
+    const deletes = input.deletes ?? []
+
+    const seenIds = new Set<number>()
+    const requestErrors: string[] = []
+    for (const u of updates) {
+      if (seenIds.has(u.id)) requestErrors.push(`Duplicate id ${u.id} in updates/deletes.`)
+      seenIds.add(u.id)
+    }
+    for (const d of deletes) {
+      if (seenIds.has(d.id)) requestErrors.push(`Duplicate id ${d.id} in updates/deletes.`)
+      seenIds.add(d.id)
+    }
+    if (requestErrors.length > 0) {
+      return {
+        ok: false,
+        kind: 'validation',
+        errors: [{ section: 'request', index: -1, errors: requestErrors }],
+      }
+    }
+
+    const validationErrors: BatchValidationError[] = []
+    const parsedUpdates: {
+      id: number
+      expected_updated_at: number
+      trimmed: string
+      extracted: ExtractedTxn
+    }[] = []
+    const parsedCreates: { trimmed: string; extracted: ExtractedTxn }[] = []
+
+    for (let i = 0; i < updates.length; i++) {
+      const u = updates[i]
+      const trimmed = u.raw_text.trim()
+      if (trimmed.length === 0) {
+        validationErrors.push({ section: 'updates', index: i, errors: ['Empty input.'] })
+        continue
+      }
+      const result = extractTxn(trimmed)
+      if (result.ok !== true) {
+        validationErrors.push({ section: 'updates', index: i, errors: result.errors })
+        continue
+      }
+      parsedUpdates.push({
+        id: u.id,
+        expected_updated_at: u.expected_updated_at,
+        trimmed,
+        extracted: result.value,
+      })
+    }
+    for (let i = 0; i < creates.length; i++) {
+      const c = creates[i]
+      const trimmed = c.raw_text.trim()
+      if (trimmed.length === 0) {
+        validationErrors.push({ section: 'creates', index: i, errors: ['Empty input.'] })
+        continue
+      }
+      const result = extractTxn(trimmed)
+      if (result.ok !== true) {
+        validationErrors.push({ section: 'creates', index: i, errors: result.errors })
+        continue
+      }
+      parsedCreates.push({ trimmed, extracted: result.value })
+    }
+    if (validationErrors.length > 0) {
+      return { ok: false, kind: 'validation', errors: validationErrors }
+    }
+
+    const conflicts: BatchConflict[] = []
+    for (let i = 0; i < parsedUpdates.length; i++) {
+      const u = parsedUpdates[i]
+      const current = this.sql
+        .exec<{ updated_at: number }>(
+          'SELECT updated_at FROM transactions WHERE id = ?',
+          u.id,
+        )
+        .toArray()[0]
+      if (!current || current.updated_at !== u.expected_updated_at) {
+        conflicts.push({
+          section: 'updates',
+          index: i,
+          id: u.id,
+          expected_updated_at: u.expected_updated_at,
+          current_updated_at: current?.updated_at ?? null,
+        })
+      }
+    }
+    for (let i = 0; i < deletes.length; i++) {
+      const d = deletes[i]
+      const current = this.sql
+        .exec<{ updated_at: number }>(
+          'SELECT updated_at FROM transactions WHERE id = ?',
+          d.id,
+        )
+        .toArray()[0]
+      if (!current || current.updated_at !== d.expected_updated_at) {
+        conflicts.push({
+          section: 'deletes',
+          index: i,
+          id: d.id,
+          expected_updated_at: d.expected_updated_at,
+          current_updated_at: current?.updated_at ?? null,
+        })
+      }
+    }
+    if (conflicts.length > 0) return { ok: false, kind: 'conflict', conflicts }
+
+    const updated: TransactionRow[] = []
+    const created: TransactionRow[] = []
+    const deleted: number[] = []
+
+    this.ctx.storage.transactionSync(() => {
+      const now = Date.now()
+      for (const d of deletes) {
+        const row = this.sql
+          .exec<{ id: number }>('DELETE FROM transactions WHERE id = ? RETURNING id', d.id)
+          .toArray()[0]
+        if (row) deleted.push(row.id)
+      }
+      for (const u of parsedUpdates) {
+        const { date, flag, t_payee, t_account, t_currency, t_tag, t_link } = u.extracted
+        const row = this.sql
+          .exec<TransactionRow>(
+            `UPDATE transactions SET
+               raw_text = ?, date = ?, flag = ?,
+               t_payee = ?, t_account = ?, t_currency = ?, t_tag = ?, t_link = ?,
+               updated_at = max(?, updated_at + 1)
+             WHERE id = ?
+             RETURNING ${ROW_COLS}`,
+            u.trimmed,
+            date,
+            flag,
+            t_payee,
+            t_account,
+            t_currency,
+            t_tag,
+            t_link,
+            now,
+            u.id,
+          )
+          .toArray()[0]
+        if (row) updated.push(row)
+      }
+      for (const c of parsedCreates) {
+        const { date, flag, t_payee, t_account, t_currency, t_tag, t_link } = c.extracted
+        const row = this.sql
+          .exec<TransactionRow>(
+            `INSERT INTO transactions
+               (raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             RETURNING ${ROW_COLS}`,
+            c.trimmed,
+            date,
+            flag,
+            t_payee,
+            t_account,
+            t_currency,
+            t_tag,
+            t_link,
+            now,
+            now,
+          )
+          .toArray()[0]
+        if (row) created.push(row)
+      }
+    })
+
+    return { ok: true, updated, created, deleted }
   }
 
   async update(_id: number, _raw_text: string): Promise<TransactionRow | null> {
