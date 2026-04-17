@@ -235,7 +235,7 @@ function LedgerBody({
     )
   }
   if (mode === 'text') {
-    return <TextEditor rows={state.rows} total={state.total} onReload={onReload} />
+    return <TextEditor rows={state.rows} onReload={onReload} />
   }
   if (state.rows.length === 0) {
     return (

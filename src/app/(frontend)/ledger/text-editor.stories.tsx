@@ -110,15 +110,15 @@ export default meta
 type Story = StoryObj<typeof TextEditor>
 
 export const Empty: Story = {
-  args: { rows: FIXTURES.empty, total: 0 },
+  args: { rows: FIXTURES.empty },
 }
 
 export const Small: Story = {
-  args: { rows: FIXTURES.small, total: FIXTURES.small.length },
+  args: { rows: FIXTURES.small },
 }
 
 export const Unparseable: Story = {
-  args: { rows: FIXTURES.unparseable, total: FIXTURES.unparseable.length },
+  args: { rows: FIXTURES.unparseable },
   parameters: {
     docs: {
       description: {
@@ -130,7 +130,7 @@ export const Unparseable: Story = {
 }
 
 export const Invalid: Story = {
-  args: { rows: FIXTURES.invalid, total: FIXTURES.invalid.length },
+  args: { rows: FIXTURES.invalid },
   parameters: {
     docs: {
       description: {
@@ -140,17 +140,6 @@ export const Invalid: Story = {
   },
 }
 
-export const AtCap: Story = {
-  args: { rows: FIXTURES.atCap, total: FIXTURES.atCap.length },
-}
-
-export const OverCap: Story = {
-  args: { rows: FIXTURES.atCap, total: 42 },
-  parameters: {
-    docs: {
-      description: {
-        story: 'Renders the narrow-the-search guardrail when total exceeds MAX_BLOCKS (10).',
-      },
-    },
-  },
+export const TenTxns: Story = {
+  args: { rows: FIXTURES.atCap },
 }
