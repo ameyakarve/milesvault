@@ -4,10 +4,12 @@ import {
   LRLanguage,
   syntaxHighlighting,
 } from '@codemirror/language'
+import { type Diagnostic, linter, lintGutter } from '@codemirror/lint'
 import { RangeSetBuilder } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 import { parser } from 'lezer-beancount'
+import { validateTxn } from '@/lib/beancount/extract'
 
 const beancountLanguage = LRLanguage.define({
   name: 'beancount',
@@ -67,6 +69,62 @@ function buildBlockDividers(view: EditorView): DecorationSet {
   return builder.finish()
 }
 
+type Block = { fromLine: number; toLine: number; text: string }
+
+function collectBlocks(doc: EditorView['state']['doc']): Block[] {
+  const blocks: Block[] = []
+  let startLine = 0
+  let bodyLines: string[] = []
+  for (let i = 1; i <= doc.lines; i++) {
+    const line = doc.line(i)
+    const isBlank = line.text.trim() === ''
+    if (isBlank) {
+      if (startLine > 0) {
+        blocks.push({ fromLine: startLine, toLine: i - 1, text: bodyLines.join('\n') })
+        startLine = 0
+        bodyLines = []
+      }
+    } else {
+      if (startLine === 0) startLine = i
+      bodyLines.push(line.text)
+    }
+  }
+  if (startLine > 0) {
+    blocks.push({ fromLine: startLine, toLine: doc.lines, text: bodyLines.join('\n') })
+  }
+  return blocks
+}
+
+function diagnosticAnchor(doc: EditorView['state']['doc'], block: Block): number {
+  for (let i = block.fromLine; i <= block.toLine; i++) {
+    const line = doc.line(i)
+    if (!line.text.trimStart().startsWith(';')) return i
+  }
+  return block.fromLine
+}
+
+const beancountLinter = linter(
+  (view) => {
+    const diagnostics: Diagnostic[] = []
+    const doc = view.state.doc
+    for (const block of collectBlocks(doc)) {
+      const r = validateTxn(block.text)
+      if (r.ok) continue
+      const anchor = doc.line(diagnosticAnchor(doc, block))
+      for (const msg of r.errors) {
+        diagnostics.push({
+          from: anchor.from,
+          to: anchor.to,
+          severity: 'error',
+          message: msg,
+        })
+      }
+    }
+    return diagnostics
+  },
+  { delay: 400 },
+)
+
 const txnDividers = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet
@@ -100,6 +158,41 @@ const theme = EditorView.theme(
     },
     '.cm-line': { padding: '0 12px' },
     '.cm-txn-divider': { borderTop: '1px solid #E4E4E7' },
+    '.cm-lintRange-error': {
+      backgroundImage: 'none',
+      textDecoration: 'underline wavy #b91c1c',
+      textDecorationSkipInk: 'none',
+    },
+    '.cm-gutter-lint': {
+      width: '12px',
+      backgroundColor: '#FAFAF9',
+      borderRight: '1px solid #F4F4F5',
+    },
+    '.cm-gutter-lint .cm-lint-marker-error': {
+      content: "''",
+      display: 'block',
+      width: '5px',
+      height: '5px',
+      margin: '6px auto 0',
+      borderRadius: '50%',
+      backgroundColor: '#b91c1c',
+    },
+    '.cm-gutter-lint .cm-lint-marker-error svg': { display: 'none' },
+    '.cm-tooltip.cm-tooltip-lint': {
+      backgroundColor: '#ffffff',
+      border: '1px solid #E4E4E7',
+      borderRadius: '4px',
+      boxShadow: '0 2px 8px rgba(9,9,11,0.06)',
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontSize: '11px',
+      color: INK,
+      padding: '6px 8px',
+    },
+    '.cm-tooltip.cm-tooltip-lint .cm-diagnostic': { padding: '2px 0' },
+    '.cm-tooltip.cm-tooltip-lint .cm-diagnostic-error': {
+      borderLeft: '2px solid #b91c1c',
+      paddingLeft: '6px',
+    },
     '.cm-gutters': {
       backgroundColor: '#FAFAF9',
       color: MUTED,
@@ -120,4 +213,10 @@ const theme = EditorView.theme(
   { dark: false },
 )
 
-export const beancountExtensions = [beancountSupport, txnDividers, theme]
+export const beancountExtensions = [
+  beancountSupport,
+  txnDividers,
+  beancountLinter,
+  lintGutter(),
+  theme,
+]

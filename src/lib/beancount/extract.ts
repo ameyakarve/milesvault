@@ -115,6 +115,13 @@ function extractFields(t: BeanTxn): ExtractedTxn {
   }
 }
 
+export type ValidationResult = { ok: true } | { ok: false; errors: string[] }
+
+export function validateTxn(source: string): ValidationResult {
+  const r = extractTxn(source)
+  return r.ok ? { ok: true } : { ok: false, errors: r.errors }
+}
+
 export function extractTxn(source: string): ExtractResult {
   const trimmed = source.trim()
   if (!trimmed) return { ok: false, errors: ['Empty input.'] }
