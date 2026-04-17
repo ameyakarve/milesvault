@@ -23,9 +23,18 @@
       "remote": true,
     },
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LEDGER_DO",
+        "class_name": "LedgerDO",
+      },
+    ],
+  },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["VaultAgent"] },
     { "tag": "v2", "deleted_classes": ["VaultAgent"] },
+    { "tag": "v3", "new_sqlite_classes": ["LedgerDO"] },
   ],
   "services": [
     // The service should match the "name" of your worker
