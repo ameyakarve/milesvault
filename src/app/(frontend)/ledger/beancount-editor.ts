@@ -76,6 +76,34 @@ const beancountIndentService = indentService.of((ctx, pos) => {
   return 0
 })
 
+function dedentPastedText(raw: string): string {
+  const normalized = raw.replace(/\r\n/g, '\n').replace(/\t/g, INDENT)
+  const lines = normalized.split('\n')
+  if (lines.length < 2) return normalized
+  let min = Infinity
+  for (const line of lines) {
+    if (line.trim() === '') continue
+    const lead = line.match(/^[ ]*/)
+    const n = lead ? lead[0].length : 0
+    if (n < min) min = n
+    if (min === 0) break
+  }
+  if (!Number.isFinite(min) || min === 0) return normalized
+  return lines.map((l) => (l.length >= min ? l.slice(min) : l)).join('\n')
+}
+
+const pasteDedenter = EditorView.domEventHandlers({
+  paste(event, view) {
+    const raw = event.clipboardData?.getData('text/plain')
+    if (!raw || !raw.includes('\n')) return false
+    const dedented = dedentPastedText(raw)
+    if (dedented === raw) return false
+    event.preventDefault()
+    view.dispatch(view.state.replaceSelection(dedented))
+    return true
+  },
+})
+
 const beancountTabKeymap = keymap.of([
   {
     key: 'Tab',
@@ -249,6 +277,7 @@ export const beancountExtensions = [
   indentUnit.of(INDENT),
   beancountIndentService,
   beancountTabKeymap,
+  pasteDedenter,
   txnDividers,
   unparseableLines,
   beancountLinter,

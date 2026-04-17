@@ -6,7 +6,8 @@ import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
 import { beancountExtensions } from './beancount-editor'
 
-const MAX_BLOCKS = 10
+const MAX_LOAD_ROWS = 10
+const MAX_SAVE_ENTRIES = 50
 
 type Snapshot = { id: number; expected_updated_at: number; raw_text: string }
 type BatchPlan = {
@@ -112,10 +113,10 @@ export function TextEditor({
     setStatus({ kind: 'idle' })
   }, [rows])
 
-  if (total > MAX_BLOCKS) {
+  if (total > MAX_LOAD_ROWS) {
     return (
       <div className="py-16 text-center font-mono text-[13px] text-zinc-500">
-        text mode supports up to {MAX_BLOCKS} transactions per edit — current match: {total}.
+        text mode supports up to {MAX_LOAD_ROWS} transactions per edit — current match: {total}.
         narrow the search to continue.
       </div>
     )
@@ -125,10 +126,12 @@ export function TextEditor({
 
   async function onSave() {
     const entries = parseBuffer(buffer)
-    if (entries.length > MAX_BLOCKS) {
+    if (entries.length > MAX_SAVE_ENTRIES) {
       setStatus({
         kind: 'error',
-        messages: [`At most ${MAX_BLOCKS} transactions per save; buffer has ${entries.length}.`],
+        messages: [
+          `At most ${MAX_SAVE_ENTRIES} transactions per save; buffer has ${entries.length}.`,
+        ],
       })
       return
     }
