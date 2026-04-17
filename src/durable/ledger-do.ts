@@ -132,31 +132,24 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     }
     const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : ''
 
-    const countSql = `SELECT COUNT(*) AS c FROM transactions t ${whereSql}`
-    const rowsSql = `SELECT ${ROW_COLS} FROM transactions t ${whereSql} ORDER BY t.date DESC, t.id DESC LIMIT ? OFFSET ?`
-    let total = 0
-    let rows: TransactionRow[] = []
-    try {
-      total =
-        this.sql.exec<{ c: number }>(countSql, ...params).toArray()[0]?.c ?? 0
-    } catch (e) {
-      console.error('[search] count failed', { sql: countSql, params, err: String(e) })
-      throw e
-    }
-    try {
-      rows = this.sql
-        .exec<TransactionRow>(rowsSql, ...params, limit, offset)
-        .toArray()
-    } catch (e) {
-      console.error('[search] rows failed', {
-        sql: rowsSql,
-        params,
+    const total =
+      this.sql
+        .exec<{ c: number }>(
+          `SELECT COUNT(*) AS c FROM transactions t ${whereSql}`,
+          ...params,
+        )
+        .toArray()[0]?.c ?? 0
+    const rows = this.sql
+      .exec<TransactionRow>(
+        `SELECT ${ROW_COLS} FROM transactions t
+         ${whereSql}
+         ORDER BY t.date DESC, t.id DESC
+         LIMIT ? OFFSET ?`,
+        ...params,
         limit,
         offset,
-        err: String(e),
-      })
-      throw e
-    }
+      )
+      .toArray()
     return { rows, total }
   }
 
