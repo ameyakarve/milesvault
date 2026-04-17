@@ -30,8 +30,6 @@ export interface Entry {
   endLine: number
 }
 
-const BALANCE_TOLERANCE = 0.005
-
 const DATE_LED = /^\d{4}-\d{2}-\d{2}/
 const DIRECTIVE_KEYWORDS =
   /^(option|plugin|pushtag|poptag|include|commodity|balance|pad|open|close|note|document|price|event|query|custom)\b/
@@ -102,24 +100,9 @@ function checkBalance(
     if (w == null) continue
     sums.set(w.ccy, (sums.get(w.ccy) ?? 0) + w.n)
   }
-  if (elided > 1) {
-    diagnostics.push({
-      kind: 'rule-violation',
-      lineOffset: headerOffset,
-      message: 'At most one posting may have an elided amount.',
-    })
-    return
-  }
-  const unbalanced = [...sums].filter(([, v]) => Math.abs(v) > BALANCE_TOLERANCE)
-  if (elided === 1 && unbalanced.length !== 1) {
-    diagnostics.push({
-      kind: 'rule-violation',
-      lineOffset: headerOffset,
-      message: `Cannot auto-balance elided posting: need exactly one unbalanced commodity, found ${unbalanced.length}.`,
-    })
-    return
-  }
-  if (elided === 0 && unbalanced.length > 0) {
+  if (elided > 0) return
+  const unbalanced = [...sums].filter(([, v]) => Math.abs(v) > 1e-9)
+  if (unbalanced.length > 0) {
     const detail = unbalanced
       .map(([c, v]) => `${c}=${Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2)}`)
       .join(', ')
@@ -189,24 +172,6 @@ function findHeader(source: string): { line: string; offset: number } | null {
   return null
 }
 
-function classifyUnparseableLines(source: string): Diagnostic[] {
-  const diagnostics: Diagnostic[] = []
-  const lines = source.split('\n')
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    if (line.trim() === '') continue
-    if (line.startsWith(' ') || line.startsWith('\t')) continue
-    if (line.trimStart().startsWith(';')) continue
-    if (DATE_LED.test(line) || DIRECTIVE_KEYWORDS.test(line)) continue
-    diagnostics.push({
-      kind: 'parser-unparseable',
-      lineOffset: i,
-      message: 'Line could not be parsed. Indent postings or prefix comments with `;`.',
-    })
-  }
-  return diagnostics
-}
-
 export function validateTxn(source: string): ValidationResult {
   const r = extractTxn(source)
   if (r.ok !== true) return { ok: false, diagnostics: r.diagnostics }
@@ -222,7 +187,7 @@ export function extractTxn(source: string): ExtractResult {
     }
   }
 
-  const diagnostics: Diagnostic[] = classifyUnparseableLines(trimmed)
+  const diagnostics: Diagnostic[] = []
   const header = findHeader(trimmed)
   const headerOffset = header?.offset ?? 0
 
@@ -240,16 +205,15 @@ export function extractTxn(source: string): ExtractResult {
     return { ok: false, diagnostics }
   }
 
-  if (result.transactions.length !== 1) {
+  const t = result.transactions[0]
+  if (t == null) {
     diagnostics.push({
-      kind: 'rule-violation',
+      kind: 'parser-unparseable',
       lineOffset: headerOffset,
-      message: `Expected exactly one transaction, found ${result.transactions.length}.`,
+      message: 'Not a transaction.',
     })
     return { ok: false, diagnostics }
   }
-
-  const t = result.transactions[0]
 
   if (normalizeFlag(t.flag) === 'invalid') {
     diagnostics.push({
@@ -263,20 +227,6 @@ export function extractTxn(source: string): ExtractResult {
       kind: 'rule-violation',
       lineOffset: headerOffset,
       message: `Date year must be >= 1900; got ${t.date.year}.`,
-    })
-  }
-  if (header != null && !header.line.includes('"')) {
-    diagnostics.push({
-      kind: 'rule-violation',
-      lineOffset: headerOffset,
-      message: 'Transaction header needs a quoted narration (e.g. `* "Payee" "Narration"`).',
-    })
-  }
-  if (t.postings.length < 2) {
-    diagnostics.push({
-      kind: 'rule-violation',
-      lineOffset: headerOffset,
-      message: `Transaction must have at least 2 postings; found ${t.postings.length}. Postings must be indented.`,
     })
   }
   checkBalance(t.postings, headerOffset, diagnostics)
