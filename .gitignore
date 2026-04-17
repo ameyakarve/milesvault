@@ -56,3 +56,6 @@ node_modules/
 
 # Storybook
 /storybook-static
+
+# local verification scripts
+.sb-check.mjs
