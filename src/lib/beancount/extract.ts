@@ -10,11 +10,25 @@ export interface ExtractedTxn {
   t_link: string
 }
 
+export type DiagnosticKind = 'rule-violation' | 'parser-unparseable'
+
+export interface Diagnostic {
+  kind: DiagnosticKind
+  lineOffset: number
+  message: string
+}
+
 export type ExtractResult =
   | { ok: true; value: ExtractedTxn }
-  | { ok: false; errors: string[] }
+  | { ok: false; diagnostics: Diagnostic[] }
+
+export type ValidationResult = { ok: true } | { ok: false; diagnostics: Diagnostic[] }
 
 const BALANCE_TOLERANCE = 0.005
+
+const DATE_LED = /^\d{4}-\d{2}-\d{2}/
+const DIRECTIVE_KEYWORDS =
+  /^(option|plugin|pushtag|poptag|include|commodity|balance|pad|open|close|note|document|price|event|query|custom)\b/
 
 type Weight = { n: number; ccy: string }
 
@@ -34,7 +48,7 @@ function postingWeight(p: Posting): Weight | null {
   return { n, ccy: p.currency }
 }
 
-function checkBalance(postings: readonly Posting[], errors: string[]): void {
+function checkBalance(postings: readonly Posting[], diagnostics: Diagnostic[]): void {
   const sums = new Map<string, number>()
   let elided = 0
   for (const p of postings) {
@@ -47,21 +61,31 @@ function checkBalance(postings: readonly Posting[], errors: string[]): void {
     sums.set(w.ccy, (sums.get(w.ccy) ?? 0) + w.n)
   }
   if (elided > 1) {
-    errors.push('At most one posting may have an elided amount.')
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: 0,
+      message: 'At most one posting may have an elided amount.',
+    })
     return
   }
   const unbalanced = [...sums].filter(([, v]) => Math.abs(v) > BALANCE_TOLERANCE)
   if (elided === 1 && unbalanced.length !== 1) {
-    errors.push(
-      `Cannot auto-balance elided posting: need exactly one unbalanced commodity, found ${unbalanced.length}.`,
-    )
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: 0,
+      message: `Cannot auto-balance elided posting: need exactly one unbalanced commodity, found ${unbalanced.length}.`,
+    })
     return
   }
   if (elided === 0 && unbalanced.length > 0) {
     const detail = unbalanced
       .map(([c, v]) => `${c}=${Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2)}`)
       .join(', ')
-    errors.push(`Unbalanced transaction: ${detail}.`)
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: 0,
+      message: `Unbalanced transaction: ${detail}.`,
+    })
   }
 }
 
@@ -115,60 +139,104 @@ function extractFields(t: BeanTxn): ExtractedTxn {
   }
 }
 
-export type ValidationResult = { ok: true } | { ok: false; errors: string[] }
-
-export function validateTxn(source: string): ValidationResult {
-  const r = extractTxn(source)
-  if (r.ok !== true) return { ok: false, errors: r.errors }
-  return { ok: true }
-}
-
 function findHeaderLine(source: string): string | null {
   for (const line of source.split('\n')) {
-    if (/^\s*\d{4}-\d{2}-\d{2}/.test(line)) return line
+    if (DATE_LED.test(line)) return line
   }
   return null
 }
 
+function classifyUnparseableLines(source: string): Diagnostic[] {
+  const diagnostics: Diagnostic[] = []
+  const lines = source.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.trim() === '') continue
+    if (line.startsWith(' ') || line.startsWith('\t')) continue
+    if (line.trimStart().startsWith(';')) continue
+    if (DATE_LED.test(line) || DIRECTIVE_KEYWORDS.test(line)) continue
+    diagnostics.push({
+      kind: 'parser-unparseable',
+      lineOffset: i,
+      message: 'Line could not be parsed. Indent postings or prefix comments with `;`.',
+    })
+  }
+  return diagnostics
+}
+
+export function validateTxn(source: string): ValidationResult {
+  const r = extractTxn(source)
+  if (r.ok !== true) return { ok: false, diagnostics: r.diagnostics }
+  return { ok: true }
+}
+
 export function extractTxn(source: string): ExtractResult {
   const trimmed = source.trim()
-  if (!trimmed) return { ok: false, errors: ['Empty input.'] }
+  if (!trimmed) {
+    return {
+      ok: false,
+      diagnostics: [{ kind: 'rule-violation', lineOffset: 0, message: 'Empty input.' }],
+    }
+  }
+
+  const diagnostics: Diagnostic[] = classifyUnparseableLines(trimmed)
 
   let result
   try {
     result = parse(trimmed)
   } catch (err) {
-    if (err instanceof BeancountParseError) return { ok: false, errors: [err.message] }
-    return { ok: false, errors: [err instanceof Error ? err.message : String(err)] }
+    const message =
+      err instanceof BeancountParseError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : String(err)
+    diagnostics.push({ kind: 'rule-violation', lineOffset: 0, message })
+    return { ok: false, diagnostics }
   }
 
   if (result.transactions.length !== 1) {
-    return {
-      ok: false,
-      errors: [`Expected exactly one transaction, found ${result.transactions.length}.`],
-    }
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: 0,
+      message: `Expected exactly one transaction, found ${result.transactions.length}.`,
+    })
+    return { ok: false, diagnostics }
   }
 
   const t = result.transactions[0]
-  const errors: string[] = []
 
   if (normalizeFlag(t.flag) === 'invalid') {
-    errors.push(`Flag must be '*' or '!'; got '${t.flag}'.`)
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: 0,
+      message: `Flag must be '*' or '!'; got '${t.flag}'.`,
+    })
   }
   if (t.date.year < 1900) {
-    errors.push(`Date year must be >= 1900; got ${t.date.year}.`)
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: 0,
+      message: `Date year must be >= 1900; got ${t.date.year}.`,
+    })
   }
   const header = findHeaderLine(trimmed)
   if (header != null && !header.includes('"')) {
-    errors.push('Transaction header needs a quoted narration (e.g. `* "Payee" "Narration"`).')
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: 0,
+      message: 'Transaction header needs a quoted narration (e.g. `* "Payee" "Narration"`).',
+    })
   }
   if (t.postings.length < 2) {
-    errors.push(
-      `Transaction must have at least 2 postings; found ${t.postings.length}. Postings must be indented.`,
-    )
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: 0,
+      message: `Transaction must have at least 2 postings; found ${t.postings.length}. Postings must be indented.`,
+    })
   }
-  checkBalance(t.postings, errors)
+  checkBalance(t.postings, diagnostics)
 
-  if (errors.length > 0) return { ok: false, errors }
+  if (diagnostics.length > 0) return { ok: false, diagnostics }
   return { ok: true, value: extractFields(t) }
 }
