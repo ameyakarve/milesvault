@@ -14,8 +14,6 @@ type BatchError = { index: number; errors: string[] }
 const ROW_COLS =
   'id, raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at'
 
-const SCHEMA_VERSION = 1
-
 function escapeFts(s: string): string {
   return s.replace(/"/g, '""')
 }
@@ -30,61 +28,67 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private migrate(): void {
-    const version =
-      this.sql.exec<{ user_version: number }>('PRAGMA user_version').toArray()[0]?.user_version ??
-      0
-    if (version < SCHEMA_VERSION) {
-      this.sql.exec('DROP TABLE IF EXISTS transactions_fts')
-      this.sql.exec('DROP TABLE IF EXISTS transactions')
-    }
-    this.sql.exec(`
-      CREATE TABLE IF NOT EXISTS transactions (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        raw_text    TEXT    NOT NULL,
-        date        INTEGER NOT NULL,
-        flag        TEXT,
-        t_payee     TEXT    NOT NULL DEFAULT '',
-        t_account   TEXT    NOT NULL DEFAULT '',
-        t_currency  TEXT    NOT NULL DEFAULT '',
-        t_tag       TEXT    NOT NULL DEFAULT '',
-        t_link      TEXT    NOT NULL DEFAULT '',
-        created_at  INTEGER NOT NULL,
-        updated_at  INTEGER NOT NULL
-      )
-    `)
-    this.sql.exec(
-      'CREATE INDEX IF NOT EXISTS idx_transactions_date_id ON transactions(date, id)',
-    )
-    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_transactions_flag ON transactions(flag)')
-    this.sql.exec(`
-      CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
-        t_payee, t_account, t_currency, t_tag, t_link,
-        content='transactions', content_rowid='id',
-        tokenize='unicode61'
-      )
-    `)
-    this.sql.exec(`
-      CREATE TRIGGER IF NOT EXISTS transactions_ai AFTER INSERT ON transactions BEGIN
-        INSERT INTO transactions_fts(rowid, t_payee, t_account, t_currency, t_tag, t_link)
-        VALUES (new.id, new.t_payee, new.t_account, new.t_currency, new.t_tag, new.t_link);
-      END
-    `)
-    this.sql.exec(`
-      CREATE TRIGGER IF NOT EXISTS transactions_ad AFTER DELETE ON transactions BEGIN
-        INSERT INTO transactions_fts(transactions_fts, rowid, t_payee, t_account, t_currency, t_tag, t_link)
-        VALUES ('delete', old.id, old.t_payee, old.t_account, old.t_currency, old.t_tag, old.t_link);
-      END
-    `)
-    this.sql.exec(`
-      CREATE TRIGGER IF NOT EXISTS transactions_au AFTER UPDATE ON transactions BEGIN
-        INSERT INTO transactions_fts(transactions_fts, rowid, t_payee, t_account, t_currency, t_tag, t_link)
-        VALUES ('delete', old.id, old.t_payee, old.t_account, old.t_currency, old.t_tag, old.t_link);
-        INSERT INTO transactions_fts(rowid, t_payee, t_account, t_currency, t_tag, t_link)
-        VALUES (new.id, new.t_payee, new.t_account, new.t_currency, new.t_tag, new.t_link);
-      END
-    `)
-    if (version < SCHEMA_VERSION) {
-      this.sql.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`)
+    const steps: Array<[string, string]> = [
+      [
+        'transactions',
+        `CREATE TABLE IF NOT EXISTS transactions (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          raw_text    TEXT    NOT NULL,
+          date        INTEGER NOT NULL,
+          flag        TEXT,
+          t_payee     TEXT    NOT NULL DEFAULT '',
+          t_account   TEXT    NOT NULL DEFAULT '',
+          t_currency  TEXT    NOT NULL DEFAULT '',
+          t_tag       TEXT    NOT NULL DEFAULT '',
+          t_link      TEXT    NOT NULL DEFAULT '',
+          created_at  INTEGER NOT NULL,
+          updated_at  INTEGER NOT NULL
+        )`,
+      ],
+      [
+        'idx_date_id',
+        'CREATE INDEX IF NOT EXISTS idx_transactions_date_id ON transactions(date, id)',
+      ],
+      ['idx_flag', 'CREATE INDEX IF NOT EXISTS idx_transactions_flag ON transactions(flag)'],
+      [
+        'transactions_fts',
+        `CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
+          t_payee, t_account, t_currency, t_tag, t_link,
+          content='transactions', content_rowid='id',
+          tokenize='unicode61'
+        )`,
+      ],
+      [
+        'trigger_ai',
+        `CREATE TRIGGER IF NOT EXISTS transactions_ai AFTER INSERT ON transactions BEGIN
+          INSERT INTO transactions_fts(rowid, t_payee, t_account, t_currency, t_tag, t_link)
+          VALUES (new.id, new.t_payee, new.t_account, new.t_currency, new.t_tag, new.t_link);
+        END`,
+      ],
+      [
+        'trigger_ad',
+        `CREATE TRIGGER IF NOT EXISTS transactions_ad AFTER DELETE ON transactions BEGIN
+          INSERT INTO transactions_fts(transactions_fts, rowid, t_payee, t_account, t_currency, t_tag, t_link)
+          VALUES ('delete', old.id, old.t_payee, old.t_account, old.t_currency, old.t_tag, old.t_link);
+        END`,
+      ],
+      [
+        'trigger_au',
+        `CREATE TRIGGER IF NOT EXISTS transactions_au AFTER UPDATE ON transactions BEGIN
+          INSERT INTO transactions_fts(transactions_fts, rowid, t_payee, t_account, t_currency, t_tag, t_link)
+          VALUES ('delete', old.id, old.t_payee, old.t_account, old.t_currency, old.t_tag, old.t_link);
+          INSERT INTO transactions_fts(rowid, t_payee, t_account, t_currency, t_tag, t_link)
+          VALUES (new.id, new.t_payee, new.t_account, new.t_currency, new.t_tag, new.t_link);
+        END`,
+      ],
+    ]
+    for (const [label, sql] of steps) {
+      try {
+        this.sql.exec(sql)
+      } catch (e) {
+        console.error(`[migrate] step ${label} failed`, { err: String(e) })
+        throw e
+      }
     }
   }
 
