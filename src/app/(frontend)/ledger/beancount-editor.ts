@@ -109,15 +109,16 @@ const beancountLinter = linter(
     const doc = view.state.doc
     for (const block of collectBlocks(doc)) {
       const r = validateTxn(block.text)
-      if (r.ok) continue
-      const anchor = doc.line(diagnosticAnchor(doc, block))
-      for (const msg of r.errors) {
-        diagnostics.push({
-          from: anchor.from,
-          to: anchor.to,
-          severity: 'error',
-          message: msg,
-        })
+      if (r.ok !== true) {
+        const anchor = doc.line(diagnosticAnchor(doc, block))
+        for (const msg of r.errors) {
+          diagnostics.push({
+            from: anchor.from,
+            to: anchor.to,
+            severity: 'error',
+            message: msg,
+          })
+        }
       }
     }
     return diagnostics
