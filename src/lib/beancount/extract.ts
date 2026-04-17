@@ -123,6 +123,13 @@ export function validateTxn(source: string): ValidationResult {
   return { ok: true }
 }
 
+function findHeaderLine(source: string): string | null {
+  for (const line of source.split('\n')) {
+    if (/^\s*\d{4}-\d{2}-\d{2}/.test(line)) return line
+  }
+  return null
+}
+
 export function extractTxn(source: string): ExtractResult {
   const trimmed = source.trim()
   if (!trimmed) return { ok: false, errors: ['Empty input.'] }
@@ -150,6 +157,15 @@ export function extractTxn(source: string): ExtractResult {
   }
   if (t.date.year < 1900) {
     errors.push(`Date year must be >= 1900; got ${t.date.year}.`)
+  }
+  const header = findHeaderLine(trimmed)
+  if (header != null && !header.includes('"')) {
+    errors.push('Transaction header needs a quoted narration (e.g. `* "Payee" "Narration"`).')
+  }
+  if (t.postings.length < 2) {
+    errors.push(
+      `Transaction must have at least 2 postings; found ${t.postings.length}. Postings must be indented.`,
+    )
   }
   checkBalance(t.postings, errors)
 
