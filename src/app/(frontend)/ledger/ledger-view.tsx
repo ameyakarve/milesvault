@@ -122,7 +122,7 @@ function LedgerPane({
   const count = state.kind === 'ok' ? state.rows.length : 0
   const total = state.kind === 'ok' ? state.total : 0
   return (
-    <section className="w-1/2 h-full overflow-y-auto px-6 py-6 flex flex-col gap-4">
+    <section className="w-1/2 h-full overflow-hidden px-6 py-6 flex flex-col gap-4">
       <LedgerHeader mode={mode} onMode={onMode} count={count} total={total} state={state} />
       <SearchBar q={q} onQ={onQ} />
       <LedgerBody mode={mode} state={state} onReload={onReload} />
@@ -222,22 +222,30 @@ function LedgerBody({
 }) {
   if (state.kind === 'error') {
     return (
-      <div className="py-16 text-center font-mono text-[13px] text-[#b91c1c]">
+      <div className="flex-1 min-h-0 py-16 text-center font-mono text-[13px] text-[#b91c1c]">
         failed to load — {state.message}
       </div>
     )
   }
   if (state.kind === 'idle' || state.kind === 'loading') {
     return (
-      <div className="py-16 text-center font-mono text-[13px] text-zinc-500">loading…</div>
+      <div className="flex-1 min-h-0 py-16 text-center font-mono text-[13px] text-zinc-500">
+        loading…
+      </div>
     )
   }
   if (mode === 'text') {
     return <TextEditor rows={state.rows} total={state.total} onReload={onReload} />
   }
-  if (state.rows.length === 0) return <EmptyLedger />
+  if (state.rows.length === 0) {
+    return (
+      <div className="flex-1 min-h-0">
+        <EmptyLedger />
+      </div>
+    )
+  }
   return (
-    <div className="flex flex-col pb-16 border-t border-zinc-100">
+    <div className="flex-1 min-h-0 overflow-y-auto flex flex-col pb-16 border-t border-zinc-100">
       {state.rows.map((row) => (
         <TxnCard key={row.id} row={row} />
       ))}

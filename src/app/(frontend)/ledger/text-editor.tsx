@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
 import type { Transaction } from '@/durable/ledger-types'
+import { beancountExtensions } from './beancount-editor'
 
 const MAX_BLOCKS = 10
 const ID_COMMENT_RE = /^;\s*id:\s*(\d+)\s*$/i
@@ -194,14 +196,26 @@ export function TextEditor({
   }
 
   return (
-    <div className="flex flex-col gap-3 pb-16">
-      <textarea
-        value={buffer}
-        onChange={(e) => setBuffer(e.target.value)}
-        spellCheck={false}
-        className="w-full min-h-[480px] font-mono text-[12px] leading-[1.5] text-[#09090B] bg-white border border-zinc-200 rounded-[4px] p-4 focus:outline-none focus:ring-2 focus:ring-[#09090B] focus:border-[#09090B] whitespace-pre"
-      />
-      <div className="flex items-start justify-between gap-6">
+    <div className="flex flex-col gap-3 flex-1 min-h-0">
+      <div className="flex-1 min-h-0 bg-white border border-zinc-200 rounded-[4px] overflow-hidden focus-within:border-[#09090B] focus-within:ring-2 focus-within:ring-[#09090B]">
+        <CodeMirror
+          className="h-full"
+          value={buffer}
+          onChange={setBuffer}
+          extensions={beancountExtensions}
+          basicSetup={{
+            lineNumbers: true,
+            highlightActiveLine: false,
+            highlightActiveLineGutter: true,
+            foldGutter: false,
+            autocompletion: false,
+            searchKeymap: false,
+            bracketMatching: false,
+            indentOnInput: false,
+          }}
+        />
+      </div>
+      <div className="flex items-start justify-between gap-6 shrink-0">
         <StatusPanel status={status} />
         <div className="flex items-center gap-2 shrink-0">
           <button
