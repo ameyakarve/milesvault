@@ -68,11 +68,7 @@
           },
         ],
       },
-      "migrations": [
-        { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
-        { "tag": "v2", "deleted_classes": ["LedgerDO"] },
-        { "tag": "v3", "new_sqlite_classes": ["LedgerDO"] },
-      ],
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LedgerDO"] }],
       "services": [{ "binding": "PROD", "service": "milesvault" }],
       "r2_buckets": [
         {
