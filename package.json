@@ -6,19 +6,13 @@
   "type": "module",
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build",
-    "deploy": "pnpm run deploy:database && pnpm run deploy:app",
-    "deploy:app": "opennextjs-cloudflare build --env=$CLOUDFLARE_ENV && opennextjs-cloudflare deploy --env=$CLOUDFLARE_ENV",
-    "deploy:database": "cross-env NODE_ENV=production PAYLOAD_SECRET=ignore payload migrate && wrangler d1 execute D1 --command 'PRAGMA optimize' --env=$CLOUDFLARE_ENV --remote",
+    "deploy": "opennextjs-cloudflare build --env=$CLOUDFLARE_ENV && node scripts/inject-do.mjs && opennextjs-cloudflare deploy --env=$CLOUDFLARE_ENV",
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "devsafe": "rm -rf .next && rm -rf .open-next && cross-env NODE_OPTIONS=--no-deprecation next dev",
-    "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
-    "generate:types": "pnpm run generate:types:cloudflare && pnpm run generate:types:payload",
-    "generate:types:cloudflare": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "generate:types:payload": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
+    "generate:types": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "ii": "pnpm install --ignore-workspace",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation next lint",
-    "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --env=$CLOUDFLARE_ENV",
+    "preview": "opennextjs-cloudflare build && node scripts/inject-do.mjs && opennextjs-cloudflare preview --env=$CLOUDFLARE_ENV",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
@@ -36,20 +30,14 @@
     "@codemirror/view": "^6.41.0",
     "@lezer/highlight": "^1.2.3",
     "@opennextjs/cloudflare": "^1.11.0",
-    "@payloadcms/db-d1-sqlite": "3.82.1",
-    "@payloadcms/next": "3.82.1",
-    "@payloadcms/richtext-lexical": "3.82.1",
-    "@payloadcms/storage-r2": "3.82.1",
-    "@payloadcms/ui": "3.82.1",
     "@uiw/react-codemirror": "^4.25.9",
     "ai": "^6.0.161",
     "beancount": "^0.2.5",
     "cross-env": "^7.0.3",
     "dotenv": "16.4.7",
-    "graphql": "^16.8.1",
     "lezer-beancount": "^1.1.0",
     "next": "15.4.11",
-    "payload": "3.82.1",
+    "next-auth": "5.0.0-beta.31",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "react-select": "^5.10.2",
@@ -93,8 +81,14 @@
   },
   "cloudflare": {
     "bindings": {
-      "PAYLOAD_SECRET": {
-        "description": "Generate a random string using `openssl rand -hex 32`"
+      "AUTH_SECRET": {
+        "description": "Generate via `openssl rand -base64 32`"
+      },
+      "AUTH_GOOGLE_ID": {
+        "description": "Google OAuth 2.0 client ID"
+      },
+      "AUTH_GOOGLE_SECRET": {
+        "description": "Google OAuth 2.0 client secret"
       }
     }
   }

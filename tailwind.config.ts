@@ -18,6 +18,11 @@ const config: Config = {
         'chip-bg': '#EEF2F7',
         'hover-row': '#F4F6F9',
       },
+      fontFamily: {
+        serif: ['Fraunces', 'serif'],
+        sans: ['Inter', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
     },
   },
   plugins: [forms, containerQueries],
