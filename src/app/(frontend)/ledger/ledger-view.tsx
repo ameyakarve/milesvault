@@ -308,13 +308,14 @@ function CardsList({
 }) {
   const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
   return (
-    <div className="flex-1 min-h-0 flex flex-col border-t border-zinc-100">
+    <div className="flex-1 min-h-0 flex flex-col">
+      <PageControls page={page} totalPages={totalPages} onPage={onPage} position="top" />
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
         {state.rows.map((row) => (
           <TxnCard key={row.id} raw={row.raw_text} />
         ))}
       </div>
-      <PageControls page={page} totalPages={totalPages} onPage={onPage} />
+      <PageControls page={page} totalPages={totalPages} onPage={onPage} position="bottom" />
     </div>
   )
 }
@@ -323,15 +324,19 @@ function PageControls({
   page,
   totalPages,
   onPage,
+  position,
 }: {
   page: number
   totalPages: number
   onPage: (p: number) => void
+  position: 'top' | 'bottom'
 }) {
   const prevDisabled = page <= 1
   const nextDisabled = page >= totalPages
+  const borderClass =
+    position === 'top' ? 'border-y border-zinc-100' : 'border-t border-zinc-100'
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-100 bg-white">
+    <div className={`flex items-center justify-between px-4 py-3 bg-white ${borderClass}`}>
       <button
         onClick={() => onPage(page - 1)}
         disabled={prevDisabled}
