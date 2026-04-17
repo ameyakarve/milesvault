@@ -1,0 +1,29 @@
+name: Mirror prod → staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'Email of the user whose ledger to mirror'
+        required: true
+        default: 'ameya.karve@gmail.com'
+
+concurrency:
+  group: mirror-staging
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Call staging mirror endpoint
+        env:
+          ADMIN_TOKEN: ${{ secrets.STAGING_ADMIN_TOKEN }}
+          EMAIL: ${{ inputs.email }}
+        run: |
+          curl --fail --silent --show-error \
+            -X POST "https://staging.milesvault.com/api/admin/ledger/mirror?email=${EMAIL}" \
+            -H "Authorization: Bearer ${ADMIN_TOKEN}"
