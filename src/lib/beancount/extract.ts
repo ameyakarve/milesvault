@@ -48,7 +48,11 @@ function postingWeight(p: Posting): Weight | null {
   return { n, ccy: p.currency }
 }
 
-function checkBalance(postings: readonly Posting[], diagnostics: Diagnostic[]): void {
+function checkBalance(
+  postings: readonly Posting[],
+  headerOffset: number,
+  diagnostics: Diagnostic[],
+): void {
   const sums = new Map<string, number>()
   let elided = 0
   for (const p of postings) {
@@ -63,7 +67,7 @@ function checkBalance(postings: readonly Posting[], diagnostics: Diagnostic[]): 
   if (elided > 1) {
     diagnostics.push({
       kind: 'rule-violation',
-      lineOffset: 0,
+      lineOffset: headerOffset,
       message: 'At most one posting may have an elided amount.',
     })
     return
@@ -72,7 +76,7 @@ function checkBalance(postings: readonly Posting[], diagnostics: Diagnostic[]): 
   if (elided === 1 && unbalanced.length !== 1) {
     diagnostics.push({
       kind: 'rule-violation',
-      lineOffset: 0,
+      lineOffset: headerOffset,
       message: `Cannot auto-balance elided posting: need exactly one unbalanced commodity, found ${unbalanced.length}.`,
     })
     return
@@ -83,7 +87,7 @@ function checkBalance(postings: readonly Posting[], diagnostics: Diagnostic[]): 
       .join(', ')
     diagnostics.push({
       kind: 'rule-violation',
-      lineOffset: 0,
+      lineOffset: headerOffset,
       message: `Unbalanced transaction: ${detail}.`,
     })
   }
@@ -139,9 +143,10 @@ function extractFields(t: BeanTxn): ExtractedTxn {
   }
 }
 
-function findHeaderLine(source: string): string | null {
-  for (const line of source.split('\n')) {
-    if (DATE_LED.test(line)) return line
+function findHeader(source: string): { line: string; offset: number } | null {
+  const lines = source.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (DATE_LED.test(lines[i])) return { line: lines[i], offset: i }
   }
   return null
 }
@@ -180,6 +185,8 @@ export function extractTxn(source: string): ExtractResult {
   }
 
   const diagnostics: Diagnostic[] = classifyUnparseableLines(trimmed)
+  const header = findHeader(trimmed)
+  const headerOffset = header?.offset ?? 0
 
   let result
   try {
@@ -191,14 +198,14 @@ export function extractTxn(source: string): ExtractResult {
         : err instanceof Error
           ? err.message
           : String(err)
-    diagnostics.push({ kind: 'rule-violation', lineOffset: 0, message })
+    diagnostics.push({ kind: 'rule-violation', lineOffset: headerOffset, message })
     return { ok: false, diagnostics }
   }
 
   if (result.transactions.length !== 1) {
     diagnostics.push({
       kind: 'rule-violation',
-      lineOffset: 0,
+      lineOffset: headerOffset,
       message: `Expected exactly one transaction, found ${result.transactions.length}.`,
     })
     return { ok: false, diagnostics }
@@ -209,33 +216,32 @@ export function extractTxn(source: string): ExtractResult {
   if (normalizeFlag(t.flag) === 'invalid') {
     diagnostics.push({
       kind: 'rule-violation',
-      lineOffset: 0,
+      lineOffset: headerOffset,
       message: `Flag must be '*' or '!'; got '${t.flag}'.`,
     })
   }
   if (t.date.year < 1900) {
     diagnostics.push({
       kind: 'rule-violation',
-      lineOffset: 0,
+      lineOffset: headerOffset,
       message: `Date year must be >= 1900; got ${t.date.year}.`,
     })
   }
-  const header = findHeaderLine(trimmed)
-  if (header != null && !header.includes('"')) {
+  if (header != null && !header.line.includes('"')) {
     diagnostics.push({
       kind: 'rule-violation',
-      lineOffset: 0,
+      lineOffset: headerOffset,
       message: 'Transaction header needs a quoted narration (e.g. `* "Payee" "Narration"`).',
     })
   }
   if (t.postings.length < 2) {
     diagnostics.push({
       kind: 'rule-violation',
-      lineOffset: 0,
+      lineOffset: headerOffset,
       message: `Transaction must have at least 2 postings; found ${t.postings.length}. Postings must be indented.`,
     })
   }
-  checkBalance(t.postings, diagnostics)
+  checkBalance(t.postings, headerOffset, diagnostics)
 
   if (diagnostics.length > 0) return { ok: false, diagnostics }
   return { ok: true, value: extractFields(t) }
