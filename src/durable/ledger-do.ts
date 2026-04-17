@@ -28,6 +28,22 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private migrate(): void {
+    try {
+      const cols = this.sql
+        .exec<{ name: string }>("SELECT name FROM pragma_table_info('transactions')")
+        .toArray()
+        .map((r) => r.name)
+      if (cols.length > 0 && !cols.includes('date')) {
+        console.warn('[migrate] transactions table missing `date` column — dropping to rebuild', {
+          cols,
+        })
+        this.sql.exec('DROP TABLE IF EXISTS transactions_fts')
+        this.sql.exec('DROP TABLE IF EXISTS transactions')
+      }
+    } catch (e) {
+      console.error('[migrate] schema probe failed', { err: String(e) })
+      throw e
+    }
     const steps: Array<[string, string]> = [
       [
         'transactions',
