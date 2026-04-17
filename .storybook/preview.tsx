@@ -1,7 +1,7 @@
 import type { Preview } from '@storybook/nextjs-vite'
 import React from 'react'
 
-import '@/app/(frontend)/chat/chat.css'
+import '@/app/(frontend)/styles.css'
 
 const preview: Preview = {
   parameters: {
@@ -9,15 +9,7 @@ const preview: Preview = {
   },
   decorators: [
     (Story) => (
-      <div
-        style={{
-          minHeight: '100vh',
-          padding: 24,
-          background: '#111',
-          color: '#e6e6e6',
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        }}
-      >
+      <div className="min-h-screen bg-[#FAFAF9] text-[#09090B] font-sans">
         <Story />
       </div>
     ),
