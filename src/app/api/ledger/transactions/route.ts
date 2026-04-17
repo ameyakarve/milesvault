@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import { toTransaction, type LedgerDO } from '@/durable/ledger-do'
+import type { LedgerDO } from '@/durable/ledger-do'
+import { toTransaction } from '@/durable/ledger-types'
 
 export const dynamic = 'force-dynamic'
 
