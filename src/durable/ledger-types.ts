@@ -27,3 +27,32 @@ export function toTransaction(row: TransactionRow): Transaction {
     updated_at: row.updated_at,
   }
 }
+
+export type BatchUpdate = { id: number; raw_text: string; expected_updated_at: number }
+export type BatchCreate = { raw_text: string }
+export type BatchDelete = { id: number; expected_updated_at: number }
+
+export type BatchApplyInput = {
+  updates?: BatchUpdate[]
+  creates?: BatchCreate[]
+  deletes?: BatchDelete[]
+}
+
+export type BatchValidationError = {
+  section: 'request' | 'updates' | 'creates'
+  index: number
+  errors: string[]
+}
+
+export type BatchConflict = {
+  section: 'updates' | 'deletes'
+  index: number
+  id: number
+  expected_updated_at: number
+  current_updated_at: number | null
+}
+
+export type BatchApplyResult =
+  | { ok: true; updated: TransactionRow[]; created: TransactionRow[]; deleted: number[] }
+  | { ok: false; kind: 'validation'; errors: BatchValidationError[] }
+  | { ok: false; kind: 'conflict'; conflicts: BatchConflict[] }
