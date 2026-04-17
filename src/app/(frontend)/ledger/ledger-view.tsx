@@ -1,13 +1,13 @@
 import React from 'react'
 
-type ProseTxn = {
+export type ProseTxn = {
   kind: 'prose'
   id: string
   date: string
   body: string
 }
 
-type RecessedTxn = {
+export type RecessedTxn = {
   kind: 'recessed'
   id: string
   date: string
@@ -17,112 +17,21 @@ type RecessedTxn = {
   postings: Array<{ account: string; amount: string }>
 }
 
-type Txn = ProseTxn | RecessedTxn
+export type Txn = ProseTxn | RecessedTxn
 
-const TXNS: Txn[] = [
-  {
-    kind: 'prose',
-    id: '1',
-    date: '2026-04-16',
-    body: 'Morning coffee at Blue Tokai — paid using HDFC Infinia — ₹220',
-  },
-  {
-    kind: 'recessed',
-    id: '2',
-    date: '2026-04-15',
-    payee: 'BigBasket',
-    narration: 'groceries',
-    amount: '₹500.00',
-    postings: [
-      { account: 'Assets:Bank:HDFC:Savings', amount: '-500.00 INR' },
-      { account: 'Assets:DebitCards:HDFC:1234', amount: '500.00 INR' },
-      { account: 'Assets:DebitCards:HDFC:1234', amount: '-500.00 INR' },
-      { account: 'Expenses:Food:Groceries', amount: '500.00 INR' },
-    ],
-  },
-  {
-    kind: 'prose',
-    id: '3',
-    date: '2026-04-14',
-    body: 'Dinner at Zomato — paid using HDFC Infinia — ₹1,000 · 10% cashback ₹100',
-  },
-  {
-    kind: 'recessed',
-    id: '4',
-    date: '2026-04-10',
-    payee: 'British Airways',
-    narration: 'LHR-BOM flight',
-    amount: '45,000 AVIOS',
-    postings: [
-      { account: 'Assets:Rewards:Points:Avios', amount: '-45000.00 AVIOS' },
-      { account: 'Expenses:Travel:Flights', amount: '45000.00 AVIOS' },
-    ],
-  },
-  {
-    kind: 'prose',
-    id: '5',
-    date: '2026-04-11',
-    body: 'Breakfast at Café de Flore — paid from HDFC Forex — $50',
-  },
-  {
-    kind: 'recessed',
-    id: '6',
-    date: '2026-04-08',
-    payee: 'Marriott Bonvoy',
-    narration: 'Mumbai stay',
-    amount: '3 NIGHTS',
-    postings: [
-      { account: 'Assets:Rewards:Points:Marriott', amount: '-45000.00 MARRIOTT-PTS' },
-      { account: 'Expenses:Travel:Hotels', amount: '45000.00 MARRIOTT-PTS' },
-      { account: 'Assets:Rewards:Status:Marriott', amount: '3.00 MAR-NIGHTS' },
-      { account: 'Income:Rewards', amount: '-3.00 MAR-NIGHTS' },
-    ],
-  },
-  {
-    kind: 'prose',
-    id: '7',
-    date: '2026-04-09',
-    body: 'Loaded Paytm Wallet from HDFC Savings — ₹1,000',
-  },
-  {
-    kind: 'prose',
-    id: '8',
-    date: '2026-04-08',
-    body: 'Dinner at Zomato — paid using HDFC Infinia — ₹850 (₹150 promo)',
-  },
-  {
-    kind: 'recessed',
-    id: '9',
-    date: '2026-04-03',
-    payee: 'HDFC SmartBuy',
-    narration: 'transfer to Avios',
-    amount: { line1: '-10,000 SMARTBUY', line2: '+10,000 AVIOS' },
-    postings: [
-      { account: 'Assets:Rewards:Points:SmartBuy', amount: '-10000.00 SMARTBUY @@ 10000.00 AVIOS' },
-      { account: 'Assets:Rewards:Points:Avios', amount: '10000.00 AVIOS' },
-    ],
-  },
-  {
-    kind: 'prose',
-    id: '10',
-    date: '2026-04-06',
-    body: 'Auto ride with Uber — paid from Paytm Wallet — ₹85',
-  },
-]
-
-export function LedgerView() {
+export function LedgerView({ txns, email }: { txns: Txn[]; email: string }) {
   return (
     <div className="min-h-screen bg-[#F7F3EC] text-[#0F1B2E]">
-      <TopNav />
+      <TopNav email={email} />
       <main className="flex w-full max-w-[2560px] mx-auto" style={{ height: 'calc(100vh - 64px)' }}>
-        <LedgerPane />
+        <LedgerPane txns={txns} />
         <AssistantPane />
       </main>
     </div>
   )
 }
 
-function TopNav() {
+function TopNav({ email }: { email: string }) {
   return (
     <nav className="sticky top-0 z-50 flex justify-between items-center px-8 h-16 w-full bg-[#F7F3EC]">
       <div className="flex items-center gap-8">
@@ -147,23 +56,25 @@ function TopNav() {
       </div>
       <div className="flex items-center gap-4 text-[#0A2540]">
         <span className="material-symbols-outlined cursor-pointer hover:opacity-70">settings</span>
-        <span className="material-symbols-outlined cursor-pointer hover:opacity-70">account_circle</span>
+        <span className="material-symbols-outlined cursor-pointer hover:opacity-70" title={email}>
+          account_circle
+        </span>
       </div>
     </nav>
   )
 }
 
-function LedgerPane() {
+function LedgerPane({ txns }: { txns: Txn[] }) {
   return (
     <section className="w-[62%] h-full overflow-y-auto px-12 py-8 flex flex-col gap-6">
-      <LedgerHeader />
+      <LedgerHeader count={txns.length} />
       <SearchBar />
-      <LedgerStream />
+      <LedgerStream txns={txns} />
     </section>
   )
 }
 
-function LedgerHeader() {
+function LedgerHeader({ count }: { count: number }) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex bg-[#F1EDE6] rounded-full p-1 border border-black/10">
@@ -174,7 +85,9 @@ function LedgerHeader() {
           Text
         </button>
       </div>
-      <span className="text-[13px] text-muted font-medium">Showing 10 of 234</span>
+      <span className="text-[13px] text-muted font-medium">
+        {count === 0 ? 'No transactions' : `Showing ${count} of ${count}`}
+      </span>
     </div>
   )
 }
@@ -197,10 +110,11 @@ function SearchBar() {
   )
 }
 
-function LedgerStream() {
+function LedgerStream({ txns }: { txns: Txn[] }) {
+  if (txns.length === 0) return <EmptyLedger />
   return (
     <div className="flex flex-col gap-4 pb-24">
-      {TXNS.map((txn) =>
+      {txns.map((txn) =>
         txn.kind === 'prose' ? (
           <ProseTxnCard key={txn.id} txn={txn} />
         ) : (
@@ -208,8 +122,28 @@ function LedgerStream() {
         ),
       )}
       <div className="text-center pt-8">
-        <span className="font-serif italic text-muted text-sm">— end · 10 of 234 —</span>
+        <span className="font-serif italic text-muted text-sm">
+          — end · {txns.length} of {txns.length} —
+        </span>
       </div>
+    </div>
+  )
+}
+
+function EmptyLedger() {
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-24 gap-3">
+      <span
+        className="material-symbols-outlined !text-[48px] text-[#9B8B7A]"
+        style={{ fontVariationSettings: "'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 48" }}
+      >
+        receipt_long
+      </span>
+      <h2 className="font-serif text-xl text-ink">Your ledger is empty</h2>
+      <p className="font-serif italic text-muted text-sm max-w-[32ch]">
+        Draft your first transaction with the assistant on the right — or paste beancount text into
+        the composer.
+      </p>
     </div>
   )
 }
