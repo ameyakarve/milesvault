@@ -4,6 +4,7 @@ export interface Transaction extends Record<string, SqlStorageValue> {
   id: number
   raw_text: string
   tokens: string
+  date: number | null
   created_at: number
   updated_at: number
 }
@@ -23,17 +24,22 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         raw_text    TEXT    NOT NULL,
         tokens      TEXT    NOT NULL DEFAULT '',
+        date        INTEGER,
         created_at  INTEGER NOT NULL,
         updated_at  INTEGER NOT NULL
       )
     `)
-    const hasTokens = this.sql
+    const cols = this.sql
       .exec<{ name: string }>("PRAGMA table_info(transactions)")
       .toArray()
-      .some((r) => r.name === 'tokens')
-    if (!hasTokens) {
+      .map((r) => r.name)
+    if (!cols.includes('tokens')) {
       this.sql.exec("ALTER TABLE transactions ADD COLUMN tokens TEXT NOT NULL DEFAULT ''")
     }
+    if (!cols.includes('date')) {
+      this.sql.exec('ALTER TABLE transactions ADD COLUMN date INTEGER')
+    }
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date)')
   }
 
   async get(_id: number): Promise<Transaction | null> {
