@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Clinical Ledger Editor</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-low": "#f2f4f5",
+                      "on-primary-fixed": "#003c86",
+                      "surface-variant": "#dde3e7",
+                      "tertiary": "#605e61",
+                      "primary": "#005ac2",
+                      "on-secondary": "#faf8ff",
+                      "on-secondary-container": "#51515a",
+                      "on-tertiary-container": "#5c5b5e",
+                      "on-background": "#2d3336",
+                      "secondary-fixed-dim": "#d5d3de",
+                      "on-primary": "#f7f7ff",
+                      "surface-tint": "#005ac2",
+                      "tertiary-fixed": "#f6f2f5",
+                      "on-primary-container": "#004eaa",
+                      "surface-container-highest": "#dde3e7",
+                      "inverse-primary": "#4d8eff",
+                      "secondary-container": "#e3e1ec",
+                      "primary-fixed-dim": "#c3d4ff",
+                      "error-container": "#fe8983",
+                      "outline": "#757c7f",
+                      "primary-dim": "#004fab",
+                      "on-tertiary": "#fbf8fb",
+                      "secondary-dim": "#52525b",
+                      "inverse-surface": "#0c0e0f",
+                      "on-tertiary-fixed-variant": "#676568",
+                      "on-secondary-fixed": "#3e3f47",
+                      "surface-container": "#ebeef0",
+                      "primary-container": "#d8e2ff",
+                      "on-primary-fixed-variant": "#0057bd",
+                      "secondary-fixed": "#e3e1ec",
+                      "inverse-on-surface": "#9c9d9e",
+                      "secondary": "#5e5e67",
+                      "outline-variant": "#adb3b6",
+                      "tertiary-fixed-dim": "#e8e4e7",
+                      "surface-container-lowest": "#ffffff",
+                      "primary-fixed": "#d8e2ff",
+                      "background": "#f9f9fa",
+                      "on-secondary-fixed-variant": "#5b5b64",
+                      "on-error": "#fff7f6",
+                      "surface-dim": "#d3dbdf",
+                      "surface": "#f9f9fa",
+                      "tertiary-container": "#f6f2f5",
+                      "error": "#9f403d",
+                      "on-surface": "#2d3336",
+                      "on-tertiary-fixed": "#4a494c",
+                      "on-error-container": "#752121",
+                      "surface-bright": "#f9f9fa",
+                      "surface-container-high": "#e4e9ec",
+                      "on-surface-variant": "#5a6063",
+                      "tertiary-dim": "#545355",
+                      "error-dim": "#4e0309"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {},
+              "fontFamily": {
+                      "headline": [
+                              "Inter"
+                      ],
+                      "body": [
+                              "Inter"
+                      ],
+                      "label": [
+                              "Inter"
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface h-screen flex flex-col overflow-hidden">
+<!-- TopNavBar Shared Component -->
+<header class="bg-[#f9f9fa] dark:bg-[#09090b] flex items-center justify-between px-6 py-3 w-full max-w-[100vw] border-none bg-slate-100 dark:bg-slate-900 flat no shadows z-50">
+<div class="flex items-center gap-8">
+<div class="font-['JetBrains_Mono'] font-bold text-lg tracking-tighter text-slate-900 dark:text-slate-50">CLINICAL_LEDGER</div>
+<nav class="hidden md:flex items-center gap-6">
+<a class="font-['Inter'] font-medium tracking-tight text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 pb-1 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors scale-98 active:opacity-80 transition-all" href="#">Ledger</a>
+<a class="font-['Inter'] font-medium tracking-tight text-slate-500 dark:text-slate-400 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors scale-98 active:opacity-80 transition-all" href="#">Registry</a>
+<a class="font-['Inter'] font-medium tracking-tight text-slate-500 dark:text-slate-400 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors scale-98 active:opacity-80 transition-all" href="#">Analytics</a>
+<a class="font-['Inter'] font-medium tracking-tight text-slate-500 dark:text-slate-400 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors scale-98 active:opacity-80 transition-all" href="#">Audit</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-['Inter'] font-medium tracking-tight text-slate-500 dark:text-slate-400 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors scale-98 active:opacity-80 transition-all p-2 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="notifications_none">notifications_none</span>
+</button>
+<button class="font-['Inter'] font-medium tracking-tight text-slate-500 dark:text-slate-400 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors scale-98 active:opacity-80 transition-all p-2 rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+<button class="font-['Inter'] font-medium tracking-tight bg-primary text-on-primary px-4 py-2 rounded-DEFAULT hover:bg-primary-dim transition-colors scale-98 active:opacity-80 transition-all ml-2">Execute Commit</button>
+</div>
+</header>
+<!-- Main Workspace -->
+<main class="flex-1 flex overflow-hidden">
+<!-- Left Pane: Ledger Editor -->
+<div class="w-1/2 flex flex-col bg-surface-container-lowest">
+<!-- Tool Bar -->
+<div class="h-14 flex items-center px-4 justify-between bg-surface-container-lowest border-b border-surface-variant/30 relative">
+<!-- Ghost border fallback -->
+<div class="absolute bottom-0 left-0 right-0 h-px bg-outline-variant opacity-15"></div>
+<div class="flex items-center gap-4">
+<!-- View Toggle -->
+<div class="flex bg-surface-container-low p-1 rounded-DEFAULT border border-outline-variant/15">
+<button class="px-3 py-1 text-xs font-medium text-on-surface-variant hover:text-on-surface transition-colors rounded-sm">Cards</button>
+<button class="px-3 py-1 text-xs font-medium bg-surface-container-lowest text-on-surface shadow-sm rounded-sm">Text</button>
+</div>
+<!-- Counter -->
+<div class="font-mono text-[11px] text-on-surface-variant tracking-[0.08em] uppercase">
+                        12 / 847
+                    </div>
+</div>
+<!-- Search -->
+<div class="flex-1 max-w-sm ml-8 flex items-center bg-surface-container-low rounded-[6px] border border-outline-variant/15 px-3 py-1.5 focus-within:border-primary focus-within:ring-0 transition-colors">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant mr-2" data-icon="search">search</span>
+<!-- Chip -->
+<div class="flex items-center bg-surface-container-highest px-2 py-0.5 rounded-[4px] mr-2 gap-1 group cursor-pointer hover:bg-surface-variant transition-colors">
+<span class="font-mono text-[10px] text-on-surface">2026-04</span>
+<span class="material-symbols-outlined text-[12px] text-on-surface-variant group-hover:text-on-surface" data-icon="close">close</span>
+</div>
+<input class="bg-transparent border-none p-0 text-sm focus:ring-0 w-full text-on-surface placeholder:text-outline placeholder:font-body font-mono h-5" placeholder="Filter ledger..." type="text"/>
+</div>
+</div>
+<!-- Editor Area -->
+<div class="flex-1 overflow-auto relative">
+<div class="absolute top-0 left-0 w-12 h-full bg-surface-container-low border-r border-outline-variant/15 text-right py-4 pr-3 font-mono text-[11px] text-outline leading-7 select-none">
+                    1<br/>2<br/>3<br/>4<br/>5<br/>6<br/>7<br/>8<br/>9<br/>10<br/>11<br/>12
+                </div>
+<div class="ml-12 p-4 font-mono text-sm leading-7 text-on-surface whitespace-pre">
+<span class="text-tertiary"># TRANSACTION RECORD</span>
+id: <span class="text-primary">42</span>
+timestamp: <span class="text-secondary-dim">2026-04-12T08:14:22Z</span>
+type: <span class="text-on-primary-fixed-variant">DEBIT_ALLOCATION</span>
+status: <span class="text-primary">VERIFIED</span>
+<span class="text-tertiary"># ENTRIES</span>
+- account: <span class="text-primary">GL-4920-A</span>
+  amount:  <span class="text-error">-$4,200.00</span>
+  desc:    "Q2 Infrastructure Maintenance"
+
+- account: <span class="text-primary">AP-1100-X</span>
+  amount:  <span class="text-primary">+$4,200.00</span>
+  desc:    "Vendor Payment: SysOps Inc."
+                </div>
+</div>
+</div>
+<!-- Vertical Divider (No Line Rule applied, using background shift) -->
+<div class="w-1 bg-surface-container-low border-x border-outline-variant/15"></div>
+<!-- Right Pane: Assistant -->
+<div class="w-1/2 flex flex-col bg-surface">
+<!-- Assistant Header -->
+<div class="h-14 flex flex-col justify-center px-6 border-b border-outline-variant/15 relative">
+<div class="absolute bottom-0 left-0 right-0 h-px bg-outline-variant opacity-15"></div>
+<div class="font-['Inter'] font-semibold text-sm tracking-tight text-on-surface">ASSISTANT</div>
+<div class="font-mono text-[10px] text-primary uppercase tracking-[0.08em]">CLERK ALWAYS ON</div>
+</div>
+<!-- Chat Area -->
+<div class="flex-1 overflow-auto p-6 flex flex-col gap-8">
+<!-- Assistant Turn -->
+<div class="flex gap-4 relative">
+<div class="absolute left-4 top-10 bottom-[-32px] w-0.5 bg-surface-container-high rounded-full"></div>
+<div class="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center border border-outline-variant/15 shrink-0 z-10">
+<span class="material-symbols-outlined text-[18px] text-on-surface" data-icon="smart_toy">smart_toy</span>
+</div>
+<div class="flex-1 pt-1">
+<div class="font-['Inter'] text-sm text-on-surface leading-relaxed">
+                            I've reviewed the transaction log for April 2026. Found <span class="font-mono bg-surface-container-high px-1 rounded-sm">12</span> entries matching your criteria. Transaction <span class="font-mono text-primary bg-primary/10 px-1 rounded-sm">id: 42</span> seems to be missing the required authorization token for the AP-1100-X account.
+                        </div>
+<div class="mt-4 p-3 bg-surface-container-low border border-outline-variant/15 rounded-[4px] font-mono text-xs text-on-surface">
+<span class="text-tertiary">// SUGGESTED FIX</span><br/>
+                            + auth_token: "REQ-778-OP"<br/>
+                            + auth_by: "system_auto"
+                        </div>
+<div class="mt-3 flex gap-2">
+<button class="bg-surface-container-lowest border border-outline-variant/30 text-on-surface px-3 py-1.5 text-xs font-medium rounded-DEFAULT hover:bg-surface-container-low transition-colors">Apply Fix</button>
+<button class="text-on-surface-variant px-3 py-1.5 text-xs font-medium hover:text-on-surface transition-colors">Ignore</button>
+</div>
+</div>
+</div>
+<!-- User Turn -->
+<div class="flex gap-4 relative">
+<div class="absolute left-4 top-10 bottom-[-32px] w-0.5 bg-surface-container-high rounded-full"></div>
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center border border-primary/20 shrink-0 z-10">
+<span class="material-symbols-outlined text-[18px] text-primary" data-icon="person">person</span>
+</div>
+<div class="flex-1 pt-1">
+<div class="font-['Inter'] text-sm text-on-surface leading-relaxed">
+                            Apply the fix to id: 42. Also check if there are any other unverified debits over $1,000 this month.
+                        </div>
+</div>
+</div>
+<!-- Assistant Turn -->
+<div class="flex gap-4 relative">
+<div class="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center border border-outline-variant/15 shrink-0 z-10">
+<span class="material-symbols-outlined text-[18px] text-on-surface" data-icon="smart_toy">smart_toy</span>
+</div>
+<div class="flex-1 pt-1">
+<div class="font-['Inter'] text-sm text-on-surface leading-relaxed">
+                            Fix applied. Scanning for unverified debits &gt; $1,000...
+                        </div>
+<div class="mt-2 flex items-center gap-2 text-xs text-on-surface-variant font-mono">
+<span class="material-symbols-outlined text-[14px] animate-spin" data-icon="sync">sync</span> Processing ledger entries
+                        </div>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="p-4 bg-surface border-t border-outline-variant/15 relative">
+<div class="absolute top-0 left-0 right-0 h-px bg-outline-variant opacity-15"></div>
+<div class="relative">
+<textarea class="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-[6px] py-3 pl-4 pr-12 text-sm text-on-surface focus:border-primary focus:ring-0 resize-none h-14" placeholder="Ask Clerk to modify entries or query data..."></textarea>
+<button class="absolute right-2 top-2 p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="send">send</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer Shared Component -->
+<footer class="bg-white/85 dark:bg-[#09090b]/85 backdrop-blur-md fixed bottom-0 w-full border-t border-slate-200/30 dark:border-slate-800/30 tonal-stratification via surface-container-lowest shadow-[0px_-12px_32px_rgba(9,9,11,0.04)] flex justify-between items-center px-8 py-4 h-12 z-50 relative">
+<div class="absolute top-0 left-0 right-0 h-px bg-outline-variant opacity-15"></div>
+<div class="font-['JetBrains_Mono'] text-[11px] uppercase tracking-[0.08em] text-slate-400">
+            SYSTEM_STATUS: READY | LAST_SYNC: 14:20:05 UTC
+        </div>
+<div class="flex gap-6">
+<button class="font-['JetBrains_Mono'] text-[11px] uppercase tracking-[0.08em] text-slate-400 hover:text-blue-500 dark:hover:text-blue-300 cursor-pointer transition-opacity duration-200">REVERT_ALL</button>
+<button class="font-['JetBrains_Mono'] text-[11px] uppercase tracking-[0.08em] text-blue-600 font-bold hover:text-blue-500 dark:hover:text-blue-300 cursor-pointer transition-opacity duration-200">SAVE_CHANGES</button>
+</div>
+</footer>
+</body></html>

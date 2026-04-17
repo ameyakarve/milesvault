@@ -125,9 +125,9 @@ export function TextEditor({
 
   if (total > MAX_BLOCKS) {
     return (
-      <div className="py-24 text-center font-serif italic text-muted text-sm">
-        Text mode supports up to {MAX_BLOCKS} transactions per edit. Narrow the search to continue —
-        currently {total}.
+      <div className="py-16 text-center font-mono text-[13px] text-zinc-500">
+        text mode supports up to {MAX_BLOCKS} transactions per edit — current match: {total}.
+        narrow the search to continue.
       </div>
     )
   }
@@ -194,12 +194,12 @@ export function TextEditor({
   }
 
   return (
-    <div className="flex flex-col gap-3 pb-24">
+    <div className="flex flex-col gap-3 pb-16">
       <textarea
         value={buffer}
         onChange={(e) => setBuffer(e.target.value)}
         spellCheck={false}
-        className="w-full min-h-[480px] font-mono text-[12px] leading-[1.55] text-[#2A2520] bg-white border border-black/10 rounded-[12px] p-5 focus:outline-none focus:ring-1 focus:ring-[#0A2540] whitespace-pre"
+        className="w-full min-h-[480px] font-mono text-[12px] leading-[1.5] text-[#09090B] bg-white border border-zinc-200 rounded-[4px] p-4 focus:outline-none focus:ring-2 focus:ring-[#09090B] focus:border-[#09090B] whitespace-pre"
       />
       <div className="flex items-start justify-between gap-6">
         <StatusPanel status={status} />
@@ -207,14 +207,14 @@ export function TextEditor({
           <button
             onClick={onRevert}
             disabled={!dirty || status.kind === 'saving'}
-            className="px-4 py-1.5 rounded-full border border-black/10 text-sm font-medium text-muted hover:text-ink disabled:opacity-40"
+            className="h-7 px-3 rounded-[4px] border border-zinc-200 text-[13px] text-zinc-600 hover:text-[#09090B] hover:border-zinc-300 disabled:opacity-40"
           >
             Revert
           </button>
           <button
             onClick={onSave}
             disabled={!dirty || status.kind === 'saving'}
-            className="px-4 py-1.5 rounded-full bg-[#0A2540] text-white text-sm font-medium disabled:opacity-40"
+            className="h-7 px-3 rounded-[4px] bg-[#09090B] text-white text-[13px] font-medium disabled:opacity-40"
           >
             {status.kind === 'saving' ? 'Saving…' : 'Save'}
           </button>
@@ -241,18 +241,18 @@ function extractMessages(
 function StatusPanel({ status }: { status: Status }) {
   if (status.kind === 'idle' || status.kind === 'saving') return <div />
   if (status.kind === 'saved') {
-    return <span className="text-sm font-mono text-[#2A7D4F]">Saved.</span>
+    return <span className="font-mono text-[12px] text-emerald-700">✓ saved</span>
   }
   if (status.kind === 'conflict') {
     return (
-      <div className="text-sm font-mono text-[#ba1a1a] leading-relaxed">
-        Conflict on id {status.ids.join(', ')} — someone else changed these. Revert to reload and
-        retry.
+      <div className="font-mono text-[12px] text-[#b91c1c] leading-[1.5]">
+        conflict on id {status.ids.join(', ')} — someone else changed these. revert to reload
+        and retry.
       </div>
     )
   }
   return (
-    <ul className="text-sm font-mono text-[#ba1a1a] list-disc pl-5 leading-relaxed">
+    <ul className="font-mono text-[12px] text-[#b91c1c] list-disc pl-5 leading-[1.5]">
       {status.messages.map((m, i) => (
         <li key={i}>{m}</li>
       ))}
