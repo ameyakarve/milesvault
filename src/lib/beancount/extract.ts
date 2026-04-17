@@ -24,11 +24,49 @@ export type ExtractResult =
 
 export type ValidationResult = { ok: true } | { ok: false; diagnostics: Diagnostic[] }
 
+export interface Entry {
+  text: string
+  startLine: number
+  endLine: number
+}
+
 const BALANCE_TOLERANCE = 0.005
 
 const DATE_LED = /^\d{4}-\d{2}-\d{2}/
 const DIRECTIVE_KEYWORDS =
   /^(option|plugin|pushtag|poptag|include|commodity|balance|pad|open|close|note|document|price|event|query|custom)\b/
+
+export function isUnparseableLine(line: string): boolean {
+  if (line.trim() === '') return false
+  if (line.startsWith(' ') || line.startsWith('\t')) return false
+  if (line.trimStart().startsWith(';')) return false
+  if (DATE_LED.test(line) || DIRECTIVE_KEYWORDS.test(line)) return false
+  return true
+}
+
+export function splitEntries(source: string): Entry[] {
+  const lines = source.split('\n')
+  const entries: Entry[] = []
+  let start = -1
+  let buffer: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const startsNewEntry = DATE_LED.test(line) || DIRECTIVE_KEYWORDS.test(line)
+    if (startsNewEntry) {
+      if (start >= 0) {
+        entries.push({ text: buffer.join('\n'), startLine: start, endLine: i - 1 })
+      }
+      start = i
+      buffer = [line]
+    } else if (start >= 0) {
+      buffer.push(line)
+    }
+  }
+  if (start >= 0) {
+    entries.push({ text: buffer.join('\n'), startLine: start, endLine: lines.length - 1 })
+  }
+  return entries
+}
 
 type Weight = { n: number; ccy: string }
 

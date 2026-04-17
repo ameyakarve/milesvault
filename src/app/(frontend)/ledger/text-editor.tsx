@@ -3,13 +3,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import type { Transaction } from '@/durable/ledger-types'
+import { splitEntries } from '@/lib/beancount/extract'
 import { beancountExtensions } from './beancount-editor'
 
 const MAX_BLOCKS = 10
-const ID_COMMENT_RE = /^;\s*id:\s*(\d+)\s*$/i
 
 type Snapshot = { id: number; expected_updated_at: number; raw_text: string }
-type Block = { id: number | null; raw_text: string }
 type BatchPlan = {
   updates: { id: number; raw_text: string; expected_updated_at: number }[]
   creates: { raw_text: string }[]
@@ -24,69 +23,57 @@ type Status =
   | { kind: 'conflict'; ids: number[] }
 
 function composeBuffer(rows: Transaction[]): string {
-  return rows.map((r) => `; id: ${r.id}\n${r.raw_text.trim()}`).join('\n\n') + '\n'
+  return rows.map((r) => r.raw_text.trim()).join('\n\n') + '\n'
 }
 
-function parseBuffer(s: string): { blocks: Block[]; errors: string[] } {
-  const blocks: Block[] = []
-  const errors: string[] = []
-  const chunks = s.replace(/\r\n/g, '\n').split(/\n\s*\n+/)
-  for (const chunk of chunks) {
-    const trimmed = chunk.trim()
-    if (!trimmed) continue
-    const lines = trimmed.split('\n')
-    const m = ID_COMMENT_RE.exec(lines[0].trim())
-    if (m) {
-      const id = Number(m[1])
-      const body = lines.slice(1).join('\n').trim()
-      if (!body) {
-        errors.push(`Block for id ${id} has no body.`)
-        continue
-      }
-      blocks.push({ id, raw_text: body })
+function parseBuffer(s: string): string[] {
+  const normalized = s.replace(/\r\n/g, '\n')
+  return splitEntries(normalized).map((e) => e.text.trim())
+}
+
+function planBatch(snapshots: Snapshot[], entries: string[]): BatchPlan {
+  const plan: BatchPlan = { updates: [], creates: [], deletes: [] }
+  const usedSnapshotIds = new Set<number>()
+  const unmatchedEntries: string[] = []
+
+  const snapsByBody = new Map<string, Snapshot[]>()
+  for (const s of snapshots) {
+    const key = s.raw_text.trim()
+    const arr = snapsByBody.get(key) ?? []
+    arr.push(s)
+    snapsByBody.set(key, arr)
+  }
+
+  for (const text of entries) {
+    const candidates = snapsByBody.get(text) ?? []
+    const matched = candidates.find((c) => !usedSnapshotIds.has(c.id))
+    if (matched) {
+      usedSnapshotIds.add(matched.id)
     } else {
-      blocks.push({ id: null, raw_text: trimmed })
+      unmatchedEntries.push(text)
     }
   }
-  return { blocks, errors }
-}
 
-function planBatch(
-  snapshots: Snapshot[],
-  blocks: Block[],
-): { plan: BatchPlan; errors: string[] } {
-  const byId = new Map(snapshots.map((s) => [s.id, s]))
-  const seen = new Set<number>()
-  const plan: BatchPlan = { updates: [], creates: [], deletes: [] }
-  const errors: string[] = []
-  for (const b of blocks) {
-    if (b.id == null) {
-      plan.creates.push({ raw_text: b.raw_text })
-      continue
-    }
-    const snap = byId.get(b.id)
-    if (!snap) {
-      errors.push(`Unknown id ${b.id} in buffer. Remove \`; id: ${b.id}\` to create new.`)
-      continue
-    }
-    if (seen.has(b.id)) {
-      errors.push(`Duplicate id ${b.id} in buffer.`)
-      continue
-    }
-    seen.add(b.id)
-    if (b.raw_text.trim() === snap.raw_text.trim()) continue
+  const unmatchedSnapshots = snapshots.filter((s) => !usedSnapshotIds.has(s.id))
+  const pairCount = Math.min(unmatchedEntries.length, unmatchedSnapshots.length)
+
+  for (let i = 0; i < pairCount; i++) {
     plan.updates.push({
-      id: b.id,
-      raw_text: b.raw_text,
-      expected_updated_at: snap.expected_updated_at,
+      id: unmatchedSnapshots[i].id,
+      raw_text: unmatchedEntries[i],
+      expected_updated_at: unmatchedSnapshots[i].expected_updated_at,
     })
   }
-  for (const s of snapshots) {
-    if (!seen.has(s.id)) {
-      plan.deletes.push({ id: s.id, expected_updated_at: s.expected_updated_at })
-    }
+  for (let i = pairCount; i < unmatchedEntries.length; i++) {
+    plan.creates.push({ raw_text: unmatchedEntries[i] })
   }
-  return { plan, errors }
+  for (let i = pairCount; i < unmatchedSnapshots.length; i++) {
+    plan.deletes.push({
+      id: unmatchedSnapshots[i].id,
+      expected_updated_at: unmatchedSnapshots[i].expected_updated_at,
+    })
+  }
+  return plan
 }
 
 function planIsEmpty(p: BatchPlan): boolean {
@@ -137,23 +124,15 @@ export function TextEditor({
   const dirty = buffer !== baseline
 
   async function onSave() {
-    const { blocks, errors: parseErrors } = parseBuffer(buffer)
-    if (parseErrors.length > 0) {
-      setStatus({ kind: 'error', messages: parseErrors })
-      return
-    }
-    if (blocks.length > MAX_BLOCKS) {
+    const entries = parseBuffer(buffer)
+    if (entries.length > MAX_BLOCKS) {
       setStatus({
         kind: 'error',
-        messages: [`At most ${MAX_BLOCKS} transactions per save; buffer has ${blocks.length}.`],
+        messages: [`At most ${MAX_BLOCKS} transactions per save; buffer has ${entries.length}.`],
       })
       return
     }
-    const { plan, errors: planErrors } = planBatch(snapshots, blocks)
-    if (planErrors.length > 0) {
-      setStatus({ kind: 'error', messages: planErrors })
-      return
-    }
+    const plan = planBatch(snapshots, entries)
     if (planIsEmpty(plan)) {
       setStatus({ kind: 'error', messages: ['No changes.'] })
       return

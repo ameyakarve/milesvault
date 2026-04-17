@@ -24,6 +24,7 @@
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@ai-sdk/react": "^3.0.163",
     "@codemirror/autocomplete": "^6.20.1",
+    "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
     "@codemirror/lint": "^6.9.5",
     "@codemirror/state": "^6.6.0",
