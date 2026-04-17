@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import type { LedgerDO } from '@/durable/ledger-do'
+import { toTransaction, type LedgerDO } from '@/durable/ledger-do'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!stub) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
   const row = await stub.get(id)
   if (!row) return new NextResponse('not found', { status: 404 })
-  return NextResponse.json(row)
+  return NextResponse.json(toTransaction(row))
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -44,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!stub) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
   const row = await stub.update(id, body.raw_text)
   if (!row) return new NextResponse('not found', { status: 404 })
-  return NextResponse.json(row)
+  return NextResponse.json(toTransaction(row))
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

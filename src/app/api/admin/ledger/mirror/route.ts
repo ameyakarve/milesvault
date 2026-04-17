@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import type { LedgerDO, Transaction } from '@/durable/ledger-do'
+import type { LedgerDO, TransactionRow } from '@/durable/ledger-do'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(`prod export failed: ${exportRes.status}`, { status: 502 })
   }
 
-  const { rows } = (await exportRes.json()) as { email: string; rows: Transaction[] }
+  const { rows } = (await exportRes.json()) as { email: string; rows: TransactionRow[] }
 
   if (!env.LEDGER_DO) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
   const stub = env.LEDGER_DO.get(env.LEDGER_DO.idFromName(email))
