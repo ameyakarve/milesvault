@@ -1,4 +1,5 @@
 import { parse, BeancountParseError, type Posting, type Transaction as BeanTxn } from 'beancount'
+import { CREDIT_CARD_GROUPS } from './account-display'
 
 export interface ExtractedTxn {
   date: number
@@ -111,6 +112,24 @@ function checkBalance(
       lineOffset: headerOffset,
       message: `Unbalanced transaction: ${detail}.`,
     })
+  }
+}
+
+function checkCreditCardShape(
+  postings: readonly Posting[],
+  headerOffset: number,
+  diagnostics: Diagnostic[],
+): void {
+  for (const p of postings) {
+    const parts = p.account.split(':').filter(Boolean)
+    if (parts[0] !== 'Liabilities' || !parts[1] || !CREDIT_CARD_GROUPS.has(parts[1])) continue
+    if (parts.length !== 4) {
+      diagnostics.push({
+        kind: 'rule-violation',
+        lineOffset: headerOffset,
+        message: `Credit card account must be 'Liabilities:${parts[1]}:bank:card'; got '${p.account}'.`,
+      })
+    }
   }
 }
 
@@ -230,6 +249,7 @@ export function extractTxn(source: string): ExtractResult {
     })
   }
   checkBalance(t.postings, headerOffset, diagnostics)
+  checkCreditCardShape(t.postings, headerOffset, diagnostics)
 
   if (diagnostics.length > 0) return { ok: false, diagnostics }
   return { ok: true, value: extractFields(t) }

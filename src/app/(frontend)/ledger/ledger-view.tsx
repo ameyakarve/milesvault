@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { Transaction } from '@/durable/ledger-types'
+import { TxnCard } from './card-patterns'
 import { TextEditor } from './text-editor'
 
 type ViewMode = 'cards' | 'text'
@@ -336,7 +337,7 @@ function CardsList({
       className="flex-1 min-h-0 overflow-y-auto flex flex-col pb-16 border-t border-zinc-100"
     >
       {state.rows.map((row) => (
-        <TxnCard key={row.id} row={row} />
+        <TxnCard key={row.id} raw={row.raw_text} />
       ))}
       {hasMore ? (
         <div
@@ -370,16 +371,6 @@ function EmptyLedger() {
     <div className="py-16 text-center font-mono text-[13px] text-zinc-500">
       no transactions · draft one with the assistant →
     </div>
-  )
-}
-
-function TxnCard({ row }: { row: Transaction }) {
-  return (
-    <article className="border-b border-zinc-100 px-3 py-3 hover:bg-zinc-50 transition-colors">
-      <pre className="font-mono text-[12px] leading-[1.5] text-[#09090B] whitespace-pre-wrap m-0">
-        {row.raw_text}
-      </pre>
-    </article>
   )
 }
 
