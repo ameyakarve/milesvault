@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 const MAX_RAW_TEXT_BYTES = 4096
 const MAX_BATCH = 100
-const MAX_APPLY_ITEMS = 10
+const MAX_APPLY_ITEMS = 50
 
 async function getStub(email: string) {
   const { env } = await getCloudflareContext({ async: true })
