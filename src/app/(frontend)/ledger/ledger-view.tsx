@@ -1,40 +1,67 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { Transaction } from '@/durable/ledger-types'
 import { TextEditor } from './text-editor'
 
 type ViewMode = 'cards' | 'text'
 
-type FetchState =
-  | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'ok'; rows: Transaction[]; total: number }
-  | { kind: 'error'; message: string }
+const PAGE_SIZE = 50
+
+type FetchStatus = 'idle' | 'loading' | 'loadingMore' | 'error'
+
+type FetchState = {
+  status: FetchStatus
+  rows: Transaction[]
+  total: number
+  errorMsg: string | null
+}
+
+const INITIAL_STATE: FetchState = {
+  status: 'loading',
+  rows: [],
+  total: 0,
+  errorMsg: null,
+}
 
 export function LedgerView({ email }: { email: string }) {
   const [q, setQ] = useState('')
   const [mode, setMode] = useState<ViewMode>('cards')
-  const [state, setState] = useState<FetchState>({ kind: 'idle' })
+  const [state, setState] = useState<FetchState>(INITIAL_STATE)
   const [reloadNonce, setReloadNonce] = useState(0)
   const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   useEffect(() => {
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      setState({ kind: 'loading' })
-      fetch(`/api/ledger/transactions?q=${encodeURIComponent(q)}`, {
-        signal: controller.signal,
-        credentials: 'include',
-      })
+      setState({ status: 'loading', rows: [], total: 0, errorMsg: null })
+      fetch(
+        `/api/ledger/transactions?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=0`,
+        { signal: controller.signal, credentials: 'include' },
+      )
         .then(async (res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`)
           return (await res.json()) as { rows: Transaction[]; total: number }
         })
-        .then((data) => setState({ kind: 'ok', rows: data.rows, total: data.total }))
+        .then((data) =>
+          setState({
+            status: 'idle',
+            rows: data.rows,
+            total: data.total,
+            errorMsg: null,
+          }),
+        )
         .catch((e: unknown) => {
           if (e instanceof DOMException && e.name === 'AbortError') return
-          setState({ kind: 'error', message: (e as Error).message })
+          setState({
+            status: 'error',
+            rows: [],
+            total: 0,
+            errorMsg: (e as Error).message,
+          })
         })
     }, 250)
     return () => {
@@ -42,6 +69,37 @@ export function LedgerView({ email }: { email: string }) {
       clearTimeout(timer)
     }
   }, [q, reloadNonce])
+
+  const loadMore = useCallback(() => {
+    const s = stateRef.current
+    if (s.status !== 'idle') return
+    if (s.rows.length >= s.total) return
+    const offset = s.rows.length
+    setState({ ...s, status: 'loadingMore' })
+    fetch(
+      `/api/ledger/transactions?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=${offset}`,
+      { credentials: 'include' },
+    )
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return (await res.json()) as { rows: Transaction[]; total: number }
+      })
+      .then((data) =>
+        setState((prev) => ({
+          status: 'idle',
+          rows: [...prev.rows, ...data.rows],
+          total: data.total,
+          errorMsg: null,
+        })),
+      )
+      .catch((e: unknown) =>
+        setState((prev) => ({
+          ...prev,
+          status: 'error',
+          errorMsg: (e as Error).message,
+        })),
+      )
+  }, [q])
 
   return (
     <div className="min-h-screen bg-[#FAFAF9] text-[#09090B]">
@@ -54,6 +112,7 @@ export function LedgerView({ email }: { email: string }) {
           onMode={setMode}
           state={state}
           onReload={reload}
+          onLoadMore={loadMore}
         />
         <AssistantPane />
       </main>
@@ -111,6 +170,7 @@ function LedgerPane({
   onMode,
   state,
   onReload,
+  onLoadMore,
 }: {
   q: string
   onQ: (v: string) => void
@@ -118,14 +178,13 @@ function LedgerPane({
   onMode: (m: ViewMode) => void
   state: FetchState
   onReload: () => void
+  onLoadMore: () => void
 }) {
-  const count = state.kind === 'ok' ? state.rows.length : 0
-  const total = state.kind === 'ok' ? state.total : 0
   return (
     <section className="w-1/2 h-full overflow-hidden px-6 py-6 flex flex-col gap-4">
-      <LedgerHeader mode={mode} onMode={onMode} count={count} total={total} state={state} />
+      <LedgerHeader mode={mode} onMode={onMode} state={state} />
       <SearchBar q={q} onQ={onQ} />
-      <LedgerBody mode={mode} state={state} onReload={onReload} />
+      <LedgerBody mode={mode} state={state} onReload={onReload} onLoadMore={onLoadMore} />
     </section>
   )
 }
@@ -133,22 +192,18 @@ function LedgerPane({
 function LedgerHeader({
   mode,
   onMode,
-  count,
-  total,
   state,
 }: {
   mode: ViewMode
   onMode: (m: ViewMode) => void
-  count: number
-  total: number
   state: FetchState
 }) {
   const counter =
-    state.kind === 'loading'
+    state.status === 'loading'
       ? '…'
-      : state.kind === 'error'
+      : state.status === 'error' && state.rows.length === 0
         ? 'ERR'
-        : `${count} / ${total}`
+        : `${state.rows.length} / ${state.total}`
   return (
     <div className="flex items-center justify-between">
       <SegmentedToggle mode={mode} onMode={onMode} />
@@ -215,22 +270,24 @@ function LedgerBody({
   mode,
   state,
   onReload,
+  onLoadMore,
 }: {
   mode: ViewMode
   state: FetchState
   onReload: () => void
+  onLoadMore: () => void
 }) {
-  if (state.kind === 'error') {
-    return (
-      <div className="flex-1 min-h-0 py-16 text-center font-mono text-[13px] text-[#b91c1c]">
-        failed to load — {state.message}
-      </div>
-    )
-  }
-  if (state.kind === 'idle' || state.kind === 'loading') {
+  if (state.status === 'loading') {
     return (
       <div className="flex-1 min-h-0 py-16 text-center font-mono text-[13px] text-zinc-500">
         loading…
+      </div>
+    )
+  }
+  if (state.status === 'error' && state.rows.length === 0) {
+    return (
+      <div className="flex-1 min-h-0 py-16 text-center font-mono text-[13px] text-[#b91c1c]">
+        failed to load — {state.errorMsg}
       </div>
     )
   }
@@ -244,16 +301,66 @@ function LedgerBody({
       </div>
     )
   }
+  return <CardsList state={state} onLoadMore={onLoadMore} />
+}
+
+function CardsList({
+  state,
+  onLoadMore,
+}: {
+  state: FetchState
+  onLoadMore: () => void
+}) {
+  const hasMore = state.rows.length < state.total
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!hasMore) return
+    const sentinel = sentinelRef.current
+    const root = scrollRef.current
+    if (!sentinel || !root) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) onLoadMore()
+      },
+      { root, rootMargin: '200px 0px', threshold: 0 },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, onLoadMore, state.rows.length])
+
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto flex flex-col pb-16 border-t border-zinc-100">
+    <div
+      ref={scrollRef}
+      className="flex-1 min-h-0 overflow-y-auto flex flex-col pb-16 border-t border-zinc-100"
+    >
       {state.rows.map((row) => (
         <TxnCard key={row.id} row={row} />
       ))}
-      <div className="pt-6 text-center">
-        <span className="font-mono text-[11px] text-zinc-500 tabular-nums">
-          — end · {state.rows.length} / {state.total} —
-        </span>
-      </div>
+      {hasMore ? (
+        <div
+          ref={sentinelRef}
+          className="pt-6 text-center font-mono text-[11px] text-zinc-500 tabular-nums"
+        >
+          {state.status === 'loadingMore'
+            ? 'loading more…'
+            : state.status === 'error'
+              ? `failed — ${state.errorMsg} · `
+              : ''}
+          {state.status === 'error' ? (
+            <button onClick={onLoadMore} className="underline hover:text-[#09090B]">
+              retry
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="pt-6 text-center">
+          <span className="font-mono text-[11px] text-zinc-500 tabular-nums">
+            — end · {state.rows.length} / {state.total} —
+          </span>
+        </div>
+      )}
     </div>
   )
 }
