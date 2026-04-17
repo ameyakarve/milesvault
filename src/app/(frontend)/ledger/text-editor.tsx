@@ -6,7 +6,6 @@ import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
 import { beancountExtensions } from './beancount-editor'
 
-const MAX_LOAD_ROWS = 10
 const MAX_SAVE_ENTRIES = 50
 
 type Snapshot = { id: number; expected_updated_at: number; raw_text: string }
@@ -86,11 +85,9 @@ type BatchConflictEntry = { section: string; index: number; id: number }
 
 export function TextEditor({
   rows,
-  total,
   onReload,
 }: {
   rows: Transaction[]
-  total: number
   onReload: () => void
 }) {
   const snapshots = useMemo<Snapshot[]>(
@@ -112,15 +109,6 @@ export function TextEditor({
     setBuffer(fresh)
     setStatus({ kind: 'idle' })
   }, [rows])
-
-  if (total > MAX_LOAD_ROWS) {
-    return (
-      <div className="py-16 text-center font-mono text-[13px] text-zinc-500">
-        text mode supports up to {MAX_LOAD_ROWS} transactions per edit — current match: {total}.
-        narrow the search to continue.
-      </div>
-    )
-  }
 
   const dirty = buffer !== baseline
 
