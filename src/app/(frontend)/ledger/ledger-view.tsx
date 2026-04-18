@@ -284,37 +284,26 @@ function LedgerBody({
       </div>
     )
   }
-  if (mode === 'text') {
-    return <TextEditor rows={state.rows} onReload={onReload} />
-  }
-  if (state.rows.length === 0) {
+  if (mode !== 'text' && state.rows.length === 0) {
     return (
       <div className="flex-1 min-h-0">
         <EmptyLedger />
       </div>
     )
   }
-  return <CardsList state={state} page={page} onPage={onPage} />
-}
-
-function CardsList({
-  state,
-  page,
-  onPage,
-}: {
-  state: FetchState
-  page: number
-  onPage: (p: number) => void
-}) {
   const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <PageControls page={page} totalPages={totalPages} onPage={onPage} position="top" />
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        {state.rows.map((row) => (
-          <TxnCard key={row.id} raw={row.raw_text} />
-        ))}
-      </div>
+      {mode === 'text' ? (
+        <TextEditor rows={state.rows} onReload={onReload} />
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+          {state.rows.map((row) => (
+            <TxnCard key={row.id} raw={row.raw_text} />
+          ))}
+        </div>
+      )}
       <PageControls page={page} totalPages={totalPages} onPage={onPage} position="bottom" />
     </div>
   )
