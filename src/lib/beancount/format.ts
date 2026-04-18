@@ -1,41 +1,46 @@
-type State = { inTransaction: boolean; lines: string[] }
-
-const DATE = /^\d{4}-\d{2}-\d{2}/
-const AMOUNT_ALIGNMENT_COLUMN = 60
-
-const POSTING_LINE =
-  /^[ \t]+(?<account>(?:[*!]\s+)?[^; \t\n](?:(?!\s{2})[^;\t\n])+)[ \t]+(?<prefix>[^;]*?)(?<amount>[+-]?[.,0-9]+)(?<suffix>.*)$/
+import { splitEntries } from './extract'
 
 export function format(text: string): string {
-  const state: State = { inTransaction: false, lines: [] }
-  for (const line of text.split('\n')) {
-    state.lines.push(formatLine(line, state))
+  const lines = text.split('\n')
+  const entryEnd = new Map<number, number>()
+  for (const e of splitEntries(text)) entryEnd.set(e.startLine, e.endLine)
+
+  const out: string[] = new Array(lines.length)
+  for (let i = 0; i < lines.length; i++) {
+    const end = entryEnd.get(i)
+    if (end === undefined) {
+      out[i] = lines[i]
+      continue
+    }
+    out[i] = lines[i]
+    for (let j = i + 1; j <= end; j++) out[j] = formatPostingLine(lines[j])
+    i = end
   }
-  return state.lines.join('\n')
+  return out.join('\n')
 }
 
-function space(length: number): string {
-  return ' '.repeat(Math.max(0, length))
+function space(length: number) {
+  return ' '.repeat(length)
 }
 
-function formatLine(line: string, state: State): string {
-  if (DATE.test(line) || /^[~=]/.test(line)) {
-    state.inTransaction = true
-    return line
+// https://ledger-cli.org/doc/ledger3.html#Journal-Format
+function formatPostingLine(line: string) {
+  const amountAlignmentColumn = 52
+  const fullMatch = line.match(
+    /^[ \t]+(?<account>(?:[*!]\s+)?[^; \t\n](?:(?!\s{2})[^;\t\n])+)[ \t]+(?<prefix>[^;]*?)(?<amount>[+-]?[.,0-9]+)(?<suffix>.*)$/,
+  )
+  if (fullMatch) {
+    const { account, prefix, amount, suffix } = fullMatch.groups!
+    if (account.length + prefix.length + amount.length <= amountAlignmentColumn - 6) {
+      return (
+        space(4) +
+        account +
+        space(amountAlignmentColumn - 4 - account.length - prefix.length - amount.length) +
+        prefix +
+        amount +
+        suffix
+      )
+    }
   }
-
-  if (line.trim() === '' || /^[^ \t]/.test(line)) {
-    state.inTransaction = false
-  }
-
-  if (!state.inTransaction) return line
-
-  const m = line.match(POSTING_LINE)
-  if (!m?.groups) return line
-
-  const { account, prefix, amount, suffix } = m.groups
-  if (account.length + prefix.length + amount.length > AMOUNT_ALIGNMENT_COLUMN - 6) return line
-
-  const padding = AMOUNT_ALIGNMENT_COLUMN - 4 - account.length - prefix.length - amount.length
-  return space(4) + account + space(padding) + prefix + amount + suffix
+  return line
 }
