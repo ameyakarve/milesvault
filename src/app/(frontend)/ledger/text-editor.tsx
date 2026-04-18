@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
+import { format } from '@/lib/beancount/format'
 import { beancountExtensions } from './beancount-editor'
 
 const MAX_SAVE_ENTRIES = 50
@@ -113,7 +114,9 @@ export function TextEditor({
   const dirty = buffer !== baseline
 
   async function onSave() {
-    const entries = parseBuffer(buffer)
+    const formatted = format(buffer)
+    if (formatted !== buffer) setBuffer(formatted)
+    const entries = parseBuffer(formatted)
     if (entries.length > MAX_SAVE_ENTRIES) {
       setStatus({
         kind: 'error',
