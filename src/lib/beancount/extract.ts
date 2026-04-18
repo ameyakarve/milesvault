@@ -117,8 +117,16 @@ function checkBalance(
 
 const ACCOUNT_SEGMENT = /^[A-Z][A-Za-z0-9-]*$/
 
+function findPostingLine(lines: readonly string[], account: string, headerOffset: number): number {
+  for (let i = headerOffset + 1; i < lines.length; i++) {
+    if (lines[i].includes(account)) return i
+  }
+  return headerOffset
+}
+
 function checkAccountSegments(
   postings: readonly Posting[],
+  lines: readonly string[],
   headerOffset: number,
   diagnostics: Diagnostic[],
 ): void {
@@ -128,7 +136,7 @@ function checkAccountSegments(
     if (bad !== undefined) {
       diagnostics.push({
         kind: 'rule-violation',
-        lineOffset: headerOffset,
+        lineOffset: findPostingLine(lines, p.account, headerOffset),
         message: `Invalid account segment '${bad}' in '${p.account}'; segments must match [A-Z][A-Za-z0-9-]*.`,
       })
     }
@@ -268,7 +276,8 @@ export function extractTxn(source: string): ExtractResult {
       message: `Date year must be >= 1900; got ${t.date.year}.`,
     })
   }
-  checkAccountSegments(t.postings, headerOffset, diagnostics)
+  const lines = trimmed.split('\n')
+  checkAccountSegments(t.postings, lines, headerOffset, diagnostics)
   checkBalance(t.postings, headerOffset, diagnostics)
   checkCreditCardShape(t.postings, headerOffset, diagnostics)
 
