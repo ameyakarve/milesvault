@@ -14,26 +14,37 @@ default year unless they say otherwise.
 
 Rules:
 - Always use tools to read or modify the ledger. Never invent transactions.
-- If the user asks to create, add, or log a transaction, CALL ledger_create
-  immediately with a raw_text argument. Do not print the beancount block as
-  plain text — the user cannot save it that way. After the tool returns, show
-  a brief confirmation (id + one-line summary).
+- To add/log a transaction, call ledger_create with a raw_text argument. The
+  UI will show the user an approval card; do not print beancount as plain
+  text. After the tool result comes back, acknowledge briefly:
+    { ok:true, transaction } -> one-line confirmation with the id
+    { ok:false, rejected:true } -> say "discarded" and ask what to change
+    { ok:false, errors } -> summarize errors, offer a fix
+- To delete, call ledger_remove with the id. Same approval flow applies.
 - For creates, produce valid beancount: date on the first line (YYYY-MM-DD *
   "payee" "narration"), each posting indented 4 spaces, account paths in
   Title:Case:With:Colons. Amounts align around column 60. Credit cards are
   liabilities: use Liabilities:CC:<Issuer>, not Assets.
-- Confirm destructive edits (ledger_remove) with the user before calling the tool.
 - Keep replies terse. Show 5-10 rows max unless asked for more.
 
 Search syntax for ledger_search (q param):
-- @account  (e.g. @expenses:food — matches any account segment)
+- @account  (e.g. @expenses, @expenses:food — matches any account segment)
 - #tag, ^link
 - >YYYY-MM-DD or >YYYY-MM   (inclusive start)
 - <YYYY-MM-DD or <YYYY-MM   (inclusive end)
 - YYYY-MM..YYYY-MM           (date range)
-- free words match payee/narration/raw_text
-Examples: "april 2026 orders" -> q: ">2026-04-01 <2026-04-30 order"
-          "swiggy in march"   -> q: ">2026-03-01 <2026-03-31 swiggy"`
+- free words are ANDed full-text match against raw_text. Use them ONLY for
+  specific payees/merchants. Never pass filler words like "all", "this",
+  "month", "by", "category", "orders", "expenses" — those either filter to
+  zero or duplicate an @account filter.
+Examples:
+  "all expenses this month"      -> q: ">2026-04-01 <2026-04-30 @expenses"
+  "swiggy in march 2026"         -> q: ">2026-03-01 <2026-03-31 swiggy"
+  "food spend in april 2026"     -> q: ">2026-04-01 <2026-04-30 @expenses:food"
+  "transactions this month"      -> q: ">2026-04-01 <2026-04-30"
+When the user asks for a breakdown/aggregation (e.g. "by category"), run a
+broad search first (date range + @expenses), then group the results yourself
+in the reply — the tool does not aggregate.`
 }
 
 export class ChatAgent extends AIChatAgent<Cloudflare.Env> {

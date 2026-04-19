@@ -47,27 +47,13 @@ export function buildLedgerTools(env: Cloudflare.Env, email: string): ToolSet {
     }),
     ledger_create: tool({
       description:
-        'Create a single transaction from a beancount raw_text block. Returns the created transaction on success, or validation errors.',
+        'Propose a single transaction from a beancount raw_text block. The user must approve in the UI before it is saved. Do not treat a tool call as a completed save — wait for the result.',
       inputSchema: z.object({ raw_text: z.string().min(1) }),
-      execute: async ({ raw_text }) => {
-        try {
-          return await client.create(raw_text)
-        } catch (e) {
-          return formatError(e)
-        }
-      },
     }),
     ledger_remove: tool({
-      description: 'Delete a transaction by id. Returns { ok: true } if deleted, else not found.',
+      description:
+        'Propose deletion of a transaction by id. The user must approve in the UI before it is deleted.',
       inputSchema: z.object({ id: z.number().int().positive() }),
-      execute: async ({ id }) => {
-        try {
-          const removed = await client.remove(id)
-          return removed ? { ok: true } : { ok: false, errors: ['not found'] }
-        } catch (e) {
-          return formatError(e)
-        }
-      },
     }),
   }
 }
