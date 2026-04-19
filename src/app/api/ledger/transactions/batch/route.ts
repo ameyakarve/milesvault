@@ -1,26 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { getCloudflareContext } from '@opennextjs/cloudflare'
-import type { LedgerDO } from '@/durable/ledger-do'
 import {
-  toTransaction,
-  type BatchUpdate,
-  type BatchCreate,
-  type BatchDelete,
-} from '@/durable/ledger-types'
+  LedgerBindingError,
+  LedgerInputError,
+  MAX_RAW_TEXT_BYTES,
+  getLedgerClient,
+} from '@/lib/ledger-api'
+import type { BatchCreate, BatchDelete, BatchUpdate } from '@/durable/ledger-types'
 
 export const dynamic = 'force-dynamic'
-
-const MAX_RAW_TEXT_BYTES = 4096
-const MAX_BATCH = 100
-const MAX_APPLY_ITEMS = 50
-
-async function getStub(email: string) {
-  const { env } = await getCloudflareContext({ async: true })
-  const ns = env.LEDGER_DO as DurableObjectNamespace<LedgerDO> | undefined
-  if (!ns) return null
-  return ns.get(ns.idFromName(email))
-}
 
 export async function POST(req: NextRequest) {
   const session = await auth()
@@ -29,42 +17,23 @@ export async function POST(req: NextRequest) {
   if (!body || !Array.isArray(body.items)) {
     return NextResponse.json({ errors: ['invalid body'] }, { status: 400 })
   }
-  const items = body.items
-  if (items.length === 0) {
-    return NextResponse.json({ errors: ['items must be non-empty'] }, { status: 400 })
-  }
-  if (items.length > MAX_BATCH) {
-    return NextResponse.json(
-      { errors: [`items exceeds max of ${MAX_BATCH}.`] },
-      { status: 400 },
-    )
-  }
-  const enc = new TextEncoder()
-  for (let i = 0; i < items.length; i++) {
-    const v = items[i]
-    if (typeof v !== 'string') {
-      return NextResponse.json(
-        { errors: [`items[${i}] must be a string.`] },
-        { status: 400 },
-      )
+
+  try {
+    const client = await getLedgerClient(session.user.email)
+    const result = await client.createBatch(body.items as string[])
+    if ('transactions' in result) {
+      return NextResponse.json({ transactions: result.transactions }, { status: 201 })
     }
-    if (enc.encode(v).byteLength > MAX_RAW_TEXT_BYTES) {
-      return NextResponse.json(
-        { errors: [`items[${i}] exceeds ${MAX_RAW_TEXT_BYTES} bytes.`] },
-        { status: 400 },
-      )
+    return NextResponse.json({ errors: result.errors }, { status: 400 })
+  } catch (e) {
+    if (e instanceof LedgerInputError) {
+      return NextResponse.json({ errors: e.errors }, { status: 400 })
     }
+    if (e instanceof LedgerBindingError) {
+      return new NextResponse(e.message, { status: 500 })
+    }
+    throw e
   }
-  const stub = await getStub(session.user.email)
-  if (!stub) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
-  const result = await stub.createBatch(items as string[])
-  if ('rows' in result) {
-    return NextResponse.json(
-      { transactions: result.rows.map(toTransaction) },
-      { status: 201 },
-    )
-  }
-  return NextResponse.json({ errors: result.errors }, { status: 400 })
 }
 
 export async function PUT(req: NextRequest) {
@@ -167,13 +136,6 @@ export async function PUT(req: NextRequest) {
     }
   }
 
-  const total = parsedUpdates.length + parsedCreates.length + parsedDeletes.length
-  if (total === 0 && shapeErrors.length === 0) {
-    shapeErrors.push('At least one of updates/creates/deletes must be non-empty.')
-  }
-  if (total > MAX_APPLY_ITEMS) {
-    shapeErrors.push(`Total items exceeds max of ${MAX_APPLY_ITEMS}.`)
-  }
   if (shapeErrors.length > 0) {
     return NextResponse.json(
       { errors: [{ section: 'request', index: -1, errors: shapeErrors }] },
@@ -181,25 +143,37 @@ export async function PUT(req: NextRequest) {
     )
   }
 
-  const stub = await getStub(session.user.email)
-  if (!stub) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
-  const result = await stub.applyBatch({
-    updates: parsedUpdates,
-    creates: parsedCreates,
-    deletes: parsedDeletes,
-  })
-  if ('updated' in result) {
-    return NextResponse.json(
-      {
-        updated: result.updated.map(toTransaction),
-        created: result.created.map(toTransaction),
-        deleted: result.deleted,
-      },
-      { status: 200 },
-    )
+  try {
+    const client = await getLedgerClient(session.user.email)
+    const result = await client.applyBatch({
+      updates: parsedUpdates,
+      creates: parsedCreates,
+      deletes: parsedDeletes,
+    })
+    if ('updated' in result) {
+      return NextResponse.json(
+        {
+          updated: result.updated,
+          created: result.created,
+          deleted: result.deleted,
+        },
+        { status: 200 },
+      )
+    }
+    if ('conflicts' in result) {
+      return NextResponse.json({ conflicts: result.conflicts }, { status: 409 })
+    }
+    return NextResponse.json({ errors: result.errors }, { status: 400 })
+  } catch (e) {
+    if (e instanceof LedgerInputError) {
+      return NextResponse.json(
+        { errors: [{ section: 'request', index: -1, errors: e.errors }] },
+        { status: 400 },
+      )
+    }
+    if (e instanceof LedgerBindingError) {
+      return new NextResponse(e.message, { status: 500 })
+    }
+    throw e
   }
-  if (result.kind === 'conflict') {
-    return NextResponse.json({ conflicts: result.conflicts }, { status: 409 })
-  }
-  return NextResponse.json({ errors: result.errors }, { status: 400 })
 }
