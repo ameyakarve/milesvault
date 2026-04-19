@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import type { Transaction } from '@/durable/ledger-types'
 import { TxnCard } from './card-patterns'
 import { TextEditor } from './text-editor'
+import { LedgerAssistant } from '../chat/chat'
 
 type ViewMode = 'cards' | 'text'
 
@@ -88,7 +89,7 @@ export function LedgerView({ email }: { email: string }) {
           onPage={setPage}
           onReload={reload}
         />
-        <AssistantPane />
+        <LedgerAssistant email={email} />
       </main>
     </div>
   )
@@ -363,39 +364,3 @@ function EmptyLedger() {
   )
 }
 
-function AssistantPane() {
-  return (
-    <aside className="w-1/2 h-full bg-[#F4F4F5] border-l border-zinc-200 flex flex-col relative">
-      <header className="h-12 px-6 flex items-center justify-between border-b border-zinc-200">
-        <h2 className="font-sans text-[13px] font-medium text-[#09090B]">Assistant</h2>
-        <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-[0.08em]">
-          CLERK · ALWAYS ON
-        </span>
-      </header>
-      <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6 pb-24">
-        <p className="font-mono text-[13px] text-zinc-500">
-          assistant panel — to be wired up next.
-        </p>
-      </div>
-      <Composer />
-    </aside>
-  )
-}
-
-function Composer() {
-  return (
-    <div className="absolute bottom-0 left-0 right-0 px-6 py-4 bg-[#F4F4F5] border-t border-zinc-200">
-      <div className="flex items-center gap-3">
-        <span className="text-zinc-600 font-mono text-[13px]">›</span>
-        <input
-          type="text"
-          placeholder="ask, or draft a new transaction…"
-          className="flex-1 bg-transparent border-none focus:ring-0 font-mono text-[13px] text-[#09090B] placeholder-zinc-400 px-0 py-1"
-        />
-        <span className="font-mono text-[10px] text-zinc-500 shrink-0 tracking-[0.08em] uppercase">
-          ⏎ send
-        </span>
-      </div>
-    </div>
-  )
-}
