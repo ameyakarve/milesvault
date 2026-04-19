@@ -62,8 +62,7 @@ export class LedgerBindingError extends Error {
   }
 }
 
-export async function getLedgerClient(email: string): Promise<LedgerClient> {
-  const { env } = await getCloudflareContext({ async: true })
+export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerClient {
   const ns = env.LEDGER_DO as DurableObjectNamespace<LedgerDO> | undefined
   if (!ns) throw new LedgerBindingError()
   const stub = ns.get(ns.idFromName(email))
@@ -145,6 +144,11 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       return result
     },
   }
+}
+
+export async function getLedgerClient(email: string): Promise<LedgerClient> {
+  const { env } = await getCloudflareContext({ async: true })
+  return createLedgerClient(env as Cloudflare.Env, email)
 }
 
 function clampInt(n: number, min: number, max: number, fallback: number): number {
