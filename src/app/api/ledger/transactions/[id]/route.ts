@@ -1,17 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
+import { LedgerBindingError, LedgerInputError, getLedgerClient } from '@/lib/ledger-api'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { LedgerDO } from '@/durable/ledger-do'
 import { toTransaction } from '@/durable/ledger-types'
 
 export const dynamic = 'force-dynamic'
-
-async function getStub(email: string) {
-  const { env } = await getCloudflareContext({ async: true })
-  const ns = env.LEDGER_DO as DurableObjectNamespace<LedgerDO> | undefined
-  if (!ns) return null
-  return ns.get(ns.idFromName(email))
-}
 
 function parseId(raw: string): number | null {
   const n = Number(raw)
@@ -24,11 +18,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id: rawId } = await params
   const id = parseId(rawId)
   if (id === null) return new NextResponse('invalid id', { status: 400 })
-  const stub = await getStub(session.user.email)
-  if (!stub) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
-  const row = await stub.get(id)
-  if (!row) return new NextResponse('not found', { status: 404 })
-  return NextResponse.json(toTransaction(row))
+
+  try {
+    const client = await getLedgerClient(session.user.email)
+    const txn = await client.get(id)
+    if (!txn) return new NextResponse('not found', { status: 404 })
+    return NextResponse.json(txn)
+  } catch (e) {
+    if (e instanceof LedgerInputError) {
+      return NextResponse.json({ errors: e.errors }, { status: 400 })
+    }
+    if (e instanceof LedgerBindingError) {
+      return new NextResponse(e.message, { status: 500 })
+    }
+    throw e
+  }
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -41,8 +45,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!body || typeof body.raw_text !== 'string') {
     return new NextResponse('invalid body', { status: 400 })
   }
-  const stub = await getStub(session.user.email)
-  if (!stub) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
+
+  const { env } = await getCloudflareContext({ async: true })
+  const ns = env.LEDGER_DO as DurableObjectNamespace<LedgerDO> | undefined
+  if (!ns) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
+  const stub = ns.get(ns.idFromName(session.user.email))
   const row = await stub.update(id, body.raw_text)
   if (!row) return new NextResponse('not found', { status: 404 })
   return NextResponse.json(toTransaction(row))
@@ -54,9 +61,19 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { id: rawId } = await params
   const id = parseId(rawId)
   if (id === null) return new NextResponse('invalid id', { status: 400 })
-  const stub = await getStub(session.user.email)
-  if (!stub) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
-  const ok = await stub.remove(id)
-  if (!ok) return new NextResponse('not found', { status: 404 })
-  return new NextResponse(null, { status: 204 })
+
+  try {
+    const client = await getLedgerClient(session.user.email)
+    const ok = await client.remove(id)
+    if (!ok) return new NextResponse('not found', { status: 404 })
+    return new NextResponse(null, { status: 204 })
+  } catch (e) {
+    if (e instanceof LedgerInputError) {
+      return NextResponse.json({ errors: e.errors }, { status: 400 })
+    }
+    if (e instanceof LedgerBindingError) {
+      return new NextResponse(e.message, { status: 500 })
+    }
+    throw e
+  }
 }
