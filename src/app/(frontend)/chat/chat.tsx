@@ -17,8 +17,9 @@ export function Chat({ email }: { email: string }) {
     cacheTtl: 4 * 60 * 1000,
   })
 
-  const { messages, sendMessage, status, clearHistory } = useAgentChat({ agent })
+  const { messages, sendMessage, status, clearHistory, error } = useAgentChat({ agent })
   const [draft, setDraft] = useState('')
+  const busy = status === 'streaming' || status === 'submitted'
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,14 +33,22 @@ export function Chat({ email }: { email: string }) {
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-6">
       <header className="flex items-center justify-between border-b border-slate-200 pb-3">
         <h1 className="font-serif text-xl">Ledger Chat</h1>
-        <button
-          type="button"
-          onClick={() => clearHistory()}
-          className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
-        >
-          Clear
-        </button>
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <span>status: {status}</span>
+          <button
+            type="button"
+            onClick={() => clearHistory()}
+            className="rounded border border-slate-300 px-2 py-1 text-slate-600 hover:bg-slate-100"
+          >
+            Clear
+          </button>
+        </div>
       </header>
+      {error ? (
+        <div className="mt-2 rounded bg-red-50 p-2 text-xs text-red-700">
+          {error.message}
+        </div>
+      ) : null}
 
       <div className="flex-1 space-y-4 overflow-y-auto py-4">
         {messages.length === 0 ? (
@@ -93,13 +102,13 @@ export function Chat({ email }: { email: string }) {
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          disabled={status === 'streaming' || status === 'submitted'}
+          disabled={busy}
           placeholder="Find my Swiggy orders this month..."
           className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
         />
         <button
           type="submit"
-          disabled={!draft.trim() || status === 'streaming' || status === 'submitted'}
+          disabled={!draft.trim() || busy}
           className="rounded bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:bg-slate-400"
         >
           Send
