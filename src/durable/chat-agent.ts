@@ -103,14 +103,27 @@ export class ChatAgent extends AIChatAgent<Cloudflare.Env> {
       middleware: kimiMiddleware,
     })
 
+    const modelMessages = await convertToModelMessages(this.messages)
+    console.log('[chat] msgs', JSON.stringify(modelMessages).slice(0, 800))
+    console.log('[chat] tools', Object.keys(tools).join(','))
+
     const result = streamText({
       model: wrappedModel,
       system: buildSystemPrompt(),
-      messages: await convertToModelMessages(this.messages),
+      messages: modelMessages,
       tools,
       abortSignal: options?.abortSignal,
+      onError: (e) => {
+        console.error('[chat] streamText onError', e)
+      },
     })
 
-    return result.toUIMessageStreamResponse()
+    return result.toUIMessageStreamResponse({
+      onError: (e) => {
+        const msg = e instanceof Error ? `${e.message}\n${e.stack ?? ''}` : String(e)
+        console.error('[chat] toUIMessageStreamResponse onError', msg)
+        return msg
+      },
+    })
   }
 }
