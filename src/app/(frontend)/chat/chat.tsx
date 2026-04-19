@@ -4,7 +4,13 @@ import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useEffect, useState } from 'react'
 
-export function LedgerAssistant({ email }: { email: string }) {
+type ToolResultFn = (args: {
+  tool: string
+  toolCallId: string
+  output: unknown
+}) => void | Promise<void>
+
+export function LedgerAssistant({ email, onMutate }: { email: string; onMutate?: () => void }) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) {
@@ -12,10 +18,10 @@ export function LedgerAssistant({ email }: { email: string }) {
       <aside className="w-1/2 h-full bg-[#F4F4F5] border-l border-zinc-200 flex flex-col relative" />
     )
   }
-  return <LedgerAssistantInner email={email} />
+  return <LedgerAssistantInner email={email} onMutate={onMutate} />
 }
 
-function LedgerAssistantInner({ email }: { email: string }) {
+function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: () => void }) {
   const agent = useAgent({
     agent: 'chat-agent',
     name: email,
@@ -30,7 +36,9 @@ function LedgerAssistantInner({ email }: { email: string }) {
     cacheTtl: 4 * 60 * 1000,
   })
 
-  const { messages, sendMessage, status, clearHistory, error } = useAgentChat({ agent })
+  const { messages, sendMessage, status, clearHistory, error, addToolResult } = useAgentChat({
+    agent,
+  })
   const [draft, setDraft] = useState('')
   const busy = status === 'streaming' || status === 'submitted'
 
@@ -72,7 +80,14 @@ function LedgerAssistantInner({ email }: { email: string }) {
             ask about your ledger, or draft a new transaction…
           </p>
         ) : (
-          messages.map((m) => <ChatTurn key={m.id} message={m} />)
+          messages.map((m) => (
+            <ChatTurn
+              key={m.id}
+              message={m as ChatMessage}
+              addToolResult={addToolResult as ToolResultFn}
+              onMutate={onMutate}
+            />
+          ))
         )}
       </div>
 
@@ -103,28 +118,51 @@ function LedgerAssistantInner({ email }: { email: string }) {
   )
 }
 
-function ChatTurn({ message }: { message: { role: string; parts: Array<unknown> } }) {
-  const isUser = message.role === 'user'
+type ChatMessage = { id: string; role: string; parts: MessagePart[] }
+
+type MessagePart =
+  | { type: 'text'; text: string }
+  | {
+      type: `tool-${string}`
+      toolCallId: string
+      state: 'input-streaming' | 'input-available' | 'output-available' | 'output-error'
+      input?: unknown
+      output?: unknown
+    }
+  | { type: string }
+
+function ChatTurn({
+  message,
+  addToolResult,
+  onMutate,
+}: {
+  message: ChatMessage
+  addToolResult: ToolResultFn
+  onMutate?: () => void
+}) {
   return (
     <div className="flex flex-col gap-2">
       <div className="font-mono text-[10px] text-zinc-500 uppercase tracking-[0.08em]">
         {message.role}
       </div>
-      <div className={isUser ? 'text-[#09090B]' : 'text-zinc-700'}>
+      <div className={message.role === 'user' ? 'text-[#09090B]' : 'text-zinc-700'}>
         {message.parts.map((part, i) => (
-          <PartView key={i} part={part as MessagePart} />
+          <PartView key={i} part={part} addToolResult={addToolResult} onMutate={onMutate} />
         ))}
       </div>
     </div>
   )
 }
 
-type MessagePart =
-  | { type: 'text'; text: string }
-  | { type: `tool-${string}`; input?: unknown; output?: unknown }
-  | { type: string }
-
-function PartView({ part }: { part: MessagePart }) {
+function PartView({
+  part,
+  addToolResult,
+  onMutate,
+}: {
+  part: MessagePart
+  addToolResult: ToolResultFn
+  onMutate?: () => void
+}) {
   if (part.type === 'text') {
     return (
       <div className="whitespace-pre-wrap font-sans text-[13px] leading-relaxed">
@@ -132,9 +170,32 @@ function PartView({ part }: { part: MessagePart }) {
       </div>
     )
   }
+
   if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
-    const tp = part as { type: string; input?: unknown; output?: unknown }
+    const tp = part as Extract<MessagePart, { type: `tool-${string}` }>
     const toolName = tp.type.replace(/^tool-/, '')
+
+    if (toolName === 'ledger_create' && tp.state === 'input-available') {
+      return (
+        <CreateProposalCard
+          toolCallId={tp.toolCallId}
+          rawText={(tp.input as { raw_text?: string })?.raw_text ?? ''}
+          addToolResult={addToolResult}
+          onMutate={onMutate}
+        />
+      )
+    }
+    if (toolName === 'ledger_remove' && tp.state === 'input-available') {
+      return (
+        <RemoveProposalCard
+          toolCallId={tp.toolCallId}
+          id={(tp.input as { id?: number })?.id ?? 0}
+          addToolResult={addToolResult}
+          onMutate={onMutate}
+        />
+      )
+    }
+
     return (
       <pre className="my-2 overflow-x-auto rounded border border-zinc-200 bg-white p-2 font-mono text-[11px] text-zinc-700">
         <div className="text-zinc-500">→ {toolName}</div>
@@ -148,4 +209,244 @@ function PartView({ part }: { part: MessagePart }) {
     )
   }
   return null
+}
+
+type ResolveState = 'idle' | 'working' | 'done' | 'error'
+
+function CreateProposalCard({
+  toolCallId,
+  rawText,
+  addToolResult,
+  onMutate,
+}: {
+  toolCallId: string
+  rawText: string
+  addToolResult: ToolResultFn
+  onMutate?: () => void
+}) {
+  const [state, setState] = useState<ResolveState>('idle')
+  const [msg, setMsg] = useState<string | null>(null)
+  const disabled = state === 'working' || state === 'done'
+
+  const onApprove = async () => {
+    setState('working')
+    setMsg(null)
+    try {
+      const res = await fetch('/api/ledger/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ raw_text: rawText }),
+      })
+      const body = await res.json()
+      if (!res.ok) {
+        const errs = (body as { errors?: string[] }).errors ?? [`HTTP ${res.status}`]
+        setState('error')
+        setMsg(errs.join('; '))
+        await addToolResult({
+          tool: 'ledger_create',
+          toolCallId,
+          output: { ok: false, errors: errs },
+        })
+        return
+      }
+      setState('done')
+      setMsg(`saved #${(body as { id: number }).id}`)
+      onMutate?.()
+      await addToolResult({
+        tool: 'ledger_create',
+        toolCallId,
+        output: { ok: true, transaction: body },
+      })
+    } catch (e) {
+      const errMsg = (e as Error).message
+      setState('error')
+      setMsg(errMsg)
+      await addToolResult({
+        tool: 'ledger_create',
+        toolCallId,
+        output: { ok: false, errors: [errMsg] },
+      })
+    }
+  }
+
+  const onReject = async () => {
+    setState('done')
+    setMsg('discarded')
+    await addToolResult({
+      tool: 'ledger_create',
+      toolCallId,
+      output: { ok: false, rejected: true },
+    })
+  }
+
+  return (
+    <ProposalShell
+      heading="Proposed transaction"
+      body={<BeancountBlock text={rawText} />}
+      state={state}
+      msg={msg}
+      disabled={disabled}
+      onApprove={onApprove}
+      onReject={onReject}
+    />
+  )
+}
+
+function RemoveProposalCard({
+  toolCallId,
+  id,
+  addToolResult,
+  onMutate,
+}: {
+  toolCallId: string
+  id: number
+  addToolResult: ToolResultFn
+  onMutate?: () => void
+}) {
+  const [state, setState] = useState<ResolveState>('idle')
+  const [msg, setMsg] = useState<string | null>(null)
+  const disabled = state === 'working' || state === 'done'
+
+  const onApprove = async () => {
+    setState('working')
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/ledger/transactions/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok && res.status !== 404) {
+        const txt = await res.text().catch(() => `HTTP ${res.status}`)
+        setState('error')
+        setMsg(txt)
+        await addToolResult({
+          tool: 'ledger_remove',
+          toolCallId,
+          output: { ok: false, errors: [txt] },
+        })
+        return
+      }
+      setState('done')
+      setMsg(`deleted #${id}`)
+      onMutate?.()
+      await addToolResult({
+        tool: 'ledger_remove',
+        toolCallId,
+        output: { ok: true, id },
+      })
+    } catch (e) {
+      const errMsg = (e as Error).message
+      setState('error')
+      setMsg(errMsg)
+      await addToolResult({
+        tool: 'ledger_remove',
+        toolCallId,
+        output: { ok: false, errors: [errMsg] },
+      })
+    }
+  }
+
+  const onReject = async () => {
+    setState('done')
+    setMsg('cancelled')
+    await addToolResult({
+      tool: 'ledger_remove',
+      toolCallId,
+      output: { ok: false, rejected: true },
+    })
+  }
+
+  return (
+    <ProposalShell
+      heading={`Delete transaction #${id}?`}
+      body={null}
+      state={state}
+      msg={msg}
+      disabled={disabled}
+      onApprove={onApprove}
+      onReject={onReject}
+      destructive
+    />
+  )
+}
+
+function ProposalShell({
+  heading,
+  body,
+  state,
+  msg,
+  disabled,
+  onApprove,
+  onReject,
+  destructive,
+}: {
+  heading: string
+  body: React.ReactNode
+  state: ResolveState
+  msg: string | null
+  disabled: boolean
+  onApprove: () => void
+  onReject: () => void
+  destructive?: boolean
+}) {
+  return (
+    <div className="my-2 rounded border border-zinc-200 bg-white overflow-hidden">
+      <div className="px-3 py-2 border-b border-zinc-100 font-mono text-[11px] text-zinc-500 uppercase tracking-[0.08em]">
+        {heading}
+      </div>
+      {body ? <div className="px-3 py-3">{body}</div> : null}
+      <div className="px-3 py-2 border-t border-zinc-100 flex items-center justify-between gap-2">
+        <span
+          className={`font-mono text-[11px] ${
+            state === 'error'
+              ? 'text-red-600'
+              : state === 'done'
+                ? 'text-zinc-500'
+                : 'text-zinc-400'
+          }`}
+        >
+          {msg ?? (state === 'working' ? 'saving…' : '')}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title="edit coming soon"
+            className="px-2 h-7 font-mono text-[11px] uppercase tracking-[0.08em] text-zinc-300 border border-zinc-200 rounded bg-white cursor-not-allowed"
+          >
+            edit
+          </button>
+          <button
+            type="button"
+            onClick={onReject}
+            disabled={disabled}
+            className="px-2 h-7 font-mono text-[11px] uppercase tracking-[0.08em] text-zinc-600 hover:text-[#09090B] border border-zinc-200 rounded bg-white disabled:text-zinc-300 disabled:cursor-not-allowed"
+          >
+            reject
+          </button>
+          <button
+            type="button"
+            onClick={onApprove}
+            disabled={disabled}
+            className={`px-2 h-7 font-mono text-[11px] uppercase tracking-[0.08em] rounded border disabled:opacity-50 disabled:cursor-not-allowed ${
+              destructive
+                ? 'text-white bg-red-600 border-red-600 hover:bg-red-700'
+                : 'text-white bg-[#09090B] border-[#09090B] hover:bg-zinc-800'
+            }`}
+          >
+            {destructive ? 'delete' : 'approve'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BeancountBlock({ text }: { text: string }) {
+  return (
+    <pre className="font-mono text-[12px] leading-relaxed text-[#09090B] whitespace-pre-wrap">
+      {text}
+    </pre>
+  )
 }

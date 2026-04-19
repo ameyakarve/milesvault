@@ -89,7 +89,7 @@ export function LedgerView({ email }: { email: string }) {
           onPage={setPage}
           onReload={reload}
         />
-        <LedgerAssistant email={email} />
+        <LedgerAssistant email={email} onMutate={reload} />
       </main>
     </div>
   )
