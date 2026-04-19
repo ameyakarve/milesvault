@@ -62,6 +62,19 @@ export class ChatAgent extends AIChatAgent<Cloudflare.Env> {
     _onFinish: unknown,
     options?: OnChatMessageOptions,
   ): Promise<Response | undefined> {
+    try {
+      return await this._onChatMessage(_onFinish, options)
+    } catch (e) {
+      const msg = e instanceof Error ? `${e.name}: ${e.message}\n${e.stack ?? ''}` : String(e)
+      console.error('[chat] top-level throw', msg)
+      throw e
+    }
+  }
+
+  async _onChatMessage(
+    _onFinish: unknown,
+    options?: OnChatMessageOptions,
+  ): Promise<Response | undefined> {
     const email = this.name
     if (!email || !email.includes('@')) {
       return new Response('ChatAgent instance must be keyed by user email', { status: 400 })
@@ -104,7 +117,11 @@ export class ChatAgent extends AIChatAgent<Cloudflare.Env> {
     })
 
     const modelMessages = await convertToModelMessages(this.messages)
-    console.log('[chat] msgs', JSON.stringify(modelMessages).slice(0, 800))
+    console.log('[chat] msgs-count', modelMessages.length)
+    for (let i = 0; i < modelMessages.length; i++) {
+      const m = modelMessages[i]
+      console.log(`[chat] msg[${i}] role=${m.role}`, JSON.stringify(m.content).slice(0, 500))
+    }
     console.log('[chat] tools', Object.keys(tools).join(','))
 
     const result = streamText({
