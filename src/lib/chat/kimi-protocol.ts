@@ -109,7 +109,7 @@ function parsePythonKwargs(src: string): Record<string, unknown> | null {
 
 function readPythonValue(src: string, start: number): { value: unknown; next: number } | null {
   const n = src.length
-  let i = start
+  const i = start
   if (i >= n) return null
   const ch = src[i]
   if (ch === '"' || ch === "'") {
