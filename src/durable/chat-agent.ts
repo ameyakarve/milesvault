@@ -1,7 +1,9 @@
 import { AIChatAgent, type OnChatMessageOptions } from '@cloudflare/ai-chat'
-import { convertToModelMessages, streamText } from 'ai'
+import { convertToModelMessages, streamText, wrapLanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { createToolMiddleware } from '@ai-sdk-tool/parser'
 import { buildLedgerTools } from '@/lib/chat/ledger-tools'
+import { kimiProtocol } from '@/lib/chat/kimi-protocol'
 
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10)
@@ -69,8 +71,24 @@ export class ChatAgent extends AIChatAgent<Cloudflare.Env> {
 
     const tools = buildLedgerTools(this.env, email)
 
-    const result = streamText({
+    const kimiMiddleware = createToolMiddleware({
+      protocol: kimiProtocol(),
+      toolSystemPromptTemplate: (toolList) =>
+        `You have access to the following tools. When you decide to call a tool, emit the call using Kimi's native tool-call tokens only (no python code blocks). Exact format per call:\n<|tool_calls_section_begin|><|tool_call_begin|>functions.<name>:0<|tool_call_argument_begin|>{"arg":"value"}<|tool_call_end|><|tool_calls_section_end|>\n\nAvailable tools:\n${toolList
+          .map(
+            (t) =>
+              `- ${t.name}: ${t.description ?? ''}\n  parameters: ${JSON.stringify(t.inputSchema)}`,
+          )
+          .join('\n')}`,
+    })
+
+    const wrappedModel = wrapLanguageModel({
       model: provider.chatModel(this.env.CHAT_MODEL),
+      middleware: kimiMiddleware,
+    })
+
+    const result = streamText({
+      model: wrappedModel,
       system: buildSystemPrompt(),
       messages: await convertToModelMessages(this.messages),
       tools,
