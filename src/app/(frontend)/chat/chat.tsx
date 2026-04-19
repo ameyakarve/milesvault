@@ -2,19 +2,27 @@
 
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { useState } from 'react'
-
-function buildTokenUrl(): string {
-  if (typeof window === 'undefined') return '/api/chat/session'
-  return new URL('/api/chat/session', window.location.origin).toString()
-}
+import { useEffect, useState } from 'react'
 
 export function LedgerAssistant({ email }: { email: string }) {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  if (!mounted) {
+    return (
+      <aside className="w-1/2 h-full bg-[#F4F4F5] border-l border-zinc-200 flex flex-col relative" />
+    )
+  }
+  return <LedgerAssistantInner email={email} />
+}
+
+function LedgerAssistantInner({ email }: { email: string }) {
   const agent = useAgent({
     agent: 'chat-agent',
     name: email,
     query: async () => {
-      const res = await fetch(buildTokenUrl(), { credentials: 'include' })
+      const res = await fetch(new URL('/api/chat/session', window.location.origin), {
+        credentials: 'include',
+      })
       if (!res.ok) throw new Error(`token ${res.status}`)
       const { token } = (await res.json()) as { token: string }
       return { token }
