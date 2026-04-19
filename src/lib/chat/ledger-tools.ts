@@ -4,6 +4,7 @@ import {
   createLedgerClient,
   LedgerBindingError,
   LedgerInputError,
+  MAX_APPLY_ITEMS,
   MAX_LIMIT,
 } from '@/lib/ledger-api'
 
@@ -45,15 +46,20 @@ export function buildLedgerTools(env: Cloudflare.Env, email: string): ToolSet {
         }
       },
     }),
-    ledger_create: tool({
+    ledger_apply: tool({
       description:
-        'Propose a single transaction from a beancount raw_text block. The user must approve in the UI before it is saved. Do not treat a tool call as a completed save — wait for the result.',
-      inputSchema: z.object({ raw_text: z.string().min(1) }),
-    }),
-    ledger_remove: tool({
-      description:
-        'Propose deletion of a transaction by id. The user must approve in the UI before it is deleted.',
-      inputSchema: z.object({ id: z.number().int().positive() }),
+        `Propose an atomic batch of ledger edits. Creates add new transactions, updates replace an existing transaction by id with new raw_text, deletes remove by id. All items apply together or none do. The user must approve in the UI before anything is saved. At least one of creates/updates/deletes must be non-empty. Max ${MAX_APPLY_ITEMS} items total. Use updates (not delete+create) when changing a single existing transaction.`,
+      inputSchema: z.object({
+        creates: z
+          .array(z.object({ raw_text: z.string().min(1) }))
+          .default([]),
+        updates: z
+          .array(z.object({ id: z.number().int().positive(), raw_text: z.string().min(1) }))
+          .default([]),
+        deletes: z
+          .array(z.object({ id: z.number().int().positive() }))
+          .default([]),
+      }),
     }),
   }
 }

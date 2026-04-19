@@ -175,21 +175,12 @@ function PartView({
     const tp = part as Extract<MessagePart, { type: `tool-${string}` }>
     const toolName = tp.type.replace(/^tool-/, '')
 
-    if (toolName === 'ledger_create' && tp.state === 'input-available') {
+    if (toolName === 'ledger_apply' && tp.state === 'input-available') {
+      const input = (tp.input ?? {}) as ApplyInput
       return (
-        <CreateProposalCard
+        <ApplyProposalCard
           toolCallId={tp.toolCallId}
-          rawText={(tp.input as { raw_text?: string })?.raw_text ?? ''}
-          addToolResult={addToolResult}
-          onMutate={onMutate}
-        />
-      )
-    }
-    if (toolName === 'ledger_remove' && tp.state === 'input-available') {
-      return (
-        <RemoveProposalCard
-          toolCallId={tp.toolCallId}
-          id={(tp.input as { id?: number })?.id ?? 0}
+          input={input}
           addToolResult={addToolResult}
           onMutate={onMutate}
         />
@@ -213,14 +204,20 @@ function PartView({
 
 type ResolveState = 'idle' | 'working' | 'done' | 'error'
 
-function CreateProposalCard({
+type ApplyInput = {
+  creates?: { raw_text: string }[]
+  updates?: { id: number; raw_text: string }[]
+  deletes?: { id: number }[]
+}
+
+function ApplyProposalCard({
   toolCallId,
-  rawText,
+  input,
   addToolResult,
   onMutate,
 }: {
   toolCallId: string
-  rawText: string
+  input: ApplyInput
   addToolResult: ToolResultFn
   onMutate?: () => void
 }) {
@@ -228,42 +225,103 @@ function CreateProposalCard({
   const [msg, setMsg] = useState<string | null>(null)
   const disabled = state === 'working' || state === 'done'
 
+  const creates = input.creates ?? []
+  const updates = input.updates ?? []
+  const deletes = input.deletes ?? []
+  const hasDelete = deletes.length > 0
+  const totalCount = creates.length + updates.length + deletes.length
+
+  const heading =
+    totalCount === 0
+      ? 'Empty batch'
+      : `Proposed changes: ${[
+          creates.length ? `${creates.length} create` : null,
+          updates.length ? `${updates.length} update` : null,
+          deletes.length ? `${deletes.length} delete` : null,
+        ]
+          .filter(Boolean)
+          .join(', ')}`
+
   const onApprove = async () => {
     setState('working')
     setMsg(null)
     try {
-      const res = await fetch('/api/ledger/transactions', {
-        method: 'POST',
+      const needsTs = [
+        ...updates.map((u) => u.id),
+        ...deletes.map((d) => d.id),
+      ]
+      const tsMap = new Map<number, number>()
+      for (const id of needsTs) {
+        if (tsMap.has(id)) continue
+        const r = await fetch(`/api/ledger/transactions/${id}`, { credentials: 'include' })
+        if (!r.ok) throw new Error(`lookup #${id}: HTTP ${r.status}`)
+        const txn = (await r.json()) as { updated_at: number }
+        tsMap.set(id, txn.updated_at)
+      }
+      const body = {
+        creates: creates.map((c) => ({ raw_text: c.raw_text })),
+        updates: updates.map((u) => ({
+          id: u.id,
+          raw_text: u.raw_text,
+          expected_updated_at: tsMap.get(u.id)!,
+        })),
+        deletes: deletes.map((d) => ({
+          id: d.id,
+          expected_updated_at: tsMap.get(d.id)!,
+        })),
+      }
+      const res = await fetch('/api/ledger/transactions/batch', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ raw_text: rawText }),
+        body: JSON.stringify(body),
       })
-      const body = await res.json()
+      const json = await res.json()
       if (!res.ok) {
-        const errs = (body as { errors?: string[] }).errors ?? [`HTTP ${res.status}`]
+        if (res.status === 409) {
+          setState('error')
+          setMsg('conflict — someone else edited this')
+          await addToolResult({
+            tool: 'ledger_apply',
+            toolCallId,
+            output: { ok: false, conflicts: (json as { conflicts: unknown }).conflicts },
+          })
+          return
+        }
+        const errs = (json as { errors?: unknown }).errors
+        const flat = Array.isArray(errs)
+          ? errs.flatMap((e: { errors?: string[] }) => e.errors ?? [])
+          : [`HTTP ${res.status}`]
         setState('error')
-        setMsg(errs.join('; '))
+        setMsg(flat.join('; '))
         await addToolResult({
-          tool: 'ledger_create',
+          tool: 'ledger_apply',
           toolCallId,
-          output: { ok: false, errors: errs },
+          output: { ok: false, errors: flat },
         })
         return
       }
+      const { updated, created, deleted } = json as {
+        updated: unknown[]
+        created: unknown[]
+        deleted: number[]
+      }
       setState('done')
-      setMsg(`saved #${(body as { id: number }).id}`)
+      setMsg(
+        `applied: +${created.length} create, ~${updated.length} update, -${deleted.length} delete`,
+      )
       onMutate?.()
       await addToolResult({
-        tool: 'ledger_create',
+        tool: 'ledger_apply',
         toolCallId,
-        output: { ok: true, transaction: body },
+        output: { ok: true, created, updated, deleted },
       })
     } catch (e) {
       const errMsg = (e as Error).message
       setState('error')
       setMsg(errMsg)
       await addToolResult({
-        tool: 'ledger_create',
+        tool: 'ledger_apply',
         toolCallId,
         output: { ok: false, errors: [errMsg] },
       })
@@ -274,7 +332,7 @@ function CreateProposalCard({
     setState('done')
     setMsg('discarded')
     await addToolResult({
-      tool: 'ledger_create',
+      tool: 'ledger_apply',
       toolCallId,
       output: { ok: false, rejected: true },
     })
@@ -282,92 +340,46 @@ function CreateProposalCard({
 
   return (
     <ProposalShell
-      heading="Proposed transaction"
-      body={<BeancountBlock text={rawText} />}
+      heading={heading}
+      body={
+        totalCount === 0 ? null : (
+          <div className="flex flex-col gap-3">
+            {creates.map((c, i) => (
+              <DiffSection key={`c${i}`} label="create">
+                <BeancountBlock text={c.raw_text} />
+              </DiffSection>
+            ))}
+            {updates.map((u, i) => (
+              <DiffSection key={`u${i}`} label={`update #${u.id}`}>
+                <BeancountBlock text={u.raw_text} />
+              </DiffSection>
+            ))}
+            {deletes.map((d, i) => (
+              <DiffSection key={`d${i}`} label={`delete #${d.id}`}>
+                <span className="font-mono text-[12px] text-zinc-500">remove transaction</span>
+              </DiffSection>
+            ))}
+          </div>
+        )
+      }
       state={state}
       msg={msg}
-      disabled={disabled}
+      disabled={disabled || totalCount === 0}
       onApprove={onApprove}
       onReject={onReject}
+      destructive={hasDelete}
     />
   )
 }
 
-function RemoveProposalCard({
-  toolCallId,
-  id,
-  addToolResult,
-  onMutate,
-}: {
-  toolCallId: string
-  id: number
-  addToolResult: ToolResultFn
-  onMutate?: () => void
-}) {
-  const [state, setState] = useState<ResolveState>('idle')
-  const [msg, setMsg] = useState<string | null>(null)
-  const disabled = state === 'working' || state === 'done'
-
-  const onApprove = async () => {
-    setState('working')
-    setMsg(null)
-    try {
-      const res = await fetch(`/api/ledger/transactions/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      })
-      if (!res.ok && res.status !== 404) {
-        const txt = await res.text().catch(() => `HTTP ${res.status}`)
-        setState('error')
-        setMsg(txt)
-        await addToolResult({
-          tool: 'ledger_remove',
-          toolCallId,
-          output: { ok: false, errors: [txt] },
-        })
-        return
-      }
-      setState('done')
-      setMsg(`deleted #${id}`)
-      onMutate?.()
-      await addToolResult({
-        tool: 'ledger_remove',
-        toolCallId,
-        output: { ok: true, id },
-      })
-    } catch (e) {
-      const errMsg = (e as Error).message
-      setState('error')
-      setMsg(errMsg)
-      await addToolResult({
-        tool: 'ledger_remove',
-        toolCallId,
-        output: { ok: false, errors: [errMsg] },
-      })
-    }
-  }
-
-  const onReject = async () => {
-    setState('done')
-    setMsg('cancelled')
-    await addToolResult({
-      tool: 'ledger_remove',
-      toolCallId,
-      output: { ok: false, rejected: true },
-    })
-  }
-
+function DiffSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <ProposalShell
-      heading={`Delete transaction #${id}?`}
-      body={null}
-      state={state}
-      msg={msg}
-      disabled={disabled}
-      onApprove={onApprove}
-      onReject={onReject}
-      destructive
-    />
+    <div>
+      <div className="font-mono text-[10px] text-zinc-500 uppercase tracking-[0.08em] mb-1">
+        {label}
+      </div>
+      {children}
+    </div>
   )
 }
 
@@ -435,7 +447,7 @@ function ProposalShell({
                 : 'text-white bg-[#09090B] border-[#09090B] hover:bg-zinc-800'
             }`}
           >
-            {destructive ? 'delete' : 'approve'}
+            {destructive ? 'confirm' : 'approve'}
           </button>
         </div>
       </div>
