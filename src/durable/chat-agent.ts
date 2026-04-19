@@ -80,6 +80,16 @@ export class ChatAgent extends AIChatAgent<Cloudflare.Env> {
               `- ${t.name}: ${t.description ?? ''}\n  parameters: ${JSON.stringify(t.inputSchema)}`,
           )
           .join('\n')}`,
+      toolResponsePromptTemplate: (toolResult) => {
+        const out = toolResult.output
+        const body =
+          typeof out === 'string'
+            ? out
+            : JSON.stringify(
+                (out as { type?: string; value?: unknown })?.value ?? out,
+              )
+        return `<|tool_result_begin|>${toolResult.toolName}:${toolResult.toolCallId}<|tool_result_argument_begin|>${body}<|tool_result_end|>`
+      },
     })
 
     const wrappedModel = wrapLanguageModel({
