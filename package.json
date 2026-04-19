@@ -21,6 +21,7 @@
     "test:int": "cross-env NODE_OPTIONS=--no-deprecation vitest run --config ./vitest.config.mts"
   },
   "dependencies": {
+    "@ai-sdk-tool/parser": "^4.1.20",
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@ai-sdk/react": "^3.0.163",
     "@cloudflare/ai-chat": "^0.4.6",
@@ -51,6 +52,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@ai-sdk/provider": "^3.0.8",
     "@eslint/eslintrc": "^3.2.0",
     "@playwright/test": "1.58.2",
     "@storybook/nextjs-vite": "^10.3.5",
