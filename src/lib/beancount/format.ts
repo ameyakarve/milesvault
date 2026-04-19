@@ -25,7 +25,7 @@ function space(length: number) {
 
 // https://ledger-cli.org/doc/ledger3.html#Journal-Format
 function formatPostingLine(line: string) {
-  const amountAlignmentColumn = 52
+  const amountAlignmentColumn = 60
   const fullMatch = line.match(
     /^[ \t]+(?<account>(?:[*!]\s+)?[^; \t\n](?:(?!\s{2})[^;\t\n])+)[ \t]+(?<prefix>[^;]*?)(?<amount>[+-]?[.,0-9]+)(?<suffix>.*)$/,
   )
