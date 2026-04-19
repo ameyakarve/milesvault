@@ -29,13 +29,23 @@
         "name": "LEDGER_DO",
         "class_name": "LedgerDO",
       },
+      {
+        "name": "ChatAgent",
+        "class_name": "ChatAgent",
+      },
     ],
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["VaultAgent"] },
     { "tag": "v2", "deleted_classes": ["VaultAgent"] },
     { "tag": "v3", "new_sqlite_classes": ["LedgerDO"] },
+    { "tag": "v4", "new_sqlite_classes": ["ChatAgent"] },
   ],
+  "vars": {
+    "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
+    "AI_GATEWAY_NAME": "dd-ai-gateway",
+    "CHAT_MODEL": "moonshotai/kimi-k2-instruct",
+  },
   "services": [
     // The service should match the "name" of your worker
     // {
@@ -66,9 +76,16 @@
             "name": "LEDGER_DO",
             "class_name": "LedgerDO",
           },
+          {
+            "name": "ChatAgent",
+            "class_name": "ChatAgent",
+          },
         ],
       },
-      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LedgerDO"] }],
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
+        { "tag": "v2", "new_sqlite_classes": ["ChatAgent"] },
+      ],
       "services": [{ "binding": "PROD", "service": "milesvault" }],
       "r2_buckets": [
         {
@@ -79,6 +96,9 @@
       "vars": {
         "ENABLE_HYDRATE": "1",
         "ALLOWED_EMAILS": "ameya.karve@gmail.com",
+        "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
+        "AI_GATEWAY_NAME": "dd-ai-gateway",
+        "CHAT_MODEL": "moonshotai/kimi-k2-instruct",
       },
     },
   },
