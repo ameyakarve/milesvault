@@ -34,7 +34,7 @@ export class ChatAgent extends AIChatAgent<Cloudflare.Env> {
       },
     })
 
-    const tools = await buildLedgerTools(email)
+    const tools = buildLedgerTools(this.env, email)
 
     const result = streamText({
       model: provider.chatModel(this.env.CHAT_MODEL),

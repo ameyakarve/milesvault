@@ -1,7 +1,7 @@
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
 import {
-  getLedgerClient,
+  createLedgerClient,
   LedgerBindingError,
   LedgerInputError,
   MAX_LIMIT,
@@ -13,8 +13,8 @@ function formatError(e: unknown): { ok: false; errors: string[] } {
   return { ok: false, errors: [(e as Error)?.message ?? 'unknown error'] }
 }
 
-export async function buildLedgerTools(email: string): Promise<ToolSet> {
-  const client = await getLedgerClient(email)
+export function buildLedgerTools(env: Cloudflare.Env, email: string): ToolSet {
+  const client = createLedgerClient(env, email)
 
   return {
     ledger_search: tool({
