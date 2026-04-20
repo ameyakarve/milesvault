@@ -35,7 +35,6 @@
       },
     ],
   },
-  "worker_loaders": [{ "binding": "WORKER_LOADER" }],
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["VaultAgent"] },
     { "tag": "v2", "deleted_classes": ["VaultAgent"] },
@@ -83,7 +82,6 @@
           },
         ],
       },
-      "worker_loaders": [{ "binding": "WORKER_LOADER" }],
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
         { "tag": "v2", "new_sqlite_classes": ["ChatAgent"] },
