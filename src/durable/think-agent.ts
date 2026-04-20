@@ -9,8 +9,7 @@ import type {
 import type { Session } from 'agents/experimental/memory/session'
 import { createCompactFunction } from 'agents/experimental/memory/utils'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { createToolMiddleware, hermesProtocol } from '@ai-sdk-tool/parser'
-import { generateText, wrapLanguageModel, type LanguageModel, type ToolSet } from 'ai'
+import { generateText, type LanguageModel, type ToolSet } from 'ai'
 import { buildAgenticLedgerTools } from '@/lib/chat/ledger-tools'
 import { createLedgerClient, LedgerBindingError } from '@/lib/ledger-api'
 import { ALL_ACCOUNTS } from '@/lib/beancount/accounts'
@@ -153,14 +152,6 @@ possible):
 ${predefinedList}`
 }
 
-function safeParse(s: string): unknown {
-  try {
-    return JSON.parse(s)
-  } catch {
-    return s
-  }
-}
-
 export class ThinkAgent extends Think<Cloudflare.Env> {
   maxSteps = 5
 
@@ -172,30 +163,7 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
         'cf-aig-authorization': `Bearer ${this.env.CF_AIG_TOKEN}`,
       },
     })
-    const hermesMiddleware = createToolMiddleware({
-      protocol: hermesProtocol(),
-      toolSystemPromptTemplate: (toolList) =>
-        `You have access to the following tools. When you decide to call a tool, emit a single tool call as plain-text XML on its own line, exactly like:\n<tool_call>{"name":"<tool_name>","arguments":{"arg":"value"}}</tool_call>\n\nRules:\n- The opening <tool_call> and closing </tool_call> tags are required.\n- The body between them is a single JSON object with "name" and "arguments".\n- Do not wrap in markdown, do not use python code blocks, do not use Kimi native tokens.\n- One tool call per turn unless you truly need parallel calls; then emit multiple <tool_call>...</tool_call> blocks back-to-back.\n\nAvailable tools:\n${toolList
-          .map(
-            (t) =>
-              `- ${t.name}: ${t.description ?? ''}\n  parameters: ${JSON.stringify(t.inputSchema)}`,
-          )
-          .join('\n')}`,
-      toolResponsePromptTemplate: (toolResult) => {
-        const out = toolResult.output
-        const body =
-          typeof out === 'string'
-            ? out
-            : JSON.stringify(
-                (out as { type?: string; value?: unknown })?.value ?? out,
-              )
-        return `<tool_response>${JSON.stringify({ name: toolResult.toolName, id: toolResult.toolCallId, result: safeParse(body) })}</tool_response>`
-      },
-    })
-    return wrapLanguageModel({
-      model: provider.chatModel(this.env.CHAT_MODEL),
-      middleware: hermesMiddleware,
-    })
+    return provider.chatModel(this.env.CHAT_MODEL)
   }
 
   getSystemPrompt(): string {
