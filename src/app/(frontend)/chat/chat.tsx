@@ -276,7 +276,13 @@ function ApplyProposalCard({
         credentials: 'include',
         body: JSON.stringify(body),
       })
-      const json = await res.json()
+      const text = await res.text()
+      let json: unknown = null
+      try {
+        json = text ? JSON.parse(text) : null
+      } catch {
+        json = null
+      }
       if (!res.ok) {
         if (res.status === 409) {
           setState('error')
@@ -284,14 +290,16 @@ function ApplyProposalCard({
           await addToolResult({
             tool: 'ledger_apply',
             toolCallId,
-            output: { ok: false, conflicts: (json as { conflicts: unknown }).conflicts },
+            output: { ok: false, conflicts: (json as { conflicts: unknown } | null)?.conflicts },
           })
           return
         }
-        const errs = (json as { errors?: unknown }).errors
+        const errs = (json as { errors?: unknown } | null)?.errors
         const flat = Array.isArray(errs)
-          ? errs.flatMap((e: { errors?: string[] }) => e.errors ?? [])
-          : [`HTTP ${res.status}`]
+          ? errs.flatMap((e: { errors?: string[] } | string) =>
+              typeof e === 'string' ? [e] : (e.errors ?? []),
+            )
+          : [text || `HTTP ${res.status}`]
         setState('error')
         setMsg(flat.join('; '))
         await addToolResult({

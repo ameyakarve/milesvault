@@ -172,8 +172,15 @@ export async function PUT(req: NextRequest) {
       )
     }
     if (e instanceof LedgerBindingError) {
-      return new NextResponse(e.message, { status: 500 })
+      return NextResponse.json({ errors: [e.message] }, { status: 500 })
     }
-    throw e
+    const name = e instanceof Error ? e.name : typeof e
+    const message = e instanceof Error ? e.message : String(e)
+    const stack = e instanceof Error ? (e.stack ?? '') : ''
+    console.error('[batch-apply] unhandled', { name, message, stack })
+    return NextResponse.json(
+      { errors: [`${name}: ${message}`], stack },
+      { status: 500 },
+    )
   }
 }
