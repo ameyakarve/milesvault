@@ -1,11 +1,14 @@
 import { DurableObject } from 'cloudflare:workers'
-import { extractTxn, type ExtractedTxn } from '@/lib/beancount/extract'
+import { extractTxn, splitEntries, type ExtractedTxn } from '@/lib/beancount/extract'
 import type {
   TransactionRow,
   BatchApplyInput,
   BatchApplyResult,
   BatchValidationError,
   BatchConflict,
+  ReplaceBufferInput,
+  ReplaceBufferResult,
+  ReplaceBufferConflict,
 } from './ledger-types'
 import type { SearchFilter } from './search-parser'
 
@@ -424,6 +427,73 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     })
 
     return { ok: true, updated, created, deleted }
+  }
+
+  async replaceBuffer(input: ReplaceBufferInput): Promise<ReplaceBufferResult> {
+    const conflicts: ReplaceBufferConflict[] = []
+    for (const k of input.knownIds) {
+      const current = this.sql
+        .exec<{ updated_at: number }>(
+          'SELECT updated_at FROM transactions WHERE id = ?',
+          k.id,
+        )
+        .toArray()[0]
+      if (!current || current.updated_at !== k.expected_updated_at) {
+        conflicts.push({
+          id: k.id,
+          expected_updated_at: k.expected_updated_at,
+          current_updated_at: current?.updated_at ?? null,
+        })
+      }
+    }
+    if (conflicts.length > 0) return { ok: false, kind: 'conflict', conflicts }
+
+    const entries = splitEntries(input.buffer)
+      .map((e) => e.text.trim())
+      .filter((s) => s.length > 0)
+
+    const rows: TransactionRow[] = []
+    this.ctx.storage.transactionSync(() => {
+      const now = Date.now()
+      for (const k of input.knownIds) {
+        this.sql.exec('DELETE FROM transactions WHERE id = ?', k.id)
+      }
+      for (const entry of entries) {
+        const parsed = extractTxn(entry)
+        const cols: ExtractedTxn =
+          parsed.ok === true
+            ? parsed.value
+            : {
+                date: 0,
+                flag: null,
+                t_payee: '',
+                t_account: '',
+                t_currency: '',
+                t_tag: '',
+                t_link: '',
+              }
+        const row = this.sql
+          .exec<TransactionRow>(
+            `INSERT INTO transactions
+               (raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             RETURNING ${ROW_COLS}`,
+            entry,
+            cols.date,
+            cols.flag,
+            cols.t_payee,
+            cols.t_account,
+            cols.t_currency,
+            cols.t_tag,
+            cols.t_link,
+            now,
+            now,
+          )
+          .toArray()[0]
+        if (row) rows.push(row)
+      }
+    })
+    return { ok: true, rows }
   }
 
   async update(_id: number, _raw_text: string): Promise<TransactionRow | null> {

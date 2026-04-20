@@ -5,6 +5,8 @@ import {
   type BatchApplyInput,
   type BatchConflict,
   type BatchValidationError,
+  type ReplaceBufferConflict,
+  type ReplaceBufferInput,
   type Transaction,
 } from '@/durable/ledger-types'
 import { parseQuery } from '@/durable/search-parser'
@@ -15,6 +17,8 @@ export const DEFAULT_LIMIT = 50
 export const MAX_LIMIT = 100
 export const MAX_CREATE_BATCH = 100
 export const MAX_APPLY_ITEMS = 50
+export const MAX_REPLACE_BUFFER_BYTES = 256 * 1024
+export const MAX_REPLACE_KNOWN_IDS = 500
 
 export type SearchResult = {
   rows: Transaction[]
@@ -36,6 +40,10 @@ export type ApplyBatchResult =
   | { ok: false; kind: 'validation'; errors: BatchValidationError[] }
   | { ok: false; kind: 'conflict'; conflicts: BatchConflict[] }
 
+export type ReplaceBufferClientResult =
+  | { ok: true; transactions: Transaction[] }
+  | { ok: false; kind: 'conflict'; conflicts: ReplaceBufferConflict[] }
+
 export type LedgerClient = {
   search(q: string, limit?: number, offset?: number): Promise<SearchResult>
   get(id: number): Promise<Transaction | null>
@@ -43,6 +51,7 @@ export type LedgerClient = {
   createBatch(rawTexts: string[]): Promise<CreateBatchResult>
   remove(id: number): Promise<boolean>
   applyBatch(input: BatchApplyInput): Promise<ApplyBatchResult>
+  replaceBuffer(input: ReplaceBufferInput): Promise<ReplaceBufferClientResult>
 }
 
 export class LedgerInputError extends Error {
@@ -142,6 +151,36 @@ export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerCl
         }
       }
       return result
+    },
+
+    async replaceBuffer(input) {
+      if (!Array.isArray(input.knownIds)) {
+        throw new LedgerInputError(['knownIds must be an array.'])
+      }
+      if (input.knownIds.length > MAX_REPLACE_KNOWN_IDS) {
+        throw new LedgerInputError([`knownIds exceeds max of ${MAX_REPLACE_KNOWN_IDS}.`])
+      }
+      for (const [idx, k] of input.knownIds.entries()) {
+        if (!Number.isInteger(k.id) || k.id <= 0) {
+          throw new LedgerInputError([`knownIds[${idx}].id must be a positive integer.`])
+        }
+        if (!Number.isInteger(k.expected_updated_at)) {
+          throw new LedgerInputError([
+            `knownIds[${idx}].expected_updated_at must be an integer.`,
+          ])
+        }
+      }
+      if (typeof input.buffer !== 'string') {
+        throw new LedgerInputError(['buffer must be a string.'])
+      }
+      if (new TextEncoder().encode(input.buffer).byteLength > MAX_REPLACE_BUFFER_BYTES) {
+        throw new LedgerInputError([`buffer exceeds ${MAX_REPLACE_BUFFER_BYTES} bytes.`])
+      }
+      const result = await stub.replaceBuffer(input)
+      if (result.ok === true) {
+        return { ok: true, transactions: result.rows.map(toTransaction) }
+      }
+      return { ok: false, kind: 'conflict', conflicts: result.conflicts }
     },
   }
 }

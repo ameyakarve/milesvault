@@ -56,3 +56,20 @@ export type BatchApplyResult =
   | { ok: true; updated: TransactionRow[]; created: TransactionRow[]; deleted: number[] }
   | { ok: false; kind: 'validation'; errors: BatchValidationError[] }
   | { ok: false; kind: 'conflict'; conflicts: BatchConflict[] }
+
+export type KnownId = { id: number; expected_updated_at: number }
+
+export type ReplaceBufferInput = {
+  knownIds: KnownId[]
+  buffer: string
+}
+
+export type ReplaceBufferConflict = {
+  id: number
+  expected_updated_at: number
+  current_updated_at: number | null
+}
+
+export type ReplaceBufferResult =
+  | { ok: true; rows: TransactionRow[] }
+  | { ok: false; kind: 'conflict'; conflicts: ReplaceBufferConflict[] }
