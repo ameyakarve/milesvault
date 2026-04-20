@@ -8,7 +8,7 @@ Six card kinds across two beancount types. "Card" is the UX primitive; the ledge
 
 | kind | beancount type | path prefix | has balance? | constraint commodities |
 |---|---|---|---|---|
-| `credit-card` | Liabilities | `Liabilities:CreditCards:*` | yes (owed) | single fiat |
+| `credit-card` | Liabilities | `Liabilities:CC:*` | yes (owed) | single fiat |
 | `debit-card` | Assets | `Assets:DebitCards:*` | always 0 (zero-sum) | single fiat |
 | `wallet` | Assets | `Assets:Loaded:Wallets:*` | yes | single fiat |
 | `prepaid-card` | Assets | `Assets:Loaded:PrepaidCards:*` | yes | single fiat |
@@ -27,7 +27,7 @@ Six card kinds across two beancount types. "Card" is the UX primitive; the ledge
 ### Credit card — standard two-posting
 ```beancount
 2026-04-16 * "Blue Tokai" "morning coffee"
-  Liabilities:CreditCards:HDFC:Infinia  -220.00 INR
+  Liabilities:CC:HDFC:Infinia  -220.00 INR
   Expenses:Food:Coffee                    220.00 INR
 ```
 
@@ -166,7 +166,7 @@ Transferability is a property of the commodity, not the account.
 Points earned alongside a spend:
 ```beancount
 2026-04-16 * "BA" "LHR-BOM flight"
-  Liabilities:CreditCards:HDFC:Infinia  -50000.00 INR
+  Liabilities:CC:HDFC:Infinia  -50000.00 INR
   Expenses:Travel:Flights                50000.00 INR
   Assets:Rewards:Points:Avios              500.00 AVIOS
   Income:Rewards                          -500.00 AVIOS
@@ -175,7 +175,7 @@ Points earned alongside a spend:
 Status earned from a stay:
 ```beancount
 2026-04-16 * "Marriott" "Mumbai stay"
-  Liabilities:CreditCards:HDFC:Infinia  -15000.00 INR
+  Liabilities:CC:HDFC:Infinia  -15000.00 INR
   Expenses:Travel:Hotels                 15000.00 INR
   Assets:Rewards:Status:Marriott             3.00 MAR-NIGHTS
   Income:Rewards                            -3.00 MAR-NIGHTS
@@ -196,7 +196,7 @@ Award flight (points + cash for taxes):
 ```beancount
 2026-06-01 * "BA" "award flight"
   Assets:Rewards:Points:Avios           -20000.00 AVIOS
-  Liabilities:CreditCards:HDFC:Infinia   -2500.00 INR
+  Liabilities:CC:HDFC:Infinia   -2500.00 INR
   Expenses:Travel:Flights                20000.00 AVIOS
   Expenses:Travel:Flights                 2500.00 INR
 ```
@@ -239,7 +239,7 @@ Money never left for the discounted portion. One posting on the instrument.
 
 ```beancount
 2026-04-16 * "Zomato" "dinner ₹1000 — ₹150 promo"
-  Liabilities:CreditCards:HDFC:Infinia   -850.00 INR
+  Liabilities:CC:HDFC:Infinia   -850.00 INR
   Expenses:Food:Restaurant               1000.00 INR
   Income:Savings:Discounts               -150.00 INR
 ```
@@ -251,9 +251,9 @@ Cashback is a real inflow. The instrument appears twice when the cashback lands 
 Same-card cashback (10% HDFC offer on Zomato):
 ```beancount
 2026-04-16 * "Zomato" "dinner, 10% HDFC offer"
-  Liabilities:CreditCards:HDFC:Infinia  -1000.00 INR
+  Liabilities:CC:HDFC:Infinia  -1000.00 INR
   Expenses:Food:Restaurant               1000.00 INR
-  Liabilities:CreditCards:HDFC:Infinia    100.00 INR
+  Liabilities:CC:HDFC:Infinia    100.00 INR
   Income:Rewards:Cashback                -100.00 INR
 ```
 
@@ -269,7 +269,7 @@ Same-wallet cashback (Paytm 5% on a ride):
 Cross-instrument cashback (Amazon via Infinia, cashback to Amazon Pay):
 ```beancount
 2026-04-16 * "Amazon" "headphones + ₹150 AmazonPay cashback"
-  Liabilities:CreditCards:HDFC:Infinia  -3000.00 INR
+  Liabilities:CC:HDFC:Infinia  -3000.00 INR
   Expenses:Shopping:Electronics          3000.00 INR
   Assets:Loaded:Wallets:AmazonPay         150.00 INR
   Income:Rewards:Cashback                -150.00 INR
@@ -279,7 +279,7 @@ Bill payment with app cashback (CRED pays into CRED wallet):
 ```beancount
 2026-04-10 * "CRED" "HDFC bill + ₹25 CRED cashback"
   Assets:Bank:HDFC:Savings              -10000.00 INR
-  Liabilities:CreditCards:HDFC:Infinia   10000.00 INR
+  Liabilities:CC:HDFC:Infinia   10000.00 INR
   Assets:Loaded:Wallets:CRED                 25.00 INR
   Income:Rewards:Cashback                   -25.00 INR
 ```
@@ -289,7 +289,7 @@ Bill payment with app cashback (CRED pays into CRED wallet):
 When cashback is credited later as a statement event rather than per-txn:
 ```beancount
 2026-04-30 * "HDFC" "Infinia April statement cashback"
-  Liabilities:CreditCards:HDFC:Infinia    250.00 INR
+  Liabilities:CC:HDFC:Infinia    250.00 INR
   Income:Rewards:Cashback                -250.00 INR
 ```
 
@@ -307,7 +307,7 @@ Pending/accrued cashback is not tracked.
 ## Path-to-kind resolver
 
 ```
-Liabilities:CreditCards:*    → credit-card
+Liabilities:CC:*    → credit-card
 Assets:DebitCards:*          → debit-card
 Assets:Loaded:Wallets:*      → wallet
 Assets:Loaded:PrepaidCards:* → prepaid-card

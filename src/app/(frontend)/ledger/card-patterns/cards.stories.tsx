@@ -21,7 +21,7 @@ type Story = StoryObj<typeof TxnCard>
 export const SimpleExpense: Story = {
   args: {
     raw: `2026-04-17 * "Amudham" "coffee"
-  Liabilities:CreditCards:HSBC   -35.00 INR
+  Liabilities:CC:HSBC   -35.00 INR
   Expenses:Food:Coffee             35.00 INR`,
   },
 }
@@ -29,9 +29,9 @@ export const SimpleExpense: Story = {
 export const CashbackExpense: Story = {
   args: {
     raw: `2026-04-17 * "Amudham" "coffee"
-  Liabilities:CreditCards:HSBC:Cashback   -35.00 INR
+  Liabilities:CC:HSBC:Cashback   -35.00 INR
   Expenses:Food:Coffee                     35.00 INR
-  Liabilities:CreditCards:HSBC:Cashback     3.50 INR
+  Liabilities:CC:HSBC:Cashback     3.50 INR
   Income:Rewards:Cashback                  -3.50 INR`,
   },
 }
@@ -39,7 +39,7 @@ export const CashbackExpense: Story = {
 export const GroceryRow: Story = {
   args: {
     raw: `2026-04-16 * "Swiggy Instamart" "groceries"
-  Liabilities:CreditCards:HDFC:Infinia   -842.00 INR
+  Liabilities:CC:HDFC:Infinia   -842.00 INR
   Expenses:Food:Groceries                  842.00 INR`,
   },
 }
@@ -55,7 +55,7 @@ export const PendingRow: Story = {
 export const LargeAmount: Story = {
   args: {
     raw: `2026-04-10 * "Taj Mahal Hotel" "Mumbai stay"
-  Liabilities:CreditCards:HDFC:Infinia   -125000.00 INR
+  Liabilities:CC:HDFC:Infinia   -125000.00 INR
   Expenses:Travel:Hotels                   125000.00 INR`,
   },
 }
@@ -63,7 +63,7 @@ export const LargeAmount: Story = {
 export const NoCategoryMatch: Story = {
   args: {
     raw: `2026-04-14 * "Mystery" "unusual"
-  Liabilities:CreditCards:HDFC  -100.00 INR
+  Liabilities:CC:HDFC  -100.00 INR
   Expenses:WeirdThing            100.00 INR`,
   },
 }
@@ -71,7 +71,7 @@ export const NoCategoryMatch: Story = {
 export const FallbackComplex: Story = {
   args: {
     raw: `2026-04-12 * "Split dinner" "three way"
-  Liabilities:CreditCards:HDFC  -3000.00 INR
+  Liabilities:CC:HDFC  -3000.00 INR
   Expenses:Food:Restaurant       1000.00 INR
   Expenses:Food:Restaurant       1000.00 INR
   Expenses:Food:Restaurant       1000.00 INR`,

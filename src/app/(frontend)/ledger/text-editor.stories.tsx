@@ -14,15 +14,15 @@ const FIXTURES: Record<string, Transaction[]> = {
     mkTxn(
       1,
       `2026-04-17 * "Amudham" "coffee, 10% HSBC cashback"
-  Liabilities:CreditCards:HSBC:Cashback   -35.00 INR
+  Liabilities:CC:HSBC:Cashback   -35.00 INR
   Expenses:Food:Coffee                     35.00 INR
-  Liabilities:CreditCards:HSBC:Cashback     3.50 INR
+  Liabilities:CC:HSBC:Cashback     3.50 INR
   Income:Rewards:Cashback                  -3.50 INR`,
     ),
     mkTxn(
       2,
       `2026-04-16 * "Zomato" "dinner"
-  Liabilities:CreditCards:HDFC:Infinia  -1220.00 INR
+  Liabilities:CC:HDFC:Infinia  -1220.00 INR
   Expenses:Food:Restaurant               1220.00 INR`,
     ),
     mkTxn(
@@ -45,7 +45,7 @@ fdsf`,
       2,
       `2026-04-17 * "Shop" "coffee"
 garbage-line
-  Liabilities:CreditCards:HDFC   -35.00 INR
+  Liabilities:CC:HDFC   -35.00 INR
   Expenses:Food:Coffee             35.00 INR`,
     ),
   ],
@@ -53,7 +53,7 @@ garbage-line
     mkTxn(
       1,
       `2026-04-17 * "Unbalanced" "amounts don't sum"
-  Liabilities:CreditCards:HDFC:Infinia  -100.00 INR
+  Liabilities:CC:HDFC:Infinia  -100.00 INR
   Expenses:Misc                           99.00 INR`,
     ),
     mkTxn(
@@ -74,7 +74,7 @@ garbage-line
     mkTxn(
       100 + i,
       `2026-04-${String(17 - i).padStart(2, '0')} * "Vendor ${i + 1}" "line item ${i + 1}"
-  Liabilities:CreditCards:HDFC:Infinia   -${(100 + i * 15).toFixed(2)} INR
+  Liabilities:CC:HDFC:Infinia   -${(100 + i * 15).toFixed(2)} INR
   Expenses:Misc                            ${(100 + i * 15).toFixed(2)} INR`,
     ),
   ),
