@@ -42,14 +42,27 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const [, mm, dd] = txn.date.split('-')
   const month = MONTHS[Number(mm) - 1] ?? '—'
   const day = dd ?? '—'
-  const title = txn.payee?.trim() || txn.narration?.trim() || 'Transaction'
+  const payee = txn.payee?.trim() ?? ''
+  const narration = txn.narration?.trim() ?? ''
+  const title = payee || narration || 'Transaction'
+  const secondary = payee && narration ? `· ${narration}` : ''
   const glyph = iconForTxn(txn.postings.map((p) => p.account))
   const match = matchSingleExpense(txn)
   const subtext = match
     ? (paymentMethodDisplay(match.payment.account) ?? match.payment.account)
     : null
   const amount = match ? formatExpenseAmount(match.expense) ?? preset.amount : preset.amount
-  return { ...preset, glyph, month, day, payee: title, subtext, amount }
+  return {
+    ...preset,
+    glyph,
+    month,
+    day,
+    payee: title,
+    narration: secondary,
+    subtext,
+    amount,
+    pill: undefined,
+  }
 }
 
 function matchSingleExpense(
