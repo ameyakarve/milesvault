@@ -160,6 +160,24 @@ export const MultiExpensesAndCashbacks: Story = {
   },
 }
 
+export const CashbackCreditedToSameCard: Story = {
+  args: {
+    text: `2026-04-19 * "Amudham Cafe" "SIK coffee combo"
+  Expenses:Food:Coffee                                 105 INR
+  Liabilities:CC:HSBC:Cashback                        -105 INR
+  Income:Rewards:Cashback                           -10.50 INR
+  Liabilities:CC:HSBC:Cashback                       10.50 INR`,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Payment and cashback credit both land on the same `Liabilities:CC:HSBC:Cashback` account (two postings). Matcher collapses same-account legs into one payment, so the cashback card variant renders: amount ₹105, rewards "+₹10.50", subtext "HSBC Cashback Card".',
+      },
+    },
+  },
+}
+
 export const MultiLegFallback: Story = {
   args: {
     text: `2026-04-12 * "Zomato" "split dinner"

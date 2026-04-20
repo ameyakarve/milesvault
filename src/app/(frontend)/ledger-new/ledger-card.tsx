@@ -113,7 +113,9 @@ function matchExpensesCashbacksPayment(
     else if (p.account === 'Expenses' || p.account.startsWith('Expenses:')) expenses.push(p)
     else others.push(p)
   }
-  if (expenses.length < 1 || cashbacks.length < 1 || others.length !== 1) return null
+  if (expenses.length < 1 || cashbacks.length < 1 || others.length < 1) return null
+  const uniqueAccounts = new Set(others.map((p) => p.account))
+  if (uniqueAccounts.size !== 1) return null
   return { expenses, cashbacks, payment: others[0] }
 }
 
