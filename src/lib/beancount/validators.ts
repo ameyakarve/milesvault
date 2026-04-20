@@ -42,7 +42,27 @@ export const balanceValidator: Validator = ({ parsed }) => {
   return out
 }
 
-export const coreValidators: readonly Validator[] = [balanceValidator]
+export const expenseSignValidator: Validator = ({ parsed }) => {
+  const out: Diagnostic[] = []
+  for (const txn of parsed) {
+    for (const p of txn.postings) {
+      if (p.account !== 'Expenses' && !p.account.startsWith('Expenses:')) continue
+      if (!p.amount) continue
+      const n = parseNumber(p.amount.numberText)
+      if (n == null || n >= 0) continue
+      out.push({
+        from: p.amount.range.from,
+        to: p.amount.range.to,
+        severity: 'error',
+        message: `Expenses posting should be positive; got ${p.amount.numberText}.`,
+        source: 'expense-sign',
+      })
+    }
+  }
+  return out
+}
+
+export const coreValidators: readonly Validator[] = [balanceValidator, expenseSignValidator]
 
 function parseNumber(text: string): number | null {
   const cleaned = text.replace(/,/g, '').trim()
