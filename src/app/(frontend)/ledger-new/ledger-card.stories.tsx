@@ -6,9 +6,9 @@ const PRESET: CardPreset = {
   glyph: Wallet,
   color: 'amber',
   narration: '',
-  account: '',
+  account: '—',
   rewards: { current: '—' },
-  amount: '',
+  amount: '—',
 }
 
 const meta: Meta<typeof EntryCard> = {

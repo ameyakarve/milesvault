@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import { paymentMethodDisplay } from '@/lib/beancount/account-display'
 import { iconForTxn } from '@/lib/beancount/category-icons'
-import { parseBuffer, type ParsedTxn } from '@/lib/beancount/parse'
+import { parseBuffer, type ParsedPosting, type ParsedTxn } from '@/lib/beancount/parse'
 
 export type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 
@@ -44,11 +44,17 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const day = dd ?? '—'
   const title = txn.payee?.trim() || txn.narration?.trim() || 'Transaction'
   const glyph = iconForTxn(txn.postings.map((p) => p.account))
-  const subtext = subtextFromTxn(txn)
-  return { ...preset, glyph, month, day, payee: title, subtext }
+  const match = matchSingleExpense(txn)
+  const subtext = match
+    ? (paymentMethodDisplay(match.payment.account) ?? match.payment.account)
+    : null
+  const amount = match ? formatExpenseAmount(match.expense) ?? preset.amount : preset.amount
+  return { ...preset, glyph, month, day, payee: title, subtext, amount }
 }
 
-function subtextFromTxn(txn: ParsedTxn): string | null {
+function matchSingleExpense(
+  txn: ParsedTxn,
+): { expense: ParsedPosting; payment: ParsedPosting } | null {
   if (txn.postings.length !== 2) return null
   const expenses = txn.postings.filter(
     (p) => p.account === 'Expenses' || p.account.startsWith('Expenses:'),
@@ -56,7 +62,39 @@ function subtextFromTxn(txn: ParsedTxn): string | null {
   if (expenses.length !== 1) return null
   const payment = txn.postings.find((p) => p !== expenses[0])
   if (!payment) return null
-  return paymentMethodDisplay(payment.account) ?? payment.account
+  return { expense: expenses[0], payment }
+}
+
+function formatExpenseAmount(expense: ParsedPosting): string | null {
+  if (!expense.amount) return null
+  const cleaned = expense.amount.numberText.replace(/,/g, '').trim()
+  if (!/^[+-]?\d+(?:\.\d+)?$/.test(cleaned)) return null
+  const n = parseFloat(cleaned)
+  if (!Number.isFinite(n)) return null
+  return formatOutflow(n, expense.amount.currency)
+}
+
+function formatOutflow(expenseValue: number, currency: string | null): string {
+  const outflow = -expenseValue
+  const abs = Math.abs(outflow)
+  const sign = outflow < 0 ? '-' : outflow > 0 ? '+' : ''
+  if (currency === 'INR') {
+    return `${sign}₹${new Intl.NumberFormat('en-IN', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(abs)}`
+  }
+  if (currency === 'USD') {
+    return `${sign}$${new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(abs)}`
+  }
+  const body = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(abs)
+  return currency ? `${sign}${body} ${currency}` : `${sign}${body}`
 }
 
 export function EntryCard({
