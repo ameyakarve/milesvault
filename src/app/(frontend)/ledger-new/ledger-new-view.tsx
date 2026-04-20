@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
+import { diffLines } from 'diff'
 import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
 import { safeParse } from '../ledger/card-patterns/types'
@@ -447,6 +448,98 @@ function TextPane({
   )
 }
 
+type DiffLine = { kind: 'add' | 'del' | 'ctx'; text: string }
+type Hunk = { header: string; lines: DiffLine[] }
+
+const DIFF_CONTEXT = 2
+
+function computeHunks(baseline: string, current: string): Hunk[] {
+  if (baseline === current) return []
+  const parts = diffLines(baseline, current)
+  const flat: DiffLine[] = []
+  for (const p of parts) {
+    const kind: DiffLine['kind'] = p.added ? 'add' : p.removed ? 'del' : 'ctx'
+    const body = p.value.endsWith('\n') ? p.value.slice(0, -1) : p.value
+    const lines = body.length === 0 ? [''] : body.split('\n')
+    for (const l of lines) flat.push({ kind, text: l })
+  }
+  const changeIdx: number[] = []
+  for (let i = 0; i < flat.length; i++) if (flat[i].kind !== 'ctx') changeIdx.push(i)
+  const hunks: Hunk[] = []
+  let i = 0
+  while (i < changeIdx.length) {
+    const start = Math.max(0, changeIdx[i] - DIFF_CONTEXT)
+    let end = changeIdx[i]
+    let j = i
+    while (j + 1 < changeIdx.length && changeIdx[j + 1] - end <= DIFF_CONTEXT * 2) {
+      j++
+      end = changeIdx[j]
+    }
+    end = Math.min(flat.length - 1, end + DIFF_CONTEXT)
+    const slice = flat.slice(start, end + 1)
+    const firstChange = slice.find((l) => l.kind !== 'ctx')
+    const ctx = slice.find((l) => l.kind === 'ctx' && l.text.trim().length > 0)
+    const header = makeHunkHeader(firstChange?.text ?? '', ctx?.text ?? '')
+    hunks.push({ header, lines: slice })
+    i = j + 1
+  }
+  return hunks
+}
+
+function makeHunkHeader(changeLine: string, ctxLine: string): string {
+  const txnLine = /^\d{4}-\d{2}-\d{2}/.test(ctxLine) ? ctxLine : changeLine
+  const m = txnLine.match(/^\d{4}-\d{2}-\d{2}\s+[*!]\s+(?:"([^"]*)")?(?:\s+"([^"]*)")?/)
+  if (m) {
+    const bits = [m[1]?.trim(), m[2]?.trim()].filter(Boolean)
+    if (bits.length > 0) return `@@ ${bits.join(' · ').toLowerCase()} @@`
+  }
+  return '@@ change @@'
+}
+
+function DiffPane({ baseline, current }: { baseline: string; current: string }) {
+  const hunks = useMemo(() => computeHunks(baseline, current), [baseline, current])
+  if (hunks.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-[11px] text-slate-400">
+        no changes
+      </div>
+    )
+  }
+  return (
+    <div className="flex-1 overflow-y-auto p-4 text-[11px] font-mono">
+      {hunks.map((h, idx) => (
+        <div key={idx} className={idx < hunks.length - 1 ? 'mb-4' : ''}>
+          <div className="text-slate-400 mb-1 text-[10px] uppercase">{h.header}</div>
+          {h.lines.map((line, li) => {
+            if (line.kind === 'add') {
+              return (
+                <div key={li} className="bg-sky-50 text-navy-600 flex px-2 py-0.5">
+                  <span className="text-sky-600 w-4 shrink-0 select-none">+</span>
+                  <span className="whitespace-pre">{line.text}</span>
+                </div>
+              )
+            }
+            if (line.kind === 'del') {
+              return (
+                <div key={li} className="bg-error/5 text-navy-600 flex px-2 py-0.5">
+                  <span className="text-error w-4 shrink-0 select-none">-</span>
+                  <span className="whitespace-pre line-through">{line.text}</span>
+                </div>
+              )
+            }
+            return (
+              <div key={li} className="text-slate-400 flex px-2 py-0.5">
+                <span className="w-4 shrink-0 select-none"> </span>
+                <span className="whitespace-pre">{line.text}</span>
+              </div>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function PageControls({
   page,
   totalPages,
@@ -639,51 +732,7 @@ export function LedgerNewView() {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 text-[11px] font-mono">
-              <div className="mb-4">
-                <div className="text-slate-400 mb-1 text-[10px] uppercase">
-                  @@ swiggy · dinner with r @@
-                </div>
-                <div className="bg-error/5 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-error w-4 shrink-0 select-none">-</span>
-                  <span>Expenses:Uncategorized</span>
-                </div>
-                <div className="bg-sky-50 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-sky-600 w-4 shrink-0 select-none">+</span>
-                  <span>Expenses:Food:Delivery</span>
-                </div>
-              </div>
-              <div className="mb-4">
-                <div className="text-slate-400 mb-1 text-[10px] uppercase">
-                  @@ meat masterz · weekend order @@
-                </div>
-                <div className="bg-error/5 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-error w-4 shrink-0 select-none">-</span>
-                  <span>Expenses:Uncategorized</span>
-                </div>
-                <div className="bg-sky-50 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-sky-600 w-4 shrink-0 select-none">+</span>
-                  <span>Expenses:Food:Delivery</span>
-                </div>
-              </div>
-              <div>
-                <div className="text-slate-400 mb-1 text-[10px] uppercase">
-                  @@ amazon · monitor & cables @@
-                </div>
-                <div className="bg-error/5 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-error w-4 shrink-0 select-none">-</span>
-                  <span>Expenses:Shopping                -4500.00 INR</span>
-                </div>
-                <div className="bg-sky-50 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-sky-600 w-4 shrink-0 select-none">+</span>
-                  <span>Expenses:Electronics:Monitor    -3200.00 INR</span>
-                </div>
-                <div className="bg-sky-50 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-sky-600 w-4 shrink-0 select-none">+</span>
-                  <span>Expenses:Electronics:Accessory  -1300.00 INR</span>
-                </div>
-              </div>
-            </div>
+            <DiffPane baseline={baseline} current={buffer} />
           </div>
 
           {/* AI chat */}
