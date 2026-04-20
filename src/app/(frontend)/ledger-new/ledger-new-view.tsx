@@ -32,8 +32,10 @@ import {
   X,
 } from 'lucide-react'
 import type { Transaction } from '@/durable/ledger-types'
+import { iconForTxn } from '@/lib/beancount/category-icons'
 import { splitEntries } from '@/lib/beancount/extract'
 import { format } from '@/lib/beancount/format'
+import { parseBuffer } from '@/lib/beancount/parse'
 import { safeParse } from '../ledger/card-patterns/types'
 import { composeBuffer } from './editor'
 import { LedgerEditor } from './ledger-editor'
@@ -306,6 +308,14 @@ function Card({ row, active }: { row: CardRow; active: boolean }) {
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
+function glyphForEntry(text: string): LucideIcon | null {
+  const { entries } = parseBuffer(text)
+  const txn = entries[0]
+  if (!txn) return null
+  const accounts = txn.postings.map((p) => p.account)
+  return iconForTxn(accounts)
+}
+
 function deriveFromRaw(raw: string): { month: string; day: string; payee: string } {
   const parsed = safeParse(raw)
   if (parsed) {
@@ -427,7 +437,8 @@ function CardsList({
       {entries.map((entry, i) => {
         const preset = PRESETS[i % PRESETS.length]
         const { month, day, payee } = deriveFromRaw(entry.text)
-        const row: CardRow = { ...preset, month, day, payee }
+        const glyph = glyphForEntry(entry.text) ?? preset.glyph
+        const row: CardRow = { ...preset, glyph, month, day, payee }
         const key = entry.snapshotId !== null ? `id-${entry.snapshotId}` : `idx-${i}`
         return <Card key={key} row={row} active={activeIdx === i} />
       })}
