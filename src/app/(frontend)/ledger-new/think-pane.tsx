@@ -131,7 +131,12 @@ function ThinkPaneInner({
     const schemaUpdate: JSONSchema7 = {
       type: 'object',
       properties: {
-        id: { type: 'integer', minimum: 1 },
+        id: {
+          oneOf: [
+            { type: 'integer', minimum: 1 },
+            { type: 'string', minLength: 1 },
+          ],
+        },
         raw_text: { type: 'string', minLength: 1 },
       },
       required: ['id', 'raw_text'],
@@ -139,7 +144,14 @@ function ThinkPaneInner({
     }
     const schemaDelete: JSONSchema7 = {
       type: 'object',
-      properties: { id: { type: 'integer', minimum: 1 } },
+      properties: {
+        id: {
+          oneOf: [
+            { type: 'integer', minimum: 1 },
+            { type: 'string', minLength: 1 },
+          ],
+        },
+      },
       required: ['id'],
       additionalProperties: false,
     }
@@ -180,19 +192,39 @@ function ThinkPaneInner({
       },
       propose_update: {
         description:
-          'Stage an edit to an existing transaction in the editor buffer. Use the numeric id returned by ledger_search/ledger_get (only when `editable: true`). Pass the full replacement raw_text.',
+          'Stage an edit to an existing transaction in the editor buffer. Pass the id (numeric for saved rows) or tempId (string for unsaved-create rows) returned by ledger_search/ledger_get; `editable` must be true. Pass the full replacement raw_text.',
         parameters: schemaUpdate,
         execute: async (input: unknown) => {
-          const { id, raw_text } = (input ?? {}) as { id: number; raw_text: string }
+          const { id, raw_text } = (input ?? {}) as {
+            id: number | string
+            raw_text: string
+          }
+          if (typeof id === 'string') {
+            const entry = entriesRef.current.find((e) => e.tempId === id)
+            if (!entry) return { ok: false, reason: `tempId ${id} not found in buffer` }
+            return onProposeRef.current({
+              kind: 'replace_text',
+              old_raw_text: entry.raw_text,
+              raw_text,
+            })
+          }
           return onProposeRef.current({ kind: 'update', id, raw_text })
         },
       },
       propose_delete: {
         description:
-          'Stage removal of a transaction from the editor buffer. Only call when `editable: true` for that id.',
+          'Stage removal of a transaction from the editor buffer. Pass id (numeric) or tempId (string); `editable` must be true.',
         parameters: schemaDelete,
         execute: async (input: unknown) => {
-          const { id } = (input ?? {}) as { id: number }
+          const { id } = (input ?? {}) as { id: number | string }
+          if (typeof id === 'string') {
+            const entry = entriesRef.current.find((e) => e.tempId === id)
+            if (!entry) return { ok: false, reason: `tempId ${id} not found in buffer` }
+            return onProposeRef.current({
+              kind: 'delete_text',
+              old_raw_text: entry.raw_text,
+            })
+          }
           return onProposeRef.current({ kind: 'delete', id })
         },
       },
