@@ -57,10 +57,10 @@ function useAutoReloadOnNewBuild() {
 function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: () => void }) {
   useAutoReloadOnNewBuild()
   const agent = useAgent({
-    agent: 'chat-agent',
+    agent: 'think-agent',
     name: email,
     query: async () => {
-      const res = await fetch(new URL('/api/chat/session', window.location.origin), {
+      const res = await fetch(new URL('/api/think/session', window.location.origin), {
         credentials: 'include',
       })
       if (!res.ok) throw new Error(`token ${res.status}`)
