@@ -92,8 +92,20 @@ function deriveEntries(buffer: string, snapshots: Snapshot[]): Entry[] {
 
 type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 
+type CardColor = 'amber' | 'sky' | 'emerald' | 'rose' | 'indigo' | 'slate'
+
+const COLOR_CLASSES: Record<CardColor, { icon: string; monthBg: string; monthText: string }> = {
+  amber: { icon: 'text-amber-600', monthBg: 'bg-amber-50', monthText: 'text-amber-700' },
+  sky: { icon: 'text-sky-600', monthBg: 'bg-sky-50', monthText: 'text-sky-700' },
+  emerald: { icon: 'text-emerald-600', monthBg: 'bg-emerald-50', monthText: 'text-emerald-700' },
+  rose: { icon: 'text-rose-600', monthBg: 'bg-rose-50', monthText: 'text-rose-700' },
+  indigo: { icon: 'text-indigo-600', monthBg: 'bg-indigo-50', monthText: 'text-indigo-700' },
+  slate: { icon: 'text-slate-500', monthBg: 'bg-slate-50', monthText: 'text-slate-600' },
+}
+
 type CardPreset = {
   glyph: LucideIcon
+  color: CardColor
   narration: string
   account: string
   rewards: { old?: string; current: string }
@@ -110,6 +122,7 @@ type CardRow = CardPreset & {
 const PRESETS: CardPreset[] = [
   {
     glyph: Utensils,
+    color: 'amber',
     narration: '· dinner with r',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+87', current: '+5,800 pts' },
@@ -117,6 +130,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: ShoppingBag,
+    color: 'indigo',
     narration: '· weekend restock',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+2,480 pts' },
@@ -124,6 +138,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Car,
+    color: 'emerald',
     narration: '· ride to office',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+320 pts' },
@@ -131,6 +146,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Utensils,
+    color: 'amber',
     narration: '· weekend order',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+164', current: '+328 pts' },
@@ -138,6 +154,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Landmark,
+    color: 'slate',
     narration: '· oct statement payment',
     account: 'Assets:Bank:HDFC → Liabilities:CreditCard:Axis',
     rewards: { current: '—' },
@@ -145,6 +162,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Package,
+    color: 'indigo',
     narration: '· monitor & cables',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+45', current: '+90 pts' },
@@ -153,6 +171,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Film,
+    color: 'rose',
     narration: '· premium renewal',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+258 pts' },
@@ -161,6 +180,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Ticket,
+    color: 'rose',
     narration: '· dune part two',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+96 pts' },
@@ -168,6 +188,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: UtensilsCrossed,
+    color: 'amber',
     narration: '· complimentary visit',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '—' },
@@ -176,6 +197,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Gift,
+    color: 'sky',
     narration: '· points → voucher',
     account: 'Assets:Rewards:Axis → Assets:GiftCards:Amazon',
     rewards: { current: '-35,000 pts' },
@@ -183,6 +205,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Hotel,
+    color: 'emerald',
     narration: '· delhi hotel',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+1,748 pts' },
@@ -191,6 +214,7 @@ const PRESETS: CardPreset[] = [
   },
   {
     glyph: Banknote,
+    color: 'emerald',
     narration: '· oct salary credit',
     account: 'Income:Salary → Assets:Bank:HDFC',
     rewards: { current: '—' },
@@ -230,6 +254,7 @@ function ChromeIconButton({
 
 function Card({ row, active }: { row: CardRow; active: boolean }) {
   const Glyph = row.glyph
+  const palette = COLOR_CLASSES[row.color]
   const shell = active
     ? 'h-[52px] bg-slate-100 flex items-center px-3 gap-3 transition-colors relative border-b border-slate-100 w-full'
     : 'h-[52px] bg-white hover:bg-slate-50 flex items-center px-3 gap-3 relative transition-colors border-b border-slate-100 w-full'
@@ -239,7 +264,9 @@ function Card({ row, active }: { row: CardRow; active: boolean }) {
     <div className={shell}>
       {active && <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-navy-600" />}
       <div className="h-10 w-10 border border-slate-200 flex flex-col shrink-0 relative overflow-hidden bg-white">
-        <div className="h-[14px] bg-slate-50 text-[9px] text-slate-500 font-mono flex items-center justify-center uppercase leading-none border-b border-slate-200">
+        <div
+          className={`h-[14px] ${palette.monthBg} ${palette.monthText} text-[9px] font-mono flex items-center justify-center uppercase leading-none border-b border-slate-200`}
+        >
           {row.month}
         </div>
         <div
@@ -252,7 +279,7 @@ function Card({ row, active }: { row: CardRow; active: boolean }) {
         className={`flex-1 min-w-[200px] flex flex-col justify-center ${active ? 'pl-[2px]' : ''}`}
       >
         <div className="flex items-center gap-1">
-          <Glyph size={14} strokeWidth={1.5} className="text-slate-400" />
+          <Glyph size={14} strokeWidth={1.5} className={palette.icon} />
           <span className="text-navy-600 text-[13px] font-medium truncate ml-1">{row.payee}</span>
           <span className="text-slate-400 text-[13px] italic truncate ml-1">{row.narration}</span>
           {row.pill && (
@@ -568,31 +595,18 @@ function DiffPane({ baseline, current }: { baseline: string; current: string }) 
 }
 
 function PaginationStrip({
-  first,
-  last,
-  total,
   page,
   totalPages,
   onPage,
-  bufferLines,
 }: {
-  first: number
-  last: number
-  total: number
   page: number
   totalPages: number
   onPage: (p: number) => void
-  bufferLines: number
 }) {
   const prevDisabled = page <= 1
   const nextDisabled = page >= totalPages
   return (
     <div className="h-[32px] bg-[#F1F5F9] border-t border-b border-[#E2E8F0] flex items-center shrink-0 w-full relative">
-      <div className="absolute left-0 w-1/3 pl-4 flex items-center">
-        <span className="font-mono text-[10px] text-slate-500">
-          {total === 0 ? '0 of 0' : `showing ${first}\u2013${last} of ${total}`}
-        </span>
-      </div>
       <div className="flex-1 flex items-center justify-center gap-2">
         <button
           type="button"
@@ -623,9 +637,6 @@ function PaginationStrip({
         >
           <ChevronRight size={14} strokeWidth={1.5} />
         </button>
-      </div>
-      <div className="absolute right-0 w-1/3 pr-4 flex items-center justify-end">
-        <span className="font-mono text-[10px] text-slate-500">{bufferLines} lines</span>
       </div>
     </div>
   )
@@ -688,10 +699,6 @@ export function LedgerNewView() {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages])
-  const first = state.rows.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
-  const last = (page - 1) * PAGE_SIZE + state.rows.length
-  const bufferLines = buffer.length === 0 ? 0 : buffer.split('\n').length
-
   const dirty = state.status === 'idle' && buffer !== baseline
 
   return (
@@ -737,15 +744,7 @@ export function LedgerNewView() {
         </div>
       </div>
 
-      <PaginationStrip
-        first={first}
-        last={last}
-        total={state.total}
-        page={page}
-        totalPages={totalPages}
-        onPage={setPage}
-        bufferLines={bufferLines}
-      />
+      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} />
 
       <main className="flex-1 flex overflow-hidden min-h-0">
         <div className="flex-[2] flex flex-col min-w-0 border-r border-slate-200">
@@ -802,7 +801,7 @@ export function LedgerNewView() {
 
           <div className="flex-1 bg-white flex flex-col overflow-hidden">
             <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0 gap-2">
-              <PaneLabel>SCRIBE</PaneLabel>
+              <PaneLabel>ASSISTANT</PaneLabel>
             </div>
             <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 text-[11px] font-mono">
               <div className="flex flex-col items-end gap-1">
@@ -827,7 +826,7 @@ export function LedgerNewView() {
                 </button>
                 <input
                   className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400"
-                  placeholder="ask scribe anything…"
+                  placeholder="ask the assistant anything…"
                   type="text"
                 />
                 <button
@@ -850,15 +849,7 @@ export function LedgerNewView() {
         </section>
       </main>
 
-      <PaginationStrip
-        first={first}
-        last={last}
-        total={state.total}
-        page={page}
-        totalPages={totalPages}
-        onPage={setPage}
-        bufferLines={bufferLines}
-      />
+      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} />
     </div>
   )
 }
