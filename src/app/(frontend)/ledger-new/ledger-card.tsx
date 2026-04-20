@@ -75,17 +75,15 @@ function formatExpenseAmount(expense: ParsedPosting): string | null {
 }
 
 function formatOutflow(expenseValue: number, currency: string | null): string {
-  const outflow = -expenseValue
-  const abs = Math.abs(outflow)
-  const sign = outflow < 0 ? '-' : outflow > 0 ? '+' : ''
+  const abs = Math.abs(expenseValue)
   if (currency === 'INR') {
-    return `${sign}₹${new Intl.NumberFormat('en-IN', {
+    return `₹${new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(abs)}`
   }
   if (currency === 'USD') {
-    return `${sign}$${new Intl.NumberFormat('en-US', {
+    return `$${new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(abs)}`
@@ -94,7 +92,7 @@ function formatOutflow(expenseValue: number, currency: string | null): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(abs)
-  return currency ? `${sign}${body} ${currency}` : `${sign}${body}`
+  return currency ? `${body} ${currency}` : body
 }
 
 export function EntryCard({
