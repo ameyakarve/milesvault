@@ -62,7 +62,45 @@ export const expenseSignValidator: Validator = ({ parsed }) => {
   return out
 }
 
-export const coreValidators: readonly Validator[] = [balanceValidator, expenseSignValidator]
+export const payeePresentValidator: Validator = ({ parsed }) => {
+  const out: Diagnostic[] = []
+  for (const txn of parsed) {
+    if (txn.payee && txn.payee.trim().length > 0) continue
+    out.push({
+      from: txn.headerRange.from,
+      to: txn.headerRange.to,
+      severity: 'error',
+      message:
+        'Missing payee. Header must be `YYYY-MM-DD * "payee" "narration"` (both strings).',
+      source: 'payee-present',
+    })
+  }
+  return out
+}
+
+export const amountRequiredValidator: Validator = ({ parsed }) => {
+  const out: Diagnostic[] = []
+  for (const txn of parsed) {
+    for (const p of txn.postings) {
+      if (p.amount) continue
+      out.push({
+        from: p.range.from,
+        to: p.range.to,
+        severity: 'error',
+        message: `Posting must have an amount; got '${p.account}' with no amount.`,
+        source: 'amount-required',
+      })
+    }
+  }
+  return out
+}
+
+export const coreValidators: readonly Validator[] = [
+  balanceValidator,
+  expenseSignValidator,
+  payeePresentValidator,
+  amountRequiredValidator,
+]
 
 function parseNumber(text: string): number | null {
   const cleaned = text.replace(/,/g, '').trim()

@@ -170,6 +170,40 @@ export const WithFlippedExpenseSign: Story = {
 }
 
 
+const MISSING_PAYEE = `2026-04-17 * "coffee"
+  Liabilities:CC:HSBC   -35.00 INR
+  Expenses:Food:Coffee   35.00 INR
+`
+
+export const WithMissingPayee: Story = {
+  args: { initialValue: MISSING_PAYEE },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Header has only one string (= narration), no payee. payee-present validator underlines the header.',
+      },
+    },
+  },
+}
+
+const ELIDED_AMOUNT = `2026-04-17 * "Amudham" "coffee"
+  Liabilities:CC:HSBC   -35.00 INR
+  Expenses:Food:Coffee
+`
+
+export const WithElidedAmount: Story = {
+  args: { initialValue: ELIDED_AMOUNT },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'One posting has no amount (elided). amount-required validator flags the posting line.',
+      },
+    },
+  },
+}
+
 const COMPLETION_SEED = `2026-04-17 * "Amudham" "coffee"
   Liabilities:CC:HSBC   -35.00 INR
   Expenses:`
