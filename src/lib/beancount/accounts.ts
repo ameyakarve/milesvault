@@ -24,7 +24,7 @@ const ROOTS = [
   'Equity:Opening-Balances',
 ]
 
-const ALL_ACCOUNTS: readonly string[] = Array.from(
+export const ALL_ACCOUNTS: readonly string[] = Array.from(
   new Set([...ROOTS, ...Object.keys(EXPENSE_ICONS)]),
 ).sort()
 

@@ -106,6 +106,18 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     }
   }
 
+  async listAccounts(): Promise<string[]> {
+    const rows = this.sql
+      .exec<{ raw_text: string }>('SELECT raw_text FROM transactions')
+      .toArray()
+    const set = new Set<string>()
+    const RE = /^[ \t]+([A-Z][A-Za-z0-9-]*(?::[A-Z0-9][A-Za-z0-9-]*)+)(?=\s|$)/gm
+    for (const r of rows) {
+      for (const m of r.raw_text.matchAll(RE)) set.add(m[1])
+    }
+    return Array.from(set).sort()
+  }
+
   async get(id: number): Promise<TransactionRow | null> {
     const row = this.sql
       .exec<TransactionRow>(
