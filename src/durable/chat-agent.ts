@@ -1,5 +1,5 @@
 import { AIChatAgent, type OnChatMessageOptions } from '@cloudflare/ai-chat'
-import { convertToModelMessages, streamText, wrapLanguageModel } from 'ai'
+import { convertToModelMessages, stepCountIs, streamText, wrapLanguageModel } from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createToolMiddleware } from '@ai-sdk-tool/parser'
 import { buildLedgerTools } from '@/lib/chat/ledger-tools'
@@ -151,6 +151,7 @@ export class ChatAgent extends AIChatAgent<Cloudflare.Env> {
       system: buildSystemPrompt(),
       messages: modelMessages,
       tools,
+      stopWhen: stepCountIs(10),
       abortSignal: options?.abortSignal,
       onError: (e) => {
         console.error('[chat] streamText onError', e)
