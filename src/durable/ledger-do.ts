@@ -1,5 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
 import { extractTxn, splitEntries, type ExtractedTxn } from '@/lib/beancount/extract'
+import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
+import { ROW_COLS, buildSearchWhere } from '@/lib/ledger-core/queries'
+import { distinctAccountsFromRawTexts } from '@/lib/ledger-core/accounts'
 import type {
   TransactionRow,
   BatchApplyInput,
@@ -13,13 +16,6 @@ import type {
 import type { SearchFilter } from './search-parser'
 
 type BatchError = { index: number; errors: string[] }
-
-const ROW_COLS =
-  'id, raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at'
-
-function escapeFts(s: string): string {
-  return s.replace(/"/g, '""')
-}
 
 export class LedgerDO extends DurableObject<CloudflareEnv> {
   private sql: SqlStorage
@@ -42,61 +38,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       this.sql.exec('DROP TABLE IF EXISTS transactions_fts')
       this.sql.exec('DROP TABLE IF EXISTS transactions')
     }
-    const steps: Array<[string, string]> = [
-      [
-        'transactions',
-        `CREATE TABLE IF NOT EXISTS transactions (
-          id          INTEGER PRIMARY KEY AUTOINCREMENT,
-          raw_text    TEXT    NOT NULL,
-          date        INTEGER NOT NULL,
-          flag        TEXT,
-          t_payee     TEXT    NOT NULL DEFAULT '',
-          t_account   TEXT    NOT NULL DEFAULT '',
-          t_currency  TEXT    NOT NULL DEFAULT '',
-          t_tag       TEXT    NOT NULL DEFAULT '',
-          t_link      TEXT    NOT NULL DEFAULT '',
-          created_at  INTEGER NOT NULL,
-          updated_at  INTEGER NOT NULL
-        )`,
-      ],
-      [
-        'idx_date_id',
-        'CREATE INDEX IF NOT EXISTS idx_transactions_date_id ON transactions(date, id)',
-      ],
-      ['idx_flag', 'CREATE INDEX IF NOT EXISTS idx_transactions_flag ON transactions(flag)'],
-      [
-        'transactions_fts',
-        `CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
-          t_payee, t_account, t_currency, t_tag, t_link,
-          content='transactions', content_rowid='id',
-          tokenize='unicode61'
-        )`,
-      ],
-      [
-        'trigger_ai',
-        `CREATE TRIGGER IF NOT EXISTS transactions_ai AFTER INSERT ON transactions BEGIN
-          INSERT INTO transactions_fts(rowid, t_payee, t_account, t_currency, t_tag, t_link)
-          VALUES (new.id, new.t_payee, new.t_account, new.t_currency, new.t_tag, new.t_link);
-        END`,
-      ],
-      [
-        'trigger_ad',
-        `CREATE TRIGGER IF NOT EXISTS transactions_ad AFTER DELETE ON transactions BEGIN
-          INSERT INTO transactions_fts(transactions_fts, rowid, t_payee, t_account, t_currency, t_tag, t_link)
-          VALUES ('delete', old.id, old.t_payee, old.t_account, old.t_currency, old.t_tag, old.t_link);
-        END`,
-      ],
-      [
-        'trigger_au',
-        `CREATE TRIGGER IF NOT EXISTS transactions_au AFTER UPDATE ON transactions BEGIN
-          INSERT INTO transactions_fts(transactions_fts, rowid, t_payee, t_account, t_currency, t_tag, t_link)
-          VALUES ('delete', old.id, old.t_payee, old.t_account, old.t_currency, old.t_tag, old.t_link);
-          INSERT INTO transactions_fts(rowid, t_payee, t_account, t_currency, t_tag, t_link)
-          VALUES (new.id, new.t_payee, new.t_account, new.t_currency, new.t_tag, new.t_link);
-        END`,
-      ],
-    ]
-    for (const [label, sql] of steps) {
+    for (const [label, sql] of SCHEMA_STEPS) {
       try {
         this.sql.exec(sql)
       } catch (e) {
@@ -110,12 +52,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const rows = this.sql
       .exec<{ raw_text: string }>('SELECT raw_text FROM transactions')
       .toArray()
-    const set = new Set<string>()
-    const RE = /^[ \t]+([A-Z][A-Za-z0-9-]*(?::[A-Z0-9][A-Za-z0-9-]*)+)(?=\s|$)/gm
-    for (const r of rows) {
-      for (const m of r.raw_text.matchAll(RE)) set.add(m[1])
-    }
-    return Array.from(set).sort()
+    return distinctAccountsFromRawTexts(rows.map((r) => r.raw_text))
   }
 
   async get(id: number): Promise<TransactionRow | null> {
@@ -133,36 +70,13 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     limit: number,
     offset: number,
   ): Promise<{ rows: TransactionRow[]; total: number }> {
-    const ftsTerms: string[] = []
-    for (const t of filter.accountTokens) ftsTerms.push(`t_account:"${escapeFts(t)}"`)
-    for (const t of filter.tagTokens) ftsTerms.push(`t_tag:"${escapeFts(t)}"`)
-    for (const t of filter.linkTokens) ftsTerms.push(`t_link:"${escapeFts(t)}"`)
-    for (const t of filter.freeTokens) ftsTerms.push(`"${escapeFts(t)}"`)
-    const ftsQuery = ftsTerms.join(' ')
-
-    const whereParts: string[] = []
-    const params: SqlStorageValue[] = []
-    if (ftsQuery.length > 0) {
-      whereParts.push(
-        't.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ?)',
-      )
-      params.push(ftsQuery)
-    }
-    if (filter.dateFrom != null) {
-      whereParts.push('t.date >= ?')
-      params.push(filter.dateFrom)
-    }
-    if (filter.dateTo != null) {
-      whereParts.push('t.date <= ?')
-      params.push(filter.dateTo)
-    }
-    const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : ''
-
+    const { whereSql, params } = buildSearchWhere(filter)
+    const sqlParams = params as SqlStorageValue[]
     const total =
       this.sql
         .exec<{ c: number }>(
           `SELECT COUNT(*) AS c FROM transactions t ${whereSql}`,
-          ...params,
+          ...sqlParams,
         )
         .toArray()[0]?.c ?? 0
     const rows = this.sql
@@ -171,7 +85,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
          ${whereSql}
          ORDER BY t.date DESC, t.id DESC
          LIMIT ? OFFSET ?`,
-        ...params,
+        ...sqlParams,
         limit,
         offset,
       )

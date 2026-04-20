@@ -770,6 +770,9 @@ export function LedgerNewView({ email }: { email: string }) {
 
           <ThinkPane
             email={email}
+            buffer={buffer}
+            snapshots={snapshots}
+            dirty={dirty}
             onPropose={(p: Proposal) => {
               const res = applyProposal(buffer, snapshots, p)
               if (res.ok === true) {
