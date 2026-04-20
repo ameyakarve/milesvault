@@ -1,5 +1,5 @@
 const TOP_LEVELS = new Set(['Assets', 'Liabilities', 'Expenses', 'Income', 'Equity'])
-export const CREDIT_CARD_GROUPS = new Set(['CreditCards', 'CreditCard'])
+export const CREDIT_CARD_GROUPS = new Set(['CreditCards', 'CreditCard', 'CC'])
 
 export function accountDisplayName(path: string): string {
   const parts = path.split(':').filter(Boolean)
