@@ -21,7 +21,40 @@ export function LedgerAssistant({ email, onMutate }: { email: string; onMutate?:
   return <LedgerAssistantInner email={email} onMutate={onMutate} />
 }
 
+function useAutoReloadOnNewBuild() {
+  useEffect(() => {
+    const ownId = process.env.NEXT_PUBLIC_BUILD_ID
+    if (!ownId) return
+    let reloaded = false
+    const check = async () => {
+      if (reloaded) return
+      try {
+        const r = await fetch('/api/version', { cache: 'no-store', credentials: 'include' })
+        if (!r.ok) return
+        const { buildId } = (await r.json()) as { buildId?: string | null }
+        if (buildId && buildId !== ownId) {
+          reloaded = true
+          window.location.reload()
+        }
+      } catch {
+        // network hiccup — try again next tick
+      }
+    }
+    void check()
+    const id = setInterval(check, 60_000)
+    const onFocus = (): void => {
+      void check()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
+}
+
 function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: () => void }) {
+  useAutoReloadOnNewBuild()
   const agent = useAgent({
     agent: 'chat-agent',
     name: email,
