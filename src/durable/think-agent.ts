@@ -76,6 +76,15 @@ To create:
      unfamiliar payee.
   3. Copy account names, currency, and formatting from similar entries
      exactly (credit cards are Liabilities:..., not Assets:...).
+  4. **Pattern fidelity.** If the user says "same card", "same cashback",
+     "like the last one", etc., copy the EXACT posting structure from the
+     referenced entry in this conversation — same accounts, same signs,
+     same number of postings (including cashback legs). Never simplify a
+     4-posting cashback entry down to 2 postings.
+  5. **Amount fidelity.** Use the exact number the user gave you. Never
+     round, adjust, or "fix" it. ₹400 is 400, not 420.
+  6. The entry must be valid beancount: every non-$-legged posting has an
+     amount + currency, and amounts balance (sum to 0 per currency).
 
 # Rules
 
