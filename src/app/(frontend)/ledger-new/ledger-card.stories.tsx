@@ -126,42 +126,6 @@ export const MultiExpenseSameCard: Story = {
 
 export const ExpensesWithCashback: Story = {
   args: {
-    text: `2026-04-17 * "Zomato" "dinner with 10% back"
-  Expenses:Food:Restaurant      1220.00 INR
-  Income:Rewards:Cashback       -122.00 INR
-  Liabilities:CC:HDFC          -1098.00 INR`,
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Expenses + cashback + single payment leg. Amount = expense total (₹1,220.00); rewards cell shows "+₹122" (cashback magnitude, compact); subtext = payment method ("HDFC Card").',
-      },
-    },
-  },
-}
-
-export const MultiExpensesAndCashbacks: Story = {
-  args: {
-    text: `2026-04-17 * "Amazon" "monitor + cables (10% back on each)"
-  Expenses:Shopping:Electronics    4500.00 INR
-  Expenses:Shopping:Home            600.00 INR
-  Income:Rewards:Cashback          -450.00 INR
-  Income:Rewards:Cashback           -60.00 INR
-  Liabilities:CC:HDFC:Infinia     -4590.00 INR`,
-  },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Multiple expenses + multiple cashbacks + single card. Amount = sum of expenses (₹5,100.00); rewards = "+₹510" (sum of cashback magnitudes); subtext = "HDFC Infinia Card". Icon from first expense.',
-      },
-    },
-  },
-}
-
-export const CashbackCreditedToSameCard: Story = {
-  args: {
     text: `2026-04-19 * "Amudham Cafe" "SIK coffee combo"
   Expenses:Food:Coffee                                 105 INR
   Liabilities:CC:HSBC:Cashback                        -105 INR
@@ -172,7 +136,29 @@ export const CashbackCreditedToSameCard: Story = {
     docs: {
       description: {
         story:
-          'Payment and cashback credit both land on the same `Liabilities:CC:HSBC:Cashback` account (two postings). Matcher collapses same-account legs into one payment, so the cashback card variant renders: amount ₹105, rewards "+₹10.50", subtext "HSBC Cashback Card".',
+          'Canonical cashback shape: 1 expense + 1 cashback pair (Income cashback + mirror credit back to the same payment account) + 1 charge. Amount = ₹105; rewards = "+₹10.50"; subtext = "HSBC Cashback Card". Rule: non-expense-non-cashback postings = 2 × cashback postings, all sharing one account.',
+      },
+    },
+  },
+}
+
+export const MultiExpensesAndCashbacks: Story = {
+  args: {
+    text: `2026-04-17 * "Amazon" "monitor + cables (10% back on each)"
+  Expenses:Shopping:Electronics                       4500.00 INR
+  Expenses:Shopping:Home                               600.00 INR
+  Liabilities:CC:HDFC:Infinia                        -4500.00 INR
+  Liabilities:CC:HDFC:Infinia                         -600.00 INR
+  Income:Rewards:Cashback                             -450.00 INR
+  Liabilities:CC:HDFC:Infinia                          450.00 INR
+  Income:Rewards:Cashback                              -60.00 INR
+  Liabilities:CC:HDFC:Infinia                           60.00 INR`,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multiple expenses + multiple cashback pairs, all on one card. 4 charge/mirror legs = 2 × 2 cashbacks. Amount = ₹5,100.00; rewards = "+₹510"; subtext = "HDFC Infinia Card". Icon from first expense.',
       },
     },
   },
