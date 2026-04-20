@@ -1,0 +1,92 @@
+import type { LucideIcon } from 'lucide-react'
+
+export type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
+
+export type CardColor = 'amber' | 'sky' | 'emerald' | 'rose' | 'indigo' | 'slate'
+
+export const COLOR_CLASSES: Record<
+  CardColor,
+  { icon: string; monthBg: string; monthText: string }
+> = {
+  amber: { icon: 'text-amber-600', monthBg: 'bg-amber-50', monthText: 'text-amber-700' },
+  sky: { icon: 'text-sky-600', monthBg: 'bg-sky-50', monthText: 'text-sky-700' },
+  emerald: { icon: 'text-emerald-600', monthBg: 'bg-emerald-50', monthText: 'text-emerald-700' },
+  rose: { icon: 'text-rose-600', monthBg: 'bg-rose-50', monthText: 'text-rose-700' },
+  indigo: { icon: 'text-indigo-600', monthBg: 'bg-indigo-50', monthText: 'text-indigo-700' },
+  slate: { icon: 'text-slate-500', monthBg: 'bg-slate-50', monthText: 'text-slate-600' },
+}
+
+export type CardPreset = {
+  glyph: LucideIcon
+  color: CardColor
+  narration: string
+  account: string
+  rewards: { old?: string; current: string }
+  amount: string
+  pill?: { label: string; kind: PillKind }
+}
+
+export type CardRow = CardPreset & {
+  month: string
+  day: string
+  payee: string
+  subtext: string | null
+}
+
+export function Card({ row, active }: { row: CardRow; active: boolean }) {
+  const Glyph = row.glyph
+  const palette = COLOR_CLASSES[row.color]
+  const shell = active
+    ? 'h-[52px] bg-slate-100 flex items-center px-3 gap-3 transition-colors relative border-b border-slate-100 w-full'
+    : 'h-[52px] bg-white hover:bg-slate-50 flex items-center px-3 gap-3 relative transition-colors border-b border-slate-100 w-full'
+  const dayBg = active ? 'bg-navy-50 text-navy-700' : 'bg-white text-navy-600'
+
+  return (
+    <div className={shell}>
+      {active && <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-navy-600" />}
+      <div className="h-10 w-10 border border-slate-200 flex flex-col shrink-0 relative overflow-hidden bg-white">
+        <div
+          className={`h-[14px] ${palette.monthBg} ${palette.monthText} text-[9px] font-mono flex items-center justify-center uppercase leading-none border-b border-slate-200`}
+        >
+          {row.month}
+        </div>
+        <div
+          className={`flex-1 text-[16px] font-mono flex items-center justify-center leading-none ${dayBg}`}
+        >
+          {row.day}
+        </div>
+      </div>
+      <div
+        className={`flex-1 min-w-[200px] flex flex-col justify-center ${active ? 'pl-[2px]' : ''}`}
+      >
+        <div className="flex items-center gap-1">
+          <Glyph size={14} strokeWidth={1.5} className={palette.icon} />
+          <span className="text-navy-600 text-[13px] font-medium truncate ml-1">{row.payee}</span>
+          <span className="text-slate-400 text-[13px] italic truncate ml-1">{row.narration}</span>
+          {row.pill && (
+            <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] uppercase font-mono px-1.5 py-0.5 flex items-center gap-1 leading-none ml-auto">
+              {row.pill.label}
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] text-slate-400 truncate font-mono">
+          {row.subtext ?? row.account}
+        </div>
+      </div>
+      <div className="w-[60px] text-right shrink-0 font-mono flex flex-col justify-center border-l border-slate-200 pl-2">
+        {row.rewards.old ? (
+          <div className="text-[11px]">
+            <span className="text-slate-300 line-through">{row.rewards.old}</span>
+            <span className="text-slate-300 mx-1">→</span>
+            <span className="text-sky-600 font-medium">{row.rewards.current}</span>
+          </div>
+        ) : (
+          <div className="text-[11px] text-sky-600 font-medium">{row.rewards.current}</div>
+        )}
+      </div>
+      <div className="text-right shrink-0 font-mono flex flex-col justify-center w-[104px] ml-2">
+        <div className="text-navy-700 text-[12px] font-medium">{row.amount}</div>
+      </div>
+    </div>
+  )
+}
