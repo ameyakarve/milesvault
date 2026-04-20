@@ -16,3 +16,27 @@ export function accountDisplayName(path: string): string {
 
   return rest.join(':')
 }
+
+export function paymentMethodDisplay(path: string): string | null {
+  const parts = path.split(':').filter(Boolean)
+  if (parts.length < 2) return null
+  const [root, group, a, b, extra] = parts
+
+  if (root === 'Liabilities' && CREDIT_CARD_GROUPS.has(group)) {
+    if (extra) return null
+    if (a && b) return `${a} ${b} Card`
+    if (a) return `${a} Card`
+    return null
+  }
+
+  if (root === 'Assets') {
+    if (parts.length === 2 && group === 'Cash') return 'Cash'
+    if (group === 'Bank') {
+      if (extra) return null
+      if (a && b) return `${a} ${b}`
+      if (a) return a
+    }
+  }
+
+  return null
+}
