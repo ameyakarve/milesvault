@@ -15,6 +15,41 @@ function formatError(e: unknown): { ok: false; errors: string[] } {
   return { ok: false, errors: [(e as Error)?.message ?? 'unknown error'] }
 }
 
+export function buildReadOnlyLedgerTools(env: Cloudflare.Env, email: string): ToolSet {
+  const client = createLedgerClient(env, email)
+
+  return {
+    ledger_search: tool({
+      description:
+        'Search transactions by a query (e.g. "swiggy", "account:Expenses:Food", date ranges). Empty q returns most-recent first. Results capped by limit (max 100).',
+      inputSchema: z.object({
+        q: z.string().default(''),
+        limit: z.number().int().min(1).max(MAX_LIMIT).default(20),
+        offset: z.number().int().min(0).default(0),
+      }),
+      execute: async ({ q, limit, offset }) => {
+        try {
+          return await client.search(q, limit, offset)
+        } catch (e) {
+          return formatError(e)
+        }
+      },
+    }),
+    ledger_get: tool({
+      description: 'Fetch a single transaction by its numeric id.',
+      inputSchema: z.object({ id: z.number().int().positive() }),
+      execute: async ({ id }) => {
+        try {
+          const txn = await client.get(id)
+          return txn ?? { ok: false, errors: ['not found'] }
+        } catch (e) {
+          return formatError(e)
+        }
+      },
+    }),
+  }
+}
+
 export function buildLedgerTools(env: Cloudflare.Env, email: string): ToolSet {
   const client = createLedgerClient(env, email)
 

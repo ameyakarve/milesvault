@@ -25,6 +25,8 @@
     "@ai-sdk/openai-compatible": "^2.0.41",
     "@ai-sdk/react": "^3.0.163",
     "@cloudflare/ai-chat": "^0.4.6",
+    "@cloudflare/shell": "^0.3.3",
+    "@cloudflare/think": "^0.3.0",
     "@codemirror/autocomplete": "^6.20.1",
     "@codemirror/commands": "^6.10.3",
     "@codemirror/language": "^6.12.3",
