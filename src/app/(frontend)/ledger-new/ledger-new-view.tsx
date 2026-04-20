@@ -5,6 +5,34 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { EditorView } from '@codemirror/view'
 import { diffLines } from 'diff'
+import {
+  ArrowUp,
+  Banknote,
+  Car,
+  ChevronLeft,
+  ChevronRight,
+  CircleDot,
+  Copy,
+  Film,
+  Filter,
+  Gift,
+  HelpCircle,
+  Hotel,
+  Landmark,
+  type LucideIcon,
+  Mic,
+  Package,
+  Paperclip,
+  Plus,
+  RotateCcw,
+  Save,
+  ShoppingBag,
+  Ticket,
+  Utensils,
+  UtensilsCrossed,
+  Wallet,
+  X,
+} from 'lucide-react'
 import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
 import { safeParse } from '../ledger/card-patterns/types'
@@ -65,7 +93,7 @@ function deriveEntries(buffer: string, snapshots: Snapshot[]): Entry[] {
 type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 
 type CardPreset = {
-  glyph: string
+  glyph: LucideIcon
   narration: string
   account: string
   rewards: { old?: string; current: string }
@@ -81,42 +109,42 @@ type CardRow = CardPreset & {
 
 const PRESETS: CardPreset[] = [
   {
-    glyph: 'restaurant',
+    glyph: Utensils,
     narration: '· dinner with r',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+87', current: '+5,800 pts' },
     amount: '-₹640.00',
   },
   {
-    glyph: 'shopping_bag',
+    glyph: ShoppingBag,
     narration: '· weekend restock',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+2,480 pts' },
     amount: '-₹320.00',
   },
   {
-    glyph: 'directions_car',
+    glyph: Car,
     narration: '· ride to office',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+320 pts' },
     amount: '-₹450.00',
   },
   {
-    glyph: 'restaurant',
+    glyph: Utensils,
     narration: '· weekend order',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+164', current: '+328 pts' },
     amount: '-₹1,250.00',
   },
   {
-    glyph: 'account_balance',
+    glyph: Landmark,
     narration: '· oct statement payment',
     account: 'Assets:Bank:HDFC → Liabilities:CreditCard:Axis',
     rewards: { current: '—' },
     amount: '-₹48,200.00',
   },
   {
-    glyph: 'inventory_2',
+    glyph: Package,
     narration: '· monitor & cables',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+45', current: '+90 pts' },
@@ -124,7 +152,7 @@ const PRESETS: CardPreset[] = [
     pill: { label: 'split', kind: 'split' },
   },
   {
-    glyph: 'movie',
+    glyph: Film,
     narration: '· premium renewal',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+258 pts' },
@@ -132,14 +160,14 @@ const PRESETS: CardPreset[] = [
     pill: { label: 'forex', kind: 'forex' },
   },
   {
-    glyph: 'local_activity',
+    glyph: Ticket,
     narration: '· dune part two',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+96 pts' },
     amount: '-₹480.00',
   },
   {
-    glyph: 'restaurant_menu',
+    glyph: UtensilsCrossed,
     narration: '· complimentary visit',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '—' },
@@ -147,14 +175,14 @@ const PRESETS: CardPreset[] = [
     pill: { label: 'benefit', kind: 'benefit' },
   },
   {
-    glyph: 'redeem',
+    glyph: Gift,
     narration: '· points → voucher',
     account: 'Assets:Rewards:Axis → Assets:GiftCards:Amazon',
     rewards: { current: '-35,000 pts' },
     amount: '+₹3,500.00',
   },
   {
-    glyph: 'hotel',
+    glyph: Hotel,
     narration: '· delhi hotel',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+1,748 pts' },
@@ -162,7 +190,7 @@ const PRESETS: CardPreset[] = [
     pill: { label: 'dcc', kind: 'dcc' },
   },
   {
-    glyph: 'payments',
+    glyph: Banknote,
     narration: '· oct salary credit',
     account: 'Income:Salary → Assets:Bank:HDFC',
     rewards: { current: '—' },
@@ -170,95 +198,84 @@ const PRESETS: CardPreset[] = [
   },
 ]
 
-function Icon({ name, className = '' }: { name: string; className?: string }) {
-  return (
-    <span className={`material-symbols-outlined ${className}`} aria-hidden>
-      {name}
-    </span>
-  )
-}
-
-function IconButton({
-  name,
+function ChromeIconButton({
+  icon: IconCmp,
   title,
   onClick,
   disabled = false,
-  active = false,
-  size = 16,
-  badge,
+  dirty = false,
 }: {
-  name: string
+  icon: LucideIcon
   title: string
   onClick?: () => void
   disabled?: boolean
-  active?: boolean
-  size?: number
-  badge?: ReactNode
+  dirty?: boolean
 }) {
-  const base = 'relative h-7 w-7 flex items-center justify-center rounded transition-colors'
-  const state = disabled
-    ? 'text-slate-300 cursor-default'
-    : active
-      ? 'text-navy-700 bg-slate-100'
-      : 'text-slate-500 hover:bg-slate-100 hover:text-navy-700'
   return (
     <button
       type="button"
       title={title}
+      aria-label={title}
       onClick={onClick}
       disabled={disabled}
-      className={`${base} ${state}`}
-      aria-label={title}
+      className="w-[28px] h-[28px] flex items-center justify-center rounded-[2px] hover:bg-slate-50 transition-colors relative"
     >
-      <Icon name={name} className={`text-[${size}px]`} />
-      {badge}
+      <IconCmp size={16} strokeWidth={1.5} className="text-slate-600" />
+      {dirty && (
+        <span className="absolute top-[6px] right-[6px] w-[6px] h-[6px] bg-amber-500 rounded-[2px]" />
+      )}
     </button>
   )
 }
 
-function Pill({ label }: { kind: PillKind; label: string }) {
-  return (
-    <span className="bg-slate-100 text-slate-500 border border-slate-200 text-[9px] uppercase tracking-wider font-mono px-1 py-px rounded-none flex items-center leading-none ml-auto">
-      {label}
-    </span>
-  )
-}
-
 function Card({ row, active }: { row: CardRow; active: boolean }) {
+  const Glyph = row.glyph
   const shell = active
-    ? 'bg-slate-100 border-l-2 border-l-navy-600'
-    : 'hover:bg-slate-50 border-l-2 border-l-transparent'
+    ? 'h-[52px] bg-slate-100 flex items-center px-3 gap-3 transition-colors relative border-b border-slate-100 w-full'
+    : 'h-[52px] bg-white hover:bg-slate-50 flex items-center px-3 gap-3 relative transition-colors border-b border-slate-100 w-full'
+  const dayBg = active ? 'bg-navy-50 text-navy-700' : 'bg-white text-navy-600'
 
   return (
-    <div
-      className={`h-8 flex items-center pl-2 pr-3 gap-2 relative transition-colors font-mono text-[11px] border-b border-slate-100 ${shell}`}
-    >
-      <div className="w-10 text-slate-400 tabular-nums shrink-0 uppercase text-[10px]">
-        {row.month}&nbsp;{row.day}
-      </div>
-      <Icon name={row.glyph} className="text-[12px] text-slate-400 shrink-0" />
-      <div className="flex-1 min-w-0 flex items-center gap-2">
-        <span className="text-navy-600 font-medium truncate max-w-[14ch]">{row.payee}</span>
-        <span className="text-slate-400 truncate">{row.narration}</span>
-        {row.pill && <Pill kind={row.pill.kind} label={row.pill.label} />}
-      </div>
-      <div className="w-[72px] text-right shrink-0 tabular-nums text-[10px]">
-        {row.rewards.old ? (
-          <>
-            <span className="text-slate-300 line-through">{row.rewards.old}</span>
-            <span className="text-slate-300 mx-1">→</span>
-            <span className="text-sky-600">{row.rewards.current}</span>
-          </>
-        ) : (
-          <span className="text-slate-500">{row.rewards.current}</span>
-        )}
+    <div className={shell}>
+      {active && <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-navy-600" />}
+      <div className="h-10 w-10 border border-slate-200 flex flex-col shrink-0 relative overflow-hidden bg-white">
+        <div className="h-[14px] bg-slate-50 text-[9px] text-slate-500 font-mono flex items-center justify-center uppercase leading-none border-b border-slate-200">
+          {row.month}
+        </div>
+        <div
+          className={`flex-1 text-[16px] font-mono flex items-center justify-center leading-none ${dayBg}`}
+        >
+          {row.day}
+        </div>
       </div>
       <div
-        className={`w-[104px] text-right shrink-0 tabular-nums ${
-          row.amount.startsWith('-') ? 'text-navy-700' : 'text-emerald-700'
-        }`}
+        className={`flex-1 min-w-[200px] flex flex-col justify-center ${active ? 'pl-[2px]' : ''}`}
       >
-        {row.amount}
+        <div className="flex items-center gap-1">
+          <Glyph size={14} strokeWidth={1.5} className="text-slate-400" />
+          <span className="text-navy-600 text-[13px] font-medium truncate ml-1">{row.payee}</span>
+          <span className="text-slate-400 text-[13px] italic truncate ml-1">{row.narration}</span>
+          {row.pill && (
+            <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] uppercase font-mono px-1.5 py-0.5 flex items-center gap-1 leading-none ml-auto">
+              {row.pill.label}
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] text-slate-400 truncate font-mono">{row.account}</div>
+      </div>
+      <div className="w-[60px] text-right shrink-0 font-mono flex flex-col justify-center border-l border-slate-200 pl-2">
+        {row.rewards.old ? (
+          <div className="text-[11px]">
+            <span className="text-slate-300 line-through">{row.rewards.old}</span>
+            <span className="text-slate-300 mx-1">→</span>
+            <span className="text-sky-600 font-medium">{row.rewards.current}</span>
+          </div>
+        ) : (
+          <div className="text-[11px] text-sky-600 font-medium">{row.rewards.current}</div>
+        )}
+      </div>
+      <div className="text-right shrink-0 font-mono flex flex-col justify-center w-[104px] ml-2">
+        <div className="text-navy-700 text-[12px] font-medium">{row.amount}</div>
       </div>
     </div>
   )
@@ -326,24 +343,11 @@ function useTransactions(page: number): FetchState {
   return state
 }
 
-function PaneHeader({
-  children,
-  action,
-  className = '',
-}: {
-  children: ReactNode
-  action?: ReactNode
-  className?: string
-}) {
+function PaneLabel({ children }: { children: ReactNode }) {
   return (
-    <div
-      className={`h-7 shrink-0 px-3 flex items-center justify-between bg-white ${className}`}
-    >
-      <h2 className="text-[11px] font-mono font-semibold uppercase tracking-[0.08em] text-navy-700">
-        {children}
-      </h2>
-      {action ?? null}
-    </div>
+    <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-navy-700">
+      {children}
+    </h2>
   )
 }
 
@@ -380,7 +384,7 @@ function CardsList({
     )
   }
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col relative z-10">
+    <div className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-white pb-0">
       {entries.map((entry, i) => {
         const preset = PRESETS[i % PRESETS.length]
         const { month, day, payee } = deriveFromRaw(entry.text)
@@ -507,8 +511,8 @@ function DiffPane({ baseline, current }: { baseline: string; current: string }) 
 
   return (
     <>
-      <div className="h-6 shrink-0 px-3 flex items-center bg-sky-50 border-b border-sky-100">
-        <span className="text-[11px] font-mono font-medium text-navy-700">
+      <div className="h-[24px] px-[12px] flex items-center bg-[#F0F9FF] border-b border-[#E0F2FE] shrink-0">
+        <span className="font-mono text-[11px] font-medium text-[#0F172A]">
           {fileTitle ?? 'no pending changes'}
         </span>
       </div>
@@ -517,34 +521,40 @@ function DiffPane({ baseline, current }: { baseline: string; current: string }) 
           buffer matches baseline
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto py-2 text-[11px] font-mono leading-[1.5]">
+        <div className="flex-1 overflow-y-auto p-3 text-[11px] font-mono">
           {hunks.map((h, idx) => (
-            <div key={idx} className={idx < hunks.length - 1 ? 'mb-3' : ''}>
+            <div key={idx} className={`${idx < hunks.length - 1 ? 'mb-4' : ''} group relative`}>
               {idx > 0 && (
-                <div className="text-slate-500 text-[10px] uppercase tracking-wider px-3 py-0.5 border-t border-slate-100">
+                <div className="text-slate-500 text-[10px] uppercase tracking-wider py-0.5">
                   {h.header}
                 </div>
               )}
               {h.lines.map((line, li) => {
                 if (line.kind === 'add') {
                   return (
-                    <div key={li} className="bg-emerald-50 text-navy-700 flex px-3 border-l-2 border-emerald-500">
-                      <span className="text-emerald-700 w-3 shrink-0 select-none">+</span>
+                    <div
+                      key={li}
+                      className="bg-emerald-50 text-emerald-700 flex px-2 py-0.5 border-l-[2px] border-emerald-600"
+                    >
+                      <span className="w-4 shrink-0 select-none font-medium">+</span>
                       <span className="whitespace-pre">{line.text}</span>
                     </div>
                   )
                 }
                 if (line.kind === 'del') {
                   return (
-                    <div key={li} className="bg-red-50 text-navy-700 flex px-3 border-l-2 border-red-400">
-                      <span className="text-red-700 w-3 shrink-0 select-none">-</span>
-                      <span className="whitespace-pre line-through">{line.text}</span>
+                    <div
+                      key={li}
+                      className="bg-red-50 text-red-500 flex px-2 py-0.5 border-l-[2px] border-red-500 line-through"
+                    >
+                      <span className="w-4 shrink-0 select-none">-</span>
+                      <span className="whitespace-pre">{line.text}</span>
                     </div>
                   )
                 }
                 return (
-                  <div key={li} className="text-slate-400 flex px-3">
-                    <span className="w-3 shrink-0 select-none"> </span>
+                  <div key={li} className="text-slate-400 flex px-2 py-0.5">
+                    <span className="w-4 shrink-0 select-none"> </span>
                     <span className="whitespace-pre">{line.text}</span>
                   </div>
                 )
@@ -577,43 +587,45 @@ function PaginationStrip({
   const prevDisabled = page <= 1
   const nextDisabled = page >= totalPages
   return (
-    <div className="h-9 shrink-0 bg-slate-100 border-t border-b border-slate-200 flex items-stretch font-mono text-[11px] text-navy-700">
-      <div className="w-1/2 px-3 flex items-center text-slate-500 border-r border-slate-200">
-        {total === 0 ? '0 of 0' : `showing ${first}\u2013${last} of ${total}`}
+    <div className="h-[32px] bg-[#F1F5F9] border-t border-b border-[#E2E8F0] flex items-center shrink-0 w-full relative">
+      <div className="absolute left-0 w-1/3 pl-4 flex items-center">
+        <span className="font-mono text-[10px] text-slate-500">
+          {total === 0 ? '0 of 0' : `showing ${first}\u2013${last} of ${total}`}
+        </span>
       </div>
-      <div className="w-1/2 px-3 flex items-center justify-between">
-        <div className="flex-1 flex items-center justify-center gap-1">
-          <button
-            type="button"
-            aria-label="previous page"
-            onClick={() => onPage(page - 1)}
-            disabled={prevDisabled}
-            className={`h-6 w-6 flex items-center justify-center rounded transition-colors ${
-              prevDisabled
-                ? 'text-slate-300 cursor-default'
-                : 'text-slate-500 hover:bg-slate-200 hover:text-navy-700'
-            }`}
-          >
-            <Icon name="chevron_left" className="text-[16px]" />
-          </button>
-          <span className="px-1 tabular-nums">
-            page {page} of {Math.max(1, totalPages)}
-          </span>
-          <button
-            type="button"
-            aria-label="next page"
-            onClick={() => onPage(page + 1)}
-            disabled={nextDisabled}
-            className={`h-6 w-6 flex items-center justify-center rounded transition-colors ${
-              nextDisabled
-                ? 'text-slate-300 cursor-default'
-                : 'text-slate-500 hover:bg-slate-200 hover:text-navy-700'
-            }`}
-          >
-            <Icon name="chevron_right" className="text-[16px]" />
-          </button>
-        </div>
-        <span className="text-slate-500 tabular-nums">{bufferLines} lines</span>
+      <div className="flex-1 flex items-center justify-center gap-2">
+        <button
+          type="button"
+          aria-label="previous page"
+          disabled={prevDisabled}
+          onClick={() => onPage(page - 1)}
+          className={
+            prevDisabled
+              ? 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px] text-slate-500 opacity-30 cursor-default'
+              : 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px] text-slate-500 hover:bg-[#E2E8F0] hover:text-[#0F172A] transition-colors'
+          }
+        >
+          <ChevronLeft size={14} strokeWidth={1.5} />
+        </button>
+        <span className="font-mono text-[10px] text-navy-700">
+          page {page} of {Math.max(1, totalPages)}
+        </span>
+        <button
+          type="button"
+          aria-label="next page"
+          disabled={nextDisabled}
+          onClick={() => onPage(page + 1)}
+          className={
+            nextDisabled
+              ? 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px] text-slate-500 opacity-30 cursor-default'
+              : 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px] text-slate-500 hover:bg-[#E2E8F0] hover:text-[#0F172A] transition-colors'
+          }
+        >
+          <ChevronRight size={14} strokeWidth={1.5} />
+        </button>
+      </div>
+      <div className="absolute right-0 w-1/3 pr-4 flex items-center justify-end">
+        <span className="font-mono text-[10px] text-slate-500">{bufferLines} lines</span>
       </div>
     </div>
   )
@@ -684,102 +696,87 @@ export function LedgerNewView() {
 
   return (
     <div className="w-screen h-screen flex flex-col bg-white text-navy-700 overflow-hidden font-sans">
-      <header className="h-8 px-3 flex justify-between items-center bg-white shrink-0 border-b border-slate-200">
-        <div className="flex items-center gap-2 text-[13px]">
-          <span className="font-semibold text-navy-700 tracking-tight">milesvault</span>
-          <span className="text-slate-300">/</span>
-          <span className="text-slate-500">ledger</span>
+      <header className="h-[32px] px-4 flex items-center bg-white shrink-0 z-20 border-b border-slate-200">
+        <div className="flex items-center gap-2">
+          <span className="font-sans font-medium text-navy-700 text-[13px]">milesvault</span>
+          <span className="font-sans font-normal text-slate-500 text-[12px]">/ ledger</span>
         </div>
-        <button
-          type="button"
-          title="account"
-          className="h-6 w-6 flex items-center justify-center text-slate-500 hover:text-navy-700 transition-colors"
-        >
-          <Icon name="account_circle" className="text-[20px]" />
-        </button>
       </header>
 
-      <div className="h-10 px-2 flex justify-between items-center bg-white border-b border-slate-200 shrink-0">
-        <div className="flex items-center gap-1">
-          <IconButton name="add" title="new entry" />
-          <IconButton
-            name="save"
-            title="save"
-            badge={
-              dirty ? (
-                <span className="absolute top-1 right-1 h-1.5 w-1.5 bg-amber-500 rounded-full" />
-              ) : undefined
-            }
-          />
-          <IconButton name="history" title="revert" />
+      <div className="h-[40px] px-4 flex justify-between items-center bg-white border-b border-slate-200 shrink-0 z-10">
+        <div className="flex items-center">
+          <ChromeIconButton icon={Plus} title="new entry" />
+          <ChromeIconButton icon={Save} title="save" dirty={dirty} />
+          <ChromeIconButton icon={RotateCcw} title="revert" />
           <div
-            className={`ml-1 h-6 px-2 flex items-center gap-1 text-[11px] font-mono rounded ${
+            className={`h-[24px] px-2 rounded-[4px] flex items-center gap-1.5 font-mono text-[11px] ml-1 ${
               dirty ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'
             }`}
             aria-live="polite"
           >
-            <Icon
-              name={dirty ? 'radio_button_checked' : 'check_circle'}
-              className="text-[12px]"
-            />
+            <CircleDot size={12} strokeWidth={2} className={dirty ? 'text-amber-700' : 'text-emerald-700'} />
             {dirty ? 'unsaved' : 'saved'}
           </div>
-          <div className="w-px h-5 bg-slate-200 mx-2" />
-          <IconButton name="filter_alt" title="filter" />
-          <div className="h-6 pl-2 pr-1 bg-slate-100 flex items-center gap-1 text-[11px] font-mono text-navy-700 rounded">
-            swiggy · oct 2025
-            <button
-              type="button"
-              title="clear filter"
-              className="h-4 w-4 flex items-center justify-center text-slate-500 hover:text-navy-700"
-            >
-              <Icon name="close" className="text-[12px]" />
-            </button>
+          <div className="h-[16px] w-px bg-slate-200 mx-3" />
+          <div className="flex items-center gap-1">
+            <ChromeIconButton icon={Filter} title="filter" />
+            <div className="flex items-center gap-1 pl-2 pr-1 h-[24px] bg-slate-100 text-[11px] font-mono text-navy-700 rounded-[4px]">
+              swiggy · oct 2025
+              <button
+                type="button"
+                title="clear filter"
+                className="w-[16px] h-[16px] flex items-center justify-center hover:bg-slate-200 rounded-[2px] transition-colors"
+              >
+                <X size={12} className="text-slate-600" />
+              </button>
+            </div>
           </div>
         </div>
-        <IconButton name="help" title="help" />
+        <div className="flex items-center gap-2">
+          <ChromeIconButton icon={HelpCircle} title="help" />
+        </div>
       </div>
 
+      <PaginationStrip
+        first={first}
+        last={last}
+        total={state.total}
+        page={page}
+        totalPages={totalPages}
+        onPage={setPage}
+        bufferLines={bufferLines}
+      />
+
       <main className="flex-1 flex overflow-hidden min-h-0">
-        <section className="flex-[2] flex flex-col min-w-0 border-r border-slate-200">
-          <div className="flex h-7 shrink-0 border-b border-slate-200">
-            <PaneHeader className="w-1/2 border-r border-slate-200">ledger</PaneHeader>
-            <PaneHeader
-              className="w-1/2"
-              action={
-                <button
-                  type="button"
-                  title="copy buffer"
-                  className="h-5 w-5 flex items-center justify-center text-slate-500 hover:text-navy-700 rounded hover:bg-slate-100 transition-colors"
-                >
-                  <Icon name="content_copy" className="text-[14px]" />
-                </button>
-              }
-            >
-              editor
-            </PaneHeader>
+        <div className="flex-[2] flex flex-col min-w-0 border-r border-slate-200">
+          <div className="flex w-full shrink-0">
+            <div className="flex-1 h-[28px] px-3 flex items-center border-b border-slate-200 border-r bg-white shrink-0">
+              <PaneLabel>LEDGER</PaneLabel>
+            </div>
+            <div className="flex-1 h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
+              <PaneLabel>EDITOR</PaneLabel>
+              <button
+                type="button"
+                title="copy buffer"
+                className="w-[20px] h-[20px] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors rounded-[4px] text-slate-500 hover:text-navy-700 mr-[12px]"
+              >
+                <Copy size={14} strokeWidth={1.5} />
+              </button>
+            </div>
           </div>
-
-          <PaginationStrip
-            first={first}
-            last={last}
-            total={state.total}
-            page={page}
-            totalPages={totalPages}
-            onPage={setPage}
-            bufferLines={bufferLines}
-          />
-
           <div className="flex flex-1 min-h-0">
-            <div className="w-1/2 border-r border-slate-200 flex flex-col min-h-0 overflow-hidden">
+            <section className="flex-1 min-w-0 bg-white flex flex-col relative overflow-hidden border-r border-slate-200">
               <CardsList
                 status={state.status}
                 errorMsg={state.errorMsg}
                 entries={cardEntries}
                 activeIdx={activeIdx}
               />
-            </div>
-            <div className="w-1/2 flex flex-col min-h-0 overflow-hidden">
+              <div className="absolute -bottom-6 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none z-0">
+                <Wallet size={180} strokeWidth={1.5} />
+              </div>
+            </section>
+            <section className="flex-1 min-w-0 bg-white flex flex-col overflow-hidden relative">
               <TextPane
                 status={state.status}
                 errorMsg={state.errorMsg}
@@ -791,85 +788,77 @@ export function LedgerNewView() {
                 }}
                 onCursorChange={setCursorPos}
               />
-            </div>
+            </section>
           </div>
+        </div>
 
-          <PaginationStrip
-            first={first}
-            last={last}
-            total={state.total}
-            page={page}
-            totalPages={totalPages}
-            onPage={setPage}
-            bufferLines={bufferLines}
-          />
-        </section>
-
-        <section className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 min-h-0 flex flex-col border-b border-slate-200">
-            <PaneHeader>changes</PaneHeader>
+        <section className="flex-1 min-w-0 flex flex-col">
+          <div className="h-[280px] bg-white flex flex-col overflow-hidden shrink-0 border-b border-slate-200">
+            <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
+              <PaneLabel>CHANGES</PaneLabel>
+            </div>
             <DiffPane baseline={baseline} current={buffer} />
           </div>
 
-          <div className="h-[360px] shrink-0 flex flex-col">
-            <PaneHeader>scribe</PaneHeader>
-            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
+          <div className="flex-1 bg-white flex flex-col overflow-hidden">
+            <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0 gap-2">
+              <PaneLabel>SCRIBE</PaneLabel>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 text-[11px] font-mono">
               <div className="flex flex-col items-end gap-1">
-                <div className="bg-slate-100 text-navy-700 px-2 py-1.5 max-w-[90%] text-[11px] font-mono border border-slate-200 rounded">
-                  recategorize swiggy and meat masterz to expenses:food:delivery. split the
-                  amazon purchase into monitor and accessories.
+                <div className="bg-amber-50/50 text-navy-600 px-3 py-2 border border-slate-200 border-l-[2px] border-l-amber-500 max-w-[85%]">
+                  Recategorize Swiggy and Meat Masterz to expenses:food:delivery.
                 </div>
               </div>
-              <div className="flex flex-col items-start gap-2">
-                <div className="bg-white text-navy-700 px-2 py-1.5 max-w-[90%] text-[11px] font-mono border border-slate-200 rounded">
-                  done. i&apos;ve staged those changes to the ledger.
-                </div>
-                <div className="bg-amber-50/60 border-l-2 border-amber-500 w-full p-2 flex flex-col gap-2 rounded-r">
-                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-amber-800">
-                    <Icon name="auto_awesome" className="text-[12px]" />
-                    staged proposals
-                  </div>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      className="flex-1 h-7 bg-navy-700 text-white text-[10px] font-mono uppercase tracking-wider hover:bg-navy-600 transition-colors rounded"
-                    >
-                      approve all
-                    </button>
-                    <button
-                      type="button"
-                      className="h-7 px-2 text-[10px] font-mono uppercase tracking-wider text-slate-500 hover:text-navy-700 border border-slate-200 rounded"
-                    >
-                      reject
-                    </button>
-                    <button
-                      type="button"
-                      className="h-7 px-2 text-[10px] font-mono uppercase tracking-wider text-slate-500 hover:text-navy-700 border border-slate-200 rounded"
-                    >
-                      diff
-                    </button>
-                  </div>
+              <div className="flex flex-col items-start gap-1">
+                <div className="bg-emerald-50 text-navy-600 px-3 py-2 max-w-[85%] border border-slate-200 border-l-[2px] border-l-emerald-500">
+                  Done. I&apos;ve staged those changes to the ledger.
                 </div>
               </div>
             </div>
-            <div className="p-2 border-t border-slate-200 shrink-0 bg-white">
-              <div className="bg-slate-50 flex items-center px-2 h-8 border border-slate-200 focus-within:border-sky-300 transition-colors rounded">
+            <div className="p-2 border-t border-slate-200 shrink-0 bg-white mt-auto">
+              <div className="bg-white flex items-center px-2 h-[36px] border border-slate-200 focus-within:border-navy-600 transition-colors">
+                <button
+                  type="button"
+                  title="attach"
+                  className="w-[24px] h-[24px] flex items-center justify-center hover:bg-slate-50 hover:text-navy-600 text-slate-400 transition-colors rounded-[2px]"
+                >
+                  <Paperclip size={14} strokeWidth={1.5} />
+                </button>
                 <input
-                  className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-700 placeholder:text-slate-400"
+                  className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400"
                   placeholder="ask scribe anything…"
                   type="text"
                 />
                 <button
                   type="button"
-                  className="bg-navy-700 text-white w-6 h-6 flex items-center justify-center hover:bg-navy-600 transition-colors shrink-0 rounded"
+                  title="dictate"
+                  className="w-[24px] h-[24px] flex items-center justify-center hover:bg-slate-50 hover:text-navy-600 text-slate-400 transition-colors rounded-[2px]"
                 >
-                  <Icon name="arrow_upward" className="text-[12px]" />
+                  <Mic size={14} strokeWidth={1.5} />
+                </button>
+                <button
+                  type="button"
+                  title="send"
+                  className="bg-navy-600 text-white w-[24px] h-[24px] flex items-center justify-center hover:bg-navy-700 transition-colors shrink-0 ml-1 rounded-[2px]"
+                >
+                  <ArrowUp size={14} strokeWidth={1.5} />
                 </button>
               </div>
             </div>
           </div>
         </section>
       </main>
+
+      <PaginationStrip
+        first={first}
+        last={last}
+        total={state.total}
+        page={page}
+        totalPages={totalPages}
+        onPage={setPage}
+        bufferLines={bufferLines}
+      />
     </div>
   )
 }
