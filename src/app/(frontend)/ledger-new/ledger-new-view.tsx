@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
 import type { Transaction } from '@/durable/ledger-types'
 import { safeParse } from '../ledger/card-patterns/types'
+import { composeBuffer, scandiBeancountExtensions } from './editor'
 
-type PillKind = 'proposed' | 'split' | 'forex' | 'dcc' | 'benefit'
+type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 
 type CardRow = {
   month: string
@@ -30,7 +32,6 @@ const PRESETS: CardRow[] = [
     rewards: { old: '+87', current: '+5,800 pts' },
     amount: '-₹640.00',
     state: 'staged',
-    pill: { label: 'proposed', kind: 'proposed' },
   },
   {
     month: 'OCT',
@@ -63,7 +64,6 @@ const PRESETS: CardRow[] = [
     rewards: { old: '+164', current: '+328 pts' },
     amount: '-₹1,250.00',
     state: 'staged',
-    pill: { label: 'proposed', kind: 'proposed' },
   },
   {
     month: 'OCT',
@@ -160,19 +160,9 @@ function Icon({ name, className = '' }: { name: string; className?: string }) {
   )
 }
 
-function Pill({ kind, label }: { kind: PillKind; label: string }) {
-  const styles: Record<PillKind, string> = {
-    proposed: 'bg-white border border-sky-200 text-sky-700',
-    split: 'bg-slate-100 text-slate-600 border border-slate-200',
-    forex: 'bg-slate-100 text-slate-600 border border-slate-200',
-    dcc: 'bg-slate-100 text-slate-600 border border-slate-200',
-    benefit: 'bg-slate-100 text-slate-600 border border-slate-200',
-  }
+function Pill({ label }: { kind: PillKind; label: string }) {
   return (
-    <span
-      className={`${styles[kind]} text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 leading-none shadow-sm ml-auto`}
-    >
-      {kind === 'proposed' && <Icon name="auto_awesome" className="text-[10px]" />}
+    <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 leading-none shadow-sm ml-auto">
       {label}
     </span>
   )
@@ -254,83 +244,6 @@ function Card({ row }: { row: CardRow }) {
   )
 }
 
-type TextLine = {
-  n: number
-  body: React.ReactNode
-  indent?: boolean
-  staged?: boolean
-  gap?: 'bottom'
-}
-
-const textLines: TextLine[] = [
-  { n: 118, body: <span className="text-slate-400">; oct 2023 — axis reserve</span> },
-  { n: 119, body: <>&nbsp;</> },
-  { n: 120, body: <span>2023-10-23 * &quot;Zepto&quot; &quot;Groceries&quot;</span> },
-  { n: 121, body: <span>Liabilities:CreditCard:Axis     -320.00 INR</span>, indent: true },
-  { n: 122, body: <span>Expenses:Groceries</span>, indent: true, gap: 'bottom' },
-  { n: 123, body: <>&nbsp;</> },
-  {
-    n: 124,
-    body: <span>2023-10-24 * &quot;Swiggy&quot; &quot;dinner with r&quot;</span>,
-    staged: true,
-  },
-  {
-    n: 125,
-    body: <span>Liabilities:CreditCard:Axis     -640.00 INR</span>,
-    indent: true,
-    staged: true,
-  },
-  {
-    n: 126,
-    body: <span className="text-sky-700 font-medium">Expenses:Food:Delivery</span>,
-    indent: true,
-    staged: true,
-  },
-  { n: 127, body: <>&nbsp;</> },
-  { n: 128, body: <span>2023-10-22 * &quot;Uber&quot; &quot;ride to office&quot;</span> },
-  { n: 129, body: <span>Liabilities:CreditCard:Axis     -450.00 INR</span>, indent: true },
-  { n: 130, body: <span>Expenses:Transport:Cab</span>, indent: true },
-]
-
-function TextLineRow({ line }: { line: TextLine }) {
-  const gutter = line.staged ? 'text-sky-400' : 'text-slate-300'
-  return (
-    <div className={`flex ${line.gap === 'bottom' ? 'pb-3' : ''}`}>
-      <div className={`w-8 shrink-0 ${gutter} text-right pr-3 select-none`}>{line.n}</div>
-      <div className={`flex-1 text-navy-600 ${line.indent ? 'pl-4' : ''}`}>{line.body}</div>
-    </div>
-  )
-}
-
-function renderTextLines(lines: TextLine[]): React.ReactNode[] {
-  const out: React.ReactNode[] = []
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (line.staged) {
-      const group: TextLine[] = []
-      while (i < lines.length && lines[i].staged) {
-        group.push(lines[i])
-        i++
-      }
-      out.push(
-        <div
-          key={`g-${group[0].n}`}
-          className="bg-sky-50/50 border-l-[2px] border-sky-400 -ml-4 pl-4 py-1 my-1"
-        >
-          {group.map((gl) => (
-            <TextLineRow key={gl.n} line={gl} />
-          ))}
-        </div>,
-      )
-      continue
-    }
-    out.push(<TextLineRow key={line.n} line={line} />)
-    i++
-  }
-  return out
-}
-
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
 function deriveFromRaw(raw: string): { month: string; day: string; payee: string } {
@@ -354,11 +267,11 @@ function deriveFromRaw(raw: string): { month: string; day: string; payee: string
   return { month: '—', day: '—', payee: 'Transaction' }
 }
 
-function CardsList() {
-  const [status, setStatus] = useState<'loading' | 'idle' | 'error'>('loading')
-  const [rows, setRows] = useState<Transaction[]>([])
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+type FetchStatus = 'loading' | 'idle' | 'error'
+type FetchState = { status: FetchStatus; rows: Transaction[]; errorMsg: string | null }
 
+function useTransactions(): FetchState {
+  const [state, setState] = useState<FetchState>({ status: 'loading', rows: [], errorMsg: null })
   useEffect(() => {
     const controller = new AbortController()
     fetch('/api/ledger/transactions?q=&limit=12&offset=0', {
@@ -369,33 +282,32 @@ function CardsList() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return (await res.json()) as { rows: Transaction[]; total: number }
       })
-      .then((data) => {
-        setRows(data.rows)
-        setStatus('idle')
-      })
+      .then((data) => setState({ status: 'idle', rows: data.rows, errorMsg: null }))
       .catch((e: unknown) => {
         if (e instanceof DOMException && e.name === 'AbortError') return
-        setErrorMsg((e as Error).message)
-        setStatus('error')
+        setState({ status: 'error', rows: [], errorMsg: (e as Error).message })
       })
     return () => controller.abort()
   }, [])
+  return state
+}
 
-  if (status === 'loading') {
+function CardsList({ state }: { state: FetchState }) {
+  if (state.status === 'loading') {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
         loading…
       </div>
     )
   }
-  if (status === 'error') {
+  if (state.status === 'error') {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-error">
-        failed to load — {errorMsg}
+        failed to load — {state.errorMsg}
       </div>
     )
   }
-  if (rows.length === 0) {
+  if (state.rows.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
         no transactions
@@ -404,7 +316,7 @@ function CardsList() {
   }
   return (
     <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 relative z-10 pb-10">
-      {rows.map((txn, i) => {
+      {state.rows.map((txn, i) => {
         const preset = PRESETS[i % PRESETS.length]
         const { month, day, payee } = deriveFromRaw(txn.raw_text)
         const row: CardRow = { ...preset, month, day, payee }
@@ -414,7 +326,51 @@ function CardsList() {
   )
 }
 
+function TextPane({ state }: { state: FetchState }) {
+  const initial = useMemo(() => composeBuffer(state.rows.map((r) => r.raw_text)), [state.rows])
+  const [buffer, setBuffer] = useState(initial)
+  useEffect(() => {
+    setBuffer(initial)
+  }, [initial])
+
+  if (state.status === 'loading') {
+    return (
+      <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
+        loading…
+      </div>
+    )
+  }
+  if (state.status === 'error') {
+    return (
+      <div className="flex-1 flex items-center justify-center text-[12px] text-error">
+        failed to load — {state.errorMsg}
+      </div>
+    )
+  }
+  return (
+    <div className="flex-1 min-h-0 overflow-hidden">
+      <CodeMirror
+        className="h-full"
+        value={buffer}
+        onChange={setBuffer}
+        extensions={scandiBeancountExtensions}
+        basicSetup={{
+          lineNumbers: true,
+          highlightActiveLine: false,
+          highlightActiveLineGutter: true,
+          foldGutter: false,
+          autocompletion: false,
+          searchKeymap: false,
+          bracketMatching: false,
+          indentOnInput: false,
+        }}
+      />
+    </div>
+  )
+}
+
 export function LedgerNewView() {
+  const state = useTransactions()
   return (
     <div className="w-screen h-screen flex flex-col bg-scandi-bg text-navy-600 overflow-hidden font-sans">
       {/* Global header */}
@@ -500,7 +456,7 @@ export function LedgerNewView() {
             <h2 className="text-navy-600 font-semibold text-[13px]">cards</h2>
             <h2 className="text-[11px] text-slate-400">12 shown</h2>
           </div>
-          <CardsList />
+          <CardsList state={state} />
           <div className="absolute -bottom-6 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none">
             <Icon name="account_balance_wallet" className="!text-[180px]" />
           </div>
@@ -520,9 +476,7 @@ export function LedgerNewView() {
               <Icon name="content_copy" className="text-[14px]" /> copy
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto bg-white text-[11px] font-mono leading-relaxed">
-            <div className="p-4">{renderTextLines(textLines)}</div>
-          </div>
+          <TextPane state={state} />
         </section>
 
         {/* Diff + AI chat pane */}
