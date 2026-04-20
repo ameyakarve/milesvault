@@ -33,6 +33,10 @@
         "name": "ChatAgent",
         "class_name": "ChatAgent",
       },
+      {
+        "name": "ThinkAgent",
+        "class_name": "ThinkAgent",
+      },
     ],
   },
   "migrations": [
@@ -40,6 +44,7 @@
     { "tag": "v2", "deleted_classes": ["VaultAgent"] },
     { "tag": "v3", "new_sqlite_classes": ["LedgerDO"] },
     { "tag": "v4", "new_sqlite_classes": ["ChatAgent"] },
+    { "tag": "v5", "new_sqlite_classes": ["ThinkAgent"] },
   ],
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
@@ -80,11 +85,16 @@
             "name": "ChatAgent",
             "class_name": "ChatAgent",
           },
+          {
+            "name": "ThinkAgent",
+            "class_name": "ThinkAgent",
+          },
         ],
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
         { "tag": "v2", "new_sqlite_classes": ["ChatAgent"] },
+        { "tag": "v3", "new_sqlite_classes": ["ThinkAgent"] },
       ],
       "services": [{ "binding": "PROD", "service": "milesvault" }],
       "r2_buckets": [
