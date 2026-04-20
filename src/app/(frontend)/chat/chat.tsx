@@ -42,10 +42,32 @@ function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: (
   const [draft, setDraft] = useState('')
   const busy = status === 'streaming' || status === 'submitted'
 
+  const pendingToolCalls = (messages as ChatMessage[]).flatMap((m) =>
+    m.role === 'assistant'
+      ? m.parts.filter(
+          (p): p is Extract<MessagePart, { type: `tool-${string}` }> =>
+            typeof p.type === 'string' &&
+            p.type.startsWith('tool-') &&
+            (p as { state?: string }).state === 'input-available',
+        )
+      : [],
+  )
+  const hasPending = pendingToolCalls.length > 0
+
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
+    if (hasPending) {
+      for (const p of pendingToolCalls) {
+        const toolName = p.type.replace(/^tool-/, '')
+        void addToolResult({
+          tool: toolName,
+          toolCallId: p.toolCallId,
+          output: { ok: false, rejected: true, reason: 'superseded-by-new-message' },
+        })
+      }
+    }
     sendMessage({ text })
     setDraft('')
   }
