@@ -81,9 +81,14 @@ export function createMapReader(getEntries: () => Iterable<MapEntry>): LedgerRea
     async search(q, limit, offset): Promise<SearchResult> {
       const filter = parseQuery(q)
       const all: MapEntry[] = []
+      let scanned = 0
       for (const e of getEntries()) {
+        scanned++
         if (matchesFilter(e, filter)) all.push(e)
       }
+      console.log(
+        `[reader:client] map search q=${JSON.stringify(q)} scanned=${scanned} matched=${all.length}`,
+      )
       all.sort((a, b) => {
         if (b.date !== a.date) return b.date - a.date
         return (b.id ?? 0) - (a.id ?? 0)
@@ -93,9 +98,16 @@ export function createMapReader(getEntries: () => Iterable<MapEntry>): LedgerRea
     },
     async get(idOrTempId): Promise<ReaderRow | null> {
       for (const e of getEntries()) {
-        if (typeof idOrTempId === 'number' && e.id === idOrTempId) return toReaderRow(e)
-        if (typeof idOrTempId === 'string' && e.tempId === idOrTempId) return toReaderRow(e)
+        if (typeof idOrTempId === 'number' && e.id === idOrTempId) {
+          console.log(`[reader:client] map get id=${idOrTempId} → hit`)
+          return toReaderRow(e)
+        }
+        if (typeof idOrTempId === 'string' && e.tempId === idOrTempId) {
+          console.log(`[reader:client] map get tempId=${idOrTempId} → hit`)
+          return toReaderRow(e)
+        }
       }
+      console.log(`[reader:client] map get ${idOrTempId} → miss`)
       return null
     },
   }

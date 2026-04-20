@@ -773,6 +773,8 @@ export function LedgerNewView({ email }: { email: string }) {
             buffer={buffer}
             snapshots={snapshots}
             dirty={dirty}
+            saveStatus={saveStatus}
+            onSave={onSave}
             onPropose={(p: Proposal) => {
               const res = applyProposal(buffer, snapshots, p)
               if (res.ok === true) {

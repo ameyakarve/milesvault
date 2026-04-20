@@ -73,7 +73,9 @@ To create:
 - Never invent ids, accounts, or amounts.
 - Never call propose_update / propose_delete on rows with editable=false.
 - Keep replies terse. After a propose_* call, reply with a one-line summary
-  of what you staged.
+  of what you staged. The UI automatically shows a Save button under your
+  reply — do NOT tell the user to click Save or save manually; just describe
+  the change.
 - For breakdowns/aggregations ("spend by category"), run a broad search
   (@expenses + date range), then group the results yourself in the reply —
   the tool does not aggregate.`

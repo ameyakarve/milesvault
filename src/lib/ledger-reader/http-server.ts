@@ -37,6 +37,7 @@ function toRow(t: ApiTxn): ReaderRow {
 export function createHttpServerReader(): LedgerReader {
   return {
     async search(q, limit, offset): Promise<SearchResult> {
+      console.log(`[reader:server] HTTP search q=${JSON.stringify(q)} limit=${limit} offset=${offset}`)
       const params = new URLSearchParams()
       if (q) params.set('q', q)
       params.set('limit', String(limit))
@@ -50,6 +51,7 @@ export function createHttpServerReader(): LedgerReader {
     },
     async get(idOrTempId): Promise<ReaderRow | null> {
       if (typeof idOrTempId !== 'number') return null
+      console.log(`[reader:server] HTTP get id=${idOrTempId}`)
       const res = await fetch(`/api/ledger/transactions/${idOrTempId}`, {
         credentials: 'include',
       })

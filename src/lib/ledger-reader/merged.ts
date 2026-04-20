@@ -89,10 +89,18 @@ export function createMergedReader(opts: {
   return {
     async search(q, limit, offset): Promise<AgentSearchResult> {
       const unsaved = hasUnsavedChanges()
+      console.log(
+        `[reader] search q=${JSON.stringify(q)} limit=${limit} offset=${offset} ` +
+          `→ hitting server${unsaved ? ' + client (unsaved buffer)' : ' only (clean buffer)'}`,
+      )
       const [serverRes, clientRes] = await Promise.all([
         server.search(q, limit, offset),
         unsaved ? client.search(q, limit, offset) : Promise.resolve(null),
       ])
+      console.log(
+        `[reader] search q=${JSON.stringify(q)} server=${serverRes.rows.length}/${serverRes.total} ` +
+          `client=${clientRes ? `${clientRes.rows.length}/${clientRes.total}` : 'skipped'}`,
+      )
 
       const merged = new Map<string, AgentRow>()
       const warnings: string[] = []
@@ -122,13 +130,18 @@ export function createMergedReader(opts: {
 
     async get(idOrTempId) {
       if (typeof idOrTempId === 'string') {
+        console.log(`[reader] get tempId=${idOrTempId} → client only`)
         const r = await client.get(idOrTempId)
         return r ? annotate(r, 'client') : null
       }
       const rendered = renderedIds().has(idOrTempId)
       if (rendered) {
+        console.log(`[reader] get id=${idOrTempId} → client (rendered in viewport)`)
         const r = await client.get(idOrTempId)
         if (r) return annotate(r, 'client')
+        console.log(`[reader] get id=${idOrTempId} → client miss, falling back to server`)
+      } else {
+        console.log(`[reader] get id=${idOrTempId} → server (not in viewport)`)
       }
       const s = await server.get(idOrTempId)
       if (!s) return null
