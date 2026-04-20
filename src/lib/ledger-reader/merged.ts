@@ -1,8 +1,7 @@
 import type { LedgerReader, ReaderRow } from './types'
 
 export type AgentRow = {
-  id: number | null
-  tempId?: string
+  id: number
   raw_text: string
   updated_at: number
   editable: boolean
@@ -18,9 +17,7 @@ export type AgentSearchResult = {
 
 export type MergedReader = {
   search(q: string, limit: number, offset: number): Promise<AgentSearchResult>
-  get(
-    idOrTempId: number | string,
-  ): Promise<AgentRow | { ok: false; reason: string } | null>
+  get(id: number): Promise<AgentRow | { ok: false; reason: string } | null>
 }
 
 export function createMergedReader(opts: {
@@ -32,12 +29,21 @@ export function createMergedReader(opts: {
   const { server, client, renderedIds, hasUnsavedChanges } = opts
 
   function annotate(row: ReaderRow, source: 'client' | 'server'): AgentRow {
-    const rendered = row.id != null && renderedIds().has(row.id)
-    const isTempOnly = row.id == null && !!row.tempId
-    if (source === 'client' && (rendered || isTempOnly)) {
+    // Negative ids are client-only (unsaved create / dirty edit). They only
+    // exist on the client side and are always editable by definition.
+    if (row.id < 0) {
       return {
         id: row.id,
-        tempId: row.tempId,
+        raw_text: row.raw_text,
+        updated_at: row.updated_at,
+        editable: true,
+        source: 'client',
+      }
+    }
+    const rendered = renderedIds().has(row.id)
+    if (source === 'client' && rendered) {
+      return {
+        id: row.id,
         raw_text: row.raw_text,
         updated_at: row.updated_at,
         editable: true,
@@ -77,7 +83,6 @@ export function createMergedReader(opts: {
     }
     return {
       id: row.id,
-      tempId: row.tempId,
       raw_text: row.raw_text,
       updated_at: row.updated_at,
       editable: false,
@@ -102,20 +107,15 @@ export function createMergedReader(opts: {
           `client=${clientRes ? `${clientRes.rows.length}/${clientRes.total}` : 'skipped'}`,
       )
 
-      const merged = new Map<string, AgentRow>()
+      const merged = new Map<number, AgentRow>()
       const warnings: string[] = []
 
       // Client rows first (authoritative over server for same id).
       if (clientRes) {
-        for (const r of clientRes.rows) {
-          const key = r.tempId ? `t:${r.tempId}` : `i:${r.id}`
-          merged.set(key, annotate(r, 'client'))
-        }
+        for (const r of clientRes.rows) merged.set(r.id, annotate(r, 'client'))
       }
       for (const r of serverRes.rows) {
-        if (r.id == null) continue
-        const key = `i:${r.id}`
-        if (!merged.has(key)) merged.set(key, annotate(r, 'server'))
+        if (!merged.has(r.id)) merged.set(r.id, annotate(r, 'server'))
       }
 
       if (unsaved) {
@@ -128,22 +128,22 @@ export function createMergedReader(opts: {
       return { rows, total: rows.length, warnings }
     },
 
-    async get(idOrTempId) {
-      if (typeof idOrTempId === 'string') {
-        console.log(`[reader] get tempId=${idOrTempId} → client only`)
-        const r = await client.get(idOrTempId)
+    async get(id) {
+      if (id < 0) {
+        console.log(`[reader] get id=${id} → client only (negative id)`)
+        const r = await client.get(id)
         return r ? annotate(r, 'client') : null
       }
-      const rendered = renderedIds().has(idOrTempId)
+      const rendered = renderedIds().has(id)
       if (rendered) {
-        console.log(`[reader] get id=${idOrTempId} → client (rendered in viewport)`)
-        const r = await client.get(idOrTempId)
+        console.log(`[reader] get id=${id} → client (rendered in viewport)`)
+        const r = await client.get(id)
         if (r) return annotate(r, 'client')
-        console.log(`[reader] get id=${idOrTempId} → client miss, falling back to server`)
+        console.log(`[reader] get id=${id} → client miss, falling back to server`)
       } else {
-        console.log(`[reader] get id=${idOrTempId} → server (not in viewport)`)
+        console.log(`[reader] get id=${id} → server (not in viewport)`)
       }
-      const s = await server.get(idOrTempId)
+      const s = await server.get(id)
       if (!s) return null
       return annotate(s, 'server')
     },

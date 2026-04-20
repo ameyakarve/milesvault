@@ -2,8 +2,7 @@ import { parseQuery, type SearchFilter } from '@/durable/search-parser'
 import type { LedgerReader, SearchResult, ReaderRow } from './types'
 
 export type MapEntry = {
-  id: number | null
-  tempId?: string
+  id: number
   raw_text: string
   date: number
   flag: string | null
@@ -56,7 +55,6 @@ function tokenPresent(haystack: string, token: string): boolean {
 function toReaderRow(e: MapEntry): ReaderRow {
   return {
     id: e.id,
-    tempId: e.tempId,
     raw_text: e.raw_text,
     date: e.date,
     flag: e.flag,
@@ -91,23 +89,19 @@ export function createMapReader(getEntries: () => Iterable<MapEntry>): LedgerRea
       )
       all.sort((a, b) => {
         if (b.date !== a.date) return b.date - a.date
-        return (b.id ?? 0) - (a.id ?? 0)
+        return b.id - a.id
       })
       const paged = all.slice(offset, offset + limit)
       return { rows: paged.map(toReaderRow), total: all.length }
     },
-    async get(idOrTempId): Promise<ReaderRow | null> {
+    async get(id): Promise<ReaderRow | null> {
       for (const e of getEntries()) {
-        if (typeof idOrTempId === 'number' && e.id === idOrTempId) {
-          console.log(`[reader:client] map get id=${idOrTempId} → hit`)
-          return toReaderRow(e)
-        }
-        if (typeof idOrTempId === 'string' && e.tempId === idOrTempId) {
-          console.log(`[reader:client] map get tempId=${idOrTempId} → hit`)
+        if (e.id === id) {
+          console.log(`[reader:client] map get id=${id} → hit`)
           return toReaderRow(e)
         }
       }
-      console.log(`[reader:client] map get ${idOrTempId} → miss`)
+      console.log(`[reader:client] map get ${id} → miss`)
       return null
     },
   }

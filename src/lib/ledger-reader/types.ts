@@ -1,6 +1,6 @@
 import type { LedgerRow } from '@/lib/ledger-core/types'
 
-export type ReaderRow = Omit<LedgerRow, 'id'> & { id: number | null; tempId?: string }
+export type ReaderRow = LedgerRow
 
 export type SearchResult = {
   rows: ReaderRow[]
@@ -9,5 +9,5 @@ export type SearchResult = {
 
 export interface LedgerReader {
   search(q: string, limit: number, offset: number): Promise<SearchResult>
-  get(idOrTempId: number | string): Promise<ReaderRow | null>
+  get(id: number): Promise<ReaderRow | null>
 }
