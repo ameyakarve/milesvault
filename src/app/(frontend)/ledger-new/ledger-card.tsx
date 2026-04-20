@@ -62,6 +62,7 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
     subtext,
     amount,
     pill: undefined,
+    rewards: { current: '' },
   }
 }
 
