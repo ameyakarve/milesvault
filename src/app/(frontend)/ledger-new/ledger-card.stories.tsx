@@ -107,6 +107,23 @@ export const UnmatchedPaymentFallback: Story = {
   },
 }
 
+export const MultiExpenseSameCard: Story = {
+  args: {
+    text: `2026-04-17 * "Amazon" "monitor + cables"
+  Expenses:Shopping:Electronics   4500.00 INR
+  Expenses:Shopping:Home           600.00 INR
+  Liabilities:CC:HDFC:Infinia    -5100.00 INR`,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multiple `Expenses:*` postings paid with a single card. Amount is the sum (₹5,100.00). Icon is derived from the first expense leg (Electronics).',
+      },
+    },
+  },
+}
+
 export const MultiLegFallback: Story = {
   args: {
     text: `2026-04-12 * "Zomato" "split dinner"
@@ -118,7 +135,7 @@ export const MultiLegFallback: Story = {
     docs: {
       description: {
         story:
-          'Txn has 3 postings, so subtext derivation bails (strict 2-posting rule). Card falls back to the preset `account` string.',
+          'Txn has 2 non-expense legs (CC + receivable), so derivation bails (rule: at least 1 Expenses leg + exactly 1 non-expense leg). Card falls back to the preset `account` string.',
       },
     },
   },

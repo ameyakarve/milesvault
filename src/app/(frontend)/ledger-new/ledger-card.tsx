@@ -47,11 +47,11 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const title = payee || narration || 'Transaction'
   const secondary = payee && narration ? `· ${narration}` : ''
   const glyph = iconForTxn(txn.postings.map((p) => p.account))
-  const match = matchSingleExpense(txn)
+  const match = matchExpensesOnePayment(txn)
   const subtext = match
     ? (paymentMethodDisplay(match.payment.account) ?? match.payment.account)
     : null
-  const amount = match ? formatExpenseAmount(match.expense) ?? preset.amount : preset.amount
+  const amount = match ? formatExpenseTotal(match.expenses) ?? preset.amount : preset.amount
   return {
     ...preset,
     glyph,
@@ -65,26 +65,35 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   }
 }
 
-function matchSingleExpense(
+function matchExpensesOnePayment(
   txn: ParsedTxn,
-): { expense: ParsedPosting; payment: ParsedPosting } | null {
-  if (txn.postings.length !== 2) return null
-  const expenses = txn.postings.filter(
-    (p) => p.account === 'Expenses' || p.account.startsWith('Expenses:'),
-  )
-  if (expenses.length !== 1) return null
-  const payment = txn.postings.find((p) => p !== expenses[0])
-  if (!payment) return null
-  return { expense: expenses[0], payment }
+): { expenses: ParsedPosting[]; payment: ParsedPosting } | null {
+  if (txn.postings.length < 2) return null
+  const expenses: ParsedPosting[] = []
+  const others: ParsedPosting[] = []
+  for (const p of txn.postings) {
+    if (p.account === 'Expenses' || p.account.startsWith('Expenses:')) expenses.push(p)
+    else others.push(p)
+  }
+  if (expenses.length < 1 || others.length !== 1) return null
+  return { expenses, payment: others[0] }
 }
 
-function formatExpenseAmount(expense: ParsedPosting): string | null {
-  if (!expense.amount) return null
-  const cleaned = expense.amount.numberText.replace(/,/g, '').trim()
-  if (!/^[+-]?\d+(?:\.\d+)?$/.test(cleaned)) return null
-  const n = parseFloat(cleaned)
-  if (!Number.isFinite(n)) return null
-  return formatOutflow(n, expense.amount.currency)
+function formatExpenseTotal(expenses: readonly ParsedPosting[]): string | null {
+  if (expenses.length === 0) return null
+  let sum = 0
+  let currency: string | null | undefined = undefined
+  for (const e of expenses) {
+    if (!e.amount) return null
+    const cleaned = e.amount.numberText.replace(/,/g, '').trim()
+    if (!/^[+-]?\d+(?:\.\d+)?$/.test(cleaned)) return null
+    const n = parseFloat(cleaned)
+    if (!Number.isFinite(n)) return null
+    if (currency === undefined) currency = e.amount.currency
+    else if (currency !== e.amount.currency) return null
+    sum += n
+  }
+  return formatOutflow(sum, currency ?? null)
 }
 
 function formatOutflow(expenseValue: number, currency: string | null): string {
