@@ -334,13 +334,19 @@ type FetchState = {
   errorMsg: string | null
 }
 
-function useTransactions(page: number): FetchState {
+function useTransactions(
+  page: number,
+): FetchState & {
+  refetch: () => void
+  replaceRows: (rows: Transaction[]) => void
+} {
   const [state, setState] = useState<FetchState>({
     status: 'loading',
     rows: [],
     total: 0,
     errorMsg: null,
   })
+  const [nonce, setNonce] = useState(0)
   useEffect(() => {
     const controller = new AbortController()
     setState((prev) => ({ ...prev, status: 'loading', errorMsg: null }))
@@ -361,8 +367,18 @@ function useTransactions(page: number): FetchState {
         setState({ status: 'error', rows: [], total: 0, errorMsg: (e as Error).message })
       })
     return () => controller.abort()
-  }, [page])
-  return state
+  }, [page, nonce])
+  return {
+    ...state,
+    refetch: () => setNonce((n) => n + 1),
+    replaceRows: (rows) =>
+      setState((prev) => ({
+        status: 'idle',
+        rows,
+        total: prev.total - prev.rows.length + rows.length,
+        errorMsg: null,
+      })),
+  }
 }
 
 function PaneLabel({ children }: { children: ReactNode }) {
@@ -642,6 +658,57 @@ export function LedgerNewView() {
     if (allEntriesParse(liveEntries)) setCardEntries(liveEntries)
   }, [liveEntries])
 
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
+  const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
+
+  async function onSave() {
+    if (saveStatus === 'saving') return
+    setSaveStatus('saving')
+    setSaveErrorMsg(null)
+    const knownIds = snapshots.map((s) => ({
+      id: s.id,
+      expected_updated_at: s.expected_updated_at,
+    }))
+    try {
+      const res = await fetch('/api/ledger/transactions/buffer', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ knownIds, buffer }),
+      })
+      if (res.status === 409) {
+        setSaveStatus('conflict')
+        setSaveErrorMsg('buffer out of date — reload and retry')
+        return
+      }
+      if (!res.ok) {
+        const body = (await res.json().catch((): null => null)) as { errors?: string[] } | null
+        setSaveStatus('error')
+        setSaveErrorMsg(body?.errors?.join('; ') ?? `HTTP ${res.status}`)
+        return
+      }
+      const payload = (await res.json().catch((): null => null)) as {
+        transactions?: Transaction[]
+      } | null
+      if (!payload?.transactions) {
+        setSaveStatus('error')
+        setSaveErrorMsg('save succeeded but response was malformed')
+        return
+      }
+      state.replaceRows(payload.transactions)
+      setSaveStatus('idle')
+    } catch (e) {
+      setSaveStatus('error')
+      setSaveErrorMsg(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  function onRevert() {
+    setBuffer(baseline)
+    setSaveStatus('idle')
+    setSaveErrorMsg(null)
+  }
+
   const [cursorPos, setCursorPos] = useState(0)
   const activeIdx = useMemo(() => {
     const parts = splitEntries(buffer)
@@ -682,17 +749,57 @@ export function LedgerNewView() {
       <div className="h-[40px] px-4 flex justify-between items-center bg-white border-b border-slate-200 shrink-0 z-10">
         <div className="flex items-center">
           <ChromeIconButton icon={Plus} title="new entry" />
-          <ChromeIconButton icon={Save} title="save" dirty={dirty} />
-          <ChromeIconButton icon={RotateCcw} title="revert" />
-          <div
-            className={`h-[24px] px-2 rounded-[4px] flex items-center gap-1.5 font-mono text-[11px] ml-1 ${
-              dirty ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'
-            }`}
-            aria-live="polite"
-          >
-            <CircleDot size={12} strokeWidth={2} className={dirty ? 'text-amber-700' : 'text-emerald-700'} />
-            {dirty ? 'unsaved' : 'saved'}
-          </div>
+          <ChromeIconButton
+            icon={Save}
+            title="save"
+            dirty={dirty}
+            disabled={!dirty || saveStatus === 'saving'}
+            onClick={onSave}
+          />
+          <ChromeIconButton
+            icon={RotateCcw}
+            title="revert"
+            disabled={!dirty || saveStatus === 'saving'}
+            onClick={onRevert}
+          />
+          {(() => {
+            const tone =
+              saveStatus === 'error' || saveStatus === 'conflict'
+                ? 'bg-red-50 text-red-700'
+                : saveStatus === 'saving'
+                  ? 'bg-sky-50 text-sky-700'
+                  : dirty
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-emerald-50 text-emerald-700'
+            const dotColor =
+              saveStatus === 'error' || saveStatus === 'conflict'
+                ? 'text-red-600'
+                : saveStatus === 'saving'
+                  ? 'text-sky-700'
+                  : dirty
+                    ? 'text-amber-700'
+                    : 'text-emerald-700'
+            const label =
+              saveStatus === 'saving'
+                ? 'saving…'
+                : saveStatus === 'conflict'
+                  ? 'conflict'
+                  : saveStatus === 'error'
+                    ? (saveErrorMsg ?? 'error')
+                    : dirty
+                      ? 'unsaved'
+                      : 'saved'
+            return (
+              <div
+                className={`h-[24px] px-2 rounded-[4px] flex items-center gap-1.5 font-mono text-[11px] ml-1 ${tone}`}
+                aria-live="polite"
+                title={saveErrorMsg ?? undefined}
+              >
+                <CircleDot size={12} strokeWidth={2} className={dotColor} />
+                <span className="truncate max-w-[240px]">{label}</span>
+              </div>
+            )
+          })()}
           <div className="h-[16px] w-px bg-slate-200 mx-3" />
           <div className="flex items-center gap-1">
             <ChromeIconButton icon={Filter} title="filter" />
