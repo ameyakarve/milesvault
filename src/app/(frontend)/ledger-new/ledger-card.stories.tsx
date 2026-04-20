@@ -124,6 +124,40 @@ export const MultiExpenseSameCard: Story = {
   },
 }
 
+export const ExpensesWithCashback: Story = {
+  args: {
+    text: `2026-04-17 * "Flipkart" "blender"
+  Expenses:Shopping:Home          1000.00 INR
+  Income:Rewards:Cashback         -1000.00 INR`,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Txn with only Expenses + `Income:Rewards:Cashback` postings. Amount column shows the expense total (₹1,000.00); rewards cell shows the cashback as "+₹1,000.00". No payment method ⇒ subtext falls back to the preset account.',
+      },
+    },
+  },
+}
+
+export const MultiExpensesAndCashbacks: Story = {
+  args: {
+    text: `2026-04-17 * "Amazon" "monitor + cables (redeemed cashback)"
+  Expenses:Shopping:Electronics    4500.00 INR
+  Expenses:Shopping:Home            600.00 INR
+  Income:Rewards:Cashback         -4500.00 INR
+  Income:Rewards:Cashback          -600.00 INR`,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multiple Expenses + multiple cashback postings, nothing else. Amount = sum of expenses (₹5,100.00); rewards = "+₹5,100.00" (sum of cashback magnitudes). Icon from first expense.',
+      },
+    },
+  },
+}
+
 export const MultiLegFallback: Story = {
   args: {
     text: `2026-04-12 * "Zomato" "split dinner"
