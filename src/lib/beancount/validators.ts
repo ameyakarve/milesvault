@@ -95,11 +95,55 @@ export const amountRequiredValidator: Validator = ({ parsed }) => {
   return out
 }
 
+const CASHBACK_ACCOUNT = 'Income:Rewards:Cashback'
+
+export const cashbackValidator: Validator = ({ parsed }) => {
+  const out: Diagnostic[] = []
+  for (const txn of parsed) {
+    for (const p of txn.postings) {
+      if (p.account !== CASHBACK_ACCOUNT) continue
+      if (!p.amount) continue
+      const n = parseNumber(p.amount.numberText)
+      if (n == null) continue
+      if (n >= 0) {
+        out.push({
+          from: p.amount.range.from,
+          to: p.amount.range.to,
+          severity: 'error',
+          message: `${CASHBACK_ACCOUNT} posting must be negative; got ${p.amount.numberText}.`,
+          source: 'cashback-sign',
+        })
+        continue
+      }
+      const ccy = p.amount.currency ?? ''
+      const counterpart = txn.postings.find((o) => {
+        if (o === p) return false
+        if (!o.amount) return false
+        const m = parseNumber(o.amount.numberText)
+        if (m == null) return false
+        if ((o.amount.currency ?? '') !== ccy) return false
+        return Math.abs(m + n) < BALANCE_EPSILON
+      })
+      if (!counterpart) {
+        out.push({
+          from: p.range.from,
+          to: p.range.to,
+          severity: 'error',
+          message: `${CASHBACK_ACCOUNT} must have one matching posting with amount ${formatAmount(-n)} ${ccy || '?'}.`,
+          source: 'cashback-counterpart',
+        })
+      }
+    }
+  }
+  return out
+}
+
 export const coreValidators: readonly Validator[] = [
   balanceValidator,
   expenseSignValidator,
   payeePresentValidator,
   amountRequiredValidator,
+  cashbackValidator,
 ]
 
 function parseNumber(text: string): number | null {

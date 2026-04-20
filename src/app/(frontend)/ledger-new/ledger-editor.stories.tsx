@@ -204,6 +204,41 @@ export const WithElidedAmount: Story = {
   },
 }
 
+const CASHBACK_POSITIVE = `2026-04-17 * "HDFC" "April statement cashback"
+  Liabilities:CC:HDFC          -250.00 INR
+  Income:Rewards:Cashback       250.00 INR
+`
+
+export const WithPositiveCashback: Story = {
+  args: { initialValue: CASHBACK_POSITIVE },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Income:Rewards:Cashback posting is positive. cashback-sign validator underlines the amount.',
+      },
+    },
+  },
+}
+
+const CASHBACK_NO_MATCH = `2026-04-17 * "HDFC" "cashback split oddly"
+  Liabilities:CC:HDFC          -200.00 INR
+  Income:Rewards:Cashback      -250.00 INR
+  Expenses:Food:Coffee          450.00 INR
+`
+
+export const WithCashbackNoMatchingPosting: Story = {
+  args: { initialValue: CASHBACK_NO_MATCH },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Cashback is -250 INR but no other posting equals +250 INR. cashback-counterpart validator flags the cashback posting.',
+      },
+    },
+  },
+}
+
 const COMPLETION_SEED = `2026-04-17 * "Amudham" "coffee"
   Liabilities:CC:HSBC   -35.00 INR
   Expenses:`
