@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.email) return NextResponse.json({ errors: ['unauthorized'] }, { status: 401 })
   const body = (await req.json().catch((): null => null)) as { items?: unknown } | null
   if (!body || !Array.isArray(body.items)) {
     return NextResponse.json({ errors: ['invalid body'] }, { status: 400 })
@@ -30,15 +30,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ errors: e.errors }, { status: 400 })
     }
     if (e instanceof LedgerBindingError) {
-      return new NextResponse(e.message, { status: 500 })
+      return NextResponse.json({ errors: [e.message] }, { status: 500 })
     }
-    throw e
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[batch] unhandled error', msg)
+    return NextResponse.json({ errors: [msg] }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.email) return NextResponse.json({ errors: ['unauthorized'] }, { status: 401 })
   const body = (await req.json().catch((): null => null)) as {
     updates?: unknown
     creates?: unknown
@@ -172,8 +174,10 @@ export async function PUT(req: NextRequest) {
       )
     }
     if (e instanceof LedgerBindingError) {
-      return new NextResponse(e.message, { status: 500 })
+      return NextResponse.json({ errors: [e.message] }, { status: 500 })
     }
-    throw e
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[batch] unhandled error', msg)
+    return NextResponse.json({ errors: [msg] }, { status: 500 })
   }
 }
