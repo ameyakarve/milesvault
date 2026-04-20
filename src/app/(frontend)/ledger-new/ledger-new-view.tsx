@@ -33,6 +33,7 @@ import {
 } from 'lucide-react'
 import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
+import { format } from '@/lib/beancount/format'
 import { safeParse } from '../ledger/card-patterns/types'
 import { composeBuffer } from './editor'
 import { LedgerEditor } from './ledger-editor'
@@ -663,6 +664,8 @@ export function LedgerNewView() {
 
   async function onSave() {
     if (saveStatus === 'saving') return
+    const formatted = format(buffer)
+    if (formatted !== buffer) setBuffer(formatted)
     setSaveStatus('saving')
     setSaveErrorMsg(null)
     const knownIds = snapshots.map((s) => ({
@@ -674,7 +677,7 @@ export function LedgerNewView() {
         method: 'PUT',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ knownIds, buffer }),
+        body: JSON.stringify({ knownIds, buffer: formatted }),
       })
       if (res.status === 409) {
         setSaveStatus('conflict')
