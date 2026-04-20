@@ -138,12 +138,38 @@ export const cashbackValidator: Validator = ({ parsed }) => {
   return out
 }
 
+export const cashbackNeedsPaymentValidator: Validator = ({ parsed }) => {
+  const out: Diagnostic[] = []
+  for (const txn of parsed) {
+    let hasCashback = false
+    let hasOther = false
+    for (const p of txn.postings) {
+      if (p.account === CASHBACK_ACCOUNT) {
+        hasCashback = true
+        continue
+      }
+      if (p.account === 'Expenses' || p.account.startsWith('Expenses:')) continue
+      hasOther = true
+    }
+    if (!hasCashback || hasOther) continue
+    out.push({
+      from: txn.headerRange.from,
+      to: txn.headerRange.to,
+      severity: 'error',
+      message: `Cashback txn must be paid with something other than expenses + cashback (add a card, bank, or cash leg).`,
+      source: 'cashback-needs-payment',
+    })
+  }
+  return out
+}
+
 export const coreValidators: readonly Validator[] = [
   balanceValidator,
   expenseSignValidator,
   payeePresentValidator,
   amountRequiredValidator,
   cashbackValidator,
+  cashbackNeedsPaymentValidator,
 ]
 
 function parseNumber(text: string): number | null {
