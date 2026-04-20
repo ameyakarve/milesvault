@@ -36,7 +36,7 @@ function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: (
     cacheTtl: 4 * 60 * 1000,
   })
 
-  const { messages, sendMessage, status, clearHistory, error, addToolResult, stop } = useAgentChat({
+  const { messages, sendMessage, status, clearHistory, error, addToolResult } = useAgentChat({
     agent,
   })
   const [draft, setDraft] = useState('')
@@ -58,15 +58,6 @@ function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: (
           <span className="font-mono text-[10px] text-zinc-500 uppercase tracking-[0.08em]">
             {status}
           </span>
-          {busy ? (
-            <button
-              type="button"
-              onClick={() => stop()}
-              className="font-mono text-[10px] text-red-600 hover:text-red-700 uppercase tracking-[0.08em]"
-            >
-              stop
-            </button>
-          ) : null}
           <button
             type="button"
             onClick={() => clearHistory()}
