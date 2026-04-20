@@ -1,4 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
+import { paymentMethodDisplay } from '@/lib/beancount/account-display'
+import { iconForTxn } from '@/lib/beancount/category-icons'
+import { parseBuffer, type ParsedTxn } from '@/lib/beancount/parse'
 
 export type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 
@@ -31,6 +34,52 @@ export type CardRow = CardPreset & {
   day: string
   payee: string
   subtext: string | null
+}
+
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
+export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
+  const [, mm, dd] = txn.date.split('-')
+  const month = MONTHS[Number(mm) - 1] ?? '—'
+  const day = dd ?? '—'
+  const title = txn.payee?.trim() || txn.narration?.trim() || 'Transaction'
+  const glyph = iconForTxn(txn.postings.map((p) => p.account))
+  const subtext = subtextFromTxn(txn)
+  return { ...preset, glyph, month, day, payee: title, subtext }
+}
+
+function subtextFromTxn(txn: ParsedTxn): string | null {
+  if (txn.postings.length !== 2) return null
+  const expenses = txn.postings.filter(
+    (p) => p.account === 'Expenses' || p.account.startsWith('Expenses:'),
+  )
+  if (expenses.length !== 1) return null
+  const payment = txn.postings.find((p) => p !== expenses[0])
+  if (!payment) return null
+  return paymentMethodDisplay(payment.account) ?? payment.account
+}
+
+export function EntryCard({
+  text,
+  preset,
+  active = false,
+}: {
+  text: string
+  preset: CardPreset
+  active?: boolean
+}) {
+  const { entries } = parseBuffer(text)
+  const txn = entries[0]
+  const row = txn ? rowFromTxn(txn, preset) : fallbackRow(text, preset)
+  return <Card row={row} active={active} />
+}
+
+function fallbackRow(raw: string, preset: CardPreset): CardRow {
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s+[*!]\s+(?:"([^"]*)"\s+)?(?:"([^"]*)")?/)
+  const month = m ? (MONTHS[Number(m[2]) - 1] ?? '—') : '—'
+  const day = m ? m[3] : '—'
+  const payee = m ? (m[4]?.trim() || m[5]?.trim() || 'Transaction') : 'Transaction'
+  return { ...preset, month, day, payee, subtext: null }
 }
 
 export function Card({ row, active }: { row: CardRow; active: boolean }) {

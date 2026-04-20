@@ -32,18 +32,11 @@ import {
   X,
 } from 'lucide-react'
 import type { Transaction } from '@/durable/ledger-types'
-import { paymentMethodDisplay } from '@/lib/beancount/account-display'
-import { iconForTxn } from '@/lib/beancount/category-icons'
 import { splitEntries } from '@/lib/beancount/extract'
 import { format } from '@/lib/beancount/format'
-import { parseBuffer } from '@/lib/beancount/parse'
 import { safeParse } from '../ledger/card-patterns/types'
 import { composeBuffer } from './editor'
-import {
-  Card,
-  type CardPreset,
-  type CardRow,
-} from './ledger-card'
+import { EntryCard, type CardPreset } from './ledger-card'
 import { LedgerEditor } from './ledger-editor'
 
 const PAGE_SIZE = 10
@@ -228,58 +221,6 @@ function ChromeIconButton({
   )
 }
 
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
-
-function glyphForEntry(text: string): LucideIcon | null {
-  const { entries } = parseBuffer(text)
-  const txn = entries[0]
-  if (!txn) return null
-  const accounts = txn.postings.map((p) => p.account)
-  return iconForTxn(accounts)
-}
-
-function deriveFromRaw(raw: string): {
-  month: string
-  day: string
-  payee: string
-  subtext: string | null
-} {
-  const subtext = deriveSubtext(raw)
-  const parsed = safeParse(raw)
-  if (parsed) {
-    const { date, payee, narration } = parsed.bean
-    const title = payee?.trim() || narration?.trim() || 'Transaction'
-    return {
-      month: MONTHS[date.month - 1] ?? '—',
-      day: String(date.day).padStart(2, '0'),
-      payee: title,
-      subtext,
-    }
-  }
-  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s+[*!]\s+(?:"([^"]*)"\s+)?(?:"([^"]*)")?/)
-  if (m) {
-    const month = MONTHS[Number(m[2]) - 1] ?? '—'
-    const day = m[3]
-    const payee = m[4]?.trim() || m[5]?.trim() || 'Transaction'
-    return { month, day, payee, subtext }
-  }
-  return { month: '—', day: '—', payee: 'Transaction', subtext }
-}
-
-function deriveSubtext(raw: string): string | null {
-  const { entries } = parseBuffer(raw)
-  const txn = entries[0]
-  if (!txn) return null
-  if (txn.postings.length !== 2) return null
-  const expenses = txn.postings.filter(
-    (p) => p.account === 'Expenses' || p.account.startsWith('Expenses:'),
-  )
-  if (expenses.length !== 1) return null
-  const payment = txn.postings.find((p) => p !== expenses[0])
-  if (!payment) return null
-  return paymentMethodDisplay(payment.account) ?? payment.account
-}
-
 type FetchStatus = 'loading' | 'idle' | 'error'
 type FetchState = {
   status: FetchStatus
@@ -379,11 +320,10 @@ function CardsList({
     <div className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-white pb-0">
       {entries.map((entry, i) => {
         const preset = PRESETS[i % PRESETS.length]
-        const { month, day, payee, subtext } = deriveFromRaw(entry.text)
-        const glyph = glyphForEntry(entry.text) ?? preset.glyph
-        const row: CardRow = { ...preset, glyph, month, day, payee, subtext }
         const key = entry.snapshotId !== null ? `id-${entry.snapshotId}` : `idx-${i}`
-        return <Card key={key} row={row} active={activeIdx === i} />
+        return (
+          <EntryCard key={key} text={entry.text} preset={preset} active={activeIdx === i} />
+        )
       })}
     </div>
   )
