@@ -3,8 +3,59 @@
 import { useEffect, useMemo, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import type { Transaction } from '@/durable/ledger-types'
+import { splitEntries } from '@/lib/beancount/extract'
 import { safeParse } from '../ledger/card-patterns/types'
 import { composeBuffer, scandiBeancountExtensions } from './editor'
+
+const PAGE_SIZE = 10
+
+type Snapshot = { id: number; raw_text: string; expected_updated_at: number }
+
+type Entry = {
+  text: string
+  snapshotId: number | null
+}
+
+function buildSnapshots(rows: Transaction[]): Snapshot[] {
+  return rows.map((r) => ({
+    id: r.id,
+    raw_text: r.raw_text.trim(),
+    expected_updated_at: r.updated_at,
+  }))
+}
+
+function deriveEntries(buffer: string, snapshots: Snapshot[]): Entry[] {
+  const parts = splitEntries(buffer).map((e) => e.text.trim()).filter((t) => t.length > 0)
+  const byBody = new Map<string, Snapshot[]>()
+  for (const s of snapshots) {
+    const arr = byBody.get(s.raw_text) ?? []
+    arr.push(s)
+    byBody.set(s.raw_text, arr)
+  }
+  const used = new Set<number>()
+  const out: Entry[] = []
+  // First pass: exact body matches
+  const resolved: (Snapshot | null)[] = parts.map((text) => {
+    const candidates = byBody.get(text) ?? []
+    const m = candidates.find((c) => !used.has(c.id))
+    if (m) {
+      used.add(m.id)
+      return m
+    }
+    return null
+  })
+  // Second pass: positional fallback for unmatched entries
+  const unusedInOrder = snapshots.filter((s) => !used.has(s.id))
+  let cursor = 0
+  for (let i = 0; i < parts.length; i++) {
+    let snap = resolved[i]
+    if (!snap && cursor < unusedInOrder.length) {
+      snap = unusedInOrder[cursor++]
+    }
+    out.push({ text: parts[i], snapshotId: snap ? snap.id : null })
+  }
+  return out
+}
 
 type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 
@@ -268,13 +319,25 @@ function deriveFromRaw(raw: string): { month: string; day: string; payee: string
 }
 
 type FetchStatus = 'loading' | 'idle' | 'error'
-type FetchState = { status: FetchStatus; rows: Transaction[]; errorMsg: string | null }
+type FetchState = {
+  status: FetchStatus
+  rows: Transaction[]
+  total: number
+  errorMsg: string | null
+}
 
-function useTransactions(): FetchState {
-  const [state, setState] = useState<FetchState>({ status: 'loading', rows: [], errorMsg: null })
+function useTransactions(page: number): FetchState {
+  const [state, setState] = useState<FetchState>({
+    status: 'loading',
+    rows: [],
+    total: 0,
+    errorMsg: null,
+  })
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/ledger/transactions?q=&limit=12&offset=0', {
+    setState((prev) => ({ ...prev, status: 'loading', errorMsg: null }))
+    const offset = (page - 1) * PAGE_SIZE
+    fetch(`/api/ledger/transactions?q=&limit=${PAGE_SIZE}&offset=${offset}`, {
       signal: controller.signal,
       credentials: 'include',
     })
@@ -282,32 +345,42 @@ function useTransactions(): FetchState {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return (await res.json()) as { rows: Transaction[]; total: number }
       })
-      .then((data) => setState({ status: 'idle', rows: data.rows, errorMsg: null }))
+      .then((data) =>
+        setState({ status: 'idle', rows: data.rows, total: data.total, errorMsg: null }),
+      )
       .catch((e: unknown) => {
         if (e instanceof DOMException && e.name === 'AbortError') return
-        setState({ status: 'error', rows: [], errorMsg: (e as Error).message })
+        setState({ status: 'error', rows: [], total: 0, errorMsg: (e as Error).message })
       })
     return () => controller.abort()
-  }, [])
+  }, [page])
   return state
 }
 
-function CardsList({ state }: { state: FetchState }) {
-  if (state.status === 'loading') {
+function CardsList({
+  status,
+  errorMsg,
+  entries,
+}: {
+  status: FetchStatus
+  errorMsg: string | null
+  entries: Entry[]
+}) {
+  if (status === 'loading') {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
         loading…
       </div>
     )
   }
-  if (state.status === 'error') {
+  if (status === 'error') {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-error">
-        failed to load — {state.errorMsg}
+        failed to load — {errorMsg}
       </div>
     )
   }
-  if (state.rows.length === 0) {
+  if (entries.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
         no transactions
@@ -315,35 +388,40 @@ function CardsList({ state }: { state: FetchState }) {
     )
   }
   return (
-    <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 relative z-10 pb-10">
-      {state.rows.map((txn, i) => {
+    <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 relative z-10">
+      {entries.map((entry, i) => {
         const preset = PRESETS[i % PRESETS.length]
-        const { month, day, payee } = deriveFromRaw(txn.raw_text)
+        const { month, day, payee } = deriveFromRaw(entry.text)
         const row: CardRow = { ...preset, month, day, payee }
-        return <Card key={txn.id} row={row} />
+        const key = entry.snapshotId !== null ? `id-${entry.snapshotId}` : `idx-${i}`
+        return <Card key={key} row={row} />
       })}
     </div>
   )
 }
 
-function TextPane({ state }: { state: FetchState }) {
-  const initial = useMemo(() => composeBuffer(state.rows.map((r) => r.raw_text)), [state.rows])
-  const [buffer, setBuffer] = useState(initial)
-  useEffect(() => {
-    setBuffer(initial)
-  }, [initial])
-
-  if (state.status === 'loading') {
+function TextPane({
+  status,
+  errorMsg,
+  buffer,
+  onBufferChange,
+}: {
+  status: FetchStatus
+  errorMsg: string | null
+  buffer: string
+  onBufferChange: (v: string) => void
+}) {
+  if (status === 'loading') {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
         loading…
       </div>
     )
   }
-  if (state.status === 'error') {
+  if (status === 'error') {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-error">
-        failed to load — {state.errorMsg}
+        failed to load — {errorMsg}
       </div>
     )
   }
@@ -352,7 +430,7 @@ function TextPane({ state }: { state: FetchState }) {
       <CodeMirror
         className="h-full"
         value={buffer}
-        onChange={setBuffer}
+        onChange={onBufferChange}
         extensions={scandiBeancountExtensions}
         basicSetup={{
           lineNumbers: true,
@@ -369,8 +447,75 @@ function TextPane({ state }: { state: FetchState }) {
   )
 }
 
+function PageControls({
+  page,
+  totalPages,
+  onPage,
+}: {
+  page: number
+  totalPages: number
+  onPage: (p: number) => void
+}) {
+  const prevDisabled = page <= 1
+  const nextDisabled = page >= totalPages
+  return (
+    <div className="h-8 shrink-0 border-t border-slate-100 flex items-center justify-between px-4 bg-white">
+      <button
+        onClick={() => onPage(page - 1)}
+        disabled={prevDisabled}
+        className={
+          prevDisabled
+            ? 'text-[11px] text-slate-300 cursor-not-allowed flex items-center gap-1'
+            : 'text-[11px] text-slate-500 hover:text-navy-600 transition-colors flex items-center gap-1'
+        }
+      >
+        <span className="material-symbols-outlined text-[14px]">arrow_back</span> prev
+      </button>
+      <span className="text-[11px] text-slate-400 tabular-nums">
+        page {page} of {Math.max(1, totalPages)}
+      </span>
+      <button
+        onClick={() => onPage(page + 1)}
+        disabled={nextDisabled}
+        className={
+          nextDisabled
+            ? 'text-[11px] text-slate-300 cursor-not-allowed flex items-center gap-1'
+            : 'text-[11px] text-slate-500 hover:text-navy-600 transition-colors flex items-center gap-1'
+        }
+      >
+        next <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+      </button>
+    </div>
+  )
+}
+
 export function LedgerNewView() {
-  const state = useTransactions()
+  const [page, setPage] = useState(1)
+  const state = useTransactions(page)
+  const snapshots = useMemo(() => buildSnapshots(state.rows), [state.rows])
+  const baseline = useMemo(
+    () => composeBuffer(state.rows.map((r) => r.raw_text)),
+    [state.rows],
+  )
+  const [buffer, setBuffer] = useState(baseline)
+  useEffect(() => {
+    setBuffer(baseline)
+  }, [baseline])
+
+  const entries = useMemo(() => deriveEntries(buffer, snapshots), [buffer, snapshots])
+  const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+  const first = state.rows.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const last = (page - 1) * PAGE_SIZE + state.rows.length
+  const rangeLabel =
+    state.status === 'loading'
+      ? '…'
+      : state.total === 0
+        ? '0 of 0'
+        : `${first}–${last} of ${state.total}`
+
   return (
     <div className="w-screen h-screen flex flex-col bg-scandi-bg text-navy-600 overflow-hidden font-sans">
       {/* Global header */}
@@ -454,18 +599,13 @@ export function LedgerNewView() {
         <section className="flex-1 min-w-0 bg-white rounded-xl flex flex-col relative overflow-hidden border border-scandi-border">
           <div className="h-10 px-4 flex items-center justify-between border-b border-slate-100 shrink-0">
             <h2 className="text-navy-600 font-semibold text-[13px]">cards</h2>
-            <h2 className="text-[11px] text-slate-400">12 shown</h2>
+            <h2 className="text-[11px] text-slate-400 tabular-nums">{rangeLabel}</h2>
           </div>
-          <CardsList state={state} />
-          <div className="absolute -bottom-6 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none">
+          <CardsList status={state.status} errorMsg={state.errorMsg} entries={entries} />
+          <div className="absolute bottom-10 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none">
             <Icon name="account_balance_wallet" className="!text-[180px]" />
           </div>
-          <div className="h-8 absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-slate-100 flex items-center justify-between px-4 z-20">
-            <span className="text-[11px] text-slate-400">showing 1–12 of 8,212</span>
-            <button className="text-[11px] text-slate-400 hover:text-navy-600 transition-colors flex items-center gap-1">
-              load older <Icon name="arrow_downward" className="text-[14px]" />
-            </button>
-          </div>
+          <PageControls page={page} totalPages={totalPages} onPage={setPage} />
         </section>
 
         {/* Text pane */}
@@ -476,7 +616,12 @@ export function LedgerNewView() {
               <Icon name="content_copy" className="text-[14px]" /> copy
             </button>
           </div>
-          <TextPane state={state} />
+          <TextPane
+            status={state.status}
+            errorMsg={state.errorMsg}
+            buffer={buffer}
+            onBufferChange={setBuffer}
+          />
         </section>
 
         {/* Diff + AI chat pane */}
