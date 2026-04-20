@@ -193,7 +193,7 @@ function Icon({ name, className = '' }: { name: string; className?: string }) {
 
 function Pill({ label }: { kind: PillKind; label: string }) {
   return (
-    <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-sm flex items-center gap-1 leading-none shadow-sm ml-auto">
+    <span className="bg-slate-100 text-slate-500 border border-slate-200 text-[9px] uppercase tracking-wider font-mono px-1 py-px rounded-none flex items-center leading-none ml-auto">
       {label}
     </span>
   )
@@ -201,66 +201,43 @@ function Pill({ label }: { kind: PillKind; label: string }) {
 
 function Card({ row, active }: { row: CardRow; active: boolean }) {
   const shell = active
-    ? 'bg-sky-50 border border-sky-200 ring-1 ring-sky-200'
-    : 'hover:bg-slate-50 border border-transparent'
-  const tile = active ? 'border-sky-200' : 'border-slate-200'
-  const tileHead = active
-    ? 'bg-sky-50 text-sky-700 border-b border-sky-100'
-    : 'bg-slate-50 text-slate-500 border-b border-slate-100'
+    ? 'bg-slate-100 border-l-2 border-l-navy-600'
+    : 'hover:bg-slate-50 border-l-2 border-l-transparent'
 
   return (
     <div
-      className={`h-[52px] rounded-lg flex items-center px-3 gap-3 relative transition-colors ${shell}`}
+      className={`h-8 flex items-center px-2 gap-2 relative transition-colors font-mono text-[11px] ${shell}`}
     >
+      <div className="w-10 text-slate-400 tabular-nums shrink-0 uppercase text-[10px]">
+        {row.month}&nbsp;{row.day}
+      </div>
+      <Icon name={row.glyph} className="text-[12px] text-slate-400 shrink-0" />
+      <div className="flex-1 min-w-0 flex items-center gap-2">
+        <span className="text-navy-600 font-medium truncate max-w-[14ch]">
+          {row.payee}
+        </span>
+        <span className="text-slate-400 truncate">
+          {row.narration}
+        </span>
+        {row.pill && <Pill kind={row.pill.kind} label={row.pill.label} />}
+      </div>
+      <div className="w-[72px] text-right shrink-0 tabular-nums text-[10px]">
+        {row.rewards.old ? (
+          <>
+            <span className="text-slate-300 line-through">{row.rewards.old}</span>
+            <span className="text-slate-300 mx-1">→</span>
+            <span className="text-sky-600">{row.rewards.current}</span>
+          </>
+        ) : (
+          <span className="text-slate-500">{row.rewards.current}</span>
+        )}
+      </div>
       <div
-        className={`h-10 w-10 rounded-[6px] border flex flex-col shrink-0 relative bg-white overflow-hidden ${tile}`}
+        className={`w-[104px] text-right shrink-0 tabular-nums ${
+          row.amount.startsWith('-') ? 'text-error' : 'text-navy-600'
+        }`}
       >
-        <div
-          className={`h-3 text-[10px] font-medium flex items-center justify-center uppercase leading-none ${tileHead}`}
-        >
-          {row.month}
-        </div>
-        <div className="flex-1 text-[18px] text-navy-600 font-semibold flex items-center justify-center leading-none">
-          {row.day}
-        </div>
-      </div>
-      <div className="flex-1 min-w-0 flex flex-col justify-center">
-        <div className="flex items-center gap-1">
-          <Icon name={row.glyph} className="text-[14px] text-slate-400" />
-          <span className="text-navy-600 text-[13px] font-semibold truncate max-w-[16ch] ml-1">
-            {row.payee}
-          </span>
-          <span className="text-slate-400 text-[13px] italic truncate ml-1">
-            {row.narration}
-          </span>
-          {row.pill && <Pill kind={row.pill.kind} label={row.pill.label} />}
-        </div>
-        <div className="text-[11px] text-slate-400 truncate font-mono">
-          {row.account}
-        </div>
-      </div>
-      <div className="w-[92px] text-right shrink-0 font-mono flex flex-col justify-center border-l border-slate-100 pl-2">
-        <div className="text-[11px]">
-          {row.rewards.old && (
-            <>
-              <span className="text-slate-300 line-through">{row.rewards.old}</span>{' '}
-              <span className="text-slate-300">→</span>{' '}
-              <span className="text-sky-600 font-medium">{row.rewards.current}</span>
-            </>
-          )}
-          {!row.rewards.old && (
-            <span className="text-slate-600">{row.rewards.current}</span>
-          )}
-        </div>
-      </div>
-      <div className="text-right shrink-0 font-mono flex flex-col justify-center w-[112px] ml-2">
-        <div
-          className={`text-[13px] font-medium ${
-            row.amount.startsWith('-') ? 'text-error' : 'text-navy-600'
-          }`}
-        >
-          {row.amount}
-        </div>
+        {row.amount}
       </div>
     </div>
   )
@@ -361,7 +338,7 @@ function CardsList({
     )
   }
   return (
-    <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 relative z-10">
+    <div className="flex-1 overflow-y-auto py-1 flex flex-col relative z-10">
       {entries.map((entry, i) => {
         const preset = PRESETS[i % PRESETS.length]
         const { month, day, payee } = deriveFromRaw(entry.text)
@@ -492,30 +469,32 @@ function DiffPane({ baseline, current }: { baseline: string; current: string }) 
     )
   }
   return (
-    <div className="flex-1 overflow-y-auto p-4 text-[11px] font-mono">
+    <div className="flex-1 overflow-y-auto py-2 text-[11px] font-mono leading-[1.5]">
       {hunks.map((h, idx) => (
-        <div key={idx} className={idx < hunks.length - 1 ? 'mb-4' : ''}>
-          <div className="text-slate-400 mb-1 text-[10px] uppercase">{h.header}</div>
+        <div key={idx} className={idx < hunks.length - 1 ? 'mb-3' : ''}>
+          <div className="text-slate-400 text-[10px] uppercase px-3 py-0.5">
+            {h.header}
+          </div>
           {h.lines.map((line, li) => {
             if (line.kind === 'add') {
               return (
-                <div key={li} className="bg-sky-50 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-sky-600 w-4 shrink-0 select-none">+</span>
+                <div key={li} className="bg-emerald-50 text-navy-600 flex px-3">
+                  <span className="text-emerald-700 w-3 shrink-0 select-none">+</span>
                   <span className="whitespace-pre">{line.text}</span>
                 </div>
               )
             }
             if (line.kind === 'del') {
               return (
-                <div key={li} className="bg-error/5 text-navy-600 flex px-2 py-0.5">
-                  <span className="text-error w-4 shrink-0 select-none">-</span>
+                <div key={li} className="bg-error/5 text-navy-600 flex px-3">
+                  <span className="text-error w-3 shrink-0 select-none">-</span>
                   <span className="whitespace-pre line-through">{line.text}</span>
                 </div>
               )
             }
             return (
-              <div key={li} className="text-slate-400 flex px-2 py-0.5">
-                <span className="w-4 shrink-0 select-none"> </span>
+              <div key={li} className="text-slate-400 flex px-3">
+                <span className="w-3 shrink-0 select-none"> </span>
                 <span className="whitespace-pre">{line.text}</span>
               </div>
             )
@@ -537,32 +516,33 @@ function PageControls({
 }) {
   const prevDisabled = page <= 1
   const nextDisabled = page >= totalPages
+  const btnBase = 'text-[10px] font-mono uppercase tracking-wider flex items-center gap-0.5'
   return (
-    <div className="h-8 shrink-0 border-t border-slate-100 flex items-center justify-between px-4 bg-white">
+    <div className="h-6 shrink-0 border-t border-slate-100 flex items-center justify-between px-3 bg-white">
       <button
         onClick={() => onPage(page - 1)}
         disabled={prevDisabled}
         className={
           prevDisabled
-            ? 'text-[11px] text-slate-300 cursor-not-allowed flex items-center gap-1'
-            : 'text-[11px] text-slate-500 hover:text-navy-600 transition-colors flex items-center gap-1'
+            ? `${btnBase} text-slate-300 cursor-not-allowed`
+            : `${btnBase} text-slate-500 hover:text-navy-600 transition-colors`
         }
       >
-        <span className="material-symbols-outlined text-[14px]">arrow_back</span> prev
+        &lt; prev
       </button>
-      <span className="text-[11px] text-slate-400 tabular-nums">
-        page {page} of {Math.max(1, totalPages)}
+      <span className="text-[10px] font-mono text-slate-400 tabular-nums">
+        {page}/{Math.max(1, totalPages)}
       </span>
       <button
         onClick={() => onPage(page + 1)}
         disabled={nextDisabled}
         className={
           nextDisabled
-            ? 'text-[11px] text-slate-300 cursor-not-allowed flex items-center gap-1'
-            : 'text-[11px] text-slate-500 hover:text-navy-600 transition-colors flex items-center gap-1'
+            ? `${btnBase} text-slate-300 cursor-not-allowed`
+            : `${btnBase} text-slate-500 hover:text-navy-600 transition-colors`
         }
       >
-        next <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+        next &gt;
       </button>
     </div>
   )
@@ -636,89 +616,79 @@ export function LedgerNewView() {
         : `${first}–${last} of ${state.total}`
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-scandi-bg text-navy-600 overflow-hidden font-sans">
+    <div className="w-screen h-screen flex flex-col bg-slate-100 text-navy-600 overflow-hidden font-sans">
       {/* Global header */}
-      <header className="h-10 px-4 flex justify-between items-center bg-white shrink-0 z-20 border-b border-slate-200">
-        <div className="flex items-center gap-1.5">
-          <div className="h-6 w-6 bg-navy-600 rounded flex items-center justify-center text-white font-bold text-[10px] shadow-sm">
+      <header className="h-7 px-2 flex justify-between items-center bg-white shrink-0 z-20 border-b border-slate-200">
+        <div className="flex items-center gap-2 font-mono text-[11px]">
+          <div className="h-4 w-4 bg-navy-600 flex items-center justify-center text-white font-bold text-[8px]">
             MV
           </div>
-          <div className="font-semibold text-navy-600 tracking-tight text-sm flex items-center gap-2">
-            milesvault <span className="text-slate-300 font-normal">/</span> ledger
+          <div className="text-navy-600">
+            milesvault <span className="text-slate-300">/</span> ledger
           </div>
         </div>
-        <div className="flex items-center gap-4 text-slate-500">
+        <div className="flex items-center gap-3 text-slate-500">
           <button className="hover:text-navy-600 transition-colors">
-            <Icon name="search" className="text-[18px]" />
+            <Icon name="search" className="text-[14px]" />
           </button>
           <button className="hover:text-navy-600 transition-colors">
-            <Icon name="help" className="text-[18px]" />
+            <Icon name="help" className="text-[14px]" />
           </button>
-          <div className="h-6 w-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700">
+          <div className="h-4 w-4 bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-700 font-mono">
             AK
           </div>
         </div>
       </header>
 
       {/* Ledger action bar */}
-      <div className="h-14 px-4 flex justify-between items-center bg-white border-b border-slate-200 shrink-0 z-10">
-        <div className="flex items-center">
-          <button className="flex items-center gap-1.5 px-3 h-8 rounded-md bg-navy-600 text-white text-xs font-medium shadow-sm hover:bg-navy-700 transition-colors">
-            <Icon name="add" className="text-[14px]" />
+      <div className="h-9 px-2 flex justify-between items-center bg-white border-b border-slate-200 shrink-0 z-10">
+        <div className="flex items-center gap-1.5">
+          <button className="flex items-center gap-1 px-2 h-6 bg-navy-600 text-white text-[10px] font-mono uppercase tracking-wider hover:bg-navy-700 transition-colors">
+            <Icon name="add" className="text-[12px]" />
             new
           </button>
-          <div className="w-3" />
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700">
-              merchant: swiggy
-              <button className="ml-1 hover:text-navy-600">
-                <Icon name="close" className="text-[14px]" />
-              </button>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700">
-              oct 2023
-              <button className="ml-1 hover:text-navy-600">
-                <Icon name="close" className="text-[14px]" />
-              </button>
-            </div>
-            <button className="flex items-center gap-1 px-2 py-1 h-8 border border-dashed border-slate-300 rounded text-xs text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors">
-              <Icon name="add" className="text-[14px]" /> filter
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <div className="flex items-center gap-1 px-1.5 h-6 bg-slate-50 border border-slate-200 text-[10px] font-mono text-slate-600">
+            merchant:swiggy
+            <button className="hover:text-navy-600">
+              <Icon name="close" className="text-[11px]" />
             </button>
-            <div className="h-5 border-l border-slate-200 mx-2" />
-            <button
-              className="h-8 w-8 flex items-center justify-center rounded hover:bg-slate-50 text-slate-400 transition-colors"
-              title="Undo"
-            >
-              <Icon name="undo" className="text-[18px]" />
-            </button>
-            <button
-              className="h-8 w-8 flex items-center justify-center rounded hover:bg-slate-50 text-slate-400 transition-colors"
-              title="Redo"
-            >
-              <Icon name="redo" className="text-[18px]" />
-            </button>
-            <div className="h-5 border-l border-slate-200 mx-2" />
           </div>
+          <div className="flex items-center gap-1 px-1.5 h-6 bg-slate-50 border border-slate-200 text-[10px] font-mono text-slate-600">
+            oct-2023
+            <button className="hover:text-navy-600">
+              <Icon name="close" className="text-[11px]" />
+            </button>
+          </div>
+          <button className="flex items-center gap-0.5 px-1.5 h-6 border border-dashed border-slate-300 text-[10px] font-mono text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors">
+            <Icon name="add" className="text-[11px]" /> filter
+          </button>
+          <div className="w-px h-4 bg-slate-200 mx-1" />
+          <button className="h-6 w-6 flex items-center justify-center hover:bg-slate-50 text-slate-400" title="Undo">
+            <Icon name="undo" className="text-[14px]" />
+          </button>
+          <button className="h-6 w-6 flex items-center justify-center hover:bg-slate-50 text-slate-400" title="Redo">
+            <Icon name="redo" className="text-[14px]" />
+          </button>
         </div>
-        <div className="flex items-center">
-          <button className="h-8 px-3 flex items-center justify-center rounded text-slate-600 text-xs font-medium hover:bg-slate-50 transition-colors">
+        <div className="flex items-center gap-1">
+          <button className="h-6 px-2 text-slate-600 text-[10px] font-mono uppercase tracking-wider hover:bg-slate-50">
             revert
           </button>
-          <div className="w-2" />
-          <button className="h-8 px-3 flex items-center justify-center rounded-md bg-navy-600 text-white text-xs font-medium hover:bg-navy-700 transition-colors shadow-sm gap-1">
-            <div className="h-[6px] w-[6px] rounded-full bg-white/60" />
-            save <Icon name="arrow_right" className="text-[14px]" />
+          <button className="h-6 px-2 bg-navy-600 text-white text-[10px] font-mono uppercase tracking-wider hover:bg-navy-700 flex items-center gap-1">
+            <div className="h-1 w-1 bg-white/60" />
+            save
           </button>
         </div>
       </div>
 
       {/* Three-pane body */}
-      <main className="flex-1 flex gap-3 p-3 pb-0 overflow-hidden">
+      <main className="flex-1 flex gap-1.5 p-1.5 pb-0 overflow-hidden">
         {/* Cards pane */}
-        <section className="flex-1 min-w-0 bg-white rounded-xl flex flex-col relative overflow-hidden border border-scandi-border">
-          <div className="h-10 px-4 flex items-center justify-between border-b border-slate-100 shrink-0">
-            <h2 className="text-navy-600 font-semibold text-[13px]">cards</h2>
-            <h2 className="text-[11px] text-slate-400 tabular-nums">{rangeLabel}</h2>
+        <section className="flex-1 min-w-0 bg-white flex flex-col relative overflow-hidden border border-slate-200">
+          <div className="h-6 px-3 flex items-center justify-between border-b border-slate-200 bg-slate-50 shrink-0">
+            <h2 className="text-slate-500 font-mono uppercase tracking-wider text-[10px]">cards</h2>
+            <h2 className="text-[10px] font-mono text-slate-400 tabular-nums">{rangeLabel}</h2>
           </div>
           <CardsList
             status={state.status}
@@ -726,18 +696,15 @@ export function LedgerNewView() {
             entries={cardEntries}
             activeIdx={activeIdx}
           />
-          <div className="absolute bottom-10 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none">
-            <Icon name="account_balance_wallet" className="!text-[180px]" />
-          </div>
           <PageControls page={page} totalPages={totalPages} onPage={setPage} />
         </section>
 
         {/* Text pane */}
-        <section className="flex-1 min-w-0 bg-white rounded-xl flex flex-col border border-scandi-border overflow-hidden relative">
-          <div className="h-10 px-4 flex items-center justify-between border-b border-slate-100 shrink-0">
-            <h2 className="text-[13px] font-semibold text-navy-600">text</h2>
-            <button className="flex items-center gap-1 text-slate-400 hover:text-navy-600 transition-colors text-[11px]">
-              <Icon name="content_copy" className="text-[14px]" /> copy
+        <section className="flex-1 min-w-0 bg-white flex flex-col border border-slate-200 overflow-hidden relative">
+          <div className="h-6 px-3 flex items-center justify-between border-b border-slate-200 bg-slate-50 shrink-0">
+            <h2 className="text-slate-500 font-mono uppercase tracking-wider text-[10px]">text</h2>
+            <button className="flex items-center gap-0.5 text-slate-400 hover:text-navy-600 transition-colors text-[10px] font-mono">
+              <Icon name="content_copy" className="text-[11px]" /> copy
             </button>
           </div>
           <TextPane
@@ -754,17 +721,17 @@ export function LedgerNewView() {
         </section>
 
         {/* Diff + AI chat pane */}
-        <section className="flex-1 min-w-0 flex flex-col gap-3">
+        <section className="flex-1 min-w-0 flex flex-col gap-1.5">
           {/* Diff */}
-          <div className="h-[280px] bg-white rounded-xl flex flex-col border border-scandi-border overflow-hidden shrink-0">
-            <div className="h-10 px-4 flex items-center justify-between border-b border-slate-100 shrink-0">
-              <h2 className="text-navy-600 font-semibold text-[13px]">diff</h2>
+          <div className="h-[260px] bg-white flex flex-col border border-slate-200 overflow-hidden shrink-0">
+            <div className="h-6 px-3 flex items-center justify-between border-b border-slate-200 bg-slate-50 shrink-0">
+              <h2 className="text-slate-500 font-mono uppercase tracking-wider text-[10px]">diff</h2>
               <div className="flex items-center gap-1 text-slate-300">
                 <button className="hover:text-navy-600 transition-colors">
-                  <Icon name="arrow_upward" className="text-[16px]" />
+                  <Icon name="arrow_upward" className="text-[12px]" />
                 </button>
                 <button className="hover:text-navy-600 transition-colors">
-                  <Icon name="arrow_downward" className="text-[16px]" />
+                  <Icon name="arrow_downward" className="text-[12px]" />
                 </button>
               </div>
             </div>
@@ -772,53 +739,53 @@ export function LedgerNewView() {
           </div>
 
           {/* AI chat */}
-          <div className="flex-1 bg-white rounded-xl flex flex-col border border-scandi-border overflow-hidden">
-            <div className="h-10 px-4 flex items-center border-b border-slate-100 shrink-0 gap-2">
-              <Icon name="auto_awesome" className="text-[14px] text-sky-600" />
-              <h2 className="text-[10px] uppercase tracking-widest text-slate-400 font-medium">
+          <div className="flex-1 bg-white flex flex-col border border-slate-200 overflow-hidden">
+            <div className="h-6 px-3 flex items-center border-b border-slate-200 bg-slate-50 shrink-0 gap-1.5">
+              <Icon name="auto_awesome" className="text-[12px] text-sky-600" />
+              <h2 className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
                 ai · scribe
               </h2>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 text-sm">
+            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 text-[12px]">
               <div className="flex flex-col items-end gap-1">
-                <div className="bg-slate-100 text-navy-600 px-3 py-2 rounded-xl rounded-tr-sm max-w-[85%] text-xs shadow-sm">
+                <div className="bg-slate-100 text-navy-600 px-2 py-1.5 max-w-[90%] text-[11px] font-mono border border-slate-200">
                   Recategorize Swiggy and Meat Masterz to expenses:food:delivery. Split the
                   Amazon purchase into monitor and accessories.
                 </div>
               </div>
               <div className="flex flex-col items-start gap-1">
-                <div className="bg-white text-navy-600 px-3 py-2 rounded-xl rounded-tl-sm max-w-[85%] text-xs shadow-sm border border-slate-100">
+                <div className="bg-white text-navy-600 px-2 py-1.5 max-w-[90%] text-[11px] font-mono border border-slate-200">
                   Done. I&apos;ve staged those changes to the ledger.
                 </div>
-                <div className="mt-1 bg-white border border-sky-100 p-2 rounded-md flex flex-col gap-2 w-[240px] shadow-sm">
-                  <div className="flex items-center gap-2 text-xs font-medium text-navy-600">
-                    <Icon name="auto_awesome" className="text-[14px] text-sky-600" />3 proposals
+                <div className="mt-1 bg-white border border-sky-200 p-1.5 flex flex-col gap-1.5 w-[220px]">
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-navy-600">
+                    <Icon name="auto_awesome" className="text-[12px] text-sky-600" />3 proposals
                   </div>
-                  <button className="w-full bg-navy-600 text-white text-xs font-medium py-1.5 rounded hover:bg-navy-700 transition-colors flex justify-center items-center gap-1">
-                    approve all <Icon name="arrow_right" className="text-[14px]" />
+                  <button className="w-full bg-navy-600 text-white text-[10px] font-mono uppercase tracking-wider py-1 hover:bg-navy-700 transition-colors flex justify-center items-center gap-1">
+                    approve all
                   </button>
-                  <div className="flex justify-between text-[10px] text-slate-400 px-1">
+                  <div className="flex justify-between text-[10px] font-mono text-slate-400">
                     <button className="hover:text-navy-600">reject all</button>
                     <button className="hover:text-navy-600">show diff</button>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="p-3 border-t border-slate-100 shrink-0 bg-white">
-              <div className="bg-slate-50 rounded-lg flex items-center px-3 h-10 border border-slate-200 focus-within:border-sky-300 transition-colors">
-                <button className="text-slate-400 hover:text-slate-600 mr-2">
-                  <Icon name="attachment" className="text-[18px]" />
+            <div className="p-1.5 border-t border-slate-200 shrink-0 bg-white">
+              <div className="bg-slate-50 flex items-center px-2 h-7 border border-slate-200 focus-within:border-sky-300 transition-colors">
+                <button className="text-slate-400 hover:text-slate-600 mr-1.5">
+                  <Icon name="attachment" className="text-[14px]" />
                 </button>
                 <input
-                  className="bg-transparent border-none focus:ring-0 focus:outline-none text-xs w-full text-navy-600 placeholder:text-slate-400"
+                  className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400"
                   placeholder="ask scribe anything..."
                   type="text"
                 />
-                <button className="text-slate-400 hover:text-slate-600 mx-2">
-                  <Icon name="mic" className="text-[18px]" />
+                <button className="text-slate-400 hover:text-slate-600 mx-1.5">
+                  <Icon name="mic" className="text-[14px]" />
                 </button>
-                <button className="bg-navy-600 text-white rounded-md w-8 h-8 flex items-center justify-center hover:bg-navy-700 transition-colors shrink-0 shadow-sm">
-                  <Icon name="arrow_upward" className="text-[16px]" />
+                <button className="bg-navy-600 text-white w-6 h-6 flex items-center justify-center hover:bg-navy-700 transition-colors shrink-0">
+                  <Icon name="arrow_upward" className="text-[12px]" />
                 </button>
               </div>
             </div>
@@ -827,8 +794,10 @@ export function LedgerNewView() {
       </main>
 
       {/* Status line */}
-      <div className="h-5 bg-slate-100 flex items-center justify-center text-[11px] text-slate-400 shrink-0 border-t border-slate-200/50">
-        last saved · 2 hours ago · sep statement reconcile
+      <div className="h-5 bg-navy-600 flex items-center justify-between px-3 text-[10px] text-slate-300 shrink-0 font-mono">
+        <span>last saved · 2h ago</span>
+        <span>sep statement reconcile</span>
+        <span className="text-slate-400">ready</span>
       </div>
     </div>
   )

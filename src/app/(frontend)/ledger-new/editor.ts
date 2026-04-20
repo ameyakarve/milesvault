@@ -266,11 +266,16 @@ const theme = EditorView.theme(
     },
     '.cm-line': { padding: '0 12px' },
     '.cm-txn-divider': { borderTop: `1px solid ${SLATE_100}` },
-    '.cm-txn-created': { backgroundColor: 'rgba(236, 253, 245, 0.7)' },
-    '.cm-txn-updated': { backgroundColor: 'rgba(240, 249, 255, 0.7)' },
+    '.cm-txn-created': {
+      backgroundColor: 'rgba(236, 253, 245, 0.85)',
+      boxShadow: 'inset 2px 0 0 #059669',
+    },
+    '.cm-txn-updated': {
+      backgroundColor: 'rgba(240, 249, 255, 0.85)',
+      boxShadow: 'inset 2px 0 0 #0284C7',
+    },
     '.cm-word-added': {
       backgroundColor: '#BAE6FD',
-      borderRadius: '2px',
       padding: '0 1px',
     },
     '.cm-gutters': {
