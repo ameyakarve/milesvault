@@ -37,13 +37,11 @@ manually — stage the change yourself.
 Users refer to transactions by date, payee, amount — never by id. Resolve
 ids yourself. Never invent an id.
 
-Each result has \`id\` and optionally \`tempId\`. Use whichever is present
-for propose_update / propose_delete:
-  - numeric \`id\` → saved transaction
-  - string \`tempId\` (e.g. "tmp_1") → unsaved-create entry still in the
-    buffer. Pass the tempId as the \`id\` arg; propose_update/delete both
-    accept strings.
-Never pass \`id: null\` or \`id: 0\` — use the tempId instead.
+Each result has an integer \`id\`:
+  - positive (> 0) → saved transaction
+  - negative (< 0) → unsaved-create / dirty entry still in the buffer
+Pass the id back verbatim to propose_update / propose_delete — the sign
+handles routing automatically.
 
 Each ledger_search / ledger_get result includes an \`editable\` flag and
 \`source\` ('client' | 'server'):

@@ -9,11 +9,13 @@ export type SnapshotLike = {
 
 /**
  * Build a flat list of MapEntry from the current editor buffer.
- * Each entry's id is resolved by matching its trimmed raw_text against
- * a snapshot's trimmed raw_text — entries that diverge are treated as
- * unsaved edits and get a tempId (they'll be `editable` via the merged
- * reader without a persisted id). Entries that don't parse still land in
- * the index with empty t_* fields so they're findable by id/tempId.
+ * Each entry's id is resolved by matching its trimmed raw_text against a
+ * snapshot's trimmed raw_text; entries with no matching snapshot (new
+ * creates or dirty edits) get a negative synthetic id (-1, -2, …) so the
+ * caller can reference them via the same `id` field as saved rows.
+ * Negative ids never collide with server autoincrement ids (always > 0).
+ * Entries that don't parse still land in the index with empty t_* fields
+ * so they're findable by id.
  */
 export function buildEntriesFromBuffer(
   buffer: string,
@@ -43,8 +45,7 @@ export function buildEntriesFromBuffer(
             t_link: '',
           }
     entries.push({
-      id: snap?.id ?? null,
-      tempId: snap ? undefined : `tmp_${++tempCounter}`,
+      id: snap?.id ?? -(++tempCounter),
       raw_text: text,
       date: cols.date,
       flag: cols.flag,
@@ -62,6 +63,6 @@ export function buildEntriesFromBuffer(
 
 export function renderedIdsFromEntries(entries: ReadonlyArray<MapEntry>): Set<number> {
   const set = new Set<number>()
-  for (const e of entries) if (e.id != null) set.add(e.id)
+  for (const e of entries) set.add(e.id)
   return set
 }

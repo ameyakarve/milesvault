@@ -49,10 +49,9 @@ export function createHttpServerReader(): LedgerReader {
       const json = (await res.json()) as ApiSearchResp
       return { rows: json.rows.map(toRow), total: json.total }
     },
-    async get(idOrTempId): Promise<ReaderRow | null> {
-      if (typeof idOrTempId !== 'number') return null
-      console.log(`[reader:server] HTTP get id=${idOrTempId}`)
-      const res = await fetch(`/api/ledger/transactions/${idOrTempId}`, {
+    async get(id): Promise<ReaderRow | null> {
+      console.log(`[reader:server] HTTP get id=${id}`)
+      const res = await fetch(`/api/ledger/transactions/${id}`, {
         credentials: 'include',
       })
       if (res.status === 404) return null
