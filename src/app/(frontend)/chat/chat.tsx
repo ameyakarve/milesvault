@@ -2,12 +2,13 @@
 
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from 'ai'
 import { useEffect, useState } from 'react'
 
-type ToolResultFn = (args: {
-  tool: string
-  toolCallId: string
-  output: unknown
+type ApprovalResponseFn = (args: {
+  id: string
+  approved: boolean
+  reason?: string
 }) => void | Promise<void>
 
 export function LedgerAssistant({ email, onMutate }: { email: string; onMutate?: () => void }) {
@@ -69,35 +70,18 @@ function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: (
     cacheTtl: 4 * 60 * 1000,
   })
 
-  const { messages, sendMessage, status, clearHistory, error, addToolResult } = useAgentChat({
-    agent,
-  })
+  const { messages, sendMessage, status, clearHistory, error, addToolApprovalResponse } =
+    useAgentChat({
+      agent,
+      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+    })
   const [draft, setDraft] = useState('')
   const busy = status === 'streaming' || status === 'submitted'
-
-  const pendingToolCalls = (messages as ChatMessage[]).flatMap((m) =>
-    m.role === 'assistant'
-      ? m.parts.filter(
-          (p): p is Extract<MessagePart, { type: `tool-${string}` }> =>
-            typeof p.type === 'string' &&
-            p.type.startsWith('tool-') &&
-            (p as { state?: string }).state === 'input-available',
-        )
-      : [],
-  )
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
-    for (const p of pendingToolCalls) {
-      const toolName = p.type.replace(/^tool-/, '')
-      void addToolResult({
-        tool: toolName,
-        toolCallId: p.toolCallId,
-        output: { ok: false, rejected: true, reason: 'superseded-by-new-message' },
-      })
-    }
     sendMessage({ text })
     setDraft('')
   }
@@ -136,7 +120,7 @@ function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: (
             <ChatTurn
               key={m.id}
               message={m as ChatMessage}
-              addToolResult={addToolResult as ToolResultFn}
+              addToolApprovalResponse={addToolApprovalResponse as ApprovalResponseFn}
               onMutate={onMutate}
             />
           ))
@@ -154,11 +138,7 @@ function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: (
             onChange={(e) => setDraft(e.target.value)}
             disabled={busy}
             type="text"
-            placeholder={
-              pendingToolCalls.length > 0
-                ? 'type to discard the pending card and send a new message…'
-                : 'ask, or draft a new transaction…'
-            }
+            placeholder="ask, or draft a new transaction…"
             className="flex-1 bg-transparent border-none focus:ring-0 font-mono text-[13px] text-[#09090B] placeholder-zinc-400 px-0 py-1 disabled:opacity-50"
           />
           <button
@@ -181,19 +161,26 @@ type MessagePart =
   | {
       type: `tool-${string}`
       toolCallId: string
-      state: 'input-streaming' | 'input-available' | 'output-available' | 'output-error'
+      state:
+        | 'input-streaming'
+        | 'input-available'
+        | 'approval-requested'
+        | 'approval-responded'
+        | 'output-available'
+        | 'output-error'
       input?: unknown
       output?: unknown
+      approval?: { id: string; approved?: boolean; reason?: string }
     }
   | { type: string }
 
 function ChatTurn({
   message,
-  addToolResult,
+  addToolApprovalResponse,
   onMutate,
 }: {
   message: ChatMessage
-  addToolResult: ToolResultFn
+  addToolApprovalResponse: ApprovalResponseFn
   onMutate?: () => void
 }) {
   return (
@@ -203,7 +190,12 @@ function ChatTurn({
       </div>
       <div className={message.role === 'user' ? 'text-[#09090B]' : 'text-zinc-700'}>
         {message.parts.map((part, i) => (
-          <PartView key={i} part={part} addToolResult={addToolResult} onMutate={onMutate} />
+          <PartView
+            key={i}
+            part={part}
+            addToolApprovalResponse={addToolApprovalResponse}
+            onMutate={onMutate}
+          />
         ))}
       </div>
     </div>
@@ -212,11 +204,11 @@ function ChatTurn({
 
 function PartView({
   part,
-  addToolResult,
+  addToolApprovalResponse,
   onMutate,
 }: {
   part: MessagePart
-  addToolResult: ToolResultFn
+  addToolApprovalResponse: ApprovalResponseFn
   onMutate?: () => void
 }) {
   if (part.type === 'text') {
@@ -231,13 +223,15 @@ function PartView({
     const tp = part as Extract<MessagePart, { type: `tool-${string}` }>
     const toolName = tp.type.replace(/^tool-/, '')
 
-    if (toolName === 'ledger_apply' && tp.state === 'input-available') {
+    if (toolName === 'ledger_apply') {
       const input = (tp.input ?? {}) as ApplyInput
       return (
         <ApplyProposalCard
-          toolCallId={tp.toolCallId}
+          state={tp.state}
+          approval={tp.approval}
           input={input}
-          addToolResult={addToolResult}
+          output={tp.output}
+          addToolApprovalResponse={addToolApprovalResponse}
           onMutate={onMutate}
         />
       )
@@ -258,29 +252,44 @@ function PartView({
   return null
 }
 
-type ResolveState = 'idle' | 'working' | 'done' | 'error'
-
 type ApplyInput = {
   creates?: { raw_text: string }[]
   updates?: { id: number; raw_text: string }[]
   deletes?: { id: number }[]
 }
 
+type ApplyOutput = {
+  ok?: boolean
+  created?: unknown[]
+  updated?: unknown[]
+  deleted?: number[]
+  errors?: string[]
+  conflicts?: unknown[]
+}
+
+type ToolPartState =
+  | 'input-streaming'
+  | 'input-available'
+  | 'approval-requested'
+  | 'approval-responded'
+  | 'output-available'
+  | 'output-error'
+
 function ApplyProposalCard({
-  toolCallId,
+  state,
+  approval,
   input,
-  addToolResult,
+  output,
+  addToolApprovalResponse,
   onMutate,
 }: {
-  toolCallId: string
+  state: ToolPartState
+  approval?: { id: string; approved?: boolean; reason?: string }
   input: ApplyInput
-  addToolResult: ToolResultFn
+  output?: unknown
+  addToolApprovalResponse: ApprovalResponseFn
   onMutate?: () => void
 }) {
-  const [state, setState] = useState<ResolveState>('idle')
-  const [msg, setMsg] = useState<string | null>(null)
-  const disabled = state === 'working' || state === 'done'
-
   const creates = input.creates ?? []
   const updates = input.updates ?? []
   const deletes = input.deletes ?? []
@@ -298,108 +307,50 @@ function ApplyProposalCard({
           .filter(Boolean)
           .join(', ')}`
 
-  const onApprove = async () => {
-    setState('working')
-    setMsg(null)
-    try {
-      const needsTs = [
-        ...updates.map((u) => u.id),
-        ...deletes.map((d) => d.id),
-      ]
-      const tsMap = new Map<number, number>()
-      for (const id of needsTs) {
-        if (tsMap.has(id)) continue
-        const r = await fetch(`/api/ledger/transactions/${id}`, { credentials: 'include' })
-        if (!r.ok) throw new Error(`lookup #${id}: HTTP ${r.status}`)
-        const txn = (await r.json()) as { updated_at: number }
-        tsMap.set(id, txn.updated_at)
-      }
-      const body = {
-        creates: creates.map((c) => ({ raw_text: c.raw_text })),
-        updates: updates.map((u) => ({
-          id: u.id,
-          raw_text: u.raw_text,
-          expected_updated_at: tsMap.get(u.id)!,
-        })),
-        deletes: deletes.map((d) => ({
-          id: d.id,
-          expected_updated_at: tsMap.get(d.id)!,
-        })),
-      }
-      const res = await fetch('/api/ledger/transactions/batch', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(body),
-      })
-      const text = await res.text()
-      let json: unknown = null
-      try {
-        json = text ? JSON.parse(text) : null
-      } catch {
-        json = null
-      }
-      if (!res.ok) {
-        if (res.status === 409) {
-          setState('error')
-          setMsg('conflict — someone else edited this')
-          await addToolResult({
-            tool: 'ledger_apply',
-            toolCallId,
-            output: { ok: false, conflicts: (json as { conflicts: unknown } | null)?.conflicts },
-          })
-          return
-        }
-        const errs = (json as { errors?: unknown } | null)?.errors
-        const flat = Array.isArray(errs)
-          ? errs.flatMap((e: { errors?: string[] } | string) =>
-              typeof e === 'string' ? [e] : (e.errors ?? []),
-            )
-          : [text || `HTTP ${res.status}`]
-        setState('error')
-        setMsg(flat.join('; '))
-        await addToolResult({
-          tool: 'ledger_apply',
-          toolCallId,
-          output: { ok: false, errors: flat },
-        })
-        return
-      }
-      const { updated, created, deleted } = json as {
-        updated: unknown[]
-        created: unknown[]
-        deleted: number[]
-      }
-      setState('done')
-      setMsg(
-        `applied: +${created.length} create, ~${updated.length} update, -${deleted.length} delete`,
-      )
-      onMutate?.()
-      await addToolResult({
-        tool: 'ledger_apply',
-        toolCallId,
-        output: { ok: true, created, updated, deleted },
-      })
-    } catch (e) {
-      const errMsg = (e as Error).message
-      setState('error')
-      setMsg(errMsg)
-      await addToolResult({
-        tool: 'ledger_apply',
-        toolCallId,
-        output: { ok: false, errors: [errMsg] },
-      })
-    }
+  const isAwaiting = state === 'approval-requested'
+  const isWorking = state === 'approval-responded' && approval?.approved === true
+  const out = (output ?? {}) as ApplyOutput
+  const didApply = state === 'output-available' && out.ok === true
+  const didFail = state === 'output-available' && out.ok === false
+  const wasRejected =
+    (state === 'approval-responded' && approval?.approved === false) ||
+    (state === 'output-available' && out.ok === false && !out.errors && !out.conflicts)
+
+  useEffect(() => {
+    if (didApply) onMutate?.()
+  }, [didApply, onMutate])
+
+  let resolveState: 'idle' | 'working' | 'done' | 'error'
+  let msg: string | null = null
+  if (isAwaiting) {
+    resolveState = 'idle'
+  } else if (isWorking) {
+    resolveState = 'working'
+    msg = 'saving…'
+  } else if (didApply) {
+    resolveState = 'done'
+    msg = `applied: +${out.created?.length ?? 0} create, ~${out.updated?.length ?? 0} update, -${out.deleted?.length ?? 0} delete`
+  } else if (wasRejected) {
+    resolveState = 'done'
+    msg = 'discarded'
+  } else if (didFail) {
+    resolveState = 'error'
+    if (out.conflicts) msg = 'conflict — someone else edited this'
+    else msg = (out.errors ?? ['apply failed']).join('; ')
+  } else {
+    resolveState = 'idle'
   }
 
-  const onReject = async () => {
-    setState('done')
-    setMsg('discarded')
-    await addToolResult({
-      tool: 'ledger_apply',
-      toolCallId,
-      output: { ok: false, rejected: true },
-    })
+  const disabled = !isAwaiting || totalCount === 0
+
+  const onApprove = () => {
+    if (!approval) return
+    void addToolApprovalResponse({ id: approval.id, approved: true })
+  }
+
+  const onReject = () => {
+    if (!approval) return
+    void addToolApprovalResponse({ id: approval.id, approved: false, reason: 'user rejected' })
   }
 
   return (
@@ -426,7 +377,7 @@ function ApplyProposalCard({
           </div>
         )
       }
-      state={state}
+      state={resolveState}
       msg={msg}
       disabled={disabled || totalCount === 0}
       onApprove={onApprove}
@@ -446,6 +397,8 @@ function DiffSection({ label, children }: { label: string; children: React.React
     </div>
   )
 }
+
+type ResolveState = 'idle' | 'working' | 'done' | 'error'
 
 function ProposalShell({
   heading,
