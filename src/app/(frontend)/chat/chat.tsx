@@ -75,21 +75,29 @@ function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: (
   const [draft, setDraft] = useState('')
   const busy = status === 'streaming' || status === 'submitted'
 
-  const hasPending = (messages as ChatMessage[]).some((m) =>
+  const pendingToolCalls = (messages as ChatMessage[]).flatMap((m) =>
     m.role === 'assistant'
-      ? m.parts.some(
-          (p) =>
+      ? m.parts.filter(
+          (p): p is Extract<MessagePart, { type: `tool-${string}` }> =>
             typeof p.type === 'string' &&
             p.type.startsWith('tool-') &&
             (p as { state?: string }).state === 'input-available',
         )
-      : false,
+      : [],
   )
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const text = draft.trim()
-    if (!text || hasPending) return
+    if (!text) return
+    for (const p of pendingToolCalls) {
+      const toolName = p.type.replace(/^tool-/, '')
+      void addToolResult({
+        tool: toolName,
+        toolCallId: p.toolCallId,
+        output: { ok: false, rejected: true, reason: 'superseded-by-new-message' },
+      })
+    }
     sendMessage({ text })
     setDraft('')
   }
@@ -144,16 +152,18 @@ function LedgerAssistantInner({ email, onMutate }: { email: string; onMutate?: (
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            disabled={busy || hasPending}
+            disabled={busy}
             type="text"
             placeholder={
-              hasPending ? 'approve or reject the pending card first…' : 'ask, or draft a new transaction…'
+              pendingToolCalls.length > 0
+                ? 'type to discard the pending card and send a new message…'
+                : 'ask, or draft a new transaction…'
             }
             className="flex-1 bg-transparent border-none focus:ring-0 font-mono text-[13px] text-[#09090B] placeholder-zinc-400 px-0 py-1 disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={!draft.trim() || busy || hasPending}
+            disabled={!draft.trim() || busy}
             className="font-mono text-[10px] text-zinc-500 shrink-0 tracking-[0.08em] uppercase disabled:text-zinc-300"
           >
             ⏎ send
