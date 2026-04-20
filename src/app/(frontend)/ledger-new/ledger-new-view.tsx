@@ -4,7 +4,6 @@ import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { diffLines } from 'diff'
 import {
-  ArrowUp,
   Banknote,
   Car,
   ChevronLeft,
@@ -18,9 +17,7 @@ import {
   Hotel,
   Landmark,
   type LucideIcon,
-  Mic,
   Package,
-  Paperclip,
   Plus,
   RotateCcw,
   Save,
@@ -38,6 +35,7 @@ import { safeParse } from '../ledger/card-patterns/types'
 import { composeBuffer } from './editor'
 import { EntryCard, type CardPreset } from './ledger-card'
 import { LedgerEditor } from './ledger-editor'
+import { ThinkPane } from './think-pane'
 
 const PAGE_SIZE = 10
 
@@ -534,7 +532,7 @@ function allEntriesParse(entries: Entry[]): boolean {
   return entries.every((e) => safeParse(e.text) !== null)
 }
 
-export function LedgerNewView() {
+export function LedgerNewView({ email }: { email: string }) {
   const [page, setPage] = useState(1)
   const state = useTransactions(page)
   const snapshots = useMemo(() => buildSnapshots(state.rows), [state.rows])
@@ -769,53 +767,7 @@ export function LedgerNewView() {
             <DiffPane baseline={baseline} current={buffer} />
           </div>
 
-          <div className="flex-1 bg-white flex flex-col overflow-hidden">
-            <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0 gap-2">
-              <PaneLabel>ASSISTANT</PaneLabel>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 text-[11px] font-mono">
-              <div className="flex flex-col items-end gap-1">
-                <div className="bg-amber-50/50 text-navy-600 px-3 py-2 border border-slate-200 border-l-[2px] border-l-amber-500 max-w-[85%]">
-                  Recategorize Swiggy and Meat Masterz to expenses:food:delivery.
-                </div>
-              </div>
-              <div className="flex flex-col items-start gap-1">
-                <div className="bg-emerald-50 text-navy-600 px-3 py-2 max-w-[85%] border border-slate-200 border-l-[2px] border-l-emerald-500">
-                  Done. I&apos;ve staged those changes to the ledger.
-                </div>
-              </div>
-            </div>
-            <div className="p-2 border-t border-slate-200 shrink-0 bg-white mt-auto">
-              <div className="bg-white flex items-center px-2 h-[36px] border border-slate-200 focus-within:border-navy-600 transition-colors">
-                <button
-                  type="button"
-                  title="attach"
-                  className="w-[24px] h-[24px] flex items-center justify-center hover:bg-slate-50 hover:text-navy-600 text-slate-400 transition-colors rounded-[2px]"
-                >
-                  <Paperclip size={14} strokeWidth={1.5} />
-                </button>
-                <input
-                  className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400"
-                  placeholder="ask the assistant anything…"
-                  type="text"
-                />
-                <button
-                  type="button"
-                  title="dictate"
-                  className="w-[24px] h-[24px] flex items-center justify-center hover:bg-slate-50 hover:text-navy-600 text-slate-400 transition-colors rounded-[2px]"
-                >
-                  <Mic size={14} strokeWidth={1.5} />
-                </button>
-                <button
-                  type="button"
-                  title="send"
-                  className="bg-navy-600 text-white w-[24px] h-[24px] flex items-center justify-center hover:bg-navy-700 transition-colors shrink-0 ml-1 rounded-[2px]"
-                >
-                  <ArrowUp size={14} strokeWidth={1.5} />
-                </button>
-              </div>
-            </div>
-          </div>
+          <ThinkPane email={email} />
         </section>
       </main>
 
