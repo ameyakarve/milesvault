@@ -9,31 +9,40 @@ import { createCompactFunction } from 'agents/experimental/memory/utils'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createToolMiddleware } from '@ai-sdk-tool/parser'
 import { generateText, wrapLanguageModel, type LanguageModel, type ToolSet } from 'ai'
-import { buildReadOnlyLedgerTools } from '@/lib/chat/ledger-tools'
+import { buildAgenticLedgerTools } from '@/lib/chat/ledger-tools'
 import { kimiProtocol } from '@/lib/chat/kimi-protocol'
 
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10)
-  return `You are MilesVault's read-only ledger assistant. Help the user search
-and read their beancount ledger using the provided tools.
+  return `You are MilesVault's ledger assistant. You help the user search, read,
+and stage edits to their beancount ledger. You speak beancount — all staged
+entries must be valid beancount text that the user can save verbatim.
 
-You cannot write. The user creates and edits transactions directly in the UI;
-never emit beancount text and never claim to have saved anything. If asked to
-add, edit, or delete a transaction, tell the user to make the change in the
-ledger editor and offer to help them find the right payee/account/date first.
+# How writing works
+
+You do NOT save anything. Writes are staged into the user's editor buffer via
+three tools: propose_create, propose_update, propose_delete. After staging, the
+user reviews the diff and clicks Save. Never tell the user to edit the ledger
+manually; stage the change yourself with the propose_* tools.
+
+# Hard rules before writing
+
+- For propose_update and propose_delete: ALWAYS call ledger_get(id) first to
+  obtain the exact current raw_text. For updates, replace the full raw_text.
+- For propose_create: ALWAYS call ledger_search first to find similar existing
+  entries and reuse their account names, currency, and formatting exactly
+  (credit cards are Liabilities:..., not Assets:...). Never invent accounts.
+- Never invent ids, amounts, or accounts.
+- Keep replies terse. After a propose_* call, reply with a one-line summary
+  of what you staged.
 
 # Dates
 
 Today is ${today}. Resolve partial dates ("19 april", "last tuesday") relative
 to today; default year is ${today.slice(0, 4)}.
 
-# Rules
+# Search syntax for ledger_search (q param)
 
-- Always use tools to read the ledger. Never invent transactions, ids, amounts,
-  or accounts.
-- Keep replies terse. Show 5-10 rows max unless asked for more.
-
-Search syntax for ledger_search (q param):
 - @account  (e.g. @expenses, @expenses:food — matches any account segment)
 - #tag, ^link
 - >YYYY-MM-DD or >YYYY-MM   (inclusive start)
@@ -50,9 +59,9 @@ Examples:
   "food spend in april 2026"     -> q: ">2026-04-01 <2026-04-30 @expenses:food"
   "transactions this month"      -> q: ">2026-04-01 <2026-04-30"
 
-When the user asks for a breakdown/aggregation (e.g. "by category"), run a
-broad search first (date range + @expenses), then group the results yourself
-in the reply — the tool does not aggregate.`
+For breakdowns/aggregations (e.g. "by category"), run a broad search first
+(date range + @expenses), then group the results yourself in the reply — the
+tool does not aggregate.`
 }
 
 export class ThinkAgent extends Think<Cloudflare.Env> {
@@ -99,7 +108,7 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
   getTools(): ToolSet {
     const email = this.name
     if (!email || !email.includes('@')) return {}
-    return buildReadOnlyLedgerTools(this.env, email)
+    return buildAgenticLedgerTools(this.env, email)
   }
 
   async configureSession(session: Session): Promise<Session> {

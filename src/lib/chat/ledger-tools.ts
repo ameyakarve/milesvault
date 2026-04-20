@@ -50,6 +50,31 @@ export function buildReadOnlyLedgerTools(env: Cloudflare.Env, email: string): To
   }
 }
 
+export function buildAgenticLedgerTools(env: Cloudflare.Env, email: string): ToolSet {
+  const readOnly = buildReadOnlyLedgerTools(env, email)
+  return {
+    ...readOnly,
+    propose_create: tool({
+      description:
+        'Stage a NEW transaction in the user\'s ledger editor buffer. This does NOT save — it places the entry in the editor for the user to review and save. raw_text is a complete beancount transaction (header line + postings). Use accounts and formatting that match existing entries (run ledger_search first). Reply briefly describing what you staged.',
+      inputSchema: z.object({ raw_text: z.string().min(1) }),
+      execute: async ({ raw_text }) => ({ ok: true, staged: 'create', raw_text }),
+    }),
+    propose_update: tool({
+      description:
+        'Stage an edit to an existing transaction in the user\'s ledger editor buffer. You MUST call ledger_get(id) first to see the exact current raw_text, then pass the full replacement raw_text. Does NOT save — user reviews and saves. Reply briefly describing what you staged.',
+      inputSchema: z.object({ id: z.number().int().positive(), raw_text: z.string().min(1) }),
+      execute: async ({ id, raw_text }) => ({ ok: true, staged: 'update', id, raw_text }),
+    }),
+    propose_delete: tool({
+      description:
+        'Stage removal of a transaction from the user\'s ledger editor buffer. Does NOT save — user reviews and saves. Confirm by id. Reply briefly describing what you staged.',
+      inputSchema: z.object({ id: z.number().int().positive() }),
+      execute: async ({ id }) => ({ ok: true, staged: 'delete', id }),
+    }),
+  }
+}
+
 export function buildLedgerTools(env: Cloudflare.Env, email: string): ToolSet {
   const client = createLedgerClient(env, email)
 
