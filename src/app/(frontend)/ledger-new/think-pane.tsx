@@ -17,6 +17,7 @@ import {
   buildEntriesFromBuffer,
   renderedIdsFromEntries,
 } from '@/lib/ledger-reader/entries'
+import { validateEntry, type ValidationResult } from '@/lib/beancount/validate-entry'
 
 type ThinkMessage = { id: string; role: string; parts: MessagePart[] }
 type MessagePart =
@@ -138,6 +139,12 @@ function ThinkPaneInner({
       required: ['id'],
       additionalProperties: false,
     }
+    const schemaValidate: JSONSchema7 = {
+      type: 'object',
+      properties: { raw_text: { type: 'string', minLength: 1 } },
+      required: ['raw_text'],
+      additionalProperties: false,
+    }
 
     return {
       ledger_search: {
@@ -164,21 +171,34 @@ function ThinkPaneInner({
           return merged.get(id)
         },
       },
+      validate_entry: {
+        description:
+          "Run MilesVault's beancount validators on a raw entry string without staging it. Returns {ok, errors[]}. Use this to self-check before propose_create / propose_update (both also auto-validate and refuse to stage on error). Checks: parse, balance, expense sign, payee present, amount required, cashback sign/counterpart, cashback needs payment leg.",
+        parameters: schemaValidate,
+        execute: async (input: unknown): Promise<ValidationResult> => {
+          const { raw_text } = (input ?? {}) as { raw_text: string }
+          return validateEntry(raw_text)
+        },
+      },
       propose_create: {
         description:
-          'Stage a NEW transaction in the editor buffer. raw_text must be a complete beancount entry. Does NOT save.',
+          'Stage a NEW transaction in the editor buffer. raw_text must be a complete beancount entry. Auto-validated — on validation failure, returns {ok:false, errors:[...]} and does NOT stage; fix the errors and retry. Does NOT save.',
         parameters: schemaCreate,
         execute: async (input: unknown) => {
           const { raw_text } = (input ?? {}) as { raw_text: string }
+          const v = validateEntry(raw_text)
+          if (!v.ok) return { ok: false, errors: v.errors }
           return onProposeRef.current({ kind: 'create', raw_text })
         },
       },
       propose_update: {
         description:
-          'Stage an edit to an existing transaction in the editor buffer. Pass the id from ledger_search/ledger_get (positive for saved rows, negative for unsaved-create/dirty entries); `editable` must be true. Pass the full replacement raw_text.',
+          'Stage an edit to an existing transaction in the editor buffer. Pass the id from ledger_search/ledger_get (positive for saved rows, negative for unsaved-create/dirty entries); `editable` must be true. Pass the full replacement raw_text. Auto-validated — on validation failure, returns {ok:false, errors:[...]} and does NOT stage; fix the errors and retry.',
         parameters: schemaUpdate,
         execute: async (input: unknown) => {
           const { id, raw_text } = (input ?? {}) as { id: number; raw_text: string }
+          const v = validateEntry(raw_text)
+          if (!v.ok) return { ok: false, errors: v.errors }
           if (id < 0) {
             const entry = entriesRef.current.find((e) => e.id === id)
             if (!entry) return { ok: false, reason: `id ${id} not found in buffer` }
