@@ -202,6 +202,23 @@ function ThinkPaneInner({
   const { messages, sendMessage, status, clearHistory, error } = useAgentChat({
     agent,
     tools,
+    onToolCall: async ({ toolCall, addToolOutput }) => {
+      const entry = (tools as Record<string, { execute?: (input: unknown) => unknown }>)[
+        toolCall.toolName
+      ]
+      if (!entry?.execute) return
+      try {
+        const output = await entry.execute(toolCall.input)
+        addToolOutput({ toolCallId: toolCall.toolCallId, output })
+      } catch (e) {
+        addToolOutput({
+          toolCallId: toolCall.toolCallId,
+          output: null,
+          state: 'output-error',
+          errorText: e instanceof Error ? e.message : String(e),
+        })
+      }
+    },
   })
   const [draft, setDraft] = useState('')
   const busy = status === 'streaming' || status === 'submitted'
