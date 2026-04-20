@@ -107,6 +107,49 @@ export const Dirty: Story = {
   },
 }
 
+const BROKEN = `2026-04-17 * "Amudham" "coffee"
+  Liabilities:CreditCards:HSBC   -35.00 INR
+  Expenses:Food:Coffee             35.00 INR
+
+2026-04-16 & "Zomato" "dinner"
+  Liabilities:CreditCards:HDFC  -1220.00 INR
+  Expenses:Food:Restaurant       1220.00 INR
+
+2026-04-15 * "HDFC Savings" "ATM withdrawal
+  Assets:Bank:HDFC:Savings   -5000.00 INR
+  Assets:Cash                 5000.00 INR
+`
+
+export const WithParseErrors: Story = {
+  args: { initialValue: BROKEN },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Second txn uses invalid flag "&"; third txn has unterminated narration string. Lezer marks error spans; CodeMirror underlines them and shows gutter markers.',
+      },
+    },
+  },
+}
+
+const UNBALANCED = `2026-04-17 * "Amudham" "coffee"
+  Liabilities:CreditCards:HSBC   -35.00 INR
+  Expenses:Food:Coffee             30.00 INR
+`
+
+export const WithUnbalancedTxn: Story = {
+  args: { initialValue: UNBALANCED },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Postings sum to -5 INR. Block-level balance validator flags the header with a red underline + gutter marker.',
+      },
+    },
+  },
+}
+
+
 export const WithNoopValidator: Story = {
   args: {
     initialValue: BASELINE,
