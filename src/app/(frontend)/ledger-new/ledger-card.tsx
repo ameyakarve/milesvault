@@ -50,8 +50,8 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const secondary = payee && narration ? `· ${narration}` : ''
   const glyph = iconForTxn(txn.postings.map((p) => p.account))
 
-  const paymentMatch = matchExpensesOnePayment(txn)
-  const cashbackMatch = paymentMatch ? null : matchExpensesAndCashbacks(txn)
+  const cashbackMatch = matchExpensesAndCashbacks(txn)
+  const paymentMatch = cashbackMatch ? null : matchExpensesOnePayment(txn)
 
   let subtext: string | null = null
   let amount = preset.amount
@@ -137,7 +137,15 @@ function formatExpenseTotal(expenses: readonly ParsedPosting[]): string | null {
 function formatCashbackTotal(cashbacks: readonly ParsedPosting[]): string | null {
   const s = sumPostings(cashbacks)
   if (!s) return null
-  return `+${formatOutflow(s.sum, s.currency)}`
+  const abs = Math.abs(s.sum)
+  const locale = s.currency === 'INR' ? 'en-IN' : 'en-US'
+  const body = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(abs)
+  if (s.currency === 'INR') return `+₹${body}`
+  if (s.currency === 'USD') return `+$${body}`
+  return s.currency ? `+${body} ${s.currency}` : `+${body}`
 }
 
 function formatOutflow(expenseValue: number, currency: string | null): string {
@@ -224,7 +232,7 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
           {row.subtext ?? row.account}
         </div>
       </div>
-      <div className="w-[60px] text-right shrink-0 font-mono flex flex-col justify-center border-l border-slate-200 pl-2">
+      <div className="w-[72px] text-right shrink-0 font-mono flex flex-col justify-center border-l border-slate-200 pl-2 overflow-hidden">
         {row.rewards.old ? (
           <div className="text-[11px]">
             <span className="text-slate-300 line-through">{row.rewards.old}</span>

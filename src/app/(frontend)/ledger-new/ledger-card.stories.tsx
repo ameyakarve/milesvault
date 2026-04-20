@@ -134,7 +134,7 @@ export const ExpensesWithCashback: Story = {
     docs: {
       description: {
         story:
-          'Txn with only Expenses + `Income:Rewards:Cashback` postings. Amount column shows the expense total (₹1,000.00); rewards cell shows the cashback as "+₹1,000.00". No payment method ⇒ subtext falls back to the preset account.',
+          'Txn with only Expenses + `Income:Rewards:Cashback` postings. Amount column shows the expense total (₹1,000.00); rewards cell shows the cashback as "+₹1,000" (compact, no trailing zeros). No payment method ⇒ subtext falls back to the preset account.',
       },
     },
   },
