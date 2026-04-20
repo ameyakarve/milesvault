@@ -275,8 +275,10 @@ const theme = EditorView.theme(
       boxShadow: 'inset 2px 0 0 #0284C7',
     },
     '.cm-word-added': {
-      backgroundColor: '#BAE6FD',
-      padding: '0 1px',
+      backgroundColor: 'rgba(125, 211, 252, 0.75)',
+      color: NAVY_700,
+      padding: '0 2px',
+      borderRadius: '2px',
     },
     '.cm-gutters': {
       backgroundColor: '#ffffff',
