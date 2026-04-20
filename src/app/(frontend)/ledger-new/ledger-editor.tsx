@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { EditorView } from '@codemirror/view'
 import {
+  type AccountCompleter,
   scandiBeancountExtensions,
+  setAccountCompleter,
   setBaselineBuffer,
   setValidators,
   type Validator,
@@ -15,6 +17,7 @@ type LedgerEditorProps = {
   onChange: (v: string) => void
   baseline?: string
   validators?: readonly Validator[]
+  completeAccount?: AccountCompleter
   onCursorChange?: (pos: number) => void
   onCreateEditor?: (view: EditorView) => void
   className?: string
@@ -25,6 +28,7 @@ export function LedgerEditor({
   onChange,
   baseline,
   validators,
+  completeAccount,
   onCursorChange,
   onCreateEditor,
   className,
@@ -54,6 +58,12 @@ export function LedgerEditor({
     view.dispatch({ effects: setValidators.of(validators ?? []) })
   }, [validators])
 
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view || !completeAccount) return
+    view.dispatch({ effects: setAccountCompleter.of(completeAccount) })
+  }, [completeAccount])
+
   return (
     <CodeMirror
       className={className}
@@ -66,6 +76,9 @@ export function LedgerEditor({
         }
         if (validators && validators.length > 0) {
           view.dispatch({ effects: setValidators.of(validators) })
+        }
+        if (completeAccount) {
+          view.dispatch({ effects: setAccountCompleter.of(completeAccount) })
         }
         onCreateEditor?.(view)
       }}
