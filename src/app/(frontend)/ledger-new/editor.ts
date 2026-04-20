@@ -7,6 +7,7 @@ import {
   indentUnit,
   syntaxHighlighting,
 } from '@codemirror/language'
+import { type Diagnostic, linter, lintGutter } from '@codemirror/lint'
 import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state'
 import {
   Decoration,
@@ -127,6 +128,37 @@ const baselineBufferField = StateField.define<string>({
     return value
   },
 })
+
+export type LedgerDiagnostic = Diagnostic
+export type Validator = (doc: string) => LedgerDiagnostic[]
+
+export const setValidators = StateEffect.define<readonly Validator[]>()
+
+const validatorsField = StateField.define<readonly Validator[]>({
+  create: () => [],
+  update(value, tr) {
+    for (const e of tr.effects) if (e.is(setValidators)) return e.value
+    return value
+  },
+})
+
+const composedLinter = linter(
+  (view) => {
+    const validators = view.state.field(validatorsField)
+    if (validators.length === 0) return []
+    const doc = view.state.doc.toString()
+    const out: Diagnostic[] = []
+    for (const v of validators) {
+      try {
+        out.push(...v(doc))
+      } catch (err) {
+        console.error('ledger validator threw', err)
+      }
+    }
+    return out
+  },
+  { delay: 150 },
+)
 
 const createdLine = Decoration.line({ attributes: { class: 'cm-txn-created' } })
 const updatedLine = Decoration.line({ attributes: { class: 'cm-txn-updated' } })
@@ -309,6 +341,9 @@ export const scandiBeancountExtensions = [
   baselineBufferField,
   entryHighlightPlugin,
   wordHighlightPlugin,
+  validatorsField,
+  composedLinter,
+  lintGutter(),
   theme,
 ]
 
