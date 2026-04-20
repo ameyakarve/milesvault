@@ -1,3 +1,9 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import type { Transaction } from '@/durable/ledger-types'
+import { safeParse } from '../ledger/card-patterns/types'
+
 type PillKind = 'proposed' | 'split' | 'forex' | 'dcc' | 'benefit'
 
 type CardRow = {
@@ -13,7 +19,7 @@ type CardRow = {
   pill?: { label: string; kind: PillKind }
 }
 
-const rows: CardRow[] = [
+const PRESETS: CardRow[] = [
   {
     month: 'OCT',
     day: '24',
@@ -325,6 +331,89 @@ function renderTextLines(lines: TextLine[]): React.ReactNode[] {
   return out
 }
 
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
+function deriveFromRaw(raw: string): { month: string; day: string; payee: string } {
+  const parsed = safeParse(raw)
+  if (parsed) {
+    const { date, payee, narration } = parsed.bean
+    const title = (payee?.trim() || narration?.trim() || 'Transaction')
+    return {
+      month: MONTHS[date.month - 1] ?? '—',
+      day: String(date.day).padStart(2, '0'),
+      payee: title,
+    }
+  }
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s+[*!]\s+(?:"([^"]*)"\s+)?(?:"([^"]*)")?/)
+  if (m) {
+    const month = MONTHS[Number(m[2]) - 1] ?? '—'
+    const day = m[3]
+    const payee = (m[4]?.trim() || m[5]?.trim() || 'Transaction')
+    return { month, day, payee }
+  }
+  return { month: '—', day: '—', payee: 'Transaction' }
+}
+
+function CardsList() {
+  const [status, setStatus] = useState<'loading' | 'idle' | 'error'>('loading')
+  const [rows, setRows] = useState<Transaction[]>([])
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/ledger/transactions?q=&limit=12&offset=0', {
+      signal: controller.signal,
+      credentials: 'include',
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return (await res.json()) as { rows: Transaction[]; total: number }
+      })
+      .then((data) => {
+        setRows(data.rows)
+        setStatus('idle')
+      })
+      .catch((e: unknown) => {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        setErrorMsg((e as Error).message)
+        setStatus('error')
+      })
+    return () => controller.abort()
+  }, [])
+
+  if (status === 'loading') {
+    return (
+      <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
+        loading…
+      </div>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <div className="flex-1 flex items-center justify-center text-[12px] text-error">
+        failed to load — {errorMsg}
+      </div>
+    )
+  }
+  if (rows.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
+        no transactions
+      </div>
+    )
+  }
+  return (
+    <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 relative z-10 pb-10">
+      {rows.map((txn, i) => {
+        const preset = PRESETS[i % PRESETS.length]
+        const { month, day, payee } = deriveFromRaw(txn.raw_text)
+        const row: CardRow = { ...preset, month, day, payee }
+        return <Card key={txn.id} row={row} />
+      })}
+    </div>
+  )
+}
+
 export function LedgerNewView() {
   return (
     <div className="w-screen h-screen flex flex-col bg-scandi-bg text-navy-600 overflow-hidden font-sans">
@@ -411,11 +500,7 @@ export function LedgerNewView() {
             <h2 className="text-navy-600 font-semibold text-[13px]">cards</h2>
             <h2 className="text-[11px] text-slate-400">12 shown</h2>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2 relative z-10 pb-10">
-            {rows.map((row, i) => (
-              <Card key={i} row={row} />
-            ))}
-          </div>
+          <CardsList />
           <div className="absolute -bottom-6 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none">
             <Icon name="account_balance_wallet" className="!text-[180px]" />
           </div>
