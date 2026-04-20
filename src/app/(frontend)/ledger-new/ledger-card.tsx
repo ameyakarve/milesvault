@@ -50,21 +50,23 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const secondary = payee && narration ? `· ${narration}` : ''
   const glyph = iconForTxn(txn.postings.map((p) => p.account))
 
-  const cashbackMatch = matchExpensesAndCashbacks(txn)
+  const cashbackMatch = matchExpensesCashbacksPayment(txn)
   const paymentMatch = cashbackMatch ? null : matchExpensesOnePayment(txn)
 
   let subtext: string | null = null
   let amount = preset.amount
   let rewards: CardRow['rewards'] = { current: '' }
 
-  if (paymentMatch) {
+  if (cashbackMatch) {
     subtext =
-      paymentMethodDisplay(paymentMatch.payment.account) ?? paymentMatch.payment.account
-    amount = formatExpenseTotal(paymentMatch.expenses) ?? preset.amount
-  } else if (cashbackMatch) {
+      paymentMethodDisplay(cashbackMatch.payment.account) ?? cashbackMatch.payment.account
     amount = formatExpenseTotal(cashbackMatch.expenses) ?? preset.amount
     const cashbackText = formatCashbackTotal(cashbackMatch.cashbacks)
     if (cashbackText) rewards = { current: cashbackText }
+  } else if (paymentMatch) {
+    subtext =
+      paymentMethodDisplay(paymentMatch.payment.account) ?? paymentMatch.payment.account
+    amount = formatExpenseTotal(paymentMatch.expenses) ?? preset.amount
   }
 
   return {
@@ -95,19 +97,24 @@ function matchExpensesOnePayment(
   return { expenses, payment: others[0] }
 }
 
-function matchExpensesAndCashbacks(
+function matchExpensesCashbacksPayment(
   txn: ParsedTxn,
-): { expenses: ParsedPosting[]; cashbacks: ParsedPosting[] } | null {
-  if (txn.postings.length < 2) return null
+): {
+  expenses: ParsedPosting[]
+  cashbacks: ParsedPosting[]
+  payment: ParsedPosting
+} | null {
+  if (txn.postings.length < 3) return null
   const expenses: ParsedPosting[] = []
   const cashbacks: ParsedPosting[] = []
+  const others: ParsedPosting[] = []
   for (const p of txn.postings) {
     if (p.account === CASHBACK_ACCOUNT) cashbacks.push(p)
     else if (p.account === 'Expenses' || p.account.startsWith('Expenses:')) expenses.push(p)
-    else return null
+    else others.push(p)
   }
-  if (expenses.length < 1 || cashbacks.length < 1) return null
-  return { expenses, cashbacks }
+  if (expenses.length < 1 || cashbacks.length < 1 || others.length !== 1) return null
+  return { expenses, cashbacks, payment: others[0] }
 }
 
 function sumPostings(
