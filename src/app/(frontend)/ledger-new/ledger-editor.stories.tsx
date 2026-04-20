@@ -4,11 +4,11 @@ import { LedgerEditor } from './ledger-editor'
 import type { Validator } from './editor'
 
 const BASELINE = `2026-04-17 * "Amudham" "coffee"
-  Liabilities:CreditCards:HSBC   -35.00 INR
+  Liabilities:CC:HSBC   -35.00 INR
   Expenses:Food:Coffee             35.00 INR
 
 2026-04-16 * "Zomato" "dinner"
-  Liabilities:CreditCards:HDFC  -1220.00 INR
+  Liabilities:CC:HDFC  -1220.00 INR
   Expenses:Food:Restaurant       1220.00 INR
 
 2026-04-15 * "HDFC Savings" "ATM withdrawal"
@@ -17,11 +17,11 @@ const BASELINE = `2026-04-17 * "Amudham" "coffee"
 `
 
 const DIRTY = `2026-04-17 * "Amudham" "coffee + tip"
-  Liabilities:CreditCards:HSBC   -40.00 INR
+  Liabilities:CC:HSBC   -40.00 INR
   Expenses:Food:Coffee             40.00 INR
 
 2026-04-16 * "Zomato" "dinner"
-  Liabilities:CreditCards:HDFC  -1220.00 INR
+  Liabilities:CC:HDFC  -1220.00 INR
   Expenses:Food:Restaurant       1220.00 INR
 
 2026-04-15 * "HDFC Savings" "ATM withdrawal"
@@ -29,7 +29,7 @@ const DIRTY = `2026-04-17 * "Amudham" "coffee + tip"
   Assets:Cash                 5000.00 INR
 
 2026-04-14 * "New txn" "created after baseline"
-  Liabilities:CreditCards:HDFC   -99.00 INR
+  Liabilities:CC:HDFC   -99.00 INR
   Expenses:Misc                    99.00 INR
 `
 
@@ -108,11 +108,11 @@ export const Dirty: Story = {
 }
 
 const BROKEN = `2026-04-17 * "Amudham" "coffee"
-  Liabilities:CreditCards:HSBC   -35.00 INR
+  Liabilities:CC:HSBC   -35.00 INR
   Expenses:Food:Coffee             35.00 INR
 
 2026-04-16 & "Zomato" "dinner"
-  Liabilities:CreditCards:HDFC  -1220.00 INR
+  Liabilities:CC:HDFC  -1220.00 INR
   Expenses:Food:Restaurant       1220.00 INR
 
 2026-04-15 * "HDFC Savings" "ATM withdrawal
@@ -133,7 +133,7 @@ export const WithParseErrors: Story = {
 }
 
 const UNBALANCED = `2026-04-17 * "Amudham" "coffee"
-  Liabilities:CreditCards:HSBC   -35.00 INR
+  Liabilities:CC:HSBC   -35.00 INR
   Expenses:Food:Coffee             30.00 INR
 `
 
@@ -150,7 +150,7 @@ export const WithUnbalancedTxn: Story = {
 }
 
 const FLIPPED_EXPENSE = `2026-04-17 * "Amudham" "coffee"
-  Liabilities:CreditCards:HSBC    35.00 INR
+  Liabilities:CC:HSBC    35.00 INR
   Expenses:Food:Coffee            -35.00 INR
 `
 
