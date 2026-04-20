@@ -1,3 +1,8 @@
+import {
+  autocompletion,
+  type CompletionSource,
+  startCompletion,
+} from '@codemirror/autocomplete'
 import { indentLess, indentMore } from '@codemirror/commands'
 import {
   HighlightStyle,
@@ -20,6 +25,7 @@ import {
 import { tags as t } from '@lezer/highlight'
 import { parser } from 'lezer-beancount'
 import { diffWordsWithSpace } from 'diff'
+import { type AccountCompleter, completeAccount } from '@/lib/beancount/accounts'
 import { splitEntries } from '@/lib/beancount/extract'
 import { parseBuffer } from '@/lib/beancount/parse'
 import {
@@ -137,8 +143,48 @@ const baselineBufferField = StateField.define<string>({
 
 export type LedgerDiagnostic = Diagnostic
 export type { ValidateContext, Validator } from '@/lib/beancount/validators'
+export type { AccountCompleter } from '@/lib/beancount/accounts'
 
 export const setValidators = StateEffect.define<readonly Validator[]>()
+export const setAccountCompleter = StateEffect.define<AccountCompleter>()
+
+const accountCompleterField = StateField.define<AccountCompleter>({
+  create: () => completeAccount,
+  update(value, tr) {
+    for (const e of tr.effects) if (e.is(setAccountCompleter)) return e.value
+    return value
+  },
+})
+
+const ACCOUNT_PREFIX_RE = /[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9-]*)+/
+
+const accountCompletionSource: CompletionSource = (context) => {
+  const match = context.matchBefore(ACCOUNT_PREFIX_RE)
+  if (!match) return null
+  if (!context.explicit && match.from === match.to) return null
+  const completer = context.state.field(accountCompleterField)
+  const hits = completer(match.text)
+  if (hits.length === 0) return null
+  return {
+    from: match.from,
+    options: hits.map((label) => ({ label, type: 'class' })),
+    validFor: /^[A-Za-z0-9:-]*$/,
+  }
+}
+
+const autocompleteColonTrigger = EditorView.updateListener.of((u) => {
+  if (!u.docChanged) return
+  let typedColon = false
+  u.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
+    if (inserted.toString().endsWith(':')) typedColon = true
+  })
+  if (!typedColon) return
+  const pos = u.state.selection.main.head
+  const before = u.state.doc.sliceString(Math.max(0, pos - 120), pos)
+  if (/[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9-]*)*:$/.test(before)) {
+    startCompletion(u.view)
+  }
+})
 
 const validatorsField = StateField.define<readonly Validator[]>({
   create: () => [],
@@ -366,6 +412,9 @@ export const scandiBeancountExtensions = [
   parseLinter,
   composedLinter,
   lintGutter(),
+  accountCompleterField,
+  autocompletion({ override: [accountCompletionSource], activateOnTyping: true }),
+  autocompleteColonTrigger,
   theme,
 ]
 

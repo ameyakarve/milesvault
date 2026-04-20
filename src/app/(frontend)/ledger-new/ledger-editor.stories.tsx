@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
 import { LedgerEditor } from './ledger-editor'
-import type { Validator } from './editor'
+import type { AccountCompleter, Validator } from './editor'
 
 const BASELINE = `2026-04-17 * "Amudham" "coffee"
   Liabilities:CC:HSBC   -35.00 INR
@@ -47,10 +47,12 @@ function Host({
   initialValue,
   baseline,
   validators,
+  completeAccount,
 }: {
   initialValue: string
   baseline?: string
   validators?: readonly Validator[]
+  completeAccount?: AccountCompleter
 }) {
   const [value, setValue] = useState(initialValue)
   return (
@@ -59,6 +61,7 @@ function Host({
       value={value}
       baseline={baseline}
       validators={validators}
+      completeAccount={completeAccount}
       onChange={setValue}
     />
   )
@@ -166,6 +169,22 @@ export const WithFlippedExpenseSign: Story = {
   },
 }
 
+
+const COMPLETION_SEED = `2026-04-17 * "Amudham" "coffee"
+  Liabilities:CC:HSBC   -35.00 INR
+  Expenses:`
+
+export const WithAccountAutocomplete: Story = {
+  args: { initialValue: COMPLETION_SEED },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Caret parked after `Expenses:`. Typing `:` after any capitalized segment triggers the built-in account completer (prefix match over default account list).',
+      },
+    },
+  },
+}
 
 export const WithNoopValidator: Story = {
   args: {
