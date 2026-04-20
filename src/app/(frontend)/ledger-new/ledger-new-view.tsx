@@ -1,12 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
+import { EditorView } from '@codemirror/view'
 import { diffLines } from 'diff'
 import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
 import { safeParse } from '../ledger/card-patterns/types'
-import { composeBuffer, scandiBeancountExtensions } from './editor'
+import {
+  composeBuffer,
+  scandiBeancountExtensions,
+  setBaselineBuffer,
+} from './editor'
 
 const PAGE_SIZE = 10
 
@@ -60,34 +65,31 @@ function deriveEntries(buffer: string, snapshots: Snapshot[]): Entry[] {
 
 type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 
-type CardRow = {
-  month: string
-  day: string
+type CardPreset = {
   glyph: string
   payee: string
   narration: string
   account: string
   rewards: { old?: string; current: string }
   amount: string
-  state?: 'staged' | 'focused'
   pill?: { label: string; kind: PillKind }
 }
 
-const PRESETS: CardRow[] = [
+type CardRow = CardPreset & {
+  month: string
+  day: string
+}
+
+const PRESETS: CardPreset[] = [
   {
-    month: 'OCT',
-    day: '24',
     glyph: 'restaurant',
     payee: 'Swiggy',
     narration: '· dinner with r',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+87', current: '+5,800 pts' },
     amount: '-₹640.00',
-    state: 'staged',
   },
   {
-    month: 'OCT',
-    day: '23',
     glyph: 'shopping_bag',
     payee: 'Zepto',
     narration: '· weekend restock',
@@ -96,30 +98,22 @@ const PRESETS: CardRow[] = [
     amount: '-₹320.00',
   },
   {
-    month: 'OCT',
-    day: '22',
     glyph: 'directions_car',
     payee: 'Uber',
     narration: '· ride to office',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { current: '+320 pts' },
     amount: '-₹450.00',
-    state: 'focused',
   },
   {
-    month: 'OCT',
-    day: '21',
     glyph: 'restaurant',
     payee: 'Meat Masterz',
     narration: '· weekend order',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+164', current: '+328 pts' },
     amount: '-₹1,250.00',
-    state: 'staged',
   },
   {
-    month: 'OCT',
-    day: '20',
     glyph: 'account_balance',
     payee: 'HDFC',
     narration: '· oct statement payment',
@@ -128,20 +122,15 @@ const PRESETS: CardRow[] = [
     amount: '-₹48,200.00',
   },
   {
-    month: 'OCT',
-    day: '18',
     glyph: 'inventory_2',
     payee: 'Amazon',
     narration: '· monitor & cables',
     account: 'Liabilities:CreditCard:Axis',
     rewards: { old: '+45', current: '+90 pts' },
     amount: '-₹4,500.00',
-    state: 'staged',
     pill: { label: 'split', kind: 'split' },
   },
   {
-    month: 'OCT',
-    day: '17',
     glyph: 'movie',
     payee: 'Netflix',
     narration: '· premium renewal',
@@ -151,8 +140,6 @@ const PRESETS: CardRow[] = [
     pill: { label: 'forex', kind: 'forex' },
   },
   {
-    month: 'OCT',
-    day: '16',
     glyph: 'local_activity',
     payee: 'BookMyShow',
     narration: '· dune part two',
@@ -161,8 +148,6 @@ const PRESETS: CardRow[] = [
     amount: '-₹480.00',
   },
   {
-    month: 'OCT',
-    day: '14',
     glyph: 'restaurant_menu',
     payee: 'EazyDiner',
     narration: '· complimentary visit',
@@ -172,8 +157,6 @@ const PRESETS: CardRow[] = [
     pill: { label: 'benefit', kind: 'benefit' },
   },
   {
-    month: 'OCT',
-    day: '12',
     glyph: 'redeem',
     payee: 'Smartbuy',
     narration: '· points → voucher',
@@ -182,8 +165,6 @@ const PRESETS: CardRow[] = [
     amount: '+₹3,500.00',
   },
   {
-    month: 'OCT',
-    day: '10',
     glyph: 'hotel',
     payee: 'Cleartrip',
     narration: '· delhi hotel',
@@ -193,8 +174,6 @@ const PRESETS: CardRow[] = [
     pill: { label: 'dcc', kind: 'dcc' },
   },
   {
-    month: 'OCT',
-    day: '07',
     glyph: 'payments',
     payee: 'Payroll',
     narration: '· oct salary credit',
@@ -220,23 +199,14 @@ function Pill({ label }: { kind: PillKind; label: string }) {
   )
 }
 
-function Card({ row }: { row: CardRow }) {
-  const shell =
-    row.state === 'staged'
-      ? 'bg-sky-50/50 hover:bg-sky-50 border border-sky-100'
-      : row.state === 'focused'
-        ? 'bg-navy-50/50 border border-navy-200'
-        : 'hover:bg-slate-50 border border-transparent'
-
-  const tile =
-    row.state === 'staged'
-      ? 'border-sky-200'
-      : 'border-slate-200'
-
-  const tileHead =
-    row.state === 'staged'
-      ? 'bg-sky-50 text-sky-700 border-b border-sky-100'
-      : 'bg-slate-50 text-slate-500 border-b border-slate-100'
+function Card({ row, active }: { row: CardRow; active: boolean }) {
+  const shell = active
+    ? 'bg-sky-50 border border-sky-200 ring-1 ring-sky-200'
+    : 'hover:bg-slate-50 border border-transparent'
+  const tile = active ? 'border-sky-200' : 'border-slate-200'
+  const tileHead = active
+    ? 'bg-sky-50 text-sky-700 border-b border-sky-100'
+    : 'bg-slate-50 text-slate-500 border-b border-slate-100'
 
   return (
     <div
@@ -362,10 +332,12 @@ function CardsList({
   status,
   errorMsg,
   entries,
+  activeIdx,
 }: {
   status: FetchStatus
   errorMsg: string | null
   entries: Entry[]
+  activeIdx: number | null
 }) {
   if (status === 'loading') {
     return (
@@ -395,7 +367,7 @@ function CardsList({
         const { month, day, payee } = deriveFromRaw(entry.text)
         const row: CardRow = { ...preset, month, day, payee }
         const key = entry.snapshotId !== null ? `id-${entry.snapshotId}` : `idx-${i}`
-        return <Card key={key} row={row} />
+        return <Card key={key} row={row} active={activeIdx === i} />
       })}
     </div>
   )
@@ -406,12 +378,25 @@ function TextPane({
   errorMsg,
   buffer,
   onBufferChange,
+  onCreateEditor,
+  onCursorChange,
 }: {
   status: FetchStatus
   errorMsg: string | null
   buffer: string
   onBufferChange: (v: string) => void
+  onCreateEditor: (view: EditorView) => void
+  onCursorChange: (pos: number) => void
 }) {
+  const cursorExtension = useMemo(
+    () =>
+      EditorView.updateListener.of((u) => {
+        if (u.selectionSet || u.docChanged) {
+          onCursorChange(u.state.selection.main.head)
+        }
+      }),
+    [onCursorChange],
+  )
   if (status === 'loading') {
     return (
       <div className="flex-1 flex items-center justify-center text-[12px] text-slate-400">
@@ -432,7 +417,8 @@ function TextPane({
         className="h-full"
         value={buffer}
         onChange={onBufferChange}
-        extensions={scandiBeancountExtensions}
+        onCreateEditor={onCreateEditor}
+        extensions={[...scandiBeancountExtensions, cursorExtension]}
         basicSetup={{
           lineNumbers: true,
           highlightActiveLine: false,
@@ -582,6 +568,11 @@ function PageControls({
   )
 }
 
+function allEntriesParse(entries: Entry[]): boolean {
+  if (entries.length === 0) return true
+  return entries.every((e) => safeParse(e.text) !== null)
+}
+
 export function LedgerNewView() {
   const [page, setPage] = useState(1)
   const state = useTransactions(page)
@@ -595,7 +586,42 @@ export function LedgerNewView() {
     setBuffer(baseline)
   }, [baseline])
 
-  const entries = useMemo(() => deriveEntries(buffer, snapshots), [buffer, snapshots])
+  const liveEntries = useMemo(() => deriveEntries(buffer, snapshots), [buffer, snapshots])
+  const [cardEntries, setCardEntries] = useState<Entry[]>(liveEntries)
+  useEffect(() => {
+    if (allEntriesParse(liveEntries)) setCardEntries(liveEntries)
+  }, [liveEntries])
+
+  const editorViewRef = useRef<EditorView | null>(null)
+  useEffect(() => {
+    const view = editorViewRef.current
+    if (!view) return
+    view.dispatch({ effects: setBaselineBuffer.of(baseline) })
+  }, [baseline])
+
+  const [cursorPos, setCursorPos] = useState(0)
+  const activeIdx = useMemo(() => {
+    const parts = splitEntries(buffer)
+    const lines = buffer.split('\n')
+    let offset = 0
+    for (let i = 0; i < parts.length; i++) {
+      const start = lines.slice(0, parts[i].startLine).reduce((s, l) => s + l.length + 1, 0)
+      const end = lines.slice(0, parts[i].endLine + 1).reduce((s, l) => s + l.length + 1, 0)
+      if (cursorPos >= start && cursorPos < end) {
+        offset = i
+        // Map live index → cardEntries index by snapshotId; else positional
+        const live = liveEntries[i]
+        if (!live) return null
+        if (live.snapshotId !== null) {
+          const found = cardEntries.findIndex((e) => e.snapshotId === live.snapshotId)
+          if (found !== -1) return found
+        }
+        return offset < cardEntries.length ? offset : null
+      }
+    }
+    return null
+  }, [buffer, cursorPos, liveEntries, cardEntries])
+
   const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
@@ -694,7 +720,12 @@ export function LedgerNewView() {
             <h2 className="text-navy-600 font-semibold text-[13px]">cards</h2>
             <h2 className="text-[11px] text-slate-400 tabular-nums">{rangeLabel}</h2>
           </div>
-          <CardsList status={state.status} errorMsg={state.errorMsg} entries={entries} />
+          <CardsList
+            status={state.status}
+            errorMsg={state.errorMsg}
+            entries={cardEntries}
+            activeIdx={activeIdx}
+          />
           <div className="absolute bottom-10 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none">
             <Icon name="account_balance_wallet" className="!text-[180px]" />
           </div>
@@ -714,6 +745,11 @@ export function LedgerNewView() {
             errorMsg={state.errorMsg}
             buffer={buffer}
             onBufferChange={setBuffer}
+            onCreateEditor={(view) => {
+              editorViewRef.current = view
+              view.dispatch({ effects: setBaselineBuffer.of(baseline) })
+            }}
+            onCursorChange={setCursorPos}
           />
         </section>
 

@@ -7,7 +7,7 @@ import {
   indentUnit,
   syntaxHighlighting,
 } from '@codemirror/language'
-import { RangeSetBuilder } from '@codemirror/state'
+import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state'
 import {
   Decoration,
   type DecorationSet,
@@ -18,6 +18,7 @@ import {
 } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 import { parser } from 'lezer-beancount'
+import { diffWordsWithSpace } from 'diff'
 import { splitEntries } from '@/lib/beancount/extract'
 
 const beancountLanguage = LRLanguage.define({
@@ -117,6 +118,134 @@ const txnDividers = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 )
 
+export const setBaselineBuffer = StateEffect.define<string>()
+
+const baselineBufferField = StateField.define<string>({
+  create: () => '',
+  update(value, tr) {
+    for (const e of tr.effects) if (e.is(setBaselineBuffer)) return e.value
+    return value
+  },
+})
+
+const createdLine = Decoration.line({ attributes: { class: 'cm-txn-created' } })
+const updatedLine = Decoration.line({ attributes: { class: 'cm-txn-updated' } })
+const wordAdded = Decoration.mark({ attributes: { class: 'cm-word-added' } })
+
+type EntryClassification = { change: 'unchanged' | 'created' | 'updated'; baselineText: string | null }
+
+function classifyDoc(doc: string, baseline: string): EntryClassification[] {
+  const current = splitEntries(doc).map((e) => e.text.trim())
+  const base = splitEntries(baseline).map((e) => e.text.trim())
+  const baseCounts = new Map<string, number>()
+  for (const b of base) baseCounts.set(b, (baseCounts.get(b) ?? 0) + 1)
+  // First pass: exact-body unchanged
+  const classified: (EntryClassification | null)[] = current.map((c) => {
+    const n = baseCounts.get(c) ?? 0
+    if (n > 0) {
+      baseCounts.set(c, n - 1)
+      return { change: 'unchanged', baselineText: c }
+    }
+    return null
+  })
+  // Second pass: positional fallback — unmatched current ↔ unmatched baseline in order
+  const unmatchedBase: string[] = []
+  const remaining = new Map(baseCounts)
+  for (const b of base) {
+    const n = remaining.get(b) ?? 0
+    if (n > 0) {
+      unmatchedBase.push(b)
+      remaining.set(b, n - 1)
+    }
+  }
+  let bi = 0
+  for (let i = 0; i < classified.length; i++) {
+    if (classified[i]) continue
+    if (bi < unmatchedBase.length) {
+      classified[i] = { change: 'updated', baselineText: unmatchedBase[bi++] }
+    } else {
+      classified[i] = { change: 'created', baselineText: null }
+    }
+  }
+  return classified as EntryClassification[]
+}
+
+function buildEntryLines(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>()
+  const doc = view.state.doc
+  const baseline = view.state.field(baselineBufferField)
+  if (!baseline) return builder.finish()
+  const entries = splitEntries(doc.toString())
+  const metas = classifyDoc(doc.toString(), baseline)
+  for (let i = 0; i < entries.length; i++) {
+    const meta = metas[i]
+    if (!meta || meta.change === 'unchanged') continue
+    const deco = meta.change === 'created' ? createdLine : updatedLine
+    const start = entries[i].startLine + 1
+    const end = entries[i].endLine + 1
+    for (let ln = start; ln <= end; ln++) {
+      builder.add(doc.line(ln).from, doc.line(ln).from, deco)
+    }
+  }
+  return builder.finish()
+}
+
+function buildWordMarks(view: EditorView): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>()
+  const doc = view.state.doc
+  const baseline = view.state.field(baselineBufferField)
+  if (!baseline) return builder.finish()
+  const entries = splitEntries(doc.toString())
+  const metas = classifyDoc(doc.toString(), baseline)
+  for (let i = 0; i < entries.length; i++) {
+    const meta = metas[i]
+    if (!meta || meta.change !== 'updated' || !meta.baselineText) continue
+    const entry = entries[i]
+    const entryStart = doc.line(entry.startLine + 1).from
+    const parts = diffWordsWithSpace(meta.baselineText, entry.text)
+    let cursor = 0
+    for (const p of parts) {
+      if (p.removed) continue
+      const len = p.value.length
+      if (p.added && p.value.trim().length > 0) {
+        builder.add(entryStart + cursor, entryStart + cursor + len, wordAdded)
+      }
+      cursor += len
+    }
+  }
+  return builder.finish()
+}
+
+const entryHighlightPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+    constructor(view: EditorView) {
+      this.decorations = buildEntryLines(view)
+    }
+    update(u: ViewUpdate) {
+      const prev = u.startState.field(baselineBufferField)
+      const cur = u.state.field(baselineBufferField)
+      if (u.docChanged || prev !== cur) this.decorations = buildEntryLines(u.view)
+    }
+  },
+  { decorations: (v) => v.decorations },
+)
+
+const wordHighlightPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+    constructor(view: EditorView) {
+      this.decorations = buildWordMarks(view)
+    }
+    update(u: ViewUpdate) {
+      const prev = u.startState.field(baselineBufferField)
+      const cur = u.state.field(baselineBufferField)
+      if (u.docChanged || prev !== cur) this.decorations = buildWordMarks(u.view)
+    }
+  },
+  { decorations: (v) => v.decorations },
+)
+
 const theme = EditorView.theme(
   {
     '&': {
@@ -137,6 +266,13 @@ const theme = EditorView.theme(
     },
     '.cm-line': { padding: '0 12px' },
     '.cm-txn-divider': { borderTop: `1px solid ${SLATE_100}` },
+    '.cm-txn-created': { backgroundColor: 'rgba(236, 253, 245, 0.7)' },
+    '.cm-txn-updated': { backgroundColor: 'rgba(240, 249, 255, 0.7)' },
+    '.cm-word-added': {
+      backgroundColor: '#BAE6FD',
+      borderRadius: '2px',
+      padding: '0 1px',
+    },
     '.cm-gutters': {
       backgroundColor: '#ffffff',
       color: SLATE_400,
@@ -163,6 +299,9 @@ export const scandiBeancountExtensions = [
   beancountIndentService,
   beancountTabKeymap,
   txnDividers,
+  baselineBufferField,
+  entryHighlightPlugin,
+  wordHighlightPlugin,
   theme,
 ]
 
