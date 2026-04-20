@@ -1,6 +1,6 @@
 import type { LedgerRow } from '@/lib/ledger-core/types'
 
-export type ReaderRow = LedgerRow & { tempId?: string }
+export type ReaderRow = Omit<LedgerRow, 'id'> & { id: number | null; tempId?: string }
 
 export type SearchResult = {
   rows: ReaderRow[]

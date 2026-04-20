@@ -6,6 +6,8 @@ export type Proposal =
   | { kind: 'create'; raw_text: string }
   | { kind: 'update'; id: number; raw_text: string }
   | { kind: 'delete'; id: number }
+  | { kind: 'replace_text'; old_raw_text: string; raw_text: string }
+  | { kind: 'delete_text'; old_raw_text: string }
 
 export type ProposalResult =
   | { ok: true; buffer: string }
@@ -33,6 +35,17 @@ function locateBySnapshotId(
   return { startLine: match.startLine, endLine: match.endLine, rawText: snap.raw_text }
 }
 
+function locateByRawText(
+  buffer: string,
+  raw_text: string,
+): { startLine: number; endLine: number } | null {
+  const target = raw_text.trim()
+  const parts = splitEntries(buffer)
+  const match = parts.find((p) => p.text.trim() === target)
+  if (!match) return null
+  return { startLine: match.startLine, endLine: match.endLine }
+}
+
 export function applyProposal(
   buffer: string,
   snapshots: Snapshot[],
@@ -46,14 +59,23 @@ export function applyProposal(
     return { ok: true, buffer: next }
   }
 
-  const loc = locateBySnapshotId(buffer, snapshots, p.id)
-  if (!loc) return { ok: false, reason: `txn #${p.id} not found or already edited in buffer` }
+  const loc =
+    p.kind === 'replace_text' || p.kind === 'delete_text'
+      ? locateByRawText(buffer, p.old_raw_text)
+      : locateBySnapshotId(buffer, snapshots, p.id)
+  if (!loc) {
+    const label =
+      p.kind === 'replace_text' || p.kind === 'delete_text'
+        ? 'entry with that raw_text'
+        : `txn #${(p as { id: number }).id}`
+    return { ok: false, reason: `${label} not found or already edited in buffer` }
+  }
 
   const offsets = lineOffsets(buffer)
   const startOffset = offsets[loc.startLine]
   let endOffset = offsets[loc.endLine + 1]
 
-  if (p.kind === 'delete') {
+  if (p.kind === 'delete' || p.kind === 'delete_text') {
     while (buffer[endOffset] === '\n') endOffset++
     return { ok: true, buffer: buffer.slice(0, startOffset) + buffer.slice(endOffset) }
   }

@@ -55,7 +55,7 @@ function tokenPresent(haystack: string, token: string): boolean {
 
 function toReaderRow(e: MapEntry): ReaderRow {
   return {
-    id: (e.id ?? 0) as number,
+    id: e.id,
     tempId: e.tempId,
     raw_text: e.raw_text,
     date: e.date,
