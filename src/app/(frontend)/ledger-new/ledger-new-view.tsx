@@ -1,9 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import { EditorView } from '@codemirror/view'
+import { useEffect, useMemo, useState } from 'react'
 import { diffLines } from 'diff'
 import {
   ArrowUp,
@@ -36,11 +34,8 @@ import {
 import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
 import { safeParse } from '../ledger/card-patterns/types'
-import {
-  composeBuffer,
-  scandiBeancountExtensions,
-  setBaselineBuffer,
-} from './editor'
+import { composeBuffer } from './editor'
+import { LedgerEditor } from './ledger-editor'
 
 const PAGE_SIZE = 10
 
@@ -427,26 +422,17 @@ function TextPane({
   status,
   errorMsg,
   buffer,
+  baseline,
   onBufferChange,
-  onCreateEditor,
   onCursorChange,
 }: {
   status: FetchStatus
   errorMsg: string | null
   buffer: string
+  baseline: string
   onBufferChange: (v: string) => void
-  onCreateEditor: (view: EditorView) => void
   onCursorChange: (pos: number) => void
 }) {
-  const cursorExtension = useMemo(
-    () =>
-      EditorView.updateListener.of((u) => {
-        if (u.selectionSet || u.docChanged) {
-          onCursorChange(u.state.selection.main.head)
-        }
-      }),
-    [onCursorChange],
-  )
   if (status === 'loading') {
     return (
       <div className="flex-1 flex items-center justify-center text-[11px] text-slate-400 font-mono">
@@ -463,22 +449,12 @@ function TextPane({
   }
   return (
     <div className="flex-1 min-h-0 overflow-hidden">
-      <CodeMirror
+      <LedgerEditor
         className="h-full"
         value={buffer}
+        baseline={baseline}
         onChange={onBufferChange}
-        onCreateEditor={onCreateEditor}
-        extensions={[...scandiBeancountExtensions, cursorExtension]}
-        basicSetup={{
-          lineNumbers: true,
-          highlightActiveLine: false,
-          highlightActiveLineGutter: true,
-          foldGutter: false,
-          autocompletion: false,
-          searchKeymap: false,
-          bracketMatching: false,
-          indentOnInput: false,
-        }}
+        onCursorChange={onCursorChange}
       />
     </div>
   )
@@ -666,13 +642,6 @@ export function LedgerNewView() {
     if (allEntriesParse(liveEntries)) setCardEntries(liveEntries)
   }, [liveEntries])
 
-  const editorViewRef = useRef<EditorView | null>(null)
-  useEffect(() => {
-    const view = editorViewRef.current
-    if (!view) return
-    view.dispatch({ effects: setBaselineBuffer.of(baseline) })
-  }, [baseline])
-
   const [cursorPos, setCursorPos] = useState(0)
   const activeIdx = useMemo(() => {
     const parts = splitEntries(buffer)
@@ -780,11 +749,8 @@ export function LedgerNewView() {
                 status={state.status}
                 errorMsg={state.errorMsg}
                 buffer={buffer}
+                baseline={baseline}
                 onBufferChange={setBuffer}
-                onCreateEditor={(view) => {
-                  editorViewRef.current = view
-                  view.dispatch({ effects: setBaselineBuffer.of(baseline) })
-                }}
                 onCursorChange={setCursorPos}
               />
             </section>
