@@ -1,10 +1,8 @@
 import { Think } from '@cloudflare/think'
 import { createExecuteTool } from '@cloudflare/think/tools/execute'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { createToolMiddleware } from '@ai-sdk-tool/parser'
-import { wrapLanguageModel, type LanguageModel, type ToolSet } from 'ai'
+import type { LanguageModel, ToolSet } from 'ai'
 import { buildLedgerTools } from '@/lib/chat/ledger-tools'
-import { kimiProtocol } from '@/lib/chat/kimi-protocol'
 
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10)
@@ -88,30 +86,7 @@ export class ChatAgent extends Think<Cloudflare.Env> {
         'cf-aig-authorization': `Bearer ${this.env.CF_AIG_TOKEN}`,
       },
     })
-    const kimiMiddleware = createToolMiddleware({
-      protocol: kimiProtocol(),
-      toolSystemPromptTemplate: (toolList) =>
-        `You have access to the following tools. When you decide to call a tool, emit the call using Kimi's native tool-call tokens only (no python code blocks). Exact format per call:\n<|tool_calls_section_begin|><|tool_call_begin|>functions.<name>:0<|tool_call_argument_begin|>{"arg":"value"}<|tool_call_end|><|tool_calls_section_end|>\n\nAvailable tools:\n${toolList
-          .map(
-            (t) =>
-              `- ${t.name}: ${t.description ?? ''}\n  parameters: ${JSON.stringify(t.inputSchema)}`,
-          )
-          .join('\n')}`,
-      toolResponsePromptTemplate: (toolResult) => {
-        const out = toolResult.output
-        const body =
-          typeof out === 'string'
-            ? out
-            : JSON.stringify(
-                (out as { type?: string; value?: unknown })?.value ?? out,
-              )
-        return `<|tool_result_begin|>${toolResult.toolName}:${toolResult.toolCallId}<|tool_result_argument_begin|>${body}<|tool_result_end|>`
-      },
-    })
-    return wrapLanguageModel({
-      model: provider.chatModel(this.env.CHAT_MODEL),
-      middleware: kimiMiddleware,
-    })
+    return provider.chatModel(this.env.CHAT_MODEL)
   }
 
   getSystemPrompt(): string {
