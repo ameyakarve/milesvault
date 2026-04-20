@@ -168,6 +168,7 @@ type MessagePart =
         | 'approval-responded'
         | 'output-available'
         | 'output-error'
+        | 'output-denied'
       input?: unknown
       output?: unknown
       approval?: { id: string; approved?: boolean; reason?: string }
@@ -274,6 +275,7 @@ type ToolPartState =
   | 'approval-responded'
   | 'output-available'
   | 'output-error'
+  | 'output-denied'
 
 function ApplyProposalCard({
   state,
@@ -313,6 +315,7 @@ function ApplyProposalCard({
   const didApply = state === 'output-available' && out.ok === true
   const didFail = state === 'output-available' && out.ok === false
   const wasRejected =
+    state === 'output-denied' ||
     (state === 'approval-responded' && approval?.approved === false) ||
     (state === 'output-available' && out.ok === false && !out.errors && !out.conflicts)
 

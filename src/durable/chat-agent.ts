@@ -1,9 +1,177 @@
 import { AIChatAgent, type OnChatMessageOptions } from '@cloudflare/ai-chat'
-import { convertToModelMessages, stepCountIs, streamText, wrapLanguageModel } from 'ai'
+import {
+  convertToModelMessages,
+  stepCountIs,
+  streamText,
+  wrapLanguageModel,
+  type ModelMessage,
+  type UIMessage,
+} from 'ai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createToolMiddleware } from '@ai-sdk-tool/parser'
 import { buildLedgerTools } from '@/lib/chat/ledger-tools'
 import { kimiProtocol } from '@/lib/chat/kimi-protocol'
+
+type ToolUIPart = {
+  type: `tool-${string}`
+  toolCallId: string
+  state:
+    | 'input-streaming'
+    | 'input-available'
+    | 'approval-requested'
+    | 'approval-responded'
+    | 'output-available'
+    | 'output-error'
+    | 'output-denied'
+  input?: unknown
+  output?: unknown
+  errorText?: string
+  approval?: { id: string; approved?: boolean; reason?: string }
+  providerExecuted?: boolean
+}
+
+function isToolPart(p: unknown): p is ToolUIPart {
+  return (
+    typeof p === 'object' &&
+    p !== null &&
+    typeof (p as { type?: unknown }).type === 'string' &&
+    (p as { type: string }).type.startsWith('tool-') &&
+    'toolCallId' in p &&
+    'state' in p
+  )
+}
+
+function genApprovalId(): string {
+  return `approval_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+}
+
+// A pending approval that the user never resolved becomes an orphan tool-call when
+// a fresh user message arrives — convertToLanguageModelPrompt would throw
+// AI_MissingToolResultsError. Resolve each stale part to a terminal state here so
+// history is self-consistent regardless of UI behaviour.
+function resolveStalePendingTools(messages: UIMessage[]): {
+  messages: UIMessage[]
+  changed: boolean
+} {
+  let changed = false
+  const out = messages.map((m) => {
+    if (m.role !== 'assistant' || !Array.isArray(m.parts)) return m
+    const newParts = m.parts.map((p) => {
+      if (!isToolPart(p)) return p
+      if (p.state === 'approval-requested') {
+        changed = true
+        return {
+          ...p,
+          state: 'output-denied',
+          approval: {
+            id: p.approval?.id ?? genApprovalId(),
+            approved: false,
+            reason: 'superseded by a newer message',
+          },
+        } satisfies ToolUIPart
+      }
+      if (p.state === 'input-available' || p.state === 'input-streaming') {
+        changed = true
+        return {
+          ...p,
+          state: 'output-error',
+          errorText: 'superseded by a newer message',
+        } satisfies ToolUIPart
+      }
+      return p
+    })
+    return { ...m, parts: newParts } as UIMessage
+  })
+  return { messages: out, changed }
+}
+
+// convertToLanguageModelPrompt throws AI_MissingToolResultsError if any
+// assistant tool-call lacks a matching tool-result (or tool-approval-response
+// with approved=true) by the time a user/system message is encountered. That
+// invariant can be violated whenever the UI state is ahead of persistence
+// (races, stale approvals, synthetic tool-call ids from middleware) — so we
+// enforce it here, at the boundary, by injecting synthetic error tool-results
+// for any orphans. This is the one place that guarantees the invariant;
+// UI-level sanitizers are cosmetic on top.
+function patchOrphanToolCalls(msgs: ModelMessage[]): ModelMessage[] {
+  type AnyPart = {
+    type?: string
+    toolCallId?: string
+    toolName?: string
+    approvalId?: string
+    providerExecuted?: boolean
+  }
+
+  const approvalIdToToolCallId = new Map<string, string>()
+  for (const m of msgs) {
+    if (m.role !== 'assistant' || !Array.isArray(m.content)) continue
+    for (const p of m.content as AnyPart[]) {
+      if (p?.type === 'tool-approval-request' && p.approvalId && p.toolCallId) {
+        approvalIdToToolCallId.set(p.approvalId, p.toolCallId)
+      }
+    }
+  }
+  const approvedToolCallIds = new Set<string>()
+  for (const m of msgs) {
+    if (m.role !== 'tool' || !Array.isArray(m.content)) continue
+    for (const p of m.content as AnyPart[]) {
+      if (p?.type === 'tool-approval-response' && p.approvalId) {
+        const tcid = approvalIdToToolCallId.get(p.approvalId)
+        if (tcid) approvedToolCallIds.add(tcid)
+      }
+    }
+  }
+
+  const pending = new Set<string>()
+  const pendingNames = new Map<string, string>()
+  const out: ModelMessage[] = []
+
+  const flushOrphans = (): boolean => {
+    for (const id of approvedToolCallIds) pending.delete(id)
+    if (pending.size === 0) return false
+    const synth = Array.from(pending).map((tcid) => ({
+      type: 'tool-result' as const,
+      toolCallId: tcid,
+      toolName: pendingNames.get(tcid) ?? 'unknown',
+      output: {
+        type: 'error-text' as const,
+        value: 'superseded: orphan tool-call patched at boundary',
+      },
+    }))
+    const prev = out[out.length - 1]
+    if (prev?.role === 'tool' && Array.isArray(prev.content)) {
+      ;(prev.content as unknown[]).push(...synth)
+    } else {
+      out.push({ role: 'tool', content: synth } as ModelMessage)
+    }
+    pending.clear()
+    return true
+  }
+
+  let patched = false
+  for (const m of msgs) {
+    if (m.role === 'assistant' && Array.isArray(m.content)) {
+      for (const p of m.content as AnyPart[]) {
+        if (p?.type === 'tool-call' && p.toolCallId && !p.providerExecuted) {
+          pending.add(p.toolCallId)
+          if (p.toolName) pendingNames.set(p.toolCallId, p.toolName)
+        }
+      }
+      out.push(m)
+    } else if (m.role === 'tool' && Array.isArray(m.content)) {
+      for (const p of m.content as AnyPart[]) {
+        if (p?.type === 'tool-result' && p.toolCallId) pending.delete(p.toolCallId)
+      }
+      out.push(m)
+    } else {
+      if (flushOrphans()) patched = true
+      out.push(m)
+    }
+  }
+  if (flushOrphans()) patched = true
+  if (patched) console.log('[chat] patched orphan tool-calls with synthetic error results')
+  return out
+}
 
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10)
@@ -138,11 +306,38 @@ export class ChatAgent extends AIChatAgent<Cloudflare.Env> {
       middleware: kimiMiddleware,
     })
 
-    const modelMessages = await convertToModelMessages(this.messages)
+    const uiMessages = this.messages as UIMessage[]
+    console.log('[chat] ui-in count=', uiMessages.length)
+    for (let i = 0; i < uiMessages.length; i++) {
+      const m = uiMessages[i]
+      const parts = (m.parts ?? []) as Array<{
+        type?: string
+        state?: string
+        toolCallId?: string
+      }>
+      const summary = parts
+        .map((p) => {
+          if (typeof p?.type === 'string' && p.type.startsWith('tool-')) {
+            return `${p.type}{state=${p.state ?? '?'},id=${p.toolCallId ?? '?'}}`
+          }
+          return p?.type ?? 'unknown'
+        })
+        .join(',')
+      console.log(`[chat] ui[${i}] role=${m.role} parts=[${summary}]`)
+    }
+    const resolved = resolveStalePendingTools(uiMessages)
+    if (resolved.changed) {
+      console.log('[chat] resolved stale pending tool parts → persisting')
+      await this.persistMessages(resolved.messages)
+    } else {
+      console.log('[chat] no stale pending tool parts')
+    }
+    const converted = await convertToModelMessages(resolved.messages)
+    const modelMessages = patchOrphanToolCalls(converted)
     console.log('[chat] msgs-count', modelMessages.length)
     for (let i = 0; i < modelMessages.length; i++) {
       const m = modelMessages[i]
-      console.log(`[chat] msg[${i}] role=${m.role}`, JSON.stringify(m.content).slice(0, 500))
+      console.log(`[chat] msg[${i}] role=${m.role}`, JSON.stringify(m.content).slice(0, 600))
     }
     console.log('[chat] tools', Object.keys(tools).join(','))
 
