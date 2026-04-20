@@ -3,6 +3,8 @@ import type {
   ToolCallContext,
   ToolCallDecision,
   ToolCallResultContext,
+  TurnConfig,
+  TurnContext,
 } from '@cloudflare/think'
 import type { Session } from 'agents/experimental/memory/session'
 import { createCompactFunction } from 'agents/experimental/memory/utils'
@@ -11,6 +13,8 @@ import { createToolMiddleware } from '@ai-sdk-tool/parser'
 import { generateText, wrapLanguageModel, type LanguageModel, type ToolSet } from 'ai'
 import { buildAgenticLedgerTools } from '@/lib/chat/ledger-tools'
 import { kimiProtocol } from '@/lib/chat/kimi-protocol'
+import { createLedgerClient, LedgerBindingError } from '@/lib/ledger-api'
+import { ALL_ACCOUNTS } from '@/lib/beancount/accounts'
 
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10)
@@ -57,6 +61,25 @@ To create:
 - For breakdowns/aggregations ("spend by category"), run a broad search
   (@expenses + date range), then group the results yourself in the reply —
   the tool does not aggregate.`
+}
+
+function buildAccountsBlock(userAccounts: readonly string[]): string {
+  const userList =
+    userAccounts.length > 0 ? userAccounts.join('\n') : '(no transactions yet)'
+  const predefinedList = ALL_ACCOUNTS.join('\n')
+  return `# Accounts
+
+The user's ledger currently contains these accounts (full beancount names).
+When updating/creating, use one of these verbatim — match spelling and case.
+Credit cards live under Liabilities:CC:..., not Assets.
+
+${userList}
+
+The app's predefined category taxonomy (authoritative for NEW accounts when
+the user doesn't have a fitting one yet; prefer an existing user account when
+possible):
+
+${predefinedList}`
 }
 
 export class ThinkAgent extends Think<Cloudflare.Env> {
@@ -122,6 +145,21 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
         }),
       )
       .compactAfter(60_000)
+  }
+
+  async beforeTurn(ctx: TurnContext): Promise<TurnConfig | void> {
+    const email = this.name
+    if (!email || !email.includes('@')) return
+    let userAccounts: string[] = []
+    try {
+      const client = createLedgerClient(this.env, email)
+      userAccounts = await client.listAccounts()
+    } catch (e) {
+      if (!(e instanceof LedgerBindingError)) {
+        console.warn('[think] listAccounts failed', String(e))
+      }
+    }
+    return { system: `${ctx.system}\n\n${buildAccountsBlock(userAccounts)}` }
   }
 
   beforeToolCall(ctx: ToolCallContext): ToolCallDecision | void {

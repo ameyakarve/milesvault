@@ -47,6 +47,7 @@ export type ReplaceBufferClientResult =
 export type LedgerClient = {
   search(q: string, limit?: number, offset?: number): Promise<SearchResult>
   get(id: number): Promise<Transaction | null>
+  listAccounts(): Promise<string[]>
   create(rawText: string): Promise<CreateResult>
   createBatch(rawTexts: string[]): Promise<CreateBatchResult>
   remove(id: number): Promise<boolean>
@@ -97,6 +98,10 @@ export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerCl
       assertPositiveInt(id, 'id')
       const row = await stub.get(id)
       return row ? toTransaction(row) : null
+    },
+
+    async listAccounts() {
+      return stub.listAccounts()
     },
 
     async create(rawText) {
