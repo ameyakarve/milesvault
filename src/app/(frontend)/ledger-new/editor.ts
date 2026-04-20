@@ -21,6 +21,12 @@ import { tags as t } from '@lezer/highlight'
 import { parser } from 'lezer-beancount'
 import { diffWordsWithSpace } from 'diff'
 import { splitEntries } from '@/lib/beancount/extract'
+import { parseBuffer } from '@/lib/beancount/parse'
+import {
+  type ValidateContext,
+  type Validator,
+  coreValidators,
+} from '@/lib/beancount/validators'
 
 const beancountLanguage = LRLanguage.define({
   name: 'beancount',
@@ -130,7 +136,7 @@ const baselineBufferField = StateField.define<string>({
 })
 
 export type LedgerDiagnostic = Diagnostic
-export type Validator = (doc: string) => LedgerDiagnostic[]
+export type { ValidateContext, Validator } from '@/lib/beancount/validators'
 
 export const setValidators = StateEffect.define<readonly Validator[]>()
 
@@ -142,22 +148,37 @@ const validatorsField = StateField.define<readonly Validator[]>({
   },
 })
 
+const parseLinter = linter(
+  (view) => {
+    const { diagnostics } = parseBuffer(view.state.doc.toString())
+    return diagnostics.map((d) => ({
+      from: d.from,
+      to: d.to,
+      severity: 'error' as const,
+      message: d.message,
+      source: 'parse',
+    }))
+  },
+  { delay: 100 },
+)
+
 const composedLinter = linter(
   (view) => {
-    const validators = view.state.field(validatorsField)
-    if (validators.length === 0) return []
+    const extra = view.state.field(validatorsField)
     const doc = view.state.doc.toString()
+    const { entries } = parseBuffer(doc)
+    const ctx: ValidateContext = { parsed: entries, doc }
     const out: Diagnostic[] = []
-    for (const v of validators) {
+    for (const v of [...coreValidators, ...extra]) {
       try {
-        out.push(...v(doc))
+        out.push(...v(ctx))
       } catch (err) {
         console.error('ledger validator threw', err)
       }
     }
     return out
   },
-  { delay: 150 },
+  { delay: 300 },
 )
 
 const createdLine = Decoration.line({ attributes: { class: 'cm-txn-created' } })
@@ -342,6 +363,7 @@ export const scandiBeancountExtensions = [
   entryHighlightPlugin,
   wordHighlightPlugin,
   validatorsField,
+  parseLinter,
   composedLinter,
   lintGutter(),
   theme,
