@@ -3,7 +3,8 @@
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { ArrowUp, Mic, Paperclip } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { Proposal } from './propose'
 
 type ThinkMessage = { id: string; role: string; parts: MessagePart[] }
 type MessagePart =
@@ -17,16 +18,49 @@ type MessagePart =
     }
   | { type: string }
 
-export function ThinkPane({ email }: { email: string }) {
+type ToolPart = Extract<MessagePart, { type: `tool-${string}` }>
+
+export function ThinkPane({
+  email,
+  onPropose,
+}: {
+  email: string
+  onPropose?: (p: Proposal) => { ok: boolean; reason?: string }
+}) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) {
     return <div className="flex-1 bg-white flex flex-col overflow-hidden" />
   }
-  return <ThinkPaneInner email={email} />
+  return <ThinkPaneInner email={email} onPropose={onPropose} />
 }
 
-function ThinkPaneInner({ email }: { email: string }) {
+function extractProposal(part: ToolPart): Proposal | null {
+  const toolName = part.type.replace(/^tool-/, '')
+  const input = (part.input ?? {}) as Record<string, unknown>
+  if (toolName === 'propose_create' && typeof input.raw_text === 'string') {
+    return { kind: 'create', raw_text: input.raw_text }
+  }
+  if (
+    toolName === 'propose_update' &&
+    typeof input.id === 'number' &&
+    typeof input.raw_text === 'string'
+  ) {
+    return { kind: 'update', id: input.id, raw_text: input.raw_text }
+  }
+  if (toolName === 'propose_delete' && typeof input.id === 'number') {
+    return { kind: 'delete', id: input.id }
+  }
+  return null
+}
+
+function ThinkPaneInner({
+  email,
+  onPropose,
+}: {
+  email: string
+  onPropose?: (p: Proposal) => { ok: boolean; reason?: string }
+}) {
   const agent = useAgent({
     agent: 'think-agent',
     name: email,
@@ -44,6 +78,24 @@ function ThinkPaneInner({ email }: { email: string }) {
   const { messages, sendMessage, status, clearHistory, error } = useAgentChat({ agent })
   const [draft, setDraft] = useState('')
   const busy = status === 'streaming' || status === 'submitted'
+
+  const appliedRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!onPropose) return
+    for (const m of messages as ThinkMessage[]) {
+      for (const part of m.parts) {
+        if (typeof part.type !== 'string' || !part.type.startsWith('tool-')) continue
+        const tp = part as ToolPart
+        if (tp.state !== 'output-available') continue
+        if (appliedRef.current.has(tp.toolCallId)) continue
+        const proposal = extractProposal(tp)
+        if (!proposal) continue
+        appliedRef.current.add(tp.toolCallId)
+        onPropose(proposal)
+        return
+      }
+    }
+  }, [messages, onPropose])
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -65,7 +117,10 @@ function ThinkPaneInner({ email }: { email: string }) {
           </span>
           <button
             type="button"
-            onClick={() => clearHistory()}
+            onClick={() => {
+              appliedRef.current.clear()
+              clearHistory()
+            }}
             className="font-mono text-[10px] text-slate-500 hover:text-navy-700 uppercase tracking-[0.08em]"
           >
             clear
@@ -81,7 +136,9 @@ function ThinkPaneInner({ email }: { email: string }) {
 
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 text-[11px] font-mono">
         {messages.length === 0 ? (
-          <div className="text-slate-400">ask about your ledger…</div>
+          <div className="text-slate-400">
+            ask about your ledger, or describe a transaction to stage…
+          </div>
         ) : (
           messages.map((m) => <Turn key={m.id} message={m as ThinkMessage} />)
         )}
@@ -102,7 +159,7 @@ function ThinkPaneInner({ email }: { email: string }) {
             onChange={(e) => setDraft(e.target.value)}
             disabled={busy}
             className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400 disabled:opacity-50"
-            placeholder="ask about your ledger…"
+            placeholder="ask, or describe a transaction to stage…"
             type="text"
           />
           <button
@@ -155,10 +212,15 @@ function PartView({ part }: { part: MessagePart }) {
     )
   }
   if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
-    const tp = part as Extract<MessagePart, { type: `tool-${string}` }>
+    const tp = part as ToolPart
     const toolName = tp.type.replace(/^tool-/, '')
+    const isPropose = toolName.startsWith('propose_')
     return (
-      <pre className="mt-1 first:mt-0 overflow-x-auto text-[10px] text-slate-600 leading-snug whitespace-pre-wrap">
+      <pre
+        className={`mt-1 first:mt-0 overflow-x-auto text-[10px] leading-snug whitespace-pre-wrap ${
+          isPropose ? 'text-sky-700' : 'text-slate-600'
+        }`}
+      >
         <span className="text-slate-400">→ {toolName}</span>
         {tp.input !== undefined ? `\n${JSON.stringify(tp.input)}` : ''}
         {tp.output !== undefined ? `\n← ${JSON.stringify(tp.output)}` : ''}

@@ -35,6 +35,7 @@ import { safeParse } from '../ledger/card-patterns/types'
 import { composeBuffer } from './editor'
 import { EntryCard, type CardPreset } from './ledger-card'
 import { LedgerEditor } from './ledger-editor'
+import { applyProposal, type Proposal } from './propose'
 import { ThinkPane } from './think-pane'
 
 const PAGE_SIZE = 10
@@ -767,7 +768,17 @@ export function LedgerNewView({ email }: { email: string }) {
             <DiffPane baseline={baseline} current={buffer} />
           </div>
 
-          <ThinkPane email={email} />
+          <ThinkPane
+            email={email}
+            onPropose={(p: Proposal) => {
+              const res = applyProposal(buffer, snapshots, p)
+              if (res.ok === true) {
+                setBuffer(res.buffer)
+                return { ok: true }
+              }
+              return { ok: false, reason: res.reason }
+            }}
+          />
         </section>
       </main>
 
