@@ -239,6 +239,23 @@ export const WithCashbackNoMatchingPosting: Story = {
   },
 }
 
+const CASHBACK_NO_PAYMENT = `2026-04-17 * "Redeem" "cashback fully offsets expense"
+  Expenses:Food:Coffee     100.00 INR
+  Income:Rewards:Cashback -100.00 INR
+`
+
+export const WithCashbackButNoPayment: Story = {
+  args: { initialValue: CASHBACK_NO_PAYMENT },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Txn has only Expenses + `Income:Rewards:Cashback` postings — no real payment leg. cashback-needs-payment validator flags the header.',
+      },
+    },
+  },
+}
+
 const COMPLETION_SEED = `2026-04-17 * "Amudham" "coffee"
   Liabilities:CC:HSBC   -35.00 INR
   Expenses:`

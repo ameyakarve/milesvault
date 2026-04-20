@@ -124,6 +124,42 @@ export const MultiExpenseSameCard: Story = {
   },
 }
 
+export const ExpensesWithCashback: Story = {
+  args: {
+    text: `2026-04-17 * "Zomato" "dinner with 10% back"
+  Expenses:Food:Restaurant      1220.00 INR
+  Income:Rewards:Cashback       -122.00 INR
+  Liabilities:CC:HDFC          -1098.00 INR`,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Expenses + cashback + single payment leg. Amount = expense total (₹1,220.00); rewards cell shows "+₹122" (cashback magnitude, compact); subtext = payment method ("HDFC Card").',
+      },
+    },
+  },
+}
+
+export const MultiExpensesAndCashbacks: Story = {
+  args: {
+    text: `2026-04-17 * "Amazon" "monitor + cables (10% back on each)"
+  Expenses:Shopping:Electronics    4500.00 INR
+  Expenses:Shopping:Home            600.00 INR
+  Income:Rewards:Cashback          -450.00 INR
+  Income:Rewards:Cashback           -60.00 INR
+  Liabilities:CC:HDFC:Infinia     -4590.00 INR`,
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Multiple expenses + multiple cashbacks + single card. Amount = sum of expenses (₹5,100.00); rewards = "+₹510" (sum of cashback magnitudes); subtext = "HDFC Infinia Card". Icon from first expense.',
+      },
+    },
+  },
+}
+
 export const MultiLegFallback: Story = {
   args: {
     text: `2026-04-12 * "Zomato" "split dinner"

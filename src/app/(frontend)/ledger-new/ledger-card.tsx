@@ -38,6 +38,8 @@ export type CardRow = CardPreset & {
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
+const CASHBACK_ACCOUNT = 'Income:Rewards:Cashback'
+
 export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const [, mm, dd] = txn.date.split('-')
   const month = MONTHS[Number(mm) - 1] ?? '—'
@@ -47,11 +49,26 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const title = payee || narration || 'Transaction'
   const secondary = payee && narration ? `· ${narration}` : ''
   const glyph = iconForTxn(txn.postings.map((p) => p.account))
-  const match = matchExpensesOnePayment(txn)
-  const subtext = match
-    ? (paymentMethodDisplay(match.payment.account) ?? match.payment.account)
-    : null
-  const amount = match ? formatExpenseTotal(match.expenses) ?? preset.amount : preset.amount
+
+  const cashbackMatch = matchExpensesCashbacksPayment(txn)
+  const paymentMatch = cashbackMatch ? null : matchExpensesOnePayment(txn)
+
+  let subtext: string | null = null
+  let amount = preset.amount
+  let rewards: CardRow['rewards'] = { current: '' }
+
+  if (cashbackMatch) {
+    subtext =
+      paymentMethodDisplay(cashbackMatch.payment.account) ?? cashbackMatch.payment.account
+    amount = formatExpenseTotal(cashbackMatch.expenses) ?? preset.amount
+    const cashbackText = formatCashbackTotal(cashbackMatch.cashbacks)
+    if (cashbackText) rewards = { current: cashbackText }
+  } else if (paymentMatch) {
+    subtext =
+      paymentMethodDisplay(paymentMatch.payment.account) ?? paymentMatch.payment.account
+    amount = formatExpenseTotal(paymentMatch.expenses) ?? preset.amount
+  }
+
   return {
     ...preset,
     glyph,
@@ -62,7 +79,7 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
     subtext,
     amount,
     pill: undefined,
-    rewards: { current: '' },
+    rewards,
   }
 }
 
@@ -80,21 +97,62 @@ function matchExpensesOnePayment(
   return { expenses, payment: others[0] }
 }
 
-function formatExpenseTotal(expenses: readonly ParsedPosting[]): string | null {
-  if (expenses.length === 0) return null
+function matchExpensesCashbacksPayment(
+  txn: ParsedTxn,
+): {
+  expenses: ParsedPosting[]
+  cashbacks: ParsedPosting[]
+  payment: ParsedPosting
+} | null {
+  if (txn.postings.length < 3) return null
+  const expenses: ParsedPosting[] = []
+  const cashbacks: ParsedPosting[] = []
+  const others: ParsedPosting[] = []
+  for (const p of txn.postings) {
+    if (p.account === CASHBACK_ACCOUNT) cashbacks.push(p)
+    else if (p.account === 'Expenses' || p.account.startsWith('Expenses:')) expenses.push(p)
+    else others.push(p)
+  }
+  if (expenses.length < 1 || cashbacks.length < 1 || others.length !== 1) return null
+  return { expenses, cashbacks, payment: others[0] }
+}
+
+function sumPostings(
+  postings: readonly ParsedPosting[],
+): { sum: number; currency: string | null } | null {
+  if (postings.length === 0) return null
   let sum = 0
   let currency: string | null | undefined = undefined
-  for (const e of expenses) {
-    if (!e.amount) return null
-    const cleaned = e.amount.numberText.replace(/,/g, '').trim()
+  for (const p of postings) {
+    if (!p.amount) return null
+    const cleaned = p.amount.numberText.replace(/,/g, '').trim()
     if (!/^[+-]?\d+(?:\.\d+)?$/.test(cleaned)) return null
     const n = parseFloat(cleaned)
     if (!Number.isFinite(n)) return null
-    if (currency === undefined) currency = e.amount.currency
-    else if (currency !== e.amount.currency) return null
+    if (currency === undefined) currency = p.amount.currency
+    else if (currency !== p.amount.currency) return null
     sum += n
   }
-  return formatOutflow(sum, currency ?? null)
+  return { sum, currency: currency ?? null }
+}
+
+function formatExpenseTotal(expenses: readonly ParsedPosting[]): string | null {
+  const s = sumPostings(expenses)
+  return s ? formatOutflow(s.sum, s.currency) : null
+}
+
+function formatCashbackTotal(cashbacks: readonly ParsedPosting[]): string | null {
+  const s = sumPostings(cashbacks)
+  if (!s) return null
+  const abs = Math.abs(s.sum)
+  const locale = s.currency === 'INR' ? 'en-IN' : 'en-US'
+  const body = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(abs)
+  if (s.currency === 'INR') return `+₹${body}`
+  if (s.currency === 'USD') return `+$${body}`
+  return s.currency ? `+${body} ${s.currency}` : `+${body}`
 }
 
 function formatOutflow(expenseValue: number, currency: string | null): string {
@@ -181,7 +239,7 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
           {row.subtext ?? row.account}
         </div>
       </div>
-      <div className="w-[60px] text-right shrink-0 font-mono flex flex-col justify-center border-l border-slate-200 pl-2">
+      <div className="w-[72px] text-right shrink-0 font-mono flex flex-col justify-center border-l border-slate-200 pl-2 overflow-hidden">
         {row.rewards.old ? (
           <div className="text-[11px]">
             <span className="text-slate-300 line-through">{row.rewards.old}</span>
