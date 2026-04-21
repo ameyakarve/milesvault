@@ -1,12 +1,11 @@
 import type {
+  LanguageModelV3CallOptions,
   LanguageModelV3Content,
   LanguageModelV3Middleware,
   LanguageModelV3StreamPart,
   LanguageModelV3ToolCall,
 } from '@ai-sdk/provider'
 
-const ARG_BEGIN = '<|tool_call_argument_begin|>'
-const CALL_END = '<|tool_call_end|>'
 const SECTION_END = '<|tool_calls_section_end|>'
 
 // Matches a Kimi tool-call envelope, terminated by `<|tool_call_end|>`.
@@ -22,6 +21,12 @@ const ENVELOPE_RE =
 
 const MARKER_SNIFF_RE =
   /(?:<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<\|tool_call_argument_begin\|>|<\|tool_call_end\|>|<\|tool_calls_section_end\|>)/
+
+// Matches the start of a beancount transaction header: `YYYY-MM-DD *`.
+// Used to detect when Kimi replied with a draft in prose instead of calling
+// propose_create / propose_update. If this fires and no tool_call was made,
+// the turn is retried with a system nudge.
+const BEANCOUNT_HEADER_RE = /^\s*\d{4}-\d{2}-\d{2}\s+\*\s+"/m
 
 // Global monotonic counter for tool_call_id generation. Seeded with Date.now()
 // only to avoid collisions with ids persisted in the session from prior isolate
@@ -58,12 +63,10 @@ function rescueFromText(
     const [full, rawName, , argJson] = m
     const name = rawName
     if (!knownToolNames.has(name)) {
-      // Unknown tool — leave the raw text alone rather than fabricate a call.
       cleaned += text.slice(lastIndex, m.index + full.length)
       lastIndex = m.index + full.length
       continue
     }
-    // Validate JSON — if broken, skip rescue for this block.
     try {
       JSON.parse(argJson)
     } catch {
@@ -82,7 +85,6 @@ function rescueFromText(
   }
   if (toolCalls.length === 0) return null
   cleaned += text.slice(lastIndex)
-  // Strip residual section-end markers and tidy whitespace.
   cleaned = cleaned.split(SECTION_END).join('').replace(/\s+$/g, '')
   return { cleanedText: cleaned, toolCalls }
 }
@@ -99,20 +101,211 @@ function knownToolNamesFromParams(params: {
   return out
 }
 
+type ProcessedStream = {
+  parts: LanguageModelV3StreamPart[]
+  rescuedAny: boolean
+  hadToolCall: boolean
+  // Concatenation of all emitted text across runs — used to detect beancount
+  // drafts emitted as prose.
+  emittedText: string
+}
+
+async function processStream(
+  stream: ReadableStream<LanguageModelV3StreamPart>,
+  names: ReadonlySet<string>,
+): Promise<ProcessedStream> {
+  const out: LanguageModelV3StreamPart[] = []
+  let rescuedAny = false
+  let sawToolCallFromProvider = false
+  let emittedText = ''
+
+  type TextRun = {
+    id: string
+    held: string
+    startEmitted: boolean
+    startPart: LanguageModelV3StreamPart & { type: 'text-start' }
+  }
+  const runs = new Map<string, TextRun>()
+  const nativeIdMap = new Map<string, string>()
+  const remap = (srcId: string, toolName: string): string => {
+    let mapped = nativeIdMap.get(srcId)
+    if (!mapped) {
+      mapped = allocId(toolName)
+      nativeIdMap.set(srcId, mapped)
+    }
+    return mapped
+  }
+
+  const reader = stream.getReader()
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    const part = value
+    switch (part.type) {
+      case 'text-start':
+        runs.set(part.id, {
+          id: part.id,
+          held: '',
+          startEmitted: false,
+          startPart: part,
+        })
+        break
+      case 'text-delta': {
+        const run = runs.get(part.id)
+        if (!run) {
+          out.push(part)
+          break
+        }
+        // Buffer everything until text-end. NIM's `kimi_k2_tool_parser` can
+        // strip opening markers (<|tool_calls_section_begin|>,
+        // <|tool_call_begin|>, <|tool_call_argument_begin|>) while leaking
+        // closing markers and the header (`functions.<name>:<idx>`) as
+        // plain content — so the leak isn't anchored by any `<|` that could
+        // serve as a streaming sentinel. Buffering defers rescue until we
+        // have the full text; the cost is that pure-prose replies render
+        // after the last token rather than incrementally, which is
+        // acceptable here (replies are one-line summaries). Native
+        // provider-emitted tool_calls still stream.
+        run.held += part.delta
+        break
+      }
+      case 'text-end': {
+        const run = runs.get(part.id)
+        runs.delete(part.id)
+        if (!run) {
+          out.push(part)
+          break
+        }
+        const rescued = rescueFromText(run.held, names)
+        if (!rescued) {
+          if (run.held.length > 0) {
+            if (!run.startEmitted) {
+              out.push(run.startPart)
+              run.startEmitted = true
+            }
+            out.push({ type: 'text-delta', id: run.id, delta: run.held })
+            emittedText += run.held
+          }
+          if (run.startEmitted) {
+            out.push({ type: 'text-end', id: run.id })
+          }
+          break
+        }
+        rescuedAny = true
+        if (rescued.cleanedText.length > 0) {
+          if (!run.startEmitted) {
+            out.push(run.startPart)
+            run.startEmitted = true
+          }
+          out.push({
+            type: 'text-delta',
+            id: run.id,
+            delta: rescued.cleanedText,
+          })
+          emittedText += rescued.cleanedText
+        }
+        if (run.startEmitted) {
+          out.push({ type: 'text-end', id: run.id })
+        }
+        for (const tc of rescued.toolCalls) {
+          out.push({
+            type: 'tool-input-start',
+            id: tc.toolCallId,
+            toolName: tc.toolName,
+          })
+          out.push({
+            type: 'tool-input-delta',
+            id: tc.toolCallId,
+            delta: tc.input,
+          })
+          out.push({ type: 'tool-input-end', id: tc.toolCallId })
+          out.push(tc)
+        }
+        break
+      }
+      case 'tool-input-start': {
+        sawToolCallFromProvider = true
+        const mapped = remap(part.id, part.toolName)
+        out.push({ ...part, id: mapped })
+        break
+      }
+      case 'tool-input-delta': {
+        const mapped = nativeIdMap.get(part.id)
+        out.push(mapped ? { ...part, id: mapped } : part)
+        break
+      }
+      case 'tool-input-end': {
+        const mapped = nativeIdMap.get(part.id)
+        out.push(mapped ? { ...part, id: mapped } : part)
+        break
+      }
+      case 'tool-call': {
+        sawToolCallFromProvider = true
+        const mapped = remap(part.toolCallId, part.toolName)
+        out.push({ ...part, toolCallId: mapped })
+        break
+      }
+      case 'finish': {
+        if (
+          rescuedAny &&
+          !sawToolCallFromProvider &&
+          part.finishReason.unified !== 'tool-calls'
+        ) {
+          out.push({
+            ...part,
+            finishReason: {
+              unified: 'tool-calls',
+              raw: part.finishReason.raw,
+            },
+          })
+        } else {
+          out.push(part)
+        }
+        break
+      }
+      default:
+        out.push(part)
+    }
+  }
+
+  return {
+    parts: out,
+    rescuedAny,
+    hadToolCall: rescuedAny || sawToolCallFromProvider,
+    emittedText,
+  }
+}
+
+const BEANCOUNT_NUDGE =
+  'Your previous reply contained a beancount draft in plain text. That does NOT stage anything for the user — the Save button only appears after a successful propose_create or propose_update. Call propose_create now with that draft as the `raw_text` argument. Do not repeat the draft in your reply; after `{ok: true}` write only a one-line summary.'
+
+function augmentWithNudge(
+  params: LanguageModelV3CallOptions,
+): LanguageModelV3CallOptions {
+  return {
+    ...params,
+    prompt: [...params.prompt, { role: 'system', content: BEANCOUNT_NUDGE }],
+  }
+}
+
 export const kimiRescueMiddleware: LanguageModelV3Middleware = {
   specificationVersion: 'v3',
-  async wrapGenerate({ doGenerate, params }) {
+  async wrapGenerate({ doGenerate, params, model }) {
     const result = await doGenerate()
     const names = knownToolNamesFromParams(
       params as { tools?: Array<{ type: string; name?: string }> },
     )
     if (names.size === 0) return result
+
     let mutated = false
+    let hadToolCall = false
+    let emittedText = ''
     const newContent: LanguageModelV3Content[] = []
     for (const part of result.content) {
       if (part.type === 'tool-call') {
         newContent.push({ ...part, toolCallId: allocId(part.toolName) })
         mutated = true
+        hadToolCall = true
         continue
       }
       if (part.type !== 'text') {
@@ -122,14 +315,35 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
       const rescued = rescueFromText(part.text, names)
       if (!rescued) {
         newContent.push(part)
+        emittedText += part.text
         continue
       }
       mutated = true
+      hadToolCall = true
       if (rescued.cleanedText.length > 0) {
         newContent.push({ ...part, text: rescued.cleanedText })
+        emittedText += rescued.cleanedText
       }
       for (const tc of rescued.toolCalls) newContent.push(tc)
     }
+
+    const shouldRetry =
+      !hadToolCall &&
+      names.has('propose_create') &&
+      BEANCOUNT_HEADER_RE.test(emittedText)
+
+    if (shouldRetry) {
+      console.warn(
+        '[kimi-rescue] beancount draft without tool_call; retrying with nudge (generate)',
+      )
+      try {
+        const retry = await model.doGenerate(augmentWithNudge(params))
+        return retry
+      } catch (e) {
+        console.warn('[kimi-rescue] retry failed (generate)', String(e))
+      }
+    }
+
     if (!mutated) return result
     console.warn(
       `[kimi-rescue] recovered ${newContent.filter((p) => p.type === 'tool-call').length} tool-call(s) from leaked Kimi tokens (generate)`,
@@ -140,174 +354,64 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
         : result.finishReason
     return { ...result, content: newContent, finishReason }
   },
-  async wrapStream({ doStream, params }) {
+  async wrapStream({ doStream, params, model }) {
     const result = await doStream()
     const names = knownToolNamesFromParams(
       params as { tools?: Array<{ type: string; name?: string }> },
     )
     if (names.size === 0) return result
 
-    type TextRun = {
-      id: string
-      held: string
-      startEmitted: boolean
-      startPart: LanguageModelV3StreamPart & { type: 'text-start' }
-    }
-    const runs = new Map<string, TextRun>()
-    // Remap native (provider-emitted) tool_call ids to unique ones so turn-local
-    // `:0/:1` collisions can't poison `processedToolCalls`.
-    const nativeIdMap = new Map<string, string>()
-    const remap = (srcId: string, toolName: string): string => {
-      let mapped = nativeIdMap.get(srcId)
-      if (!mapped) {
-        mapped = allocId(toolName)
-        nativeIdMap.set(srcId, mapped)
-      }
-      return mapped
-    }
-    let rescuedAny = false
-    let sawToolCallFromProvider = false
+    const outStream = new ReadableStream<LanguageModelV3StreamPart>({
+      async start(controller) {
+        try {
+          const first = await processStream(result.stream, names)
 
-    const transform = new TransformStream<
-      LanguageModelV3StreamPart,
-      LanguageModelV3StreamPart
-    >({
-      transform(part, controller) {
-        switch (part.type) {
-          case 'text-start':
-            runs.set(part.id, {
-              id: part.id,
-              held: '',
-              startEmitted: false,
-              startPart: part,
-            })
-            // Defer emission until we know there's text to emit (vs fully rescued).
-            return
-          case 'text-delta': {
-            const run = runs.get(part.id)
-            if (!run) {
-              controller.enqueue(part)
-              return
+          const shouldRetry =
+            !first.hadToolCall &&
+            names.has('propose_create') &&
+            BEANCOUNT_HEADER_RE.test(first.emittedText)
+
+          if (!shouldRetry) {
+            if (first.rescuedAny) {
+              console.warn(
+                '[kimi-rescue] recovered tool-call(s) from leaked Kimi tokens (stream)',
+              )
             }
-            // Buffer everything until text-end. NIM's `kimi_k2_tool_parser` can
-            // strip opening markers (<|tool_calls_section_begin|>,
-            // <|tool_call_begin|>, <|tool_call_argument_begin|>) while leaking
-            // closing markers and the header (`functions.<name>:<idx>`) as
-            // plain content — meaning the leak isn't anchored by any `<|` that
-            // could serve as a streaming sentinel. Buffering defers rescue
-            // until we have the full text; the cost is that pure-prose
-            // replies render after the last token rather than incrementally,
-            // which is acceptable for this agent (replies are one-line
-            // summaries). Native provider-emitted tool_calls still stream.
-            run.held += part.delta
+            for (const p of first.parts) controller.enqueue(p)
+            controller.close()
             return
           }
-          case 'text-end': {
-            const run = runs.get(part.id)
-            runs.delete(part.id)
-            if (!run) {
-              controller.enqueue(part)
-              return
-            }
-            const rescued = rescueFromText(run.held, names)
-            if (!rescued) {
-              if (!run.startEmitted) {
-                controller.enqueue(run.startPart)
-                run.startEmitted = true
-              }
-              if (run.held.length > 0) {
-                controller.enqueue({
-                  type: 'text-delta',
-                  id: run.id,
-                  delta: run.held,
-                })
-              }
-              controller.enqueue({ type: 'text-end', id: run.id })
-              return
-            }
-            rescuedAny = true
-            if (rescued.cleanedText.length > 0) {
-              if (!run.startEmitted) {
-                controller.enqueue(run.startPart)
-                run.startEmitted = true
-              }
-              controller.enqueue({
-                type: 'text-delta',
-                id: run.id,
-                delta: rescued.cleanedText,
-              })
-            }
-            if (run.startEmitted) {
-              controller.enqueue({ type: 'text-end', id: run.id })
-            }
-            for (const tc of rescued.toolCalls) {
-              controller.enqueue({
-                type: 'tool-input-start',
-                id: tc.toolCallId,
-                toolName: tc.toolName,
-              })
-              controller.enqueue({
-                type: 'tool-input-delta',
-                id: tc.toolCallId,
-                delta: tc.input,
-              })
-              controller.enqueue({ type: 'tool-input-end', id: tc.toolCallId })
-              controller.enqueue(tc)
-            }
+
+          console.warn(
+            '[kimi-rescue] beancount draft without tool_call; retrying with nudge (stream)',
+          )
+          let retryResult: Awaited<ReturnType<typeof model.doStream>>
+          try {
+            retryResult = await model.doStream(augmentWithNudge(params))
+          } catch (e) {
+            console.warn('[kimi-rescue] retry failed, falling back to original', String(e))
+            for (const p of first.parts) controller.enqueue(p)
+            controller.close()
             return
           }
-          case 'tool-input-start': {
-            sawToolCallFromProvider = true
-            const mapped = remap(part.id, part.toolName)
-            controller.enqueue({ ...part, id: mapped })
-            return
+
+          const second = await processStream(retryResult.stream, names)
+          if (second.hadToolCall) {
+            console.warn('[kimi-rescue] retry produced tool_call; emitting retry stream')
+            for (const p of second.parts) controller.enqueue(p)
+          } else {
+            console.warn(
+              '[kimi-rescue] retry still produced no tool_call; falling back to first attempt',
+            )
+            for (const p of first.parts) controller.enqueue(p)
           }
-          case 'tool-input-delta': {
-            const mapped = nativeIdMap.get(part.id)
-            controller.enqueue(mapped ? { ...part, id: mapped } : part)
-            return
-          }
-          case 'tool-input-end': {
-            const mapped = nativeIdMap.get(part.id)
-            controller.enqueue(mapped ? { ...part, id: mapped } : part)
-            return
-          }
-          case 'tool-call': {
-            sawToolCallFromProvider = true
-            const mapped = remap(part.toolCallId, part.toolName)
-            controller.enqueue({ ...part, toolCallId: mapped })
-            return
-          }
-          case 'finish': {
-            if (
-              rescuedAny &&
-              !sawToolCallFromProvider &&
-              part.finishReason.unified !== 'tool-calls'
-            ) {
-              controller.enqueue({
-                ...part,
-                finishReason: {
-                  unified: 'tool-calls',
-                  raw: part.finishReason.raw,
-                },
-              })
-              return
-            }
-            controller.enqueue(part)
-            return
-          }
-          default:
-            controller.enqueue(part)
-            return
-        }
-      },
-      flush() {
-        if (rescuedAny) {
-          console.warn('[kimi-rescue] recovered tool-call(s) from leaked Kimi tokens (stream)')
+          controller.close()
+        } catch (e) {
+          controller.error(e)
         }
       },
     })
 
-    return { ...result, stream: result.stream.pipeThrough(transform) }
+    return { ...result, stream: outStream }
   },
 }
