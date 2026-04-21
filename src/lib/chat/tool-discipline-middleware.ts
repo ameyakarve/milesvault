@@ -1,5 +1,6 @@
 import type {
   LanguageModelV3CallOptions,
+  LanguageModelV3Content,
   LanguageModelV3Middleware,
   LanguageModelV3StreamPart,
 } from '@ai-sdk/provider'
@@ -24,6 +25,14 @@ import type {
  * (First array element is outermost in the AI SDK.)
  */
 export function toolDisciplineMiddleware(opts: {
+  /**
+   * Name of the tool that carries user-facing text (e.g. `reply`). The
+   * retry is considered successful only if this specific tool was called
+   * — if the retry produces some other tool instead, we fall back to the
+   * first (text-only) stream so the agent loop terminates naturally
+   * instead of chasing the wrong tool across multiple steps.
+   */
+  replyToolName: string
   /** System message appended on retry. Explain the blessed path. */
   nudge: string
   /** Logger prefix, purely cosmetic. Defaults to `tool-discipline`. */
@@ -37,24 +46,36 @@ export function toolDisciplineMiddleware(opts: {
       const result = await doGenerate()
       if ((params.tools ?? []).length === 0) return result
 
-      let hadToolCall = false
-      let emittedText = ''
-      for (const part of result.content) {
-        if (part.type === 'tool-call') hadToolCall = true
-        else if (part.type === 'text') emittedText += part.text
+      const firstSummary = summarizeContent(result.content)
+      if (
+        firstSummary.calledTools.size > 0 ||
+        firstSummary.emittedText.trim().length === 0
+      ) {
+        return result
       }
-
-      if (hadToolCall || emittedText.trim().length === 0) return result
 
       console.warn(
         `[${prefix}] model emitted free-form text with no tool_call; retrying with nudge (generate)`,
       )
+      let retry: Awaited<ReturnType<typeof model.doGenerate>>
       try {
-        return await model.doGenerate(withNudge(params, opts.nudge))
+        retry = await model.doGenerate(withNudge(params, opts.nudge))
       } catch (e) {
         console.warn(`[${prefix}] retry failed, falling back to original`, String(e))
         return result
       }
+
+      const retrySummary = summarizeContent(retry.content)
+      if (retrySummary.calledTools.has(opts.replyToolName)) {
+        console.warn(
+          `[${prefix}] retry produced "${opts.replyToolName}"; using retry result`,
+        )
+        return retry
+      }
+      console.warn(
+        `[${prefix}] retry did not call "${opts.replyToolName}" (called: ${[...retrySummary.calledTools].join(',') || 'none'}); falling back to first attempt to let the loop terminate`,
+      )
+      return result
     },
 
     async wrapStream({ doStream, params, model }) {
@@ -88,12 +109,14 @@ export function toolDisciplineMiddleware(opts: {
             }
 
             const second = await consume(retry.stream)
-            if (second.hadToolCall) {
-              console.warn(`[${prefix}] retry produced tool_call; emitting retry stream`)
+            if (second.calledTools.has(opts.replyToolName)) {
+              console.warn(
+                `[${prefix}] retry produced "${opts.replyToolName}"; emitting retry stream`,
+              )
               for (const p of second.parts) controller.enqueue(p)
             } else {
               console.warn(
-                `[${prefix}] retry still emitted text without tool_call; falling back to first attempt`,
+                `[${prefix}] retry did not call "${opts.replyToolName}" (called: ${[...second.calledTools].join(',') || 'none'}); falling back to first attempt to let the loop terminate`,
               )
               for (const p of first.parts) controller.enqueue(p)
             }
@@ -109,6 +132,19 @@ export function toolDisciplineMiddleware(opts: {
   }
 }
 
+function summarizeContent(content: readonly LanguageModelV3Content[]): {
+  calledTools: Set<string>
+  emittedText: string
+} {
+  const calledTools = new Set<string>()
+  let emittedText = ''
+  for (const part of content) {
+    if (part.type === 'tool-call') calledTools.add(part.toolName)
+    else if (part.type === 'text') emittedText += part.text
+  }
+  return { calledTools, emittedText }
+}
+
 function withNudge(
   params: LanguageModelV3CallOptions,
   nudge: string,
@@ -122,6 +158,7 @@ function withNudge(
 type Consumed = {
   parts: LanguageModelV3StreamPart[]
   hadToolCall: boolean
+  calledTools: Set<string>
   emittedText: string
 }
 
@@ -129,7 +166,7 @@ async function consume(
   stream: ReadableStream<LanguageModelV3StreamPart>,
 ): Promise<Consumed> {
   const parts: LanguageModelV3StreamPart[] = []
-  let hadToolCall = false
+  const calledTools = new Set<string>()
   let emittedText = ''
   const reader = stream.getReader()
   for (;;) {
@@ -138,13 +175,15 @@ async function consume(
     parts.push(value)
     switch (value.type) {
       case 'tool-call':
+        calledTools.add(value.toolName)
+        break
       case 'tool-input-start':
-        hadToolCall = true
+        calledTools.add(value.toolName)
         break
       case 'text-delta':
         emittedText += value.delta
         break
     }
   }
-  return { parts, hadToolCall, emittedText }
+  return { parts, hadToolCall: calledTools.size > 0, calledTools, emittedText }
 }

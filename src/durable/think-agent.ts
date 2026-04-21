@@ -201,6 +201,7 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
       // recovered a call from leaked envelope tokens.
       middleware: [
         toolDisciplineMiddleware({
+          replyToolName: 'reply',
           nudge:
             'Your previous reply was free-form text with no tool call. ALL user-facing text must go through the `reply` tool. Retry now: call `reply` with a `message` argument for what you meant to say; if you were staging a transaction, also call the appropriate propose_* tool in the same step.',
           logPrefix: 'think-tool-discipline',
