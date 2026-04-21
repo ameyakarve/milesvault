@@ -245,7 +245,6 @@ type FetchState = {
 function useTransactions(
   page: number,
 ): FetchState & {
-  refetch: () => void
   replaceRows: (rows: Transaction[]) => void
 } {
   const [state, setState] = useState<FetchState>({
@@ -254,7 +253,6 @@ function useTransactions(
     total: 0,
     errorMsg: null,
   })
-  const [nonce, setNonce] = useState(0)
   useEffect(() => {
     const controller = new AbortController()
     setState((prev) => ({ ...prev, status: 'loading', errorMsg: null }))
@@ -272,19 +270,22 @@ function useTransactions(
       )
       .catch((e: unknown) => {
         if (e instanceof DOMException && e.name === 'AbortError') return
-        setState({ status: 'error', rows: [], total: 0, errorMsg: (e as Error).message })
+        setState({
+          status: 'error',
+          rows: [],
+          total: 0,
+          errorMsg: e instanceof Error ? e.message : String(e),
+        })
       })
     return () => controller.abort()
-  }, [page, nonce])
+  }, [page])
   return {
     ...state,
-    refetch: () => setNonce((n) => n + 1),
     replaceRows: (rows) =>
       setState((prev) => ({
-        status: 'idle',
+        ...prev,
         rows,
         total: prev.total - prev.rows.length + rows.length,
-        errorMsg: null,
       })),
   }
 }

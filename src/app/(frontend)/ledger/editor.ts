@@ -13,7 +13,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language'
 import { type Diagnostic, linter, lintGutter } from '@codemirror/lint'
-import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state'
+import { RangeSetBuilder, StateEffect, StateField, type Text } from '@codemirror/state'
 import {
   Decoration,
   type DecorationSet,
@@ -131,30 +131,36 @@ const txnDividers = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 )
 
-export const setBaselineBuffer = StateEffect.define<string>()
-
-const baselineBufferField = StateField.define<string>({
-  create: () => '',
-  update(value, tr) {
-    for (const e of tr.effects) if (e.is(setBaselineBuffer)) return e.value
-    return value
-  },
-})
+function defineReactSlot<T>(initial: T): {
+  field: StateField<T>
+  effect: ReturnType<typeof StateEffect.define<T>>
+} {
+  const effect = StateEffect.define<T>()
+  const field = StateField.define<T>({
+    create: () => initial,
+    update(value, tr) {
+      for (const e of tr.effects) if (e.is(effect)) return e.value
+      return value
+    },
+  })
+  return { field, effect }
+}
 
 export type LedgerDiagnostic = Diagnostic
 export type { ValidateContext, Validator } from '@/lib/beancount/validators'
 export type { AccountCompleter } from '@/lib/beancount/accounts'
 
-export const setValidators = StateEffect.define<readonly Validator[]>()
-export const setAccountCompleter = StateEffect.define<AccountCompleter>()
+const baselineSlot = defineReactSlot<string>('')
+const validatorsSlot = defineReactSlot<readonly Validator[]>([])
+const accountCompleterSlot = defineReactSlot<AccountCompleter>(completeAccount)
 
-const accountCompleterField = StateField.define<AccountCompleter>({
-  create: () => completeAccount,
-  update(value, tr) {
-    for (const e of tr.effects) if (e.is(setAccountCompleter)) return e.value
-    return value
-  },
-})
+const baselineBufferField = baselineSlot.field
+const validatorsField = validatorsSlot.field
+const accountCompleterField = accountCompleterSlot.field
+
+export const setBaselineBuffer = baselineSlot.effect
+export const setValidators = validatorsSlot.effect
+export const setAccountCompleter = accountCompleterSlot.effect
 
 const ACCOUNT_PREFIX_RE = /[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9-]*)+/
 
@@ -186,17 +192,19 @@ const autocompleteColonTrigger = EditorView.updateListener.of((u) => {
   }
 })
 
-const validatorsField = StateField.define<readonly Validator[]>({
-  create: () => [],
-  update(value, tr) {
-    for (const e of tr.effects) if (e.is(setValidators)) return e.value
-    return value
-  },
-})
+const parseCache = new WeakMap<Text, ReturnType<typeof parseBuffer>>()
+function cachedParse(doc: Text): ReturnType<typeof parseBuffer> {
+  let hit = parseCache.get(doc)
+  if (!hit) {
+    hit = parseBuffer(doc.toString())
+    parseCache.set(doc, hit)
+  }
+  return hit
+}
 
 const parseLinter = linter(
   (view) => {
-    const { diagnostics } = parseBuffer(view.state.doc.toString())
+    const { diagnostics } = cachedParse(view.state.doc)
     return diagnostics.map((d) => ({
       from: d.from,
       to: d.to,
@@ -211,9 +219,8 @@ const parseLinter = linter(
 const composedLinter = linter(
   (view) => {
     const extra = view.state.field(validatorsField)
-    const doc = view.state.doc.toString()
-    const { entries } = parseBuffer(doc)
-    const ctx: ValidateContext = { parsed: entries, doc }
+    const { entries } = cachedParse(view.state.doc)
+    const ctx: ValidateContext = { parsed: entries, doc: view.state.doc.toString() }
     const out: Diagnostic[] = []
     for (const v of [...coreValidators, ...extra]) {
       try {
@@ -269,77 +276,50 @@ function classifyDoc(doc: string, baseline: string): EntryClassification[] {
   return classified as EntryClassification[]
 }
 
-function buildEntryLines(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
+function buildDiffDecorations(view: EditorView): DecorationSet {
   const doc = view.state.doc
   const baseline = view.state.field(baselineBufferField)
-  if (!baseline) return builder.finish()
-  const entries = splitEntries(doc.toString())
-  const metas = classifyDoc(doc.toString(), baseline)
+  if (!baseline) return Decoration.none
+  const docText = doc.toString()
+  const entries = splitEntries(docText)
+  const metas = classifyDoc(docText, baseline)
+  const ranges: ReturnType<Decoration['range']>[] = []
   for (let i = 0; i < entries.length; i++) {
     const meta = metas[i]
     if (!meta || meta.change === 'unchanged') continue
-    const deco = meta.change === 'created' ? createdLine : updatedLine
-    const start = entries[i].startLine + 1
-    const end = entries[i].endLine + 1
-    for (let ln = start; ln <= end; ln++) {
-      builder.add(doc.line(ln).from, doc.line(ln).from, deco)
-    }
-  }
-  return builder.finish()
-}
-
-function buildWordMarks(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
-  const doc = view.state.doc
-  const baseline = view.state.field(baselineBufferField)
-  if (!baseline) return builder.finish()
-  const entries = splitEntries(doc.toString())
-  const metas = classifyDoc(doc.toString(), baseline)
-  for (let i = 0; i < entries.length; i++) {
-    const meta = metas[i]
-    if (!meta || meta.change !== 'updated' || !meta.baselineText) continue
     const entry = entries[i]
-    const entryStart = doc.line(entry.startLine + 1).from
-    const parts = diffWordsWithSpace(meta.baselineText, entry.text)
-    let cursor = 0
-    for (const p of parts) {
-      if (p.removed) continue
-      const len = p.value.length
-      if (p.added && p.value.trim().length > 0) {
-        builder.add(entryStart + cursor, entryStart + cursor + len, wordAdded)
+    const lineDeco = meta.change === 'created' ? createdLine : updatedLine
+    for (let ln = entry.startLine + 1; ln <= entry.endLine + 1; ln++) {
+      const pos = doc.line(ln).from
+      ranges.push(lineDeco.range(pos, pos))
+    }
+    if (meta.change === 'updated' && meta.baselineText) {
+      const entryStart = doc.line(entry.startLine + 1).from
+      const parts = diffWordsWithSpace(meta.baselineText, entry.text)
+      let cursor = 0
+      for (const p of parts) {
+        if (p.removed) continue
+        const len = p.value.length
+        if (p.added && p.value.trim().length > 0) {
+          ranges.push(wordAdded.range(entryStart + cursor, entryStart + cursor + len))
+        }
+        cursor += len
       }
-      cursor += len
     }
   }
-  return builder.finish()
+  return Decoration.set(ranges, true)
 }
 
-const entryHighlightPlugin = ViewPlugin.fromClass(
+const diffHighlightPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet
     constructor(view: EditorView) {
-      this.decorations = buildEntryLines(view)
+      this.decorations = buildDiffDecorations(view)
     }
     update(u: ViewUpdate) {
       const prev = u.startState.field(baselineBufferField)
       const cur = u.state.field(baselineBufferField)
-      if (u.docChanged || prev !== cur) this.decorations = buildEntryLines(u.view)
-    }
-  },
-  { decorations: (v) => v.decorations },
-)
-
-const wordHighlightPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet
-    constructor(view: EditorView) {
-      this.decorations = buildWordMarks(view)
-    }
-    update(u: ViewUpdate) {
-      const prev = u.startState.field(baselineBufferField)
-      const cur = u.state.field(baselineBufferField)
-      if (u.docChanged || prev !== cur) this.decorations = buildWordMarks(u.view)
+      if (u.docChanged || prev !== cur) this.decorations = buildDiffDecorations(u.view)
     }
   },
   { decorations: (v) => v.decorations },
@@ -406,8 +386,7 @@ export const scandiBeancountExtensions = [
   beancountTabKeymap,
   txnDividers,
   baselineBufferField,
-  entryHighlightPlugin,
-  wordHighlightPlugin,
+  diffHighlightPlugin,
   validatorsField,
   parseLinter,
   composedLinter,
