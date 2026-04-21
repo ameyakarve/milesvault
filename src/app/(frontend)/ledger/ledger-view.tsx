@@ -8,7 +8,6 @@ import {
   Car,
   ChevronLeft,
   ChevronRight,
-  CircleDot,
   Copy,
   Film,
   Filter,
@@ -37,6 +36,7 @@ import { composeBuffer } from './editor'
 import { EntryCard, type CardPreset } from './ledger-card'
 import { LedgerEditor } from './ledger-editor'
 import { applyProposal, type Proposal } from './propose'
+import { SavePill } from './save-status'
 import { ThinkPane } from './think-pane'
 
 const PAGE_SIZE = 10
@@ -672,44 +672,7 @@ export function LedgerView({ email }: { email: string }) {
             disabled={!dirty || saveStatus === 'saving'}
             onClick={onRevert}
           />
-          {(() => {
-            const tone =
-              saveStatus === 'error' || saveStatus === 'conflict'
-                ? 'bg-red-50 text-red-700'
-                : saveStatus === 'saving'
-                  ? 'bg-sky-50 text-sky-700'
-                  : dirty
-                    ? 'bg-amber-100 text-amber-800'
-                    : 'bg-emerald-50 text-emerald-700'
-            const dotColor =
-              saveStatus === 'error' || saveStatus === 'conflict'
-                ? 'text-red-600'
-                : saveStatus === 'saving'
-                  ? 'text-sky-700'
-                  : dirty
-                    ? 'text-amber-700'
-                    : 'text-emerald-700'
-            const label =
-              saveStatus === 'saving'
-                ? 'saving…'
-                : saveStatus === 'conflict'
-                  ? 'conflict'
-                  : saveStatus === 'error'
-                    ? (saveErrorMsg ?? 'error')
-                    : dirty
-                      ? 'unsaved'
-                      : 'saved'
-            return (
-              <div
-                className={`h-[24px] px-2 rounded-[4px] flex items-center gap-1.5 font-mono text-[11px] ml-1 ${tone}`}
-                aria-live="polite"
-                title={saveErrorMsg ?? undefined}
-              >
-                <CircleDot size={12} strokeWidth={2} className={dotColor} />
-                <span className="truncate max-w-[240px]">{label}</span>
-              </div>
-            )
-          })()}
+          <SavePill saveStatus={saveStatus} dirty={dirty} errorMsg={saveErrorMsg} />
           <div className="h-[16px] w-px bg-slate-200 mx-3" />
           <div className="flex items-center gap-1">
             <ChromeIconButton icon={Filter} title="filter" />
