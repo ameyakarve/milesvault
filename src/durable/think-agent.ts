@@ -9,8 +9,9 @@ import type {
 import type { Session } from 'agents/experimental/memory/session'
 import { createCompactFunction } from 'agents/experimental/memory/utils'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { generateText, type LanguageModel, type ToolSet } from 'ai'
+import { generateText, wrapLanguageModel, type LanguageModel, type ToolSet } from 'ai'
 import { buildAgenticLedgerTools } from '@/lib/chat/ledger-tools'
+import { kimiRescueMiddleware } from '@/lib/chat/kimi-rescue-middleware'
 import { createLedgerClient, LedgerBindingError } from '@/lib/ledger-api'
 import { ALL_ACCOUNTS } from '@/lib/beancount/accounts'
 
@@ -163,7 +164,10 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
         'cf-aig-authorization': `Bearer ${this.env.CF_AIG_TOKEN}`,
       },
     })
-    return provider.chatModel(this.env.CHAT_MODEL)
+    return wrapLanguageModel({
+      model: provider.chatModel(this.env.CHAT_MODEL),
+      middleware: kimiRescueMiddleware,
+    })
   }
 
   getSystemPrompt(): string {
