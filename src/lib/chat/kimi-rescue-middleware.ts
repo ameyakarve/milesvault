@@ -123,7 +123,7 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
     )
     if (names.size === 0) return result
 
-    type TextRun = { id: string; buffer: string }
+    type TextRun = { id: string; held: string }
     const runs = new Map<string, TextRun>()
     let rescuedAny = false
     let sawToolCallFromProvider = false
@@ -135,16 +135,39 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
       transform(part, controller) {
         switch (part.type) {
           case 'text-start':
-            runs.set(part.id, { id: part.id, buffer: '' })
-            // Defer emitting text-start until we know whether to rescue.
+            runs.set(part.id, { id: part.id, held: '' })
+            controller.enqueue(part)
             return
           case 'text-delta': {
             const run = runs.get(part.id)
-            if (run) {
-              run.buffer += part.delta
+            if (!run) {
+              controller.enqueue(part)
               return
             }
-            controller.enqueue(part)
+            run.held += part.delta
+            const suspectAt = potentialMarkerStart(run.held)
+            if (suspectAt === -1) {
+              // Safe to flush everything.
+              if (run.held.length > 0) {
+                controller.enqueue({
+                  type: 'text-delta',
+                  id: run.id,
+                  delta: run.held,
+                })
+                run.held = ''
+              }
+              return
+            }
+            if (suspectAt > 0) {
+              const safe = run.held.slice(0, suspectAt)
+              controller.enqueue({
+                type: 'text-delta',
+                id: run.id,
+                delta: safe,
+              })
+              run.held = run.held.slice(suspectAt)
+            }
+            // Otherwise: the entire held buffer could be a marker — keep holding.
             return
           }
           case 'text-end': {
@@ -154,15 +177,13 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
               controller.enqueue(part)
               return
             }
-            const rescued = rescueFromText(run.buffer, names)
+            const rescued = rescueFromText(run.held, names)
             if (!rescued) {
-              // Flush as a normal text block.
-              controller.enqueue({ type: 'text-start', id: run.id })
-              if (run.buffer.length > 0) {
+              if (run.held.length > 0) {
                 controller.enqueue({
                   type: 'text-delta',
                   id: run.id,
-                  delta: run.buffer,
+                  delta: run.held,
                 })
               }
               controller.enqueue({ type: 'text-end', id: run.id })
@@ -170,14 +191,13 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
             }
             rescuedAny = true
             if (rescued.cleanedText.length > 0) {
-              controller.enqueue({ type: 'text-start', id: run.id })
               controller.enqueue({
                 type: 'text-delta',
                 id: run.id,
                 delta: rescued.cleanedText,
               })
-              controller.enqueue({ type: 'text-end', id: run.id })
             }
+            controller.enqueue({ type: 'text-end', id: run.id })
             for (const tc of rescued.toolCalls) {
               controller.enqueue({
                 type: 'tool-input-start',
@@ -231,4 +251,15 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
 
     return { ...result, stream: result.stream.pipeThrough(transform) }
   },
+}
+
+// Returns the index in `s` from which content could be the start of a Kimi
+// marker token (`<|tool_...|>` family), or -1 if nothing in `s` looks suspect.
+// Callers flush everything before the index and hold everything from it on.
+function potentialMarkerStart(s: string): number {
+  const hit = s.indexOf('<|')
+  if (hit !== -1) return hit
+  // No full `<|`. Check if the tail is a prefix of `<|` (just a stray `<`).
+  if (s.endsWith('<')) return s.length - 1
+  return -1
 }
