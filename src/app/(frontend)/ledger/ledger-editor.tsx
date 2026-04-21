@@ -19,7 +19,6 @@ type LedgerEditorProps = {
   validators?: readonly Validator[]
   completeAccount?: AccountCompleter
   onCursorChange?: (pos: number) => void
-  onCreateEditor?: (view: EditorView) => void
   className?: string
 }
 
@@ -30,20 +29,22 @@ export function LedgerEditor({
   validators,
   completeAccount,
   onCursorChange,
-  onCreateEditor,
   className,
 }: LedgerEditorProps) {
   const viewRef = useRef<EditorView | null>(null)
+  const cursorCbRef = useRef(onCursorChange)
+  useEffect(() => {
+    cursorCbRef.current = onCursorChange
+  })
 
   const cursorExtension = useMemo(
     () =>
       EditorView.updateListener.of((u) => {
-        if (!onCursorChange) return
-        if (u.selectionSet || u.docChanged) {
-          onCursorChange(u.state.selection.main.head)
-        }
+        const cb = cursorCbRef.current
+        if (!cb) return
+        if (u.selectionSet || u.docChanged) cb(u.state.selection.main.head)
       }),
-    [onCursorChange],
+    [],
   )
 
   useEffect(() => {
@@ -71,16 +72,6 @@ export function LedgerEditor({
       onChange={onChange}
       onCreateEditor={(view) => {
         viewRef.current = view
-        if (baseline !== undefined) {
-          view.dispatch({ effects: setBaselineBuffer.of(baseline) })
-        }
-        if (validators && validators.length > 0) {
-          view.dispatch({ effects: setValidators.of(validators) })
-        }
-        if (completeAccount) {
-          view.dispatch({ effects: setAccountCompleter.of(completeAccount) })
-        }
-        onCreateEditor?.(view)
       }}
       extensions={[...scandiBeancountExtensions, cursorExtension]}
       basicSetup={{
