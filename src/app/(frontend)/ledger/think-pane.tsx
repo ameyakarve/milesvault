@@ -3,9 +3,10 @@
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import type { JSONSchema7 } from 'ai'
-import { ArrowUp, Mic, Paperclip, Save } from 'lucide-react'
+import { ArrowUp, Mic, Paperclip } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Proposal, Snapshot } from './propose'
+import { SaveButton, type SaveStatus } from './save-status'
 import { createMapReader } from '@/lib/ledger-reader/map'
 import { createHttpServerReader } from '@/lib/ledger-reader/http-server'
 import {
@@ -34,8 +35,6 @@ type MessagePart =
 type ToolPart = Extract<MessagePart, { type: `tool-${string}` }>
 
 type OnPropose = (p: Proposal) => { ok: boolean; reason?: string }
-
-type SaveStatus = 'idle' | 'saving' | 'conflict' | 'error'
 
 type ThinkPaneProps = {
   email: string
@@ -417,43 +416,8 @@ function Turn({
           <PartView key={i} part={part} />
         ))}
       </div>
-      {showSaveCard ? <SaveCard saveStatus={saveStatus} onSave={onSave} /> : null}
+      {showSaveCard ? <SaveButton saveStatus={saveStatus} onSave={onSave} /> : null}
     </div>
-  )
-}
-
-function SaveCard({
-  saveStatus,
-  onSave,
-}: {
-  saveStatus: SaveStatus
-  onSave: () => void | Promise<void>
-}) {
-  const busy = saveStatus === 'saving'
-  const label =
-    saveStatus === 'saving'
-      ? 'saving…'
-      : saveStatus === 'conflict'
-        ? 'conflict — reload & retry'
-        : saveStatus === 'error'
-          ? 'save failed — retry'
-          : 'save staged changes'
-  const tone =
-    saveStatus === 'conflict' || saveStatus === 'error'
-      ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
-      : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-  return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={() => {
-        void onSave()
-      }}
-      className={`max-w-[85%] mt-1 px-2.5 h-[28px] flex items-center gap-2 border ${tone} font-mono text-[11px] uppercase tracking-[0.08em] transition-colors disabled:opacity-60 disabled:cursor-not-allowed`}
-    >
-      <Save size={12} strokeWidth={1.75} />
-      <span>{label}</span>
-    </button>
   )
 }
 
