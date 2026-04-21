@@ -36,7 +36,7 @@ function rescueFromText(
   let lastIndex = 0
   ENVELOPE_RE.lastIndex = 0
   for (let m = ENVELOPE_RE.exec(text); m !== null; m = ENVELOPE_RE.exec(text)) {
-    const [full, rawName, idx, argJson] = m
+    const [full, rawName, , argJson] = m
     const name = rawName
     if (!knownToolNames.has(name)) {
       // Unknown tool — leave the raw text alone rather than fabricate a call.
@@ -56,7 +56,7 @@ function rescueFromText(
     lastIndex = m.index + full.length
     toolCalls.push({
       type: 'tool-call',
-      toolCallId: `functions.${name}:${idx}`,
+      toolCallId: crypto.randomUUID(),
       toolName: name,
       input: argJson,
     })
