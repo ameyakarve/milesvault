@@ -337,6 +337,7 @@ function ThinkPaneInner({
             />
           ))
         )}
+        {busy ? <BusyIndicator label={status} /> : null}
       </div>
 
       <form onSubmit={onSubmit} className="p-2 border-t border-slate-200 shrink-0 bg-white mt-auto">
@@ -453,6 +454,24 @@ function SaveCard({
       <Save size={12} strokeWidth={1.75} />
       <span>{label}</span>
     </button>
+  )
+}
+
+function BusyIndicator({ label }: { label: string }) {
+  const text = label === 'submitted' ? 'thinking' : 'working'
+  return (
+    <div className="flex items-start">
+      <div className="px-3 py-2 border border-slate-200 border-l-[2px] border-l-emerald-500 bg-emerald-50 flex items-center gap-2">
+        <span className="flex gap-1" aria-hidden>
+          <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse [animation-delay:0ms]" />
+          <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse [animation-delay:150ms]" />
+          <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse [animation-delay:300ms]" />
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.08em] text-emerald-700">
+          {text}…
+        </span>
+      </div>
+    </div>
   )
 }
 
