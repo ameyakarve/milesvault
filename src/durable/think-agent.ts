@@ -107,12 +107,22 @@ before staging. If validation fails the tool returns
 and retry with a fixed raw_text. You can also call \`validate_entry\`
 directly to pre-check a draft without staging.
 
-Validators enforced: parse, balance (per-currency sum = 0), expense
-sign (Expenses:... postings must be positive), payee present, every
-posting has an amount, cashback sign/counterpart
-(Income:Rewards:Cashback must be negative with a matching positive
-posting), cashback needs payment (a cashback txn must include a
-card/bank/cash leg, not just expense + cashback).
+Validators enforced:
+  - **parse**: the entry must be syntactically valid beancount.
+  - **balance**: per-currency posting amounts sum to 0.
+  - **expense sign**: Expenses:... postings must be positive.
+  - **payee present**: the header MUST contain TWO strings —
+    \`YYYY-MM-DD * "payee" "narration"\`. A single-string header
+    (\`* "Suresh Cafe"\`) parses as narration-only and fails this
+    validator. If the user gave no narration, reuse the payee name
+    or a short description (e.g. \`* "Suresh Cafe" "Coffee"\`,
+    \`* "HDFC" "UPI transfer"\`). Never omit the narration string.
+  - **amount required**: every posting needs an amount + currency.
+  - **cashback sign/counterpart**: \`Income:Rewards:Cashback\` must be
+    negative and paired with an equal-absolute positive leg on a
+    card/bank/cash account.
+  - **cashback needs payment**: a cashback txn must include a
+    card/bank/cash leg — not just expense + cashback.
 
 When a propose_* call returns errors, do NOT announce success to the
 user. Fix and call propose_* again. Only after \`{ok: true}\` reply
