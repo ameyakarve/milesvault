@@ -21,11 +21,22 @@ const ENVELOPE_RE =
 const MARKER_SNIFF_RE =
   /(?:<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<\|tool_call_argument_begin\|>)/
 
-// Seeded with Date.now() so rescued ids never collide with the model's
-// turn-local `:0, :1, …` indices persisted in prior UIMessages, and never
-// collide across turns within the same session. Keeps `functions.<name>:<idx>`
-// format so Kimi's Jinja template (vLLM accuracy blog RC#1) renders cleanly.
-let rescueSeq = Date.now()
+// Global monotonic counter for tool_call_id generation. Seeded with Date.now()
+// only to avoid collisions with ids persisted in the session from prior isolate
+// lifetimes (the model's native turn-local `:0, :1, …` emissions, now rewritten
+// on ingest but previously stored as-is). Keeps the `functions.<name>:<idx>`
+// shape so Kimi's Jinja template (`## Return of {{ tool_call_id }}`, vLLM
+// accuracy blog RC#1) renders cleanly.
+//
+// Applied to BOTH rescued-from-text tool calls AND native OpenAI-format
+// tool_calls returned by the provider (NIM's `kimi_k2_tool_parser`), because
+// @cloudflare/ai-chat's `processedToolCalls` Set is keyed globally by
+// toolCallId — turn-local `:0` collisions would skip `execute()` on turn 2
+// and replay the prior turn's cached result.
+let seq = Date.now()
+function allocId(name: string): string {
+  return `functions.${name}:${seq++}`
+}
 
 type Rescued = {
   cleanedText: string
@@ -62,7 +73,7 @@ function rescueFromText(
     lastIndex = m.index + full.length
     toolCalls.push({
       type: 'tool-call',
-      toolCallId: `functions.${name}:${rescueSeq++}`,
+      toolCallId: allocId(name),
       toolName: name,
       input: argJson,
     })
@@ -97,6 +108,11 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
     let mutated = false
     const newContent: LanguageModelV3Content[] = []
     for (const part of result.content) {
+      if (part.type === 'tool-call') {
+        newContent.push({ ...part, toolCallId: allocId(part.toolName) })
+        mutated = true
+        continue
+      }
       if (part.type !== 'text') {
         newContent.push(part)
         continue
@@ -136,6 +152,17 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
       startPart: LanguageModelV3StreamPart & { type: 'text-start' }
     }
     const runs = new Map<string, TextRun>()
+    // Remap native (provider-emitted) tool_call ids to unique ones so turn-local
+    // `:0/:1` collisions can't poison `processedToolCalls`.
+    const nativeIdMap = new Map<string, string>()
+    const remap = (srcId: string, toolName: string): string => {
+      let mapped = nativeIdMap.get(srcId)
+      if (!mapped) {
+        mapped = allocId(toolName)
+        nativeIdMap.set(srcId, mapped)
+      }
+      return mapped
+    }
     let rescuedAny = false
     let sawToolCallFromProvider = false
 
@@ -247,11 +274,28 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
             }
             return
           }
-          case 'tool-call':
-          case 'tool-input-start':
+          case 'tool-input-start': {
             sawToolCallFromProvider = true
-            controller.enqueue(part)
+            const mapped = remap(part.id, part.toolName)
+            controller.enqueue({ ...part, id: mapped })
             return
+          }
+          case 'tool-input-delta': {
+            const mapped = nativeIdMap.get(part.id)
+            controller.enqueue(mapped ? { ...part, id: mapped } : part)
+            return
+          }
+          case 'tool-input-end': {
+            const mapped = nativeIdMap.get(part.id)
+            controller.enqueue(mapped ? { ...part, id: mapped } : part)
+            return
+          }
+          case 'tool-call': {
+            sawToolCallFromProvider = true
+            const mapped = remap(part.toolCallId, part.toolName)
+            controller.enqueue({ ...part, toolCallId: mapped })
+            return
+          }
           case 'finish': {
             if (
               rescuedAny &&
