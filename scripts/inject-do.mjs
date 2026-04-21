@@ -20,7 +20,6 @@ const rewritten = current.replace(defaultExportNeedle, 'const __nextHandler = {'
 const appended = `${rewritten}
 ${marker}
 export { LedgerDO } from "../src/durable/ledger-do.ts"
-export { ChatAgent } from "../src/durable/chat-agent.ts"
 export { ThinkAgent } from "../src/durable/think-agent.ts"
 import { fetchWithAgents as __fetchWithAgents } from "../src/durable/worker-intercept.ts"
 export default {
