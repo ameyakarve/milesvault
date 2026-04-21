@@ -1,9 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/auth'
-import { LedgerBindingError, LedgerInputError, getLedgerClient } from '@/lib/ledger-api'
+import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { LedgerDO } from '@/durable/ledger-do'
 import { toTransaction } from '@/durable/ledger-types'
+import { withLedger } from '@/lib/ledger-route-handler'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,34 +11,16 @@ function parseId(raw: string): number | null {
   return Number.isInteger(n) && n > 0 ? n : null
 }
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
-  const { id: rawId } = await params
-  const id = parseId(rawId)
+export const GET = withLedger<{ id: string }>(async ({ client, params }) => {
+  const id = parseId(params.id)
   if (id === null) return new NextResponse('invalid id', { status: 400 })
+  const txn = await client.get(id)
+  if (!txn) return new NextResponse('not found', { status: 404 })
+  return NextResponse.json(txn)
+})
 
-  try {
-    const client = await getLedgerClient(session.user.email)
-    const txn = await client.get(id)
-    if (!txn) return new NextResponse('not found', { status: 404 })
-    return NextResponse.json(txn)
-  } catch (e) {
-    if (e instanceof LedgerInputError) {
-      return NextResponse.json({ errors: e.errors }, { status: 400 })
-    }
-    if (e instanceof LedgerBindingError) {
-      return new NextResponse(e.message, { status: 500 })
-    }
-    throw e
-  }
-}
-
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
-  const { id: rawId } = await params
-  const id = parseId(rawId)
+export const PATCH = withLedger<{ id: string }>(async ({ req, params, email }) => {
+  const id = parseId(params.id)
   if (id === null) return new NextResponse('invalid id', { status: 400 })
   const body = (await req.json().catch((): null => null)) as { raw_text?: unknown } | null
   if (!body || typeof body.raw_text !== 'string') {
@@ -49,31 +30,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { env } = await getCloudflareContext({ async: true })
   const ns = env.LEDGER_DO as DurableObjectNamespace<LedgerDO> | undefined
   if (!ns) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
-  const stub = ns.get(ns.idFromName(session.user.email))
+  const stub = ns.get(ns.idFromName(email))
   const row = await stub.update(id, body.raw_text)
   if (!row) return new NextResponse('not found', { status: 404 })
   return NextResponse.json(toTransaction(row))
-}
+})
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
-  const { id: rawId } = await params
-  const id = parseId(rawId)
+export const DELETE = withLedger<{ id: string }>(async ({ client, params }) => {
+  const id = parseId(params.id)
   if (id === null) return new NextResponse('invalid id', { status: 400 })
-
-  try {
-    const client = await getLedgerClient(session.user.email)
-    const ok = await client.remove(id)
-    if (!ok) return new NextResponse('not found', { status: 404 })
-    return new NextResponse(null, { status: 204 })
-  } catch (e) {
-    if (e instanceof LedgerInputError) {
-      return NextResponse.json({ errors: e.errors }, { status: 400 })
-    }
-    if (e instanceof LedgerBindingError) {
-      return new NextResponse(e.message, { status: 500 })
-    }
-    throw e
-  }
-}
+  const ok = await client.remove(id)
+  if (!ok) return new NextResponse('not found', { status: 404 })
+  return new NextResponse(null, { status: 204 })
+})
