@@ -183,7 +183,7 @@ ${predefinedList}`
 }
 
 export class ThinkAgent extends Think<Cloudflare.Env> {
-  maxSteps = 5
+  maxSteps = 10
 
   getModel(): LanguageModel {
     const provider = createOpenAICompatible({
