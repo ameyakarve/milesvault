@@ -12,6 +12,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { generateText, wrapLanguageModel, type LanguageModel, type ToolSet } from 'ai'
 import { buildAgenticLedgerTools } from '@/lib/chat/ledger-tools'
 import { kimiRescueMiddleware } from '@/lib/chat/kimi-rescue-middleware'
+import { toolDisciplineMiddleware } from '@/lib/chat/tool-discipline-middleware'
 import { withNimRequestNormalize } from '@/lib/chat/nim-request-normalize'
 import { createLedgerClient, LedgerBindingError } from '@/lib/ledger-api'
 import { ALL_ACCOUNTS } from '@/lib/beancount/accounts'
@@ -24,6 +25,15 @@ entries must be valid beancount text that the user can save verbatim.
 
 Today is ${today}. Resolve partial dates ("19 april", "last tuesday") relative
 to today; default year is ${today.slice(0, 4)}.
+
+# How you talk
+
+ALL user-facing text goes through the \`reply\` tool. Never emit free-form
+assistant text — if you want to ask a question, confirm a change, or say
+anything to the user, call \`reply({message: "..."})\`. The UI renders the
+message as your chat bubble. You may call \`reply\` in the same step as a
+\`propose_*\` tool (recommended: stage the change AND describe it in one
+step).
 
 # How writing works
 
@@ -140,17 +150,14 @@ with the one-line summary.
   emit the propose_* tool call directly. Never write a message like
   "Creating a new transaction…" without the tool call in the same turn —
   that lies to the user because nothing actually gets staged.
-- **Never paste beancount text in your reply.** If your response contains
-  a \`YYYY-MM-DD *\` header followed by postings, you MUST have called
-  propose_create / propose_update in the same turn with that same text as
-  \`raw_text\`. Showing the user a beancount draft without the tool call
-  does not stage it — the Save button only appears after a successful
-  propose_*. Do not echo the staged entry back in your reply either;
-  after \`{ok: true}\` just write the one-line summary.
-- Keep replies terse. After a propose_* call, reply with a one-line summary
-  of what you staged. The UI automatically shows a Save button under your
-  reply — do NOT tell the user to click Save or save manually; just describe
-  the change.
+- **Never paste beancount text inside a \`reply\` message.** The staged
+  entry is already visible in the editor and via the propose_* tool call;
+  a one-line summary (\`reply({message: "Staged ₹400 at Suresh Cafe on
+  your HSBC cashback card."})\`) is enough. Don't echo the raw_text back.
+- Keep \`reply\` messages terse. After a propose_* call, reply with a
+  one-line summary of what you staged. The UI automatically shows a Save
+  button under your reply — do NOT tell the user to click Save or save
+  manually; just describe the change.
 - For breakdowns/aggregations ("spend by category"), run a broad search
   (@expenses + date range), then group the results yourself in the reply —
   the tool does not aggregate.`
@@ -189,7 +196,17 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
     })
     return wrapLanguageModel({
       model: provider.chatModel(this.env.CHAT_MODEL),
-      middleware: kimiRescueMiddleware,
+      // Order: outermost first. `toolDiscipline` must see post-rescue
+      // tool_calls so it correctly skips retry when `kimiRescue` already
+      // recovered a call from leaked envelope tokens.
+      middleware: [
+        toolDisciplineMiddleware({
+          nudge:
+            'Your previous reply was free-form text with no tool call. ALL user-facing text must go through the `reply` tool. Retry now: call `reply` with a `message` argument for what you meant to say; if you were staging a transaction, also call the appropriate propose_* tool in the same step.',
+          logPrefix: 'think-tool-discipline',
+        }),
+        kimiRescueMiddleware,
+      ],
     })
   }
 

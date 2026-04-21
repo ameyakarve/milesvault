@@ -81,6 +81,12 @@ export function buildAgenticLedgerTools(env: Cloudflare.Env, email: string): Too
   const readOnly = buildReadOnlyLedgerTools(env, email)
   return {
     ...readOnly,
+    reply: tool({
+      description:
+        'Send a message to the user. Use for ALL user-facing text — confirmations, clarifying questions, one-line summaries after staging. Do NOT emit free-form assistant text; every reply must go through this tool. May be called in the same step as a propose_* to say something about what you just staged.',
+      inputSchema: z.object({ message: z.string().min(1) }),
+      execute: async ({ message }) => ({ ok: true, message }),
+    }),
     propose_create: tool({
       description:
         'Stage a NEW transaction in the user\'s ledger editor buffer. This does NOT save — it places the entry in the editor for the user to review and save. raw_text is a complete beancount transaction (header line + postings). Use accounts and formatting that match existing entries (run ledger_search first). Reply briefly describing what you staged.',
