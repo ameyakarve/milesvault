@@ -123,7 +123,12 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
     )
     if (names.size === 0) return result
 
-    type TextRun = { id: string; held: string }
+    type TextRun = {
+      id: string
+      held: string
+      startEmitted: boolean
+      startPart: LanguageModelV3StreamPart & { type: 'text-start' }
+    }
     const runs = new Map<string, TextRun>()
     let rescuedAny = false
     let sawToolCallFromProvider = false
@@ -135,8 +140,13 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
       transform(part, controller) {
         switch (part.type) {
           case 'text-start':
-            runs.set(part.id, { id: part.id, held: '' })
-            controller.enqueue(part)
+            runs.set(part.id, {
+              id: part.id,
+              held: '',
+              startEmitted: false,
+              startPart: part,
+            })
+            // Defer emission until we know there's text to emit (vs fully rescued).
             return
           case 'text-delta': {
             const run = runs.get(part.id)
@@ -147,8 +157,11 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
             run.held += part.delta
             const suspectAt = potentialMarkerStart(run.held)
             if (suspectAt === -1) {
-              // Safe to flush everything.
               if (run.held.length > 0) {
+                if (!run.startEmitted) {
+                  controller.enqueue(run.startPart)
+                  run.startEmitted = true
+                }
                 controller.enqueue({
                   type: 'text-delta',
                   id: run.id,
@@ -160,6 +173,10 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
             }
             if (suspectAt > 0) {
               const safe = run.held.slice(0, suspectAt)
+              if (!run.startEmitted) {
+                controller.enqueue(run.startPart)
+                run.startEmitted = true
+              }
               controller.enqueue({
                 type: 'text-delta',
                 id: run.id,
@@ -179,6 +196,10 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
             }
             const rescued = rescueFromText(run.held, names)
             if (!rescued) {
+              if (!run.startEmitted) {
+                controller.enqueue(run.startPart)
+                run.startEmitted = true
+              }
               if (run.held.length > 0) {
                 controller.enqueue({
                   type: 'text-delta',
@@ -191,13 +212,19 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
             }
             rescuedAny = true
             if (rescued.cleanedText.length > 0) {
+              if (!run.startEmitted) {
+                controller.enqueue(run.startPart)
+                run.startEmitted = true
+              }
               controller.enqueue({
                 type: 'text-delta',
                 id: run.id,
                 delta: rescued.cleanedText,
               })
             }
-            controller.enqueue({ type: 'text-end', id: run.id })
+            if (run.startEmitted) {
+              controller.enqueue({ type: 'text-end', id: run.id })
+            }
             for (const tc of rescued.toolCalls) {
               controller.enqueue({
                 type: 'tool-input-start',
