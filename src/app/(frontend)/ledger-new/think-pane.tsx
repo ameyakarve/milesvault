@@ -208,6 +208,13 @@ function ThinkPaneInner({
               raw_text,
             })
           }
+          const row = await merged.get(id)
+          if (!row || 'ok' in row) {
+            return { ok: false, reason: `id ${id} not found` }
+          }
+          if (!row.editable) {
+            return { ok: false, reason: row.reason ?? `id ${id} is not editable` }
+          }
           return onProposeRef.current({ kind: 'update', id, raw_text })
         },
       },
@@ -224,6 +231,13 @@ function ThinkPaneInner({
               kind: 'delete_text',
               old_raw_text: entry.raw_text,
             })
+          }
+          const row = await merged.get(id)
+          if (!row || 'ok' in row) {
+            return { ok: false, reason: `id ${id} not found` }
+          }
+          if (!row.editable) {
+            return { ok: false, reason: row.reason ?? `id ${id} is not editable` }
           }
           return onProposeRef.current({ kind: 'delete', id })
         },
