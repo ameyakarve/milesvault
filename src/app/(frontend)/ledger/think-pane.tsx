@@ -14,6 +14,7 @@ import {
   renderedIdsFromEntries,
 } from '@/lib/ledger-reader/entries'
 import { buildClientTools } from './ledger-tools-client'
+import { PaneLabel } from './ledger-chrome'
 
 type ThinkMessage = { id: string; role: string; parts: MessagePart[] }
 type MessagePart =
@@ -134,9 +135,7 @@ function ThinkPaneInner({
   return (
     <div className="flex-1 bg-white flex flex-col overflow-hidden">
       <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0 gap-2">
-        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.08em] text-navy-700">
-          ASSISTANT
-        </h2>
+        <PaneLabel>ASSISTANT</PaneLabel>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] text-slate-500 uppercase tracking-[0.08em]">
             {status}

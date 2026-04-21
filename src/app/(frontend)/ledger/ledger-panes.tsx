@@ -122,6 +122,18 @@ const PRESETS: CardPreset[] = [
   },
 ]
 
+function PaneStatus({
+  status,
+  errorMsg,
+}: {
+  status: FetchStatus
+  errorMsg: string | null
+}) {
+  const base = 'flex-1 flex items-center justify-center text-[11px] font-mono'
+  if (status === 'loading') return <div className={`${base} text-slate-400`}>loading…</div>
+  return <div className={`${base} text-error`}>failed to load — {errorMsg}</div>
+}
+
 export function CardsList({
   status,
   errorMsg,
@@ -133,20 +145,7 @@ export function CardsList({
   entries: Entry[]
   activeIdx: number | null
 }) {
-  if (status === 'loading') {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[11px] text-slate-400 font-mono">
-        loading…
-      </div>
-    )
-  }
-  if (status === 'error') {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[11px] text-error font-mono">
-        failed to load — {errorMsg}
-      </div>
-    )
-  }
+  if (status !== 'idle') return <PaneStatus status={status} errorMsg={errorMsg} />
   if (entries.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center text-[11px] text-slate-400 font-mono">
@@ -182,20 +181,7 @@ export function TextPane({
   onBufferChange: (v: string) => void
   onCursorChange: (pos: number) => void
 }) {
-  if (status === 'loading') {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[11px] text-slate-400 font-mono">
-        loading…
-      </div>
-    )
-  }
-  if (status === 'error') {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[11px] text-error font-mono">
-        failed to load — {errorMsg}
-      </div>
-    )
-  }
+  if (status !== 'idle') return <PaneStatus status={status} errorMsg={errorMsg} />
   return (
     <div className="flex-1 min-h-0 overflow-hidden">
       <LedgerEditor

@@ -267,20 +267,19 @@ export function LedgerView({ email }: { email: string }) {
   const activeIdx = useMemo(() => {
     const parts = splitEntries(buffer)
     const lines = buffer.split('\n')
-    let offset = 0
+    const lineOffsets: number[] = [0]
+    for (const l of lines) lineOffsets.push(lineOffsets[lineOffsets.length - 1] + l.length + 1)
     for (let i = 0; i < parts.length; i++) {
-      const start = lines.slice(0, parts[i].startLine).reduce((s, l) => s + l.length + 1, 0)
-      const end = lines.slice(0, parts[i].endLine + 1).reduce((s, l) => s + l.length + 1, 0)
-      if (cursorPos >= start && cursorPos < end) {
-        offset = i
-        const live = liveEntries[i]
-        if (!live) return null
-        if (live.snapshotId !== null) {
-          const found = cardEntries.findIndex((e) => e.snapshotId === live.snapshotId)
-          if (found !== -1) return found
-        }
-        return offset < cardEntries.length ? offset : null
+      const start = lineOffsets[parts[i].startLine]
+      const end = lineOffsets[parts[i].endLine + 1]
+      if (cursorPos < start || cursorPos >= end) continue
+      const live = liveEntries[i]
+      if (!live) return null
+      if (live.snapshotId !== null) {
+        const found = cardEntries.findIndex((e) => e.snapshotId === live.snapshotId)
+        if (found !== -1) return found
       }
+      return i < cardEntries.length ? i : null
     }
     return null
   }, [buffer, cursorPos, liveEntries, cardEntries])

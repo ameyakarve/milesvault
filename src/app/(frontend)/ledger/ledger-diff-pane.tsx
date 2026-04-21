@@ -57,8 +57,8 @@ export function DiffPane({ baseline, current }: { baseline: string; current: str
 
   return (
     <>
-      <div className="h-[24px] px-[12px] flex items-center bg-[#F0F9FF] border-b border-[#E0F2FE] shrink-0">
-        <span className="font-mono text-[11px] font-medium text-[#0F172A]">
+      <div className="h-[24px] px-[12px] flex items-center bg-sky-50 border-b border-sky-100 shrink-0">
+        <span className="font-mono text-[11px] font-medium text-navy-700">
           {fileTitle ?? 'no pending changes'}
         </span>
       </div>

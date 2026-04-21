@@ -120,17 +120,13 @@ export type LedgerDiagnostic = Diagnostic
 export type { ValidateContext, Validator } from '@/lib/beancount/validators'
 export type { AccountCompleter } from '@/lib/beancount/accounts'
 
-const baselineSlot = defineReactSlot<string>('')
-const validatorsSlot = defineReactSlot<readonly Validator[]>([])
-const accountCompleterSlot = defineReactSlot<AccountCompleter>(completeAccount)
+const { field: baselineBufferField, effect: setBaselineBuffer } = defineReactSlot<string>('')
+const { field: validatorsField, effect: setValidators } =
+  defineReactSlot<readonly Validator[]>([])
+const { field: accountCompleterField, effect: setAccountCompleter } =
+  defineReactSlot<AccountCompleter>(completeAccount)
 
-const baselineBufferField = baselineSlot.field
-const validatorsField = validatorsSlot.field
-const accountCompleterField = accountCompleterSlot.field
-
-export const setBaselineBuffer = baselineSlot.effect
-export const setValidators = validatorsSlot.effect
-export const setAccountCompleter = accountCompleterSlot.effect
+export { setBaselineBuffer, setValidators, setAccountCompleter }
 
 const ACCOUNT_PREFIX_RE = /[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9-]*)+/
 
