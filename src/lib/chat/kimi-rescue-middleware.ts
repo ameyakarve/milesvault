@@ -18,8 +18,16 @@ const SECTION_END = '<|tool_calls_section_end|>'
 const ENVELOPE_RE =
   /(?:<\|tool_call_begin\|>)?(?:functions\.)?([A-Za-z_][\w-]*):(\d+)\s*(?:<\|tool_call_argument_begin\|>)?\s*([\s\S]*?)<\|tool_call_end\|>/g
 
+// Marker-less header: NIM occasionally strips EVERY envelope marker, including
+// `<|tool_call_end|>`. The header `functions.<name>:<idx>` + the JSON object
+// then flow through as plain text. We require the `functions.` prefix here to
+// avoid matching unrelated `name:0` text; the closing is found by a
+// balanced-brace scan over the following `{...}`.
+const MARKERLESS_RE =
+  /functions\.([A-Za-z_][\w-]*):(\d+)\s*(?=\{)/g
+
 const MARKER_SNIFF_RE =
-  /(?:<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<\|tool_call_argument_begin\|>|<\|tool_call_end\|>|<\|tool_calls_section_end\|>)/
+  /(?:<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<\|tool_call_argument_begin\|>|<\|tool_call_end\|>|<\|tool_calls_section_end\|>|functions\.[A-Za-z_][\w-]*:\d+\s*\{)/
 
 // Global monotonic counter for tool_call_id generation. Seeded with Date.now()
 // only to avoid collisions with ids persisted in the session from prior isolate
@@ -43,11 +51,39 @@ type Rescued = {
   toolCalls: LanguageModelV3ToolCall[]
 }
 
-function rescueFromText(
+function scanBalancedJson(
+  text: string,
+  start: number,
+): { json: string; end: number } | null {
+  if (text[start] !== '{') return null
+  let depth = 0
+  let inStr = false
+  let esc = false
+  for (let i = start; i < text.length; i++) {
+    const c = text[i]
+    if (esc) {
+      esc = false
+      continue
+    }
+    if (inStr) {
+      if (c === '\\') esc = true
+      else if (c === '"') inStr = false
+      continue
+    }
+    if (c === '"') inStr = true
+    else if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return { json: text.slice(start, i + 1), end: i + 1 }
+    }
+  }
+  return null
+}
+
+function extractEnvelope(
   text: string,
   knownToolNames: ReadonlySet<string>,
-): Rescued | null {
-  if (!MARKER_SNIFF_RE.test(text)) return null
+): Rescued {
   const toolCalls: LanguageModelV3ToolCall[] = []
   let cleaned = ''
   let lastIndex = 0
@@ -76,9 +112,76 @@ function rescueFromText(
       input: argJson,
     })
   }
-  if (toolCalls.length === 0) return null
   cleaned += text.slice(lastIndex)
-  cleaned = cleaned.split(SECTION_END).join('').replace(/\s+$/g, '')
+  return { cleanedText: cleaned, toolCalls }
+}
+
+function extractMarkerless(
+  text: string,
+  knownToolNames: ReadonlySet<string>,
+): Rescued {
+  const toolCalls: LanguageModelV3ToolCall[] = []
+  let cleaned = ''
+  let lastIndex = 0
+  MARKERLESS_RE.lastIndex = 0
+  for (let m = MARKERLESS_RE.exec(text); m !== null; m = MARKERLESS_RE.exec(text)) {
+    const [full, name] = m
+    const jsonStart = m.index + full.length
+    // Skip whitespace between header and `{` — RE's `\s*(?=\{)` already does
+    // this via lookahead, so text[jsonStart] should already be '{'. Be safe.
+    let braceIdx = jsonStart
+    while (braceIdx < text.length && text[braceIdx] !== '{') braceIdx++
+    if (!knownToolNames.has(name)) {
+      cleaned += text.slice(lastIndex, jsonStart)
+      lastIndex = jsonStart
+      continue
+    }
+    const scan = scanBalancedJson(text, braceIdx)
+    if (!scan) {
+      cleaned += text.slice(lastIndex, jsonStart)
+      lastIndex = jsonStart
+      continue
+    }
+    try {
+      JSON.parse(scan.json)
+    } catch {
+      cleaned += text.slice(lastIndex, scan.end)
+      lastIndex = scan.end
+      continue
+    }
+    cleaned += text.slice(lastIndex, m.index)
+    // Consume optional trailing `<|tool_call_end|>` (partial-envelope case
+    // where only the closing marker survived).
+    let after = scan.end
+    if (text.startsWith('<|tool_call_end|>', after)) {
+      after += '<|tool_call_end|>'.length
+    }
+    lastIndex = after
+    toolCalls.push({
+      type: 'tool-call',
+      toolCallId: allocId(name),
+      toolName: name,
+      input: scan.json,
+    })
+    MARKERLESS_RE.lastIndex = after
+  }
+  cleaned += text.slice(lastIndex)
+  return { cleanedText: cleaned, toolCalls }
+}
+
+function rescueFromText(
+  text: string,
+  knownToolNames: ReadonlySet<string>,
+): Rescued | null {
+  if (!MARKER_SNIFF_RE.test(text)) return null
+  const first = extractEnvelope(text, knownToolNames)
+  const second = extractMarkerless(first.cleanedText, knownToolNames)
+  const toolCalls = [...first.toolCalls, ...second.toolCalls]
+  if (toolCalls.length === 0) return null
+  const cleaned = second.cleanedText
+    .split(SECTION_END)
+    .join('')
+    .replace(/\s+$/g, '')
   return { cleanedText: cleaned, toolCalls }
 }
 
