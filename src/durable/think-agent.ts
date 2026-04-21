@@ -125,6 +125,13 @@ with the one-line summary.
   emit the propose_* tool call directly. Never write a message like
   "Creating a new transaction…" without the tool call in the same turn —
   that lies to the user because nothing actually gets staged.
+- **Never paste beancount text in your reply.** If your response contains
+  a \`YYYY-MM-DD *\` header followed by postings, you MUST have called
+  propose_create / propose_update in the same turn with that same text as
+  \`raw_text\`. Showing the user a beancount draft without the tool call
+  does not stage it — the Save button only appears after a successful
+  propose_*. Do not echo the staged entry back in your reply either;
+  after \`{ok: true}\` just write the one-line summary.
 - Keep replies terse. After a propose_* call, reply with a one-line summary
   of what you staged. The UI automatically shows a Save button under your
   reply — do NOT tell the user to click Save or save manually; just describe
