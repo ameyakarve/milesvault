@@ -32,12 +32,11 @@ function classifyDoc(doc: string, baseline: string): EntryClassification[] {
     return null
   })
   const unmatchedBase: string[] = []
-  const remaining = new Map(baseCounts)
   for (const b of base) {
-    const n = remaining.get(b) ?? 0
+    const n = baseCounts.get(b) ?? 0
     if (n > 0) {
       unmatchedBase.push(b)
-      remaining.set(b, n - 1)
+      baseCounts.set(b, n - 1)
     }
   }
   let bi = 0
