@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import type { KnownId } from '@/durable/ledger-types'
 import { withLedger } from '@/lib/ledger-route-handler'
+import { parseArrayOf } from '@/lib/parse-array-of'
+import { validateKnownId } from '@/lib/ledger-route-validators'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,28 +15,11 @@ export const PUT = withLedger(
       return NextResponse.json({ errors: ['invalid body'] }, { status: 400 })
     }
 
-    const shapeErrors: string[] = []
-    const parsedKnownIds: KnownId[] = []
-    if (!Array.isArray(body.knownIds)) {
-      shapeErrors.push('knownIds must be an array.')
-    } else {
-      for (let i = 0; i < body.knownIds.length; i++) {
-        const k = body.knownIds[i] as Record<string, unknown> | null
-        if (!k || typeof k !== 'object') {
-          shapeErrors.push(`knownIds[${i}] must be an object.`)
-          continue
-        }
-        if (!Number.isInteger(k.id) || (k.id as number) <= 0) {
-          shapeErrors.push(`knownIds[${i}].id must be a positive integer.`)
-        }
-        if (!Number.isInteger(k.expected_updated_at)) {
-          shapeErrors.push(`knownIds[${i}].expected_updated_at must be an integer.`)
-        }
-        if (typeof k.id === 'number' && typeof k.expected_updated_at === 'number') {
-          parsedKnownIds.push({ id: k.id, expected_updated_at: k.expected_updated_at })
-        }
-      }
-    }
+    const knownIds =
+      body.knownIds === undefined
+        ? { values: [], errors: ['knownIds must be an array.'] }
+        : parseArrayOf('knownIds', body.knownIds, validateKnownId)
+    const shapeErrors = [...knownIds.errors]
     if (typeof body.buffer !== 'string') {
       shapeErrors.push('buffer must be a string.')
     }
@@ -44,7 +28,7 @@ export const PUT = withLedger(
     }
 
     const result = await client.replaceBuffer({
-      knownIds: parsedKnownIds,
+      knownIds: knownIds.values,
       buffer: body.buffer as string,
     })
     if (result.ok === true) {
