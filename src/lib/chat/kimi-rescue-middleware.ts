@@ -9,17 +9,19 @@ const ARG_BEGIN = '<|tool_call_argument_begin|>'
 const CALL_END = '<|tool_call_end|>'
 const SECTION_END = '<|tool_calls_section_end|>'
 
-// Matches `<|tool_call_argument_begin|>{json}<|tool_call_end|>` blocks and
-// captures the id-ish token immediately preceding. Tolerates:
-//   - full envelope: `<|tool_call_begin|>functions.<name>:<idx><|tool_call_argument_begin|>...`
-//   - prefix-less:   `<name>:<idx><|tool_call_argument_begin|>...`
-//   - missing `<|tool_calls_section_begin|>` entirely
-// Captured name is normalised by stripping an optional `functions.` prefix.
+// Matches a Kimi tool-call envelope, terminated by `<|tool_call_end|>`.
+// Tolerates all documented + observed degradations:
+//   - full envelope: `<|tool_call_begin|>functions.<name>:<idx><|tool_call_argument_begin|>{...}<|tool_call_end|>`
+//   - missing leading `<|tool_call_begin|>`
+//   - missing `functions.` prefix
+//   - missing `<|tool_call_argument_begin|>` (NIM sometimes strips it; JSON
+//     sits directly after `:<idx>` and before `<|tool_call_end|>`)
+// Captured name is normalised by stripping the optional `functions.` prefix.
 const ENVELOPE_RE =
-  /(?:<\|tool_call_begin\|>)?(?:functions\.)?([A-Za-z_][\w-]*):(\d+)\s*<\|tool_call_argument_begin\|>([\s\S]*?)<\|tool_call_end\|>/g
+  /(?:<\|tool_call_begin\|>)?(?:functions\.)?([A-Za-z_][\w-]*):(\d+)\s*(?:<\|tool_call_argument_begin\|>)?\s*([\s\S]*?)<\|tool_call_end\|>/g
 
 const MARKER_SNIFF_RE =
-  /(?:<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<\|tool_call_argument_begin\|>)/
+  /(?:<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<\|tool_call_argument_begin\|>|<\|tool_call_end\|>|<\|tool_calls_section_end\|>)/
 
 // Global monotonic counter for tool_call_id generation. Seeded with Date.now()
 // only to avoid collisions with ids persisted in the session from prior isolate
