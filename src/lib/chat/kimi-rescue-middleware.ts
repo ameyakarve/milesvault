@@ -5,8 +5,6 @@ import type {
   LanguageModelV3ToolCall,
 } from '@ai-sdk/provider'
 
-const ARG_BEGIN = '<|tool_call_argument_begin|>'
-const CALL_END = '<|tool_call_end|>'
 const SECTION_END = '<|tool_calls_section_end|>'
 
 // Matches a Kimi tool-call envelope, terminated by `<|tool_call_end|>`.
@@ -58,12 +56,10 @@ function rescueFromText(
     const [full, rawName, , argJson] = m
     const name = rawName
     if (!knownToolNames.has(name)) {
-      // Unknown tool — leave the raw text alone rather than fabricate a call.
       cleaned += text.slice(lastIndex, m.index + full.length)
       lastIndex = m.index + full.length
       continue
     }
-    // Validate JSON — if broken, skip rescue for this block.
     try {
       JSON.parse(argJson)
     } catch {
@@ -82,7 +78,6 @@ function rescueFromText(
   }
   if (toolCalls.length === 0) return null
   cleaned += text.slice(lastIndex)
-  // Strip residual section-end markers and tidy whitespace.
   cleaned = cleaned.split(SECTION_END).join('').replace(/\s+$/g, '')
   return { cleanedText: cleaned, toolCalls }
 }
@@ -181,7 +176,6 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
               startEmitted: false,
               startPart: part,
             })
-            // Defer emission until we know there's text to emit (vs fully rescued).
             return
           case 'text-delta': {
             const run = runs.get(part.id)
@@ -189,16 +183,11 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
               controller.enqueue(part)
               return
             }
-            // Buffer everything until text-end. NIM's `kimi_k2_tool_parser` can
-            // strip opening markers (<|tool_calls_section_begin|>,
-            // <|tool_call_begin|>, <|tool_call_argument_begin|>) while leaking
-            // closing markers and the header (`functions.<name>:<idx>`) as
-            // plain content — meaning the leak isn't anchored by any `<|` that
-            // could serve as a streaming sentinel. Buffering defers rescue
-            // until we have the full text; the cost is that pure-prose
-            // replies render after the last token rather than incrementally,
-            // which is acceptable for this agent (replies are one-line
-            // summaries). Native provider-emitted tool_calls still stream.
+            // Buffer until text-end. NIM's `kimi_k2_tool_parser` can strip
+            // opening markers while leaking closing ones and the
+            // `functions.<name>:<idx>` header as plain content — so the leak
+            // isn't anchored by any `<|` that could serve as a streaming
+            // sentinel. Buffering defers rescue until we have the full text.
             run.held += part.delta
             return
           }
@@ -211,18 +200,20 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
             }
             const rescued = rescueFromText(run.held, names)
             if (!rescued) {
-              if (!run.startEmitted) {
-                controller.enqueue(run.startPart)
-                run.startEmitted = true
-              }
               if (run.held.length > 0) {
+                if (!run.startEmitted) {
+                  controller.enqueue(run.startPart)
+                  run.startEmitted = true
+                }
                 controller.enqueue({
                   type: 'text-delta',
                   id: run.id,
                   delta: run.held,
                 })
               }
-              controller.enqueue({ type: 'text-end', id: run.id })
+              if (run.startEmitted) {
+                controller.enqueue({ type: 'text-end', id: run.id })
+              }
               return
             }
             rescuedAny = true

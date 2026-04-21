@@ -145,8 +145,23 @@ function ThinkPaneInner({
       required: ['raw_text'],
       additionalProperties: false,
     }
+    const schemaReply: JSONSchema7 = {
+      type: 'object',
+      properties: { message: { type: 'string', minLength: 1 } },
+      required: ['message'],
+      additionalProperties: false,
+    }
 
     return {
+      reply: {
+        description:
+          'Send a message to the user. Use for ALL user-facing text — confirmations, clarifying questions, one-line summaries after staging. Do NOT emit free-form assistant text; every reply must go through this tool. May be called in the same step as a propose_* to say something about what you just staged.',
+        parameters: schemaReply,
+        execute: async (input: unknown) => {
+          const { message } = (input ?? {}) as { message: string }
+          return { ok: true, message }
+        },
+      },
       ledger_search: {
         description:
           "Search the user's transactions. Merges local (viewport + unsaved edits) and server. Each row has `editable` — if false, `reason` tells you whether to ask the user to save or to widen the editor filter. Grammar: @account, #tag, ^link, >YYYY-MM-DD, <YYYY-MM-DD, free tokens.",
@@ -446,6 +461,16 @@ function PartView({ part }: { part: MessagePart }) {
     return (
       <div className="whitespace-pre-wrap text-[11px] leading-relaxed">
         {(part as { text: string }).text}
+      </div>
+    )
+  }
+  if (part.type === 'tool-reply') {
+    const tp = part as ToolPart
+    const message = (tp.input as { message?: string } | undefined)?.message
+    if (!message) return null
+    return (
+      <div className="whitespace-pre-wrap text-[11px] leading-relaxed">
+        {message}
       </div>
     )
   }
