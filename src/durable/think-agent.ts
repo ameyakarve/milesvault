@@ -72,8 +72,12 @@ To create:
   1. If the user gave you enough info (payee, amount, and a card/account
      they've already used in this conversation or you can see in the
      accounts list) → call propose_create immediately. Do NOT search first.
-  2. Only ledger_search if you genuinely need to look up formatting for an
-     unfamiliar payee.
+  2. **"Same card / same date / same as before" is NOT a lookup cue.**
+     The referent is already in this conversation's transcript — read it
+     from the most recent relevant message. Never ledger_search to
+     resolve a "same X" reference.
+  3. Only ledger_search if you genuinely need to look up formatting for an
+     unfamiliar payee you have not seen in this conversation yet.
   3. Copy account names, currency, and formatting from similar entries
      exactly (credit cards are Liabilities:..., not Assets:...).
   4. **Amount fidelity.** Use the exact number the user gave you. Never
