@@ -21,6 +21,12 @@ const ENVELOPE_RE =
 const MARKER_SNIFF_RE =
   /(?:<\|tool_calls_section_begin\|>|<\|tool_call_begin\|>|<\|tool_call_argument_begin\|>)/
 
+// Seeded with Date.now() so rescued ids never collide with the model's
+// turn-local `:0, :1, …` indices persisted in prior UIMessages, and never
+// collide across turns within the same session. Keeps `functions.<name>:<idx>`
+// format so Kimi's Jinja template (vLLM accuracy blog RC#1) renders cleanly.
+let rescueSeq = Date.now()
+
 type Rescued = {
   cleanedText: string
   toolCalls: LanguageModelV3ToolCall[]
@@ -56,7 +62,7 @@ function rescueFromText(
     lastIndex = m.index + full.length
     toolCalls.push({
       type: 'tool-call',
-      toolCallId: crypto.randomUUID(),
+      toolCallId: `functions.${name}:${rescueSeq++}`,
       toolName: name,
       input: argJson,
     })
