@@ -8,7 +8,9 @@ import type { Op, Snapshot } from './propose'
 import { createMapReader } from '@/lib/ledger-reader/map'
 import { buildEntriesFromBuffer } from '@/lib/ledger-reader/entries'
 import { buildClientTools } from './ledger-tools-client'
-import { PaneLabel } from './ledger-chrome'
+import { PaneCap, PaneLabel } from './ledger-chrome'
+
+const PANE_ROOT_CLS = 'flex-1 bg-scandi-quiet flex flex-col overflow-hidden min-w-0 min-h-0'
 
 type ThinkMessage = { id: string; role: string; parts: MessagePart[] }
 type MessagePart =
@@ -39,7 +41,7 @@ export function ThinkPane(props: ThinkPaneProps) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) {
-    return <div className="flex-1 bg-scandi-quiet flex flex-col overflow-hidden" />
+    return <div className={PANE_ROOT_CLS} />
   }
   return <ThinkPaneInner {...props} />
 }
@@ -141,6 +143,13 @@ function ThinkPaneInner({
     },
   })
   const [draft, setDraft] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [draft])
   const statusBusy = status === 'streaming' || status === 'submitted'
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -160,10 +169,10 @@ function ThinkPaneInner({
     onAiBusyChange?.(busy)
   }, [busy, onAiBusyChange])
 
-  const onSubmit = (e: React.FormEvent) => {
+  const onSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
     e.preventDefault()
     const text = draft.trim()
-    if (!text) return
+    if (!text || chatLocked) return
     proposeFiredRef.current = false
     setBusy(true)
     sendMessage({ text })
@@ -171,8 +180,8 @@ function ThinkPaneInner({
   }
 
   return (
-    <div className="flex-1 bg-scandi-quiet flex flex-col overflow-hidden">
-      <div className="h-[28px] px-3 flex items-center justify-between bg-scandi-cap shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_0_rgba(15,23,42,0.04)] shrink-0 gap-2">
+    <div className={PANE_ROOT_CLS}>
+      <PaneCap className="justify-between gap-2">
         <PaneLabel>ASSISTANT</PaneLabel>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] text-slate-500 uppercase tracking-[0.08em]">
@@ -190,7 +199,7 @@ function ThinkPaneInner({
             clear
           </button>
         </div>
-      </div>
+      </PaneCap>
 
       {error ? (
         <div className="mx-3 mt-3 px-2 py-1.5 border border-red-200 bg-red-50 font-mono text-[11px] text-red-700">
@@ -210,28 +219,35 @@ function ThinkPaneInner({
       </div>
 
       <form onSubmit={onSubmit} className="p-2 border-t border-scandi-rule shrink-0 bg-scandi-quiet mt-auto">
-        <div className="bg-white flex items-center px-2 h-[36px] border border-scandi-rule focus-within:border-scandi-accent transition-colors">
+        <div className="bg-white flex items-end px-2 py-1 border border-scandi-rule focus-within:border-scandi-accent transition-colors gap-1">
           <button
             type="button"
             title="attach"
             disabled
-            className="w-[24px] h-[24px] flex items-center justify-center text-slate-300 rounded-[2px]"
+            className="w-[24px] h-[24px] flex items-center justify-center text-slate-300 rounded-[2px] shrink-0 mb-[2px]"
           >
             <Paperclip size={14} strokeWidth={1.5} />
           </button>
-          <input
+          <textarea
+            ref={textareaRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                onSubmit(e)
+              }
+            }}
             disabled={chatLocked}
-            className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400 disabled:opacity-50"
+            rows={1}
+            className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400 disabled:opacity-50 resize-none py-[6px] max-h-[160px] overflow-y-auto leading-relaxed"
             placeholder={saving ? 'saving…' : 'ask, or describe a transaction to stage…'}
-            type="text"
           />
           <button
             type="button"
             title="dictate"
             disabled
-            className="w-[24px] h-[24px] flex items-center justify-center text-slate-300 rounded-[2px]"
+            className="w-[24px] h-[24px] flex items-center justify-center text-slate-300 rounded-[2px] shrink-0 mb-[2px]"
           >
             <Mic size={14} strokeWidth={1.5} />
           </button>
@@ -239,7 +255,7 @@ function ThinkPaneInner({
             type="submit"
             disabled={!draft.trim() || chatLocked}
             title={saving ? 'send (saving)' : 'send'}
-            className="bg-scandi-accent text-white w-[24px] h-[24px] flex items-center justify-center hover:bg-scandi-accent-hover transition-colors shrink-0 ml-1 rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-scandi-accent text-white w-[24px] h-[24px] flex items-center justify-center hover:bg-scandi-accent-hover transition-colors shrink-0 ml-1 rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed mb-[2px]"
           >
             <ArrowUp size={14} strokeWidth={1.5} />
           </button>
@@ -256,10 +272,10 @@ function Turn({ message }: { message: ThinkMessage }) {
   return (
     <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
       <div
-        className={`px-3 py-2 max-w-[85%] border border-scandi-rule ${
+        className={`px-3 py-2 max-w-[85%] border border-scandi-rule bg-white text-navy-700 ${
           isUser
-            ? 'bg-slate-100 text-navy-700 border-l-[3px] border-l-slate-500'
-            : 'bg-white text-navy-700 border-l-[3px] border-l-scandi-accent'
+            ? 'border-r-[3px] border-r-scandi-accent'
+            : 'border-l-[3px] border-l-slate-400'
         }`}
       >
         {visible.map((part, i) => (
@@ -283,13 +299,13 @@ function BusyIndicator({ label }: { label: string }) {
   const text = label === 'submitted' ? 'thinking' : 'working'
   return (
     <div className="flex items-start">
-      <div className="px-3 py-2 border border-scandi-rule border-l-[3px] border-l-scandi-accent bg-white flex items-center gap-2">
+      <div className="px-3 py-2 border border-scandi-rule border-l-[3px] border-l-slate-400 bg-white flex items-center gap-2">
         <span className="flex gap-1" aria-hidden>
-          <span className="w-1 h-1 rounded-full bg-scandi-accent animate-pulse [animation-delay:0ms]" />
-          <span className="w-1 h-1 rounded-full bg-scandi-accent animate-pulse [animation-delay:150ms]" />
-          <span className="w-1 h-1 rounded-full bg-scandi-accent animate-pulse [animation-delay:300ms]" />
+          <span className="w-1 h-1 rounded-full bg-slate-400 animate-pulse [animation-delay:0ms]" />
+          <span className="w-1 h-1 rounded-full bg-slate-400 animate-pulse [animation-delay:150ms]" />
+          <span className="w-1 h-1 rounded-full bg-slate-400 animate-pulse [animation-delay:300ms]" />
         </span>
-        <span className="text-[10px] uppercase tracking-[0.08em] text-scandi-accent">
+        <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">
           {text}…
         </span>
       </div>

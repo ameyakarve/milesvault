@@ -208,7 +208,7 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
   const shell = active
     ? 'h-[52px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] flex items-center px-3 gap-3 transition-colors relative border-b border-scandi-rule w-full z-10'
     : 'h-[52px] bg-transparent hover:bg-white flex items-center px-3 gap-3 relative transition-colors border-b border-scandi-rule w-full'
-  const dayBg = active ? 'bg-navy-50 text-navy-700' : 'bg-white text-navy-600'
+  const dayBg = active ? 'bg-scandi-accent text-white' : 'bg-white text-navy-600'
 
   return (
     <div className={shell}>
