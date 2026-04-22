@@ -37,13 +37,15 @@ export function LedgerEditor({
     cursorCbRef.current = onCursorChange
   })
 
-  const cursorExtension = useMemo(
-    () =>
+  const extensions = useMemo(
+    () => [
+      ...scandiBeancountExtensions,
       EditorView.updateListener.of((u) => {
         const cb = cursorCbRef.current
         if (!cb) return
         if (u.selectionSet || u.docChanged) cb(u.state.selection.main.head)
       }),
+    ],
     [],
   )
 
@@ -77,7 +79,7 @@ export function LedgerEditor({
       onCreateEditor={(view) => {
         viewRef.current = view
       }}
-      extensions={[...scandiBeancountExtensions, cursorExtension]}
+      extensions={extensions}
       basicSetup={{
         lineNumbers: true,
         highlightActiveLine: false,
