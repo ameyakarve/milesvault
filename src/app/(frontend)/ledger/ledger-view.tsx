@@ -143,20 +143,25 @@ function PaginationStrip({
   totalPages,
   onPage,
   locked = false,
+  lockTitle,
 }: {
   page: number
   totalPages: number
   onPage: (p: number) => void
   locked?: boolean
+  lockTitle?: string
 }) {
   const prevDisabled = locked || page <= 1
   const nextDisabled = locked || page >= totalPages
+  const prevTitle = locked ? lockTitle : page <= 1 ? undefined : 'previous page'
+  const nextTitle = locked ? lockTitle : page >= totalPages ? undefined : 'next page'
   return (
     <div className="h-[32px] bg-[#F1F5F9] border-t border-b border-[#E2E8F0] flex items-center shrink-0 w-full relative">
       <div className="flex-1 flex items-center justify-center gap-2">
         <button
           type="button"
           aria-label="previous page"
+          title={prevTitle}
           disabled={prevDisabled}
           onClick={() => onPage(page - 1)}
           className={
@@ -173,6 +178,7 @@ function PaginationStrip({
         <button
           type="button"
           aria-label="next page"
+          title={nextTitle}
           disabled={nextDisabled}
           onClick={() => onPage(page + 1)}
           className={
@@ -314,6 +320,14 @@ export function LedgerView({ email }: { email: string }) {
   const saveEnabled =
     bufferState.kind === 'pending' ||
     (bufferState.kind === 'staged' && bufferState.validated)
+  const pageLocked = locked || dirty
+  const pageLockTitle = saving
+    ? 'paging disabled (saving)'
+    : aiBusy
+      ? 'paging disabled (assistant working)'
+      : dirty
+        ? 'save or revert first'
+        : undefined
 
   return (
     <div className="w-screen h-screen flex flex-col bg-white text-navy-700 overflow-hidden font-sans">
@@ -381,7 +395,13 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </div>
 
-      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} locked={locked} />
+      <PaginationStrip
+        page={page}
+        totalPages={totalPages}
+        onPage={setPage}
+        locked={pageLocked}
+        lockTitle={pageLockTitle}
+      />
 
       <main className="flex-1 flex overflow-hidden min-h-0">
         <div className="flex-[3] flex flex-col min-w-0 border-r border-slate-200">
@@ -446,7 +466,13 @@ export function LedgerView({ email }: { email: string }) {
         </section>
       </main>
 
-      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} locked={locked} />
+      <PaginationStrip
+        page={page}
+        totalPages={totalPages}
+        onPage={setPage}
+        locked={pageLocked}
+        lockTitle={pageLockTitle}
+      />
     </div>
   )
 }
