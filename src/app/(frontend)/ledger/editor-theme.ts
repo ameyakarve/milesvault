@@ -50,7 +50,7 @@ export const scandiEditorTheme = EditorView.theme(
       caretColor: NAVY_600,
       color: NAVY_600,
     },
-    '.cm-line': { padding: '0 12px' },
+    '.cm-line, .cm-deletedChunk': { padding: '0 12px' },
     '.cm-txn-divider': { borderTop: `1px solid ${SLATE_100}` },
     '.cm-gutters': {
       backgroundColor: '#ffffff',
@@ -73,7 +73,20 @@ export const scandiEditorTheme = EditorView.theme(
     '&.cm-merge-b .cm-changedText, .cm-inlineChangedText': {
       background: 'rgba(16, 185, 129, 0.18)',
     },
-    '.cm-deletedChunk': { paddingLeft: '0' },
+    '.cm-changeGutter': { width: '14px' },
+    '.cm-changedLineGutter, .cm-deletedLineGutter': {
+      background: 'transparent',
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    '.cm-changedLineGutter': {
+      color: '#059669',
+      '&::before': { content: '"+"' },
+    },
+    '.cm-deletedLineGutter': {
+      color: '#DC2626',
+      '&::before': { content: '"-"' },
+    },
   },
   { dark: false },
 )
