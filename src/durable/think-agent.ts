@@ -282,6 +282,22 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
       `[think] _runInferenceLoop override ACTIVE; stopWhen=[stepCountIs(${finalMaxSteps}), hasToolCall('reply')] tools=${Object.keys(finalTools).join(',')} continuation=${input.continuation}`,
     )
 
+    // `parallel_tool_calls: false` is passed through verbatim by
+    // `@ai-sdk/openai-compatible` via `providerOptions[<providerName>]` —
+    // see openai-compatible-chat-language-model.ts spread logic. vLLM ≥ the
+    // Nov-2025 PR trims multi-tool responses to a single call per step,
+    // which serializes Kimi's propose + reply into two distinct steps and
+    // eliminates the client-side tool-result race that drove the observed
+    // auto-continuation loop. The provider-name key must match the `name`
+    // passed to `createOpenAICompatible` in `nim-provider.ts`.
+    const mergedProviderOptions = {
+      ...(config.providerOptions ?? {}),
+      'cf-ai-gateway-nim': {
+        ...(config.providerOptions?.['cf-ai-gateway-nim'] ?? {}),
+        parallel_tool_calls: false,
+      },
+    }
+
     const result = streamText({
       model: finalModel,
       system: finalSystem,
@@ -292,7 +308,7 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
       // THE ONLY DIVERGENCE FROM UPSTREAM: add hasToolCall('reply') so a
       // single reply call ends the turn. See header comment.
       stopWhen: [stepCountIs(finalMaxSteps), hasToolCall('reply')],
-      providerOptions: config.providerOptions,
+      providerOptions: mergedProviderOptions,
       abortSignal: input.signal,
       onChunk: async (event) => {
         await self.onChunk(event)
@@ -349,6 +365,16 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
   // stops the *current* streamText; it cannot prevent a brand-new loop that
   // gets scheduled from the tool-result handler. So we also override this
   // handler to skip the scheduling step specifically for `reply`.
+  //
+  // PRIMARY DEFENSE IS ELSEWHERE (`parallel_tool_calls: false`)
+  // ----------------------------------------------------------
+  // This override is now belt-and-suspenders. The real fix for the loop is
+  // `parallel_tool_calls: false` passed via providerOptions on the streamText
+  // call — that forces vLLM to trim to a single tool call per step, which
+  // means `propose` and `reply` land in separate steps and `stopWhen`
+  // terminates the turn cleanly at reply. This override remains for the case
+  // where a (theoretically still-possible) single-step `reply` result comes
+  // back with autoContinue=true.
   //
   // UPSTREAM FIX WE'RE WAITING ON
   // -----------------------------
