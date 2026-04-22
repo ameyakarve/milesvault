@@ -9,6 +9,7 @@ const buildId =
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   serverExternalPackages: ['jose', 'pg-cloudflare'],
+  productionBrowserSourceMaps: process.env.CLOUDFLARE_ENV === 'staging',
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,
   },
