@@ -18,7 +18,7 @@ export const scandiHighlight = HighlightStyle.define([
   { tag: t.lineComment, color: SLATE_400, fontStyle: 'italic' },
   { tag: t.string, color: NAVY_700 },
   { tag: t.number, color: NAVY_700, fontWeight: '600' },
-  { tag: t.literal, color: SKY_700 },
+  { tag: t.literal, color: SKY_700, fontWeight: '700' },
   { tag: t.bool, color: NAVY_600 },
   { tag: t.variableName, color: SLATE_600 },
   { tag: t.unit, color: SLATE_500 },
@@ -36,7 +36,7 @@ export const scandiEditorTheme = EditorView.theme(
   {
     '&': {
       height: '100%',
-      fontSize: '11px',
+      fontSize: '13px',
       backgroundColor: '#ffffff',
     },
     '.cm-scroller': {
@@ -58,7 +58,7 @@ export const scandiEditorTheme = EditorView.theme(
       border: 'none',
       borderRight: `1px solid ${SLATE_100}`,
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-      fontSize: '10px',
+      fontSize: '11px',
     },
     '.cm-lineNumbers .cm-gutterElement': { padding: '0 4px 0 8px' },
     '.cm-activeLine:not(.cm-changedLine):not(.cm-deletedLine)': {

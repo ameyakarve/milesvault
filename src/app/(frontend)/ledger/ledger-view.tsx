@@ -156,7 +156,7 @@ function PaginationStrip({
   const prevTitle = locked ? lockTitle : page <= 1 ? undefined : 'previous page'
   const nextTitle = locked ? lockTitle : page >= totalPages ? undefined : 'next page'
   return (
-    <div className="h-[32px] bg-[#D6E0E9] border-t border-b border-[#B9C6D2] flex items-center shrink-0 w-full relative">
+    <div className="h-[32px] bg-slate-200 border-t-2 border-b border-t-[#9BAFC2] border-b-[#CBD5E1] flex items-center shrink-0 w-full relative">
       <div className="flex-1 flex items-center justify-center gap-2">
         <button
           type="button"
@@ -350,7 +350,7 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </header>
 
-      <div className="h-[40px] px-4 flex justify-between items-center bg-slate-200 border-b border-slate-300 shrink-0 z-10">
+      <div className="h-[40px] px-4 flex justify-between items-center bg-slate-200 border-b-2 border-[#9BAFC2] shrink-0 z-10">
         <div className="flex items-center">
           <ChromeIconButton icon={Plus} title="new entry" />
           <ChromeIconButton
