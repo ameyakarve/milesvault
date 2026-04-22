@@ -72,7 +72,6 @@ export type CardPreset = {
 
 export type CardRow = CardPreset & {
   payee: string
-  narrationText: string
   dateLabel: string
   subtext: string | null
 }
@@ -98,7 +97,6 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const payee = txn.payee?.trim() ?? ''
   const narration = txn.narration?.trim() ?? ''
   const title = payee || narration || 'Transaction'
-  const narrationText = payee && narration && narration !== payee ? narration : ''
   const glyph = iconForTxn(txn.postings.map((p) => p.account))
 
   const cashbackMatch = matchExpensesCashbacksPayment(txn)
@@ -124,7 +122,6 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
     ...preset,
     glyph,
     payee: title,
-    narrationText,
     dateLabel: formatDateLabel(txn.date),
     subtext,
     amount,
@@ -251,7 +248,6 @@ function fallbackRow(raw: string, preset: CardPreset): CardRow {
   return {
     ...preset,
     payee,
-    narrationText: '',
     dateLabel,
     subtext: null,
   }
@@ -286,18 +282,10 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
         <div className="text-navy-700 text-[15px] font-semibold truncate leading-tight">
           {row.payee}
         </div>
-        <div className="flex items-center gap-1.5 min-w-0 leading-tight">
+        <div className="flex items-center min-w-0 leading-tight">
           <span className="text-[12px] font-mono font-semibold uppercase tracking-[0.06em] text-navy-700 truncate">
             {row.dateLabel}
           </span>
-          {row.narrationText ? (
-            <>
-              <span className="text-slate-300 shrink-0">·</span>
-              <span className="text-[11px] italic text-slate-500 truncate">
-                {row.narrationText}
-              </span>
-            </>
-          ) : null}
         </div>
         <div className="flex items-center gap-1.5 text-[12px] text-slate-600 min-w-0 leading-tight">
           <CreditCard size={12} strokeWidth={1.75} className="text-slate-500 shrink-0" />
