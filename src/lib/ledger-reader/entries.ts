@@ -61,8 +61,3 @@ export function buildEntriesFromBuffer(
   return entries
 }
 
-export function renderedIdsFromEntries(entries: ReadonlyArray<MapEntry>): Set<number> {
-  const set = new Set<number>()
-  for (const e of entries) set.add(e.id)
-  return set
-}

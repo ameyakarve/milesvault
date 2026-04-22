@@ -487,7 +487,6 @@ export function LedgerView({ email }: { email: string }) {
             email={email}
             buffer={buffer}
             snapshots={snapshots}
-            bufferState={bufferState}
             saving={saving}
             onAiBusyChange={setAiBusy}
             onPropose={(ops: readonly Op[]) => {
