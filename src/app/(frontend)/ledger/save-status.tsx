@@ -30,10 +30,10 @@ export function describeSaveStatus(input: {
       : isDirty
         ? 'bg-red-50 text-red-700'
         : isStagedUnvalidated
-          ? 'bg-amber-100 text-amber-800'
+          ? 'bg-red-50 text-red-700'
           : isStaged
             ? 'bg-sky-50 text-sky-700'
-            : 'bg-emerald-50 text-emerald-700'
+            : 'bg-slate-100 text-navy-700'
   const dotColor = isError
     ? 'text-red-600'
     : isBusy
@@ -41,10 +41,10 @@ export function describeSaveStatus(input: {
       : isDirty
         ? 'text-red-600'
         : isStagedUnvalidated
-          ? 'text-amber-700'
+          ? 'text-red-600'
           : isStaged
             ? 'text-sky-700'
-            : 'text-emerald-700'
+            : 'text-navy-700'
   const label =
     saveStatus === 'saving'
       ? 'saving…'
@@ -109,7 +109,7 @@ export function SaveButton({
   const isErr = saveStatus === 'conflict' || saveStatus === 'error'
   const tone = isErr
     ? 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
-    : 'border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+    : 'border-slate-300 bg-slate-100 text-navy-700 hover:bg-slate-200'
   return (
     <button
       type="button"

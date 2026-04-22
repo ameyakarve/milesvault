@@ -206,13 +206,13 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
   const Glyph = row.glyph
   const palette = COLOR_CLASSES[row.color]
   const shell = active
-    ? 'h-[52px] bg-slate-100 flex items-center px-3 gap-3 transition-colors relative border-b border-slate-100 w-full'
-    : 'h-[52px] bg-white hover:bg-slate-50 flex items-center px-3 gap-3 relative transition-colors border-b border-slate-100 w-full'
+    ? 'h-[52px] bg-white flex items-center px-3 gap-3 transition-colors relative border-b border-slate-200 w-full'
+    : 'h-[52px] bg-transparent hover:bg-white flex items-center px-3 gap-3 relative transition-colors border-b border-slate-200 w-full'
   const dayBg = active ? 'bg-navy-50 text-navy-700' : 'bg-white text-navy-600'
 
   return (
     <div className={shell}>
-      {active && <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-navy-600" />}
+      {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-navy-700" />}
       <div className="h-10 w-10 border border-slate-200 flex flex-col shrink-0 relative overflow-hidden bg-white">
         <div
           className={`h-[14px] ${palette.monthBg} ${palette.monthText} text-[9px] font-mono flex items-center justify-center uppercase leading-none border-b border-slate-200`}
@@ -226,14 +226,14 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
         </div>
       </div>
       <div
-        className={`flex-1 min-w-[200px] flex flex-col justify-center ${active ? 'pl-[2px]' : ''}`}
+        className={`flex-1 min-w-[200px] flex flex-col justify-center ${active ? 'pl-[3px]' : ''}`}
       >
         <div className="flex items-center gap-1">
           <Glyph size={14} strokeWidth={1.5} className={palette.icon} />
           <span className="text-navy-600 text-[13px] font-medium truncate ml-1">{row.payee}</span>
           <span className="text-slate-400 text-[13px] italic truncate ml-1">{row.narration}</span>
           {row.pill && (
-            <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] uppercase font-mono px-1.5 py-0.5 flex items-center gap-1 leading-none ml-auto">
+            <span className="bg-white text-slate-600 border border-slate-200 text-[9px] uppercase font-mono px-1.5 py-0.5 flex items-center gap-1 leading-none ml-auto">
               {row.pill.label}
             </span>
           )}
