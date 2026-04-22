@@ -338,12 +338,12 @@ export function LedgerView({ email }: { email: string }) {
       <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} />
 
       <main className="flex-1 flex overflow-hidden min-h-0">
-        <div className="flex-[2] flex flex-col min-w-0 border-r border-slate-200">
+        <div className="flex-[3] flex flex-col min-w-0 border-r border-slate-200">
           <div className="flex w-full shrink-0">
-            <div className="flex-1 h-[28px] px-3 flex items-center border-b border-slate-200 border-r bg-white shrink-0">
+            <div className="flex-[1] h-[28px] px-3 flex items-center border-b border-slate-200 border-r bg-white shrink-0">
               <PaneLabel>LEDGER</PaneLabel>
             </div>
-            <div className="flex-1 h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
+            <div className="flex-[2] h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
               <PaneLabel>EDITOR</PaneLabel>
               <button
                 type="button"
@@ -355,7 +355,7 @@ export function LedgerView({ email }: { email: string }) {
             </div>
           </div>
           <div className="flex flex-1 min-h-0">
-            <section className="flex-1 min-w-0 bg-white flex flex-col relative overflow-hidden border-r border-slate-200">
+            <section className="flex-[1] min-w-0 bg-white flex flex-col relative overflow-hidden border-r border-slate-200">
               <CardsList
                 status={state.status}
                 errorMsg={state.errorMsg}
@@ -366,7 +366,7 @@ export function LedgerView({ email }: { email: string }) {
                 <Wallet size={180} strokeWidth={1.5} />
               </div>
             </section>
-            <section className="flex-1 min-w-0 bg-white flex flex-col overflow-hidden relative">
+            <section className="flex-[2] min-w-0 bg-white flex flex-col overflow-hidden relative">
               <TextPane
                 status={state.status}
                 errorMsg={state.errorMsg}
