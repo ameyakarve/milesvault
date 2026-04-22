@@ -206,13 +206,13 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
   const Glyph = row.glyph
   const palette = COLOR_CLASSES[row.color]
   const shell = active
-    ? 'h-[52px] bg-white flex items-center px-3 gap-3 transition-colors relative border-b border-slate-200 w-full'
-    : 'h-[52px] bg-transparent hover:bg-white flex items-center px-3 gap-3 relative transition-colors border-b border-slate-200 w-full'
+    ? 'h-[52px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] flex items-center px-3 gap-3 transition-colors relative border-b border-scandi-rule w-full z-10'
+    : 'h-[52px] bg-transparent hover:bg-white flex items-center px-3 gap-3 relative transition-colors border-b border-scandi-rule w-full'
   const dayBg = active ? 'bg-navy-50 text-navy-700' : 'bg-white text-navy-600'
 
   return (
     <div className={shell}>
-      {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#2F5D7A]" />}
+      {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-scandi-accent" />}
       <div className="h-10 w-10 border border-slate-200 flex flex-col shrink-0 relative overflow-hidden bg-white">
         <div
           className={`h-[14px] ${palette.monthBg} ${palette.monthText} text-[9px] font-mono flex items-center justify-center uppercase leading-none border-b border-slate-200`}
