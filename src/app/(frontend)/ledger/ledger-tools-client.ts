@@ -114,8 +114,9 @@ const schemaPropose: JSONSchema7 = {
         ],
       },
     },
+    message: { type: 'string', minLength: 1 },
   },
-  required: ['ops'],
+  required: ['ops', 'message'],
   additionalProperties: false,
 }
 
@@ -124,17 +125,12 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
   return {
     reply: {
       description:
-        'Send a message to the user. Use for ALL user-facing text — confirmations, clarifying questions, one-line summaries after staging. Do NOT emit free-form assistant text; every reply must go through this tool. May be called in the same step as propose to say something about what you just staged. After this call returns, stop — do not call more tools this turn.',
+        'Terminal. Send a message to the user WITHOUT staging anything. Use for clarifying questions (e.g. "which card did you pay with?"), info-only responses about the ledger, or error explanations. If you are staging a transaction, call `propose` instead — propose takes its own `message` and is also terminal. Never emit free-form assistant text; all user-facing text goes through `reply` or `propose.message`.',
       parameters: schemaReply,
       execute: async (input) => {
         const { message } = (input ?? {}) as { message: string }
         console.log(`[reply] executed; msgLen=${message?.length ?? 0}`)
-        return {
-          ok: true,
-          done: true,
-          note: 'Message delivered. Turn complete — do NOT call any more tools; wait for the next user message.',
-          message,
-        }
+        return { ok: true, message }
       },
     },
     ledger_search: {
@@ -169,12 +165,17 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
     },
     propose: {
       description:
-        "Stage a batch of create/update/delete ops against the editor buffer. All-or-nothing: any validation failure rejects the whole batch and nothing is staged. Call propose AT MOST ONCE per user turn — pack every change the user asked for into one call's `ops` array. Ops apply in order. For update/delete, the id MUST already be present in the buffer (positive = saved row currently on this page; negative = unsaved create/dirty). If the user asks to edit a row on another page, ask them to page to it first.",
+        "Terminal. Stage a batch of create/update/delete ops against the editor buffer AND send a one-line summary to the user in a single call. All-or-nothing: any validation failure rejects the whole batch and nothing is staged. Call propose AT MOST ONCE per user turn — pack every change the user asked for into one call's `ops` array, and put your user-facing summary in `message`. Ops apply in order. For update/delete, the id MUST already be present in the buffer (positive = saved row currently on this page; negative = unsaved create/dirty). If the user asks to edit a row on another page, call `reply` to ask them to page to it first.",
       parameters: schemaPropose,
       execute: async (input) => {
-        const { ops } = (input ?? {}) as { ops: readonly Op[] }
+        const { ops, message } = (input ?? {}) as {
+          ops: readonly Op[]
+          message: string
+        }
         const opKinds = ops.map((o) => o.op).join(',')
-        console.log(`[propose] invoked n=${ops.length} ops=[${opKinds}]`)
+        console.log(
+          `[propose] invoked n=${ops.length} ops=[${opKinds}] msgLen=${message?.length ?? 0}`,
+        )
         const errors: { index: number; errors: ValidationError[] }[] = []
         for (let i = 0; i < ops.length; i++) {
           const op = ops[i]
@@ -195,11 +196,7 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
           return result
         }
         console.log(`[propose] staged n=${ops.length}`)
-        return {
-          ...result,
-          done: true,
-          note: 'Ops staged. Call `reply` once to confirm, then stop — do NOT call propose or any other tool again this turn.',
-        }
+        return { ...result, message }
       },
     },
   }
