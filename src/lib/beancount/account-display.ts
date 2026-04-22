@@ -8,10 +8,9 @@ export function accountDisplayName(path: string): string {
   const rest = TOP_LEVELS.has(parts[0]) ? parts.slice(1) : parts
 
   if (rest.length > 0 && CREDIT_CARD_GROUPS.has(rest[0])) {
-    const [, bank, card] = rest
-    if (bank && card) return `${bank} ${card}`
-    if (bank) return bank
-    return 'Card'
+    const [, bank, card, numberId] = rest
+    const base = bank && card ? `${bank} ${card}` : bank ? bank : 'Card'
+    return numberId ? `${base} · ${numberId}` : base
   }
 
   return rest.join(':')
@@ -23,9 +22,9 @@ export function paymentMethodDisplay(path: string): string | null {
   const [root, group, a, b, extra] = parts
 
   if (root === 'Liabilities' && CREDIT_CARD_GROUPS.has(group)) {
-    if (a && b) return `${a} ${b}`
-    if (a) return a
-    return null
+    const base = a && b ? `${a} ${b}` : a ? a : null
+    if (!base) return null
+    return extra ? `${base} · ${extra}` : base
   }
 
   if (root === 'Assets') {
