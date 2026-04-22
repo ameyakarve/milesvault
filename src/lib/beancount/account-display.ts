@@ -9,8 +9,8 @@ export function accountDisplayName(path: string): string {
 
   if (rest.length > 0 && CREDIT_CARD_GROUPS.has(rest[0])) {
     const [, bank, card] = rest
-    if (bank && card) return `${bank} ${card} Card`
-    if (bank) return `${bank} Card`
+    if (bank && card) return `${bank} ${card}`
+    if (bank) return bank
     return 'Card'
   }
 
@@ -23,9 +23,8 @@ export function paymentMethodDisplay(path: string): string | null {
   const [root, group, a, b, extra] = parts
 
   if (root === 'Liabilities' && CREDIT_CARD_GROUPS.has(group)) {
-    if (extra) return null
-    if (a && b) return `${a} ${b} Card`
-    if (a) return `${a} Card`
+    if (a && b) return `${a} ${b}`
+    if (a) return a
     return null
   }
 

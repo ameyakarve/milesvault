@@ -120,11 +120,28 @@ export function iconForAccount(account: string): LucideIcon | null {
 }
 
 export function iconForTxn(accounts: readonly string[]): LucideIcon {
-  const expense = accounts.find((a) => a === 'Expenses' || a.startsWith('Expenses:'))
-  if (expense) return iconForAccount(expense) ?? DEFAULT_ICON
+  const expenses = accounts.filter((a) => a === 'Expenses' || a.startsWith('Expenses:'))
+  if (expenses.length > 0) {
+    const prefix = longestCommonAccountPrefix(expenses)
+    return iconForAccount(prefix) ?? DEFAULT_ICON
+  }
   const onlyTransfers = accounts.every(
     (a) => a.startsWith('Assets:') || a.startsWith('Liabilities:'),
   )
   if (onlyTransfers && accounts.length >= 2) return TRANSFER_ICON
   return DEFAULT_ICON
+}
+
+function longestCommonAccountPrefix(accounts: readonly string[]): string {
+  if (accounts.length === 0) return ''
+  const first = accounts[0].split(':')
+  let depth = first.length
+  for (let i = 1; i < accounts.length; i++) {
+    const parts = accounts[i].split(':')
+    let j = 0
+    while (j < depth && j < parts.length && first[j] === parts[j]) j++
+    depth = j
+    if (depth === 0) break
+  }
+  return first.slice(0, depth).join(':')
 }
