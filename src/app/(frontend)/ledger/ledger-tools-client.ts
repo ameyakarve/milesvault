@@ -124,11 +124,16 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
   return {
     reply: {
       description:
-        'Send a message to the user. Use for ALL user-facing text — confirmations, clarifying questions, one-line summaries after staging. Do NOT emit free-form assistant text; every reply must go through this tool. May be called in the same step as propose to say something about what you just staged.',
+        'Send a message to the user. Use for ALL user-facing text — confirmations, clarifying questions, one-line summaries after staging. Do NOT emit free-form assistant text; every reply must go through this tool. May be called in the same step as propose to say something about what you just staged. After this call returns, stop — do not call more tools this turn.',
       parameters: schemaReply,
       execute: async (input) => {
         const { message } = (input ?? {}) as { message: string }
-        return { ok: true, message }
+        return {
+          ok: true,
+          done: true,
+          note: 'Message delivered. Turn complete — do NOT call any more tools; wait for the next user message.',
+          message,
+        }
       },
     },
     ledger_search: {
@@ -176,7 +181,13 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
           }
         }
         if (errors.length > 0) return { ok: false, errors }
-        return propose(ops)
+        const result = propose(ops)
+        if (!result.ok) return result
+        return {
+          ...result,
+          done: true,
+          note: 'Ops staged. Call `reply` once to confirm, then stop — do NOT call propose or any other tool again this turn.',
+        }
       },
     },
   }
