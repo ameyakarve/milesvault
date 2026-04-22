@@ -286,14 +286,18 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
         <div className="text-navy-700 text-[15px] font-semibold truncate leading-tight">
           {row.payee}
         </div>
-        <div className="flex items-center gap-1.5 text-[12px] text-slate-500 min-w-0 leading-tight">
+        <div className="flex items-center gap-1.5 min-w-0 leading-tight">
+          <span className="text-[12px] font-mono font-semibold uppercase tracking-[0.06em] text-navy-700 truncate">
+            {row.dateLabel}
+          </span>
           {row.narrationText ? (
             <>
-              <span className="italic truncate">{row.narrationText}</span>
               <span className="text-slate-300 shrink-0">·</span>
+              <span className="text-[11px] italic text-slate-500 truncate">
+                {row.narrationText}
+              </span>
             </>
           ) : null}
-          <span className="truncate">{row.dateLabel}</span>
         </div>
         <div className="flex items-center gap-1.5 text-[12px] text-slate-600 min-w-0 leading-tight">
           <CreditCard size={12} strokeWidth={1.75} className="text-slate-500 shrink-0" />
