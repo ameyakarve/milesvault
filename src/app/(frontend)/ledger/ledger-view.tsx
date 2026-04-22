@@ -20,7 +20,6 @@ import { splitEntries } from '@/lib/beancount/extract'
 import { format } from '@/lib/beancount/format'
 import { composeBuffer } from './editor'
 import { ChromeIconButton, PaneLabel } from './ledger-chrome'
-import { DiffPane } from './ledger-diff-pane'
 import { CardsList, type Entry, type FetchStatus, TextPane } from './ledger-panes'
 import { applyProposal, type Proposal } from './propose'
 import { SavePill } from './save-status'
@@ -381,13 +380,6 @@ export function LedgerView({ email }: { email: string }) {
         </div>
 
         <section className="flex-1 min-w-0 flex flex-col">
-          <div className="h-[280px] bg-white flex flex-col overflow-hidden shrink-0 border-b border-slate-200">
-            <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0">
-              <PaneLabel>CHANGES</PaneLabel>
-            </div>
-            <DiffPane baseline={baseline} current={buffer} />
-          </div>
-
           <ThinkPane
             email={email}
             buffer={buffer}

@@ -52,20 +52,6 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-line': { padding: '0 12px' },
     '.cm-txn-divider': { borderTop: `1px solid ${SLATE_100}` },
-    '.cm-txn-created': {
-      backgroundColor: 'rgba(236, 253, 245, 0.85)',
-      boxShadow: 'inset 2px 0 0 #059669',
-    },
-    '.cm-txn-updated': {
-      backgroundColor: 'rgba(240, 249, 255, 0.85)',
-      boxShadow: 'inset 2px 0 0 #0284C7',
-    },
-    '.cm-word-added': {
-      backgroundColor: 'rgba(125, 211, 252, 0.75)',
-      color: NAVY_700,
-      padding: '0 2px',
-      borderRadius: '2px',
-    },
     '.cm-gutters': {
       backgroundColor: '#ffffff',
       color: SLATE_400,
