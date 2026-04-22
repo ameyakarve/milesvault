@@ -156,7 +156,7 @@ function PaginationStrip({
   const prevTitle = locked ? lockTitle : page <= 1 ? undefined : 'previous page'
   const nextTitle = locked ? lockTitle : page >= totalPages ? undefined : 'next page'
   return (
-    <div className="h-[32px] bg-slate-200 border-t-2 border-b border-t-[#9BAFC2] border-b-[#CBD5E1] flex items-center shrink-0 w-full relative">
+    <div className="h-[32px] bg-slate-200 border-t border-t-[#9BAFC2] flex items-center shrink-0 w-full relative">
       <div className="flex-1 flex items-center justify-center gap-2">
         <button
           type="button"
@@ -350,7 +350,7 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </header>
 
-      <div className="h-[40px] px-4 flex justify-between items-center bg-slate-200 border-b-2 border-[#9BAFC2] shrink-0 z-10">
+      <div className="h-[40px] px-4 flex justify-between items-center bg-slate-200 border-b border-[#9BAFC2] shrink-0 z-10">
         <div className="flex items-center">
           <ChromeIconButton icon={Plus} title="new entry" />
           <ChromeIconButton
@@ -429,10 +429,10 @@ export function LedgerView({ email }: { email: string }) {
       </div>
 
       <main className="flex-1 grid grid-cols-[1fr_2fr_1fr] grid-rows-[28px_minmax(0,1fr)] overflow-hidden min-h-0">
-        <div className="h-[28px] px-3 flex items-center border-b border-slate-300 border-r border-r-slate-300 bg-[#D9E3EC] min-w-0">
+        <div className="h-[28px] px-3 flex items-center border-b border-b-[#9BAFC2] border-r border-r-[#9BAFC2] bg-[#D9E3EC] min-w-0">
           <PaneLabel>LEDGER</PaneLabel>
         </div>
-        <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-300 border-r border-r-slate-300 bg-[#D9E3EC] min-w-0">
+        <div className="h-[28px] px-3 flex items-center justify-between border-b border-b-[#9BAFC2] border-r border-r-[#9BAFC2] bg-[#D9E3EC] min-w-0">
           <PaneLabel>EDITOR</PaneLabel>
           <button
             type="button"
@@ -462,7 +462,7 @@ export function LedgerView({ email }: { email: string }) {
             }}
           />
         </section>
-        <section className="bg-[#D9E3EC] flex flex-col relative overflow-hidden border-r border-slate-300 min-w-0 min-h-0 [scrollbar-gutter:stable]">
+        <section className="bg-[#D9E3EC] flex flex-col relative overflow-hidden border-r border-r-[#9BAFC2] min-w-0 min-h-0 [scrollbar-gutter:stable]">
           <CardsList
             status={state.status}
             errorMsg={state.errorMsg}
@@ -473,7 +473,7 @@ export function LedgerView({ email }: { email: string }) {
             <Wallet size={180} strokeWidth={1.5} />
           </div>
         </section>
-        <section className="bg-white flex flex-col overflow-hidden relative border-r border-slate-300 min-w-0 min-h-0">
+        <section className="bg-white flex flex-col overflow-hidden relative border-r border-r-[#9BAFC2] min-w-0 min-h-0">
           <TextPane
             status={state.status}
             errorMsg={state.errorMsg}
