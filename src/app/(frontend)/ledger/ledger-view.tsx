@@ -18,6 +18,7 @@ import { parse as parseBean } from 'beancount'
 import type { Transaction } from '@/durable/ledger-types'
 import { splitEntries } from '@/lib/beancount/extract'
 import { format } from '@/lib/beancount/format'
+import { type BufferState, evaluateBuffer } from './buffer-state'
 import { composeBuffer } from './editor'
 import { ChromeIconButton, PaneLabel } from './ledger-chrome'
 import { CardsList, type Entry, type FetchStatus, TextPane } from './ledger-panes'
@@ -141,13 +142,15 @@ function PaginationStrip({
   page,
   totalPages,
   onPage,
+  locked = false,
 }: {
   page: number
   totalPages: number
   onPage: (p: number) => void
+  locked?: boolean
 }) {
-  const prevDisabled = page <= 1
-  const nextDisabled = page >= totalPages
+  const prevDisabled = locked || page <= 1
+  const nextDisabled = locked || page >= totalPages
   return (
     <div className="h-[32px] bg-[#F1F5F9] border-t border-b border-[#E2E8F0] flex items-center shrink-0 w-full relative">
       <div className="flex-1 flex items-center justify-center gap-2">
@@ -211,6 +214,7 @@ export function LedgerView({ email }: { email: string }) {
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
+  const [aiBusy, setAiBusy] = useState(false)
 
   async function onSave() {
     if (saveStatus === 'saving') return
@@ -287,7 +291,12 @@ export function LedgerView({ email }: { email: string }) {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages])
-  const dirty = state.status === 'idle' && buffer !== baseline
+  const bufferState: BufferState = useMemo(() => {
+    if (state.status !== 'idle') return { kind: 'clean' }
+    return evaluateBuffer(buffer, baseline)
+  }, [buffer, baseline, state.status])
+  const dirty = bufferState.kind !== 'clean'
+  const saveable = bufferState.kind === 'staged' && bufferState.validated
 
   return (
     <div className="w-screen h-screen flex flex-col bg-white text-navy-700 overflow-hidden font-sans">
@@ -303,18 +312,30 @@ export function LedgerView({ email }: { email: string }) {
           <ChromeIconButton icon={Plus} title="new entry" />
           <ChromeIconButton
             icon={Save}
-            title="save"
+            title={
+              aiBusy
+                ? 'save (assistant working)'
+                : bufferState.kind === 'dirty'
+                  ? 'save (fix parse errors first)'
+                  : bufferState.kind === 'staged' && !bufferState.validated
+                    ? 'save (fix validation errors first)'
+                    : 'save'
+            }
             dirty={dirty}
-            disabled={!dirty || saveStatus === 'saving'}
+            disabled={!saveable || saveStatus === 'saving' || aiBusy}
             onClick={onSave}
           />
           <ChromeIconButton
             icon={RotateCcw}
-            title="revert"
-            disabled={!dirty || saveStatus === 'saving'}
+            title={aiBusy ? 'revert (assistant working)' : 'revert'}
+            disabled={!dirty || saveStatus === 'saving' || aiBusy}
             onClick={onRevert}
           />
-          <SavePill saveStatus={saveStatus} dirty={dirty} errorMsg={saveErrorMsg} />
+          <SavePill
+            saveStatus={saveStatus}
+            bufferState={bufferState}
+            errorMsg={saveErrorMsg}
+          />
           <div className="h-[16px] w-px bg-slate-200 mx-3" />
           <div className="flex items-center gap-1">
             <ChromeIconButton icon={Filter} title="filter" />
@@ -335,7 +356,7 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </div>
 
-      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} />
+      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} locked={aiBusy} />
 
       <main className="flex-1 flex overflow-hidden min-h-0">
         <div className="flex-[3] flex flex-col min-w-0 border-r border-slate-200">
@@ -374,6 +395,7 @@ export function LedgerView({ email }: { email: string }) {
                 baseline={baseline}
                 onBufferChange={setBuffer}
                 onCursorChange={setCursorPos}
+                readOnly={aiBusy}
               />
             </section>
           </div>
@@ -384,9 +406,8 @@ export function LedgerView({ email }: { email: string }) {
             email={email}
             buffer={buffer}
             snapshots={snapshots}
-            dirty={dirty}
-            saveStatus={saveStatus}
-            onSave={onSave}
+            bufferState={bufferState}
+            onAiBusyChange={setAiBusy}
             onPropose={(ops: readonly Op[]) => {
               const res = applyProposal(buffer, snapshots, ops)
               if (res.ok === true) {
@@ -399,7 +420,7 @@ export function LedgerView({ email }: { email: string }) {
         </section>
       </main>
 
-      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} />
+      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} locked={aiBusy} />
     </div>
   )
 }
