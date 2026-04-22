@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -21,6 +21,7 @@ import { format } from '@/lib/beancount/format'
 import { type BufferState, evaluateBuffer } from './buffer-state'
 import { composeBuffer } from './editor'
 import { ChromeIconButton, PaneCap, PaneLabel } from './ledger-chrome'
+import type { LedgerEditorHandle } from './ledger-editor'
 import { CardsList, type Entry, type FetchStatus, TextPane } from './ledger-panes'
 import { applyProposal, type Op } from './propose'
 import { SavePill } from './save-status'
@@ -231,6 +232,8 @@ export function LedgerView({ email }: { email: string }) {
     } catch {}
   }
 
+  const editorRef = useRef<LedgerEditorHandle | null>(null)
+
   async function onSave() {
     if (saveStatus === 'saving') return
     const verdict = evaluateBuffer(buffer, baseline)
@@ -239,7 +242,10 @@ export function LedgerView({ email }: { email: string }) {
       return
     }
     const formatted = format(buffer)
-    if (formatted !== buffer) setBuffer(formatted)
+    if (formatted !== buffer) {
+      editorRef.current?.replaceDoc(formatted)
+      setBuffer(formatted)
+    }
     setSaveStatus('saving')
     setSaveErrorMsg(null)
     const knownIds = snapshots.map((s) => ({
@@ -464,6 +470,7 @@ export function LedgerView({ email }: { email: string }) {
               onBufferChange={setBuffer}
               onCursorChange={setCursorPos}
               readOnly={locked}
+              editorRef={editorRef}
             />
           </div>
         </section>

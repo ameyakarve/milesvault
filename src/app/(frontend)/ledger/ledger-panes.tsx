@@ -13,8 +13,9 @@ import {
   Utensils,
   UtensilsCrossed,
 } from 'lucide-react'
+import type { Ref } from 'react'
 import { EntryCard, type CardPreset } from './ledger-card'
-import { LedgerEditor } from './ledger-editor'
+import { LedgerEditor, type LedgerEditorHandle } from './ledger-editor'
 
 export type FetchStatus = 'loading' | 'idle' | 'error'
 export type Entry = { text: string; snapshotId: number | null }
@@ -174,6 +175,7 @@ export function TextPane({
   onBufferChange,
   onCursorChange,
   readOnly,
+  editorRef,
 }: {
   status: FetchStatus
   errorMsg: string | null
@@ -182,11 +184,13 @@ export function TextPane({
   onBufferChange: (v: string) => void
   onCursorChange: (pos: number) => void
   readOnly?: boolean
+  editorRef?: Ref<LedgerEditorHandle>
 }) {
   if (status !== 'idle') return <PaneStatus status={status} errorMsg={errorMsg} />
   return (
     <div className="flex-1 min-h-0 overflow-hidden">
       <LedgerEditor
+        ref={editorRef}
         className="h-full"
         value={buffer}
         baseline={baseline}
