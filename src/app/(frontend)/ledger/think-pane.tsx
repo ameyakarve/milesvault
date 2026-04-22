@@ -39,7 +39,7 @@ export function ThinkPane(props: ThinkPaneProps) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) {
-    return <div className="flex-1 bg-[#E2EAF0] flex flex-col overflow-hidden" />
+    return <div className="flex-1 bg-[#CCDBE7] flex flex-col overflow-hidden" />
   }
   return <ThinkPaneInner {...props} />
 }
@@ -171,8 +171,8 @@ function ThinkPaneInner({
   }
 
   return (
-    <div className="flex-1 bg-[#E2EAF0] flex flex-col overflow-hidden">
-      <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-300 bg-[#E2EAF0] shrink-0 gap-2">
+    <div className="flex-1 bg-[#CCDBE7] flex flex-col overflow-hidden">
+      <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-300 bg-[#CCDBE7] shrink-0 gap-2">
         <PaneLabel>ASSISTANT</PaneLabel>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] text-slate-500 uppercase tracking-[0.08em]">
@@ -209,7 +209,7 @@ function ThinkPaneInner({
         {busy ? <BusyIndicator label={status} /> : null}
       </div>
 
-      <form onSubmit={onSubmit} className="p-2 border-t border-slate-300 shrink-0 bg-[#E2EAF0] mt-auto">
+      <form onSubmit={onSubmit} className="p-2 border-t border-slate-300 shrink-0 bg-[#CCDBE7] mt-auto">
         <div className="bg-white flex items-center px-2 h-[36px] border border-slate-300 focus-within:border-[#3B6B8C] transition-colors">
           <button
             type="button"

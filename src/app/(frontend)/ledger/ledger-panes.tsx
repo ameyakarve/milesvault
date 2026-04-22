@@ -154,7 +154,7 @@ export function CardsList({
     )
   }
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-[#E8EEF4] pb-0">
+    <div className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-[#D9E3EC] pb-0">
       {entries.map((entry, i) => {
         const preset = PRESETS[i % PRESETS.length]
         const key = entry.snapshotId !== null ? `id-${entry.snapshotId}` : `idx-${i}`
