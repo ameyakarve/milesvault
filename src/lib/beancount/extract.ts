@@ -67,9 +67,9 @@ export function splitEntries(source: string): Entry[] {
   return entries
 }
 
-type Weight = { n: number; ccy: string }
+export type PostingWeight = { n: number; ccy: string }
 
-function postingWeight(p: Posting): Weight | null {
+export function postingWeight(p: Posting): PostingWeight | null {
   if (p.amount == null || !p.currency) return null
   const n = parseFloat(p.amount)
   if (!Number.isFinite(n)) return null
@@ -102,7 +102,7 @@ function checkBalance(
     sums.set(w.ccy, (sums.get(w.ccy) ?? 0) + w.n)
   }
   if (elided > 0) return
-  const unbalanced = [...sums].filter(([, v]) => Math.abs(v) > 1e-9)
+  const unbalanced = [...sums].filter(([, v]) => Math.abs(v) > 0.005)
   if (unbalanced.length > 0) {
     const detail = unbalanced
       .map(([c, v]) => `${c}=${Number.isInteger(v) ? v.toFixed(0) : v.toFixed(2)}`)

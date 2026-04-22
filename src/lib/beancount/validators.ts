@@ -1,29 +1,38 @@
 import type { Diagnostic } from '@codemirror/lint'
+import { parse as parseBean } from 'beancount'
+import { postingWeight } from './extract'
 import type { ParsedTxn } from './parse'
 
 export type ValidateContext = { parsed: readonly ParsedTxn[]; doc: string }
 export type Validator = (ctx: ValidateContext) => Diagnostic[]
 
-const BALANCE_EPSILON = 1e-9
+const BALANCE_EPSILON = 0.005
 
-export const balanceValidator: Validator = ({ parsed }) => {
+export const balanceValidator: Validator = ({ parsed, doc }) => {
   const out: Diagnostic[] = []
   for (const txn of parsed) {
+    const slice = doc.slice(txn.range.from, txn.range.to)
+    let bean
+    try {
+      bean = parseBean(slice).transactions[0]
+    } catch {
+      continue
+    }
+    if (!bean) continue
     const sums = new Map<string, number>()
     let elided = 0
     let skipped = false
-    for (const p of txn.postings) {
+    for (const p of bean.postings) {
       if (p.amount == null) {
         elided += 1
         continue
       }
-      const n = parseNumber(p.amount.numberText)
-      if (n == null) {
+      const w = postingWeight(p)
+      if (w == null) {
         skipped = true
         break
       }
-      const ccy = p.amount.currency ?? ''
-      sums.set(ccy, (sums.get(ccy) ?? 0) + n)
+      sums.set(w.ccy, (sums.get(w.ccy) ?? 0) + w.n)
     }
     if (skipped || elided > 0) continue
     const unbalanced = [...sums].filter(([, v]) => Math.abs(v) > BALANCE_EPSILON)
