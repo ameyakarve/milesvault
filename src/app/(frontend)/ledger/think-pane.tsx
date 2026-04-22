@@ -189,9 +189,10 @@ function ThinkPaneInner({
           </span>
           <button
             type="button"
-            disabled={chatLocked}
+            disabled={saving}
             onClick={() => {
               proposeFiredRef.current = false
+              setBusy(false)
               clearHistory()
             }}
             className="font-mono text-[10px] text-slate-500 hover:text-navy-700 uppercase tracking-[0.08em] disabled:opacity-40 disabled:cursor-not-allowed"
