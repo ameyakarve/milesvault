@@ -219,22 +219,28 @@ const composedLinter = linter(
   { delay: 300 },
 )
 
-export const scandiBeancountExtensions = [
-  beancountSupport,
-  indentUnit.of(INDENT),
-  beancountIndentService,
-  beancountTabKeymap,
-  txnDividers,
-  unifiedMergeView({ original: '', mergeControls: false, gutter: true }),
-  validatorsField,
-  parseLinter,
-  composedLinter,
-  lintGutter(),
-  accountCompleterField,
-  autocompletion({ override: [accountCompletionSource], activateOnTyping: true }),
-  autocompleteColonTrigger,
-  scandiEditorTheme,
-]
+export function buildScandiBeancountExtensions(initialBaseline: string) {
+  return [
+    beancountSupport,
+    indentUnit.of(INDENT),
+    beancountIndentService,
+    beancountTabKeymap,
+    txnDividers,
+    unifiedMergeView({
+      original: initialBaseline,
+      mergeControls: false,
+      gutter: true,
+    }),
+    validatorsField,
+    parseLinter,
+    composedLinter,
+    lintGutter(),
+    accountCompleterField,
+    autocompletion({ override: [accountCompletionSource], activateOnTyping: true }),
+    autocompleteColonTrigger,
+    scandiEditorTheme,
+  ]
+}
 
 export function composeBuffer(rawTexts: string[]): string {
   return rawTexts.map((r) => r.trim()).join('\n\n') + '\n'
