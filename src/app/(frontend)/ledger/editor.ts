@@ -12,9 +12,14 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language'
 import { type Diagnostic, linter, lintGutter } from '@codemirror/lint'
-import { unifiedMergeView } from '@codemirror/merge'
 import {
-  Compartment,
+  getOriginalDoc,
+  originalDocChangeEffect,
+  unifiedMergeView,
+} from '@codemirror/merge'
+import {
+  ChangeSet,
+  type EditorState,
   RangeSetBuilder,
   StateEffect,
   StateField,
@@ -133,12 +138,13 @@ const { field: accountCompleterField, effect: setAccountCompleter } =
 
 export { setValidators, setAccountCompleter }
 
-const mergeCompartment = new Compartment()
-
-export function setBaseline(baseline: string): StateEffect<unknown> {
-  return mergeCompartment.reconfigure(
-    unifiedMergeView({ original: baseline, mergeControls: false, gutter: true }),
+export function setBaseline(state: EditorState, baseline: string): StateEffect<unknown> {
+  const current = getOriginalDoc(state)
+  const changes = ChangeSet.of(
+    [{ from: 0, to: current.length, insert: baseline }],
+    current.length,
   )
+  return originalDocChangeEffect(state, changes)
 }
 
 const ACCOUNT_PREFIX_RE = /[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9-]*)+/
@@ -219,7 +225,7 @@ export const scandiBeancountExtensions = [
   beancountIndentService,
   beancountTabKeymap,
   txnDividers,
-  mergeCompartment.of([]),
+  unifiedMergeView({ original: '', mergeControls: false, gutter: true }),
   validatorsField,
   parseLinter,
   composedLinter,
