@@ -6,6 +6,7 @@ import type {
 } from '@cloudflare/think'
 import { createWorkspaceTools } from '@cloudflare/think/tools/workspace'
 import { createToolsFromClientSchemas } from 'agents/chat'
+import type { ChatProtocolEvent } from 'agents/chat'
 import type { Session } from 'agents/experimental/memory/session'
 import {
   createCompactFunction,
@@ -323,6 +324,79 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
       },
     })
     return self._transformInferenceResult(result)
+  }
+
+  // ---------------------------------------------------------------------------
+  // UPSTREAM PATCH: suppress auto-continuation after a `reply` tool result
+  // ---------------------------------------------------------------------------
+  //
+  // `@cloudflare/ai-chat`'s `sendToolOutputToServer` always sends every
+  // client-tool result with `autoContinue: true` (see
+  // `node_modules/@cloudflare/ai-chat/dist/react.js:765-779`), and
+  // `Think._handleProtocolEvent`'s "tool-result" case unconditionally fires
+  // `this._scheduleAutoContinuation(connection)` when that flag is set (see
+  // `node_modules/@cloudflare/think/dist/think.js:940-955`). That starts a
+  // fresh `_runInferenceLoop({ continuation: true })` 50 ms later.
+  //
+  // For every tool except `reply` that's correct: the model asked for data,
+  // the client executed the tool, the model must see the result and keep
+  // going. But `reply` is the terminal channel — its contract is "after this
+  // call returns, stop." Auto-continuing after `reply` drives Kimi K2 into an
+  // observed loop: reply → continuation → generate_entry → propose (blocked
+  // by dedup) → reply → continuation → … until the step budget runs out.
+  //
+  // Our `stopWhen: hasToolCall('reply')` override on `_runInferenceLoop` only
+  // stops the *current* streamText; it cannot prevent a brand-new loop that
+  // gets scheduled from the tool-result handler. So we also override this
+  // handler to skip the scheduling step specifically for `reply`.
+  //
+  // UPSTREAM FIX WE'RE WAITING ON
+  // -----------------------------
+  // Expose a `shouldAutoContinue(event): boolean` hook on `Think` (or pipe a
+  // per-tool `terminal: true` flag through to the tool-result branch). Once
+  // that ships, delete this override and return `false` for `reply`.
+  //
+  // MAINTENANCE RISK
+  // ----------------
+  // This is a full copy of the private `_handleProtocolEvent` switch. Any
+  // upstream change to the method (new event types, reshuffled persistence,
+  // new auto-continuation semantics) must be reflected here. Re-check against
+  // `node_modules/@cloudflare/think/dist/think.js` on every version bump.
+  async _handleProtocolEvent(
+    connection: unknown,
+    event: ChatProtocolEvent,
+  ): Promise<void> {
+    if (event.type !== 'tool-result' || event.toolName !== 'reply') {
+      return (Think.prototype as any)._handleProtocolEvent.call(
+        this,
+        connection,
+        event,
+      )
+    }
+    const self = this as any
+    if (event.clientTools && event.clientTools.length > 0) {
+      self._lastClientTools = event.clientTools
+      self._persistClientTools()
+    }
+    const resultPromise = Promise.resolve().then(() => {
+      self._applyToolResult(
+        event.toolCallId,
+        event.output,
+        event.state,
+        event.errorText,
+      )
+      return true
+    })
+    self._pendingInteractionPromise = resultPromise
+    resultPromise
+      .finally(() => {
+        if (self._pendingInteractionPromise === resultPromise)
+          self._pendingInteractionPromise = null
+      })
+      .catch(() => {})
+    console.log(
+      `[think] reply is terminal; suppressing auto-continuation (autoContinue=${event.autoContinue})`,
+    )
   }
 }
 
