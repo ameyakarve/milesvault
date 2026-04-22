@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react'
+import { Coins, CreditCard, type LucideIcon } from 'lucide-react'
 import { paymentMethodDisplay } from '@/lib/beancount/account-display'
 import { iconForTxn } from '@/lib/beancount/category-icons'
 import { parseBuffer, type ParsedPosting, type ParsedTxn } from '@/lib/beancount/parse'
@@ -7,16 +7,57 @@ export type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 
 export type CardColor = 'amber' | 'sky' | 'emerald' | 'rose' | 'indigo' | 'slate'
 
-export const COLOR_CLASSES: Record<
-  CardColor,
-  { icon: string; monthBg: string; monthText: string }
-> = {
-  amber: { icon: 'text-amber-600', monthBg: 'bg-amber-50', monthText: 'text-amber-700' },
-  sky: { icon: 'text-sky-600', monthBg: 'bg-sky-50', monthText: 'text-sky-700' },
-  emerald: { icon: 'text-emerald-600', monthBg: 'bg-emerald-50', monthText: 'text-emerald-700' },
-  rose: { icon: 'text-rose-600', monthBg: 'bg-rose-50', monthText: 'text-rose-700' },
-  indigo: { icon: 'text-indigo-600', monthBg: 'bg-indigo-50', monthText: 'text-indigo-700' },
-  slate: { icon: 'text-slate-500', monthBg: 'bg-slate-50', monthText: 'text-slate-600' },
+type ColorTokens = {
+  icon: string
+  tileBg: string
+  tileBorder: string
+  tileText: string
+  categoryLabel: string
+}
+
+export const COLOR_CLASSES: Record<CardColor, ColorTokens> = {
+  amber: {
+    icon: 'text-amber-600',
+    tileBg: 'bg-amber-50',
+    tileBorder: 'border-amber-200',
+    tileText: 'text-amber-700',
+    categoryLabel: 'DINING',
+  },
+  sky: {
+    icon: 'text-sky-600',
+    tileBg: 'bg-sky-50',
+    tileBorder: 'border-sky-200',
+    tileText: 'text-sky-700',
+    categoryLabel: 'REWARDS',
+  },
+  emerald: {
+    icon: 'text-emerald-600',
+    tileBg: 'bg-emerald-50',
+    tileBorder: 'border-emerald-200',
+    tileText: 'text-emerald-700',
+    categoryLabel: 'TRAVEL',
+  },
+  rose: {
+    icon: 'text-rose-600',
+    tileBg: 'bg-rose-50',
+    tileBorder: 'border-rose-200',
+    tileText: 'text-rose-700',
+    categoryLabel: 'LEISURE',
+  },
+  indigo: {
+    icon: 'text-indigo-600',
+    tileBg: 'bg-indigo-50',
+    tileBorder: 'border-indigo-200',
+    tileText: 'text-indigo-700',
+    categoryLabel: 'SHOPPING',
+  },
+  slate: {
+    icon: 'text-slate-500',
+    tileBg: 'bg-slate-100',
+    tileBorder: 'border-slate-200',
+    tileText: 'text-slate-600',
+    categoryLabel: 'TRANSFER',
+  },
 }
 
 export type CardPreset = {
@@ -30,24 +71,34 @@ export type CardPreset = {
 }
 
 export type CardRow = CardPreset & {
-  month: string
-  day: string
   payee: string
+  narrationText: string
+  dateLabel: string
   subtext: string | null
 }
 
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 const CASHBACK_ACCOUNT = 'Income:Rewards:Cashback'
 
+function formatDateLabel(dateStr: string): string {
+  const [ys, ms, ds] = dateStr.split('-')
+  const y = Number(ys)
+  const m = Number(ms)
+  const d = Number(ds)
+  if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return dateStr
+  const date = new Date(Date.UTC(y, m - 1, d))
+  const wd = WEEKDAYS_SHORT[date.getUTCDay()] ?? ''
+  const mon = MONTHS_SHORT[m - 1] ?? ''
+  return `${wd}, ${d} ${mon}`
+}
+
 export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
-  const [, mm, dd] = txn.date.split('-')
-  const month = MONTHS[Number(mm) - 1] ?? '—'
-  const day = dd ?? '—'
   const payee = txn.payee?.trim() ?? ''
   const narration = txn.narration?.trim() ?? ''
   const title = payee || narration || 'Transaction'
-  const secondary = payee && narration ? `· ${narration}` : ''
+  const narrationText = payee && narration && narration !== payee ? narration : ''
   const glyph = iconForTxn(txn.postings.map((p) => p.account))
 
   const cashbackMatch = matchExpensesCashbacksPayment(txn)
@@ -72,10 +123,9 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   return {
     ...preset,
     glyph,
-    month,
-    day,
     payee: title,
-    narration: secondary,
+    narrationText,
+    dateLabel: formatDateLabel(txn.date),
     subtext,
     amount,
     pill: undefined,
@@ -161,13 +211,13 @@ function formatCashbackTotal(cashbacks: readonly ParsedPosting[]): string | null
 function formatOutflow(expenseValue: number, currency: string | null): string {
   const abs = Math.abs(expenseValue)
   if (currency === 'INR') {
-    return `₹${new Intl.NumberFormat('en-IN', {
+    return `−₹${new Intl.NumberFormat('en-IN', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(abs)}`
   }
   if (currency === 'USD') {
-    return `$${new Intl.NumberFormat('en-US', {
+    return `−$${new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(abs)}`
@@ -176,7 +226,7 @@ function formatOutflow(expenseValue: number, currency: string | null): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(abs)
-  return currency ? `${body} ${currency}` : body
+  return currency ? `−${body} ${currency}` : `−${body}`
 }
 
 export function EntryCard({
@@ -196,65 +246,75 @@ export function EntryCard({
 
 function fallbackRow(raw: string, preset: CardPreset): CardRow {
   const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s+[*!]\s+(?:"([^"]*)"\s+)?(?:"([^"]*)")?/)
-  const month = m ? (MONTHS[Number(m[2]) - 1] ?? '—') : '—'
-  const day = m ? m[3] : '—'
-  const payee = m ? (m[4]?.trim() || m[5]?.trim() || 'Transaction') : 'Transaction'
-  return { ...preset, month, day, payee, subtext: null }
+  const payee = m ? m[4]?.trim() || m[5]?.trim() || 'Transaction' : 'Transaction'
+  const dateLabel = m ? formatDateLabel(`${m[1]}-${m[2]}-${m[3]}`) : '—'
+  return {
+    ...preset,
+    payee,
+    narrationText: '',
+    dateLabel,
+    subtext: null,
+  }
 }
 
 export function Card({ row, active }: { row: CardRow; active: boolean }) {
   const Glyph = row.glyph
   const palette = COLOR_CLASSES[row.color]
   const shell = active
-    ? 'h-[52px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] flex items-center px-3 gap-3 transition-colors relative border-b border-scandi-rule w-full z-10'
-    : 'h-[52px] bg-transparent hover:bg-white flex items-center px-3 gap-3 relative transition-colors border-b border-scandi-rule w-full'
-  const dayBg = active ? 'bg-scandi-accent text-white' : 'bg-white text-navy-600'
+    ? 'h-[88px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] flex items-center px-3 gap-3 transition-colors relative border-b border-scandi-rule w-full z-10'
+    : 'h-[88px] bg-transparent hover:bg-white flex items-center px-3 gap-3 relative transition-colors border-b border-scandi-rule w-full'
+  const pillText = row.rewards.current?.trim() ?? ''
+  const showPill = pillText !== '' && pillText !== '—'
+  const accountLabel = row.subtext ?? row.account
 
   return (
     <div className={shell}>
       {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-scandi-accent" />}
-      <div className="h-10 w-10 border border-slate-200 flex flex-col shrink-0 relative overflow-hidden bg-white">
-        <div
-          className={`h-[14px] ${palette.monthBg} ${palette.monthText} text-[9px] font-mono flex items-center justify-center uppercase leading-none border-b border-slate-200`}
-        >
-          {row.month}
-        </div>
-        <div
-          className={`flex-1 text-[16px] font-mono flex items-center justify-center leading-none ${dayBg}`}
-        >
-          {row.day}
-        </div>
-      </div>
+
       <div
-        className={`flex-1 min-w-[200px] flex flex-col justify-center ${active ? 'pl-[3px]' : ''}`}
+        className={`h-[56px] w-[56px] shrink-0 border ${palette.tileBorder} ${palette.tileBg} flex flex-col items-center justify-center gap-[3px]`}
       >
-        <div className="flex items-center gap-1">
-          <Glyph size={14} strokeWidth={1.5} className={palette.icon} />
-          <span className="text-navy-600 text-[13px] font-medium truncate ml-1">{row.payee}</span>
-          <span className="text-slate-400 text-[13px] italic truncate ml-1">{row.narration}</span>
-          {row.pill && (
-            <span className="bg-white text-slate-600 border border-slate-200 text-[9px] uppercase font-mono px-1.5 py-0.5 flex items-center gap-1 leading-none ml-auto">
-              {row.pill.label}
-            </span>
-          )}
+        <Glyph size={20} strokeWidth={1.75} className={palette.tileText} />
+        <span
+          className={`text-[9px] font-mono font-semibold uppercase tracking-[0.08em] ${palette.tileText}`}
+        >
+          {palette.categoryLabel}
+        </span>
+      </div>
+
+      <div className="flex-1 min-w-0 flex flex-col justify-center gap-[4px]">
+        <div className="text-navy-700 text-[15px] font-semibold truncate leading-tight">
+          {row.payee}
         </div>
-        <div className="text-[11px] text-slate-400 truncate font-mono">
-          {row.subtext ?? row.account}
+        <div className="flex items-center gap-1.5 text-[12px] text-slate-500 min-w-0 leading-tight">
+          {row.narrationText ? (
+            <>
+              <span className="italic truncate">{row.narrationText}</span>
+              <span className="text-slate-300 shrink-0">·</span>
+            </>
+          ) : null}
+          <span className="truncate">{row.dateLabel}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[12px] text-slate-600 min-w-0 leading-tight">
+          <CreditCard size={12} strokeWidth={1.75} className="text-slate-500 shrink-0" />
+          <span className="truncate">{accountLabel}</span>
         </div>
       </div>
-      <div className="w-[72px] text-right shrink-0 font-mono flex flex-col justify-center border-l border-slate-200 pl-2 overflow-hidden">
-        {row.rewards.old ? (
-          <div className="text-[11px]">
-            <span className="text-slate-300 line-through">{row.rewards.old}</span>
-            <span className="text-slate-300 mx-1">→</span>
-            <span className="text-sky-600 font-medium">{row.rewards.current}</span>
+
+      <div className="w-[116px] shrink-0 flex flex-col items-end justify-center gap-1.5">
+        <div className="text-navy-700 text-[15px] font-mono font-semibold tabular-nums">
+          {row.amount}
+        </div>
+        {showPill ? (
+          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 border border-emerald-100">
+            <Coins size={10} strokeWidth={2} className="text-emerald-700 shrink-0" />
+            <span className="text-[10px] font-mono font-semibold text-emerald-700 tabular-nums">
+              {pillText}
+            </span>
           </div>
         ) : (
-          <div className="text-[11px] text-sky-600 font-medium">{row.rewards.current}</div>
+          <div className="h-[20px]" />
         )}
-      </div>
-      <div className="text-right shrink-0 font-mono flex flex-col justify-center w-[104px] ml-2">
-        <div className="text-navy-700 text-[12px] font-medium">{row.amount}</div>
       </div>
     </div>
   )
