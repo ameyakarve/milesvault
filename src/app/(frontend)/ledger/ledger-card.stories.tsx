@@ -40,7 +40,7 @@ export const CreditCardBankOnly: Story = {
     docs: {
       description: {
         story:
-          '`Liabilities:CC:HSBC` (bank only) → subtext "HSBC Card". Payee + icon derived from the parsed txn.',
+          '`Liabilities:CC:HSBC` (bank only) → subtext "HSBC". Payee + icon derived from the parsed txn.',
       },
     },
   },
@@ -55,7 +55,7 @@ export const CreditCardBankAndProduct: Story = {
   parameters: {
     docs: {
       description: {
-        story: '`Liabilities:CC:HDFC:Infinia` → subtext "HDFC Infinia Card".',
+        story: '`Liabilities:CC:HDFC:Infinia` → subtext "HDFC Infinia".',
       },
     },
   },
@@ -118,7 +118,7 @@ export const MultiExpenseSameCard: Story = {
     docs: {
       description: {
         story:
-          'Multiple `Expenses:*` postings paid with a single card. Amount is the sum (₹5,100.00). Icon is derived from the first expense leg (Electronics).',
+          'Multiple `Expenses:*` postings paid with a single card. Amount is the sum (₹5,100.00). Icon is resolved from the deepest common prefix across expense legs (`Expenses:Shopping` → ShoppingBag).',
       },
     },
   },
@@ -136,7 +136,7 @@ export const ExpensesWithCashback: Story = {
     docs: {
       description: {
         story:
-          'Canonical cashback shape: 1 expense + 1 cashback pair (Income cashback + mirror credit back to the same payment account) + 1 charge. Amount = ₹105; rewards = "+₹10.50"; subtext = "HSBC Cashback Card". Rule: non-expense-non-cashback postings = 2 × cashback postings, all sharing one account.',
+          'Canonical cashback shape: 1 expense + 1 cashback pair (Income cashback + mirror credit back to the same payment account) + 1 charge. Amount = ₹105; rewards = "+₹10.50"; subtext = "HSBC Cashback". Rule: non-expense-non-cashback postings = 2 × cashback postings, all sharing one account.',
       },
     },
   },
@@ -158,7 +158,7 @@ export const MultiExpensesAndCashbacks: Story = {
     docs: {
       description: {
         story:
-          'Multiple expenses + multiple cashback pairs, all on one card. 4 charge/mirror legs = 2 × 2 cashbacks. Amount = ₹5,100.00; rewards = "+₹510"; subtext = "HDFC Infinia Card". Icon from first expense.',
+          'Multiple expenses + multiple cashback pairs, all on one card. 4 charge/mirror legs = 2 × 2 cashbacks. Amount = ₹5,100.00; rewards = "+₹510"; subtext = "HDFC Infinia". Icon resolved from deepest common prefix (`Expenses:Shopping` → ShoppingBag).',
       },
     },
   },
