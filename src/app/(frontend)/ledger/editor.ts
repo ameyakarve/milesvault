@@ -12,7 +12,14 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language'
 import { type Diagnostic, linter, lintGutter } from '@codemirror/lint'
-import { RangeSetBuilder, StateEffect, StateField, type Text } from '@codemirror/state'
+import { unifiedMergeView } from '@codemirror/merge'
+import {
+  Compartment,
+  RangeSetBuilder,
+  StateEffect,
+  StateField,
+  type Text,
+} from '@codemirror/state'
 import {
   Decoration,
   type DecorationSet,
@@ -30,7 +37,6 @@ import {
   type Validator,
   coreValidators,
 } from '@/lib/beancount/validators'
-import { diffHighlightExtension } from './editor-diff-decorations'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 
 const beancountLanguage = LRLanguage.define({
@@ -120,13 +126,20 @@ export type LedgerDiagnostic = Diagnostic
 export type { ValidateContext, Validator } from '@/lib/beancount/validators'
 export type { AccountCompleter } from '@/lib/beancount/accounts'
 
-const { field: baselineBufferField, effect: setBaselineBuffer } = defineReactSlot<string>('')
 const { field: validatorsField, effect: setValidators } =
   defineReactSlot<readonly Validator[]>([])
 const { field: accountCompleterField, effect: setAccountCompleter } =
   defineReactSlot<AccountCompleter>(completeAccount)
 
-export { setBaselineBuffer, setValidators, setAccountCompleter }
+export { setValidators, setAccountCompleter }
+
+const mergeCompartment = new Compartment()
+
+export function setBaseline(baseline: string): StateEffect<unknown> {
+  return mergeCompartment.reconfigure(
+    unifiedMergeView({ original: baseline, mergeControls: false, gutter: true }),
+  )
+}
 
 const ACCOUNT_PREFIX_RE = /[A-Z][A-Za-z0-9-]*(?::[A-Za-z0-9-]*)+/
 
@@ -206,8 +219,7 @@ export const scandiBeancountExtensions = [
   beancountIndentService,
   beancountTabKeymap,
   txnDividers,
-  baselineBufferField,
-  diffHighlightExtension(baselineBufferField),
+  mergeCompartment.of([]),
   validatorsField,
   parseLinter,
   composedLinter,

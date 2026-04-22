@@ -7,7 +7,7 @@ import {
   type AccountCompleter,
   scandiBeancountExtensions,
   setAccountCompleter,
-  setBaselineBuffer,
+  setBaseline,
   setValidators,
   type Validator,
 } from './editor'
@@ -47,10 +47,14 @@ export function LedgerEditor({
     [],
   )
 
+  const prevBaselineRef = useRef<string | null>(null)
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
-    view.dispatch({ effects: setBaselineBuffer.of(baseline ?? '') })
+    const next = baseline ?? ''
+    if (prevBaselineRef.current === next) return
+    prevBaselineRef.current = next
+    view.dispatch({ effects: setBaseline(next) })
   }, [baseline])
 
   useEffect(() => {
