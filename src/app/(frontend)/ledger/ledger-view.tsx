@@ -215,6 +215,8 @@ export function LedgerView({ email }: { email: string }) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
   const [aiBusy, setAiBusy] = useState(false)
+  const saving = saveStatus === 'saving'
+  const locked = aiBusy || saving
 
   async function onSave() {
     if (saveStatus === 'saving') return
@@ -328,22 +330,30 @@ export function LedgerView({ email }: { email: string }) {
           <ChromeIconButton
             icon={Save}
             title={
-              aiBusy
-                ? 'save (assistant working)'
-                : bufferState.kind === 'dirty'
-                  ? 'save (fix parse errors first)'
-                  : bufferState.kind === 'staged' && !bufferState.validated
-                    ? 'save (fix validation errors first)'
-                    : 'save'
+              saving
+                ? 'saving…'
+                : aiBusy
+                  ? 'save (assistant working)'
+                  : bufferState.kind === 'dirty'
+                    ? 'save (fix parse errors first)'
+                    : bufferState.kind === 'staged' && !bufferState.validated
+                      ? 'save (fix validation errors first)'
+                      : 'save'
             }
             dirty={dirty}
-            disabled={!saveEnabled || saveStatus === 'saving' || aiBusy}
+            disabled={!saveEnabled || locked}
             onClick={onSave}
           />
           <ChromeIconButton
             icon={RotateCcw}
-            title={aiBusy ? 'revert (assistant working)' : 'revert'}
-            disabled={!dirty || saveStatus === 'saving' || aiBusy}
+            title={
+              saving
+                ? 'revert (saving)'
+                : aiBusy
+                  ? 'revert (assistant working)'
+                  : 'revert'
+            }
+            disabled={!dirty || locked}
             onClick={onRevert}
           />
           <SavePill
@@ -371,7 +381,7 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </div>
 
-      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} locked={aiBusy} />
+      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} locked={locked} />
 
       <main className="flex-1 flex overflow-hidden min-h-0">
         <div className="flex-[3] flex flex-col min-w-0 border-r border-slate-200">
@@ -410,7 +420,7 @@ export function LedgerView({ email }: { email: string }) {
                 baseline={baseline}
                 onBufferChange={setBuffer}
                 onCursorChange={setCursorPos}
-                readOnly={aiBusy}
+                readOnly={locked}
               />
             </section>
           </div>
@@ -422,6 +432,7 @@ export function LedgerView({ email }: { email: string }) {
             buffer={buffer}
             snapshots={snapshots}
             bufferState={bufferState}
+            saving={saving}
             onAiBusyChange={setAiBusy}
             onPropose={(ops: readonly Op[]) => {
               const res = applyProposal(buffer, snapshots, ops)
@@ -435,7 +446,7 @@ export function LedgerView({ email }: { email: string }) {
         </section>
       </main>
 
-      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} locked={aiBusy} />
+      <PaginationStrip page={page} totalPages={totalPages} onPage={setPage} locked={locked} />
     </div>
   )
 }
