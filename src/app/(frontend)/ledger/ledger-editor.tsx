@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
+import CodeMirror, { ExternalChange } from '@uiw/react-codemirror'
 import { EditorView } from '@codemirror/view'
 import {
   type AccountCompleter,
@@ -23,21 +23,45 @@ type LedgerEditorProps = {
   className?: string
 }
 
-export function LedgerEditor({
-  value,
-  onChange,
-  baseline,
-  validators,
-  completeAccount,
-  onCursorChange,
-  readOnly,
-  className,
-}: LedgerEditorProps) {
+export type LedgerEditorHandle = {
+  replaceDoc: (next: string) => void
+}
+
+export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(function LedgerEditor(
+  {
+    value,
+    onChange,
+    baseline,
+    validators,
+    completeAccount,
+    onCursorChange,
+    readOnly,
+    className,
+  },
+  ref,
+) {
   const viewRef = useRef<EditorView | null>(null)
   const cursorCbRef = useRef(onCursorChange)
   useEffect(() => {
     cursorCbRef.current = onCursorChange
   })
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      replaceDoc: (next) => {
+        const view = viewRef.current
+        if (!view) return
+        const current = view.state.doc.toString()
+        if (current === next) return
+        view.dispatch({
+          changes: { from: 0, to: view.state.doc.length, insert: next },
+          annotations: [ExternalChange.of(true)],
+        })
+      },
+    }),
+    [],
+  )
 
   const initialBaselineRef = useRef(baseline ?? '')
   const extensions = useMemo(
@@ -95,4 +119,4 @@ export function LedgerEditor({
       }}
     />
   )
-}
+})
