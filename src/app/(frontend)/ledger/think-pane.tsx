@@ -272,10 +272,10 @@ function Turn({ message }: { message: ThinkMessage }) {
   return (
     <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
       <div
-        className={`px-3 py-2 max-w-[85%] border border-scandi-rule bg-white text-navy-700 ${
+        className={`px-3 py-2 max-w-[85%] border ${
           isUser
-            ? 'border-r-[3px] border-r-scandi-accent'
-            : 'border-l-[3px] border-l-slate-400'
+            ? 'bg-scandi-accent border-scandi-accent text-white'
+            : 'bg-white border-scandi-rule text-navy-700'
         }`}
       >
         {visible.map((part, i) => (
@@ -299,7 +299,7 @@ function BusyIndicator({ label }: { label: string }) {
   const text = label === 'submitted' ? 'thinking' : 'working'
   return (
     <div className="flex items-start">
-      <div className="px-3 py-2 border border-scandi-rule border-l-[3px] border-l-slate-400 bg-white flex items-center gap-2">
+      <div className="px-3 py-2 border border-scandi-rule bg-white flex items-center gap-2">
         <span className="flex gap-1" aria-hidden>
           <span className="w-1 h-1 rounded-full bg-slate-400 animate-pulse [animation-delay:0ms]" />
           <span className="w-1 h-1 rounded-full bg-slate-400 animate-pulse [animation-delay:150ms]" />

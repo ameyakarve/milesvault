@@ -1,18 +1,21 @@
 import { Coins, CreditCard, type LucideIcon } from 'lucide-react'
 import { paymentMethodDisplay } from '@/lib/beancount/account-display'
-import { iconForTxn } from '@/lib/beancount/category-icons'
+import {
+  type CardColor,
+  type CategoryMeta,
+  categoryForTxn,
+  FALLBACK_CATEGORY,
+} from '@/lib/beancount/category-icons'
 import { parseBuffer, type ParsedPosting, type ParsedTxn } from '@/lib/beancount/parse'
 
 export type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
-
-export type CardColor = 'amber' | 'sky' | 'emerald' | 'rose' | 'indigo' | 'slate'
+export type { CardColor }
 
 type ColorTokens = {
   icon: string
   tileBg: string
   tileBorder: string
   tileText: string
-  categoryLabel: string
 }
 
 export const COLOR_CLASSES: Record<CardColor, ColorTokens> = {
@@ -21,42 +24,36 @@ export const COLOR_CLASSES: Record<CardColor, ColorTokens> = {
     tileBg: 'bg-amber-50',
     tileBorder: 'border-amber-200',
     tileText: 'text-amber-700',
-    categoryLabel: 'DINING',
   },
   sky: {
     icon: 'text-sky-600',
     tileBg: 'bg-sky-50',
     tileBorder: 'border-sky-200',
     tileText: 'text-sky-700',
-    categoryLabel: 'REWARDS',
   },
   emerald: {
     icon: 'text-emerald-600',
     tileBg: 'bg-emerald-50',
     tileBorder: 'border-emerald-200',
     tileText: 'text-emerald-700',
-    categoryLabel: 'TRAVEL',
   },
   rose: {
     icon: 'text-rose-600',
     tileBg: 'bg-rose-50',
     tileBorder: 'border-rose-200',
     tileText: 'text-rose-700',
-    categoryLabel: 'LEISURE',
   },
   indigo: {
     icon: 'text-indigo-600',
     tileBg: 'bg-indigo-50',
     tileBorder: 'border-indigo-200',
     tileText: 'text-indigo-700',
-    categoryLabel: 'SHOPPING',
   },
   slate: {
     icon: 'text-slate-500',
     tileBg: 'bg-slate-100',
     tileBorder: 'border-slate-200',
     tileText: 'text-slate-600',
-    categoryLabel: 'TRANSFER',
   },
 }
 
@@ -74,6 +71,7 @@ export type CardRow = CardPreset & {
   payee: string
   dateLabel: string
   subtext: string | null
+  category: CategoryMeta
 }
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -97,7 +95,7 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
   const payee = txn.payee?.trim() ?? ''
   const narration = txn.narration?.trim() ?? ''
   const title = payee || narration || 'Transaction'
-  const glyph = iconForTxn(txn.postings.map((p) => p.account))
+  const category = categoryForTxn(txn.postings.map((p) => p.account))
 
   const cashbackMatch = matchExpensesCashbacksPayment(txn)
   const paymentMatch = cashbackMatch ? null : matchExpensesOnePayment(txn)
@@ -120,13 +118,15 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
 
   return {
     ...preset,
-    glyph,
+    glyph: category.icon,
+    color: category.color,
     payee: title,
     dateLabel: formatDateLabel(txn.date),
     subtext,
     amount,
     pill: undefined,
     rewards,
+    category,
   }
 }
 
@@ -250,12 +250,14 @@ function fallbackRow(raw: string, preset: CardPreset): CardRow {
     payee,
     dateLabel,
     subtext: null,
+    category: FALLBACK_CATEGORY,
   }
 }
 
 export function Card({ row, active }: { row: CardRow; active: boolean }) {
-  const Glyph = row.glyph
-  const palette = COLOR_CLASSES[row.color]
+  const Glyph = row.category.icon
+  const palette = COLOR_CLASSES[row.category.color]
+  const tileLabel = row.category.shortName.toUpperCase()
   const shell = active
     ? 'h-[88px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] flex items-center px-3 gap-3 transition-colors relative border-b border-scandi-rule w-full z-10'
     : 'h-[88px] bg-transparent hover:bg-white flex items-center px-3 gap-3 relative transition-colors border-b border-scandi-rule w-full'
@@ -274,7 +276,7 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
         <span
           className={`text-[9px] font-mono font-semibold uppercase tracking-[0.08em] ${palette.tileText}`}
         >
-          {palette.categoryLabel}
+          {tileLabel}
         </span>
       </div>
 
