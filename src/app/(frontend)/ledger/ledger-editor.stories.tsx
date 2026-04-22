@@ -152,24 +152,6 @@ export const WithUnbalancedTxn: Story = {
   },
 }
 
-const FLIPPED_EXPENSE = `2026-04-17 * "Amudham" "coffee"
-  Liabilities:CC:HSBC    35.00 INR
-  Expenses:Food:Coffee            -35.00 INR
-`
-
-export const WithFlippedExpenseSign: Story = {
-  args: { initialValue: FLIPPED_EXPENSE },
-  parameters: {
-    docs: {
-      description: {
-        story:
-          'Expenses posting is negative (-35). Expense-sign validator underlines the amount. Balance still holds, so the balance validator stays quiet.',
-      },
-    },
-  },
-}
-
-
 const MISSING_PAYEE = `2026-04-17 * "coffee"
   Liabilities:CC:HSBC   -35.00 INR
   Expenses:Food:Coffee   35.00 INR
