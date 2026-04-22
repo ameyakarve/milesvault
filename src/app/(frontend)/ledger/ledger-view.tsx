@@ -21,7 +21,7 @@ import { format } from '@/lib/beancount/format'
 import { composeBuffer } from './editor'
 import { ChromeIconButton, PaneLabel } from './ledger-chrome'
 import { CardsList, type Entry, type FetchStatus, TextPane } from './ledger-panes'
-import { applyProposal, type Proposal } from './propose'
+import { applyProposal, type Op } from './propose'
 import { SavePill } from './save-status'
 import { ThinkPane } from './think-pane'
 
@@ -387,8 +387,8 @@ export function LedgerView({ email }: { email: string }) {
             dirty={dirty}
             saveStatus={saveStatus}
             onSave={onSave}
-            onPropose={(p: Proposal) => {
-              const res = applyProposal(buffer, snapshots, p)
+            onPropose={(ops: readonly Op[]) => {
+              const res = applyProposal(buffer, snapshots, ops)
               if (res.ok === true) {
                 setBuffer(res.buffer)
                 return { ok: true }
