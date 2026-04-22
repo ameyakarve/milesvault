@@ -223,6 +223,18 @@ export function LedgerView({ email }: { email: string }) {
   const [aiBusy, setAiBusy] = useState(false)
   const saving = saveStatus === 'saving'
   const locked = aiBusy || saving
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const handle = setTimeout(() => setCopied(false), 1500)
+    return () => clearTimeout(handle)
+  }, [copied])
+  async function onCopyBuffer() {
+    try {
+      await navigator.clipboard.writeText(buffer)
+      setCopied(true)
+    } catch {}
+  }
 
   async function onSave() {
     if (saveStatus === 'saving') return
@@ -377,13 +389,34 @@ export function LedgerView({ email }: { email: string }) {
           />
           <div className="h-[16px] w-px bg-slate-200 mx-3" />
           <div className="flex items-center gap-1">
-            <ChromeIconButton icon={Filter} title="filter" />
+            <ChromeIconButton
+              icon={Filter}
+              title={
+                saving
+                  ? 'filter (saving)'
+                  : aiBusy
+                    ? 'filter (assistant working)'
+                    : dirty
+                      ? 'filter (save or revert first)'
+                      : 'filter'
+              }
+              disabled={pageLocked}
+            />
             <div className="flex items-center gap-1 pl-2 pr-1 h-[24px] bg-slate-100 text-[11px] font-mono text-navy-700 rounded-[4px]">
               swiggy · oct 2025
               <button
                 type="button"
-                title="clear filter"
-                className="w-[16px] h-[16px] flex items-center justify-center hover:bg-slate-200 rounded-[2px] transition-colors"
+                title={
+                  saving
+                    ? 'clear filter (saving)'
+                    : aiBusy
+                      ? 'clear filter (assistant working)'
+                      : dirty
+                        ? 'clear filter (save or revert first)'
+                        : 'clear filter'
+                }
+                disabled={pageLocked}
+                className="w-[16px] h-[16px] flex items-center justify-center hover:bg-slate-200 rounded-[2px] transition-colors disabled:opacity-30 disabled:cursor-default disabled:hover:bg-transparent"
               >
                 <X size={12} className="text-slate-600" />
               </button>
@@ -413,8 +446,11 @@ export function LedgerView({ email }: { email: string }) {
               <PaneLabel>EDITOR</PaneLabel>
               <button
                 type="button"
-                title="copy buffer"
-                className="w-[20px] h-[20px] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors rounded-[4px] text-slate-500 hover:text-navy-700 mr-[12px]"
+                title={copied ? 'copied' : 'copy buffer'}
+                onClick={onCopyBuffer}
+                className={`w-[20px] h-[20px] flex items-center justify-center hover:bg-[#F1F5F9] transition-colors rounded-[4px] mr-[12px] ${
+                  copied ? 'text-emerald-600' : 'text-slate-500 hover:text-navy-700'
+                }`}
               >
                 <Copy size={14} strokeWidth={1.5} />
               </button>
