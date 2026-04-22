@@ -60,7 +60,7 @@ export const scandiEditorTheme = EditorView.theme(
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
       fontSize: '10px',
     },
-    '.cm-lineNumbers .cm-gutterElement': { padding: '0 10px 0 16px' },
+    '.cm-lineNumbers .cm-gutterElement': { padding: '0 4px 0 8px' },
     '.cm-activeLine:not(.cm-changedLine):not(.cm-deletedLine)': {
       backgroundColor: 'transparent',
     },
@@ -70,21 +70,28 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '&.cm-focused': { outline: 'none' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: NAVY_600, borderLeftWidth: '1px' },
-    '&.cm-merge-b .cm-changedText, .cm-inlineChangedText': {
-      background: 'rgba(16, 185, 129, 0.18)',
+    '&.cm-merge-b .cm-changedLine, .cm-inlineChangedLine': {
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
     },
-    '.cm-changeGutter': { width: '14px' },
+    '&.cm-merge-a .cm-changedLine, .cm-deletedChunk': {
+      backgroundColor: 'rgba(220, 38, 38, 0.10)',
+    },
+    '&.cm-merge-b .cm-changedText, .cm-inlineChangedText': {
+      background: 'rgba(16, 185, 129, 0.30)',
+    },
+    '.cm-changeGutter': { width: '10px' },
     '.cm-changedLineGutter, .cm-deletedLineGutter': {
-      background: 'transparent',
       fontWeight: '600',
       textAlign: 'center',
     },
     '.cm-changedLineGutter': {
       color: '#059669',
+      backgroundColor: 'rgba(16, 185, 129, 0.12)',
       '&::before': { content: '"+"' },
     },
     '.cm-deletedLineGutter': {
       color: '#DC2626',
+      backgroundColor: 'rgba(220, 38, 38, 0.10)',
       '&::before': { content: '"-"' },
     },
   },
