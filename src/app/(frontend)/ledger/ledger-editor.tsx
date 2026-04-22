@@ -5,7 +5,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { EditorView } from '@codemirror/view'
 import {
   type AccountCompleter,
-  scandiBeancountExtensions,
+  buildScandiBeancountExtensions,
   setAccountCompleter,
   setBaseline,
   setValidators,
@@ -37,9 +37,10 @@ export function LedgerEditor({
     cursorCbRef.current = onCursorChange
   })
 
+  const initialBaselineRef = useRef(baseline ?? '')
   const extensions = useMemo(
     () => [
-      ...scandiBeancountExtensions,
+      ...buildScandiBeancountExtensions(initialBaselineRef.current),
       EditorView.updateListener.of((u) => {
         const cb = cursorCbRef.current
         if (!cb) return
@@ -49,7 +50,7 @@ export function LedgerEditor({
     [],
   )
 
-  const prevBaselineRef = useRef<string | null>(null)
+  const prevBaselineRef = useRef<string>(initialBaselineRef.current)
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
