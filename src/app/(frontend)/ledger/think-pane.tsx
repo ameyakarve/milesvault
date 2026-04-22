@@ -118,7 +118,20 @@ function ThinkPaneInner({
     },
   })
   const [draft, setDraft] = useState('')
-  const busy = status === 'streaming' || status === 'submitted'
+  const statusBusy = status === 'streaming' || status === 'submitted'
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    if (statusBusy) {
+      setBusy(true)
+      return
+    }
+    if (status === 'error') {
+      setBusy(false)
+      return
+    }
+    const id = setTimeout(() => setBusy(false), 500)
+    return () => clearTimeout(id)
+  }, [statusBusy, status])
   const chatLocked = busy || saving
   useEffect(() => {
     onAiBusyChange?.(busy)
@@ -129,6 +142,7 @@ function ThinkPaneInner({
     const text = draft.trim()
     if (!text) return
     proposeFiredRef.current = false
+    setBusy(true)
     sendMessage({ text })
     setDraft('')
   }
