@@ -1,5 +1,5 @@
 import type { JSONSchema7 } from 'ai'
-import type { AgentRow, AgentSearchResult, MergedReader } from '@/lib/ledger-reader/merged'
+import type { LedgerReader, ReaderRow, SearchResult } from '@/lib/ledger-reader/types'
 import {
   validateEntry,
   type ValidationError,
@@ -8,7 +8,7 @@ import {
 import type { Op } from './propose'
 
 export type ClientToolDeps = {
-  merged: MergedReader
+  reader: LedgerReader
   propose: (ops: readonly Op[]) => { ok: boolean; reason?: string }
 }
 
@@ -97,7 +97,7 @@ const schemaPropose: JSONSchema7 = {
 }
 
 export function buildClientTools(deps: ClientToolDeps): ClientTools {
-  const { merged, propose } = deps
+  const { reader, propose } = deps
   return {
     reply: {
       description:
@@ -110,26 +110,24 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
     },
     ledger_search: {
       description:
-        "Search the user's transactions. Merges local (viewport + unsaved edits) and server. Each row has `editable` — if false, `reason` tells you whether to ask the user to save or to widen the editor filter. Grammar: @account, #tag, ^link, >YYYY-MM-DD, <YYYY-MM-DD, free tokens.",
+        "Search the transactions currently visible in the editor buffer. This is scoped to the current page — entries on other pages are not searchable. If the user asks about something older, ask them to page to the right range first. Grammar: @account, #tag, ^link, >YYYY-MM-DD, <YYYY-MM-DD, free tokens.",
       parameters: schemaSearch,
-      execute: async (input): Promise<AgentSearchResult> => {
+      execute: async (input): Promise<SearchResult> => {
         const { q = '', limit = 20, offset = 0 } = (input ?? {}) as {
           q?: string
           limit?: number
           offset?: number
         }
-        return merged.search(q, limit, offset)
+        return reader.search(q, limit, offset)
       },
     },
     ledger_get: {
       description:
-        'Fetch one transaction by id. Positive id = saved row; negative id = unsaved-create/dirty entry in the buffer. Returns `editable` + `reason` like ledger_search.',
+        'Fetch one transaction by id from the current editor buffer. Positive id = saved row currently on this page; negative id = unsaved-create/dirty entry. Returns null if not in the buffer.',
       parameters: schemaGet,
-      execute: async (
-        input,
-      ): Promise<AgentRow | { ok: false; reason: string } | null> => {
+      execute: async (input): Promise<ReaderRow | null> => {
         const { id } = (input ?? {}) as { id: number }
-        return merged.get(id)
+        return reader.get(id)
       },
     },
     validate_entry: {
@@ -143,7 +141,7 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
     },
     propose: {
       description:
-        "Stage a batch of create/update/delete ops against the editor buffer. All-or-nothing: any validation failure rejects the whole batch and nothing is staged. Call propose AT MOST ONCE per user turn — pack every change the user asked for into one call's `ops` array. Ops apply in order. For update/delete, the id MUST already be present in the buffer (positive = saved row loaded in the viewport; negative = unsaved create/dirty). If the row is on the server but not in the buffer, ledger_search will return it with editable:false — ask the user to save/widen the filter before editing it.",
+        "Stage a batch of create/update/delete ops against the editor buffer. All-or-nothing: any validation failure rejects the whole batch and nothing is staged. Call propose AT MOST ONCE per user turn — pack every change the user asked for into one call's `ops` array. Ops apply in order. For update/delete, the id MUST already be present in the buffer (positive = saved row currently on this page; negative = unsaved create/dirty). If the user asks to edit a row on another page, ask them to page to it first.",
       parameters: schemaPropose,
       execute: async (input) => {
         const { ops } = (input ?? {}) as { ops: readonly Op[] }

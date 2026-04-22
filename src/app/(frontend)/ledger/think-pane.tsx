@@ -4,15 +4,9 @@ import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { ArrowUp, Mic, Paperclip } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BufferState } from './buffer-state'
 import type { Op, Snapshot } from './propose'
 import { createMapReader } from '@/lib/ledger-reader/map'
-import { createHttpServerReader } from '@/lib/ledger-reader/http-server'
-import { createMergedReader } from '@/lib/ledger-reader/merged'
-import {
-  buildEntriesFromBuffer,
-  renderedIdsFromEntries,
-} from '@/lib/ledger-reader/entries'
+import { buildEntriesFromBuffer } from '@/lib/ledger-reader/entries'
 import { buildClientTools } from './ledger-tools-client'
 import { PaneLabel } from './ledger-chrome'
 
@@ -36,7 +30,6 @@ type ThinkPaneProps = {
   email: string
   buffer: string
   snapshots: Snapshot[]
-  bufferState: BufferState
   saving?: boolean
   onPropose: OnPropose
   onAiBusyChange?: (busy: boolean) => void
@@ -55,12 +48,10 @@ function ThinkPaneInner({
   email,
   buffer,
   snapshots,
-  bufferState,
   saving = false,
   onPropose,
   onAiBusyChange,
 }: ThinkPaneProps) {
-  const dirty = bufferState.kind !== 'clean'
   const agent = useAgent({
     agent: 'think-agent',
     name: email,
@@ -76,11 +67,9 @@ function ThinkPaneInner({
   })
 
   const entriesRef = useRef(buildEntriesFromBuffer(buffer, snapshots))
-  const dirtyRef = useRef(dirty)
   useEffect(() => {
     entriesRef.current = buildEntriesFromBuffer(buffer, snapshots)
-    dirtyRef.current = dirty
-  }, [buffer, snapshots, dirty])
+  }, [buffer, snapshots])
 
   const onProposeRef = useRef(onPropose)
   useEffect(() => {
@@ -88,14 +77,9 @@ function ThinkPaneInner({
   }, [onPropose])
 
   const tools = useMemo(() => {
-    const merged = createMergedReader({
-      server: createHttpServerReader(),
-      client: createMapReader(() => entriesRef.current),
-      renderedIds: () => renderedIdsFromEntries(entriesRef.current),
-      hasUnsavedChanges: () => dirtyRef.current,
-    })
+    const reader = createMapReader(() => entriesRef.current)
     return buildClientTools({
-      merged,
+      reader,
       propose: (ops) => onProposeRef.current(ops),
     })
   }, [])
