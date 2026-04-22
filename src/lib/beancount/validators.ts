@@ -51,26 +51,6 @@ export const balanceValidator: Validator = ({ parsed, doc }) => {
   return out
 }
 
-export const expenseSignValidator: Validator = ({ parsed }) => {
-  const out: Diagnostic[] = []
-  for (const txn of parsed) {
-    for (const p of txn.postings) {
-      if (p.account !== 'Expenses' && !p.account.startsWith('Expenses:')) continue
-      if (!p.amount) continue
-      const n = parseNumber(p.amount.numberText)
-      if (n == null || n >= 0) continue
-      out.push({
-        from: p.amount.range.from,
-        to: p.amount.range.to,
-        severity: 'error',
-        message: `Expenses posting should be positive; got ${p.amount.numberText}.`,
-        source: 'expense-sign',
-      })
-    }
-  }
-  return out
-}
-
 export const payeePresentValidator: Validator = ({ parsed }) => {
   const out: Diagnostic[] = []
   for (const txn of parsed) {
@@ -174,7 +154,6 @@ export const cashbackNeedsPaymentValidator: Validator = ({ parsed }) => {
 
 export const coreValidators: readonly Validator[] = [
   balanceValidator,
-  expenseSignValidator,
   payeePresentValidator,
   amountRequiredValidator,
   cashbackValidator,

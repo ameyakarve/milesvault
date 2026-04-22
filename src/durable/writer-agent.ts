@@ -111,7 +111,6 @@ ${buildAccountsBlock(userAccounts)}
 # Validators you MUST satisfy
 - parse: syntactically valid beancount.
 - balance: per-currency posting amounts sum to 0.
-- expense sign: Expenses:... postings are POSITIVE.
 - payee present: header has TWO strings (payee + narration).
 - amount required: every posting has an amount and currency.
 - cashback sign/counterpart: Income:Rewards:Cashback is NEGATIVE and paired with an equal-absolute POSITIVE leg on a card/bank/cash account.

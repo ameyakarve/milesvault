@@ -156,7 +156,7 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
     },
     validate_entry: {
       description:
-        "Run MilesVault's beancount validators on a raw entry string without staging it. Returns {ok, errors[]}. Use this to self-check before propose (which also auto-validates). Checks: parse, balance, expense sign, payee present, amount required, cashback sign/counterpart, cashback needs payment leg.",
+        "Run MilesVault's beancount validators on a raw entry string without staging it. Returns {ok, errors[]}. Use this to self-check before propose (which also auto-validates). Checks: parse, balance, payee present, amount required, cashback sign/counterpart, cashback needs payment leg.",
       parameters: schemaValidate,
       execute: async (input): Promise<ValidationResult> => {
         const { raw_text } = (input ?? {}) as { raw_text: string }
