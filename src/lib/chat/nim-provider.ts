@@ -7,6 +7,7 @@ export function createNimChatModel(
   modelName: string,
   providerName = 'cf-ai-gateway-nim',
 ): LanguageModelV3 {
+  console.log(`[nim] create model=${modelName} provider=${providerName}`)
   const provider = createOpenAICompatible({
     name: providerName,
     baseURL: `https://gateway.ai.cloudflare.com/v1/${env.CLOUDFLARE_ACCOUNT_ID}/${env.AI_GATEWAY_NAME}/custom-nvidia-nim`,

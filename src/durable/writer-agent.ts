@@ -61,10 +61,19 @@ export function buildGenerateEntryTool(deps: WriterDeps) {
         }
         lastRawText = stripFences(text).trim()
         const v = validateEntry(lastRawText)
-        if (v.ok) return { ok: true, raw_text: lastRawText, attempts: i + 1 }
+        console.log(
+          `[writer] attempt ${i + 1}/${deps.maxAttempts} validate=${v.ok ? 'ok' : 'fail'}${v.ok ? '' : ` errors=${v.errors.length}`}`,
+        )
+        if (v.ok) {
+          console.log(`[writer] success on attempt ${i + 1}/${deps.maxAttempts}`)
+          return { ok: true, raw_text: lastRawText, attempts: i + 1 }
+        }
         attempts.push({ raw_text: lastRawText, errors: v.errors })
       }
       const last = attempts[attempts.length - 1]
+      console.warn(
+        `[writer] all ${deps.maxAttempts} attempts failed; last errors: ${last.errors.map((e) => `[${e.source}] ${e.message}`).join('; ')}`,
+      )
       return {
         ok: false,
         errors: last.errors,

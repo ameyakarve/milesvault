@@ -264,6 +264,7 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
       return mapped
     }
     let rescuedAny = false
+    let rescuedCount = 0
     let sawToolCallFromProvider = false
 
     const transform = new TransformStream<
@@ -320,6 +321,7 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
               return
             }
             rescuedAny = true
+            rescuedCount += rescued.toolCalls.length
             if (rescued.cleanedText.length > 0) {
               if (!run.startEmitted) {
                 controller.enqueue(run.startPart)
@@ -396,8 +398,10 @@ export const kimiRescueMiddleware: LanguageModelV3Middleware = {
         }
       },
       flush() {
-        if (rescuedAny) {
-          console.warn('[kimi-rescue] recovered tool-call(s) from leaked Kimi tokens (stream)')
+        if (rescuedAny || nativeIdMap.size > 0) {
+          console.warn(
+            `[kimi-rescue] stream: rescued=${rescuedCount} nativeRemapped=${nativeIdMap.size}`,
+          )
         }
       },
     })

@@ -45,6 +45,7 @@ export function withNimRequestNormalize(
       }
     }
     if (!mutated) return base(input, init)
+    console.log('[nim-normalize] dropped empty content from assistant tool_calls message')
     return base(input, { ...init, body: JSON.stringify(parsed) })
   }
 }
