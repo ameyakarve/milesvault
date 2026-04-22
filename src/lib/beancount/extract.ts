@@ -116,31 +116,20 @@ function checkBalance(
 }
 
 const ACCOUNT_SEGMENT = /^[A-Z][A-Za-z0-9-]*$/
-const POSTING_FLAG = /^[*!]\s+/
-const ACCOUNT_REGION = /^(.+?)(?=\s{2,}|\t|\s[-+]?\d|\s@|\s;|\s*$)/
 
-function checkPostingLines(
-  lines: readonly string[],
+function checkAccountSegments(
+  postings: readonly Posting[],
   headerOffset: number,
   diagnostics: Diagnostic[],
 ): void {
-  for (let i = headerOffset + 1; i < lines.length; i++) {
-    const line = lines[i]
-    if (line === '' || (!line.startsWith(' ') && !line.startsWith('\t'))) break
-    const trimmed = line.trimStart()
-    if (trimmed === '' || trimmed.startsWith(';')) continue
-    const afterFlag = trimmed.replace(POSTING_FLAG, '')
-    const match = afterFlag.match(ACCOUNT_REGION)
-    const accountRegion = (match ? match[1] : afterFlag).trimEnd()
-    if (!accountRegion) continue
-    const bad = accountRegion.split(':').find((s) => !ACCOUNT_SEGMENT.test(s))
-    if (bad !== undefined) {
-      diagnostics.push({
-        kind: 'rule-violation',
-        lineOffset: i,
-        message: `Invalid account segment '${bad}' in '${accountRegion}'; segments must match [A-Z][A-Za-z0-9-]*.`,
-      })
-    }
+  for (const p of postings) {
+    const bad = p.account.split(':').find((s) => !ACCOUNT_SEGMENT.test(s))
+    if (bad === undefined) continue
+    diagnostics.push({
+      kind: 'rule-violation',
+      lineOffset: headerOffset,
+      message: `Invalid account segment '${bad}' in '${p.account}'; segments must match [A-Z][A-Za-z0-9-]*.`,
+    })
   }
 }
 
@@ -277,8 +266,7 @@ export function extractTxn(source: string): ExtractResult {
       message: `Date year must be >= 1900; got ${t.date.year}.`,
     })
   }
-  const lines = trimmed.split('\n')
-  checkPostingLines(lines, headerOffset, diagnostics)
+  checkAccountSegments(t.postings, headerOffset, diagnostics)
   if (diagnostics.length > 0) return { ok: false, diagnostics }
 
   checkBalance(t.postings, headerOffset, diagnostics)

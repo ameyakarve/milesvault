@@ -207,7 +207,7 @@ export const UnparseableFallback: Story = {
     docs: {
       description: {
         story:
-          'Parser rejects the txn (invalid flag). `EntryCard` falls back to regex-extracted date + payee and the preset as-is.',
+          'Parser rejects the txn (invalid flag). `EntryCard` falls back to the preset with a placeholder date.',
       },
     },
   },
