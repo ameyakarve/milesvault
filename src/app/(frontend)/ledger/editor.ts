@@ -19,11 +19,12 @@ import {
 } from '@codemirror/merge'
 import {
   ChangeSet,
-  type EditorState,
+  EditorState,
   RangeSetBuilder,
   StateEffect,
   StateField,
   type Text,
+  type Transaction,
 } from '@codemirror/state'
 import {
   Decoration,
@@ -98,6 +99,27 @@ function buildEntryDividers(view: EditorView): DecorationSet {
   }
   return builder.finish()
 }
+
+const trimTrailingWhitespace = EditorState.transactionFilter.of((tr: Transaction) => {
+  if (!tr.docChanged) return tr
+  const cursorLine = tr.newDoc.lineAt(tr.newSelection.main.head).number
+  const touched = new Set<number>()
+  tr.changes.iterChanges((_fA, _tA, fromB, toB) => {
+    const fromLine = tr.newDoc.lineAt(fromB).number
+    const toLine = tr.newDoc.lineAt(toB).number
+    for (let n = fromLine; n <= toLine; n++) touched.add(n)
+  })
+  const extra: { from: number; to: number; insert: string }[] = []
+  for (const n of touched) {
+    if (n === cursorLine) continue
+    const line = tr.newDoc.line(n)
+    const trimmed = line.text.replace(/[ \t]+$/, '')
+    if (trimmed.length === line.text.length) continue
+    extra.push({ from: line.from + trimmed.length, to: line.to, insert: '' })
+  }
+  if (extra.length === 0) return tr
+  return [tr, { changes: extra, selection: tr.newSelection, sequential: true }]
+})
 
 const txnDividers = ViewPlugin.fromClass(
   class {
@@ -225,6 +247,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     indentUnit.of(INDENT),
     beancountIndentService,
     beancountTabKeymap,
+    trimTrailingWhitespace,
     txnDividers,
     unifiedMergeView({
       original: initialBaseline,
