@@ -56,7 +56,7 @@ export function LedgerEditor({
     const next = baseline ?? ''
     if (prevBaselineRef.current === next) return
     prevBaselineRef.current = next
-    view.dispatch({ effects: setBaseline(next) })
+    view.dispatch({ effects: setBaseline(view.state, next) })
   }, [baseline])
 
   useEffect(() => {
