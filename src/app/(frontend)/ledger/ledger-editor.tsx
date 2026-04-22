@@ -19,6 +19,7 @@ type LedgerEditorProps = {
   validators?: readonly Validator[]
   completeAccount?: AccountCompleter
   onCursorChange?: (pos: number) => void
+  readOnly?: boolean
   className?: string
 }
 
@@ -29,6 +30,7 @@ export function LedgerEditor({
   validators,
   completeAccount,
   onCursorChange,
+  readOnly,
   className,
 }: LedgerEditorProps) {
   const viewRef = useRef<EditorView | null>(null)
@@ -77,6 +79,7 @@ export function LedgerEditor({
       className={className}
       value={value}
       onChange={onChange}
+      readOnly={readOnly ?? false}
       onCreateEditor={(view) => {
         viewRef.current = view
       }}

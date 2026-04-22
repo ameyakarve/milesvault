@@ -173,6 +173,7 @@ export function TextPane({
   baseline,
   onBufferChange,
   onCursorChange,
+  readOnly,
 }: {
   status: FetchStatus
   errorMsg: string | null
@@ -180,6 +181,7 @@ export function TextPane({
   baseline: string
   onBufferChange: (v: string) => void
   onCursorChange: (pos: number) => void
+  readOnly?: boolean
 }) {
   if (status !== 'idle') return <PaneStatus status={status} errorMsg={errorMsg} />
   return (
@@ -190,6 +192,7 @@ export function TextPane({
         baseline={baseline}
         onChange={onBufferChange}
         onCursorChange={onCursorChange}
+        readOnly={readOnly}
       />
     </div>
   )

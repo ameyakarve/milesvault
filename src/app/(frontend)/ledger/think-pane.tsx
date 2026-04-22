@@ -4,8 +4,8 @@ import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { ArrowUp, Mic, Paperclip } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { BufferState } from './buffer-state'
 import type { Op, Snapshot } from './propose'
-import { SaveButton, type SaveStatus } from './save-status'
 import { createMapReader } from '@/lib/ledger-reader/map'
 import { createHttpServerReader } from '@/lib/ledger-reader/http-server'
 import { createMergedReader } from '@/lib/ledger-reader/merged'
@@ -36,10 +36,9 @@ type ThinkPaneProps = {
   email: string
   buffer: string
   snapshots: Snapshot[]
-  dirty: boolean
-  saveStatus: SaveStatus
-  onSave: () => void | Promise<void>
+  bufferState: BufferState
   onPropose: OnPropose
+  onAiBusyChange?: (busy: boolean) => void
 }
 
 export function ThinkPane(props: ThinkPaneProps) {
@@ -55,11 +54,11 @@ function ThinkPaneInner({
   email,
   buffer,
   snapshots,
-  dirty,
-  saveStatus,
-  onSave,
+  bufferState,
   onPropose,
+  onAiBusyChange,
 }: ThinkPaneProps) {
+  const dirty = bufferState.kind !== 'clean'
   const agent = useAgent({
     agent: 'think-agent',
     name: email,
@@ -122,6 +121,9 @@ function ThinkPaneInner({
   })
   const [draft, setDraft] = useState('')
   const busy = status === 'streaming' || status === 'submitted'
+  useEffect(() => {
+    onAiBusyChange?.(busy)
+  }, [busy, onAiBusyChange])
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -141,10 +143,11 @@ function ThinkPaneInner({
           </span>
           <button
             type="button"
+            disabled={busy}
             onClick={() => {
               clearHistory()
             }}
-            className="font-mono text-[10px] text-slate-500 hover:text-navy-700 uppercase tracking-[0.08em]"
+            className="font-mono text-[10px] text-slate-500 hover:text-navy-700 uppercase tracking-[0.08em] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             clear
           </button>
@@ -163,16 +166,7 @@ function ThinkPaneInner({
             ask about your ledger, or describe a transaction to stage…
           </div>
         ) : (
-          messages.map((m, idx) => (
-            <Turn
-              key={m.id}
-              message={m as ThinkMessage}
-              isLast={idx === messages.length - 1}
-              dirty={dirty}
-              saveStatus={saveStatus}
-              onSave={onSave}
-            />
-          ))
+          messages.map((m) => <Turn key={m.id} message={m as ThinkMessage} />)
         )}
         {busy ? <BusyIndicator label={status} /> : null}
       </div>
@@ -217,30 +211,8 @@ function ThinkPaneInner({
   )
 }
 
-function Turn({
-  message,
-  isLast,
-  dirty,
-  saveStatus,
-  onSave,
-}: {
-  message: ThinkMessage
-  isLast: boolean
-  dirty: boolean
-  saveStatus: SaveStatus
-  onSave: () => void | Promise<void>
-}) {
+function Turn({ message }: { message: ThinkMessage }) {
   const isUser = message.role === 'user'
-  const showSaveCard =
-    isLast &&
-    !isUser &&
-    dirty &&
-    message.parts.some((p) => {
-      if (typeof p.type !== 'string' || !p.type.startsWith('tool-propose_')) return false
-      const tp = p as ToolPart
-      const out = tp.output as { ok?: boolean } | undefined
-      return out?.ok === true
-    })
   return (
     <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
       <div
@@ -254,7 +226,6 @@ function Turn({
           <PartView key={i} part={part} />
         ))}
       </div>
-      {showSaveCard ? <SaveButton saveStatus={saveStatus} onSave={onSave} /> : null}
     </div>
   )
 }

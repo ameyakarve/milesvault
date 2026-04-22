@@ -1,4 +1,5 @@
 import { CircleDot, Save } from 'lucide-react'
+import type { BufferState } from './buffer-state'
 
 export type SaveStatus = 'idle' | 'saving' | 'conflict' | 'error'
 
@@ -12,26 +13,38 @@ export type DescribedSaveStatus = {
 
 export function describeSaveStatus(input: {
   saveStatus: SaveStatus
-  dirty: boolean
+  bufferState: BufferState
   errorMsg?: string | null
 }): DescribedSaveStatus {
-  const { saveStatus, dirty, errorMsg } = input
+  const { saveStatus, bufferState, errorMsg } = input
   const isError = saveStatus === 'error' || saveStatus === 'conflict'
   const isBusy = saveStatus === 'saving'
+  const isDirty = bufferState.kind === 'dirty'
+  const isStagedUnvalidated =
+    bufferState.kind === 'staged' && !bufferState.validated
+  const isStaged = bufferState.kind === 'staged' && bufferState.validated
   const tone = isError
     ? 'bg-red-50 text-red-700'
     : isBusy
       ? 'bg-sky-50 text-sky-700'
-      : dirty
-        ? 'bg-amber-100 text-amber-800'
-        : 'bg-emerald-50 text-emerald-700'
+      : isDirty
+        ? 'bg-red-50 text-red-700'
+        : isStagedUnvalidated
+          ? 'bg-amber-100 text-amber-800'
+          : isStaged
+            ? 'bg-sky-50 text-sky-700'
+            : 'bg-emerald-50 text-emerald-700'
   const dotColor = isError
     ? 'text-red-600'
     : isBusy
       ? 'text-sky-700'
-      : dirty
-        ? 'text-amber-700'
-        : 'text-emerald-700'
+      : isDirty
+        ? 'text-red-600'
+        : isStagedUnvalidated
+          ? 'text-amber-700'
+          : isStaged
+            ? 'text-sky-700'
+            : 'text-emerald-700'
   const label =
     saveStatus === 'saving'
       ? 'saving…'
@@ -39,22 +52,30 @@ export function describeSaveStatus(input: {
         ? 'conflict'
         : saveStatus === 'error'
           ? (errorMsg ?? 'error')
-          : dirty
-            ? 'unsaved'
-            : 'saved'
+          : isDirty
+            ? 'parse errors'
+            : isStagedUnvalidated
+              ? 'staged · invalid'
+              : isStaged
+                ? 'staged'
+                : 'saved'
   return { tone, dotColor, label, isError, isBusy }
 }
 
 export function SavePill({
   saveStatus,
-  dirty,
+  bufferState,
   errorMsg,
 }: {
   saveStatus: SaveStatus
-  dirty: boolean
+  bufferState: BufferState
   errorMsg?: string | null
 }) {
-  const { tone, dotColor, label } = describeSaveStatus({ saveStatus, dirty, errorMsg })
+  const { tone, dotColor, label } = describeSaveStatus({
+    saveStatus,
+    bufferState,
+    errorMsg,
+  })
   return (
     <div
       className={`h-[24px] px-2 rounded-[4px] flex items-center gap-1.5 font-mono text-[11px] ml-1 ${tone}`}
@@ -70,9 +91,11 @@ export function SavePill({
 export function SaveButton({
   saveStatus,
   onSave,
+  disabled = false,
 }: {
   saveStatus: SaveStatus
   onSave: () => void | Promise<void>
+  disabled?: boolean
 }) {
   const busy = saveStatus === 'saving'
   const label =
@@ -90,7 +113,7 @@ export function SaveButton({
   return (
     <button
       type="button"
-      disabled={busy}
+      disabled={busy || disabled}
       onClick={() => {
         void onSave()
       }}
