@@ -84,12 +84,12 @@ export const scandiEditorTheme = EditorView.theme(
       fontWeight: '600',
       textAlign: 'center',
     },
-    '&light.cm-merge-b .cm-changedLineGutter': {
+    '&.cm-merge-b .cm-changedLineGutter': {
       color: SKY_700,
       backgroundColor: 'rgba(2, 132, 199, 0.10)',
       '&::before': { content: '"+"' },
     },
-    '&light .cm-deletedLineGutter': {
+    '& .cm-deletedLineGutter': {
       color: AMBER_700,
       backgroundColor: 'rgba(180, 83, 9, 0.10)',
       '&::before': { content: '"-"' },
