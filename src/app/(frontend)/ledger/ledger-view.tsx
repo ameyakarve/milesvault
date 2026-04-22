@@ -20,7 +20,7 @@ import { splitEntries } from '@/lib/beancount/extract'
 import { format } from '@/lib/beancount/format'
 import { type BufferState, evaluateBuffer } from './buffer-state'
 import { composeBuffer } from './editor'
-import { ChromeIconButton, PaneLabel } from './ledger-chrome'
+import { ChromeIconButton, PaneCap, PaneLabel } from './ledger-chrome'
 import { CardsList, type Entry, type FetchStatus, TextPane } from './ledger-panes'
 import { applyProposal, type Op } from './propose'
 import { SavePill } from './save-status'
@@ -155,6 +155,9 @@ function PaginationStrip({
   const nextDisabled = locked || page >= totalPages
   const prevTitle = locked ? lockTitle : page <= 1 ? undefined : 'previous page'
   const nextTitle = locked ? lockTitle : page >= totalPages ? undefined : 'next page'
+  const btnBase = 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px]'
+  const btnEnabled = `${btnBase} text-slate-600 hover:bg-slate-300 hover:text-navy-700 transition-colors`
+  const btnDisabled = `${btnBase} text-slate-500 opacity-30 cursor-default`
   return (
     <div className="h-[32px] bg-scandi-chrome flex items-center shrink-0 w-full relative">
       <div className="flex-1 flex items-center justify-center gap-2">
@@ -164,11 +167,7 @@ function PaginationStrip({
           title={prevTitle}
           disabled={prevDisabled}
           onClick={() => onPage(page - 1)}
-          className={
-            prevDisabled
-              ? 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px] text-slate-500 opacity-30 cursor-default'
-              : 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px] text-slate-600 hover:bg-[#CBD5E1] hover:text-[#0F172A] transition-colors'
-          }
+          className={prevDisabled ? btnDisabled : btnEnabled}
         >
           <ChevronLeft size={14} strokeWidth={1.5} />
         </button>
@@ -181,11 +180,7 @@ function PaginationStrip({
           title={nextTitle}
           disabled={nextDisabled}
           onClick={() => onPage(page + 1)}
-          className={
-            nextDisabled
-              ? 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px] text-slate-500 opacity-30 cursor-default'
-              : 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px] text-slate-600 hover:bg-[#CBD5E1] hover:text-[#0F172A] transition-colors'
-          }
+          className={nextDisabled ? btnDisabled : btnEnabled}
         >
           <ChevronRight size={14} strokeWidth={1.5} />
         </button>
@@ -430,9 +425,9 @@ export function LedgerView({ email }: { email: string }) {
 
       <main className="flex-1 grid grid-cols-[1fr_2fr_1fr] gap-[1px] bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
         <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
-          <div className="h-[28px] shrink-0 px-3 flex items-center bg-scandi-cap shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_0_rgba(15,23,42,0.04)] min-w-0">
+          <PaneCap>
             <PaneLabel>LEDGER</PaneLabel>
-          </div>
+          </PaneCap>
           <div className="flex-1 min-h-0 bg-scandi-surface flex flex-col relative overflow-hidden [scrollbar-gutter:stable]">
             <CardsList
               status={state.status}
@@ -447,7 +442,7 @@ export function LedgerView({ email }: { email: string }) {
         </section>
 
         <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
-          <div className="h-[28px] shrink-0 px-3 flex items-center justify-between bg-scandi-cap shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_0_rgba(15,23,42,0.04)] min-w-0">
+          <PaneCap className="justify-between">
             <PaneLabel>EDITOR</PaneLabel>
             <button
               type="button"
@@ -459,7 +454,7 @@ export function LedgerView({ email }: { email: string }) {
             >
               <Copy size={14} strokeWidth={1.5} />
             </button>
-          </div>
+          </PaneCap>
           <div className="flex-1 min-h-0 bg-white flex flex-col overflow-hidden relative">
             <TextPane
               status={state.status}
@@ -473,23 +468,21 @@ export function LedgerView({ email }: { email: string }) {
           </div>
         </section>
 
-        <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
-          <ThinkPane
-            email={email}
-            buffer={buffer}
-            snapshots={snapshots}
-            saving={saving}
-            onAiBusyChange={setAiBusy}
-            onPropose={(ops: readonly Op[]) => {
-              const res = applyProposal(buffer, snapshots, ops)
-              if (res.ok === true) {
-                setBuffer(res.buffer)
-                return { ok: true }
-              }
-              return { ok: false, reason: res.reason }
-            }}
-          />
-        </section>
+        <ThinkPane
+          email={email}
+          buffer={buffer}
+          snapshots={snapshots}
+          saving={saving}
+          onAiBusyChange={setAiBusy}
+          onPropose={(ops: readonly Op[]) => {
+            const res = applyProposal(buffer, snapshots, ops)
+            if (res.ok === true) {
+              setBuffer(res.buffer)
+              return { ok: true }
+            }
+            return { ok: false, reason: res.reason }
+          }}
+        />
       </main>
 
       <PaginationStrip

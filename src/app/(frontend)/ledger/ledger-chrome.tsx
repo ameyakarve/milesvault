@@ -38,3 +38,19 @@ export function PaneLabel({ children }: { children: ReactNode }) {
     </h2>
   )
 }
+
+export function PaneCap({
+  children,
+  className = '',
+}: {
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div
+      className={`h-[28px] shrink-0 px-3 flex items-center bg-scandi-cap shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_0_rgba(15,23,42,0.04)] min-w-0 ${className}`}
+    >
+      {children}
+    </div>
+  )
+}
