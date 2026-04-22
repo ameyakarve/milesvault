@@ -291,9 +291,17 @@ export function LedgerView({ email }: { email: string }) {
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
   }, [page, totalPages])
-  const bufferState: BufferState = useMemo(() => {
-    if (state.status !== 'idle') return { kind: 'clean' }
-    return evaluateBuffer(buffer, baseline)
+  const [bufferState, setBufferState] = useState<BufferState>({ kind: 'clean' })
+  useEffect(() => {
+    if (state.status !== 'idle' || buffer === baseline) {
+      setBufferState({ kind: 'clean' })
+      return
+    }
+    setBufferState((prev) => (prev.kind === 'pending' ? prev : { kind: 'pending' }))
+    const handle = setTimeout(() => {
+      setBufferState(evaluateBuffer(buffer, baseline))
+    }, 250)
+    return () => clearTimeout(handle)
   }, [buffer, baseline, state.status])
   const dirty = bufferState.kind !== 'clean'
   const saveable = bufferState.kind === 'staged' && bufferState.validated
