@@ -432,7 +432,7 @@ export function LedgerView({ email }: { email: string }) {
         <div className="h-[28px] px-3 flex items-center border-b border-slate-300 border-r border-r-slate-300 bg-[#D9E3EC] min-w-0">
           <PaneLabel>LEDGER</PaneLabel>
         </div>
-        <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-300 border-r border-r-slate-300 bg-white min-w-0">
+        <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-300 border-r border-r-slate-300 bg-[#D9E3EC] min-w-0">
           <PaneLabel>EDITOR</PaneLabel>
           <button
             type="button"
