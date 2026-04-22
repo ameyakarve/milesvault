@@ -182,9 +182,7 @@ export const coreValidators: readonly Validator[] = [
 ]
 
 function parseNumber(text: string): number | null {
-  const cleaned = text.replace(/,/g, '').trim()
-  if (!/^[+-]?\d+(?:\.\d+)?$/.test(cleaned)) return null
-  const n = parseFloat(cleaned)
+  const n = Number(text.split(',').join(''))
   return Number.isFinite(n) ? n : null
 }
 

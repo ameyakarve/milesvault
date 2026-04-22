@@ -1,4 +1,5 @@
 import { Coins, CreditCard, type LucideIcon } from 'lucide-react'
+import { parse as parseBean, type Posting, type Transaction as BeanTxn } from 'beancount'
 import { paymentMethodDisplay } from '@/lib/beancount/account-display'
 import {
   type CardColor,
@@ -6,7 +7,6 @@ import {
   categoryForTxn,
   FALLBACK_CATEGORY,
 } from '@/lib/beancount/category-icons'
-import { parseBuffer, type ParsedPosting, type ParsedTxn } from '@/lib/beancount/parse'
 
 export type PillKind = 'split' | 'forex' | 'dcc' | 'benefit'
 export type { CardColor }
@@ -79,19 +79,17 @@ const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 const CASHBACK_ACCOUNT = 'Income:Rewards:Cashback'
 
-function formatDateLabel(dateStr: string): string {
-  const [ys, ms, ds] = dateStr.split('-')
-  const y = Number(ys)
-  const m = Number(ms)
-  const d = Number(ds)
-  if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) return dateStr
+function formatDateLabel(y: number, m: number, d: number): string {
+  if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) {
+    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  }
   const date = new Date(Date.UTC(y, m - 1, d))
   const wd = WEEKDAYS_SHORT[date.getUTCDay()] ?? ''
   const mon = MONTHS_SHORT[m - 1] ?? ''
   return `${wd}, ${d} ${mon}`
 }
 
-export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
+export function rowFromTxn(txn: BeanTxn, preset: CardPreset): CardRow {
   const payee = txn.payee?.trim() ?? ''
   const narration = txn.narration?.trim() ?? ''
   const title = payee || narration || 'Transaction'
@@ -121,7 +119,7 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
     glyph: category.icon,
     color: category.color,
     payee: title,
-    dateLabel: formatDateLabel(txn.date),
+    dateLabel: formatDateLabel(txn.date.year, txn.date.month, txn.date.day),
     subtext,
     amount,
     pill: undefined,
@@ -131,11 +129,11 @@ export function rowFromTxn(txn: ParsedTxn, preset: CardPreset): CardRow {
 }
 
 function matchExpensesOnePayment(
-  txn: ParsedTxn,
-): { expenses: ParsedPosting[]; payment: ParsedPosting } | null {
+  txn: BeanTxn,
+): { expenses: Posting[]; payment: Posting } | null {
   if (txn.postings.length < 2) return null
-  const expenses: ParsedPosting[] = []
-  const others: ParsedPosting[] = []
+  const expenses: Posting[] = []
+  const others: Posting[] = []
   for (const p of txn.postings) {
     if (p.account === 'Expenses' || p.account.startsWith('Expenses:')) expenses.push(p)
     else others.push(p)
@@ -145,16 +143,16 @@ function matchExpensesOnePayment(
 }
 
 function matchExpensesCashbacksPayment(
-  txn: ParsedTxn,
+  txn: BeanTxn,
 ): {
-  expenses: ParsedPosting[]
-  cashbacks: ParsedPosting[]
-  payment: ParsedPosting
+  expenses: Posting[]
+  cashbacks: Posting[]
+  payment: Posting
 } | null {
   if (txn.postings.length < 3) return null
-  const expenses: ParsedPosting[] = []
-  const cashbacks: ParsedPosting[] = []
-  const others: ParsedPosting[] = []
+  const expenses: Posting[] = []
+  const cashbacks: Posting[] = []
+  const others: Posting[] = []
   for (const p of txn.postings) {
     if (p.account === CASHBACK_ACCOUNT) cashbacks.push(p)
     else if (p.account === 'Expenses' || p.account.startsWith('Expenses:')) expenses.push(p)
@@ -168,30 +166,29 @@ function matchExpensesCashbacksPayment(
 }
 
 function sumPostings(
-  postings: readonly ParsedPosting[],
+  postings: readonly Posting[],
 ): { sum: number; currency: string | null } | null {
   if (postings.length === 0) return null
   let sum = 0
   let currency: string | null | undefined = undefined
   for (const p of postings) {
-    if (!p.amount) return null
-    const cleaned = p.amount.numberText.replace(/,/g, '').trim()
-    if (!/^[+-]?\d+(?:\.\d+)?$/.test(cleaned)) return null
-    const n = parseFloat(cleaned)
+    if (p.amount == null) return null
+    const n = parseFloat(p.amount)
     if (!Number.isFinite(n)) return null
-    if (currency === undefined) currency = p.amount.currency
-    else if (currency !== p.amount.currency) return null
+    const ccy = p.currency ?? null
+    if (currency === undefined) currency = ccy
+    else if (currency !== ccy) return null
     sum += n
   }
   return { sum, currency: currency ?? null }
 }
 
-function formatExpenseTotal(expenses: readonly ParsedPosting[]): string | null {
+function formatExpenseTotal(expenses: readonly Posting[]): string | null {
   const s = sumPostings(expenses)
   return s ? formatOutflow(s.sum, s.currency) : null
 }
 
-function formatCashbackTotal(cashbacks: readonly ParsedPosting[]): string | null {
+function formatCashbackTotal(cashbacks: readonly Posting[]): string | null {
   const s = sumPostings(cashbacks)
   if (!s) return null
   const abs = Math.abs(s.sum)
@@ -235,20 +232,24 @@ export function EntryCard({
   preset: CardPreset
   active?: boolean
 }) {
-  const { entries } = parseBuffer(text)
-  const txn = entries[0]
-  const row = txn ? rowFromTxn(txn, preset) : fallbackRow(text, preset)
+  const txn = safeParse(text)
+  const row = txn ? rowFromTxn(txn, preset) : fallbackRow(preset)
   return <Card row={row} active={active} />
 }
 
-function fallbackRow(raw: string, preset: CardPreset): CardRow {
-  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})\s+[*!]\s+(?:"([^"]*)"\s+)?(?:"([^"]*)")?/)
-  const payee = m ? m[4]?.trim() || m[5]?.trim() || 'Transaction' : 'Transaction'
-  const dateLabel = m ? formatDateLabel(`${m[1]}-${m[2]}-${m[3]}`) : '—'
+function safeParse(text: string): BeanTxn | null {
+  try {
+    return parseBean(text).transactions[0] ?? null
+  } catch {
+    return null
+  }
+}
+
+function fallbackRow(preset: CardPreset): CardRow {
   return {
     ...preset,
-    payee,
-    dateLabel,
+    payee: 'Transaction',
+    dateLabel: '—',
     subtext: null,
     category: FALLBACK_CATEGORY,
   }
