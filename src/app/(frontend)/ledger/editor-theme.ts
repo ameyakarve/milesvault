@@ -70,6 +70,10 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '&.cm-focused': { outline: 'none' },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: NAVY_600, borderLeftWidth: '1px' },
+    '&.cm-merge-b .cm-changedText, .cm-inlineChangedText': {
+      background: 'rgba(16, 185, 129, 0.18)',
+    },
+    '.cm-deletedChunk': { paddingLeft: '0' },
   },
   { dark: false },
 )
