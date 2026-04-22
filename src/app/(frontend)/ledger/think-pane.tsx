@@ -76,11 +76,23 @@ function ThinkPaneInner({
     onProposeRef.current = onPropose
   }, [onPropose])
 
+  const proposeFiredRef = useRef(false)
   const tools = useMemo(() => {
     const reader = createMapReader(() => entriesRef.current)
     return buildClientTools({
       reader,
-      propose: (ops) => onProposeRef.current(ops),
+      propose: (ops) => {
+        if (proposeFiredRef.current) {
+          return {
+            ok: false,
+            reason:
+              'propose already called this turn — you must bundle all ops into a single call. Do not call propose again until the user submits a new message.',
+          }
+        }
+        const res = onProposeRef.current(ops)
+        if (res.ok) proposeFiredRef.current = true
+        return res
+      },
     })
   }, [])
 
@@ -116,6 +128,7 @@ function ThinkPaneInner({
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
+    proposeFiredRef.current = false
     sendMessage({ text })
     setDraft('')
   }
@@ -132,6 +145,7 @@ function ThinkPaneInner({
             type="button"
             disabled={chatLocked}
             onClick={() => {
+              proposeFiredRef.current = false
               clearHistory()
             }}
             className="font-mono text-[10px] text-slate-500 hover:text-navy-700 uppercase tracking-[0.08em] disabled:opacity-40 disabled:cursor-not-allowed"
