@@ -218,6 +218,11 @@ export function LedgerView({ email }: { email: string }) {
 
   async function onSave() {
     if (saveStatus === 'saving') return
+    const verdict = evaluateBuffer(buffer, baseline)
+    if (verdict.kind !== 'staged' || !verdict.validated) {
+      setBufferState(verdict)
+      return
+    }
     const formatted = format(buffer)
     if (formatted !== buffer) setBuffer(formatted)
     setSaveStatus('saving')
@@ -304,7 +309,9 @@ export function LedgerView({ email }: { email: string }) {
     return () => clearTimeout(handle)
   }, [buffer, baseline, state.status])
   const dirty = bufferState.kind !== 'clean'
-  const saveable = bufferState.kind === 'staged' && bufferState.validated
+  const saveEnabled =
+    bufferState.kind === 'pending' ||
+    (bufferState.kind === 'staged' && bufferState.validated)
 
   return (
     <div className="w-screen h-screen flex flex-col bg-white text-navy-700 overflow-hidden font-sans">
@@ -330,7 +337,7 @@ export function LedgerView({ email }: { email: string }) {
                     : 'save'
             }
             dirty={dirty}
-            disabled={!saveable || saveStatus === 'saving' || aiBusy}
+            disabled={!saveEnabled || saveStatus === 'saving' || aiBusy}
             onClick={onSave}
           />
           <ChromeIconButton
