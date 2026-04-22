@@ -61,7 +61,9 @@ export const scandiEditorTheme = EditorView.theme(
       fontSize: '10px',
     },
     '.cm-lineNumbers .cm-gutterElement': { padding: '0 10px 0 16px' },
-    '.cm-activeLine': { backgroundColor: 'transparent' },
+    '.cm-activeLine:not(.cm-changedLine):not(.cm-deletedLine)': {
+      backgroundColor: 'transparent',
+    },
     '.cm-activeLineGutter': { backgroundColor: SLATE_50, color: NAVY_600 },
     '.cm-selectionBackground, .cm-content ::selection, ::selection': {
       backgroundColor: `${SLATE_200} !important`,
