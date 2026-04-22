@@ -47,6 +47,8 @@
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
     "AI_GATEWAY_NAME": "dd-ai-gateway",
     "CHAT_MODEL": "moonshotai/kimi-k2-instruct",
+    "WRITER_MODEL": "moonshotai/kimi-k2-instruct",
+    "WRITER_MAX_ATTEMPTS": "3",
   },
   "services": [
     // The service should match the "name" of your worker
@@ -104,6 +106,8 @@
         "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
         "AI_GATEWAY_NAME": "dd-ai-gateway",
         "CHAT_MODEL": "moonshotai/kimi-k2-instruct",
+        "WRITER_MODEL": "moonshotai/kimi-k2-instruct",
+        "WRITER_MAX_ATTEMPTS": "3",
       },
     },
   },
