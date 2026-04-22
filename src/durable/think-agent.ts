@@ -279,7 +279,7 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
     const finalMaxSteps = config.maxSteps ?? this.maxSteps
 
     console.log(
-      `[think] _runInferenceLoop override ACTIVE; stopWhen=[stepCountIs(${finalMaxSteps}), hasToolCall('reply')] tools=${Object.keys(finalTools).join(',')} continuation=${input.continuation}`,
+      `[think] _runInferenceLoop override ACTIVE; stopWhen=[stepCountIs(${finalMaxSteps}), hasToolCall('propose'), hasToolCall('reply')] tools=${Object.keys(finalTools).join(',')} continuation=${input.continuation}`,
     )
 
     // `parallel_tool_calls: false` is passed through verbatim by
@@ -305,9 +305,14 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
       tools: finalTools,
       activeTools: config.activeTools,
       toolChoice: config.toolChoice,
-      // THE ONLY DIVERGENCE FROM UPSTREAM: add hasToolCall('reply') so a
-      // single reply call ends the turn. See header comment.
-      stopWhen: [stepCountIs(finalMaxSteps), hasToolCall('reply')],
+      // THE ONLY DIVERGENCE FROM UPSTREAM: both `propose` and `reply` are
+      // terminal (they carry their own user-facing `message`), so a single
+      // call to either ends the turn. See header comment.
+      stopWhen: [
+        stepCountIs(finalMaxSteps),
+        hasToolCall('propose'),
+        hasToolCall('reply'),
+      ],
       providerOptions: mergedProviderOptions,
       abortSignal: input.signal,
       onChunk: async (event) => {
@@ -343,7 +348,7 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
   }
 
   // ---------------------------------------------------------------------------
-  // UPSTREAM PATCH: suppress auto-continuation after a `reply` tool result
+  // UPSTREAM PATCH: suppress auto-continuation after terminal tools
   // ---------------------------------------------------------------------------
   //
   // `@cloudflare/ai-chat`'s `sendToolOutputToServer` always sends every
@@ -354,27 +359,22 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
   // `node_modules/@cloudflare/think/dist/think.js:940-955`). That starts a
   // fresh `_runInferenceLoop({ continuation: true })` 50 ms later.
   //
-  // For every tool except `reply` that's correct: the model asked for data,
-  // the client executed the tool, the model must see the result and keep
-  // going. But `reply` is the terminal channel — its contract is "after this
-  // call returns, stop." Auto-continuing after `reply` drives Kimi K2 into an
-  // observed loop: reply → continuation → generate_entry → propose (blocked
-  // by dedup) → reply → continuation → … until the step budget runs out.
-  //
-  // Our `stopWhen: hasToolCall('reply')` override on `_runInferenceLoop` only
-  // stops the *current* streamText; it cannot prevent a brand-new loop that
-  // gets scheduled from the tool-result handler. So we also override this
-  // handler to skip the scheduling step specifically for `reply`.
+  // Both `propose` and `reply` are terminal tools — each one carries its
+  // own user-facing `message` and ends the turn. Auto-continuing after
+  // either would drive the model into a "double-check" loop (observed
+  // with Kimi K2: re-calls generate_entry + propose, hits the dedup
+  // guard, calls reply, loops until the step budget runs out).
   //
   // PRIMARY DEFENSE IS ELSEWHERE (`parallel_tool_calls: false`)
   // ----------------------------------------------------------
-  // This override is now belt-and-suspenders. The real fix for the loop is
-  // `parallel_tool_calls: false` passed via providerOptions on the streamText
-  // call — that forces vLLM to trim to a single tool call per step, which
-  // means `propose` and `reply` land in separate steps and `stopWhen`
-  // terminates the turn cleanly at reply. This override remains for the case
-  // where a (theoretically still-possible) single-step `reply` result comes
-  // back with autoContinue=true.
+  // This override is now belt-and-suspenders. `parallel_tool_calls: false`
+  // (passed via providerOptions on the streamText call) forces vLLM to trim
+  // to a single tool call per step, so `propose` / `reply` can't come back
+  // alongside another tool in the same step. Combined with
+  // `stopWhen: hasToolCall('propose' | 'reply')` on the streamText, the
+  // turn ends cleanly at the streamText level. This override catches any
+  // (theoretically still-possible) single-step terminal-tool result that
+  // arrives with `autoContinue: true` and prevents a fresh loop.
   //
   // UPSTREAM FIX WE'RE WAITING ON
   // -----------------------------
@@ -392,7 +392,10 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
     connection: unknown,
     event: ChatProtocolEvent,
   ): Promise<void> {
-    if (event.type !== 'tool-result' || event.toolName !== 'reply') {
+    const isTerminal =
+      event.type === 'tool-result' &&
+      (event.toolName === 'reply' || event.toolName === 'propose')
+    if (!isTerminal) {
       return (Think.prototype as any)._handleProtocolEvent.call(
         this,
         connection,
@@ -421,7 +424,7 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
       })
       .catch(() => {})
     console.log(
-      `[think] reply is terminal; suppressing auto-continuation (autoContinue=${event.autoContinue})`,
+      `[think] ${(event as { toolName: string }).toolName} is terminal; suppressing auto-continuation (autoContinue=${event.autoContinue})`,
     )
   }
 }

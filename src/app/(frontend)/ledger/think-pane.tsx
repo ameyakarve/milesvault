@@ -294,7 +294,7 @@ function PartView({ part }: { part: MessagePart }) {
       </div>
     )
   }
-  if (part.type === 'tool-reply') {
+  if (part.type === 'tool-reply' || part.type === 'tool-propose') {
     const tp = part as ToolPart
     const message = (tp.input as { message?: string } | undefined)?.message
     if (!message) return null
