@@ -4,7 +4,7 @@ import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { ArrowUp, Mic, Paperclip } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Proposal, Snapshot } from './propose'
+import type { Op, Snapshot } from './propose'
 import { SaveButton, type SaveStatus } from './save-status'
 import { createMapReader } from '@/lib/ledger-reader/map'
 import { createHttpServerReader } from '@/lib/ledger-reader/http-server'
@@ -30,7 +30,7 @@ type MessagePart =
 
 type ToolPart = Extract<MessagePart, { type: `tool-${string}` }>
 
-type OnPropose = (p: Proposal) => { ok: boolean; reason?: string }
+type OnPropose = (ops: readonly Op[]) => { ok: boolean; reason?: string }
 
 type ThinkPaneProps = {
   email: string
@@ -95,8 +95,7 @@ function ThinkPaneInner({
     })
     return buildClientTools({
       merged,
-      getEntries: () => entriesRef.current,
-      propose: (p) => onProposeRef.current(p),
+      propose: (ops) => onProposeRef.current(ops),
     })
   }, [])
 

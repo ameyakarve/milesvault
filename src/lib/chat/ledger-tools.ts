@@ -38,7 +38,7 @@ Examples:
   "all HSBC cashback card charges"    -> q: "@hsbccashback"
   "travel tag this month"             -> q: ">2026-04-01 <2026-04-30 #travel"
 
-Each result row includes its numeric id — use that id for ledger_get / propose_update / propose_delete. Results are capped by limit (max ${MAX_LIMIT}).`
+Each result row includes its numeric id — use that id for ledger_get and for propose update/delete ops. Results are capped by limit (max ${MAX_LIMIT}).`
 
 export function buildReadOnlyLedgerTools(env: Cloudflare.Env, email: string): ToolSet {
   const client = createLedgerClient(env, email)
@@ -81,27 +81,30 @@ export function buildAgenticLedgerTools(env: Cloudflare.Env, email: string): Too
     ...readOnly,
     reply: tool({
       description:
-        'Send a message to the user. Use for ALL user-facing text — confirmations, clarifying questions, one-line summaries after staging. Do NOT emit free-form assistant text; every reply must go through this tool. May be called in the same step as a propose_* to say something about what you just staged.',
+        'Send a message to the user. Use for ALL user-facing text — confirmations, clarifying questions, one-line summaries after staging. Do NOT emit free-form assistant text; every reply must go through this tool. May be called in the same step as propose to say something about what you just staged.',
       inputSchema: z.object({ message: z.string().min(1) }),
       execute: async ({ message }) => ({ ok: true, message }),
     }),
-    propose_create: tool({
+    propose: tool({
       description:
-        'Stage a NEW transaction in the user\'s ledger editor buffer. This does NOT save — it places the entry in the editor for the user to review and save. raw_text is a complete beancount transaction (header line + postings). Use accounts and formatting that match existing entries (run ledger_search first). Reply briefly describing what you staged.',
-      inputSchema: z.object({ raw_text: z.string().min(1) }),
-      execute: async ({ raw_text }) => ({ ok: true, staged: 'create', raw_text }),
-    }),
-    propose_update: tool({
-      description:
-        'Stage an edit to an existing transaction in the user\'s ledger editor buffer. You MUST call ledger_get(id) first to see the exact current raw_text, then pass the full replacement raw_text. Does NOT save — user reviews and saves. Reply briefly describing what you staged.',
-      inputSchema: z.object({ id: z.number().int().positive(), raw_text: z.string().min(1) }),
-      execute: async ({ id, raw_text }) => ({ ok: true, staged: 'update', id, raw_text }),
-    }),
-    propose_delete: tool({
-      description:
-        'Stage removal of a transaction from the user\'s ledger editor buffer. Does NOT save — user reviews and saves. Confirm by id. Reply briefly describing what you staged.',
-      inputSchema: z.object({ id: z.number().int().positive() }),
-      execute: async ({ id }) => ({ ok: true, staged: 'delete', id }),
+        "Stage a batch of create/update/delete ops against the editor buffer. All-or-nothing: any failure rejects the whole batch. Call AT MOST ONCE per user turn — pack every change into one `ops` array. Ops apply in order. For update/delete, the id MUST already be present in the buffer (positive = saved row loaded in the viewport; negative = unsaved create). Does NOT save.",
+      inputSchema: z.object({
+        ops: z
+          .array(
+            z.discriminatedUnion('op', [
+              z.object({ op: z.literal('create'), raw_text: z.string().min(1) }),
+              z.object({
+                op: z.literal('update'),
+                id: z.number().int(),
+                raw_text: z.string().min(1),
+              }),
+              z.object({ op: z.literal('delete'), id: z.number().int() }),
+            ]),
+          )
+          .min(1)
+          .max(100),
+      }),
+      execute: async ({ ops }) => ({ ok: true, staged: 'propose', count: ops.length }),
     }),
   }
 }
