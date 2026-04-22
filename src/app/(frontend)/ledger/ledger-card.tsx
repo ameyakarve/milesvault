@@ -212,7 +212,7 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
 
   return (
     <div className={shell}>
-      {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-navy-700" />}
+      {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-[#3B6B8C]" />}
       <div className="h-10 w-10 border border-slate-200 flex flex-col shrink-0 relative overflow-hidden bg-white">
         <div
           className={`h-[14px] ${palette.monthBg} ${palette.monthText} text-[9px] font-mono flex items-center justify-center uppercase leading-none border-b border-slate-200`}
