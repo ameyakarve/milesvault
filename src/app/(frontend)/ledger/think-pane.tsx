@@ -37,6 +37,7 @@ type ThinkPaneProps = {
   buffer: string
   snapshots: Snapshot[]
   bufferState: BufferState
+  saving?: boolean
   onPropose: OnPropose
   onAiBusyChange?: (busy: boolean) => void
 }
@@ -55,6 +56,7 @@ function ThinkPaneInner({
   buffer,
   snapshots,
   bufferState,
+  saving = false,
   onPropose,
   onAiBusyChange,
 }: ThinkPaneProps) {
@@ -121,6 +123,7 @@ function ThinkPaneInner({
   })
   const [draft, setDraft] = useState('')
   const busy = status === 'streaming' || status === 'submitted'
+  const chatLocked = busy || saving
   useEffect(() => {
     onAiBusyChange?.(busy)
   }, [busy, onAiBusyChange])
@@ -143,7 +146,7 @@ function ThinkPaneInner({
           </span>
           <button
             type="button"
-            disabled={busy}
+            disabled={chatLocked}
             onClick={() => {
               clearHistory()
             }}
@@ -184,9 +187,9 @@ function ThinkPaneInner({
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            disabled={busy}
+            disabled={chatLocked}
             className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400 disabled:opacity-50"
-            placeholder="ask, or describe a transaction to stage…"
+            placeholder={saving ? 'saving…' : 'ask, or describe a transaction to stage…'}
             type="text"
           />
           <button
@@ -199,8 +202,8 @@ function ThinkPaneInner({
           </button>
           <button
             type="submit"
-            disabled={!draft.trim() || busy}
-            title="send"
+            disabled={!draft.trim() || chatLocked}
+            title={saving ? 'send (saving)' : 'send'}
             className="bg-navy-600 text-white w-[24px] h-[24px] flex items-center justify-center hover:bg-navy-700 transition-colors shrink-0 ml-1 rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ArrowUp size={14} strokeWidth={1.5} />
