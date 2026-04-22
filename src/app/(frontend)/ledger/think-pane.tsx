@@ -251,6 +251,8 @@ function ThinkPaneInner({
 
 function Turn({ message }: { message: ThinkMessage }) {
   const isUser = message.role === 'user'
+  const visible = message.parts.filter(isVisiblePart)
+  if (visible.length === 0) return null
   return (
     <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
       <div
@@ -260,12 +262,21 @@ function Turn({ message }: { message: ThinkMessage }) {
             : 'bg-emerald-50 text-navy-600 border-l-[2px] border-l-emerald-500'
         }`}
       >
-        {message.parts.map((part, i) => (
+        {visible.map((part, i) => (
           <PartView key={i} part={part} />
         ))}
       </div>
     </div>
   )
+}
+
+function isVisiblePart(part: MessagePart): boolean {
+  if (part.type === 'text') return Boolean((part as { text: string }).text)
+  if (part.type === 'tool-reply' || part.type === 'tool-propose') {
+    const tp = part as ToolPart
+    return Boolean((tp.input as { message?: string } | undefined)?.message)
+  }
+  return false
 }
 
 function BusyIndicator({ label }: { label: string }) {
@@ -288,9 +299,11 @@ function BusyIndicator({ label }: { label: string }) {
 
 function PartView({ part }: { part: MessagePart }) {
   if (part.type === 'text') {
+    const text = (part as { text: string }).text
+    if (!text) return null
     return (
       <div className="whitespace-pre-wrap text-[11px] leading-relaxed">
-        {(part as { text: string }).text}
+        {text}
       </div>
     )
   }
@@ -302,22 +315,6 @@ function PartView({ part }: { part: MessagePart }) {
       <div className="whitespace-pre-wrap text-[11px] leading-relaxed">
         {message}
       </div>
-    )
-  }
-  if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
-    const tp = part as ToolPart
-    const toolName = tp.type.replace(/^tool-/, '')
-    const isPropose = toolName.startsWith('propose_')
-    return (
-      <pre
-        className={`mt-1 first:mt-0 overflow-x-auto text-[10px] leading-snug whitespace-pre-wrap ${
-          isPropose ? 'text-sky-700' : 'text-slate-600'
-        }`}
-      >
-        <span className="text-slate-400">→ {toolName}</span>
-        {tp.input !== undefined ? `\n${JSON.stringify(tp.input)}` : ''}
-        {tp.output !== undefined ? `\n← ${JSON.stringify(tp.output)}` : ''}
-      </pre>
     )
   }
   return null

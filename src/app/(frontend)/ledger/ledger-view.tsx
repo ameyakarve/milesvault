@@ -428,14 +428,6 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </div>
 
-      <PaginationStrip
-        page={page}
-        totalPages={totalPages}
-        onPage={setPage}
-        locked={pageLocked}
-        lockTitle={pageLockTitle}
-      />
-
       <main className="flex-1 flex overflow-hidden min-h-0">
         <div className="flex-[3] flex flex-col min-w-0 border-r border-slate-200">
           <div className="flex w-full shrink-0">
