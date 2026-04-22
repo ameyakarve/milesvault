@@ -51,6 +51,29 @@ const schemaReply: JSONSchema7 = {
   additionalProperties: false,
 }
 
+const SEARCH_DESCRIPTION = `Search the transactions currently visible in the editor buffer. Scoped to the current page — entries on other pages are not searchable. If the user asks about something older, ask them to page to it first.
+
+Query grammar (tokens combined by whitespace, all ANDed):
+  @<seg>              Match any account segment. Segments split on ':' — '@expenses:food' expands to @expenses AND @food.
+  #<tag>              Match a tag.
+  ^<link>             Match a link.
+  >YYYY-MM-DD         Inclusive start date (>YYYY-MM = start of month).
+  <YYYY-MM-DD         Inclusive end date (<YYYY-MM = end of month).
+  YYYY-MM..YYYY-MM    Closed date range (day variants also work).
+  YYYY-MM-DD          Exact day.
+  <free word>         Matches any indexed field (payee, account, currency, tag, link). Narration is NOT indexed.
+
+Rules:
+- Prefer concrete filters over free text. Use @account for category filters and a single free token for payee. Don't pass filler words ("all", "this", "month", "by") — they either filter to zero or duplicate an @filter.
+- To find a specific txn by payee+date (e.g. "the Amudham one from April 19"), combine a tight date range with the payee as a free token: '>2026-04-19 <2026-04-19 amudham'.
+- If 0 hits, broaden (drop the date or widen it) before guessing a different merchant name.
+- Empty q returns most-recent first.
+
+Examples:
+  "find Amudham on 19 April"   -> q: ">2026-04-19 <2026-04-19 amudham"
+  "food spend in April 2026"   -> q: ">2026-04-01 <2026-04-30 @expenses:food"
+  "travel tag this month"      -> q: ">2026-04-01 <2026-04-30 #travel"`
+
 const schemaPropose: JSONSchema7 = {
   type: 'object',
   properties: {
@@ -109,8 +132,7 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
       },
     },
     ledger_search: {
-      description:
-        "Search the transactions currently visible in the editor buffer. This is scoped to the current page — entries on other pages are not searchable. If the user asks about something older, ask them to page to the right range first. Grammar: @account, #tag, ^link, >YYYY-MM-DD, <YYYY-MM-DD, free tokens.",
+      description: SEARCH_DESCRIPTION,
       parameters: schemaSearch,
       execute: async (input): Promise<SearchResult> => {
         const { q = '', limit = 20, offset = 0 } = (input ?? {}) as {

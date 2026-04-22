@@ -1,7 +1,5 @@
 import { Think } from '@cloudflare/think'
 import type {
-  ToolCallContext,
-  ToolCallDecision,
   ToolCallResultContext,
   TurnConfig,
   TurnContext,
@@ -9,8 +7,7 @@ import type {
 import type { Session } from 'agents/experimental/memory/session'
 import { createCompactFunction } from 'agents/experimental/memory/utils'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { generateText, wrapLanguageModel, type LanguageModel, type ToolSet } from 'ai'
-import { buildAgenticLedgerTools } from '@/lib/chat/ledger-tools'
+import { generateText, wrapLanguageModel, type LanguageModel } from 'ai'
 import { kimiRescueMiddleware } from '@/lib/chat/kimi-rescue-middleware'
 import { toolDisciplineMiddleware } from '@/lib/chat/tool-discipline-middleware'
 import { withNimRequestNormalize } from '@/lib/chat/nim-request-normalize'
@@ -50,12 +47,6 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
     return buildSystemPrompt()
   }
 
-  getTools(): ToolSet {
-    const email = this.name
-    if (!email || !email.includes('@')) return {}
-    return buildAgenticLedgerTools(this.env, email)
-  }
-
   async configureSession(session: Session): Promise<Session> {
     const summarizerModel = this.getModel()
     return session
@@ -87,19 +78,6 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
       }
     }
     return { system: `${ctx.system}\n\n${buildAccountsBlock(userAccounts)}` }
-  }
-
-  beforeToolCall(ctx: ToolCallContext): ToolCallDecision | void {
-    if (ctx.toolName === 'ledger_search') {
-      const q = (ctx.input as { q?: unknown })?.q
-      if (typeof q === 'string' && q.trim().length === 0) {
-        return {
-          action: 'block',
-          reason:
-            'Empty query. Provide at least one filter (date range, @account, or a specific payee/merchant).',
-        }
-      }
-    }
   }
 
   afterToolCall(ctx: ToolCallResultContext): void {
