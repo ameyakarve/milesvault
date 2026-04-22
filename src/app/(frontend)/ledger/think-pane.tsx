@@ -172,7 +172,7 @@ function ThinkPaneInner({
 
   return (
     <div className="flex-1 bg-[#CCDBE7] flex flex-col overflow-hidden">
-      <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-300 bg-[#CCDBE7] shrink-0 gap-2">
+      <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-300 bg-[#D9E3EC] shrink-0 gap-2">
         <PaneLabel>ASSISTANT</PaneLabel>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] text-slate-500 uppercase tracking-[0.08em]">
