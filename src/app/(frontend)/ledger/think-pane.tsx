@@ -39,7 +39,7 @@ export function ThinkPane(props: ThinkPaneProps) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) {
-    return <div className="flex-1 bg-white flex flex-col overflow-hidden" />
+    return <div className="flex-1 bg-[#ECEFF4] flex flex-col overflow-hidden" />
   }
   return <ThinkPaneInner {...props} />
 }
@@ -171,8 +171,8 @@ function ThinkPaneInner({
   }
 
   return (
-    <div className="flex-1 bg-white flex flex-col overflow-hidden">
-      <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-200 bg-white shrink-0 gap-2">
+    <div className="flex-1 bg-[#ECEFF4] flex flex-col overflow-hidden">
+      <div className="h-[28px] px-3 flex items-center justify-between border-b border-slate-300 bg-[#ECEFF4] shrink-0 gap-2">
         <PaneLabel>ASSISTANT</PaneLabel>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] text-slate-500 uppercase tracking-[0.08em]">
@@ -209,8 +209,8 @@ function ThinkPaneInner({
         {busy ? <BusyIndicator label={status} /> : null}
       </div>
 
-      <form onSubmit={onSubmit} className="p-2 border-t border-slate-200 shrink-0 bg-white mt-auto">
-        <div className="bg-white flex items-center px-2 h-[36px] border border-slate-200 focus-within:border-navy-600 transition-colors">
+      <form onSubmit={onSubmit} className="p-2 border-t border-slate-300 shrink-0 bg-[#ECEFF4] mt-auto">
+        <div className="bg-white flex items-center px-2 h-[36px] border border-slate-300 focus-within:border-navy-700 transition-colors">
           <button
             type="button"
             title="attach"
@@ -256,10 +256,10 @@ function Turn({ message }: { message: ThinkMessage }) {
   return (
     <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
       <div
-        className={`px-3 py-2 max-w-[85%] border border-slate-200 ${
+        className={`px-3 py-2 max-w-[85%] border border-slate-300 ${
           isUser
-            ? 'bg-amber-50/50 text-navy-600 border-l-[2px] border-l-amber-500'
-            : 'bg-emerald-50 text-navy-600 border-l-[2px] border-l-emerald-500'
+            ? 'bg-slate-100 text-navy-700 border-l-[3px] border-l-slate-500'
+            : 'bg-white text-navy-700 border-l-[3px] border-l-slate-400'
         }`}
       >
         {visible.map((part, i) => (
@@ -283,13 +283,13 @@ function BusyIndicator({ label }: { label: string }) {
   const text = label === 'submitted' ? 'thinking' : 'working'
   return (
     <div className="flex items-start">
-      <div className="px-3 py-2 border border-slate-200 border-l-[2px] border-l-emerald-500 bg-emerald-50 flex items-center gap-2">
+      <div className="px-3 py-2 border border-slate-300 border-l-[3px] border-l-slate-400 bg-white flex items-center gap-2">
         <span className="flex gap-1" aria-hidden>
-          <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse [animation-delay:0ms]" />
-          <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse [animation-delay:150ms]" />
-          <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse [animation-delay:300ms]" />
+          <span className="w-1 h-1 rounded-full bg-navy-700 animate-pulse [animation-delay:0ms]" />
+          <span className="w-1 h-1 rounded-full bg-navy-700 animate-pulse [animation-delay:150ms]" />
+          <span className="w-1 h-1 rounded-full bg-navy-700 animate-pulse [animation-delay:300ms]" />
         </span>
-        <span className="text-[10px] uppercase tracking-[0.08em] text-emerald-700">
+        <span className="text-[10px] uppercase tracking-[0.08em] text-navy-700">
           {text}…
         </span>
       </div>

@@ -21,11 +21,11 @@ export function ChromeIconButton({
       aria-label={title}
       onClick={onClick}
       disabled={disabled}
-      className="w-[28px] h-[28px] flex items-center justify-center rounded-[2px] hover:bg-slate-50 transition-colors relative"
+      className="w-[28px] h-[28px] flex items-center justify-center rounded-[2px] hover:bg-white transition-colors relative"
     >
       <IconCmp size={16} strokeWidth={1.5} className="text-slate-600" />
       {dirty && (
-        <span className="absolute top-[6px] right-[6px] w-[6px] h-[6px] bg-amber-500 rounded-[2px]" />
+        <span className="absolute top-[6px] right-[6px] w-[6px] h-[6px] bg-navy-700 rounded-[2px]" />
       )}
     </button>
   )
