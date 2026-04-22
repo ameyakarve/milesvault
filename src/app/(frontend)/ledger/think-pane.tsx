@@ -83,6 +83,7 @@ function ThinkPaneInner({
       reader,
       propose: (ops) => {
         if (proposeFiredRef.current) {
+          console.warn('[think-pane] propose dedup guard fired — model called propose twice this turn')
           return {
             ok: false,
             reason:
@@ -91,6 +92,7 @@ function ThinkPaneInner({
         }
         const res = onProposeRef.current(ops)
         if (res.ok) proposeFiredRef.current = true
+        else console.warn('[think-pane] onPropose rejected:', res.reason)
         return res
       },
     })
@@ -100,14 +102,24 @@ function ThinkPaneInner({
     agent,
     tools,
     onToolCall: async ({ toolCall, addToolOutput }) => {
+      console.log(
+        `[think-pane] onToolCall name=${toolCall.toolName} id=${toolCall.toolCallId}`,
+      )
       const entry = (tools as Record<string, { execute?: (input: unknown) => unknown }>)[
         toolCall.toolName
       ]
-      if (!entry?.execute) return
+      if (!entry?.execute) {
+        console.warn(`[think-pane] onToolCall: no execute for ${toolCall.toolName}`)
+        return
+      }
       try {
         const output = await entry.execute(toolCall.input)
         addToolOutput({ toolCallId: toolCall.toolCallId, output })
       } catch (e) {
+        console.error(
+          `[think-pane] onToolCall execute threw for ${toolCall.toolName}:`,
+          e,
+        )
         addToolOutput({
           toolCallId: toolCall.toolCallId,
           output: null,
@@ -115,6 +127,17 @@ function ThinkPaneInner({
           errorText: e instanceof Error ? e.message : String(e),
         })
       }
+    },
+    onError: (e) => {
+      console.error(
+        '[think-pane] useAgentChat error:',
+        e instanceof Error ? `${e.name}: ${e.message}\n${e.stack}` : String(e),
+      )
+    },
+    onFinish: ({ message, isError, isAbort, isDisconnect, finishReason }) => {
+      console.log(
+        `[think-pane] onFinish msgId=${message?.id} parts=${message?.parts?.length ?? 0} isError=${isError} isAbort=${isAbort} isDisconnect=${isDisconnect} finishReason=${finishReason}`,
+      )
     },
   })
   const [draft, setDraft] = useState('')

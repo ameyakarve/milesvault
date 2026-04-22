@@ -128,6 +128,7 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
       parameters: schemaReply,
       execute: async (input) => {
         const { message } = (input ?? {}) as { message: string }
+        console.log(`[reply] executed; msgLen=${message?.length ?? 0}`)
         return {
           ok: true,
           done: true,
@@ -172,6 +173,8 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
       parameters: schemaPropose,
       execute: async (input) => {
         const { ops } = (input ?? {}) as { ops: readonly Op[] }
+        const opKinds = ops.map((o) => o.op).join(',')
+        console.log(`[propose] invoked n=${ops.length} ops=[${opKinds}]`)
         const errors: { index: number; errors: ValidationError[] }[] = []
         for (let i = 0; i < ops.length; i++) {
           const op = ops[i]
@@ -180,9 +183,18 @@ export function buildClientTools(deps: ClientToolDeps): ClientTools {
             if (!v.ok) errors.push({ index: i, errors: v.errors })
           }
         }
-        if (errors.length > 0) return { ok: false, errors }
+        if (errors.length > 0) {
+          console.warn(
+            `[propose] validation failed: ${errors.map((e) => `idx=${e.index} errs=${e.errors.map((x) => x.message).join('|')}`).join('; ')}`,
+          )
+          return { ok: false, errors }
+        }
         const result = propose(ops)
-        if (!result.ok) return result
+        if (!result.ok) {
+          console.warn(`[propose] onPropose rejected: ${result.reason ?? '(no reason)'}`)
+          return result
+        }
+        console.log(`[propose] staged n=${ops.length}`)
         return {
           ...result,
           done: true,

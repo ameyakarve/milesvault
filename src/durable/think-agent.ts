@@ -116,6 +116,11 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
       }
     }
     this.accountsForTurn = userAccounts
+    if (userAccounts.length === 0) {
+      console.warn(`[think] beforeTurn: accounts=0 for ${email}`)
+    } else {
+      console.log(`[think] beforeTurn: accounts=${userAccounts.length}`)
+    }
     return { system: `${ctx.system}\n\n${buildAccountsBlock(userAccounts)}` }
   }
 
@@ -272,6 +277,10 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
     const finalTools = self._wrapToolsWithDecision(mergedTools)
     const finalMaxSteps = config.maxSteps ?? this.maxSteps
 
+    console.log(
+      `[think] _runInferenceLoop override ACTIVE; stopWhen=[stepCountIs(${finalMaxSteps}), hasToolCall('reply')] tools=${Object.keys(finalTools).join(',')} continuation=${input.continuation}`,
+    )
+
     const result = streamText({
       model: finalModel,
       system: finalSystem,
@@ -289,6 +298,13 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
         await self._pipelineExtensionChunk(event)
       },
       onStepFinish: async (event) => {
+        const toolCallNames = (event.toolCalls ?? [])
+          .map((tc: { toolName: string }) => tc.toolName)
+          .join(',')
+        const textLen = typeof event.text === 'string' ? event.text.length : 0
+        console.log(
+          `[think] stepFinish toolCalls=[${toolCallNames}] textLen=${textLen} finishReason=${event.finishReason}`,
+        )
         await self.onStepFinish(event)
         await self._pipelineExtensionStepFinish(event)
       },

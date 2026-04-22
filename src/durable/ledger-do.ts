@@ -290,7 +290,12 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         })
       }
     }
-    if (conflicts.length > 0) return { ok: false, kind: 'conflict', conflicts }
+    if (conflicts.length > 0) {
+      console.warn(
+        `[ledger-do] applyBatch conflict n=${conflicts.length} sections=${conflicts.map((c) => `${c.section}:${c.id}`).join(',')}`,
+      )
+      return { ok: false, kind: 'conflict', conflicts }
+    }
 
     const updated: TransactionRow[] = []
     const created: TransactionRow[] = []
@@ -352,6 +357,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }
     })
 
+    console.log(
+      `[ledger-do] applyBatch ok updated=${updated.length} created=${created.length} deleted=${deleted.length}`,
+    )
     return { ok: true, updated, created, deleted }
   }
 
@@ -372,7 +380,12 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         })
       }
     }
-    if (conflicts.length > 0) return { ok: false, kind: 'conflict', conflicts }
+    if (conflicts.length > 0) {
+      console.warn(
+        `[ledger-do] replaceBuffer conflict n=${conflicts.length} ids=${conflicts.map((c) => c.id).join(',')}`,
+      )
+      return { ok: false, kind: 'conflict', conflicts }
+    }
 
     const entries = splitEntries(input.buffer)
       .map((e) => e.text.trim())
@@ -419,6 +432,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         if (row) rows.push(row)
       }
     })
+    console.log(
+      `[ledger-do] replaceBuffer ok entries=${entries.length} replaced=${input.knownIds.length}`,
+    )
     return { ok: true, rows }
   }
 
