@@ -156,7 +156,7 @@ function PaginationStrip({
   const prevTitle = locked ? lockTitle : page <= 1 ? undefined : 'previous page'
   const nextTitle = locked ? lockTitle : page >= totalPages ? undefined : 'next page'
   return (
-    <div className="h-[32px] bg-[#DCE3EB] border-t border-t-[#AEBCCA] flex items-center shrink-0 w-full relative">
+    <div className="h-[32px] bg-scandi-chrome flex items-center shrink-0 w-full relative">
       <div className="flex-1 flex items-center justify-center gap-2">
         <button
           type="button"
@@ -350,7 +350,7 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </header>
 
-      <div className="h-[40px] px-4 flex justify-between items-center bg-[#DCE3EB] border-b border-[#AEBCCA] shrink-0 z-10">
+      <div className="h-[40px] px-4 flex justify-between items-center bg-scandi-chrome shrink-0 z-10">
         <div className="flex items-center">
           <ChromeIconButton icon={Plus} title="new entry" />
           <ChromeIconButton
@@ -428,24 +428,52 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </div>
 
-      <main className="flex-1 grid grid-cols-[1fr_2fr_1fr] grid-rows-[28px_minmax(0,1fr)] overflow-hidden min-h-0">
-        <div className="h-[28px] px-3 flex items-center border-b border-b-[#AEBCCA] border-r border-r-[#AEBCCA] bg-[#C7D3DF] min-w-0">
-          <PaneLabel>LEDGER</PaneLabel>
-        </div>
-        <div className="h-[28px] px-3 flex items-center justify-between border-b border-b-[#AEBCCA] border-r border-r-[#AEBCCA] bg-[#C7D3DF] min-w-0">
-          <PaneLabel>EDITOR</PaneLabel>
-          <button
-            type="button"
-            title={copied ? 'copied' : 'copy buffer'}
-            onClick={onCopyBuffer}
-            className={`w-[20px] h-[20px] flex items-center justify-center hover:bg-slate-200 transition-colors rounded-[4px] mr-[12px] ${
-              copied ? 'text-[#224866]' : 'text-slate-500 hover:text-navy-700'
-            }`}
-          >
-            <Copy size={14} strokeWidth={1.5} />
-          </button>
-        </div>
-        <section className="[grid-column:3] [grid-row:1/span_2] min-w-0 min-h-0 flex flex-col overflow-hidden">
+      <main className="flex-1 grid grid-cols-[1fr_2fr_1fr] gap-[1px] bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
+        <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
+          <div className="h-[28px] shrink-0 px-3 flex items-center bg-scandi-cap shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_0_rgba(15,23,42,0.04)] min-w-0">
+            <PaneLabel>LEDGER</PaneLabel>
+          </div>
+          <div className="flex-1 min-h-0 bg-scandi-surface flex flex-col relative overflow-hidden [scrollbar-gutter:stable]">
+            <CardsList
+              status={state.status}
+              errorMsg={state.errorMsg}
+              entries={cardEntries}
+              activeIdx={activeIdx}
+            />
+            <div className="absolute -bottom-6 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none z-0">
+              <Wallet size={180} strokeWidth={1.5} />
+            </div>
+          </div>
+        </section>
+
+        <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
+          <div className="h-[28px] shrink-0 px-3 flex items-center justify-between bg-scandi-cap shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_0_rgba(15,23,42,0.04)] min-w-0">
+            <PaneLabel>EDITOR</PaneLabel>
+            <button
+              type="button"
+              title={copied ? 'copied' : 'copy buffer'}
+              onClick={onCopyBuffer}
+              className={`w-[20px] h-[20px] flex items-center justify-center hover:bg-white transition-colors rounded-[2px] mr-[12px] ${
+                copied ? 'text-scandi-accent' : 'text-slate-500 hover:text-navy-700'
+              }`}
+            >
+              <Copy size={14} strokeWidth={1.5} />
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 bg-white flex flex-col overflow-hidden relative">
+            <TextPane
+              status={state.status}
+              errorMsg={state.errorMsg}
+              buffer={buffer}
+              baseline={baseline}
+              onBufferChange={setBuffer}
+              onCursorChange={setCursorPos}
+              readOnly={locked}
+            />
+          </div>
+        </section>
+
+        <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
           <ThinkPane
             email={email}
             buffer={buffer}
@@ -460,28 +488,6 @@ export function LedgerView({ email }: { email: string }) {
               }
               return { ok: false, reason: res.reason }
             }}
-          />
-        </section>
-        <section className="bg-[#E8EDF2] flex flex-col relative overflow-hidden border-r border-r-[#AEBCCA] min-w-0 min-h-0 [scrollbar-gutter:stable]">
-          <CardsList
-            status={state.status}
-            errorMsg={state.errorMsg}
-            entries={cardEntries}
-            activeIdx={activeIdx}
-          />
-          <div className="absolute -bottom-6 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none z-0">
-            <Wallet size={180} strokeWidth={1.5} />
-          </div>
-        </section>
-        <section className="bg-white flex flex-col overflow-hidden relative border-r border-r-[#AEBCCA] min-w-0 min-h-0">
-          <TextPane
-            status={state.status}
-            errorMsg={state.errorMsg}
-            buffer={buffer}
-            baseline={baseline}
-            onBufferChange={setBuffer}
-            onCursorChange={setCursorPos}
-            readOnly={locked}
           />
         </section>
       </main>

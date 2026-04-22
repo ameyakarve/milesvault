@@ -39,7 +39,7 @@ export function ThinkPane(props: ThinkPaneProps) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   if (!mounted) {
-    return <div className="flex-1 bg-[#EEF2F6] flex flex-col overflow-hidden" />
+    return <div className="flex-1 bg-scandi-quiet flex flex-col overflow-hidden" />
   }
   return <ThinkPaneInner {...props} />
 }
@@ -171,8 +171,8 @@ function ThinkPaneInner({
   }
 
   return (
-    <div className="flex-1 bg-[#EEF2F6] flex flex-col overflow-hidden">
-      <div className="h-[28px] px-3 flex items-center justify-between border-b border-b-[#9BAFC2] bg-[#C7D3DF] shrink-0 gap-2">
+    <div className="flex-1 bg-scandi-quiet flex flex-col overflow-hidden">
+      <div className="h-[28px] px-3 flex items-center justify-between bg-scandi-cap shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_1px_0_rgba(15,23,42,0.04)] shrink-0 gap-2">
         <PaneLabel>ASSISTANT</PaneLabel>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[10px] text-slate-500 uppercase tracking-[0.08em]">
@@ -209,8 +209,8 @@ function ThinkPaneInner({
         {busy ? <BusyIndicator label={status} /> : null}
       </div>
 
-      <form onSubmit={onSubmit} className="p-2 border-t border-[#AEBCCA] shrink-0 bg-[#EEF2F6] mt-auto">
-        <div className="bg-white flex items-center px-2 h-[36px] border border-[#AEBCCA] focus-within:border-[#2F5D7A] transition-colors">
+      <form onSubmit={onSubmit} className="p-2 border-t border-scandi-rule shrink-0 bg-scandi-quiet mt-auto">
+        <div className="bg-white flex items-center px-2 h-[36px] border border-scandi-rule focus-within:border-scandi-accent transition-colors">
           <button
             type="button"
             title="attach"
@@ -239,7 +239,7 @@ function ThinkPaneInner({
             type="submit"
             disabled={!draft.trim() || chatLocked}
             title={saving ? 'send (saving)' : 'send'}
-            className="bg-[#2F5D7A] text-white w-[24px] h-[24px] flex items-center justify-center hover:bg-[#224866] transition-colors shrink-0 ml-1 rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-scandi-accent text-white w-[24px] h-[24px] flex items-center justify-center hover:bg-scandi-accent-hover transition-colors shrink-0 ml-1 rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ArrowUp size={14} strokeWidth={1.5} />
           </button>
@@ -256,10 +256,10 @@ function Turn({ message }: { message: ThinkMessage }) {
   return (
     <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
       <div
-        className={`px-3 py-2 max-w-[85%] border border-[#AEBCCA] ${
+        className={`px-3 py-2 max-w-[85%] border border-scandi-rule ${
           isUser
             ? 'bg-slate-100 text-navy-700 border-l-[3px] border-l-slate-500'
-            : 'bg-white text-navy-700 border-l-[3px] border-l-[#2F5D7A]'
+            : 'bg-white text-navy-700 border-l-[3px] border-l-scandi-accent'
         }`}
       >
         {visible.map((part, i) => (
@@ -283,13 +283,13 @@ function BusyIndicator({ label }: { label: string }) {
   const text = label === 'submitted' ? 'thinking' : 'working'
   return (
     <div className="flex items-start">
-      <div className="px-3 py-2 border border-[#AEBCCA] border-l-[3px] border-l-[#2F5D7A] bg-white flex items-center gap-2">
+      <div className="px-3 py-2 border border-scandi-rule border-l-[3px] border-l-scandi-accent bg-white flex items-center gap-2">
         <span className="flex gap-1" aria-hidden>
-          <span className="w-1 h-1 rounded-full bg-[#2F5D7A] animate-pulse [animation-delay:0ms]" />
-          <span className="w-1 h-1 rounded-full bg-[#2F5D7A] animate-pulse [animation-delay:150ms]" />
-          <span className="w-1 h-1 rounded-full bg-[#2F5D7A] animate-pulse [animation-delay:300ms]" />
+          <span className="w-1 h-1 rounded-full bg-scandi-accent animate-pulse [animation-delay:0ms]" />
+          <span className="w-1 h-1 rounded-full bg-scandi-accent animate-pulse [animation-delay:150ms]" />
+          <span className="w-1 h-1 rounded-full bg-scandi-accent animate-pulse [animation-delay:300ms]" />
         </span>
-        <span className="text-[10px] uppercase tracking-[0.08em] text-[#2F5D7A]">
+        <span className="text-[10px] uppercase tracking-[0.08em] text-scandi-accent">
           {text}…
         </span>
       </div>
