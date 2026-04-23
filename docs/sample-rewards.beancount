@@ -1,0 +1,150 @@
+; Sample transactions for reward/cashback/discount patterns already documented
+; in accounts-taxonomy.md (sections: Rewards, Reward transaction patterns,
+; Cashback and discounts). All dates illustrative (2026). Every txn balances.
+
+;; ========================================================================
+;; EARNING — multi-commodity, #reward-accrual tag on Income:Void
+;; ========================================================================
+
+;; Airline miles earned alongside a flight spend
+2026-04-02 * "BA" "LHR-BOM flight" #reward-accrual
+  Liabilities:CC:HDFC:Infinia         -50000.00 INR
+  Expenses:Travel:Flights              50000.00 INR
+  Assets:Rewards:Points:Avios            500.00 AVIOS
+  Income:Void                           -500.00 AVIOS
+
+;; Bank transferable points on a generic spend (HDFC SmartBuy)
+2026-04-03 * "Amazon" "laptop purchase" #reward-accrual
+  Liabilities:CC:HDFC:Infinia         -80000.00 INR
+  Expenses:Shopping:Electronics        80000.00 INR
+  Assets:Rewards:Points:SmartBuy       2400.00 SMARTBUY
+  Income:Void                         -2400.00 SMARTBUY
+
+;; Card-locked points (SBI-RP, issuer-catalog only)
+2026-04-04 * "BigBasket" "weekly groceries" #reward-accrual
+  Liabilities:CC:SBI:Elite             -3500.00 INR
+  Expenses:Groceries                    3500.00 INR
+  Assets:Rewards:Points:SBI               35.00 SBI-RP
+  Income:Void                            -35.00 SBI-RP
+
+;; Hotel points earned from a stay
+2026-04-05 * "Marriott" "Bengaluru stay" #reward-accrual
+  Liabilities:CC:HDFC:Infinia         -15000.00 INR
+  Expenses:Travel:Hotels               15000.00 INR
+  Assets:Rewards:Points:Marriott        7500.00 MARRIOTT
+  Income:Void                          -7500.00 MARRIOTT
+
+;; Status — elite nights accrued on same stay (second plug commodity)
+2026-04-05 * "Marriott" "Bengaluru stay — nights credit" #reward-accrual
+  Assets:Rewards:Status:Marriott           3.00 MAR-NIGHTS
+  Income:Void                             -3.00 MAR-NIGHTS
+
+;; Airline tier points on a paid ticket
+2026-04-06 * "Singapore Airlines" "BOM-SIN business" #reward-accrual
+  Liabilities:CC:HDFC:Infinia         -95000.00 INR
+  Expenses:Travel:Flights              95000.00 INR
+  Assets:Rewards:Points:Krisflyer      12000.00 KRISFLYER
+  Income:Void                         -12000.00 KRISFLYER
+  Assets:Rewards:Status:Krisflyer        135.00 KF-PPS
+  Income:Void                           -135.00 KF-PPS
+
+;; ========================================================================
+;; TRANSFER BETWEEN PROGRAMS — @@ price, no plug
+;; ========================================================================
+
+;; HDFC SmartBuy → Avios at 1:1.5
+2026-04-20 * "HDFC SmartBuy" "transfer to Avios"
+  Assets:Rewards:Points:SmartBuy      -10000.00 SMARTBUY
+  Assets:Rewards:Points:Avios          15000.00 AVIOS @@ 10000.00 SMARTBUY
+
+;; Amex MR → Marriott at 1:1 (straight ratio)
+2026-04-21 * "Amex MR" "transfer to Marriott Bonvoy"
+  Assets:Rewards:Points:MR            -20000.00 MR
+  Assets:Rewards:Points:Marriott       20000.00 MARRIOTT @@ 20000.00 MR
+
+;; ========================================================================
+;; REDEMPTION — flows to real Expenses:*, no plug
+;; ========================================================================
+
+;; Award flight: points + cash for taxes
+2026-06-01 * "BA" "award flight LHR-BOM"
+  Assets:Rewards:Points:Avios         -20000.00 AVIOS
+  Liabilities:CC:HDFC:Infinia          -2500.00 INR
+  Expenses:Travel:Flights              20000.00 AVIOS
+  Expenses:Travel:Flights               2500.00 INR
+
+;; Award hotel night (points only)
+2026-06-10 * "Marriott" "award night Goa"
+  Assets:Rewards:Points:Marriott      -30000.00 MARRIOTT
+  Expenses:Travel:Hotels               30000.00 MARRIOTT
+
+;; Card-locked redemption into a gift-card / loaded voucher
+2026-05-10 * "SBI Rewards" "Amazon voucher"
+  Assets:Rewards:Points:SBI            -4000.00 SBI-RP
+  Assets:Loaded:GiftCards:Amazon        1000.00 INR @@ 4000.00 SBI-RP
+
+;; Cash-equivalent cashback redemption (points → statement credit)
+2026-05-12 * "HDFC Infinia" "points → statement credit"
+  Assets:Rewards:Points:SmartBuy       -5000.00 SMARTBUY
+  Liabilities:CC:HDFC:Infinia           1250.00 INR @@ 5000.00 SMARTBUY
+
+;; ========================================================================
+;; EXPIRY / RESET — Expenses:Void with #reward-expiry tag
+;; ========================================================================
+
+;; Avios annual expiry
+2026-12-31 * "Avios" "annual expiry" #reward-expiry
+  Assets:Rewards:Points:Avios          -2000.00 AVIOS
+  Expenses:Void                         2000.00 AVIOS
+
+;; Marriott elite-night reset at year end
+2026-12-31 * "Marriott" "tier reset" #reward-expiry
+  Assets:Rewards:Status:Marriott         -50.00 MAR-NIGHTS
+  Expenses:Void                           50.00 MAR-NIGHTS
+
+;; ========================================================================
+;; DISCOUNT — phantom savings, one instrument posting, #discount tag
+;; ========================================================================
+
+;; Promo discount at checkout
+2026-04-16 * "Zomato" "dinner ₹1000 — ₹150 promo" #discount
+  Liabilities:CC:HDFC:Infinia            -850.00 INR
+  Expenses:Food:Restaurant              1000.00 INR
+  Income:Void                           -150.00 INR
+
+;; ========================================================================
+;; CASHBACK — real inflow, two instrument postings when same card/wallet
+;; ========================================================================
+
+;; Same-card cashback (10% HDFC offer)
+2026-04-16 * "Zomato" "dinner, 10% HDFC offer" #cashback
+  Liabilities:CC:HDFC:Infinia          -1000.00 INR
+  Expenses:Food:Restaurant              1000.00 INR
+  Liabilities:CC:HDFC:Infinia            100.00 INR
+  Income:Void                           -100.00 INR
+
+;; Same-wallet cashback (Paytm 5%)
+2026-04-16 * "Zomato" "dinner + 5% Paytm cashback" #cashback
+  Assets:Loaded:Wallets:Paytm          -1000.00 INR
+  Expenses:Food:Restaurant              1000.00 INR
+  Assets:Loaded:Wallets:Paytm             50.00 INR
+  Income:Void                            -50.00 INR
+
+;; Cross-instrument cashback (Amazon via Infinia, cashback to Amazon Pay)
+2026-04-16 * "Amazon" "headphones + ₹150 AmazonPay cashback" #cashback
+  Liabilities:CC:HDFC:Infinia          -3000.00 INR
+  Expenses:Shopping:Electronics         3000.00 INR
+  Assets:Loaded:Wallets:AmazonPay        150.00 INR
+  Income:Void                           -150.00 INR
+
+;; Bill payment with app cashback (CRED pays into CRED wallet)
+2026-04-10 * "CRED" "HDFC bill + ₹25 CRED cashback" #cashback
+  Assets:Bank:HDFC:Savings            -10000.00 INR
+  Liabilities:CC:HDFC:Infinia          10000.00 INR
+  Assets:Loaded:Wallets:CRED              25.00 INR
+  Income:Void                            -25.00 INR
+
+;; Statement-level cashback (standalone)
+2026-04-30 * "HDFC" "Infinia April statement cashback" #cashback
+  Liabilities:CC:HDFC:Infinia            250.00 INR
+  Income:Void                           -250.00 INR

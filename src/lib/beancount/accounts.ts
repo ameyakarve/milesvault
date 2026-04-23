@@ -19,7 +19,8 @@ const ROOTS = [
   'Income',
   'Income:Salary',
   'Income:Interest',
-  'Income:Rewards',
+  'Income:Void',
+  'Expenses:Void',
   'Equity',
   'Equity:Opening-Balances',
 ]

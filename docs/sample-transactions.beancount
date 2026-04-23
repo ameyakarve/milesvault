@@ -1,0 +1,104 @@
+; Sample transactions for patterns not yet covered in accounts-taxonomy.md.
+; All dates are illustrative (2026). Accounts follow the path-to-kind resolver
+; from accounts-taxonomy.md. Every txn balances per beancount rules.
+
+;; ========================================================================
+;; TIER 1 — very common, user-blocking
+;; ========================================================================
+
+;; Income / salary
+;; Salary credited to a bank account. Employer and take-home are gross-less-tax.
+2026-04-01 * "Acme Corp" "April salary"
+  Income:Salary:Acme                 -250000.00 INR
+  Expenses:Taxes:IncomeTax             75000.00 INR
+  Assets:Bank:HDFC:Savings            175000.00 INR
+
+;; CC bill payment — pays down liability
+;; Bank outflow increases the CC account toward zero.
+2026-04-05 * "HDFC" "April Infinia bill payment"
+  Assets:Bank:HDFC:Savings            -42350.00 INR
+  Liabilities:CC:HDFC:Infinia          42350.00 INR
+
+;; Own-account transfer — bank to bank
+2026-04-06 * "Self" "move savings to HYSA"
+  Assets:Bank:HDFC:Savings           -100000.00 INR
+  Assets:Bank:ICICI:HYSA              100000.00 INR
+
+;; ATM withdrawal — bank to cash
+2026-04-07 * "ATM" "HDFC Koregaon Park withdrawal"
+  Assets:Bank:HDFC:Savings             -5000.00 INR
+  Assets:Cash                           5000.00 INR
+
+;; Cash expense — cash to expense
+2026-04-07 * "Auto" "airport ride"
+  Assets:Cash                           -350.00 INR
+  Expenses:Transport:Auto                350.00 INR
+
+;; Refund — simple expense reversal
+;; Same merchant issues a credit back to the original card.
+2026-04-08 * "Zomato" "refund: cancelled order"
+  Expenses:Food:Delivery                -420.00 INR
+  Liabilities:CC:HDFC:Infinia            420.00 INR
+
+;; Refund — merchant/CC lag case (booked when the credit posts later)
+;; Original charge already cleared; refund arrives days later.
+2026-04-10 * "Amazon" "refund: returned headphones"
+  Liabilities:CC:HDFC:Infinia           3000.00 INR
+  Expenses:Shopping:Electronics        -3000.00 INR
+
+;; ========================================================================
+;; TIER 2 — common enough to need shape now
+;; ========================================================================
+
+;; Reimbursement — split dinner, friend owes me
+;; I paid 2000; my share is 1000; friend's 1000 becomes a receivable.
+2026-04-11 * "Toit" "dinner with Rahul"
+  Liabilities:CC:HDFC:Infinia          -2000.00 INR
+  Expenses:Food:Restaurant              1000.00 INR
+  Assets:Receivables:Rahul              1000.00 INR
+
+;; Reimbursement settlement — friend pays me back later
+2026-04-18 * "Rahul" "settled dinner split"
+  Assets:Receivables:Rahul             -1000.00 INR
+  Assets:Bank:HDFC:Savings              1000.00 INR
+
+;; Interest on a credit card — finance cost, not shopping
+2026-04-15 * "HDFC" "Infinia revolving interest"
+  Expenses:Finance:Interest              850.00 INR
+  Liabilities:CC:HDFC:Infinia           -850.00 INR
+
+;; Annual fee / late fee — finance fee
+2026-04-16 * "HDFC" "Infinia annual fee"
+  Expenses:Finance:Fees                12500.00 INR
+  Liabilities:CC:HDFC:Infinia         -12500.00 INR
+
+;; P2P UPI — loan to a friend (recoverable, not an expense)
+2026-04-12 * "Priya" "lent for flight booking"
+  Assets:Bank:HDFC:Savings             -8000.00 INR
+  Assets:Receivables:Priya              8000.00 INR
+
+;; P2P UPI — gift (not recoverable, plug via Expenses:Void)
+2026-04-12 * "Mom" "Diwali gift" #gift-out
+  Assets:Bank:HDFC:Savings             -5000.00 INR
+  Expenses:Void                         5000.00 INR
+
+;; Subscription — recurring expense, tagged and linked for reporting
+2026-04-14 * "Netflix" "monthly subscription" #subscription ^netflix-2026
+  Liabilities:CC:HDFC:Infinia           -649.00 INR
+  Expenses:Subscriptions:Streaming       649.00 INR
+
+;; ========================================================================
+;; TIER 3 — lower priority, non-trivial shape
+;; ========================================================================
+
+;; Loan disbursal — new liability funds a bank account
+2026-04-03 * "HDFC" "personal loan disbursed"
+  Assets:Bank:HDFC:Savings            500000.00 INR
+  Liabilities:Loans:HDFC:Personal    -500000.00 INR
+
+;; EMI payment — split into principal and interest
+;; Monthly EMI 12000 = 9500 principal + 2500 interest.
+2026-04-25 * "HDFC" "personal loan EMI Apr"
+  Assets:Bank:HDFC:Savings            -12000.00 INR
+  Liabilities:Loans:HDFC:Personal       9500.00 INR
+  Expenses:Finance:Interest             2500.00 INR

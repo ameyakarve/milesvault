@@ -28,6 +28,7 @@ const WALLET_GLYPH_SVG = `${SVG_OPEN}<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><p
 const GIFT_GLYPH_SVG = `${SVG_OPEN}<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>${SVG_CLOSE}`
 const RECEIVABLE_GLYPH_SVG = `${SVG_OPEN}<path d="M11 17a1 1 0 0 1-1.414 0L6 13.414A2 2 0 0 1 6 10.586l3.586-3.586a1 1 0 1 1 1.414 1.414L8.414 11H17a4 4 0 0 1 4 4v2a1 1 0 1 1-2 0v-2a2 2 0 0 0-2-2H8.414l2.586 2.586A1 1 0 0 1 11 17Z"/>${SVG_CLOSE}`
 const CASH_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/>${SVG_CLOSE}`
+const VOID_GLYPH_SVG = `${SVG_OPEN}<circle cx="12" cy="12" r="8" stroke-dasharray="3 2.5"/>${SVG_CLOSE}`
 
 const GLYPH_SVG: Record<string, string> = {
   'Liabilities:CC:': CC_GLYPH_SVG,
@@ -40,6 +41,8 @@ const GLYPH_SVG: Record<string, string> = {
   'Assets:Loaded:GiftCards:': GIFT_GLYPH_SVG,
   'Assets:Receivables:': RECEIVABLE_GLYPH_SVG,
   'Assets:Cash': CASH_GLYPH_SVG,
+  'Income:Void': VOID_GLYPH_SVG,
+  'Expenses:Void': VOID_GLYPH_SVG,
 }
 
 class AccountGlyphWidget extends WidgetType {
