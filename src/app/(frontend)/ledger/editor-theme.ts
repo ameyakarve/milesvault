@@ -40,7 +40,7 @@ export const scandiEditorTheme = EditorView.theme(
     '&': {
       height: '100%',
       fontSize: '13px',
-      backgroundColor: '#ffffff',
+      backgroundColor: '#EEF2F6',
     },
     '.cm-scroller': {
       overflow: 'auto',
@@ -109,7 +109,7 @@ export const scandiEditorTheme = EditorView.theme(
       boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
     },
     '.cm-gutters': {
-      backgroundColor: '#ffffff',
+      backgroundColor: '#EEF2F6',
       color: SLATE_400,
       border: 'none',
       borderRight: `1px solid ${SLATE_100}`,
