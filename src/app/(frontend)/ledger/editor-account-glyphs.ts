@@ -13,7 +13,15 @@ const SVG_OPEN =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
 const SVG_CLOSE = '</svg>'
 
-const CC_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>${SVG_CLOSE}`
+const CARD_LABEL_ATTRS =
+  'text-anchor="middle" font-size="10" font-weight="700" stroke="none" fill="currentColor" font-family="ui-monospace, monospace"'
+const FX_LABEL_ATTRS =
+  'text-anchor="middle" font-size="8" font-weight="700" stroke="none" fill="currentColor" font-family="ui-monospace, monospace"'
+
+const CC_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2"/><text x="12" y="16" ${CARD_LABEL_ATTRS}>CC</text>${SVG_CLOSE}`
+const DC_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2" stroke-dasharray="2.5 2"/><text x="12" y="16" ${CARD_LABEL_ATTRS}>DC</text>${SVG_CLOSE}`
+const PREPAID_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2"/><text x="12" y="16" ${CARD_LABEL_ATTRS}>PP</text>${SVG_CLOSE}`
+const FOREX_GLYPH_SVG = `${SVG_OPEN}<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><text x="9" y="15" ${FX_LABEL_ATTRS}>$</text><text x="15" y="15" ${FX_LABEL_ATTRS}>€</text>${SVG_CLOSE}`
 const BANK_GLYPH_SVG = `${SVG_OPEN}<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>${SVG_CLOSE}`
 const WALLET_GLYPH_SVG = `${SVG_OPEN}<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>${SVG_CLOSE}`
 const GIFT_GLYPH_SVG = `${SVG_OPEN}<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>${SVG_CLOSE}`
@@ -22,6 +30,9 @@ const CASH_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="12" x="2" y="6" rx="
 
 const GLYPH_SVG: Record<string, string> = {
   'Liabilities:CC:': CC_GLYPH_SVG,
+  'Assets:DC:': DC_GLYPH_SVG,
+  'Assets:Loaded:PrepaidCards:': PREPAID_GLYPH_SVG,
+  'Assets:Loaded:ForexCards:': FOREX_GLYPH_SVG,
   'Assets:Bank:': BANK_GLYPH_SVG,
   'Assets:Loaded:Wallets:': WALLET_GLYPH_SVG,
   'Assets:Loaded:GiftCards:': GIFT_GLYPH_SVG,
