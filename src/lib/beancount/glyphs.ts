@@ -2,6 +2,7 @@ export type AccountGlyph = {
   text: string
   visualWidth: number
   label: string
+  leafLabel?: string
 }
 
 export const ACCOUNT_GLYPHS: readonly AccountGlyph[] = [
@@ -14,9 +15,9 @@ export const ACCOUNT_GLYPHS: readonly AccountGlyph[] = [
   { text: 'Assets:Loaded:Wallets', visualWidth: 3, label: 'wallet' },
   { text: 'Assets:Loaded:GiftCards', visualWidth: 3, label: 'gift card' },
   { text: 'Assets:Receivables', visualWidth: 3, label: 'receivable' },
-  { text: 'Assets:Cash', visualWidth: 3, label: 'cash' },
-  { text: 'Income:Void', visualWidth: 3, label: 'void (source)' },
-  { text: 'Expenses:Void', visualWidth: 3, label: 'void (sink)' },
+  { text: 'Assets:Cash', visualWidth: 7, label: 'cash', leafLabel: 'Cash' },
+  { text: 'Income:Void', visualWidth: 7, label: 'void (source)', leafLabel: 'Void' },
+  { text: 'Expenses:Void', visualWidth: 7, label: 'void (sink)', leafLabel: 'Void' },
 ]
 
 export function visualTextLen(s: string): number {
