@@ -337,7 +337,6 @@ export function LedgerView({ email }: { email: string }) {
               buffer={buffer}
               baseline={baseline}
               onBufferChange={setBuffer}
-              onCursorChange={() => {}}
               onSave={onSave}
               readOnly={locked}
               editorRef={editorRef}

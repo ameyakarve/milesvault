@@ -24,7 +24,6 @@ export function TextPane({
   buffer,
   baseline,
   onBufferChange,
-  onCursorChange,
   onSave,
   readOnly,
   editorRef,
@@ -34,7 +33,6 @@ export function TextPane({
   buffer: string
   baseline: string
   onBufferChange: (v: string) => void
-  onCursorChange: (pos: number) => void
   onSave?: () => void
   readOnly?: boolean
   editorRef?: Ref<LedgerEditorHandle>
@@ -48,7 +46,6 @@ export function TextPane({
         value={buffer}
         baseline={baseline}
         onChange={onBufferChange}
-        onCursorChange={onCursorChange}
         onSave={onSave}
         readOnly={readOnly}
       />

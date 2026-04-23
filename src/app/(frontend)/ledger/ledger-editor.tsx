@@ -18,7 +18,6 @@ type LedgerEditorProps = {
   baseline?: string
   validators?: readonly Validator[]
   completeAccount?: AccountCompleter
-  onCursorChange?: (pos: number) => void
   onSave?: () => void
   readOnly?: boolean
   className?: string
@@ -36,7 +35,6 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
     baseline,
     validators,
     completeAccount,
-    onCursorChange,
     onSave,
     readOnly,
     className,
@@ -44,10 +42,8 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
   ref,
 ) {
   const viewRef = useRef<EditorView | null>(null)
-  const cursorCbRef = useRef(onCursorChange)
   const saveCbRef = useRef(onSave)
   useEffect(() => {
-    cursorCbRef.current = onCursorChange
     saveCbRef.current = onSave
   })
 
@@ -73,11 +69,6 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
   const extensions = useMemo(
     () => [
       ...buildScandiBeancountExtensions(initialBaselineRef.current),
-      EditorView.updateListener.of((u) => {
-        const cb = cursorCbRef.current
-        if (!cb) return
-        if (u.selectionSet || u.docChanged) cb(u.state.selection.main.head)
-      }),
       keymap.of([
         {
           key: 'Mod-s',
