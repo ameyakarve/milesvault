@@ -8,8 +8,8 @@ import {
   type ViewUpdate,
   WidgetType,
 } from '@codemirror/view'
-import { Circle, CircleCheck, TriangleAlert } from 'lucide-static'
-import { chipSlotWidth, toChipSvg } from '@/lib/beancount/entities'
+import { TriangleAlert } from 'lucide-static'
+import { chipVisualWidth, toChipSvg } from '@/lib/beancount/entities'
 import { cursorTxnLines, unveilChipAt } from './editor-chip-state'
 
 export type HeaderHit = {
@@ -24,10 +24,10 @@ export type HeaderHit = {
 const HEADER_RE =
   /^(\d{4}-\d{2}-\d{2})([ \t]+)([*!]|txn)([ \t]+)"([^"]*)"(?:([ \t]+)"([^"]*)")?/gm
 
-const FLAG_META: Record<string, { label: string; svg: string; chipClass: string }> = {
-  '*': { label: '', svg: CircleCheck, chipClass: 'cm-flag-chip-cleared' },
-  '!': { label: 'Pending', svg: TriangleAlert, chipClass: 'cm-flag-chip-pending' },
-  txn: { label: 'Entry', svg: Circle, chipClass: 'cm-flag-chip-txn' },
+const PENDING_META = {
+  label: 'Pending',
+  svg: TriangleAlert,
+  chipClass: 'cm-flag-chip-pending',
 }
 
 function dateChipLabel(iso: string, todayMs: number): string {
@@ -39,7 +39,9 @@ function dateChipLabel(iso: string, todayMs: number): string {
   if (diffDays > 1 && diffDays <= 7) return `${diffDays}d ago`
   if (diffDays === -1) return 'tomorrow'
   if (diffDays < 0 && diffDays >= -7) return `in ${-diffDays}d`
-  return `${d.toLocaleString('en', { month: 'short' })} ${d.getDate()}`
+  const mmm = d.toLocaleString('en', { month: 'short' })
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mmm}-${dd}`
 }
 
 export function hitsForLine(lineText: string, lineFrom: number, todayMs: number): HeaderHit[] {
@@ -49,29 +51,31 @@ export function hitsForLine(lineText: string, lineFrom: number, todayMs: number)
   if (!match) return hits
   const [, dateStr, sp1, flag, sp2, payee, sp3, narration] = match
   const base = lineFrom + (match.index ?? 0)
+  const flagFrom = base + dateStr.length + sp1.length
+  const payeeOpenQuote = flagFrom + flag.length + sp2.length
+  const isPending = flag === '!'
   hits.push({
     from: base,
-    to: base + dateStr.length,
+    to: isPending ? flagFrom : payeeOpenQuote,
     label: dateChipLabel(dateStr, todayMs),
     tooltip: dateStr,
   })
-  const flagFrom = base + dateStr.length + sp1.length
-  const flagMeta = FLAG_META[flag]
-  if (flagMeta) {
+  if (isPending) {
     hits.push({
       from: flagFrom,
-      to: flagFrom + flag.length,
-      label: flagMeta.label,
+      to: payeeOpenQuote,
+      label: PENDING_META.label,
       tooltip: `flag: ${flag}`,
-      svg: flagMeta.svg,
-      chipClass: flagMeta.chipClass,
+      svg: PENDING_META.svg,
+      chipClass: PENDING_META.chipClass,
     })
   }
-  const payeeOpenQuote = flagFrom + flag.length + sp2.length
   const payeeLen = payee.length + 2
+  const payeeTo =
+    payeeOpenQuote + payeeLen + (narration !== undefined ? sp3.length : 0)
   hits.push({
     from: payeeOpenQuote,
-    to: payeeOpenQuote + payeeLen,
+    to: payeeTo,
     label: payee || 'payee',
     tooltip: `payee: ${payee}`,
     chipClass: 'cm-payee-chip',
@@ -178,7 +182,7 @@ function buildHeaderDecorations(view: EditorView): DecorationSet {
           h.label,
           h.tooltip,
           h.svg,
-          chipSlotWidth(h.to - h.from, h.label),
+          chipVisualWidth(h.label),
           h.chipClass,
         ),
       }),
