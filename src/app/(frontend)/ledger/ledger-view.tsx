@@ -28,7 +28,7 @@ import { SavePill } from './save-status'
 import { ThinkPane } from './think-pane'
 import { useSyncScroll } from './use-sync-scroll'
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 50
 
 type ParsedTxn = { bean: BeanTxn; raw: string }
 
