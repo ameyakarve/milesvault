@@ -5,7 +5,7 @@ export type AccountGlyph = {
 }
 
 export const ACCOUNT_GLYPHS: readonly AccountGlyph[] = [
-  { text: 'Liabilities:CC', visualWidth: 2, label: 'credit card' },
+  { text: 'Liabilities:CC:', visualWidth: 2, label: 'credit card' },
 ]
 
 export function visualTextLen(s: string): number {
