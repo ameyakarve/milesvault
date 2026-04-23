@@ -58,8 +58,7 @@ export const scandiEditorTheme = EditorView.theme(
       alignItems: 'center',
       justifyContent: 'flex-start',
       gap: '3px',
-      height: '16px',
-      verticalAlign: '-3px',
+      verticalAlign: 'baseline',
       color: SKY_700,
     },
     '.cm-account-glyph-chip': {
