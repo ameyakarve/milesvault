@@ -20,7 +20,7 @@ import { toChipSvg } from '@/lib/beancount/category-icon-svgs'
 import { chipVisualWidth } from '@/lib/beancount/glyphs'
 import { unveilChipAt, unveiledChipsField } from './editor-chip-state'
 
-type HeaderHit = {
+export type HeaderHit = {
   from: number
   to: number
   label: string
@@ -49,7 +49,7 @@ function dateChipLabel(iso: string, todayMs: number): string {
   return `${d.toLocaleString('en', { month: 'short' })} ${d.getDate()}`
 }
 
-function hitsForLine(lineText: string, lineFrom: number, todayMs: number): HeaderHit[] {
+export function hitsForLine(lineText: string, lineFrom: number, todayMs: number): HeaderHit[] {
   const hits: HeaderHit[] = []
   HEADER_RE.lastIndex = 0
   const match = HEADER_RE.exec(lineText)
@@ -97,7 +97,7 @@ function hitsForLine(lineText: string, lineFrom: number, todayMs: number): Heade
   return hits
 }
 
-function startOfDayMs(): number {
+export function startOfDayMs(): number {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return today.getTime()
