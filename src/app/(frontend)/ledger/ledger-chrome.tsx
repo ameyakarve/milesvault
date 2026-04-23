@@ -7,12 +7,14 @@ export function ChromeIconButton({
   onClick,
   disabled = false,
   dirty = false,
+  active = false,
 }: {
   icon: LucideIcon
   title: string
   onClick?: () => void
   disabled?: boolean
   dirty?: boolean
+  active?: boolean
 }) {
   return (
     <button
@@ -23,7 +25,11 @@ export function ChromeIconButton({
       disabled={disabled}
       className="w-[28px] h-[28px] flex items-center justify-center rounded-[2px] hover:bg-white transition-colors relative"
     >
-      <IconCmp size={16} strokeWidth={1.5} className="text-slate-600" />
+      <IconCmp
+        size={16}
+        strokeWidth={1.5}
+        className={active ? 'text-scandi-accent' : 'text-slate-600'}
+      />
       {dirty && (
         <span className="absolute top-[6px] right-[6px] w-[6px] h-[6px] bg-scandi-accent rounded-[2px]" />
       )}

@@ -179,6 +179,7 @@ export function TextPane({
   baseline,
   onBufferChange,
   onCursorChange,
+  onSave,
   readOnly,
   editorRef,
 }: {
@@ -188,6 +189,7 @@ export function TextPane({
   baseline: string
   onBufferChange: (v: string) => void
   onCursorChange: (pos: number) => void
+  onSave?: () => void
   readOnly?: boolean
   editorRef?: Ref<LedgerEditorHandle>
 }) {
@@ -201,6 +203,7 @@ export function TextPane({
         baseline={baseline}
         onChange={onBufferChange}
         onCursorChange={onCursorChange}
+        onSave={onSave}
         readOnly={readOnly}
       />
     </div>
