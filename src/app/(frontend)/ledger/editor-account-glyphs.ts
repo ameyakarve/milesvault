@@ -8,7 +8,12 @@ import {
   type ViewUpdate,
   WidgetType,
 } from '@codemirror/view'
-import { ACCOUNT_GLYPHS, type AccountGlyph } from '@/lib/beancount/glyphs'
+import {
+  type AccountGlyph,
+  ANY_ACCOUNT_RE,
+  chipVisualWidth,
+  matchAccountChip,
+} from '@/lib/beancount/glyphs'
 import { unveilChipAt, unveiledChipsField } from './editor-chip-state'
 
 const SVG_OPEN =
@@ -41,19 +46,51 @@ const GLYPH_SVG: Record<string, string> = {
   'Income:Void': VOID_GLYPH_SVG,
 }
 
+type Hit = {
+  from: number
+  to: number
+  glyph: AccountGlyph
+  chipLabel: string
+}
+
+function findAccountHits(view: EditorView): Hit[] {
+  const hits: Hit[] = []
+  for (const { from, to } of view.visibleRanges) {
+    const text = view.state.doc.sliceString(from, to)
+    for (const match of text.matchAll(ANY_ACCOUNT_RE)) {
+      const acct = match[0]
+      if (acct.startsWith('Expenses:')) continue
+      const hit = matchAccountChip(acct)
+      if (!hit) continue
+      if (!GLYPH_SVG[hit.glyph.text]) continue
+      const start = from + (match.index ?? 0)
+      hits.push({
+        from: start,
+        to: start + hit.consumedLen,
+        glyph: hit.glyph,
+        chipLabel: hit.chipLabel,
+      })
+    }
+  }
+  return hits
+}
+
 class AccountGlyphWidget extends WidgetType {
-  constructor(readonly glyph: AccountGlyph) {
+  constructor(
+    readonly glyph: AccountGlyph,
+    readonly chipLabel: string,
+  ) {
     super()
   }
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span')
     span.className = 'cm-account-glyph'
-    span.style.width = `${this.glyph.visualWidth}ch`
+    span.style.width = `${chipVisualWidth(this.chipLabel)}ch`
     span.setAttribute('aria-label', this.glyph.text)
     span.innerHTML = GLYPH_SVG[this.glyph.text] ?? ''
     const label = document.createElement('span')
     label.className = 'cm-account-glyph-chip'
-    label.textContent = this.glyph.chipLabel
+    label.textContent = this.chipLabel
     span.appendChild(label)
     span.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -66,7 +103,7 @@ class AccountGlyphWidget extends WidgetType {
     return (
       other instanceof AccountGlyphWidget &&
       other.glyph.text === this.glyph.text &&
-      other.glyph.chipLabel === this.glyph.chipLabel
+      other.chipLabel === this.chipLabel
     )
   }
   ignoreEvent(): boolean {
@@ -76,24 +113,15 @@ class AccountGlyphWidget extends WidgetType {
 
 function buildGlyphDecorations(view: EditorView): DecorationSet {
   const unveiled = view.state.field(unveiledChipsField, false) ?? new Set<number>()
-  type Hit = { from: number; to: number; glyph: AccountGlyph }
-  const hits: Hit[] = []
-  for (const { from, to } of view.visibleRanges) {
-    const text = view.state.doc.sliceString(from, to)
-    for (const glyph of ACCOUNT_GLYPHS) {
-      if (!GLYPH_SVG[glyph.text]) continue
-      let idx = 0
-      while ((idx = text.indexOf(glyph.text, idx)) !== -1) {
-        hits.push({ from: from + idx, to: from + idx + glyph.text.length, glyph })
-        idx += glyph.text.length
-      }
-    }
-  }
-  hits.sort((a, b) => a.from - b.from)
+  const hits = findAccountHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
     if (unveiled.has(h.from)) continue
-    builder.add(h.from, h.to, Decoration.replace({ widget: new AccountGlyphWidget(h.glyph) }))
+    builder.add(
+      h.from,
+      h.to,
+      Decoration.replace({ widget: new AccountGlyphWidget(h.glyph, h.chipLabel) }),
+    )
   }
   return builder.finish()
 }
@@ -121,23 +149,23 @@ export const accountGlyphs = ViewPlugin.fromClass(
   },
 )
 
-const MAX_GLYPH_LEN = Math.max(...ACCOUNT_GLYPHS.map((g) => g.text.length))
-
-function glyphAt(view: EditorView, pos: number): { from: number; glyph: AccountGlyph } | null {
-  const doc = view.state.doc
-  const lineStart = doc.lineAt(pos).from
-  const scanFrom = Math.max(lineStart, pos - MAX_GLYPH_LEN + 1)
-  const scanTo = Math.min(doc.length, pos + MAX_GLYPH_LEN)
-  const slice = doc.sliceString(scanFrom, scanTo)
-  const localPos = pos - scanFrom
-  for (const glyph of ACCOUNT_GLYPHS) {
-    if (!GLYPH_SVG[glyph.text]) continue
-    let idx = 0
-    while ((idx = slice.indexOf(glyph.text, idx)) !== -1) {
-      if (idx <= localPos && localPos < idx + glyph.text.length) {
-        return { from: scanFrom + idx, glyph }
+function hitAt(view: EditorView, pos: number): Hit | null {
+  const line = view.state.doc.lineAt(pos)
+  const localPos = pos - line.from
+  for (const match of line.text.matchAll(ANY_ACCOUNT_RE)) {
+    const acct = match[0]
+    if (acct.startsWith('Expenses:')) continue
+    const hit = matchAccountChip(acct)
+    if (!hit) continue
+    if (!GLYPH_SVG[hit.glyph.text]) continue
+    const idx = match.index ?? 0
+    if (localPos >= idx && localPos < idx + hit.consumedLen) {
+      return {
+        from: line.from + idx,
+        to: line.from + idx + hit.consumedLen,
+        glyph: hit.glyph,
+        chipLabel: hit.chipLabel,
       }
-      idx += glyph.text.length
     }
   }
   return null
@@ -145,16 +173,16 @@ function glyphAt(view: EditorView, pos: number): { from: number; glyph: AccountG
 
 export const accountGlyphTooltip = hoverTooltip(
   (view, pos) => {
-    const hit = glyphAt(view, pos)
+    const hit = hitAt(view, pos)
     if (!hit) return null
     return {
       pos: hit.from,
-      end: hit.from + hit.glyph.text.length,
+      end: hit.to,
       above: true,
       create: () => {
         const dom = document.createElement('div')
         dom.className = 'cm-account-glyph-tip'
-        dom.textContent = hit.glyph.text
+        dom.textContent = view.state.doc.sliceString(hit.from, hit.to)
         return { dom }
       },
     }
