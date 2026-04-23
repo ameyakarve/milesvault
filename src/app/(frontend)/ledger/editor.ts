@@ -37,7 +37,7 @@ import {
   keymap,
 } from '@codemirror/view'
 import { parser } from 'lezer-beancount'
-import { type AccountCompleter, completeAccount } from '@/lib/beancount/accounts'
+import { type AccountCompleter, completeAccount } from '@/lib/beancount/entities'
 import { splitEntries } from '@/lib/beancount/extract'
 import { parseBuffer } from '@/lib/beancount/parse'
 import {
@@ -45,9 +45,8 @@ import {
   type Validator,
   coreValidators,
 } from '@/lib/beancount/validators'
-import { accountGlyphs, accountGlyphTooltip } from './editor-account-glyphs'
+import { accountChips, accountChipTooltip } from './editor-chips'
 import { diffChips } from './editor-diff-chips'
-import { expenseGlyphs, expenseGlyphTooltip } from './editor-expense-glyphs'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 
@@ -193,7 +192,7 @@ function defineReactSlot<T>(initial: T): {
 
 export type LedgerDiagnostic = Diagnostic
 export type { ValidateContext, Validator } from '@/lib/beancount/validators'
-export type { AccountCompleter } from '@/lib/beancount/accounts'
+export type { AccountCompleter } from '@/lib/beancount/entities'
 
 const { field: validatorsField, effect: setValidators } =
   defineReactSlot<readonly Validator[]>([])
@@ -304,10 +303,8 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     accountCompleterField,
     autocompletion({ override: [accountCompletionSource], activateOnTyping: true }),
     autocompleteColonTrigger,
-    accountGlyphs,
-    accountGlyphTooltip,
-    expenseGlyphs,
-    expenseGlyphTooltip,
+    accountChips,
+    accountChipTooltip,
     headerChips,
     headerChipTooltip,
     diffChips,

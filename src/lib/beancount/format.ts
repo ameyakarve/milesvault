@@ -1,5 +1,5 @@
+import { visualTextLen } from './entities'
 import { splitEntries } from './extract'
-import { visualTextLen } from './glyphs'
 
 export function format(text: string): string {
   const lines = text.split('\n')

@@ -1,13 +1,11 @@
 import { getChunks } from '@codemirror/merge'
 import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
-import { CATEGORY_ICON_SVG, toChipSvg } from '@/lib/beancount/category-icon-svgs'
 import {
   ANY_ACCOUNT_RE,
   chipVisualWidth,
-  matchAccountChip,
-  matchExpenseChip,
-} from '@/lib/beancount/glyphs'
-import { ACCOUNT_GLYPH_SVG } from './editor-account-glyphs'
+  resolveAccount,
+  toChipSvg,
+} from '@/lib/beancount/entities'
 import { hitsForLine, startOfDayMs } from './editor-header-chips'
 
 type ChipSpec = {
@@ -23,31 +21,15 @@ function accountSpecs(text: string): ChipSpec[] {
   for (const m of text.matchAll(ANY_ACCOUNT_RE)) {
     const acct = m[0]
     const from = m.index ?? 0
-    if (acct.startsWith('Expenses:')) {
-      const hit = matchExpenseChip(acct)
-      if (!hit) continue
-      const svg = CATEGORY_ICON_SVG[hit.matchedPath]
-      if (!svg) continue
-      out.push({
-        from,
-        to: from + hit.consumedLen,
-        label: hit.chipLabel,
-        svg,
-        title: acct.slice(0, hit.consumedLen),
-      })
-    } else {
-      const hit = matchAccountChip(acct)
-      if (!hit) continue
-      const svg = ACCOUNT_GLYPH_SVG[hit.glyph.text]
-      if (!svg) continue
-      out.push({
-        from,
-        to: from + hit.consumedLen,
-        label: hit.chipLabel,
-        svg,
-        title: acct.slice(0, hit.consumedLen),
-      })
-    }
+    const r = resolveAccount(acct)
+    if (!r || !r.glyph) continue
+    out.push({
+      from,
+      to: from + r.consumedLen,
+      label: r.chipLabel,
+      svg: r.glyph.svg,
+      title: acct.slice(0, r.consumedLen),
+    })
   }
   return out
 }
