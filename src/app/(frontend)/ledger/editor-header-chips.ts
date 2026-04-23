@@ -16,8 +16,7 @@ import {
   TriangleAlert,
   User,
 } from 'lucide-static'
-import { toChipSvg } from '@/lib/beancount/category-icon-svgs'
-import { chipVisualWidth } from '@/lib/beancount/glyphs'
+import { chipVisualWidth, toChipSvg } from '@/lib/beancount/entities'
 import { cursorLine, unveilChipAt } from './editor-chip-state'
 
 export type HeaderHit = {

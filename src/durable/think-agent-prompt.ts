@@ -1,4 +1,4 @@
-import { ALL_ACCOUNTS } from '@/lib/beancount/accounts'
+import { ALL_ACCOUNTS } from '@/lib/beancount/entities'
 
 export function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10)
