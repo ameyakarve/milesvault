@@ -36,18 +36,33 @@ type Hit = {
   from: number
   to: number
   compressed: string
+  primary: boolean
 }
 
 function findAmountHits(view: EditorView): Hit[] {
   const hits: Hit[] = []
+  const doc = view.state.doc
   for (const { from, to } of view.visibleRanges) {
-    const text = view.state.doc.sliceString(from, to)
-    for (const m of text.matchAll(AMOUNT_RE)) {
-      const raw = m[1]
-      const idx = m.index ?? 0
-      const compressed = compressAmount(raw)
-      if (!compressed) continue
-      hits.push({ from: from + idx, to: from + idx + raw.length, compressed })
+    let lineNum = doc.lineAt(from).number
+    const endLineNum = doc.lineAt(to).number
+    while (lineNum <= endLineNum) {
+      const line = doc.line(lineNum)
+      let seen = false
+      for (const m of line.text.matchAll(AMOUNT_RE)) {
+        const raw = m[1]
+        const idx = m.index ?? 0
+        const compressed = compressAmount(raw)
+        if (compressed) {
+          hits.push({
+            from: line.from + idx,
+            to: line.from + idx + raw.length,
+            compressed,
+            primary: !seen,
+          })
+        }
+        seen = true
+      }
+      lineNum += 1
     }
   }
   return hits
@@ -56,14 +71,17 @@ function findAmountHits(view: EditorView): Hit[] {
 class AmountChipWidget extends WidgetType {
   constructor(
     readonly label: string,
-    readonly width: number,
+    readonly slotWidth: number | null,
   ) {
     super()
   }
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span')
     span.className = 'cm-amount-chip'
-    span.style.width = `${this.width}ch`
+    if (this.slotWidth !== null) {
+      span.style.width = `${this.slotWidth}ch`
+      span.style.textAlign = 'right'
+    }
     span.textContent = this.label
     span.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -76,7 +94,7 @@ class AmountChipWidget extends WidgetType {
     return (
       other instanceof AmountChipWidget &&
       other.label === this.label &&
-      other.width === this.width
+      other.slotWidth === this.slotWidth
     )
   }
   ignoreEvent(): boolean {
@@ -92,11 +110,12 @@ function buildAmountDecorations(view: EditorView): DecorationSet {
   for (const h of hits) {
     const ln = doc.lineAt(h.from).number
     if (ln >= active.from && ln <= active.to) continue
+    const slotWidth = h.primary ? h.to - h.from : null
     builder.add(
       h.from,
       h.to,
       Decoration.replace({
-        widget: new AmountChipWidget(h.compressed, h.to - h.from),
+        widget: new AmountChipWidget(h.compressed, slotWidth),
       }),
     )
   }

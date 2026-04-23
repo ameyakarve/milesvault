@@ -66,7 +66,6 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-amount-chip': {
       display: 'inline-block',
-      textAlign: 'right',
       whiteSpace: 'pre',
       color: NAVY_700,
       fontWeight: '600',
