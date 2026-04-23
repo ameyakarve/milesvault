@@ -102,9 +102,14 @@ const beancountFoldService = foldService.of((state, lineStart) => {
   const doc = state.doc
   const headerLineNum = doc.lineAt(lineStart).number - 1
   const entry = cachedSplit(doc).find((e) => e.startLine === headerLineNum)
-  if (!entry || entry.endLine === entry.startLine) return null
+  if (!entry) return null
+  let endLine1 = entry.endLine + 1
+  while (endLine1 > entry.startLine + 1 && doc.line(endLine1).text.trim() === '') {
+    endLine1 -= 1
+  }
+  if (endLine1 === entry.startLine + 1) return null
   const headerLine = doc.line(entry.startLine + 1)
-  const lastLine = doc.line(entry.endLine + 1)
+  const lastLine = doc.line(endLine1)
   return { from: headerLine.to, to: lastLine.to }
 })
 
