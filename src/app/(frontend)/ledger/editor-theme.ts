@@ -98,6 +98,20 @@ export const scandiEditorTheme = EditorView.theme(
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     },
     '.cm-lineNumbers .cm-gutterElement': { padding: '0 4px 0 8px' },
+    '.cm-txn-card-gutter': {
+      backgroundColor: '#ffffff',
+      borderRight: `1px solid ${SLATE_100}`,
+      minWidth: '160px',
+    },
+    '.cm-txn-card-gutter .cm-gutterElement': { padding: '0 6px' },
+    '.cm-txn-card': {
+      height: '100%',
+      boxSizing: 'border-box',
+      padding: '2px 8px',
+      border: `1px solid ${SLATE_200}`,
+      borderRadius: '4px',
+      backgroundColor: SLATE_50,
+    },
     '.cm-activeLine:not(.cm-changedLine):not(.cm-deletedLine)': {
       backgroundColor: 'transparent',
     },
