@@ -57,10 +57,10 @@ Stored-value kinds hold a real balance. Two separate transactions: a load (or gi
   Expenses:Travel:Local         85.00 INR
 ```
 
-Gift card received (no bank outflow — booked as income):
+Gift card received (no bank outflow — booked via plug with tag):
 ```beancount
-2026-04-01 * "Mom" "birthday — Amazon Pay"
-  Income:Gifts                    -2000.00 INR
+2026-04-01 * "Mom" "birthday — Amazon Pay" #gift-in
+  Income:Void                     -2000.00 INR
   Assets:Loaded:GiftCards:Amazon   2000.00 INR
 ```
 
@@ -137,16 +137,27 @@ Two kinds for reward commodities. Both live under `Assets:Rewards:*` and carry n
 - Lounge visit counters, insurance/concierge perks — not tracked as commodities.
 - Status *tiers* (Gold, Platinum) — these are entity state, not balances. Live on the program entity, not as accounts.
 
-### System sinks
+### System plug accounts
 
-Rewards use a single pair of system-reserved accounts for mint/burn magic:
+All non-cash accruals and burns flow through a single symmetric pair, regardless of commodity or semantic flavor:
 
 | account | role |
 |---|---|
-| `Income:Rewards` | mint sink — where all reward commodities originate |
-| `Expenses:Rewards` | burn sink — expiry, forfeit, tier reset |
+| `Income:Void` | single source — reward accruals, cashback, discounts, gifts received, all commodities |
+| `Expenses:Void` | single sink — expiry, forfeit, tier reset, gifts given |
 
-Both auto-provisioned per user; hold multiple commodities simultaneously. Normal redemptions (points → flight) flow into real `Expenses:*` accounts, not these sinks.
+Both auto-provisioned per user; hold multiple commodities simultaneously (INR alongside AVIOS, MARRIOTT, KRISFLYER, MAR-NIGHTS, KF-PPS, SBI-RP, SMARTBUY, …). Normal redemptions (points → flight) flow into real `Expenses:*` accounts, not these plugs.
+
+Transaction-level **tags** classify the plug usage. The name "Void" is flavor-agnostic on purpose — classification lives on the transaction, not the account path.
+
+| tag | used on |
+|---|---|
+| `#reward-accrual` | points / miles / status earned alongside a spend |
+| `#reward-expiry` | points / miles / status lost to expiry or tier reset |
+| `#cashback` | real-fiat cashback credited back to a card/wallet |
+| `#discount` | promo/coupon savings (phantom savings, one instrument leg) |
+| `#gift-in` | gift received (inbound) |
+| `#gift-out` | gift given (outbound) |
 
 ### Consolidation
 
@@ -165,20 +176,20 @@ Transferability is a property of the commodity, not the account.
 
 Points earned alongside a spend:
 ```beancount
-2026-04-16 * "BA" "LHR-BOM flight"
+2026-04-16 * "BA" "LHR-BOM flight" #reward-accrual
   Liabilities:CC:HDFC:Infinia  -50000.00 INR
   Expenses:Travel:Flights                50000.00 INR
   Assets:Rewards:Points:Avios              500.00 AVIOS
-  Income:Rewards                          -500.00 AVIOS
+  Income:Void                             -500.00 AVIOS
 ```
 
 Status earned from a stay:
 ```beancount
-2026-04-16 * "Marriott" "Mumbai stay"
+2026-04-16 * "Marriott" "Mumbai stay" #reward-accrual
   Liabilities:CC:HDFC:Infinia  -15000.00 INR
   Expenses:Travel:Hotels                 15000.00 INR
   Assets:Rewards:Status:Marriott             3.00 MAR-NIGHTS
-  Income:Rewards                            -3.00 MAR-NIGHTS
+  Income:Void                               -3.00 MAR-NIGHTS
 ```
 
 ### Transfer between programs — `@@` conversion
@@ -212,36 +223,36 @@ Card-locked redemption into a voucher:
 
 Points expire unused:
 ```beancount
-2026-12-31 * "Avios" "annual expiry"
+2026-12-31 * "Avios" "annual expiry" #reward-expiry
   Assets:Rewards:Points:Avios  -2000.00 AVIOS
-  Expenses:Rewards              2000.00 AVIOS
+  Expenses:Void                 2000.00 AVIOS
 ```
 
 Status resets at year end:
 ```beancount
-2026-12-31 * "Marriott" "tier reset"
+2026-12-31 * "Marriott" "tier reset" #reward-expiry
   Assets:Rewards:Status:Marriott  -50.00 MAR-NIGHTS
-  Expenses:Rewards                 50.00 MAR-NIGHTS
+  Expenses:Void                    50.00 MAR-NIGHTS
 ```
 
 ## Cashback and discounts
 
 Both are recorded inline with the originating txn. They differ in whether money actually moves.
 
-| | Instrument postings | Gross expense shown? | Sink |
-|---|---|---|---|
-| Discount | 1 (net payment only) | yes | `Income:Savings:Discounts` |
-| Cashback | 2 (full outflow + credit back) | yes | `Income:Rewards:Cashback` |
+| | Instrument postings | Gross expense shown? | Plug | Tag |
+|---|---|---|---|---|
+| Discount | 1 (net payment only) | yes | `Income:Void` | `#discount` |
+| Cashback | 2 (full outflow + credit back) | yes | `Income:Void` | `#cashback` |
 
 ### Discount — net payment, phantom savings
 
 Money never left for the discounted portion. One posting on the instrument.
 
 ```beancount
-2026-04-16 * "Zomato" "dinner ₹1000 — ₹150 promo"
+2026-04-16 * "Zomato" "dinner ₹1000 — ₹150 promo" #discount
   Liabilities:CC:HDFC:Infinia   -850.00 INR
   Expenses:Food:Restaurant               1000.00 INR
-  Income:Savings:Discounts               -150.00 INR
+  Income:Void                            -150.00 INR
 ```
 
 ### Cashback — full payment + credit back
@@ -250,59 +261,59 @@ Cashback is a real inflow. The instrument appears twice when the cashback lands 
 
 Same-card cashback (10% HDFC offer on Zomato):
 ```beancount
-2026-04-16 * "Zomato" "dinner, 10% HDFC offer"
+2026-04-16 * "Zomato" "dinner, 10% HDFC offer" #cashback
   Liabilities:CC:HDFC:Infinia  -1000.00 INR
   Expenses:Food:Restaurant               1000.00 INR
   Liabilities:CC:HDFC:Infinia    100.00 INR
-  Income:Rewards:Cashback                -100.00 INR
+  Income:Void                            -100.00 INR
 ```
 
 Same-wallet cashback (Paytm 5% on a ride):
 ```beancount
-2026-04-16 * "Zomato" "dinner + 5% Paytm cashback"
+2026-04-16 * "Zomato" "dinner + 5% Paytm cashback" #cashback
   Assets:Loaded:Wallets:Paytm    -1000.00 INR
   Expenses:Food:Restaurant        1000.00 INR
   Assets:Loaded:Wallets:Paytm        50.00 INR
-  Income:Rewards:Cashback           -50.00 INR
+  Income:Void                       -50.00 INR
 ```
 
 Cross-instrument cashback (Amazon via Infinia, cashback to Amazon Pay):
 ```beancount
-2026-04-16 * "Amazon" "headphones + ₹150 AmazonPay cashback"
+2026-04-16 * "Amazon" "headphones + ₹150 AmazonPay cashback" #cashback
   Liabilities:CC:HDFC:Infinia  -3000.00 INR
   Expenses:Shopping:Electronics          3000.00 INR
   Assets:Loaded:Wallets:AmazonPay         150.00 INR
-  Income:Rewards:Cashback                -150.00 INR
+  Income:Void                            -150.00 INR
 ```
 
 Bill payment with app cashback (CRED pays into CRED wallet):
 ```beancount
-2026-04-10 * "CRED" "HDFC bill + ₹25 CRED cashback"
+2026-04-10 * "CRED" "HDFC bill + ₹25 CRED cashback" #cashback
   Assets:Bank:HDFC:Savings              -10000.00 INR
   Liabilities:CC:HDFC:Infinia   10000.00 INR
   Assets:Loaded:Wallets:CRED                 25.00 INR
-  Income:Rewards:Cashback                   -25.00 INR
+  Income:Void                               -25.00 INR
 ```
 
 ### Statement-level cashback (standalone)
 
 When cashback is credited later as a statement event rather than per-txn:
 ```beancount
-2026-04-30 * "HDFC" "Infinia April statement cashback"
+2026-04-30 * "HDFC" "Infinia April statement cashback" #cashback
   Liabilities:CC:HDFC:Infinia    250.00 INR
-  Income:Rewards:Cashback                -250.00 INR
+  Income:Void                            -250.00 INR
 ```
 
 Pending/accrued cashback is not tracked.
 
 ### Income/Expense map
 
+Single plug pair for everything non-cash; distinguish semantics via tags.
+
 | account | role |
 |---|---|
-| `Income:Rewards` | mint sink for phantom commodities (points, status) |
-| `Income:Rewards:Cashback` | real fiat cashback |
-| `Income:Savings:Discounts` | POS discount savings |
-| `Expenses:Rewards` | burn sink (expiry, reset, forfeit) |
+| `Income:Void` | all inbound plug entries (accrual, cashback, discount, gift-in) — any commodity |
+| `Expenses:Void` | all outbound plug entries (expiry, reset, forfeit, gift-out) — any commodity |
 
 ## Path-to-kind resolver
 
