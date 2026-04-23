@@ -21,12 +21,43 @@ export const ACCOUNT_GLYPHS: readonly AccountGlyph[] = [
   { text: 'Income:Void', visualWidth: 7, label: 'void (source)', chipLabel: 'Void' },
 ]
 
-const EXPENSE_ACCOUNT_RE = /Expenses(?::[A-Za-z0-9]+)+/g
+export const ANY_ACCOUNT_RE = /[A-Z][A-Za-z0-9]*(?::[A-Za-z0-9]+)+/g
 
 export type ExpenseChipMatch = {
   matchedPath: string
   consumedLen: number
   chipLabel: string
+}
+
+export type AccountChipMatch = {
+  glyph: AccountGlyph
+  consumedLen: number
+  chipLabel: string
+}
+
+const GLYPH_BY_TEXT: Record<string, AccountGlyph> = Object.fromEntries(
+  ACCOUNT_GLYPHS.map((g) => [g.text, g]),
+)
+
+export function matchAccountChip(acct: string): AccountChipMatch | null {
+  const segments = acct.split(':')
+  let depth = segments.length
+  while (depth >= 1) {
+    const prefix = segments.slice(0, depth).join(':')
+    if (GLYPH_BY_TEXT[prefix]) break
+    depth--
+  }
+  if (depth < 1) return null
+  const glyph = GLYPH_BY_TEXT[segments.slice(0, depth).join(':')]
+  if (depth === segments.length) {
+    return { glyph, consumedLen: acct.length, chipLabel: glyph.chipLabel }
+  }
+  const firstTail = segments[depth]
+  return {
+    glyph,
+    consumedLen: glyph.text.length + 1 + firstTail.length,
+    chipLabel: firstTail,
+  }
 }
 
 export function matchExpenseChip(acct: string): ExpenseChipMatch | null {
@@ -63,16 +94,15 @@ export { chipVisualWidth }
 
 export function visualTextLen(s: string): number {
   let delta = 0
-  for (const g of ACCOUNT_GLYPHS) {
-    if (g.text.length === 0) continue
-    let idx = 0
-    while ((idx = s.indexOf(g.text, idx)) !== -1) {
-      delta += g.visualWidth - g.text.length
-      idx += g.text.length
+  for (const match of s.matchAll(ANY_ACCOUNT_RE)) {
+    const acct = match[0]
+    if (acct.startsWith('Expenses:')) {
+      const hit = matchExpenseChip(acct)
+      if (!hit) continue
+      delta += chipVisualWidth(hit.chipLabel) - hit.consumedLen
+      continue
     }
-  }
-  for (const match of s.matchAll(EXPENSE_ACCOUNT_RE)) {
-    const hit = matchExpenseChip(match[0])
+    const hit = matchAccountChip(acct)
     if (!hit) continue
     delta += chipVisualWidth(hit.chipLabel) - hit.consumedLen
   }
