@@ -56,10 +56,20 @@ class AccountGlyphWidget extends WidgetType {
     span.setAttribute('aria-label', this.glyph.text)
     span.title = this.glyph.text
     span.innerHTML = GLYPH_SVG[this.glyph.text] ?? ''
+    if (this.glyph.leafLabel) {
+      const label = document.createElement('span')
+      label.className = 'cm-account-glyph-leaf'
+      label.textContent = this.glyph.leafLabel
+      span.appendChild(label)
+    }
     return span
   }
   eq(other: WidgetType): boolean {
-    return other instanceof AccountGlyphWidget && other.glyph.text === this.glyph.text
+    return (
+      other instanceof AccountGlyphWidget &&
+      other.glyph.text === this.glyph.text &&
+      other.glyph.leafLabel === this.glyph.leafLabel
+    )
   }
   ignoreEvent(): boolean {
     return false

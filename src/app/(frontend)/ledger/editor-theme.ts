@@ -56,9 +56,15 @@ export const scandiEditorTheme = EditorView.theme(
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: '3px',
       height: '16px',
       verticalAlign: '-3px',
       color: SKY_700,
+    },
+    '.cm-account-glyph-leaf': {
+      fontSize: '11px',
+      fontWeight: '600',
+      letterSpacing: '0.02em',
     },
     '.cm-gutters': {
       backgroundColor: '#ffffff',
