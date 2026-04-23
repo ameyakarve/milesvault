@@ -18,7 +18,7 @@ import {
 } from 'lucide-static'
 import { toChipSvg } from '@/lib/beancount/category-icon-svgs'
 import { chipVisualWidth } from '@/lib/beancount/glyphs'
-import { unveilChipAt, unveiledChipsField } from './editor-chip-state'
+import { cursorLine, unveilChipAt } from './editor-chip-state'
 
 export type HeaderHit = {
   from: number
@@ -164,11 +164,12 @@ class HeaderChipWidget extends WidgetType {
 }
 
 function buildHeaderDecorations(view: EditorView): DecorationSet {
-  const unveiled = view.state.field(unveiledChipsField, false) ?? new Set<number>()
+  const activeLine = cursorLine(view.state)
+  const doc = view.state.doc
   const hits = findHeaderHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
-    if (unveiled.has(h.from)) continue
+    if (doc.lineAt(h.from).number === activeLine) continue
     builder.add(
       h.from,
       h.to,
@@ -185,9 +186,7 @@ export const headerChips = ViewPlugin.fromClass(
       this.decorations = buildHeaderDecorations(view)
     }
     update(u: ViewUpdate) {
-      const prevUnveiled = u.startState.field(unveiledChipsField, false)
-      const nextUnveiled = u.state.field(unveiledChipsField, false)
-      if (u.docChanged || u.viewportChanged || prevUnveiled !== nextUnveiled) {
+      if (u.docChanged || u.viewportChanged || u.selectionSet) {
         this.decorations = buildHeaderDecorations(u.view)
       }
     }

@@ -10,7 +10,7 @@ import {
 } from '@codemirror/view'
 import { CATEGORY_ICON_SVG, toChipSvg } from '@/lib/beancount/category-icon-svgs'
 import { chipVisualWidth, matchExpenseChip } from '@/lib/beancount/glyphs'
-import { unveilChipAt, unveiledChipsField } from './editor-chip-state'
+import { cursorLine, unveilChipAt } from './editor-chip-state'
 
 type ExpenseHit = {
   from: number
@@ -90,11 +90,12 @@ class ExpenseGlyphWidget extends WidgetType {
 }
 
 function buildExpenseDecorations(view: EditorView): DecorationSet {
-  const unveiled = view.state.field(unveiledChipsField, false) ?? new Set<number>()
+  const activeLine = cursorLine(view.state)
+  const doc = view.state.doc
   const hits = findExpenseHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
-    if (unveiled.has(h.from)) continue
+    if (doc.lineAt(h.from).number === activeLine) continue
     builder.add(
       h.from,
       h.to,
@@ -113,9 +114,7 @@ export const expenseGlyphs = ViewPlugin.fromClass(
       this.decorations = buildExpenseDecorations(view)
     }
     update(u: ViewUpdate) {
-      const prevUnveiled = u.startState.field(unveiledChipsField, false)
-      const nextUnveiled = u.state.field(unveiledChipsField, false)
-      if (u.docChanged || u.viewportChanged || prevUnveiled !== nextUnveiled) {
+      if (u.docChanged || u.viewportChanged || u.selectionSet) {
         this.decorations = buildExpenseDecorations(u.view)
       }
     }
