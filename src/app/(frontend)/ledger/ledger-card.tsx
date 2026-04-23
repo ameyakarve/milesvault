@@ -260,16 +260,17 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
   const palette = COLOR_CLASSES[row.category.color]
   const tileLabel = row.category.shortName.toUpperCase()
   const shell = active
-    ? 'h-[88px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)] flex items-center px-3 gap-3 transition-colors relative border-b border-scandi-rule w-full z-10'
-    : 'h-[88px] bg-transparent hover:bg-white flex items-center px-3 gap-3 relative transition-colors border-b border-scandi-rule w-full'
+    ? 'h-[88px] bg-scandi-accent flex items-center px-3 gap-3 transition-colors relative border-b border-scandi-rule w-full z-10'
+    : 'h-[88px] bg-white hover:bg-scandi-quiet flex items-center px-3 gap-3 relative transition-colors border-b border-scandi-rule w-full'
+  const primaryText = active ? 'text-white' : 'text-navy-700'
+  const subText = active ? 'text-slate-200' : 'text-slate-600'
+  const subIcon = active ? 'text-slate-300' : 'text-slate-500'
   const pillText = row.rewards.current?.trim() ?? ''
   const showPill = pillText !== '' && pillText !== '—'
   const accountLabel = row.subtext ?? row.account
 
   return (
     <div className={shell}>
-      {active && <div className="absolute left-0 top-0 bottom-0 w-[3px] bg-scandi-accent" />}
-
       <div
         className={`h-[56px] w-[56px] shrink-0 border ${palette.tileBorder} ${palette.tileBg} flex flex-col items-center justify-center gap-[3px]`}
       >
@@ -282,22 +283,24 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col justify-center gap-[4px]">
-        <div className="text-navy-700 text-[15px] font-semibold truncate leading-tight">
+        <div className={`${primaryText} text-[15px] font-semibold truncate leading-tight`}>
           {row.payee}
         </div>
         <div className="flex items-center min-w-0 leading-tight">
-          <span className="text-[12px] font-mono font-semibold uppercase tracking-[0.06em] text-navy-700 truncate">
+          <span
+            className={`text-[12px] font-mono font-semibold uppercase tracking-[0.06em] ${primaryText} truncate`}
+          >
             {row.dateLabel}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 text-[12px] text-slate-600 min-w-0 leading-tight">
-          <CreditCard size={12} strokeWidth={1.75} className="text-slate-500 shrink-0" />
+        <div className={`flex items-center gap-1.5 text-[12px] ${subText} min-w-0 leading-tight`}>
+          <CreditCard size={12} strokeWidth={1.75} className={`${subIcon} shrink-0`} />
           <span className="truncate">{accountLabel}</span>
         </div>
       </div>
 
       <div className="w-[116px] shrink-0 flex flex-col items-end justify-center gap-1.5">
-        <div className="text-navy-700 text-[15px] font-mono font-semibold tabular-nums">
+        <div className={`${primaryText} text-[15px] font-mono font-semibold tabular-nums`}>
           {row.amount}
         </div>
         {showPill ? (
