@@ -48,6 +48,7 @@ import {
 import { accountGlyphs, accountGlyphTooltip } from './editor-account-glyphs'
 import { chipBlurHandler, unveiledChipsField } from './editor-chip-state'
 import { expenseGlyphs, expenseGlyphTooltip } from './editor-expense-glyphs'
+import { headerChips, headerChipTooltip } from './editor-header-chips'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 
 const beancountLanguage = LRLanguage.define({
@@ -309,6 +310,8 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     accountGlyphTooltip,
     expenseGlyphs,
     expenseGlyphTooltip,
+    headerChips,
+    headerChipTooltip,
     scandiEditorTheme,
   ]
 }
