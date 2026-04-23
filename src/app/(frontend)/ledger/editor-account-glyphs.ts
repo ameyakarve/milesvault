@@ -3,6 +3,7 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
+  hoverTooltip,
   ViewPlugin,
   type ViewUpdate,
   WidgetType,
@@ -54,7 +55,6 @@ class AccountGlyphWidget extends WidgetType {
     span.className = 'cm-account-glyph'
     span.style.width = `${this.glyph.visualWidth}ch`
     span.setAttribute('aria-label', this.glyph.text)
-    span.title = this.glyph.text
     span.innerHTML = GLYPH_SVG[this.glyph.text] ?? ''
     if (this.glyph.leafLabel) {
       const label = document.createElement('span')
@@ -117,4 +117,45 @@ export const accountGlyphs = ViewPlugin.fromClass(
         return view.plugin(plugin)?.decorations ?? Decoration.none
       }),
   },
+)
+
+const MAX_GLYPH_LEN = Math.max(...ACCOUNT_GLYPHS.map((g) => g.text.length))
+
+function glyphAt(view: EditorView, pos: number): { from: number; glyph: AccountGlyph } | null {
+  const doc = view.state.doc
+  const lineStart = doc.lineAt(pos).from
+  const scanFrom = Math.max(lineStart, pos - MAX_GLYPH_LEN + 1)
+  const scanTo = Math.min(doc.length, pos + MAX_GLYPH_LEN)
+  const slice = doc.sliceString(scanFrom, scanTo)
+  const localPos = pos - scanFrom
+  for (const glyph of ACCOUNT_GLYPHS) {
+    if (!GLYPH_SVG[glyph.text]) continue
+    let idx = 0
+    while ((idx = slice.indexOf(glyph.text, idx)) !== -1) {
+      if (idx <= localPos && localPos < idx + glyph.text.length) {
+        return { from: scanFrom + idx, glyph }
+      }
+      idx += glyph.text.length
+    }
+  }
+  return null
+}
+
+export const accountGlyphTooltip = hoverTooltip(
+  (view, pos) => {
+    const hit = glyphAt(view, pos)
+    if (!hit) return null
+    return {
+      pos: hit.from,
+      end: hit.from + hit.glyph.text.length,
+      above: true,
+      create: () => {
+        const dom = document.createElement('div')
+        dom.className = 'cm-account-glyph-tip'
+        dom.textContent = hit.glyph.text
+        return { dom }
+      },
+    }
+  },
+  { hoverTime: 120 },
 )
