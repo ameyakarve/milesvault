@@ -52,11 +52,10 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-line, .cm-deletedChunk': { padding: '0 12px' },
     '.cm-txn-band': { backgroundColor: SLATE_50 },
-    '.cm-liab-cc-glyph': {
+    '.cm-account-glyph': {
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      width: '16px',
       height: '16px',
       verticalAlign: '-3px',
       color: SKY_700,
