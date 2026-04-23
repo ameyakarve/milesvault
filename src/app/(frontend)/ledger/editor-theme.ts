@@ -74,7 +74,6 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-account-glyph-tip': {
       padding: '4px 8px',
-      fontSize: '11px',
       fontWeight: '500',
       color: NAVY_600,
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
@@ -91,7 +90,6 @@ export const scandiEditorTheme = EditorView.theme(
       border: 'none',
       borderRight: `1px solid ${SLATE_100}`,
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-      fontSize: '11px',
     },
     '.cm-lineNumbers .cm-gutterElement': { padding: '0 4px 0 8px' },
     '.cm-activeLine:not(.cm-changedLine):not(.cm-deletedLine)': {
