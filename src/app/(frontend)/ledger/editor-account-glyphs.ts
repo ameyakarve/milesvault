@@ -13,7 +13,7 @@ const CC_GLYPH_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>'
 
 const GLYPH_SVG: Record<string, string> = {
-  'Liabilities:CC': CC_GLYPH_SVG,
+  'Liabilities:CC:': CC_GLYPH_SVG,
 }
 
 class AccountGlyphWidget extends WidgetType {
