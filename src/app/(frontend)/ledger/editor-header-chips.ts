@@ -25,15 +25,16 @@ export type HeaderHit = {
   label: string
   tooltip: string
   svg: string
+  flagClass?: string
 }
 
 const HEADER_RE =
   /^(\d{4}-\d{2}-\d{2})([ \t]+)([*!]|txn)([ \t]+)"([^"]*)"(?:([ \t]+)"([^"]*)")?/gm
 
-const FLAG_META: Record<string, { label: string; svg: string }> = {
-  '*': { label: 'Cleared', svg: CircleCheck },
-  '!': { label: 'Pending', svg: TriangleAlert },
-  txn: { label: 'Entry', svg: Circle },
+const FLAG_META: Record<string, { label: string; svg: string; flagClass: string }> = {
+  '*': { label: '', svg: CircleCheck, flagClass: 'cm-flag-chip-cleared' },
+  '!': { label: 'Pending', svg: TriangleAlert, flagClass: 'cm-flag-chip-pending' },
+  txn: { label: 'Entry', svg: Circle, flagClass: 'cm-flag-chip-txn' },
 }
 
 function dateChipLabel(iso: string, todayMs: number): string {
@@ -71,6 +72,7 @@ export function hitsForLine(lineText: string, lineFrom: number, todayMs: number)
       label: flagMeta.label,
       tooltip: `flag: ${flag}`,
       svg: flagMeta.svg,
+      flagClass: flagMeta.flagClass,
     })
   }
   const payeeOpenQuote = flagFrom + flag.length + sp2.length
@@ -130,19 +132,22 @@ class HeaderChipWidget extends WidgetType {
     readonly tooltip: string,
     readonly svg: string,
     readonly width: number,
+    readonly flagClass: string | undefined,
   ) {
     super()
   }
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span')
-    span.className = 'cm-account-glyph'
+    span.className = this.flagClass ? `cm-account-glyph ${this.flagClass}` : 'cm-account-glyph'
     span.style.width = `${this.width}ch`
     span.setAttribute('aria-label', this.tooltip)
     span.innerHTML = toChipSvg(this.svg)
-    const label = document.createElement('span')
-    label.className = 'cm-account-glyph-chip'
-    label.textContent = this.label
-    span.appendChild(label)
+    if (this.label) {
+      const label = document.createElement('span')
+      label.className = 'cm-account-glyph-chip'
+      label.textContent = this.label
+      span.appendChild(label)
+    }
     span.addEventListener('mousedown', (e) => {
       e.preventDefault()
       const pos = view.posAtDOM(span)
@@ -156,7 +161,8 @@ class HeaderChipWidget extends WidgetType {
       other.label === this.label &&
       other.tooltip === this.tooltip &&
       other.svg === this.svg &&
-      other.width === this.width
+      other.width === this.width &&
+      other.flagClass === this.flagClass
     )
   }
   ignoreEvent(): boolean {
@@ -181,6 +187,7 @@ function buildHeaderDecorations(view: EditorView): DecorationSet {
           h.tooltip,
           h.svg,
           chipSlotWidth(h.to - h.from, h.label),
+          h.flagClass,
         ),
       }),
     )

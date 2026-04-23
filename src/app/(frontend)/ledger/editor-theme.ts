@@ -13,6 +13,7 @@ const SLATE_50 = '#F8FAFC'
 const SKY_600 = '#0284C7'
 const SKY_700 = '#0369A1'
 const AMBER_700 = '#B45309'
+const EMERALD_600 = '#059669'
 
 export const scandiHighlight = HighlightStyle.define([
   { tag: t.lineComment, color: SLATE_400, fontStyle: 'italic' },
@@ -64,6 +65,9 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-account-glyph-chip': {
       fontWeight: '600',
     },
+    '.cm-flag-chip-cleared': { color: EMERALD_600 },
+    '.cm-flag-chip-pending': { color: AMBER_700 },
+    '.cm-flag-chip-txn': { color: SLATE_500 },
     '.cm-amount-chip': {
       display: 'inline-block',
       whiteSpace: 'pre',
