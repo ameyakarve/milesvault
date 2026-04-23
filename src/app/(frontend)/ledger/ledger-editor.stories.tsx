@@ -188,7 +188,7 @@ export const WithElidedAmount: Story = {
 
 const CASHBACK_POSITIVE = `2026-04-17 * "HDFC" "April statement cashback"
   Liabilities:CC:HDFC          -250.00 INR
-  Income:Rewards:Cashback       250.00 INR
+  Income:Void       250.00 INR
 `
 
 export const WithPositiveCashback: Story = {
@@ -197,7 +197,7 @@ export const WithPositiveCashback: Story = {
     docs: {
       description: {
         story:
-          'Income:Rewards:Cashback posting is positive. cashback-sign validator underlines the amount.',
+          'Income:Void posting is positive. cashback-sign validator underlines the amount.',
       },
     },
   },
@@ -205,7 +205,7 @@ export const WithPositiveCashback: Story = {
 
 const CASHBACK_NO_MATCH = `2026-04-17 * "HDFC" "cashback split oddly"
   Liabilities:CC:HDFC          -200.00 INR
-  Income:Rewards:Cashback      -250.00 INR
+  Income:Void      -250.00 INR
   Expenses:Food:Coffee          450.00 INR
 `
 
@@ -223,7 +223,7 @@ export const WithCashbackNoMatchingPosting: Story = {
 
 const CASHBACK_NO_PAYMENT = `2026-04-17 * "Redeem" "cashback fully offsets expense"
   Expenses:Food:Coffee     100.00 INR
-  Income:Rewards:Cashback -100.00 INR
+  Income:Void -100.00 INR
 `
 
 export const WithCashbackButNoPayment: Story = {
@@ -232,7 +232,7 @@ export const WithCashbackButNoPayment: Story = {
     docs: {
       description: {
         story:
-          'Txn has only Expenses + `Income:Rewards:Cashback` postings — no real payment leg. cashback-needs-payment validator flags the header.',
+          'Txn has only Expenses + `Income:Void` postings — no real payment leg. cashback-needs-payment validator flags the header.',
       },
     },
   },

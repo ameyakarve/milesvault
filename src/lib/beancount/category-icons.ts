@@ -161,7 +161,7 @@ export const EXPENSE_CATEGORIES: Record<string, CategoryMeta> = {
   'Expenses:Services:Banking': cat(Landmark, 'Banking', 'Services · Banking', 'slate'),
   'Expenses:Services:Shipping': cat(Package, 'Shipping', 'Services · Shipping', 'slate'),
 
-  'Expenses:Rewards': cat(Sparkles, 'Rewards', 'Rewards', 'sky'),
+  'Expenses:Void': cat(Sparkles, 'Void', 'Void', 'sky'),
   'Expenses:Taxes': cat(Receipt, 'Taxes', 'Taxes', 'slate'),
   'Expenses:Misc': cat(CircleEllipsis, 'Misc', 'Misc', 'slate'),
 }

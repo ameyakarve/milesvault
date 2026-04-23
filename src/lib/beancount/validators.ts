@@ -84,7 +84,7 @@ export const amountRequiredValidator: Validator = ({ parsed }) => {
   return out
 }
 
-const CASHBACK_ACCOUNT = 'Income:Rewards:Cashback'
+const CASHBACK_ACCOUNT = 'Income:Void'
 
 export const cashbackValidator: Validator = ({ parsed }) => {
   const out: Diagnostic[] = []

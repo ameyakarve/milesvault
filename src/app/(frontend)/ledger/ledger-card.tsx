@@ -77,7 +77,7 @@ export type CardRow = CardPreset & {
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-const CASHBACK_ACCOUNT = 'Income:Rewards:Cashback'
+const CASHBACK_ACCOUNT = 'Income:Void'
 
 function formatDateLabel(y: number, m: number, d: number): string {
   if (!y || !m || !d || m < 1 || m > 12 || d < 1 || d > 31) {
