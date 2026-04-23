@@ -32,7 +32,7 @@ const RECEIVABLE_GLYPH_SVG = `${SVG_OPEN}<path d="M11 17a1 1 0 0 1-1.414 0L6 13.
 const CASH_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/>${SVG_CLOSE}`
 const VOID_GLYPH_SVG = `${SVG_OPEN}<circle cx="12" cy="12" r="8" stroke-dasharray="3 2.5"/>${SVG_CLOSE}`
 
-const GLYPH_SVG: Record<string, string> = {
+export const ACCOUNT_GLYPH_SVG: Record<string, string> = {
   'Liabilities:CC': CC_GLYPH_SVG,
   'Assets:DC': DC_GLYPH_SVG,
   'Assets:Loaded:PrepaidCards': PREPAID_GLYPH_SVG,
@@ -62,7 +62,7 @@ function findAccountHits(view: EditorView): Hit[] {
       if (acct.startsWith('Expenses:')) continue
       const hit = matchAccountChip(acct)
       if (!hit) continue
-      if (!GLYPH_SVG[hit.glyph.text]) continue
+      if (!ACCOUNT_GLYPH_SVG[hit.glyph.text]) continue
       const start = from + (match.index ?? 0)
       hits.push({
         from: start,
@@ -87,7 +87,7 @@ class AccountGlyphWidget extends WidgetType {
     span.className = 'cm-account-glyph'
     span.style.width = `${chipVisualWidth(this.chipLabel)}ch`
     span.setAttribute('aria-label', this.glyph.text)
-    span.innerHTML = GLYPH_SVG[this.glyph.text] ?? ''
+    span.innerHTML = ACCOUNT_GLYPH_SVG[this.glyph.text] ?? ''
     const label = document.createElement('span')
     label.className = 'cm-account-glyph-chip'
     label.textContent = this.chipLabel
@@ -157,7 +157,7 @@ function hitAt(view: EditorView, pos: number): Hit | null {
     if (acct.startsWith('Expenses:')) continue
     const hit = matchAccountChip(acct)
     if (!hit) continue
-    if (!GLYPH_SVG[hit.glyph.text]) continue
+    if (!ACCOUNT_GLYPH_SVG[hit.glyph.text]) continue
     const idx = match.index ?? 0
     if (localPos >= idx && localPos < idx + hit.consumedLen) {
       return {

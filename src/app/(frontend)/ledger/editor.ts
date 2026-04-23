@@ -47,6 +47,7 @@ import {
 } from '@/lib/beancount/validators'
 import { accountGlyphs, accountGlyphTooltip } from './editor-account-glyphs'
 import { chipBlurHandler, unveiledChipsField } from './editor-chip-state'
+import { diffChips } from './editor-diff-chips'
 import { expenseGlyphs, expenseGlyphTooltip } from './editor-expense-glyphs'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
@@ -312,6 +313,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     expenseGlyphTooltip,
     headerChips,
     headerChipTooltip,
+    diffChips,
     scandiEditorTheme,
   ]
 }
