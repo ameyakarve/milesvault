@@ -14,15 +14,10 @@ const SVG_OPEN =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
 const SVG_CLOSE = '</svg>'
 
-const CARD_LABEL_ATTRS =
-  'text-anchor="middle" font-size="10" font-weight="700" stroke="none" fill="currentColor" font-family="ui-monospace, monospace"'
-const FX_LABEL_ATTRS =
-  'text-anchor="middle" font-size="8" font-weight="700" stroke="none" fill="currentColor" font-family="ui-monospace, monospace"'
-
-const CC_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2"/><text x="12" y="16" ${CARD_LABEL_ATTRS}>CC</text>${SVG_CLOSE}`
-const DC_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2" stroke-dasharray="2.5 2"/><text x="12" y="16" ${CARD_LABEL_ATTRS}>DC</text>${SVG_CLOSE}`
-const PREPAID_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2"/><text x="12" y="16" ${CARD_LABEL_ATTRS}>PP</text>${SVG_CLOSE}`
-const FOREX_GLYPH_SVG = `${SVG_OPEN}<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><text x="9" y="15" ${FX_LABEL_ATTRS}>$</text><text x="15" y="15" ${FX_LABEL_ATTRS}>€</text>${SVG_CLOSE}`
+const CC_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>${SVG_CLOSE}`
+const DC_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2" stroke-dasharray="2.5 2"/>${SVG_CLOSE}`
+const PREPAID_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" rx="2"/><circle cx="17" cy="14" r="2"/>${SVG_CLOSE}`
+const FOREX_GLYPH_SVG = `${SVG_OPEN}<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/>${SVG_CLOSE}`
 const BANK_GLYPH_SVG = `${SVG_OPEN}<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>${SVG_CLOSE}`
 const POINTS_GLYPH_SVG = `${SVG_OPEN}<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>${SVG_CLOSE}`
 const WALLET_GLYPH_SVG = `${SVG_OPEN}<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>${SVG_CLOSE}`
@@ -56,19 +51,17 @@ class AccountGlyphWidget extends WidgetType {
     span.style.width = `${this.glyph.visualWidth}ch`
     span.setAttribute('aria-label', this.glyph.text)
     span.innerHTML = GLYPH_SVG[this.glyph.text] ?? ''
-    if (this.glyph.leafLabel) {
-      const label = document.createElement('span')
-      label.className = 'cm-account-glyph-leaf'
-      label.textContent = this.glyph.leafLabel
-      span.appendChild(label)
-    }
+    const label = document.createElement('span')
+    label.className = 'cm-account-glyph-chip'
+    label.textContent = this.glyph.chipLabel
+    span.appendChild(label)
     return span
   }
   eq(other: WidgetType): boolean {
     return (
       other instanceof AccountGlyphWidget &&
       other.glyph.text === this.glyph.text &&
-      other.glyph.leafLabel === this.glyph.leafLabel
+      other.glyph.chipLabel === this.glyph.chipLabel
     )
   }
   ignoreEvent(): boolean {

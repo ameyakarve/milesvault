@@ -61,7 +61,7 @@ export const scandiEditorTheme = EditorView.theme(
       verticalAlign: '-3px',
       color: SKY_700,
     },
-    '.cm-account-glyph-leaf': {
+    '.cm-account-glyph-chip': {
       fontSize: '11px',
       fontWeight: '600',
       letterSpacing: '0.02em',
