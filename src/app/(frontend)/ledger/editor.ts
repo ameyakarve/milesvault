@@ -108,15 +108,19 @@ const beancountFoldService = foldService.of((state, lineStart) => {
   return { from: headerLine.to, to: lastLine.to }
 })
 
-const entryDivider = Decoration.line({ attributes: { class: 'cm-txn-divider' } })
+const entryBand = Decoration.line({ attributes: { class: 'cm-txn-band' } })
 
-function buildEntryDividers(view: EditorView): DecorationSet {
+function buildEntryBands(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const doc = view.state.doc
   const entries = cachedSplit(doc)
-  for (let i = 1; i < entries.length; i++) {
-    const line = doc.line(entries[i].startLine + 1)
-    builder.add(line.from, line.from, entryDivider)
+  for (let i = 0; i < entries.length; i++) {
+    if (i % 2 === 0) continue
+    const e = entries[i]
+    for (let ln = e.startLine; ln <= e.endLine; ln++) {
+      const line = doc.line(ln + 1)
+      builder.add(line.from, line.from, entryBand)
+    }
   }
   return builder.finish()
 }
@@ -146,10 +150,10 @@ const txnDividers = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet
     constructor(view: EditorView) {
-      this.decorations = buildEntryDividers(view)
+      this.decorations = buildEntryBands(view)
     }
     update(u: ViewUpdate) {
-      if (u.docChanged) this.decorations = buildEntryDividers(u.view)
+      if (u.docChanged) this.decorations = buildEntryBands(u.view)
     }
   },
   { decorations: (v) => v.decorations },
