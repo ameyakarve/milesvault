@@ -67,11 +67,13 @@ export const scandiEditorTheme = EditorView.theme(
       borderTop: `1px solid ${SLATE_200}`,
       borderTopLeftRadius: '6px',
       borderTopRightRadius: '6px',
+      marginTop: '6px',
     },
     '.cm-txn-foot, .cm-txn-solo': {
       borderBottom: `1px solid ${SLATE_200}`,
       borderBottomLeftRadius: '6px',
       borderBottomRightRadius: '6px',
+      marginBottom: '6px',
     },
     '.cm-account-glyph': {
       display: 'inline-flex',
