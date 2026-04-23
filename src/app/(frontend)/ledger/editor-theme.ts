@@ -68,6 +68,8 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-flag-chip-cleared': { color: EMERALD_600 },
     '.cm-flag-chip-pending': { color: AMBER_700 },
     '.cm-flag-chip-txn': { color: SLATE_500 },
+    '.cm-payee-chip': { color: NAVY_700 },
+    '.cm-narration-chip': { color: SLATE_500 },
     '.cm-amount-chip': {
       display: 'inline-block',
       whiteSpace: 'pre',
