@@ -22,6 +22,7 @@ import {
 import {
   ChangeSet,
   EditorState,
+  RangeSet,
   RangeSetBuilder,
   StateEffect,
   StateField,
@@ -32,8 +33,11 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
+  GutterMarker,
   ViewPlugin,
   type ViewUpdate,
+  gutterLineClass,
+  highlightWhitespace,
   keymap,
 } from '@codemirror/view'
 import { parser } from 'lezer-beancount'
@@ -49,7 +53,6 @@ import { amountChips } from './editor-amount-chips'
 import { accountChips, accountChipTooltip } from './editor-chips'
 import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
-import { spaceDots } from './editor-space-dots'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 
 const beancountLanguage = LRLanguage.define({
@@ -128,20 +131,11 @@ const beancountFoldService = foldService.of((state, lineStart) => {
 
 const entryBand = Decoration.line({ attributes: { class: 'cm-txn-band' } })
 
-function buildEntryBands(view: EditorView): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
-  const doc = view.state.doc
-  const entries = cachedSplit(doc)
-  for (let i = 0; i < entries.length; i++) {
-    if (i % 2 === 0) continue
-    const e = entries[i]
-    for (let ln = e.startLine; ln <= e.endLine; ln++) {
-      const line = doc.line(ln + 1)
-      builder.add(line.from, line.from, entryBand)
-    }
-  }
-  return builder.finish()
+class TxnBandGutterMarker extends GutterMarker {
+  elementClass = 'cm-txn-band'
 }
+const entryBandGutterMarker = new TxnBandGutterMarker()
+
 
 const trimTrailingWhitespace = EditorState.transactionFilter.of((tr: Transaction) => {
   if (!tr.docChanged) return tr
@@ -164,18 +158,37 @@ const trimTrailingWhitespace = EditorState.transactionFilter.of((tr: Transaction
   return [tr, { changes: extra, selection: tr.newSelection, sequential: true }]
 })
 
-const txnDividers = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet
-    constructor(view: EditorView) {
-      this.decorations = buildEntryBands(view)
+type EntryBandSets = {
+  lines: DecorationSet
+  gutter: RangeSet<GutterMarker>
+}
+
+function buildEntryBandsFromDoc(doc: Text): EntryBandSets {
+  const lineBuilder = new RangeSetBuilder<Decoration>()
+  const gutterBuilder = new RangeSetBuilder<GutterMarker>()
+  const entries = splitEntries(doc.toString())
+  for (let i = 0; i < entries.length; i++) {
+    if (i % 2 === 0) continue
+    const e = entries[i]
+    for (let ln = e.startLine; ln <= e.endLine; ln++) {
+      const line = doc.line(ln + 1)
+      lineBuilder.add(line.from, line.from, entryBand)
+      gutterBuilder.add(line.from, line.from, entryBandGutterMarker)
     }
-    update(u: ViewUpdate) {
-      if (u.docChanged) this.decorations = buildEntryBands(u.view)
-    }
+  }
+  return { lines: lineBuilder.finish(), gutter: gutterBuilder.finish() }
+}
+
+const entryBandField = StateField.define<EntryBandSets>({
+  create: (state) => buildEntryBandsFromDoc(state.doc),
+  update(value, tr) {
+    return tr.docChanged ? buildEntryBandsFromDoc(tr.newDoc) : value
   },
-  { decorations: (v) => v.decorations },
-)
+  provide: (f) => [
+    EditorView.decorations.from(f, (v) => v.lines),
+    gutterLineClass.from(f, (v) => v.gutter),
+  ],
+})
 
 function defineReactSlot<T>(initial: T): {
   field: StateField<T>
@@ -292,8 +305,8 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     beancountFoldService,
     beancountTabKeymap,
     trimTrailingWhitespace,
-    txnDividers,
-    spaceDots,
+    entryBandField,
+    highlightWhitespace(),
     unifiedMergeView({
       original: initialBaseline,
       mergeControls: false,

@@ -79,10 +79,17 @@ class AmountChipWidget extends WidgetType {
     const span = document.createElement('span')
     span.className = 'cm-amount-chip'
     if (this.slotWidth !== null) {
-      span.style.width = `${this.slotWidth}ch`
-      span.style.textAlign = 'right'
+      const padCh = Math.max(0, this.slotWidth - this.label.length)
+      if (padCh > 0) {
+        const dots = document.createElement('span')
+        dots.className = 'cm-space-dots'
+        dots.textContent = ' '.repeat(padCh)
+        span.appendChild(dots)
+      }
+      span.appendChild(document.createTextNode(this.label))
+    } else {
+      span.textContent = this.label
     }
-    span.textContent = this.label
     span.addEventListener('mousedown', (e) => {
       e.preventDefault()
       const pos = view.posAtDOM(span)

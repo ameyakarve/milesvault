@@ -8,6 +8,7 @@ export function chipSlotWidth(rawLen: number, chipLabel: string): number {
 
 export function toChipSvg(raw: string): string {
   return raw
+    .trim()
     .replace('width="24"', 'width="1em"')
     .replace('height="24"', 'height="1em"')
     .replace('stroke-width="2"', 'stroke-width="1.75"')
