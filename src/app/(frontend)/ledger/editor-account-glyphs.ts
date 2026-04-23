@@ -38,7 +38,6 @@ const GLYPH_SVG: Record<string, string> = {
   'Assets:Receivables': RECEIVABLE_GLYPH_SVG,
   'Assets:Cash': CASH_GLYPH_SVG,
   'Income:Void': VOID_GLYPH_SVG,
-  'Expenses:Void': VOID_GLYPH_SVG,
 }
 
 class AccountGlyphWidget extends WidgetType {
