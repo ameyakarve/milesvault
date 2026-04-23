@@ -56,23 +56,7 @@ export const scandiEditorTheme = EditorView.theme(
       backgroundColor: 'transparent',
     },
     '.cm-line, .cm-deletedChunk': { padding: '0 12px' },
-    '.cm-txn-head, .cm-txn-body, .cm-txn-foot, .cm-txn-solo': {
-      borderLeft: `1px solid ${SLATE_200}`,
-      borderRight: `1px solid ${SLATE_200}`,
-      marginLeft: '8px',
-      marginRight: '8px',
-      backgroundColor: '#ffffff',
-    },
-    '.cm-txn-head, .cm-txn-solo': {
-      borderTop: `1px solid ${SLATE_200}`,
-      borderTopLeftRadius: '6px',
-      borderTopRightRadius: '6px',
-    },
-    '.cm-txn-foot, .cm-txn-solo': {
-      borderBottom: `1px solid ${SLATE_200}`,
-      borderBottomLeftRadius: '6px',
-      borderBottomRightRadius: '6px',
-    },
+    '.cm-txn-band': { backgroundColor: SLATE_50 },
     '.cm-account-glyph': {
       display: 'inline-flex',
       alignItems: 'center',

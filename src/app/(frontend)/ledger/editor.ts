@@ -125,28 +125,19 @@ const beancountFoldService = foldService.of((state, lineStart) => {
   return { from: headerLine.to, to: lastLine.to }
 })
 
-const txnHead = Decoration.line({ attributes: { class: 'cm-txn-head' } })
-const txnBody = Decoration.line({ attributes: { class: 'cm-txn-body' } })
-const txnFoot = Decoration.line({ attributes: { class: 'cm-txn-foot' } })
-const txnSolo = Decoration.line({ attributes: { class: 'cm-txn-solo' } })
+const entryBand = Decoration.line({ attributes: { class: 'cm-txn-band' } })
 
 function buildEntryBands(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const doc = view.state.doc
-  for (const e of cachedSplit(doc)) {
-    if (e.startLine === e.endLine) {
-      const line = doc.line(e.startLine + 1)
-      builder.add(line.from, line.from, txnSolo)
-      continue
-    }
-    const head = doc.line(e.startLine + 1)
-    builder.add(head.from, head.from, txnHead)
-    for (let ln = e.startLine + 1; ln < e.endLine; ln++) {
+  const entries = cachedSplit(doc)
+  for (let i = 0; i < entries.length; i++) {
+    if (i % 2 === 0) continue
+    const e = entries[i]
+    for (let ln = e.startLine; ln <= e.endLine; ln++) {
       const line = doc.line(ln + 1)
-      builder.add(line.from, line.from, txnBody)
+      builder.add(line.from, line.from, entryBand)
     }
-    const foot = doc.line(e.endLine + 1)
-    builder.add(foot.from, foot.from, txnFoot)
   }
   return builder.finish()
 }
