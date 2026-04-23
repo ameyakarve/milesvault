@@ -10,7 +10,7 @@ import {
 } from '@codemirror/view'
 import {
   ANY_ACCOUNT_RE,
-  chipVisualWidth,
+  chipSlotWidth,
   type Glyph,
   resolveAccount,
   type ResolvedAccount,
@@ -60,13 +60,14 @@ class AccountChipWidget extends WidgetType {
     readonly glyph: Glyph,
     readonly chipLabel: string,
     readonly tooltip: string,
+    readonly width: number,
   ) {
     super()
   }
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span')
     span.className = 'cm-account-glyph'
-    span.style.width = `${chipVisualWidth(this.chipLabel)}ch`
+    span.style.width = `${this.width}ch`
     span.setAttribute('aria-label', this.tooltip)
     span.innerHTML = toChipSvg(this.glyph.svg)
     const label = document.createElement('span')
@@ -85,7 +86,8 @@ class AccountChipWidget extends WidgetType {
       other instanceof AccountChipWidget &&
       other.glyph.svg === this.glyph.svg &&
       other.chipLabel === this.chipLabel &&
-      other.tooltip === this.tooltip
+      other.tooltip === this.tooltip &&
+      other.width === this.width
     )
   }
   ignoreEvent(): boolean {
@@ -105,7 +107,12 @@ function buildChipDecorations(view: EditorView): DecorationSet {
       h.from,
       h.to,
       Decoration.replace({
-        widget: new AccountChipWidget(h.glyph, h.chipLabel, h.tooltip),
+        widget: new AccountChipWidget(
+          h.glyph,
+          h.chipLabel,
+          h.tooltip,
+          chipSlotWidth(h.to - h.from, h.chipLabel),
+        ),
       }),
     )
   }

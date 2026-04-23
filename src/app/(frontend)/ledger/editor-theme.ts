@@ -55,7 +55,7 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-account-glyph': {
       display: 'inline-flex',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
       gap: '3px',
       height: '16px',
       verticalAlign: '-3px',

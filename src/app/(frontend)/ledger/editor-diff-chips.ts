@@ -2,7 +2,7 @@ import { getChunks } from '@codemirror/merge'
 import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
 import {
   ANY_ACCOUNT_RE,
-  chipVisualWidth,
+  chipSlotWidth,
   resolveAccount,
   toChipSvg,
 } from '@/lib/beancount/entities'
@@ -54,7 +54,7 @@ function buildChipSpecs(text: string): ChipSpec[] {
 function makeChipSpan(spec: ChipSpec): HTMLSpanElement {
   const span = document.createElement('span')
   span.className = 'cm-account-glyph'
-  span.style.width = `${chipVisualWidth(spec.label)}ch`
+  span.style.width = `${chipSlotWidth(spec.to - spec.from, spec.label)}ch`
   span.setAttribute('aria-label', spec.title)
   span.innerHTML = toChipSvg(spec.svg)
   const lbl = document.createElement('span')

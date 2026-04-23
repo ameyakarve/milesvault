@@ -16,7 +16,7 @@ import {
   TriangleAlert,
   User,
 } from 'lucide-static'
-import { chipVisualWidth, toChipSvg } from '@/lib/beancount/entities'
+import { chipSlotWidth, toChipSvg } from '@/lib/beancount/entities'
 import { cursorTxnLines, unveilChipAt } from './editor-chip-state'
 
 export type HeaderHit = {
@@ -129,13 +129,14 @@ class HeaderChipWidget extends WidgetType {
     readonly label: string,
     readonly tooltip: string,
     readonly svg: string,
+    readonly width: number,
   ) {
     super()
   }
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span')
     span.className = 'cm-account-glyph'
-    span.style.width = `${chipVisualWidth(this.label)}ch`
+    span.style.width = `${this.width}ch`
     span.setAttribute('aria-label', this.tooltip)
     span.innerHTML = toChipSvg(this.svg)
     const label = document.createElement('span')
@@ -154,7 +155,8 @@ class HeaderChipWidget extends WidgetType {
       other instanceof HeaderChipWidget &&
       other.label === this.label &&
       other.tooltip === this.tooltip &&
-      other.svg === this.svg
+      other.svg === this.svg &&
+      other.width === this.width
     )
   }
   ignoreEvent(): boolean {
@@ -173,7 +175,14 @@ function buildHeaderDecorations(view: EditorView): DecorationSet {
     builder.add(
       h.from,
       h.to,
-      Decoration.replace({ widget: new HeaderChipWidget(h.label, h.tooltip, h.svg) }),
+      Decoration.replace({
+        widget: new HeaderChipWidget(
+          h.label,
+          h.tooltip,
+          h.svg,
+          chipSlotWidth(h.to - h.from, h.label),
+        ),
+      }),
     )
   }
   return builder.finish()
