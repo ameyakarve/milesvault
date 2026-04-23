@@ -1,4 +1,5 @@
 import { splitEntries } from './extract'
+import { visualTextLen } from './glyphs'
 
 export function format(text: string): string {
   const lines = text.split('\n')
@@ -37,11 +38,14 @@ function formatPostingLine(line: string) {
     const { account, prefix, suffix } = fullMatch.groups!
     const amount = stripTrailingZeros(fullMatch.groups!.amount)
     const cleanedSuffix = stripTrailingZeros(suffix)
-    if (account.length + prefix.length + amount.length <= amountAlignmentColumn - 4) {
+    const acctVis = visualTextLen(account)
+    const preVis = visualTextLen(prefix)
+    const amtVis = visualTextLen(amount)
+    if (acctVis + preVis + amtVis <= amountAlignmentColumn - 4) {
       return (
         space(2) +
         account +
-        space(amountAlignmentColumn - 2 - account.length - prefix.length - amount.length) +
+        space(amountAlignmentColumn - 2 - acctVis - preVis - amtVis) +
         prefix +
         amount +
         cleanedSuffix
