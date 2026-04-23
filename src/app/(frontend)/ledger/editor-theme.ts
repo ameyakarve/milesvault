@@ -66,6 +66,16 @@ export const scandiEditorTheme = EditorView.theme(
       fontWeight: '600',
       letterSpacing: '0.02em',
     },
+    '.cm-amount-chip': {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      height: '16px',
+      verticalAlign: '-3px',
+      color: NAVY_700,
+      fontWeight: '600',
+      fontVariantNumeric: 'tabular-nums',
+    },
     '.cm-account-glyph-tip': {
       padding: '4px 8px',
       fontSize: '11px',
