@@ -17,7 +17,7 @@ import {
   User,
 } from 'lucide-static'
 import { chipVisualWidth, toChipSvg } from '@/lib/beancount/entities'
-import { cursorLine, unveilChipAt } from './editor-chip-state'
+import { cursorTxnLines, unveilChipAt } from './editor-chip-state'
 
 export type HeaderHit = {
   from: number
@@ -163,12 +163,13 @@ class HeaderChipWidget extends WidgetType {
 }
 
 function buildHeaderDecorations(view: EditorView): DecorationSet {
-  const activeLine = cursorLine(view.state)
+  const active = cursorTxnLines(view.state)
   const doc = view.state.doc
   const hits = findHeaderHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
-    if (doc.lineAt(h.from).number === activeLine) continue
+    const ln = doc.lineAt(h.from).number
+    if (ln >= active.from && ln <= active.to) continue
     builder.add(
       h.from,
       h.to,
