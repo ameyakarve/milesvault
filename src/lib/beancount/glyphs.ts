@@ -49,15 +49,10 @@ export function matchAccountChip(acct: string): AccountChipMatch | null {
   }
   if (depth < 1) return null
   const glyph = GLYPH_BY_TEXT[segments.slice(0, depth).join(':')]
-  if (depth === segments.length) {
-    return { glyph, consumedLen: acct.length, chipLabel: glyph.chipLabel }
-  }
-  const firstTail = segments[depth]
-  return {
-    glyph,
-    consumedLen: glyph.text.length + 1 + firstTail.length,
-    chipLabel: firstTail,
-  }
+  const tail = segments.slice(depth)
+  if (tail.length > 0 && /^\d+$/.test(tail[tail.length - 1])) tail.pop()
+  const chipLabel = tail.length > 0 ? tail.join(' ') : glyph.chipLabel
+  return { glyph, consumedLen: acct.length, chipLabel }
 }
 
 export function matchExpenseChip(acct: string): ExpenseChipMatch | null {
