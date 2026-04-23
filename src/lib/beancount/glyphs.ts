@@ -14,6 +14,7 @@ export const ACCOUNT_GLYPHS: readonly AccountGlyph[] = [
   { text: 'Assets:Loaded:ForexCards', visualWidth: 5, label: 'forex card', chipLabel: 'FX' },
   { text: 'Assets:Bank', visualWidth: 7, label: 'bank', chipLabel: 'Bank' },
   { text: 'Assets:Rewards:Points', visualWidth: 9, label: 'rewards points', chipLabel: 'Points' },
+  { text: 'Assets:Rewards:Status', visualWidth: 9, label: 'status tier', chipLabel: 'Status' },
   { text: 'Assets:Loaded:Wallets', visualWidth: 9, label: 'wallet', chipLabel: 'Wallet' },
   { text: 'Assets:Loaded:GiftCards', visualWidth: 7, label: 'gift card', chipLabel: 'Gift' },
   { text: 'Assets:Receivables', visualWidth: 6, label: 'receivable', chipLabel: 'Rcv' },
