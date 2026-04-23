@@ -30,21 +30,15 @@ const PENDING_META = {
   chipClass: 'cm-flag-chip-pending',
 }
 
-function dateChipLabel(iso: string, todayMs: number): string {
+function dateChipLabel(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
   if (Number.isNaN(d.getTime())) return iso
-  const diffDays = Math.round((todayMs - d.getTime()) / 86_400_000)
-  if (diffDays === 0) return 'today'
-  if (diffDays === 1) return 'yesterday'
-  if (diffDays > 1 && diffDays <= 7) return `${diffDays}d ago`
-  if (diffDays === -1) return 'tomorrow'
-  if (diffDays < 0 && diffDays >= -7) return `in ${-diffDays}d`
   const mmm = d.toLocaleString('en', { month: 'short' })
   const dd = String(d.getDate()).padStart(2, '0')
-  return `${mmm}-${dd}`
+  return `${dd} ${mmm}`
 }
 
-export function hitsForLine(lineText: string, lineFrom: number, todayMs: number): HeaderHit[] {
+export function hitsForLine(lineText: string, lineFrom: number): HeaderHit[] {
   const hits: HeaderHit[] = []
   HEADER_RE.lastIndex = 0
   const match = HEADER_RE.exec(lineText)
@@ -57,7 +51,7 @@ export function hitsForLine(lineText: string, lineFrom: number, todayMs: number)
   hits.push({
     from: base,
     to: isPending ? flagFrom : payeeOpenQuote,
-    label: dateChipLabel(dateStr, todayMs),
+    label: dateChipLabel(dateStr),
     tooltip: dateStr,
   })
   if (isPending) {
@@ -94,22 +88,15 @@ export function hitsForLine(lineText: string, lineFrom: number, todayMs: number)
   return hits
 }
 
-export function startOfDayMs(): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return today.getTime()
-}
-
 function findHeaderHits(view: EditorView): HeaderHit[] {
   const hits: HeaderHit[] = []
-  const todayMs = startOfDayMs()
   const doc = view.state.doc
   for (const { from, to } of view.visibleRanges) {
     let lineNum = doc.lineAt(from).number
     const endLineNum = doc.lineAt(to).number
     while (lineNum <= endLineNum) {
       const line = doc.line(lineNum)
-      hits.push(...hitsForLine(line.text, line.from, todayMs))
+      hits.push(...hitsForLine(line.text, line.from))
       lineNum += 1
     }
   }
@@ -118,7 +105,7 @@ function findHeaderHits(view: EditorView): HeaderHit[] {
 
 function headerHitAt(view: EditorView, pos: number): HeaderHit | null {
   const line = view.state.doc.lineAt(pos)
-  const hits = hitsForLine(line.text, line.from, startOfDayMs())
+  const hits = hitsForLine(line.text, line.from)
   return hits.find((h) => pos >= h.from && pos < h.to) ?? null
 }
 

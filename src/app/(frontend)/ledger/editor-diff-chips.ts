@@ -6,7 +6,7 @@ import {
   resolveAccount,
   toChipSvg,
 } from '@/lib/beancount/entities'
-import { hitsForLine, startOfDayMs } from './editor-header-chips'
+import { hitsForLine } from './editor-header-chips'
 
 type ChipSpec = {
   from: number
@@ -36,7 +36,7 @@ function accountSpecs(text: string): ChipSpec[] {
 
 function buildChipSpecs(text: string): ChipSpec[] {
   const specs: ChipSpec[] = []
-  for (const h of hitsForLine(text, 0, startOfDayMs())) {
+  for (const h of hitsForLine(text, 0)) {
     specs.push({ from: h.from, to: h.to, label: h.label, svg: h.svg, title: h.tooltip })
   }
   for (const s of accountSpecs(text)) specs.push(s)
