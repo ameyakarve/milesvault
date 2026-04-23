@@ -32,10 +32,8 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
-  GutterMarker,
   ViewPlugin,
   type ViewUpdate,
-  gutter,
   keymap,
 } from '@codemirror/view'
 import { parser } from 'lezer-beancount'
@@ -111,38 +109,6 @@ function cachedSplit(doc: Text): ReturnType<typeof splitEntries> {
   }
   return hit
 }
-
-const txnStartLineCache = new WeakMap<Text, Set<number>>()
-function txnStartLines(doc: Text): Set<number> {
-  let hit = txnStartLineCache.get(doc)
-  if (!hit) {
-    hit = new Set(cachedSplit(doc).map((e) => e.startLine))
-    txnStartLineCache.set(doc, hit)
-  }
-  return hit
-}
-
-class TxnCardMarker extends GutterMarker {
-  toDOM(): HTMLElement {
-    const div = document.createElement('div')
-    div.className = 'cm-txn-card'
-    return div
-  }
-  eq(other: GutterMarker): boolean {
-    return other instanceof TxnCardMarker
-  }
-}
-
-const TXN_CARD_MARKER = new TxnCardMarker()
-
-const txnCardGutter = gutter({
-  class: 'cm-txn-card-gutter',
-  lineMarker: (view, line) => {
-    const lineNum0 = view.state.doc.lineAt(line.from).number - 1
-    return txnStartLines(view.state.doc).has(lineNum0) ? TXN_CARD_MARKER : null
-  },
-  initialSpacer: () => TXN_CARD_MARKER,
-})
 
 const beancountFoldService = foldService.of((state, lineStart) => {
   const doc = state.doc
@@ -326,7 +292,6 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     beancountTabKeymap,
     trimTrailingWhitespace,
     txnDividers,
-    txnCardGutter,
     unifiedMergeView({
       original: initialBaseline,
       mergeControls: false,
