@@ -57,10 +57,10 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-line, .cm-deletedChunk': {
       padding: '0 12px',
-      borderBottom: `1px solid ${SLATE_100}`,
+      borderBottom: `1px solid ${SLATE_200}`,
     },
     '.cm-space-dots': {
-      backgroundImage: `radial-gradient(circle, ${SLATE_200} 0.5px, transparent 1px)`,
+      backgroundImage: `radial-gradient(circle, ${SLATE_400} 1px, transparent 1.25px)`,
       backgroundSize: '1ch 100%',
       backgroundRepeat: 'repeat-x',
       backgroundPosition: '0 55%',

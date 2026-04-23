@@ -7,7 +7,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from '@codemirror/view'
-import { cursorTxnLines, unveilChipAt } from './editor-chip-state'
+import { cursorPos, unveilChipAt } from './editor-chip-state'
 
 const AMOUNT_RE = /([+-]?(?:\d+\.?\d*|\.\d+))(?=\s+[A-Z])/g
 
@@ -103,13 +103,11 @@ class AmountChipWidget extends WidgetType {
 }
 
 function buildAmountDecorations(view: EditorView): DecorationSet {
-  const active = cursorTxnLines(view.state)
-  const doc = view.state.doc
+  const cursor = cursorPos(view.state)
   const hits = findAmountHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
-    const ln = doc.lineAt(h.from).number
-    if (ln >= active.from && ln <= active.to) continue
+    if (cursor >= h.from && cursor <= h.to) continue
     const slotWidth = h.primary ? h.to - h.from : null
     builder.add(
       h.from,
