@@ -9,37 +9,19 @@ import {
   Plus,
   RotateCcw,
   Save,
-  Wallet,
 } from 'lucide-react'
-import type { Transaction as BeanTxn } from 'beancount'
-import { parse as parseBean } from 'beancount'
 import type { Transaction } from '@/durable/ledger-types'
-import { splitEntries } from '@/lib/beancount/extract'
 import { format } from '@/lib/beancount/format'
 import { type BufferState, evaluateBuffer } from './buffer-state'
 import { composeBuffer } from './editor'
 import { ChromeIconButton, PaneCap, PaneLabel } from './ledger-chrome'
 import type { LedgerEditorHandle } from './ledger-editor'
-import { CardsList, type Entry, type FetchStatus, TextPane } from './ledger-panes'
+import { type FetchStatus, TextPane } from './ledger-panes'
 import { applyProposal, type Op } from './propose'
 import { SavePill } from './save-status'
 import { ThinkPane } from './think-pane'
-import { useSyncScroll } from './use-sync-scroll'
 
 const PAGE_SIZE = 50
-
-type ParsedTxn = { bean: BeanTxn; raw: string }
-
-function safeParse(raw: string): ParsedTxn | null {
-  try {
-    const result = parseBean(raw)
-    const bean = result.transactions[0]
-    if (!bean) return null
-    return { bean, raw }
-  } catch {
-    return null
-  }
-}
 
 type Snapshot = { id: number; raw_text: string; expected_updated_at: number }
 
@@ -50,38 +32,6 @@ function buildSnapshots(rows: Transaction[]): Snapshot[] {
     expected_updated_at: r.updated_at,
   }))
 }
-
-function deriveEntries(buffer: string, snapshots: Snapshot[]): Entry[] {
-  const parts = splitEntries(buffer).map((e) => e.text.trim()).filter((t) => t.length > 0)
-  const byBody = new Map<string, Snapshot[]>()
-  for (const s of snapshots) {
-    const arr = byBody.get(s.raw_text) ?? []
-    arr.push(s)
-    byBody.set(s.raw_text, arr)
-  }
-  const used = new Set<number>()
-  const out: Entry[] = []
-  const resolved: (Snapshot | null)[] = parts.map((text) => {
-    const candidates = byBody.get(text) ?? []
-    const m = candidates.find((c) => !used.has(c.id))
-    if (m) {
-      used.add(m.id)
-      return m
-    }
-    return null
-  })
-  const unusedInOrder = snapshots.filter((s) => !used.has(s.id))
-  let cursor = 0
-  for (let i = 0; i < parts.length; i++) {
-    let snap = resolved[i]
-    if (!snap && cursor < unusedInOrder.length) {
-      snap = unusedInOrder[cursor++]
-    }
-    out.push({ text: parts[i], snapshotId: snap ? snap.id : null })
-  }
-  return out
-}
-
 
 type FetchState = {
   status: FetchStatus
@@ -189,11 +139,6 @@ function PaginationStrip({
   )
 }
 
-function allEntriesParse(entries: Entry[]): boolean {
-  if (entries.length === 0) return true
-  return entries.every((e) => safeParse(e.text) !== null)
-}
-
 export function LedgerView({ email }: { email: string }) {
   const [page, setPage] = useState(1)
   const state = useTransactions(page)
@@ -206,12 +151,6 @@ export function LedgerView({ email }: { email: string }) {
   useEffect(() => {
     setBuffer(baseline)
   }, [baseline])
-
-  const liveEntries = useMemo(() => deriveEntries(buffer, snapshots), [buffer, snapshots])
-  const [cardEntries, setCardEntries] = useState<Entry[]>(liveEntries)
-  useEffect(() => {
-    if (allEntriesParse(liveEntries)) setCardEntries(liveEntries)
-  }, [liveEntries])
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
@@ -232,14 +171,6 @@ export function LedgerView({ email }: { email: string }) {
   }
 
   const editorRef = useRef<LedgerEditorHandle | null>(null)
-  const cardsScrollRef = useRef<HTMLDivElement | null>(null)
-
-  useSyncScroll({
-    cardsRef: cardsScrollRef,
-    editorHandleRef: editorRef,
-    enabled: state.status === 'idle',
-    txnCount: cardEntries.length,
-  })
 
   async function onSave() {
     if (saveStatus === 'saving') return
@@ -299,27 +230,6 @@ export function LedgerView({ email }: { email: string }) {
     setSaveErrorMsg(null)
   }
 
-  const [cursorPos, setCursorPos] = useState(0)
-  const activeIdx = useMemo(() => {
-    const parts = splitEntries(buffer)
-    const lines = buffer.split('\n')
-    const lineOffsets: number[] = [0]
-    for (const l of lines) lineOffsets.push(lineOffsets[lineOffsets.length - 1] + l.length + 1)
-    for (let i = 0; i < parts.length; i++) {
-      const start = lineOffsets[parts[i].startLine]
-      const end = lineOffsets[parts[i].endLine + 1]
-      if (cursorPos < start || cursorPos >= end) continue
-      const live = liveEntries[i]
-      if (!live) return null
-      if (live.snapshotId !== null) {
-        const found = cardEntries.findIndex((e) => e.snapshotId === live.snapshotId)
-        if (found !== -1) return found
-      }
-      return i < cardEntries.length ? i : null
-    }
-    return null
-  }, [buffer, cursorPos, liveEntries, cardEntries])
-
   const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
@@ -358,25 +268,7 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </header>
 
-      <main className="flex-1 grid grid-cols-[1fr_2fr_1fr] gap-[1px] bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
-        <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
-          <PaneCap>
-            <PaneLabel>LEDGER</PaneLabel>
-          </PaneCap>
-          <div className="flex-1 min-h-0 bg-white flex flex-col relative overflow-hidden [scrollbar-gutter:stable]">
-            <CardsList
-              status={state.status}
-              errorMsg={state.errorMsg}
-              entries={cardEntries}
-              activeIdx={activeIdx}
-              scrollRef={cardsScrollRef}
-            />
-            <div className="absolute -bottom-6 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none z-0">
-              <Wallet size={180} strokeWidth={1.5} />
-            </div>
-          </div>
-        </section>
-
+      <main className="flex-1 grid grid-cols-[2fr_1fr] gap-[1px] bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
         <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
           <PaneCap className="justify-between">
             <PaneLabel>EDITOR</PaneLabel>
@@ -445,7 +337,7 @@ export function LedgerView({ email }: { email: string }) {
               buffer={buffer}
               baseline={baseline}
               onBufferChange={setBuffer}
-              onCursorChange={setCursorPos}
+              onCursorChange={() => {}}
               onSave={onSave}
               readOnly={locked}
               editorRef={editorRef}
