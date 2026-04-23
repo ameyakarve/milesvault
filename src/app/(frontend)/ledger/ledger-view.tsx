@@ -363,7 +363,7 @@ export function LedgerView({ email }: { email: string }) {
           <PaneCap>
             <PaneLabel>LEDGER</PaneLabel>
           </PaneCap>
-          <div className="flex-1 min-h-0 bg-scandi-surface flex flex-col relative overflow-hidden [scrollbar-gutter:stable]">
+          <div className="flex-1 min-h-0 bg-white flex flex-col relative overflow-hidden [scrollbar-gutter:stable]">
             <CardsList
               status={state.status}
               errorMsg={state.errorMsg}

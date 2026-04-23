@@ -159,7 +159,7 @@ export function CardsList({
   return (
     <div
       ref={scrollRef}
-      className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-scandi-surface pb-0"
+      className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-white pb-0"
     >
       {entries.map((entry, i) => {
         const preset = PRESETS[i % PRESETS.length]
