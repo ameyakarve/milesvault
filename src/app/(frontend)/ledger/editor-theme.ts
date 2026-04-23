@@ -14,6 +14,8 @@ const SKY_600 = '#0284C7'
 const SKY_700 = '#0369A1'
 const AMBER_700 = '#B45309'
 const EMERALD_600 = '#059669'
+const TEAL_700 = '#0F766E'
+const VIOLET_700 = '#6D28D9'
 
 export const scandiHighlight = HighlightStyle.define([
   { tag: t.lineComment, color: SLATE_400, fontStyle: 'italic' },
@@ -25,8 +27,8 @@ export const scandiHighlight = HighlightStyle.define([
   { tag: t.unit, color: SLATE_500 },
   { tag: t.modifier, color: NAVY_600, fontWeight: '600' },
   { tag: t.keyword, color: NAVY_600, fontWeight: '600' },
-  { tag: t.tagName, color: AMBER_700 },
-  { tag: t.link, color: SKY_600 },
+  { tag: t.tagName, color: VIOLET_700, fontWeight: '500' },
+  { tag: t.link, color: TEAL_700, fontWeight: '500' },
   { tag: t.propertyName, color: SLATE_500, fontStyle: 'italic' },
   { tag: [t.operator, t.arithmeticOperator], color: SLATE_400 },
   { tag: [t.brace, t.paren, t.separator, t.punctuation], color: SLATE_200 },
