@@ -16,7 +16,7 @@ import {
   type ResolvedAccount,
   toChipSvg,
 } from '@/lib/beancount/entities'
-import { cursorTxnLines, unveilChipAt } from './editor-chip-state'
+import { cursorPos, unveilChipAt } from './editor-chip-state'
 
 type Hit = {
   from: number
@@ -96,13 +96,11 @@ class AccountChipWidget extends WidgetType {
 }
 
 function buildChipDecorations(view: EditorView): DecorationSet {
-  const active = cursorTxnLines(view.state)
-  const doc = view.state.doc
+  const cursor = cursorPos(view.state)
   const hits = findAccountHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
-    const ln = doc.lineAt(h.from).number
-    if (ln >= active.from && ln <= active.to) continue
+    if (cursor >= h.from && cursor <= h.to) continue
     builder.add(
       h.from,
       h.to,
