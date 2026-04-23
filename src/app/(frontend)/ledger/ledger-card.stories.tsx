@@ -129,7 +129,7 @@ export const ExpensesWithCashback: Story = {
     text: `2026-04-19 * "Amudham Cafe" "SIK coffee combo"
   Expenses:Food:Coffee                                 105 INR
   Liabilities:CC:HSBC:Cashback                        -105 INR
-  Income:Rewards:Cashback                           -10.50 INR
+  Income:Void                           -10.50 INR
   Liabilities:CC:HSBC:Cashback                       10.50 INR`,
   },
   parameters: {
@@ -149,9 +149,9 @@ export const MultiExpensesAndCashbacks: Story = {
   Expenses:Shopping:Home                               600.00 INR
   Liabilities:CC:HDFC:Infinia                        -4500.00 INR
   Liabilities:CC:HDFC:Infinia                         -600.00 INR
-  Income:Rewards:Cashback                             -450.00 INR
+  Income:Void                             -450.00 INR
   Liabilities:CC:HDFC:Infinia                          450.00 INR
-  Income:Rewards:Cashback                              -60.00 INR
+  Income:Void                              -60.00 INR
   Liabilities:CC:HDFC:Infinia                           60.00 INR`,
   },
   parameters: {

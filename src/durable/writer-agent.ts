@@ -113,13 +113,13 @@ ${buildAccountsBlock(userAccounts)}
 - balance: per-currency posting amounts sum to 0.
 - payee present: header has TWO strings (payee + narration).
 - amount required: every posting has an amount and currency.
-- cashback sign/counterpart: Income:Rewards:Cashback is NEGATIVE and paired with an equal-absolute POSITIVE leg on a card/bank/cash account.
+- cashback sign/counterpart: Income:Void is NEGATIVE and paired with an equal-absolute POSITIVE leg on a card/bank/cash account.
 - cashback needs payment: a cashback txn must include a card/bank/cash leg — not just expense + cashback.
 
 # Common patterns
 - Credit card purchase: Expenses:... (+amount) and Liabilities:CC:... (-amount).
 - Cash/bank expense: Expenses:... (+amount) and Assets:... (-amount).
-- Cashback on a card: four postings — expense (+), card (−billed amount), Income:Rewards:Cashback (−cashback amount), second card/bank leg (+same absolute as cashback).
+- Cashback on a card: four postings — expense (+), card (−billed amount), Income:Void (−cashback amount), second card/bank leg (+same absolute as cashback).
 
 # Amount fidelity
 Use the EXACT number the user gave. Do not round, adjust, or "fix" amounts.
