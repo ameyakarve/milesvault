@@ -2,7 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import CodeMirror, { ExternalChange } from '@uiw/react-codemirror'
-import { EditorView } from '@codemirror/view'
+import { EditorView, keymap } from '@codemirror/view'
 import {
   type AccountCompleter,
   buildScandiBeancountExtensions,
@@ -19,6 +19,7 @@ type LedgerEditorProps = {
   validators?: readonly Validator[]
   completeAccount?: AccountCompleter
   onCursorChange?: (pos: number) => void
+  onSave?: () => void
   readOnly?: boolean
   className?: string
 }
@@ -36,6 +37,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
     validators,
     completeAccount,
     onCursorChange,
+    onSave,
     readOnly,
     className,
   },
@@ -43,8 +45,10 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
 ) {
   const viewRef = useRef<EditorView | null>(null)
   const cursorCbRef = useRef(onCursorChange)
+  const saveCbRef = useRef(onSave)
   useEffect(() => {
     cursorCbRef.current = onCursorChange
+    saveCbRef.current = onSave
   })
 
   useImperativeHandle(
@@ -74,6 +78,18 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
         if (!cb) return
         if (u.selectionSet || u.docChanged) cb(u.state.selection.main.head)
       }),
+      keymap.of([
+        {
+          key: 'Mod-s',
+          preventDefault: true,
+          run: () => {
+            const cb = saveCbRef.current
+            if (!cb) return false
+            cb()
+            return true
+          },
+        },
+      ]),
     ],
     [],
   )

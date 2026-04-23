@@ -6,12 +6,10 @@ import {
   ChevronRight,
   Copy,
   Filter,
-  HelpCircle,
   Plus,
   RotateCcw,
   Save,
   Wallet,
-  X,
 } from 'lucide-react'
 import type { Transaction as BeanTxn } from 'beancount'
 import { parse as parseBean } from 'beancount'
@@ -360,84 +358,6 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </header>
 
-      <div className="h-[40px] px-4 flex justify-between items-center bg-scandi-chrome shrink-0 z-10">
-        <div className="flex items-center">
-          <ChromeIconButton icon={Plus} title="new entry" />
-          <ChromeIconButton
-            icon={Save}
-            title={
-              saving
-                ? 'saving…'
-                : aiBusy
-                  ? 'save (assistant working)'
-                  : bufferState.kind === 'dirty'
-                    ? 'save (fix parse errors first)'
-                    : bufferState.kind === 'staged' && !bufferState.validated
-                      ? 'save (fix validation errors first)'
-                      : 'save'
-            }
-            dirty={dirty}
-            disabled={!saveEnabled || locked}
-            onClick={onSave}
-          />
-          <ChromeIconButton
-            icon={RotateCcw}
-            title={
-              saving
-                ? 'revert (saving)'
-                : aiBusy
-                  ? 'revert (assistant working)'
-                  : 'revert'
-            }
-            disabled={!dirty || locked}
-            onClick={onRevert}
-          />
-          <SavePill
-            saveStatus={saveStatus}
-            bufferState={bufferState}
-            errorMsg={saveErrorMsg}
-          />
-          <div className="h-[16px] w-px bg-slate-400 mx-3" />
-          <div className="flex items-center gap-1">
-            <ChromeIconButton
-              icon={Filter}
-              title={
-                saving
-                  ? 'filter (saving)'
-                  : aiBusy
-                    ? 'filter (assistant working)'
-                    : dirty
-                      ? 'filter (save or revert first)'
-                      : 'filter'
-              }
-              disabled={pageLocked}
-            />
-            <div className="flex items-center gap-1 pl-2 pr-1 h-[24px] bg-slate-100 border border-slate-400 text-[11px] font-mono text-navy-700 rounded-[4px]">
-              swiggy · oct 2025
-              <button
-                type="button"
-                title={
-                  saving
-                    ? 'clear filter (saving)'
-                    : aiBusy
-                      ? 'clear filter (assistant working)'
-                      : dirty
-                        ? 'clear filter (save or revert first)'
-                        : 'clear filter'
-                }
-                disabled={pageLocked}
-                className="w-[16px] h-[16px] flex items-center justify-center hover:bg-slate-300 rounded-[2px] transition-colors disabled:opacity-30 disabled:cursor-default disabled:hover:bg-transparent"
-              >
-                <X size={12} className="text-slate-600" />
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <ChromeIconButton icon={HelpCircle} title="help" />
-        </div>
-      </div>
-
       <main className="flex-1 grid grid-cols-[1fr_2fr_1fr] gap-[1px] bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
         <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
           <PaneCap>
@@ -460,16 +380,63 @@ export function LedgerView({ email }: { email: string }) {
         <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
           <PaneCap className="justify-between">
             <PaneLabel>EDITOR</PaneLabel>
-            <button
-              type="button"
-              title={copied ? 'copied' : 'copy buffer'}
-              onClick={onCopyBuffer}
-              className={`w-[20px] h-[20px] flex items-center justify-center hover:bg-white transition-colors rounded-[2px] mr-[12px] ${
-                copied ? 'text-scandi-accent' : 'text-slate-500 hover:text-navy-700'
-              }`}
-            >
-              <Copy size={14} strokeWidth={1.5} />
-            </button>
+            <div className="flex items-center">
+              <ChromeIconButton icon={Plus} title="new entry" />
+              <ChromeIconButton
+                icon={Save}
+                title={
+                  saving
+                    ? 'saving…'
+                    : aiBusy
+                      ? 'save (assistant working)'
+                      : bufferState.kind === 'dirty'
+                        ? 'save (fix parse errors first)'
+                        : bufferState.kind === 'staged' && !bufferState.validated
+                          ? 'save (fix validation errors first)'
+                          : 'save · ⌘S'
+                }
+                dirty={dirty}
+                disabled={!saveEnabled || locked}
+                onClick={onSave}
+              />
+              <ChromeIconButton
+                icon={RotateCcw}
+                title={
+                  saving
+                    ? 'revert (saving)'
+                    : aiBusy
+                      ? 'revert (assistant working)'
+                      : 'revert'
+                }
+                disabled={!dirty || locked}
+                onClick={onRevert}
+              />
+              <SavePill
+                saveStatus={saveStatus}
+                bufferState={bufferState}
+                errorMsg={saveErrorMsg}
+              />
+              <div className="h-[16px] w-px bg-slate-400 mx-2" />
+              <ChromeIconButton
+                icon={Filter}
+                title={
+                  saving
+                    ? 'filter (saving)'
+                    : aiBusy
+                      ? 'filter (assistant working)'
+                      : dirty
+                        ? 'filter (save or revert first)'
+                        : 'filter'
+                }
+                disabled={pageLocked}
+              />
+              <ChromeIconButton
+                icon={Copy}
+                title={copied ? 'copied' : 'copy buffer'}
+                onClick={onCopyBuffer}
+                active={copied}
+              />
+            </div>
           </PaneCap>
           <div className="flex-1 min-h-0 bg-white flex flex-col overflow-hidden relative">
             <TextPane
@@ -479,6 +446,7 @@ export function LedgerView({ email }: { email: string }) {
               baseline={baseline}
               onBufferChange={setBuffer}
               onCursorChange={setCursorPos}
+              onSave={onSave}
               readOnly={locked}
               editorRef={editorRef}
             />
