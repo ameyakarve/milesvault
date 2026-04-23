@@ -10,6 +10,7 @@ import {
 } from '@codemirror/view'
 import { CATEGORY_ICON_SVG, toChipSvg } from '@/lib/beancount/category-icon-svgs'
 import { chipVisualWidth, matchExpenseChip } from '@/lib/beancount/glyphs'
+import { unveilChipAt, unveiledChipsField } from './editor-chip-state'
 
 type ExpenseHit = {
   from: number
@@ -58,7 +59,7 @@ class ExpenseGlyphWidget extends WidgetType {
   ) {
     super()
   }
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span')
     span.className = 'cm-account-glyph'
     span.style.width = `${chipVisualWidth(this.label)}ch`
@@ -68,6 +69,11 @@ class ExpenseGlyphWidget extends WidgetType {
     label.className = 'cm-account-glyph-chip'
     label.textContent = this.label
     span.appendChild(label)
+    span.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      const pos = view.posAtDOM(span)
+      unveilChipAt(view, pos)
+    })
     return span
   }
   eq(other: WidgetType): boolean {
@@ -84,9 +90,11 @@ class ExpenseGlyphWidget extends WidgetType {
 }
 
 function buildExpenseDecorations(view: EditorView): DecorationSet {
+  const unveiled = view.state.field(unveiledChipsField, false) ?? new Set<number>()
   const hits = findExpenseHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
+    if (unveiled.has(h.from)) continue
     builder.add(
       h.from,
       h.to,
@@ -105,7 +113,9 @@ export const expenseGlyphs = ViewPlugin.fromClass(
       this.decorations = buildExpenseDecorations(view)
     }
     update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged) {
+      const prevUnveiled = u.startState.field(unveiledChipsField, false)
+      const nextUnveiled = u.state.field(unveiledChipsField, false)
+      if (u.docChanged || u.viewportChanged || prevUnveiled !== nextUnveiled) {
         this.decorations = buildExpenseDecorations(u.view)
       }
     }
