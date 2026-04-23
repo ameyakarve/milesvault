@@ -45,7 +45,7 @@ import {
   type Validator,
   coreValidators,
 } from '@/lib/beancount/validators'
-import { accountGlyphs } from './editor-account-glyphs'
+import { accountGlyphs, accountGlyphTooltip } from './editor-account-glyphs'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 
 const beancountLanguage = LRLanguage.define({
@@ -302,6 +302,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     autocompletion({ override: [accountCompletionSource], activateOnTyping: true }),
     autocompleteColonTrigger,
     accountGlyphs,
+    accountGlyphTooltip,
     scandiEditorTheme,
   ]
 }

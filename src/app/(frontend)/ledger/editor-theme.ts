@@ -66,6 +66,19 @@ export const scandiEditorTheme = EditorView.theme(
       fontWeight: '600',
       letterSpacing: '0.02em',
     },
+    '.cm-account-glyph-tip': {
+      padding: '4px 8px',
+      fontSize: '11px',
+      fontWeight: '500',
+      color: NAVY_600,
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    },
+    '.cm-tooltip.cm-tooltip-hover': {
+      backgroundColor: '#ffffff',
+      border: `1px solid ${SLATE_200}`,
+      borderRadius: '4px',
+      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
+    },
     '.cm-gutters': {
       backgroundColor: '#ffffff',
       color: SLATE_400,
