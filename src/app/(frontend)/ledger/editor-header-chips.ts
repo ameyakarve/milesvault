@@ -9,8 +9,6 @@ import {
   WidgetType,
 } from '@codemirror/view'
 import { Circle, CircleCheck, Quote, TriangleAlert, User } from 'lucide-static'
-
-const CLASSIC_CALENDAR = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" fill="white" stroke="none"/><path d="M5 4h14a2 2 0 0 1 2 2v4H3V6a2 2 0 0 1 2-2z" fill="#DC2626" stroke="none"/><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>`
 import { chipSlotWidth, toChipSvg } from '@/lib/beancount/entities'
 import { cursorTxnLines, unveilChipAt } from './editor-chip-state'
 
@@ -19,7 +17,7 @@ export type HeaderHit = {
   to: number
   label: string
   tooltip: string
-  svg: string
+  svg?: string
   flagClass?: string
 }
 
@@ -56,7 +54,6 @@ export function hitsForLine(lineText: string, lineFrom: number, todayMs: number)
     to: base + dateStr.length,
     label: dateChipLabel(dateStr, todayMs),
     tooltip: dateStr,
-    svg: CLASSIC_CALENDAR,
   })
   const flagFrom = base + dateStr.length + sp1.length
   const flagMeta = FLAG_META[flag]
@@ -125,7 +122,7 @@ class HeaderChipWidget extends WidgetType {
   constructor(
     readonly label: string,
     readonly tooltip: string,
-    readonly svg: string,
+    readonly svg: string | undefined,
     readonly width: number,
     readonly flagClass: string | undefined,
   ) {
@@ -136,7 +133,7 @@ class HeaderChipWidget extends WidgetType {
     span.className = this.flagClass ? `cm-account-glyph ${this.flagClass}` : 'cm-account-glyph'
     span.style.width = `${this.width}ch`
     span.setAttribute('aria-label', this.tooltip)
-    span.innerHTML = toChipSvg(this.svg)
+    if (this.svg) span.innerHTML = toChipSvg(this.svg)
     if (this.label) {
       const label = document.createElement('span')
       label.className = 'cm-account-glyph-chip'
