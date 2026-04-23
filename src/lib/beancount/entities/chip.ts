@@ -1,5 +1,5 @@
-export function chipVisualWidth(chipLabel: string): number {
-  return chipLabel.length + 3
+export function chipVisualWidth(chipLabel: string, hasSvg = true): number {
+  return chipLabel.length + (hasSvg ? 3 : 1)
 }
 
 export function chipSlotWidth(rawLen: number, chipLabel: string): number {

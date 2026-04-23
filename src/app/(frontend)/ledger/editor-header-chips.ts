@@ -182,7 +182,7 @@ function buildHeaderDecorations(view: EditorView): DecorationSet {
           h.label,
           h.tooltip,
           h.svg,
-          chipVisualWidth(h.label),
+          chipVisualWidth(h.label, h.svg !== undefined),
           h.chipClass,
         ),
       }),
