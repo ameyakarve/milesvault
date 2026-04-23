@@ -59,7 +59,7 @@ export const scandiEditorTheme = EditorView.theme(
       padding: '0 12px',
       borderBottom: `1px solid ${SLATE_200}`,
     },
-    '.cm-space-dots, .cm-account-glyph::after, .cm-amount-chip::before': {
+    '.cm-space-dots': {
       backgroundImage: `radial-gradient(circle, ${SLATE_400} 1px, transparent 1.25px)`,
       backgroundSize: '1ch 100%',
       backgroundRepeat: 'repeat-x',
@@ -67,17 +67,13 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-txn-band': { backgroundColor: SLATE_50 },
     '.cm-account-glyph': {
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      gap: '3px',
+      display: 'inline-block',
       verticalAlign: 'baseline',
       color: SKY_700,
     },
-    '.cm-account-glyph::after': {
-      content: '""',
-      flex: '1 1 auto',
-      alignSelf: 'stretch',
+    '.cm-account-glyph svg': {
+      verticalAlign: '-0.15em',
+      marginRight: '3px',
     },
     '.cm-account-glyph-chip': {
       fontWeight: '600',
@@ -88,18 +84,13 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-payee-chip': { color: NAVY_700 },
     '.cm-narration-chip': { color: SLATE_500 },
     '.cm-amount-chip': {
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
+      display: 'inline-block',
+      verticalAlign: 'baseline',
+      textAlign: 'right',
       whiteSpace: 'pre',
       color: NAVY_700,
       fontWeight: '600',
       fontVariantNumeric: 'tabular-nums',
-    },
-    '.cm-amount-chip::before': {
-      content: '""',
-      flex: '1 1 auto',
-      alignSelf: 'stretch',
     },
     '.cm-account-glyph-tip': {
       padding: '4px 8px',
