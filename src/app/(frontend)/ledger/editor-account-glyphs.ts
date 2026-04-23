@@ -26,6 +26,7 @@ const PREPAID_GLYPH_SVG = `${SVG_OPEN}<rect width="20" height="14" x="2" y="5" r
 const FOREX_GLYPH_SVG = `${SVG_OPEN}<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/>${SVG_CLOSE}`
 const BANK_GLYPH_SVG = `${SVG_OPEN}<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>${SVG_CLOSE}`
 const POINTS_GLYPH_SVG = `${SVG_OPEN}<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>${SVG_CLOSE}`
+const STATUS_GLYPH_SVG = `${SVG_OPEN}<path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15"/><path d="M11 12 5.12 2.2"/><path d="m13 12 5.88-9.8"/><path d="M8 7h8"/><circle cx="12" cy="17" r="5"/><path d="M12 18v-2h-.5"/>${SVG_CLOSE}`
 const WALLET_GLYPH_SVG = `${SVG_OPEN}<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/>${SVG_CLOSE}`
 const GIFT_GLYPH_SVG = `${SVG_OPEN}<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/>${SVG_CLOSE}`
 const RECEIVABLE_GLYPH_SVG = `${SVG_OPEN}<path d="M11 17a1 1 0 0 1-1.414 0L6 13.414A2 2 0 0 1 6 10.586l3.586-3.586a1 1 0 1 1 1.414 1.414L8.414 11H17a4 4 0 0 1 4 4v2a1 1 0 1 1-2 0v-2a2 2 0 0 0-2-2H8.414l2.586 2.586A1 1 0 0 1 11 17Z"/>${SVG_CLOSE}`
@@ -39,6 +40,7 @@ export const ACCOUNT_GLYPH_SVG: Record<string, string> = {
   'Assets:Loaded:ForexCards': FOREX_GLYPH_SVG,
   'Assets:Bank': BANK_GLYPH_SVG,
   'Assets:Rewards:Points': POINTS_GLYPH_SVG,
+  'Assets:Rewards:Status': STATUS_GLYPH_SVG,
   'Assets:Loaded:Wallets': WALLET_GLYPH_SVG,
   'Assets:Loaded:GiftCards': GIFT_GLYPH_SVG,
   'Assets:Receivables': RECEIVABLE_GLYPH_SVG,
