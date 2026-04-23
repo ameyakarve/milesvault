@@ -5,6 +5,7 @@ export type AccountGlyph = {
   visualWidth: number
   label: string
   chipLabel: string
+  prefixChip?: boolean
 }
 
 export const ACCOUNT_GLYPHS: readonly AccountGlyph[] = [
@@ -14,7 +15,7 @@ export const ACCOUNT_GLYPHS: readonly AccountGlyph[] = [
   { text: 'Assets:Loaded:ForexCards', visualWidth: 5, label: 'forex card', chipLabel: 'FX' },
   { text: 'Assets:Bank', visualWidth: 7, label: 'bank', chipLabel: 'Bank' },
   { text: 'Assets:Rewards:Points', visualWidth: 9, label: 'rewards points', chipLabel: 'Points' },
-  { text: 'Assets:Rewards:Status', visualWidth: 9, label: 'status tier', chipLabel: 'Status' },
+  { text: 'Assets:Rewards:Status', visualWidth: 9, label: 'status tier', chipLabel: 'Status', prefixChip: true },
   { text: 'Assets:Loaded:Wallets', visualWidth: 9, label: 'wallet', chipLabel: 'Wallet' },
   { text: 'Assets:Loaded:GiftCards', visualWidth: 7, label: 'gift card', chipLabel: 'Gift' },
   { text: 'Assets:Receivables', visualWidth: 6, label: 'receivable', chipLabel: 'Rcv' },
@@ -51,7 +52,13 @@ export function matchAccountChip(acct: string): AccountChipMatch | null {
   if (depth < 1) return null
   const glyph = GLYPH_BY_TEXT[segments.slice(0, depth).join(':')]
   const tail = segments.slice(depth)
-  const chipLabel = tail.length > 0 ? tail.join(' ') : glyph.chipLabel
+  const tailLabel = tail.join(' ')
+  const chipLabel =
+    tail.length === 0
+      ? glyph.chipLabel
+      : glyph.prefixChip
+        ? `${glyph.chipLabel}: ${tailLabel}`
+        : tailLabel
   return { glyph, consumedLen: acct.length, chipLabel }
 }
 
