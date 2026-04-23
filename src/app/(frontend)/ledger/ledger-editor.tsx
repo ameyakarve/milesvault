@@ -119,6 +119,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
         autocompletion: false,
         searchKeymap: false,
         bracketMatching: false,
+        drawSelection: false,
       }}
     />
   )

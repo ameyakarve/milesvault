@@ -7,6 +7,7 @@ import { indentLess, indentMore } from '@codemirror/commands'
 import {
   LanguageSupport,
   LRLanguage,
+  foldNodeProp,
   foldService,
   indentService,
   indentUnit,
@@ -48,7 +49,14 @@ import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 
 const beancountLanguage = LRLanguage.define({
   name: 'beancount',
-  parser,
+  parser: parser.configure({
+    props: [
+      foldNodeProp.add({
+        PostingBlock: () => null,
+        MetadataBlock: () => null,
+      }),
+    ],
+  }),
   languageData: { commentTokens: { line: ';' } },
 })
 
