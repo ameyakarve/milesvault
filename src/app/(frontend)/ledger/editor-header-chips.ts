@@ -8,7 +8,7 @@ import {
   type ViewUpdate,
   WidgetType,
 } from '@codemirror/view'
-import { Circle, CircleCheck, Quote, TriangleAlert, User } from 'lucide-static'
+import { Circle, CircleCheck, TriangleAlert } from 'lucide-static'
 import { chipSlotWidth, toChipSvg } from '@/lib/beancount/entities'
 import { cursorTxnLines, unveilChipAt } from './editor-chip-state'
 
@@ -18,16 +18,16 @@ export type HeaderHit = {
   label: string
   tooltip: string
   svg?: string
-  flagClass?: string
+  chipClass?: string
 }
 
 const HEADER_RE =
   /^(\d{4}-\d{2}-\d{2})([ \t]+)([*!]|txn)([ \t]+)"([^"]*)"(?:([ \t]+)"([^"]*)")?/gm
 
-const FLAG_META: Record<string, { label: string; svg: string; flagClass: string }> = {
-  '*': { label: '', svg: CircleCheck, flagClass: 'cm-flag-chip-cleared' },
-  '!': { label: 'Pending', svg: TriangleAlert, flagClass: 'cm-flag-chip-pending' },
-  txn: { label: 'Entry', svg: Circle, flagClass: 'cm-flag-chip-txn' },
+const FLAG_META: Record<string, { label: string; svg: string; chipClass: string }> = {
+  '*': { label: '', svg: CircleCheck, chipClass: 'cm-flag-chip-cleared' },
+  '!': { label: 'Pending', svg: TriangleAlert, chipClass: 'cm-flag-chip-pending' },
+  txn: { label: 'Entry', svg: Circle, chipClass: 'cm-flag-chip-txn' },
 }
 
 function dateChipLabel(iso: string, todayMs: number): string {
@@ -64,7 +64,7 @@ export function hitsForLine(lineText: string, lineFrom: number, todayMs: number)
       label: flagMeta.label,
       tooltip: `flag: ${flag}`,
       svg: flagMeta.svg,
-      flagClass: flagMeta.flagClass,
+      chipClass: flagMeta.chipClass,
     })
   }
   const payeeOpenQuote = flagFrom + flag.length + sp2.length
@@ -74,7 +74,7 @@ export function hitsForLine(lineText: string, lineFrom: number, todayMs: number)
     to: payeeOpenQuote + payeeLen,
     label: payee || 'payee',
     tooltip: `payee: ${payee}`,
-    svg: User,
+    chipClass: 'cm-payee-chip',
   })
   if (narration !== undefined) {
     const narrationOpen = payeeOpenQuote + payeeLen + sp3.length
@@ -84,7 +84,7 @@ export function hitsForLine(lineText: string, lineFrom: number, todayMs: number)
       to: narrationOpen + narrationLen,
       label: narration || 'narration',
       tooltip: `narration: ${narration}`,
-      svg: Quote,
+      chipClass: 'cm-narration-chip',
     })
   }
   return hits
@@ -124,13 +124,13 @@ class HeaderChipWidget extends WidgetType {
     readonly tooltip: string,
     readonly svg: string | undefined,
     readonly width: number,
-    readonly flagClass: string | undefined,
+    readonly chipClass: string | undefined,
   ) {
     super()
   }
   toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span')
-    span.className = this.flagClass ? `cm-account-glyph ${this.flagClass}` : 'cm-account-glyph'
+    span.className = this.chipClass ? `cm-account-glyph ${this.chipClass}` : 'cm-account-glyph'
     span.style.width = `${this.width}ch`
     span.setAttribute('aria-label', this.tooltip)
     if (this.svg) span.innerHTML = toChipSvg(this.svg)
@@ -154,7 +154,7 @@ class HeaderChipWidget extends WidgetType {
       other.tooltip === this.tooltip &&
       other.svg === this.svg &&
       other.width === this.width &&
-      other.flagClass === this.flagClass
+      other.chipClass === this.chipClass
     )
   }
   ignoreEvent(): boolean {
@@ -179,7 +179,7 @@ function buildHeaderDecorations(view: EditorView): DecorationSet {
           h.tooltip,
           h.svg,
           chipSlotWidth(h.to - h.from, h.label),
-          h.flagClass,
+          h.chipClass,
         ),
       }),
     )
