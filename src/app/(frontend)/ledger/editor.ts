@@ -7,6 +7,7 @@ import { indentLess, indentMore } from '@codemirror/commands'
 import {
   LanguageSupport,
   LRLanguage,
+  foldService,
   indentService,
   indentUnit,
   syntaxHighlighting,
@@ -87,12 +88,32 @@ const beancountTabKeymap = keymap.of([
   },
 ])
 
+const splitCache = new WeakMap<Text, ReturnType<typeof splitEntries>>()
+function cachedSplit(doc: Text): ReturnType<typeof splitEntries> {
+  let hit = splitCache.get(doc)
+  if (!hit) {
+    hit = splitEntries(doc.toString())
+    splitCache.set(doc, hit)
+  }
+  return hit
+}
+
+const beancountFoldService = foldService.of((state, lineStart) => {
+  const doc = state.doc
+  const headerLineNum = doc.lineAt(lineStart).number - 1
+  const entry = cachedSplit(doc).find((e) => e.startLine === headerLineNum)
+  if (!entry || entry.endLine === entry.startLine) return null
+  const headerLine = doc.line(entry.startLine + 1)
+  const lastLine = doc.line(entry.endLine + 1)
+  return { from: headerLine.to, to: lastLine.to }
+})
+
 const entryDivider = Decoration.line({ attributes: { class: 'cm-txn-divider' } })
 
 function buildEntryDividers(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const doc = view.state.doc
-  const entries = splitEntries(doc.toString())
+  const entries = cachedSplit(doc)
   for (let i = 1; i < entries.length; i++) {
     const line = doc.line(entries[i].startLine + 1)
     builder.add(line.from, line.from, entryDivider)
@@ -246,6 +267,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     beancountSupport,
     indentUnit.of(INDENT),
     beancountIndentService,
+    beancountFoldService,
     beancountTabKeymap,
     trimTrailingWhitespace,
     txnDividers,

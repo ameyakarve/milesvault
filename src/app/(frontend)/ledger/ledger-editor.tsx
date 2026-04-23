@@ -25,6 +25,7 @@ type LedgerEditorProps = {
 
 export type LedgerEditorHandle = {
   replaceDoc: (next: string) => void
+  getView: () => EditorView | null
 }
 
 export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(function LedgerEditor(
@@ -59,6 +60,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
           annotations: [ExternalChange.of(true)],
         })
       },
+      getView: () => viewRef.current,
     }),
     [],
   )
@@ -112,7 +114,8 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
         lineNumbers: true,
         highlightActiveLine: false,
         highlightActiveLineGutter: true,
-        foldGutter: false,
+        foldGutter: true,
+        foldKeymap: true,
         autocompletion: false,
         searchKeymap: false,
         bracketMatching: false,

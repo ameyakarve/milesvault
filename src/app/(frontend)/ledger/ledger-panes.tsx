@@ -140,11 +140,13 @@ export function CardsList({
   errorMsg,
   entries,
   activeIdx,
+  scrollRef,
 }: {
   status: FetchStatus
   errorMsg: string | null
   entries: Entry[]
   activeIdx: number | null
+  scrollRef?: Ref<HTMLDivElement>
 }) {
   if (status !== 'idle') return <PaneStatus status={status} errorMsg={errorMsg} />
   if (entries.length === 0) {
@@ -155,7 +157,10 @@ export function CardsList({
     )
   }
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-scandi-surface pb-0">
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-scandi-surface pb-0"
+    >
       {entries.map((entry, i) => {
         const preset = PRESETS[i % PRESETS.length]
         const key = entry.snapshotId !== null ? `id-${entry.snapshotId}` : `idx-${i}`

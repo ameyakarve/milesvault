@@ -26,6 +26,7 @@ import { CardsList, type Entry, type FetchStatus, TextPane } from './ledger-pane
 import { applyProposal, type Op } from './propose'
 import { SavePill } from './save-status'
 import { ThinkPane } from './think-pane'
+import { useSyncScroll } from './use-sync-scroll'
 
 const PAGE_SIZE = 10
 
@@ -233,6 +234,14 @@ export function LedgerView({ email }: { email: string }) {
   }
 
   const editorRef = useRef<LedgerEditorHandle | null>(null)
+  const cardsScrollRef = useRef<HTMLDivElement | null>(null)
+
+  useSyncScroll({
+    cardsRef: cardsScrollRef,
+    editorHandleRef: editorRef,
+    enabled: state.status === 'idle',
+    txnCount: cardEntries.length,
+  })
 
   async function onSave() {
     if (saveStatus === 'saving') return
@@ -440,6 +449,7 @@ export function LedgerView({ email }: { email: string }) {
               errorMsg={state.errorMsg}
               entries={cardEntries}
               activeIdx={activeIdx}
+              scrollRef={cardsScrollRef}
             />
             <div className="absolute -bottom-6 -right-6 text-navy-600 opacity-[0.03] select-none pointer-events-none z-0">
               <Wallet size={180} strokeWidth={1.5} />
