@@ -74,6 +74,13 @@ class AccountChipWidget extends WidgetType {
     label.className = 'cm-account-glyph-chip'
     label.textContent = this.chipLabel
     span.appendChild(label)
+    const padCh = Math.max(0, this.width - this.chipLabel.length - 3)
+    if (padCh > 0) {
+      const dots = document.createElement('span')
+      dots.className = 'cm-space-dots'
+      dots.textContent = ' '.repeat(padCh)
+      span.appendChild(dots)
+    }
     span.addEventListener('mousedown', (e) => {
       e.preventDefault()
       const pos = view.posAtDOM(span)

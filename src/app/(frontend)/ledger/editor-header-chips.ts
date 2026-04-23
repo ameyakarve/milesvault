@@ -144,6 +144,14 @@ class HeaderChipWidget extends WidgetType {
       label.textContent = this.label
       span.appendChild(label)
     }
+    const contentWidth = this.label.length + (this.svg ? 3 : 0)
+    const padCh = Math.max(0, this.width - contentWidth)
+    if (padCh > 0) {
+      const dots = document.createElement('span')
+      dots.className = 'cm-space-dots'
+      dots.textContent = ' '.repeat(padCh)
+      span.appendChild(dots)
+    }
     span.addEventListener('mousedown', (e) => {
       e.preventDefault()
       const pos = view.posAtDOM(span)
