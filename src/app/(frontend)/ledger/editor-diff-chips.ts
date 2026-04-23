@@ -1,3 +1,4 @@
+import { getChunks } from '@codemirror/merge'
 import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
 import { CATEGORY_ICON_SVG, toChipSvg } from '@/lib/beancount/category-icon-svgs'
 import {
@@ -81,29 +82,38 @@ function makeChipSpan(spec: ChipSpec): HTMLSpanElement {
   return span
 }
 
-function chipifyDelElement(del: HTMLElement): void {
-  const text = del.textContent ?? ''
-  const specs = buildChipSpecs(text)
-  if (specs.length === 0) return
-  del.replaceChildren()
-  let cursor = 0
-  for (const s of specs) {
-    if (s.from > cursor) {
-      del.appendChild(document.createTextNode(text.slice(cursor, s.from)))
-    }
-    del.appendChild(makeChipSpan(s))
-    cursor = s.to
-  }
-  if (cursor < text.length) {
-    del.appendChild(document.createTextNode(text.slice(cursor)))
+function rememberRaw(chunk: HTMLElement): void {
+  const dels = chunk.querySelectorAll<HTMLElement>('.cm-deletedLine > del')
+  for (const del of dels) {
+    if (del.dataset.raw === undefined) del.dataset.raw = del.textContent ?? ''
   }
 }
 
-function chipifyChunk(chunk: HTMLElement): void {
-  if (chunk.dataset.chipified === '1') return
+function renderChipped(chunk: HTMLElement): void {
   const dels = chunk.querySelectorAll<HTMLElement>('.cm-deletedLine > del')
-  for (const del of dels) chipifyDelElement(del)
-  chunk.dataset.chipified = '1'
+  for (const del of dels) {
+    const text = del.dataset.raw ?? del.textContent ?? ''
+    const specs = buildChipSpecs(text)
+    if (specs.length === 0) {
+      del.textContent = text
+      continue
+    }
+    del.replaceChildren()
+    let cursor = 0
+    for (const s of specs) {
+      if (s.from > cursor) del.appendChild(document.createTextNode(text.slice(cursor, s.from)))
+      del.appendChild(makeChipSpan(s))
+      cursor = s.to
+    }
+    if (cursor < text.length) del.appendChild(document.createTextNode(text.slice(cursor)))
+  }
+}
+
+function renderRaw(chunk: HTMLElement): void {
+  const dels = chunk.querySelectorAll<HTMLElement>('.cm-deletedLine > del')
+  for (const del of dels) {
+    del.textContent = del.dataset.raw ?? del.textContent ?? ''
+  }
 }
 
 export const diffChips = ViewPlugin.fromClass(
@@ -113,12 +123,33 @@ export const diffChips = ViewPlugin.fromClass(
       this.view = view
       queueMicrotask(() => this.process())
     }
-    update(_u: ViewUpdate) {
-      queueMicrotask(() => this.process())
+    update(u: ViewUpdate) {
+      if (u.docChanged || u.viewportChanged || u.selectionSet) {
+        queueMicrotask(() => this.process())
+      }
     }
     process() {
-      const chunks = this.view.contentDOM.querySelectorAll<HTMLElement>('.cm-deletedChunk')
-      for (const c of chunks) chipifyChunk(c)
+      const state = this.view.state
+      const chunks = getChunks(state)?.chunks ?? []
+      const cursorLineNum = state.doc.lineAt(state.selection.main.head).number
+      const doms = this.view.contentDOM.querySelectorAll<HTMLElement>('.cm-deletedChunk')
+      for (const dom of doms) {
+        rememberRaw(dom)
+        const pos = this.view.posAtDOM(dom)
+        const chunk = chunks.find((c) => c.fromB === pos) ?? null
+        let active = false
+        if (chunk) {
+          const fromLine = state.doc.lineAt(Math.min(chunk.fromB, state.doc.length)).number
+          const toInc = chunk.toB > chunk.fromB ? chunk.toB - 1 : chunk.fromB
+          const toLine = state.doc.lineAt(Math.min(toInc, state.doc.length)).number
+          active = cursorLineNum >= fromLine && cursorLineNum <= toLine
+        }
+        const want: 'raw' | 'chips' = active ? 'raw' : 'chips'
+        if (dom.dataset.chipMode === want) continue
+        if (want === 'raw') renderRaw(dom)
+        else renderChipped(dom)
+        dom.dataset.chipMode = want
+      }
     }
   },
 )
