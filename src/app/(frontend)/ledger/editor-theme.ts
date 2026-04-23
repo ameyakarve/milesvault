@@ -10,20 +10,26 @@ const SLATE_600 = '#475569'
 const SLATE_200 = '#E2E8F0'
 const SLATE_100 = '#F1F5F9'
 const SLATE_50 = '#F8FAFC'
-const SKY_600 = '#0284C7'
 const SKY_700 = '#0369A1'
 const AMBER_700 = '#B45309'
-const EMERALD_600 = '#059669'
 const TEAL_700 = '#0F766E'
 const VIOLET_700 = '#6D28D9'
 
+const TOKEN_STYLE = {
+  date: { color: NAVY_700, fontWeight: '600' },
+  number: { color: NAVY_700, fontWeight: '600' },
+  string: { color: NAVY_700 },
+  account: { color: SLATE_600 },
+  flag: { color: AMBER_700, fontWeight: '600' },
+} as const
+
 export const scandiHighlight = HighlightStyle.define([
   { tag: t.lineComment, color: SLATE_400, fontStyle: 'italic' },
-  { tag: t.string, color: NAVY_700 },
-  { tag: t.number, color: NAVY_700, fontWeight: '600' },
-  { tag: t.literal, color: SKY_700, fontWeight: '700' },
+  { tag: t.string, ...TOKEN_STYLE.string },
+  { tag: t.number, ...TOKEN_STYLE.number },
+  { tag: t.literal, ...TOKEN_STYLE.date },
   { tag: t.bool, color: NAVY_600 },
-  { tag: t.variableName, color: SLATE_600 },
+  { tag: t.variableName, ...TOKEN_STYLE.account },
   { tag: t.unit, color: SLATE_500 },
   { tag: t.modifier, color: NAVY_600, fontWeight: '600' },
   { tag: t.keyword, color: NAVY_600, fontWeight: '600' },
@@ -59,7 +65,7 @@ export const scandiEditorTheme = EditorView.theme(
       padding: '0 12px',
       borderBottom: `1px solid ${SLATE_200}`,
     },
-    '.cm-space-dots, .cm-highlightSpace': {
+    '.cm-chip__dots, .cm-highlightSpace': {
       backgroundImage: `radial-gradient(circle, ${SLATE_400} 1px, transparent 1.25px)`,
       backgroundSize: '1ch 100%',
       backgroundRepeat: 'repeat-x',
@@ -69,32 +75,32 @@ export const scandiEditorTheme = EditorView.theme(
       content: '""',
     },
     '.cm-txn-band': { backgroundColor: SLATE_50 },
-    '.cm-account-glyph': {
+    '.cm-chip': {
       display: 'inline-block',
       verticalAlign: 'baseline',
-      color: SKY_700,
+      whiteSpace: 'pre',
     },
-    '.cm-account-glyph svg': {
+    '.cm-chip__icon': {
+      display: 'inline-block',
+      width: '3ch',
+    },
+    '.cm-chip__icon svg': {
       display: 'inline-block',
       width: '3ch',
       height: '1em',
       verticalAlign: '-0.15em',
     },
-    '.cm-flag-chip-cleared': { color: EMERALD_600 },
-    '.cm-flag-chip-pending': { color: AMBER_700 },
-    '.cm-flag-chip-txn': { color: SLATE_500 },
-    '.cm-payee-chip': { color: NAVY_700 },
-    '.cm-narration-chip': { color: SLATE_500 },
-    '.cm-amount-chip': {
-      display: 'inline-block',
-      verticalAlign: 'baseline',
+    '.cm-chip--account': TOKEN_STYLE.account,
+    '.cm-chip--date': TOKEN_STYLE.date,
+    '.cm-chip--payee': TOKEN_STYLE.string,
+    '.cm-chip--narration': { ...TOKEN_STYLE.string, color: SLATE_500 },
+    '.cm-chip--flag-pending': TOKEN_STYLE.flag,
+    '.cm-chip--amount': {
+      ...TOKEN_STYLE.number,
       textAlign: 'right',
-      whiteSpace: 'pre',
-      color: NAVY_700,
-      fontWeight: '600',
       fontVariantNumeric: 'tabular-nums',
     },
-    '.cm-account-glyph-tip': {
+    '.cm-chip-tip': {
       padding: '4px 8px',
       fontWeight: '500',
       color: NAVY_600,

@@ -54,7 +54,7 @@ export const balanceValidator: Validator = ({ parsed, doc }) => {
 export const payeePresentValidator: Validator = ({ parsed }) => {
   const out: Diagnostic[] = []
   for (const txn of parsed) {
-    if (txn.payee && txn.payee.trim().length > 0) continue
+    if (txn.payee && txn.payee.text.trim().length > 0) continue
     out.push({
       from: txn.headerRange.from,
       to: txn.headerRange.to,

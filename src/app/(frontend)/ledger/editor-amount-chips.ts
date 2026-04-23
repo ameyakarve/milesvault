@@ -1,15 +1,8 @@
 import { RangeSetBuilder } from '@codemirror/state'
-import {
-  Decoration,
-  type DecorationSet,
-  EditorView,
-  ViewPlugin,
-  type ViewUpdate,
-  WidgetType,
-} from '@codemirror/view'
-import { cursorPos, unveilChipAt } from './editor-chip-state'
-
-const AMOUNT_RE = /([+-]?(?:\d+\.?\d*|\.\d+))(?=\s+[A-Z])/g
+import { Decoration, type DecorationSet, type EditorView } from '@codemirror/view'
+import { ChipWidget } from './chip-widget'
+import { cursorPos } from './editor-chip-state'
+import { cachedParse, isInVisibleRange, makeChipPlugin } from './parse-cache'
 
 const SCALES: ReadonlyArray<readonly [string, number]> = [
   ['B', 9],
@@ -35,78 +28,30 @@ export function compressAmount(raw: string): string | null {
 type Hit = {
   from: number
   to: number
+  raw: string
   compressed: string
   primary: boolean
 }
 
 function findAmountHits(view: EditorView): Hit[] {
   const hits: Hit[] = []
-  const doc = view.state.doc
-  for (const { from, to } of view.visibleRanges) {
-    let lineNum = doc.lineAt(from).number
-    const endLineNum = doc.lineAt(to).number
-    while (lineNum <= endLineNum) {
-      const line = doc.line(lineNum)
-      let seen = false
-      for (const m of line.text.matchAll(AMOUNT_RE)) {
-        const raw = m[1]
-        const idx = m.index ?? 0
-        const compressed = compressAmount(raw)
-        if (compressed) {
-          hits.push({
-            from: line.from + idx,
-            to: line.from + idx + raw.length,
-            compressed,
-            primary: !seen,
-          })
-        }
-        seen = true
-      }
-      lineNum += 1
-    }
+  const { amounts, postingAmountStarts } = cachedParse(view.state.doc)
+  for (const amt of amounts) {
+    if (!isInVisibleRange(view, amt.range.from)) continue
+    const raw = amt.numberText
+    if (!raw) continue
+    const compressed = compressAmount(raw)
+    if (!compressed) continue
+    const from = amt.range.from
+    hits.push({
+      from,
+      to: from + raw.length,
+      raw,
+      compressed,
+      primary: postingAmountStarts.has(from),
+    })
   }
   return hits
-}
-
-class AmountChipWidget extends WidgetType {
-  constructor(
-    readonly label: string,
-    readonly slotWidth: number | null,
-  ) {
-    super()
-  }
-  toDOM(view: EditorView): HTMLElement {
-    const span = document.createElement('span')
-    span.className = 'cm-amount-chip'
-    if (this.slotWidth !== null) {
-      const padCh = Math.max(0, this.slotWidth - this.label.length)
-      if (padCh > 0) {
-        const dots = document.createElement('span')
-        dots.className = 'cm-space-dots'
-        dots.textContent = ' '.repeat(padCh)
-        span.appendChild(dots)
-      }
-      span.appendChild(document.createTextNode(this.label))
-    } else {
-      span.textContent = this.label
-    }
-    span.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      const pos = view.posAtDOM(span)
-      unveilChipAt(view, pos)
-    })
-    return span
-  }
-  eq(other: WidgetType): boolean {
-    return (
-      other instanceof AmountChipWidget &&
-      other.label === this.label &&
-      other.slotWidth === this.slotWidth
-    )
-  }
-  ignoreEvent(): boolean {
-    return false
-  }
 }
 
 function buildAmountDecorations(view: EditorView): DecorationSet {
@@ -115,35 +60,21 @@ function buildAmountDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
     if (cursor >= h.from && cursor <= h.to) continue
-    const slotWidth = h.primary ? h.to - h.from : null
+    const width = h.primary ? h.to - h.from : h.compressed.length
     builder.add(
       h.from,
       h.to,
       Decoration.replace({
-        widget: new AmountChipWidget(h.compressed, slotWidth),
+        widget: new ChipWidget({
+          variant: 'amount',
+          label: h.compressed,
+          tooltip: h.raw,
+          width,
+        }),
       }),
     )
   }
   return builder.finish()
 }
 
-export const amountChips = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet
-    constructor(view: EditorView) {
-      this.decorations = buildAmountDecorations(view)
-    }
-    update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged || u.selectionSet) {
-        this.decorations = buildAmountDecorations(u.view)
-      }
-    }
-  },
-  {
-    decorations: (v) => v.decorations,
-    provide: (plugin) =>
-      EditorView.atomicRanges.of((view) => {
-        return view.plugin(plugin)?.decorations ?? Decoration.none
-      }),
-  },
-)
+export const amountChips = makeChipPlugin(buildAmountDecorations)

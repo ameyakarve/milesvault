@@ -19,13 +19,20 @@ export type ParsedPosting = {
   amount: ParsedAmount | null
 }
 
+export type ParsedString = {
+  range: Range
+  text: string
+}
+
 export type ParsedTxn = {
   range: Range
   headerRange: Range
+  dateRange: Range
   date: string
+  flagRange: Range | null
   flag: string | null
-  payee: string | null
-  narration: string | null
+  payee: ParsedString | null
+  narration: ParsedString | null
   tags: string[]
   links: string[]
   postings: ParsedPosting[]
@@ -37,8 +44,16 @@ export type ParseDiagnostic = {
   message: string
 }
 
+export type AccountRef = {
+  account: string
+  range: Range
+}
+
 export type ParseResult = {
   entries: ParsedTxn[]
+  accounts: AccountRef[]
+  amounts: ParsedAmount[]
+  postingAmountStarts: Set<number>
   diagnostics: ParseDiagnostic[]
 }
 
@@ -49,6 +64,8 @@ export function parseBuffer(doc: string): ParseResult {
   const diagnostics: ParseDiagnostic[] = []
   const errorRanges: Range[] = []
   const directiveNodes: SyntaxNode[] = []
+  const accounts: AccountRef[] = []
+  const amounts: ParsedAmount[] = []
 
   tree.iterate({
     enter(node) {
@@ -63,6 +80,17 @@ export function parseBuffer(doc: string): ParseResult {
         directiveNodes.push(node.node)
         return undefined
       }
+      if (node.name === 'Account') {
+        accounts.push({
+          account: doc.slice(node.from, node.to),
+          range: { from: node.from, to: node.to },
+        })
+        return undefined
+      }
+      if (node.name === 'Amount') {
+        amounts.push(readAmount(node.node, doc))
+        return undefined
+      }
       return undefined
     },
   })
@@ -74,7 +102,14 @@ export function parseBuffer(doc: string): ParseResult {
     if (parsed) entries.push(parsed)
   }
 
-  return { entries, diagnostics }
+  const postingAmountStarts = new Set<number>()
+  for (const txn of entries) {
+    for (const p of txn.postings) {
+      if (p.amount) postingAmountStarts.add(p.amount.range.from)
+    }
+  }
+
+  return { entries, accounts, amounts, postingAmountStarts, diagnostics }
 }
 
 function rangeOverlapsAny(r: Range, ranges: readonly Range[]): boolean {
@@ -92,10 +127,14 @@ function readDatedDirective(directive: SyntaxNode, doc: string): ParsedTxn | nul
   const headerEnd = firstPostingBlockStart(txn) ?? txn.to
   const header: Range = { from: directive.from, to: headerEnd }
 
+  const dateRange: Range = { from: dateNode.from, to: dateNode.to }
   const date = doc.slice(dateNode.from, dateNode.to)
-  const flag = readChildText(txn, 'TxnFlag', doc) ?? readChildText(txn, 'TxnKeyword', doc)
 
-  const strings = readChildrenText(txn, 'String', doc)
+  const flagNode = txn.getChild('TxnFlag') ?? txn.getChild('TxnKeyword')
+  const flagRange = flagNode ? { from: flagNode.from, to: flagNode.to } : null
+  const flag = flagNode ? doc.slice(flagNode.from, flagNode.to) : null
+
+  const strings = readChildrenAs(txn, 'String', doc, unquote)
   const payee = strings.length >= 2 ? strings[0] : null
   const narration = strings.length >= 2 ? strings[1] : (strings[0] ?? null)
 
@@ -115,7 +154,9 @@ function readDatedDirective(directive: SyntaxNode, doc: string): ParsedTxn | nul
   return {
     range: { from: directive.from, to: directive.to },
     headerRange: header,
+    dateRange,
     date,
+    flagRange,
     flag,
     payee,
     narration,
@@ -169,16 +210,28 @@ function firstPostingBlockStart(node: SyntaxNode): number | null {
   return pb ? pb.from : null
 }
 
-function readChildText(node: SyntaxNode, name: string, doc: string): string | null {
-  const c = node.getChild(name)
-  return c ? doc.slice(c.from, c.to) : null
-}
-
 function readChildrenText(node: SyntaxNode, name: string, doc: string): string[] {
   const out: string[] = []
   for (let c = node.firstChild; c; c = c.nextSibling) {
     if (c.name !== name) continue
     out.push(unquote(doc.slice(c.from, c.to)))
+  }
+  return out
+}
+
+function readChildrenAs(
+  node: SyntaxNode,
+  name: string,
+  doc: string,
+  transform: (raw: string) => string,
+): ParsedString[] {
+  const out: ParsedString[] = []
+  for (let c = node.firstChild; c; c = c.nextSibling) {
+    if (c.name !== name) continue
+    out.push({
+      range: { from: c.from, to: c.to },
+      text: transform(doc.slice(c.from, c.to)),
+    })
   }
   return out
 }

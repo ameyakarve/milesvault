@@ -2,32 +2,27 @@ import { RangeSetBuilder } from '@codemirror/state'
 import {
   Decoration,
   type DecorationSet,
-  EditorView,
-  hoverTooltip,
-  ViewPlugin,
-  type ViewUpdate,
-  WidgetType,
+  type EditorView,
 } from '@codemirror/view'
 import { TriangleAlert } from 'lucide-static'
-import { chipVisualWidth, toChipSvg } from '@/lib/beancount/entities'
-import { cursorPos, unveilChipAt } from './editor-chip-state'
+import { chipVisualWidth } from '@/lib/beancount/entities'
+import type { ParsedTxn } from '@/lib/beancount/parse'
+import { ChipWidget, type ChipVariant } from './chip-widget'
+import { cursorPos } from './editor-chip-state'
+import {
+  cachedParse,
+  isInVisibleRange,
+  makeChipPlugin,
+  makeChipTooltip,
+} from './parse-cache'
 
 export type HeaderHit = {
   from: number
   to: number
+  variant: ChipVariant
   label: string
   tooltip: string
   svg?: string
-  chipClass?: string
-}
-
-const HEADER_RE =
-  /^(\d{4}-\d{2}-\d{2})([ \t]+)([*!]|txn)([ \t]+)"([^"]*)"(?:([ \t]+)"([^"]*)")?/gm
-
-const PENDING_META = {
-  label: 'Pending',
-  svg: TriangleAlert,
-  chipClass: 'cm-flag-chip-pending',
 }
 
 function dateChipLabel(iso: string): string {
@@ -38,51 +33,50 @@ function dateChipLabel(iso: string): string {
   return `${dd} ${mmm}`
 }
 
-export function hitsForLine(lineText: string, lineFrom: number): HeaderHit[] {
+export function hitsForTxn(txn: ParsedTxn): HeaderHit[] {
   const hits: HeaderHit[] = []
-  HEADER_RE.lastIndex = 0
-  const match = HEADER_RE.exec(lineText)
-  if (!match) return hits
-  const [, dateStr, sp1, flag, sp2, payee, sp3, narration] = match
-  const base = lineFrom + (match.index ?? 0)
-  const flagFrom = base + dateStr.length + sp1.length
-  const payeeOpenQuote = flagFrom + flag.length + sp2.length
-  const isPending = flag === '!'
+  const isPending = txn.flag === '!'
+  const dateTo = isPending
+    ? (txn.flagRange?.from ?? txn.dateRange.to)
+    : (txn.payee?.range.from ?? txn.narration?.range.from ?? txn.dateRange.to)
   hits.push({
-    from: base,
-    to: isPending ? flagFrom : payeeOpenQuote,
-    label: dateChipLabel(dateStr),
-    tooltip: dateStr,
+    from: txn.dateRange.from,
+    to: dateTo,
+    variant: 'date',
+    label: dateChipLabel(txn.date),
+    tooltip: txn.date,
   })
-  if (isPending) {
+  if (isPending && txn.flagRange) {
+    const pendingTo =
+      txn.payee?.range.from ?? txn.narration?.range.from ?? txn.flagRange.to
     hits.push({
-      from: flagFrom,
-      to: payeeOpenQuote,
-      label: PENDING_META.label,
-      tooltip: `flag: ${flag}`,
-      svg: PENDING_META.svg,
-      chipClass: PENDING_META.chipClass,
+      from: txn.flagRange.from,
+      to: pendingTo,
+      variant: 'flag-pending',
+      label: 'Pending',
+      tooltip: `flag: ${txn.flag}`,
+      svg: TriangleAlert,
     })
   }
-  const payeeLen = payee.length + 2
-  const payeeTo =
-    payeeOpenQuote + payeeLen + (narration !== undefined ? sp3.length : 0)
-  hits.push({
-    from: payeeOpenQuote,
-    to: payeeTo,
-    label: payee || 'payee',
-    tooltip: `payee: ${payee}`,
-    chipClass: 'cm-payee-chip',
-  })
-  if (narration !== undefined) {
-    const narrationOpen = payeeOpenQuote + payeeLen + sp3.length
-    const narrationLen = narration.length + 2
+  if (txn.payee) {
+    const payeeText = txn.payee.text
+    const payeeTo = txn.narration ? txn.narration.range.from : txn.payee.range.to
     hits.push({
-      from: narrationOpen,
-      to: narrationOpen + narrationLen,
-      label: narration || 'narration',
-      tooltip: `narration: ${narration}`,
-      chipClass: 'cm-narration-chip',
+      from: txn.payee.range.from,
+      to: payeeTo,
+      variant: 'payee',
+      label: payeeText || 'payee',
+      tooltip: `payee: ${payeeText}`,
+    })
+  }
+  if (txn.narration) {
+    const narrationText = txn.narration.text
+    hits.push({
+      from: txn.narration.range.from,
+      to: txn.narration.range.to,
+      variant: 'narration',
+      label: narrationText || 'narration',
+      tooltip: `narration: ${narrationText}`,
     })
   }
   return hits
@@ -90,75 +84,23 @@ export function hitsForLine(lineText: string, lineFrom: number): HeaderHit[] {
 
 function findHeaderHits(view: EditorView): HeaderHit[] {
   const hits: HeaderHit[] = []
-  const doc = view.state.doc
-  for (const { from, to } of view.visibleRanges) {
-    let lineNum = doc.lineAt(from).number
-    const endLineNum = doc.lineAt(to).number
-    while (lineNum <= endLineNum) {
-      const line = doc.line(lineNum)
-      hits.push(...hitsForLine(line.text, line.from))
-      lineNum += 1
-    }
+  const { entries } = cachedParse(view.state.doc)
+  for (const txn of entries) {
+    if (!isInVisibleRange(view, txn.headerRange.from)) continue
+    hits.push(...hitsForTxn(txn))
   }
   return hits
 }
 
 function headerHitAt(view: EditorView, pos: number): HeaderHit | null {
-  const line = view.state.doc.lineAt(pos)
-  const hits = hitsForLine(line.text, line.from)
-  return hits.find((h) => pos >= h.from && pos < h.to) ?? null
-}
-
-class HeaderChipWidget extends WidgetType {
-  constructor(
-    readonly label: string,
-    readonly tooltip: string,
-    readonly svg: string | undefined,
-    readonly width: number,
-    readonly chipClass: string | undefined,
-  ) {
-    super()
-  }
-  toDOM(view: EditorView): HTMLElement {
-    const span = document.createElement('span')
-    span.className = this.chipClass ? `cm-account-glyph ${this.chipClass}` : 'cm-account-glyph'
-    span.style.width = `${this.width}ch`
-    span.setAttribute('aria-label', this.tooltip)
-    if (this.svg) span.innerHTML = toChipSvg(this.svg)
-    if (this.label) {
-      const label = document.createElement('span')
-      label.className = 'cm-account-glyph-chip'
-      label.textContent = this.label
-      span.appendChild(label)
+  const { entries } = cachedParse(view.state.doc)
+  for (const txn of entries) {
+    if (pos < txn.headerRange.from || pos > txn.headerRange.to) continue
+    for (const h of hitsForTxn(txn)) {
+      if (pos >= h.from && pos < h.to) return h
     }
-    const contentWidth = this.label.length + (this.svg ? 3 : 0)
-    const padCh = Math.max(0, this.width - contentWidth)
-    if (padCh > 0) {
-      const dots = document.createElement('span')
-      dots.className = 'cm-space-dots'
-      dots.textContent = ' '.repeat(padCh)
-      span.appendChild(dots)
-    }
-    span.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      const pos = view.posAtDOM(span)
-      unveilChipAt(view, pos)
-    })
-    return span
   }
-  eq(other: WidgetType): boolean {
-    return (
-      other instanceof HeaderChipWidget &&
-      other.label === this.label &&
-      other.tooltip === this.tooltip &&
-      other.svg === this.svg &&
-      other.width === this.width &&
-      other.chipClass === this.chipClass
-    )
-  }
-  ignoreEvent(): boolean {
-    return false
-  }
+  return null
 }
 
 function buildHeaderDecorations(view: EditorView): DecorationSet {
@@ -171,55 +113,18 @@ function buildHeaderDecorations(view: EditorView): DecorationSet {
       h.from,
       h.to,
       Decoration.replace({
-        widget: new HeaderChipWidget(
-          h.label,
-          h.tooltip,
-          h.svg,
-          chipVisualWidth(h.label, h.svg !== undefined),
-          h.chipClass,
-        ),
+        widget: new ChipWidget({
+          variant: h.variant,
+          label: h.label,
+          tooltip: h.tooltip,
+          svg: h.svg,
+          width: chipVisualWidth(h.label, h.svg !== undefined),
+        }),
       }),
     )
   }
   return builder.finish()
 }
 
-export const headerChips = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet
-    constructor(view: EditorView) {
-      this.decorations = buildHeaderDecorations(view)
-    }
-    update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged || u.selectionSet) {
-        this.decorations = buildHeaderDecorations(u.view)
-      }
-    }
-  },
-  {
-    decorations: (v) => v.decorations,
-    provide: (plugin) =>
-      EditorView.atomicRanges.of((view) => {
-        return view.plugin(plugin)?.decorations ?? Decoration.none
-      }),
-  },
-)
-
-export const headerChipTooltip = hoverTooltip(
-  (view, pos) => {
-    const hit = headerHitAt(view, pos)
-    if (!hit) return null
-    return {
-      pos: hit.from,
-      end: hit.to,
-      above: true,
-      create: () => {
-        const dom = document.createElement('div')
-        dom.className = 'cm-account-glyph-tip'
-        dom.textContent = hit.tooltip
-        return { dom }
-      },
-    }
-  },
-  { hoverTime: 120 },
-)
+export const headerChips = makeChipPlugin(buildHeaderDecorations)
+export const headerChipTooltip = makeChipTooltip(headerHitAt)

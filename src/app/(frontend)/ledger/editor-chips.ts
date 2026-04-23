@@ -1,22 +1,20 @@
 import { RangeSetBuilder } from '@codemirror/state'
+import { Decoration, type DecorationSet, type EditorView } from '@codemirror/view'
 import {
-  Decoration,
-  type DecorationSet,
-  EditorView,
-  hoverTooltip,
-  ViewPlugin,
-  type ViewUpdate,
-  WidgetType,
-} from '@codemirror/view'
-import {
-  ANY_ACCOUNT_RE,
   chipSlotWidth,
   type Glyph,
   resolveAccount,
   type ResolvedAccount,
-  toChipSvg,
 } from '@/lib/beancount/entities'
-import { cursorPos, unveilChipAt } from './editor-chip-state'
+import { ChipWidget } from './chip-widget'
+import { cursorPos } from './editor-chip-state'
+import {
+  cachedParse,
+  isInVisibleRange,
+  makeChipPlugin,
+  makeChipTooltip,
+  postingSignMap,
+} from './parse-cache'
 
 type Hit = {
   from: number
@@ -26,16 +24,24 @@ type Hit = {
   tooltip: string
 }
 
-function hitFor(acct: string, start: number): Hit | null {
+const POINTS_PATH = 'Assets:Rewards:Points'
+
+function hitFor(acct: string, start: number, signByAcctPos: Map<number, number>): Hit | null {
   const r = resolveAccount(acct)
   if (!r || !r.glyph) return null
   return {
     from: start,
     to: start + r.consumedLen,
     glyph: r.glyph,
-    chipLabel: r.chipLabel,
+    chipLabel: pointsAwareLabel(r, signByAcctPos.get(start)),
     tooltip: tooltipFor(acct, r),
   }
+}
+
+function pointsAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
+  if (r.matchedPath !== POINTS_PATH || r.tail.length === 0) return r.chipLabel
+  if (sign === undefined || sign === 0) return r.chipLabel
+  return `${r.chipLabel} ${sign > 0 ? 'earned' : 'burned'}`
 }
 
 function tooltipFor(acct: string, r: ResolvedAccount): string {
@@ -43,63 +49,15 @@ function tooltipFor(acct: string, r: ResolvedAccount): string {
 }
 
 function findAccountHits(view: EditorView): Hit[] {
+  const parse = cachedParse(view.state.doc)
+  const signs = postingSignMap(parse)
   const hits: Hit[] = []
-  for (const { from, to } of view.visibleRanges) {
-    const text = view.state.doc.sliceString(from, to)
-    for (const match of text.matchAll(ANY_ACCOUNT_RE)) {
-      const start = from + (match.index ?? 0)
-      const hit = hitFor(match[0], start)
-      if (hit) hits.push(hit)
-    }
+  for (const a of parse.accounts) {
+    if (!isInVisibleRange(view, a.range.from)) continue
+    const hit = hitFor(a.account, a.range.from, signs)
+    if (hit) hits.push(hit)
   }
   return hits
-}
-
-class AccountChipWidget extends WidgetType {
-  constructor(
-    readonly glyph: Glyph,
-    readonly chipLabel: string,
-    readonly tooltip: string,
-    readonly width: number,
-  ) {
-    super()
-  }
-  toDOM(view: EditorView): HTMLElement {
-    const span = document.createElement('span')
-    span.className = 'cm-account-glyph'
-    span.style.width = `${this.width}ch`
-    span.setAttribute('aria-label', this.tooltip)
-    span.innerHTML = toChipSvg(this.glyph.svg)
-    const label = document.createElement('span')
-    label.className = 'cm-account-glyph-chip'
-    label.textContent = this.chipLabel
-    span.appendChild(label)
-    const padCh = Math.max(0, this.width - this.chipLabel.length - 3)
-    if (padCh > 0) {
-      const dots = document.createElement('span')
-      dots.className = 'cm-space-dots'
-      dots.textContent = ' '.repeat(padCh)
-      span.appendChild(dots)
-    }
-    span.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      const pos = view.posAtDOM(span)
-      unveilChipAt(view, pos)
-    })
-    return span
-  }
-  eq(other: WidgetType): boolean {
-    return (
-      other instanceof AccountChipWidget &&
-      other.glyph.svg === this.glyph.svg &&
-      other.chipLabel === this.chipLabel &&
-      other.tooltip === this.tooltip &&
-      other.width === this.width
-    )
-  }
-  ignoreEvent(): boolean {
-    return false
-  }
 }
 
 function buildChipDecorations(view: EditorView): DecorationSet {
@@ -112,66 +70,30 @@ function buildChipDecorations(view: EditorView): DecorationSet {
       h.from,
       h.to,
       Decoration.replace({
-        widget: new AccountChipWidget(
-          h.glyph,
-          h.chipLabel,
-          h.tooltip,
-          chipSlotWidth(h.to - h.from, h.chipLabel),
-        ),
+        widget: new ChipWidget({
+          variant: 'account',
+          label: h.chipLabel,
+          tooltip: h.tooltip,
+          svg: h.glyph.svg,
+          width: chipSlotWidth(h.to - h.from, h.chipLabel),
+        }),
       }),
     )
   }
   return builder.finish()
 }
 
-export const accountChips = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet
-    constructor(view: EditorView) {
-      this.decorations = buildChipDecorations(view)
-    }
-    update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged || u.selectionSet) {
-        this.decorations = buildChipDecorations(u.view)
-      }
-    }
-  },
-  {
-    decorations: (v) => v.decorations,
-    provide: (plugin) =>
-      EditorView.atomicRanges.of((view) => {
-        return view.plugin(plugin)?.decorations ?? Decoration.none
-      }),
-  },
-)
+export const accountChips = makeChipPlugin(buildChipDecorations)
 
 function hitAtPos(view: EditorView, pos: number): Hit | null {
-  const line = view.state.doc.lineAt(pos)
-  const localPos = pos - line.from
-  for (const match of line.text.matchAll(ANY_ACCOUNT_RE)) {
-    const idx = match.index ?? 0
-    const hit = hitFor(match[0], line.from + idx)
+  const parse = cachedParse(view.state.doc)
+  const signs = postingSignMap(parse)
+  for (const a of parse.accounts) {
+    const hit = hitFor(a.account, a.range.from, signs)
     if (!hit) continue
-    if (localPos >= idx && localPos < idx + (hit.to - hit.from)) return hit
+    if (pos >= hit.from && pos < hit.to) return hit
   }
   return null
 }
 
-export const accountChipTooltip = hoverTooltip(
-  (view, pos) => {
-    const hit = hitAtPos(view, pos)
-    if (!hit) return null
-    return {
-      pos: hit.from,
-      end: hit.to,
-      above: true,
-      create: () => {
-        const dom = document.createElement('div')
-        dom.className = 'cm-account-glyph-tip'
-        dom.textContent = hit.tooltip
-        return { dom }
-      },
-    }
-  },
-  { hoverTime: 120 },
-)
+export const accountChipTooltip = makeChipTooltip(hitAtPos)

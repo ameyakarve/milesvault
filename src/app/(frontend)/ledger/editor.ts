@@ -34,8 +34,6 @@ import {
   type DecorationSet,
   EditorView,
   GutterMarker,
-  ViewPlugin,
-  type ViewUpdate,
   gutterLineClass,
   highlightWhitespace,
   keymap,
@@ -43,7 +41,7 @@ import {
 import { parser } from 'lezer-beancount'
 import { type AccountCompleter, completeAccount } from '@/lib/beancount/entities'
 import { splitEntries } from '@/lib/beancount/extract'
-import { parseBuffer } from '@/lib/beancount/parse'
+import { cachedParse } from './parse-cache'
 import {
   type ValidateContext,
   type Validator,
@@ -255,15 +253,6 @@ const autocompleteColonTrigger = EditorView.updateListener.of((u) => {
   }
 })
 
-const parseCache = new WeakMap<Text, ReturnType<typeof parseBuffer>>()
-function cachedParse(doc: Text): ReturnType<typeof parseBuffer> {
-  let hit = parseCache.get(doc)
-  if (!hit) {
-    hit = parseBuffer(doc.toString())
-    parseCache.set(doc, hit)
-  }
-  return hit
-}
 
 const parseLinter = linter(
   (view) => {
