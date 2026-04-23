@@ -51,7 +51,7 @@ export const scandiEditorTheme = EditorView.theme(
       color: NAVY_600,
     },
     '.cm-line, .cm-deletedChunk': { padding: '0 12px' },
-    '.cm-txn-divider': { borderTop: `1px solid ${SLATE_100}` },
+    '.cm-txn-band': { backgroundColor: SLATE_50 },
     '.cm-gutters': {
       backgroundColor: '#ffffff',
       color: SLATE_400,
