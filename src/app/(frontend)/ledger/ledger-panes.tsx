@@ -14,7 +14,8 @@ import {
   UtensilsCrossed,
 } from 'lucide-react'
 import type { Ref } from 'react'
-import { EntryCard, type CardPreset } from './ledger-card'
+import type { Posting, Transaction as BeanTxn } from 'beancount'
+import { EntryCard, safeParseEntry, type CardPreset } from './ledger-card'
 import { LedgerEditor, type LedgerEditorHandle } from './ledger-editor'
 
 export type FetchStatus = 'loading' | 'idle' | 'error'
@@ -135,6 +136,118 @@ function PaneStatus({
   return <div className={`${base} text-error`}>failed to load — {errorMsg}</div>
 }
 
+const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
+type DayItem = { entry: Entry; parsed: BeanTxn | null; listIndex: number }
+type DayGroup = {
+  key: string
+  header: { weekday: string; day: number; month: string; year: number } | null
+  items: DayItem[]
+  total: { display: string | null; count: number }
+}
+
+function dateKeyFromText(text: string): string | null {
+  const m = text.match(/^\s*(\d{4}-\d{2}-\d{2})/)
+  return m?.[1] ?? null
+}
+
+function dayOutflow(items: DayItem[]): { display: string | null; count: number } {
+  let sum = 0
+  let currency: string | null | undefined
+  let ok = true
+  outer: for (const { parsed } of items) {
+    if (!parsed) continue
+    for (const p of parsed.postings as Posting[]) {
+      if (!(p.account === 'Expenses' || p.account.startsWith('Expenses:'))) continue
+      if (p.amount == null) { ok = false; break outer }
+      const n = parseFloat(p.amount)
+      if (!Number.isFinite(n)) { ok = false; break outer }
+      const c = p.currency ?? null
+      if (currency === undefined) currency = c
+      else if (currency !== c) { ok = false; break outer }
+      sum += n
+    }
+  }
+  const count = items.length
+  if (!ok || sum === 0) return { display: null, count }
+  const abs = Math.abs(sum)
+  if (currency === 'INR') {
+    return {
+      display: `−₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(abs)}`,
+      count,
+    }
+  }
+  if (currency === 'USD') {
+    return {
+      display: `−$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(abs)}`,
+      count,
+    }
+  }
+  return { display: null, count }
+}
+
+function groupEntries(entries: Entry[]): DayGroup[] {
+  const groups: DayGroup[] = []
+  let current: DayGroup | null = null
+  entries.forEach((entry, i) => {
+    const parsed = safeParseEntry(entry.text)
+    const key = parsed
+      ? `${parsed.date.year}-${String(parsed.date.month).padStart(2, '0')}-${String(parsed.date.day).padStart(2, '0')}`
+      : (dateKeyFromText(entry.text) ?? 'unknown')
+    if (!current || current.key !== key) {
+      let header: DayGroup['header'] = null
+      if (parsed) {
+        const d = new Date(Date.UTC(parsed.date.year, parsed.date.month - 1, parsed.date.day))
+        header = {
+          weekday: WEEKDAYS[d.getUTCDay()] ?? '',
+          day: parsed.date.day,
+          month: MONTHS[parsed.date.month - 1] ?? '',
+          year: parsed.date.year,
+        }
+      } else if (key !== 'unknown') {
+        const [y, m, dd] = key.split('-').map(Number)
+        const d = new Date(Date.UTC(y, m - 1, dd))
+        header = {
+          weekday: WEEKDAYS[d.getUTCDay()] ?? '',
+          day: dd,
+          month: MONTHS[m - 1] ?? '',
+          year: y,
+        }
+      }
+      current = { key, header, items: [], total: { display: null, count: 0 } }
+      groups.push(current)
+    }
+    current.items.push({ entry, parsed, listIndex: i })
+  })
+  for (const g of groups) g.total = dayOutflow(g.items)
+  return groups
+}
+
+function DayHeader({
+  header,
+  total,
+}: {
+  header: DayGroup['header']
+  total: DayGroup['total']
+}) {
+  return (
+    <div className="sticky top-0 z-20 h-[36px] px-4 flex items-center justify-between bg-white/90 backdrop-blur-sm border-b border-scandi-rule">
+      <span className="text-[11px] font-mono font-semibold uppercase tracking-[0.12em] text-slate-500">
+        {header ? `${header.weekday} · ${header.day} ${header.month}` : 'unknown date'}
+      </span>
+      <div className="flex items-center gap-2 text-[11px] font-mono text-slate-500">
+        {total.display && (
+          <span className="tabular-nums font-semibold text-navy-700">{total.display}</span>
+        )}
+        <span className="tabular-nums">
+          {total.count} txn{total.count === 1 ? '' : 's'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export function CardsList({
   status,
   errorMsg,
@@ -156,18 +269,34 @@ export function CardsList({
       </div>
     )
   }
+  const groups = groupEntries(entries)
   return (
     <div
       ref={scrollRef}
       className="flex-1 overflow-y-auto flex flex-col relative z-10 bg-white pb-0"
     >
-      {entries.map((entry, i) => {
-        const preset = PRESETS[i % PRESETS.length]
-        const key = entry.snapshotId !== null ? `id-${entry.snapshotId}` : `idx-${i}`
-        return (
-          <EntryCard key={key} text={entry.text} preset={preset} active={activeIdx === i} />
-        )
-      })}
+      {groups.map((group, gi) => (
+        <div key={group.key} className={gi === 0 ? '' : 'mt-3'}>
+          <DayHeader header={group.header} total={group.total} />
+          {group.items.map((item) => {
+            const preset = PRESETS[item.listIndex % PRESETS.length]
+            const key =
+              item.entry.snapshotId !== null
+                ? `id-${item.entry.snapshotId}`
+                : `idx-${item.listIndex}`
+            return (
+              <EntryCard
+                key={key}
+                text={item.entry.text}
+                preset={preset}
+                parsed={item.parsed}
+                active={activeIdx === item.listIndex}
+                cardIdx={item.listIndex}
+              />
+            )
+          })}
+        </div>
+      ))}
     </div>
   )
 }

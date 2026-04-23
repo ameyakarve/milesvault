@@ -29,8 +29,14 @@ export function useSyncScroll({
 
     function getCardTops(): number[] {
       if (!cardsEl) return []
-      const children = Array.from(cardsEl.children) as HTMLElement[]
-      return children.map((el) => el.offsetTop)
+      const cards = Array.from(
+        cardsEl.querySelectorAll<HTMLElement>('[data-card-idx]'),
+      )
+      cards.sort(
+        (a, b) =>
+          Number(a.dataset.cardIdx ?? 0) - Number(b.dataset.cardIdx ?? 0),
+      )
+      return cards.map((el) => el.offsetTop)
     }
 
     function getEditorTops(): number[] {

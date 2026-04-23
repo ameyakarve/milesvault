@@ -223,26 +223,30 @@ function formatOutflow(expenseValue: number, currency: string | null): string {
   return currency ? `−${body} ${currency}` : `−${body}`
 }
 
-export function EntryCard({
-  text,
-  preset,
-  active = false,
-}: {
-  text: string
-  preset: CardPreset
-  active?: boolean
-}) {
-  const txn = safeParse(text)
-  const row = txn ? rowFromTxn(txn, preset) : fallbackRow(preset)
-  return <Card row={row} active={active} />
-}
-
-function safeParse(text: string): BeanTxn | null {
+export function safeParseEntry(text: string): BeanTxn | null {
   try {
     return parseBean(text).transactions[0] ?? null
   } catch {
     return null
   }
+}
+
+export function EntryCard({
+  text,
+  preset,
+  active = false,
+  parsed,
+  cardIdx,
+}: {
+  text: string
+  preset: CardPreset
+  active?: boolean
+  parsed?: BeanTxn | null
+  cardIdx?: number
+}) {
+  const txn = parsed === undefined ? safeParseEntry(text) : parsed
+  const row = txn ? rowFromTxn(txn, preset) : fallbackRow(preset)
+  return <Card row={row} active={active} cardIdx={cardIdx} />
 }
 
 function fallbackRow(preset: CardPreset): CardRow {
@@ -255,22 +259,38 @@ function fallbackRow(preset: CardPreset): CardRow {
   }
 }
 
-export function Card({ row, active }: { row: CardRow; active: boolean }) {
+export function Card({
+  row,
+  active,
+  cardIdx,
+}: {
+  row: CardRow
+  active: boolean
+  cardIdx?: number
+}) {
   const Glyph = row.category.icon
   const palette = COLOR_CLASSES[row.category.color]
   const tileLabel = row.category.shortName.toUpperCase()
   const shell = active
-    ? 'h-[88px] bg-scandi-accent flex items-center px-3 gap-3 transition-colors relative border-b border-scandi-rule w-full z-10'
-    : 'h-[88px] bg-white hover:bg-scandi-quiet flex items-center px-3 gap-3 relative transition-colors border-b border-scandi-rule w-full'
+    ? 'h-[96px] bg-scandi-accent flex items-center px-4 gap-4 transition-colors relative w-full z-10'
+    : 'h-[96px] bg-white hover:bg-scandi-quiet flex items-center px-4 gap-4 relative transition-colors w-full'
+  const isInflow = row.amount.trim().startsWith('+')
   const primaryText = active ? 'text-white' : 'text-navy-700'
   const subText = active ? 'text-slate-200' : 'text-slate-600'
   const subIcon = active ? 'text-slate-300' : 'text-slate-500'
+  const amountColor = active
+    ? isInflow
+      ? 'text-emerald-300'
+      : 'text-white'
+    : isInflow
+      ? 'text-emerald-700'
+      : 'text-navy-700'
   const pillText = row.rewards.current?.trim() ?? ''
   const showPill = pillText !== '' && pillText !== '—'
   const accountLabel = row.subtext ?? row.account
 
   return (
-    <div className={shell}>
+    <div className={shell} data-card-idx={cardIdx}>
       <div
         className={`h-[56px] w-[56px] shrink-0 border ${palette.tileBorder} ${palette.tileBg} flex flex-col items-center justify-center gap-[3px]`}
       >
@@ -282,16 +302,9 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
         </span>
       </div>
 
-      <div className="flex-1 min-w-0 flex flex-col justify-center gap-[4px]">
-        <div className={`${primaryText} text-[15px] font-semibold truncate leading-tight`}>
+      <div className="flex-1 min-w-0 flex flex-col justify-center gap-[6px]">
+        <div className={`${primaryText} text-[18px] font-semibold truncate leading-tight`}>
           {row.payee}
-        </div>
-        <div className="flex items-center min-w-0 leading-tight">
-          <span
-            className={`text-[12px] font-mono font-semibold uppercase tracking-[0.06em] ${primaryText} truncate`}
-          >
-            {row.dateLabel}
-          </span>
         </div>
         <div className={`flex items-center gap-1.5 text-[12px] ${subText} min-w-0 leading-tight`}>
           <CreditCard size={12} strokeWidth={1.75} className={`${subIcon} shrink-0`} />
@@ -299,8 +312,8 @@ export function Card({ row, active }: { row: CardRow; active: boolean }) {
         </div>
       </div>
 
-      <div className="w-[116px] shrink-0 flex flex-col items-end justify-center gap-1.5">
-        <div className={`${primaryText} text-[15px] font-mono font-semibold tabular-nums`}>
+      <div className="w-[140px] shrink-0 flex flex-col items-end justify-center gap-1.5">
+        <div className={`${amountColor} text-[20px] font-mono font-semibold tabular-nums`}>
           {row.amount}
         </div>
         {showPill ? (
