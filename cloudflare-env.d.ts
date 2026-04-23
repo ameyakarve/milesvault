@@ -10,7 +10,7 @@ declare namespace Cloudflare {
 		R2: R2Bucket;
 		ASSETS: Fetcher;
 		ENABLE_HYDRATE: "1";
-		ALLOWED_EMAILS: "ameya.karve@gmail.com";
+		ALLOWED_EMAILS: "ameya.karve@gmail.com,amogh.karve@gmail.com";
 		WRITER_MODEL: "moonshotai/kimi-k2-instruct";
 		WRITER_MAX_ATTEMPTS: "3";
 		AUTH_GOOGLE_ID: string;
@@ -35,7 +35,7 @@ declare namespace Cloudflare {
 		R2: R2Bucket;
 		ASSETS: Fetcher;
 		ENABLE_HYDRATE?: "1";
-		ALLOWED_EMAILS?: "ameya.karve@gmail.com";
+		ALLOWED_EMAILS?: "ameya.karve@gmail.com,amogh.karve@gmail.com";
 		WRITER_MODEL: "moonshotai/kimi-k2-instruct";
 		WRITER_MAX_ATTEMPTS: "3";
 		LEDGER_DO: DurableObjectNamespace<import("./.open-next/worker").LedgerDO>;
