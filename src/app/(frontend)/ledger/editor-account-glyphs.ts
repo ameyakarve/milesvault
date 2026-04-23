@@ -9,6 +9,7 @@ import {
   WidgetType,
 } from '@codemirror/view'
 import { ACCOUNT_GLYPHS, type AccountGlyph } from '@/lib/beancount/glyphs'
+import { unveilChipAt, unveiledChipsField } from './editor-chip-state'
 
 const SVG_OPEN =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
@@ -44,7 +45,7 @@ class AccountGlyphWidget extends WidgetType {
   constructor(readonly glyph: AccountGlyph) {
     super()
   }
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const span = document.createElement('span')
     span.className = 'cm-account-glyph'
     span.style.width = `${this.glyph.visualWidth}ch`
@@ -54,6 +55,11 @@ class AccountGlyphWidget extends WidgetType {
     label.className = 'cm-account-glyph-chip'
     label.textContent = this.glyph.chipLabel
     span.appendChild(label)
+    span.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      const pos = view.posAtDOM(span)
+      unveilChipAt(view, pos)
+    })
     return span
   }
   eq(other: WidgetType): boolean {
@@ -69,6 +75,7 @@ class AccountGlyphWidget extends WidgetType {
 }
 
 function buildGlyphDecorations(view: EditorView): DecorationSet {
+  const unveiled = view.state.field(unveiledChipsField, false) ?? new Set<number>()
   type Hit = { from: number; to: number; glyph: AccountGlyph }
   const hits: Hit[] = []
   for (const { from, to } of view.visibleRanges) {
@@ -85,6 +92,7 @@ function buildGlyphDecorations(view: EditorView): DecorationSet {
   hits.sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
+    if (unveiled.has(h.from)) continue
     builder.add(h.from, h.to, Decoration.replace({ widget: new AccountGlyphWidget(h.glyph) }))
   }
   return builder.finish()
@@ -97,7 +105,9 @@ export const accountGlyphs = ViewPlugin.fromClass(
       this.decorations = buildGlyphDecorations(view)
     }
     update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged) {
+      const prevUnveiled = u.startState.field(unveiledChipsField, false)
+      const nextUnveiled = u.state.field(unveiledChipsField, false)
+      if (u.docChanged || u.viewportChanged || prevUnveiled !== nextUnveiled) {
         this.decorations = buildGlyphDecorations(u.view)
       }
     }

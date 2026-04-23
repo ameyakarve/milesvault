@@ -46,6 +46,7 @@ import {
   coreValidators,
 } from '@/lib/beancount/validators'
 import { accountGlyphs, accountGlyphTooltip } from './editor-account-glyphs'
+import { chipBlurHandler, unveiledChipsField } from './editor-chip-state'
 import { expenseGlyphs, expenseGlyphTooltip } from './editor-expense-glyphs'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 
@@ -302,6 +303,8 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     accountCompleterField,
     autocompletion({ override: [accountCompletionSource], activateOnTyping: true }),
     autocompleteColonTrigger,
+    unveiledChipsField,
+    chipBlurHandler,
     accountGlyphs,
     accountGlyphTooltip,
     expenseGlyphs,
