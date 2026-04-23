@@ -45,6 +45,7 @@ import {
   type Validator,
   coreValidators,
 } from '@/lib/beancount/validators'
+import { amountChips } from './editor-amount-chips'
 import { accountChips, accountChipTooltip } from './editor-chips'
 import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
@@ -307,6 +308,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     accountChipTooltip,
     headerChips,
     headerChipTooltip,
+    amountChips,
     diffChips,
     scandiEditorTheme,
   ]
