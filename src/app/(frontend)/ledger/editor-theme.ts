@@ -47,11 +47,13 @@ export const scandiEditorTheme = EditorView.theme(
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
       lineHeight: '1.6',
       fontVariantNumeric: 'tabular-nums',
+      backgroundColor: '#EEF2F6',
     },
     '.cm-content': {
       padding: '12px 0',
       caretColor: NAVY_600,
       color: NAVY_600,
+      backgroundColor: 'transparent',
     },
     '.cm-line, .cm-deletedChunk': { padding: '0 12px' },
     '.cm-txn-head, .cm-txn-body, .cm-txn-foot, .cm-txn-solo': {
