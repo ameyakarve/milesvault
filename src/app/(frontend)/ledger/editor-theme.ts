@@ -55,7 +55,16 @@ export const scandiEditorTheme = EditorView.theme(
       color: NAVY_600,
       backgroundColor: 'transparent',
     },
-    '.cm-line, .cm-deletedChunk': { padding: '0 12px' },
+    '.cm-line, .cm-deletedChunk': {
+      padding: '0 12px',
+      borderBottom: `1px solid ${SLATE_100}`,
+    },
+    '.cm-space-dots': {
+      backgroundImage: `radial-gradient(circle, ${SLATE_200} 0.5px, transparent 1px)`,
+      backgroundSize: '1ch 100%',
+      backgroundRepeat: 'repeat-x',
+      backgroundPosition: '0 55%',
+    },
     '.cm-txn-band': { backgroundColor: SLATE_50 },
     '.cm-account-glyph': {
       display: 'inline-flex',

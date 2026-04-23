@@ -49,6 +49,7 @@ import { amountChips } from './editor-amount-chips'
 import { accountChips, accountChipTooltip } from './editor-chips'
 import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
+import { spaceDots } from './editor-space-dots'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 
 const beancountLanguage = LRLanguage.define({
@@ -292,6 +293,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     beancountTabKeymap,
     trimTrailingWhitespace,
     txnDividers,
+    spaceDots,
     unifiedMergeView({
       original: initialBaseline,
       mergeControls: false,
