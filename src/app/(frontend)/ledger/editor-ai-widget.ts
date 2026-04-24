@@ -477,7 +477,7 @@ export function openAiForRange(view: EditorView, from: number, to: number): void
   view.dispatch({ selection: { anchor: from, head: to }, effects: aiOpen.of({ selection: { from, to } }) })
 }
 
-function openForCurrentSelection(view: EditorView) {
+export function openAiForCurrentSelection(view: EditorView) {
   const existing = view.state.field(aiField, false)
   if (existing) {
     closeWidget(view)
@@ -502,26 +502,11 @@ const openKeymap = keymap.of([
     key: 'Mod-i',
     preventDefault: true,
     run: (view) => {
-      openForCurrentSelection(view)
+      openAiForCurrentSelection(view)
       return true
     },
   },
 ])
-
-const SLASH_AI_RE = /^\s*\/ai\s*$/
-
-const slashAiTrigger = EditorView.updateListener.of((u) => {
-  if (!u.docChanged) return
-  if (u.state.field(aiField, false)) return
-  const line = u.state.doc.lineAt(u.state.selection.main.head)
-  if (!SLASH_AI_RE.test(line.text)) return
-  queueMicrotask(() => {
-    u.view.dispatch({
-      changes: { from: line.from, to: line.to, insert: '' },
-    })
-    openForCurrentSelection(u.view)
-  })
-})
 
 const aiTheme = EditorView.theme({
   '.cm-ai-widget': {
@@ -616,6 +601,5 @@ export const aiWidget: Extension = [
   snapshotsField,
   aiSyncPlugin,
   Prec.highest(openKeymap),
-  slashAiTrigger,
   aiTheme,
 ]
