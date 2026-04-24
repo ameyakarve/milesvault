@@ -84,6 +84,7 @@ export const scandiEditorTheme = EditorView.theme(
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
       letterSpacing: '0.01em',
       lineHeight: '1.4',
+      borderBottom: `1px solid ${SLATE_200}`,
     },
     '.cm-chip': {
       display: 'inline-block',
