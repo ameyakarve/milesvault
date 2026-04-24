@@ -125,12 +125,10 @@ const NODES: readonly NodeSpec[] = [
   // Liabilities
   n('Liabilities'),
   n('Liabilities:CC', { glyph: g(CC_SVG, 'credit card', 'CC') }),
-  n('Liabilities:Loans'),
 
   // Income
   n('Income'),
   n('Income:Salary'),
-  n('Income:Interest'),
   n('Income:Void', { glyph: g(Scale, 'void (source)', 'Void') }),
 
   // Equity

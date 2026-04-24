@@ -12,7 +12,9 @@ const FALLBACK = 'A quiet morning sip — draft summary goes here.'
 
 const HANDLERS: readonly DescribeHandler[] = [
   rewardsVoidHandler,
+  cardVoidAdjustmentHandler,
   statementCreditHandler,
+  giftCardRedemptionHandler,
   mixedRedemptionHandler,
   rewardsRedemptionHandler,
   expensePaymentHandler,
@@ -25,6 +27,8 @@ const REWARDS_VOID_PATHS: readonly string[] = [
 
 const REWARDS_POINTS_PATH = 'Assets:Rewards:Points'
 const CC_PATH = 'Liabilities:CC'
+const GIFT_CARDS_PATH = 'Assets:Loaded:GiftCards'
+const INCOME_VOID_PATH = 'Income:Void'
 
 const PAYMENT_INSTRUMENT_PATHS: readonly string[] = [
   'Liabilities:CC',
@@ -173,6 +177,38 @@ function rewardsRedemptionHandler(txn: ParsedTxn): DescribeResult {
   return { kind: 'ok', text: `${points} ${unit} redeemed for ${currency} ${amount}` }
 }
 
+function cardVoidAdjustmentHandler(txn: ParsedTxn): DescribeResult {
+  if (txn.postings.length !== 2) return { kind: 'unhandled' }
+  let cardPosting: ParsedPosting | null = null
+  let cardLabel: string | null = null
+  let hasVoid = false
+  for (const posting of txn.postings) {
+    const resolved = resolveAccount(posting.account)
+    if (!resolved) return { kind: 'unhandled' }
+    if (resolved.matchedPath === CC_PATH) {
+      if (cardPosting !== null) return { kind: 'unhandled' }
+      cardPosting = posting
+      cardLabel = resolved.chipLabel
+      continue
+    }
+    if (posting.account === INCOME_VOID_PATH) {
+      hasVoid = true
+      continue
+    }
+    return { kind: 'unhandled' }
+  }
+  if (!cardPosting || !cardLabel || !hasVoid || !cardPosting.amount?.currency) {
+    return { kind: 'unhandled' }
+  }
+  const n = parseFloat(cardPosting.amount.numberText)
+  if (!Number.isFinite(n) || n === 0) return { kind: 'unhandled' }
+  const verb = n > 0 ? 'credited' : 'debited'
+  return {
+    kind: 'ok',
+    text: `${cardPosting.amount.currency} ${formatAmount(Math.abs(n))} ${verb} to ${cardLabel}`,
+  }
+}
+
 function statementCreditHandler(txn: ParsedTxn): DescribeResult {
   let rewardsPosting: ParsedPosting | null = null
   let cardPosting: ParsedPosting | null = null
@@ -222,6 +258,58 @@ function statementCreditHandler(txn: ParsedTxn): DescribeResult {
   return {
     kind: 'ok',
     text: `${cash} ${cashCcy} statement credit on ${cardLabel} using ${points} ${pointsUnit}`,
+  }
+}
+
+function giftCardRedemptionHandler(txn: ParsedTxn): DescribeResult {
+  let rewardsPosting: ParsedPosting | null = null
+  let giftPosting: ParsedPosting | null = null
+  let giftLabel: string | null = null
+
+  for (const posting of txn.postings) {
+    const resolved = resolveAccount(posting.account)
+    if (!resolved) return { kind: 'unhandled' }
+    if (resolved.matchedPath === REWARDS_POINTS_PATH) {
+      if (rewardsPosting !== null) return { kind: 'unhandled' }
+      rewardsPosting = posting
+      continue
+    }
+    if (resolved.matchedPath === GIFT_CARDS_PATH && resolved.tail.length > 0) {
+      if (giftPosting !== null) return { kind: 'unhandled' }
+      giftPosting = posting
+      giftLabel = `${resolved.tail.join(' ')} gift card`
+      continue
+    }
+    return { kind: 'unhandled' }
+  }
+
+  if (
+    !rewardsPosting ||
+    !giftPosting ||
+    !giftLabel ||
+    !rewardsPosting.amount?.currency ||
+    !giftPosting.amount?.currency
+  ) {
+    return { kind: 'unhandled' }
+  }
+
+  const pointsN = parseFloat(rewardsPosting.amount.numberText)
+  if (!Number.isFinite(pointsN) || pointsN >= 0) return { kind: 'unhandled' }
+
+  const giftN = parseFloat(giftPosting.amount.numberText)
+  if (!Number.isFinite(giftN) || giftN <= 0) return { kind: 'unhandled' }
+
+  const price = giftPosting.priceAmount
+  if (!price || !price.currency || giftPosting.atSigns !== 2) return { kind: 'unhandled' }
+  if (price.currency !== rewardsPosting.amount.currency) return { kind: 'unhandled' }
+
+  const points = formatAmount(Math.abs(pointsN))
+  const pointsUnit = rewardsPosting.amount.currency
+  const giftAmount = formatAmount(giftN)
+  const giftCcy = giftPosting.amount.currency
+  return {
+    kind: 'ok',
+    text: `${points} ${pointsUnit} redeemed for ${giftCcy} ${giftAmount} ${giftLabel}`,
   }
 }
 

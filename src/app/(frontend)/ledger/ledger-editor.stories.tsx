@@ -139,11 +139,6 @@ const KITCHEN_SINK = `2026-12-31 * "Marriott" "tier reset"
   Liabilities:CC:HDFC:Infinia                            250 INR
   Income:Void                                           -250 INR
 
-2026-04-25 * "HDFC" "personal loan EMI April"
-  Assets:Bank:HDFC:Savings                            -12000 INR
-  Liabilities:Loans:HDFC:Personal                       9500 INR
-  Expenses:Finance:Interest                             2500 INR
-
 2026-04-22 * "Funny Cafe" "Funny Cafe"
   Expenses:Food:Coffee                                   500 INR
   Liabilities:CC:HSBC:Cashback                          -500 INR
@@ -240,15 +235,7 @@ const KITCHEN_SINK = `2026-12-31 * "Marriott" "tier reset"
   Assets:DC:HDFC:1234                                  -2150 INR
   Expenses:Food:Groceries                               2150 INR
 
-2026-04-16 * "HDFC" "Infinia annual fee"
-  Expenses:Finance:Fees                                12500 INR
-  Liabilities:CC:HDFC:Infinia                         -12500 INR
-
 ;; P2P UPI — loan to a friend (recoverable, not an expense)
-
-2026-04-15 * "HDFC" "Infinia revolving interest"
-  Expenses:Finance:Interest                              850 INR
-  Liabilities:CC:HDFC:Infinia                           -850 INR
 
 2026-04-14 * "Netflix" "monthly subscription" #subscription ^netflix-2026
   Liabilities:CC:HDFC:Infinia                           -649 INR
@@ -326,10 +313,6 @@ const KITCHEN_SINK = `2026-12-31 * "Marriott" "tier reset"
   Expenses:Shopping:Electronics                        80000 INR
   Assets:Rewards:Points:SmartBuy                        2400 SMARTBUY
   Income:Void                                          -2400 SMARTBUY
-
-2026-04-03 * "HDFC" "personal loan disbursed"
-  Assets:Bank:HDFC:Savings                            500000 INR
-  Liabilities:Loans:HDFC:Personal                    -500000 INR
 
 2026-04-02 * "BA" "LHR-BOM flight"
   Liabilities:CC:HDFC:Infinia                         -50000 INR
