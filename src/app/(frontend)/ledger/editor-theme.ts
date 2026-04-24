@@ -2,7 +2,7 @@ import { HighlightStyle } from '@codemirror/language'
 import { EditorView } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 
-const NAVY_600 = '#1E293B'
+export const NAVY_600 = '#1E293B'
 export const NAVY_700 = '#0F172A'
 export const SLATE_400 = '#94A3B8'
 export const SLATE_500 = '#64748B'
@@ -89,14 +89,13 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-txn-desc': {
       display: 'flex',
       alignItems: 'center',
-      gap: '6px',
+      gap: '8px',
       height: '24px',
       padding: '0 12px',
       backgroundColor: SLATE_50,
-      color: SLATE_500,
+      color: NAVY_600,
       fontSize: '11px',
-      fontFamily: SANS_STACK,
-      letterSpacing: '0.01em',
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
       lineHeight: '24px',
       borderBottom: `1px solid ${SLATE_100}`,
     },
@@ -104,16 +103,17 @@ export const scandiEditorTheme = EditorView.theme(
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      width: '11px',
-      height: '11px',
+      width: '14px',
+      height: '14px',
       flexShrink: 0,
-      color: SLATE_400,
+      color: SLATE_500,
     },
     '.cm-txn-desc-icon': {
-      width: '11px',
-      height: '11px',
+      width: '14px',
+      height: '14px',
       display: 'block',
     },
+    '.cm-txn-desc:has(+ .cm-line.cm-card-active)': { color: SLATE_500 },
     '.cm-txn-desc-text': { flex: 1, minWidth: 0 },
     '.cm-txn-desc-handle': {
       flexShrink: 0,
