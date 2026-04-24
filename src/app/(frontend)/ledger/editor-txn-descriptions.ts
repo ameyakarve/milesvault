@@ -3,10 +3,17 @@ import {
   Decoration,
   type DecorationSet,
   EditorView,
+  GutterMarker,
+  gutterWidgetClass,
   WidgetType,
 } from '@codemirror/view'
 import { generateTxnDescription } from '@/lib/beancount/txn-description'
 import { cachedParse } from './parse-cache'
+
+class TxnBandMarker extends GutterMarker {
+  elementClass = 'cm-txn-band'
+}
+const txnBandMarker = new TxnBandMarker()
 
 class TxnDescWidget extends WidgetType {
   constructor(
@@ -49,10 +56,15 @@ function buildTxnDescs(doc: Text): DecorationSet {
   return builder.finish()
 }
 
-export const txnDescriptions = StateField.define<DecorationSet>({
-  create: (state) => buildTxnDescs(state.doc),
-  update(value, tr) {
-    return tr.docChanged ? buildTxnDescs(tr.newDoc) : value
-  },
-  provide: (f) => EditorView.decorations.from(f),
-})
+export const txnDescriptions = [
+  StateField.define<DecorationSet>({
+    create: (state) => buildTxnDescs(state.doc),
+    update(value, tr) {
+      return tr.docChanged ? buildTxnDescs(tr.newDoc) : value
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  }),
+  gutterWidgetClass.of((_view, widget) =>
+    widget instanceof TxnDescWidget && widget.banded ? txnBandMarker : null,
+  ),
+]
