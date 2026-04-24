@@ -96,7 +96,26 @@ describe('generateTxnDescription — expense + payment handler', () => {
   })
 })
 
-describe('generateTxnDescription — status tier handler', () => {
+describe('generateTxnDescription — rewards void handler', () => {
+  it('phrases rewards-points expiry via Expenses:Void', () => {
+    const txn = firstEntry(`
+2026-12-31 * "Avios" "annual expiry"
+  Assets:Rewards:Points:Avios  -2000 AVIOS
+  Expenses:Void  2000 AVIOS
+`)
+    expect(generateTxnDescription(txn)).toBe('2,000 AVIOS expired')
+  })
+
+  it('phrases rewards-points accrual as added', () => {
+    const txn = firstEntry(`
+2026-04-24 * "BA" "flight points"
+  Assets:Rewards:Points:Avios  500 AVIOS
+  Expenses:Void  -500 AVIOS
+`)
+    expect(generateTxnDescription(txn)).toBe('500 AVIOS added')
+  })
+
+
   it('phrases status-tier expiry via Expenses:Void', () => {
     const txn = firstEntry(`
 2026-12-31 * "Marriott" "tier reset"
@@ -170,15 +189,6 @@ describe('generateTxnDescription — negative cases return fallback', () => {
 2026-04-24 * "Mystery"
   Expenses:Food:Coffee  100 INR
   Liabilities:Unknown:Thing  -100 INR
-`)
-    expect(generateTxnDescription(txn)).toBe(FALLBACK)
-  })
-
-  it('returns fallback for rewards-points expiry (not a payment instrument)', () => {
-    const txn = firstEntry(`
-2026-12-31 * "Avios" "annual expiry"
-  Assets:Rewards:Points:Avios  -2000 AVIOS
-  Expenses:Void  2000 AVIOS
 `)
     expect(generateTxnDescription(txn)).toBe(FALLBACK)
   })
