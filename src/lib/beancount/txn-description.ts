@@ -316,8 +316,8 @@ function giftCardRedemptionHandler(txn: ParsedTxn): DescribeResult {
 
 function rewardsTransferHandler(txn: ParsedTxn): DescribeResult {
   if (txn.postings.length !== 2) return { kind: 'unhandled' }
-  let source: ParsedPosting | null = null
-  let dest: ParsedPosting | null = null
+  let source: { n: number; unit: string } | null = null
+  let dest: { n: number; unit: string } | null = null
   for (const posting of txn.postings) {
     const resolved = resolveAccount(posting.account)
     if (!resolved || resolved.matchedPath !== REWARDS_POINTS_PATH) return { kind: 'unhandled' }
@@ -326,23 +326,18 @@ function rewardsTransferHandler(txn: ParsedTxn): DescribeResult {
     if (!Number.isFinite(n)) return { kind: 'unhandled' }
     if (n < 0) {
       if (source !== null) return { kind: 'unhandled' }
-      source = posting
+      source = { n, unit: posting.amount.currency }
     } else if (n > 0) {
       if (dest !== null) return { kind: 'unhandled' }
-      dest = posting
+      dest = { n, unit: posting.amount.currency }
     } else {
       return { kind: 'unhandled' }
     }
   }
-  if (!source || !dest || !source.amount || !dest.amount) return { kind: 'unhandled' }
-
-  const sourceN = parseFloat(source.amount.numberText)
-  const destN = parseFloat(dest.amount.numberText)
-  const sourceUnit = source.amount.currency
-  const destUnit = dest.amount.currency
+  if (!source || !dest) return { kind: 'unhandled' }
   return {
     kind: 'ok',
-    text: `${formatAmount(Math.abs(sourceN))} ${sourceUnit} transferred to ${formatAmount(destN)} ${destUnit}`,
+    text: `${formatAmount(Math.abs(source.n))} ${source.unit} transferred to ${formatAmount(dest.n)} ${dest.unit}`,
   }
 }
 
