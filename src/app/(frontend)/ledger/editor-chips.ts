@@ -67,7 +67,9 @@ function signAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
     return `Paid using ${r.chipLabel} CC`
   }
   if (r.matchedPath === GIFT_CARDS_PATH && r.tail.length > 0) {
-    return `${r.tail.join(' ')} gift card`
+    const base = `${r.tail.join(' ')} gift card`
+    if (sign === undefined || sign === 0) return base
+    return `${base} ${sign > 0 ? 'credited' : 'debited'}`
   }
   if (sign === undefined || sign === 0) return r.chipLabel
   if (r.matchedPath === POINTS_PATH && r.tail.length > 0) {
