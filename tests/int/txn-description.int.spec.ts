@@ -196,6 +196,36 @@ describe('generateTxnDescription — rewards redemption handler', () => {
   })
 })
 
+describe('generateTxnDescription — card + Income:Void adjustment handler', () => {
+  it('phrases a statement cashback as credited', () => {
+    const txn = firstEntry(`
+2026-04-30 * "HDFC" "Infinia April statement cashback"
+  Liabilities:CC:HDFC:Infinia  250 INR
+  Income:Void                 -250 INR
+`)
+    expect(generateTxnDescription(txn)).toBe('INR 250 credited to HDFC Infinia')
+  })
+
+  it('phrases a negative adjustment as debited', () => {
+    const txn = firstEntry(`
+2026-04-30 * "HDFC" "reversal"
+  Liabilities:CC:HDFC:Infinia  -250 INR
+  Income:Void                   250 INR
+`)
+    expect(generateTxnDescription(txn)).toBe('INR 250 debited to HDFC Infinia')
+  })
+
+  it('returns fallback when there is a third posting', () => {
+    const txn = firstEntry(`
+2026-04-30 * "HDFC" "extra leg"
+  Liabilities:CC:HDFC:Infinia  250 INR
+  Income:Void                 -250 INR
+  Expenses:Misc                  0 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+})
+
 describe('generateTxnDescription — statement credit handler', () => {
   it('phrases points burned for a CC statement credit', () => {
     const txn = firstEntry(`
@@ -232,6 +262,37 @@ describe('generateTxnDescription — statement credit handler', () => {
   Assets:Rewards:Points:SmartBuy  -5000 SMARTBUY
   Liabilities:CC:HDFC:Infinia      1250 INR @@ 5000 SMARTBUY
   Expenses:Misc                       0 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+})
+
+describe('generateTxnDescription — gift card redemption handler', () => {
+  it('phrases points redeemed for a gift card', () => {
+    const txn = firstEntry(`
+2026-05-10 * "SBI Rewards" "Amazon voucher"
+  Assets:Rewards:Points:SBI              -4000 SBI-RP
+  Assets:Loaded:GiftCards:Amazon          1000 INR @@ 4000 SBI-RP
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      '4K SBI-RP redeemed for INR 1K Amazon gift card',
+    )
+  })
+
+  it('returns fallback when gift posting has no @@ price', () => {
+    const txn = firstEntry(`
+2026-05-10 * "SBI Rewards" "no price"
+  Assets:Rewards:Points:SBI              -4000 SBI-RP
+  Assets:Loaded:GiftCards:Amazon          1000 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback when price currency differs from points currency', () => {
+    const txn = firstEntry(`
+2026-05-10 * "SBI Rewards" "mismatched price"
+  Assets:Rewards:Points:SBI              -4000 SBI-RP
+  Assets:Loaded:GiftCards:Amazon          1000 INR @@ 4000 AVIOS
 `)
     expect(generateTxnDescription(txn)).toBe(FALLBACK)
   })

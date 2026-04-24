@@ -32,6 +32,7 @@ const EXPENSES_VOID_PATH = 'Expenses:Void'
 const INCOME_VOID_PATH = 'Income:Void'
 const CC_PATH = 'Liabilities:CC'
 const BANK_PATH = 'Assets:Bank'
+const GIFT_CARDS_PATH = 'Assets:Loaded:GiftCards'
 
 function hitFor(
   acct: string,
@@ -64,6 +65,9 @@ function signAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
   }
   if (r.matchedPath === CC_PATH) {
     return `Paid using ${r.chipLabel} CC`
+  }
+  if (r.matchedPath === GIFT_CARDS_PATH && r.tail.length > 0) {
+    return `${r.tail.join(' ')} gift card`
   }
   if (sign === undefined || sign === 0) return r.chipLabel
   if (r.matchedPath === POINTS_PATH && r.tail.length > 0) {
