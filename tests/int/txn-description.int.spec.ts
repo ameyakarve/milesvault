@@ -145,6 +145,57 @@ describe('generateTxnDescription — rewards void handler', () => {
   })
 })
 
+describe('generateTxnDescription — rewards redemption handler', () => {
+  it('phrases a points redemption covering the whole expense', () => {
+    const txn = firstEntry(`
+2026-06-10 * "Marriott" "award night Goa"
+  Expenses:Travel:Hotels  20000 INR
+  Assets:Rewards:Points:Marriott  -30000 MARRIOTT @@ 20000 INR
+`)
+    expect(generateTxnDescription(txn)).toBe('30K MARRIOTT redeemed for INR 20K')
+  })
+
+  it('handles multiple expense lines in the same currency', () => {
+    const txn = firstEntry(`
+2026-06-10 * "Marriott" "award night + breakfast"
+  Expenses:Travel:Hotels  18000 INR
+  Expenses:Food:Restaurant  2000 INR
+  Assets:Rewards:Points:Marriott  -30000 MARRIOTT @@ 20000 INR
+`)
+    expect(generateTxnDescription(txn)).toBe('30K MARRIOTT redeemed for INR 20K')
+  })
+
+  it('returns fallback if more than one rewards posting', () => {
+    const txn = firstEntry(`
+2026-06-10 * "Marriott" "split award"
+  Expenses:Travel:Hotels  20000 INR
+  Assets:Rewards:Points:Marriott  -20000 MARRIOTT
+  Assets:Rewards:Points:Avios  -10000 AVIOS
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback if expenses span multiple currencies', () => {
+    const txn = firstEntry(`
+2026-06-10 * "Marriott" "mixed"
+  Expenses:Travel:Hotels  18000 INR
+  Expenses:Food:Restaurant  30 USD
+  Assets:Rewards:Points:Marriott  -30000 MARRIOTT @@ 20000 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback if a non-expense non-rewards posting is present', () => {
+    const txn = firstEntry(`
+2026-06-10 * "Marriott" "mixed payment"
+  Expenses:Travel:Hotels  20000 INR
+  Assets:Rewards:Points:Marriott  -15000 MARRIOTT
+  Liabilities:CC:HDFC:Infinia  -10000 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+})
+
 describe('generateTxnDescription — negative cases return fallback', () => {
   it('returns fallback when the txn has no expense postings', () => {
     const txn = firstEntry(`
