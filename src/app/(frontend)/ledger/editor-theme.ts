@@ -19,6 +19,9 @@ export const ROSE_700 = '#BE123C'
 
 export const PAPER_BG = '#EEF2F6'
 
+export const SANS_STACK =
+  "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+
 const TOKEN_STYLE = {
   date: { color: NAVY_700, fontWeight: '600' },
   number: { color: NAVY_700, fontWeight: '600' },
@@ -92,7 +95,7 @@ export const scandiEditorTheme = EditorView.theme(
       backgroundColor: SLATE_50,
       color: SLATE_500,
       fontSize: '11px',
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontFamily: SANS_STACK,
       letterSpacing: '0.01em',
       lineHeight: '24px',
       borderBottom: `1px solid ${SLATE_100}`,
@@ -136,7 +139,7 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-day-divider': {
       padding: '16px 12px 6px',
       color: SLATE_500,
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontFamily: SANS_STACK,
       fontSize: '10px',
       fontWeight: '600',
       letterSpacing: '0.12em',
@@ -184,7 +187,7 @@ export const scandiEditorTheme = EditorView.theme(
       padding: '4px 8px',
       fontWeight: '500',
       color: NAVY_600,
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontFamily: SANS_STACK,
     },
     '.cm-tooltip.cm-tooltip-hover': {
       backgroundColor: '#ffffff',
