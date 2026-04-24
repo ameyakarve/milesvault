@@ -30,6 +30,8 @@ const POINTS_PATH = 'Assets:Rewards:Points'
 const STATUS_PATH = 'Assets:Rewards:Status'
 const EXPENSES_VOID_PATH = 'Expenses:Void'
 const INCOME_VOID_PATH = 'Income:Void'
+const CC_PATH = 'Liabilities:CC'
+const BANK_PATH = 'Assets:Bank'
 
 function hitFor(
   acct: string,
@@ -60,12 +62,18 @@ function signAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
   if (r.matchedPath.startsWith('Expenses:')) {
     return `Spend on ${r.chipLabel}`
   }
+  if (r.matchedPath === CC_PATH) {
+    return `Paid using ${r.chipLabel} CC`
+  }
   if (sign === undefined || sign === 0) return r.chipLabel
   if (r.matchedPath === POINTS_PATH && r.tail.length > 0) {
     return `${r.chipLabel} ${sign > 0 ? 'earned' : 'burned'}`
   }
   if (r.matchedPath === STATUS_PATH && r.tail.length > 0) {
     return `${r.tail.join(':')} Status: ${sign > 0 ? 'earned' : 'expired'}`
+  }
+  if (r.matchedPath === BANK_PATH && r.tail.length > 0) {
+    return `${sign > 0 ? 'Credited' : 'Debited'} from ${r.chipLabel}`
   }
   return r.chipLabel
 }
