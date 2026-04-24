@@ -432,6 +432,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         if (row) rows.push(row)
       }
     })
+    rows.sort((a, b) => b.date - a.date || b.id - a.id)
     console.log(
       `[ledger-do] replaceBuffer ok entries=${entries.length} replaced=${input.knownIds.length}`,
     )
