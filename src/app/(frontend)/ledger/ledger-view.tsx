@@ -13,15 +13,19 @@ import { HelpButton } from './ledger-help'
 import { TextPane } from './ledger-panes'
 import { buildSnapshots, PAGE_SIZE, useTransactions } from './use-transactions'
 
-function PaginationStrip({
+function PaginationPill({
   page,
   totalPages,
+  pageRows,
+  total,
   onPage,
   locked = false,
   lockTitle,
 }: {
   page: number
   totalPages: number
+  pageRows: number
+  total: number
   onPage: (p: number) => void
   locked?: boolean
   lockTitle?: string
@@ -30,34 +34,44 @@ function PaginationStrip({
   const nextDisabled = locked || page >= totalPages
   const prevTitle = locked ? lockTitle : page <= 1 ? undefined : 'previous page'
   const nextTitle = locked ? lockTitle : page >= totalPages ? undefined : 'next page'
-  const btnBase = 'w-[20px] h-[20px] flex items-center justify-center rounded-[4px]'
-  const btnEnabled = `${btnBase} text-slate-600 hover:bg-slate-300 hover:text-navy-700 transition-colors`
-  const btnDisabled = `${btnBase} text-slate-500 opacity-30 cursor-default`
+  const enabled =
+    'text-slate-600 hover:bg-slate-50 border border-transparent transition-colors'
+  const disabled = 'text-slate-300 border border-slate-100 bg-slate-50/50 cursor-default'
+  const base =
+    'px-3 py-1.5 rounded-[4px] flex items-center text-[12px] font-mono'
   return (
-    <div className="h-[32px] bg-scandi-chrome flex items-center shrink-0 w-full relative">
-      <div className="flex-1 flex items-center justify-center gap-2">
+    <div className="flex justify-center my-6 shrink-0">
+      <div className="h-12 flex items-center justify-between bg-white border border-slate-200 rounded-[6px] px-4 w-[380px] shadow-sm">
         <button
           type="button"
           aria-label="previous page"
           title={prevTitle}
           disabled={prevDisabled}
           onClick={() => onPage(page - 1)}
-          className={prevDisabled ? btnDisabled : btnEnabled}
+          className={`${base} ${prevDisabled ? disabled : enabled}`}
         >
-          <ChevronLeft size={14} strokeWidth={1.5} />
+          <ChevronLeft size={14} strokeWidth={1.5} className="mr-1" />
+          Prev
         </button>
-        <span className="font-mono text-[10px] text-navy-700">
-          page {page} of {Math.max(1, totalPages)}
-        </span>
+        <div className="font-mono text-[11px]">
+          <span className="text-slate-700 font-medium">
+            Page {page} of {Math.max(1, totalPages)}
+          </span>
+          <span className="text-slate-400 mx-1">·</span>
+          <span className="text-slate-500">
+            {pageRows} of {total} txns
+          </span>
+        </div>
         <button
           type="button"
           aria-label="next page"
           title={nextTitle}
           disabled={nextDisabled}
           onClick={() => onPage(page + 1)}
-          className={nextDisabled ? btnDisabled : btnEnabled}
+          className={`${base} ${nextDisabled ? disabled : enabled}`}
         >
-          <ChevronRight size={14} strokeWidth={1.5} />
+          Next
+          <ChevronRight size={14} strokeWidth={1.5} className="ml-1" />
         </button>
       </div>
     </div>
@@ -243,15 +257,16 @@ export function LedgerView({ email }: { email: string }) {
             />
           </div>
         </section>
+        <PaginationPill
+          page={page}
+          totalPages={totalPages}
+          pageRows={state.rows.length}
+          total={state.total}
+          onPage={setPage}
+          locked={pageLocked}
+          lockTitle={pageLockTitle}
+        />
       </main>
-
-      <PaginationStrip
-        page={page}
-        totalPages={totalPages}
-        onPage={setPage}
-        locked={pageLocked}
-        lockTitle={pageLockTitle}
-      />
     </div>
   )
 }
