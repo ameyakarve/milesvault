@@ -15,6 +15,7 @@ import {
   WidgetType,
 } from '@codemirror/view'
 import {
+  MONO_STACK,
   NAVY_700,
   ROSE_700,
   SANS_STACK,
@@ -24,6 +25,7 @@ import {
   SLATE_600,
   SLATE_50,
 } from './editor-theme'
+import { renderIconSVG } from './editor-txn-icon'
 import { splitEntries } from '@/lib/beancount/extract'
 import { applyProposal, type Op, type Snapshot } from './propose'
 
@@ -144,9 +146,6 @@ const aiField = StateField.define<AiSession | null>({
     }),
 })
 
-const SPARKLES_SVG =
-  '<svg class="cm-ai-sparkles" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>'
-
 class AiWidget extends WidgetType {
   constructor(readonly sessionId: string) {
     super()
@@ -160,7 +159,7 @@ class AiWidget extends WidgetType {
     root.dataset.aiSession = this.sessionId
     root.innerHTML = `
       <form class="cm-ai-input-row">
-        ${SPARKLES_SVG}
+        ${renderIconSVG('sparkles')}
         <input class="cm-ai-input" type="text" placeholder="ask the AI to edit this txn…" autocomplete="off" />
       </form>
       <div class="cm-ai-response" hidden></div>
@@ -248,9 +247,31 @@ function latestAssistantIndex(state: AiSession): number {
   return -1
 }
 
+type WidgetRefs = {
+  response: HTMLDivElement
+  undo: HTMLButtonElement
+  status: HTMLDivElement
+  input: HTMLInputElement
+}
+const widgetRefs = new WeakMap<HTMLElement, WidgetRefs>()
+
+function refs(root: HTMLElement): WidgetRefs {
+  let r = widgetRefs.get(root)
+  if (!r) {
+    r = {
+      response: root.querySelector<HTMLDivElement>('.cm-ai-response')!,
+      undo: root.querySelector<HTMLButtonElement>('.cm-ai-undo')!,
+      status: root.querySelector<HTMLDivElement>('.cm-ai-status')!,
+      input: root.querySelector<HTMLInputElement>('.cm-ai-input')!,
+    }
+    widgetRefs.set(root, r)
+  }
+  return r
+}
+
 function renderFull(root: HTMLElement, state: AiSession | null, currentDoc: string) {
   if (!state || state.id !== root.dataset.aiSession) return
-  const response = root.querySelector<HTMLDivElement>('.cm-ai-response')!
+  const { response, undo, status, input } = refs(root)
   const idx = latestAssistantIndex(state)
   const msg = idx >= 0 ? state.messages[idx] : null
   if (msg && msg.content.length > 0) {
@@ -266,20 +287,14 @@ function renderFull(root: HTMLElement, state: AiSession | null, currentDoc: stri
     response.hidden = true
     response.textContent = ''
   }
-  const undoBtn = root.querySelector<HTMLButtonElement>('.cm-ai-undo')!
   if (msg?.applied) {
-    undoBtn.hidden = false
-    undoBtn.dataset.msg = String(idx)
-    undoBtn.disabled = currentDoc !== msg.applied.afterBuffer
+    undo.hidden = false
+    undo.dataset.msg = String(idx)
+    undo.disabled = currentDoc !== msg.applied.afterBuffer
   } else {
-    undoBtn.hidden = true
-    delete undoBtn.dataset.msg
+    undo.hidden = true
+    delete undo.dataset.msg
   }
-  renderStatus(root, state)
-}
-
-function renderStatus(root: HTMLElement, state: AiSession) {
-  const status = root.querySelector<HTMLDivElement>('.cm-ai-status')!
   if (state.status === 'error') {
     status.hidden = false
     status.textContent = state.error ?? 'something went wrong'
@@ -291,25 +306,8 @@ function renderStatus(root: HTMLElement, state: AiSession) {
   } else {
     status.hidden = true
   }
-  const input = root.querySelector<HTMLInputElement>('.cm-ai-input')!
-  input.disabled = state.status === 'streaming'
-}
-
-function refreshUndoButtons(root: HTMLElement, state: AiSession, currentDoc: string) {
-  const idx = latestAssistantIndex(state)
-  const msg = idx >= 0 ? state.messages[idx] : null
-  if (!msg?.applied) return
-  const btn = root.querySelector<HTMLButtonElement>('.cm-ai-undo')
-  if (btn) btn.disabled = currentDoc !== msg.applied.afterBuffer
-}
-
-function patchRender(
-  root: HTMLElement,
-  _prev: AiSession | null,
-  next: AiSession,
-  currentDoc: string,
-) {
-  renderFull(root, next, currentDoc)
+  const shouldDisable = state.status === 'streaming'
+  if (input.disabled !== shouldDisable) input.disabled = shouldDisable
 }
 
 const aiSyncPlugin = ViewPlugin.fromClass(
@@ -334,12 +332,9 @@ const aiSyncPlugin = ViewPlugin.fromClass(
         this.sessionId = next.id
       }
       if (!this.root) return
-      const currentDoc = update.state.doc.toString()
-      if (sessionChanged) {
-        patchRender(this.root, prev ?? null, next, currentDoc)
-      } else if (update.docChanged && next.messages.some((m) => m.applied)) {
-        refreshUndoButtons(this.root, next, currentDoc)
-      }
+      const hasApplied = next.messages.some((m) => m.applied)
+      if (!sessionChanged && (!update.docChanged || !hasApplied)) return
+      renderFull(this.root, next, update.state.doc.toString())
     }
   },
 )
@@ -487,8 +482,6 @@ const openKeymap = keymap.of([
   },
 ])
 
-const MONO_STACK = "'JetBrains Mono', ui-monospace, monospace"
-
 const aiTheme = EditorView.theme({
   '.cm-ai-widget': {
     display: 'flex',
@@ -511,11 +504,9 @@ const aiTheme = EditorView.theme({
     paddingBottom: '8px',
     borderBottom: `1px solid ${SLATE_200}`,
   },
-  '.cm-ai-sparkles': {
+  '.cm-ai-input-row > svg': {
     flexShrink: 0,
     color: SLATE_500,
-    width: '14px',
-    height: '14px',
   },
   '.cm-ai-input': {
     flex: '1',

@@ -9,7 +9,7 @@ import {
   type ViewUpdate,
 } from '@codemirror/view'
 import { cachedSplit, entryEndLineTrimmed } from './editor'
-import { PAPER_BG, SLATE_200 } from './editor-theme'
+import { PAPER_BG, SLATE_200, TEAL_PRIMARY } from './editor-theme'
 
 const CARD = 'cm-card'
 const CARD_FIRST = 'cm-card-first'
@@ -109,7 +109,7 @@ const cardModeField = StateField.define<CardSets>({
 
 const CARD_BG = '#FFFFFF'
 const ACTIVE_BG = '#F0FDFA'
-const ACTIVE_BORDER = '1.5px solid #0891B2'
+const ACTIVE_BORDER = `1.5px solid ${TEAL_PRIMARY}`
 const ACTIVE_SHADOW = '0 4px 20px rgba(15, 23, 42, 0.06)'
 const ACTIVE_POSTING_STROKE = 'inset 2px 0 0 0 rgba(8, 145, 178, 0.6)'
 const BORDER = `1px solid ${SLATE_200}`

@@ -2,12 +2,14 @@ import { HighlightStyle } from '@codemirror/language'
 import { EditorView } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 
-export const NAVY_600 = '#1E293B'
+const NAVY_600 = '#1E293B'
 export const NAVY_700 = '#0F172A'
 export const SLATE_400 = '#94A3B8'
 export const SLATE_500 = '#64748B'
 export const SLATE_600 = '#475569'
+export const SLATE_700 = '#334155'
 export const SLATE_200 = '#E2E8F0'
+const SLATE_300 = '#CBD5E1'
 const SLATE_100 = '#F1F5F9'
 export const SLATE_50 = '#F8FAFC'
 const SKY_700 = '#0369A1'
@@ -21,6 +23,7 @@ export const PAPER_BG = '#F4F6F8'
 
 export const SANS_STACK =
   "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+export const MONO_STACK = "'JetBrains Mono', ui-monospace, monospace"
 
 const TOKEN_STYLE = {
   date: { color: NAVY_700, fontWeight: '600' },
@@ -57,7 +60,7 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-scroller': {
       overflow: 'auto',
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontFamily: MONO_STACK,
       lineHeight: '1.5',
       fontVariantNumeric: 'tabular-nums',
       backgroundColor: PAPER_BG,
@@ -73,7 +76,7 @@ export const scandiEditorTheme = EditorView.theme(
       borderBottom: `1px solid ${SLATE_200}`,
     },
     '.cm-chip__dots, .cm-highlightSpace': {
-      backgroundImage: `radial-gradient(circle, #CBD5E1 1px, transparent 1.25px)`,
+      backgroundImage: `radial-gradient(circle, ${SLATE_300} 1px, transparent 1.25px)`,
       backgroundSize: '1ch 100%',
       backgroundRepeat: 'repeat-x',
       backgroundPosition: '0 55%',
@@ -95,7 +98,7 @@ export const scandiEditorTheme = EditorView.theme(
       backgroundColor: SLATE_50,
       color: NAVY_600,
       fontSize: '11px',
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontFamily: MONO_STACK,
       lineHeight: '24px',
       borderBottom: `1px solid ${SLATE_100}`,
     },
@@ -139,7 +142,7 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-day-divider': {
       padding: '18px 12px 6px',
       color: NAVY_700,
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontFamily: MONO_STACK,
       fontSize: '11px',
       fontWeight: '700',
       letterSpacing: '0.04em',
@@ -166,14 +169,14 @@ export const scandiEditorTheme = EditorView.theme(
       height: '1em',
       verticalAlign: '-0.15em',
     },
-    '.cm-chip--account': { color: '#334155' },
+    '.cm-chip--account': { color: SLATE_700 },
     '.cm-chip__pill': {
       display: 'inline-block',
       backgroundColor: '#FFFFFF',
       border: `1px solid ${SLATE_200}`,
       borderRadius: '4px',
       padding: '0 6px',
-      color: '#334155',
+      color: SLATE_700,
       marginRight: '1ch',
     },
     '.cm-chip--date': TOKEN_STYLE.date,
@@ -237,7 +240,7 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-completionIcon-keyword:after': { content: '"/"' },
     '.cm-completionIcon-class:after': { content: '"\u25E6"' },
     '.cm-completionLabel': {
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontFamily: MONO_STACK,
       fontSize: '12px',
     },
     '.cm-completionMatchedText': {
@@ -253,10 +256,10 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-gutters': {
       backgroundColor: PAPER_BG,
-      color: '#CBD5E1',
+      color: SLATE_300,
       border: 'none',
       borderRight: `1px solid ${SLATE_100}`,
-      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontFamily: MONO_STACK,
       fontSize: '11px',
       fontWeight: '700',
     },
