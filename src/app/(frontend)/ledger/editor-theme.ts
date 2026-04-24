@@ -112,6 +112,16 @@ export const scandiEditorTheme = EditorView.theme(
       display: 'block',
     },
     '.cm-txn-desc-text': { flex: 1, minWidth: 0 },
+    '.cm-day-divider': {
+      padding: '16px 12px 6px',
+      color: SLATE_500,
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontSize: '10px',
+      fontWeight: '600',
+      letterSpacing: '0.12em',
+      backgroundColor: PAPER_BG,
+    },
+    '.cm-day-divider-gutter': { backgroundColor: PAPER_BG },
     '.cm-chip': {
       display: 'inline-block',
       verticalAlign: 'baseline',
