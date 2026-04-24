@@ -132,6 +132,7 @@ export const scandiEditorTheme = EditorView.theme(
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
     },
     '.cm-lineNumbers .cm-gutterElement': { padding: '0 4px 0 8px' },
+    '.cm-gutterElement': { borderBottom: `1px solid ${SLATE_200}` },
     '.cm-activeLine:not(.cm-changedLine):not(.cm-deletedLine)': {
       backgroundColor: 'transparent',
     },
