@@ -5,7 +5,6 @@ import {
   type EditorView,
 } from '@codemirror/view'
 import { TriangleAlert } from 'lucide-static'
-import { chipVisualWidth } from '@/lib/beancount/entities'
 import type { ParsedTxn } from '@/lib/beancount/parse'
 import { ChipWidget, type ChipVariant } from './chip-widget'
 import { cursorPos } from './editor-chip-state'
@@ -35,35 +34,38 @@ function dateChipLabel(iso: string): string {
 
 export function hitsForTxn(txn: ParsedTxn): HeaderHit[] {
   const hits: HeaderHit[] = []
-  const isPending = txn.flag === '!'
-  const dateTo = isPending
-    ? (txn.flagRange?.from ?? txn.dateRange.to)
-    : (txn.payee?.range.from ?? txn.narration?.range.from ?? txn.dateRange.to)
   hits.push({
     from: txn.dateRange.from,
-    to: dateTo,
+    to: txn.dateRange.to,
     variant: 'date',
     label: dateChipLabel(txn.date),
     tooltip: txn.date,
   })
-  if (isPending && txn.flagRange) {
-    const pendingTo =
-      txn.payee?.range.from ?? txn.narration?.range.from ?? txn.flagRange.to
-    hits.push({
-      from: txn.flagRange.from,
-      to: pendingTo,
-      variant: 'flag-pending',
-      label: 'Pending',
-      tooltip: `flag: ${txn.flag}`,
-      svg: TriangleAlert,
-    })
+  if (txn.flagRange) {
+    if (txn.flag === '!') {
+      hits.push({
+        from: txn.flagRange.from,
+        to: txn.flagRange.to,
+        variant: 'flag-pending',
+        label: 'Pending',
+        tooltip: `flag: ${txn.flag}`,
+        svg: TriangleAlert,
+      })
+    } else if (txn.flag === '*') {
+      hits.push({
+        from: txn.flagRange.from,
+        to: txn.flagRange.to,
+        variant: 'flag-cleared',
+        label: '·',
+        tooltip: 'cleared',
+      })
+    }
   }
   if (txn.payee) {
     const payeeText = txn.payee.text
-    const payeeTo = txn.narration ? txn.narration.range.from : txn.payee.range.to
     hits.push({
       from: txn.payee.range.from,
-      to: payeeTo,
+      to: txn.payee.range.to,
       variant: 'payee',
       label: payeeText || 'payee',
       tooltip: `payee: ${payeeText}`,
@@ -77,6 +79,15 @@ export function hitsForTxn(txn: ParsedTxn): HeaderHit[] {
       variant: 'narration',
       label: narrationText || 'narration',
       tooltip: `narration: ${narrationText}`,
+    })
+  }
+  for (const tag of txn.tags) {
+    hits.push({
+      from: tag.range.from,
+      to: tag.range.to,
+      variant: 'tag',
+      label: tag.text,
+      tooltip: `tag: ${tag.text}`,
     })
   }
   return hits
@@ -118,7 +129,7 @@ function buildHeaderDecorations(view: EditorView): DecorationSet {
           label: h.label,
           tooltip: h.tooltip,
           svg: h.svg,
-          width: chipVisualWidth(h.label, h.svg !== undefined),
+          width: h.label.length + (h.svg ? 3 : 0),
         }),
       }),
     )

@@ -9,6 +9,8 @@ export type ChipVariant =
   | 'payee'
   | 'narration'
   | 'flag-pending'
+  | 'flag-cleared'
+  | 'tag'
 
 export type ChipSpec = {
   variant: ChipVariant

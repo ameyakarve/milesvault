@@ -132,6 +132,13 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-chip--payee': { ...TOKEN_STYLE.string, color: ROSE_700 },
     '.cm-chip--narration': { ...TOKEN_STYLE.string, color: SLATE_500 },
     '.cm-chip--flag-pending': TOKEN_STYLE.flag,
+    '.cm-chip--flag-cleared': { color: SLATE_400 },
+    '.cm-chip--tag': {
+      color: SLATE_600,
+      fontWeight: '500',
+      fontVariant: 'all-small-caps',
+      letterSpacing: '0.04em',
+    },
     '.cm-chip--amount': {
       ...TOKEN_STYLE.number,
       textAlign: 'right',

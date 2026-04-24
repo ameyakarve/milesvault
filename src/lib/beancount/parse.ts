@@ -35,8 +35,8 @@ export type ParsedTxn = {
   flag: string | null
   payee: ParsedString | null
   narration: ParsedString | null
-  tags: string[]
-  links: string[]
+  tags: ParsedString[]
+  links: ParsedString[]
   postings: ParsedPosting[]
 }
 
@@ -140,8 +140,8 @@ function readDatedDirective(directive: SyntaxNode, doc: string): ParsedTxn | nul
   const payee = strings.length >= 2 ? strings[0] : null
   const narration = strings.length >= 2 ? strings[1] : (strings[0] ?? null)
 
-  const tags = readChildrenText(txn, 'Tag', doc).map(stripLeading)
-  const links = readChildrenText(txn, 'Link', doc).map(stripLeading)
+  const tags = readChildrenAs(txn, 'Tag', doc, stripLeading)
+  const links = readChildrenAs(txn, 'Link', doc, stripLeading)
 
   const postings: ParsedPosting[] = []
   const pb = txn.getChild('PostingBlock')
@@ -224,15 +224,6 @@ function readAmount(node: SyntaxNode, doc: string): ParsedAmount {
 function firstPostingBlockStart(node: SyntaxNode): number | null {
   const pb = node.getChild('PostingBlock')
   return pb ? pb.from : null
-}
-
-function readChildrenText(node: SyntaxNode, name: string, doc: string): string[] {
-  const out: string[] = []
-  for (let c = node.firstChild; c; c = c.nextSibling) {
-    if (c.name !== name) continue
-    out.push(unquote(doc.slice(c.from, c.to)))
-  }
-  return out
 }
 
 function readChildrenAs(
