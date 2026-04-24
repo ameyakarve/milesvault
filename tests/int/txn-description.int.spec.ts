@@ -196,6 +196,47 @@ describe('generateTxnDescription — rewards redemption handler', () => {
   })
 })
 
+describe('generateTxnDescription — statement credit handler', () => {
+  it('phrases points burned for a CC statement credit', () => {
+    const txn = firstEntry(`
+2026-05-12 * "HDFC Infinia" "points → statement credit"
+  Assets:Rewards:Points:SmartBuy  -5000 SMARTBUY
+  Liabilities:CC:HDFC:Infinia      1250 INR @@ 5000 SMARTBUY
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      '1,250 INR statement credit on HDFC Infinia using 5K SMARTBUY',
+    )
+  })
+
+  it('returns fallback when the CC posting has no @@ price', () => {
+    const txn = firstEntry(`
+2026-05-12 * "HDFC Infinia" "no price"
+  Assets:Rewards:Points:SmartBuy  -5000 SMARTBUY
+  Liabilities:CC:HDFC:Infinia      1250 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback when price currency differs from points currency', () => {
+    const txn = firstEntry(`
+2026-05-12 * "HDFC Infinia" "mismatched price"
+  Assets:Rewards:Points:SmartBuy  -5000 SMARTBUY
+  Liabilities:CC:HDFC:Infinia      1250 INR @@ 5000 AVIOS
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback when a third leg is present', () => {
+    const txn = firstEntry(`
+2026-05-12 * "HDFC Infinia" "extra leg"
+  Assets:Rewards:Points:SmartBuy  -5000 SMARTBUY
+  Liabilities:CC:HDFC:Infinia      1250 INR @@ 5000 SMARTBUY
+  Expenses:Misc                       0 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+})
+
 describe('generateTxnDescription — mixed redemption handler', () => {
   it('phrases points + cash redemption', () => {
     const txn = firstEntry(`

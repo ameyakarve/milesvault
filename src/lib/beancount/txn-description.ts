@@ -12,6 +12,7 @@ const FALLBACK = 'A quiet morning sip — draft summary goes here.'
 
 const HANDLERS: readonly DescribeHandler[] = [
   rewardsVoidHandler,
+  statementCreditHandler,
   mixedRedemptionHandler,
   rewardsRedemptionHandler,
   expensePaymentHandler,
@@ -23,6 +24,7 @@ const REWARDS_VOID_PATHS: readonly string[] = [
 ]
 
 const REWARDS_POINTS_PATH = 'Assets:Rewards:Points'
+const CC_PATH = 'Liabilities:CC'
 
 const PAYMENT_INSTRUMENT_PATHS: readonly string[] = [
   'Liabilities:CC',
@@ -169,6 +171,58 @@ function rewardsRedemptionHandler(txn: ParsedTxn): DescribeResult {
   const unit = rewardsPosting.amount.currency
   const amount = formatAmount(total)
   return { kind: 'ok', text: `${points} ${unit} redeemed for ${currency} ${amount}` }
+}
+
+function statementCreditHandler(txn: ParsedTxn): DescribeResult {
+  let rewardsPosting: ParsedPosting | null = null
+  let cardPosting: ParsedPosting | null = null
+  let cardLabel: string | null = null
+
+  for (const posting of txn.postings) {
+    const resolved = resolveAccount(posting.account)
+    if (!resolved) return { kind: 'unhandled' }
+    if (resolved.matchedPath === REWARDS_POINTS_PATH) {
+      if (rewardsPosting !== null) return { kind: 'unhandled' }
+      rewardsPosting = posting
+      continue
+    }
+    if (resolved.matchedPath === CC_PATH) {
+      if (cardPosting !== null) return { kind: 'unhandled' }
+      cardPosting = posting
+      cardLabel = resolved.chipLabel
+      continue
+    }
+    return { kind: 'unhandled' }
+  }
+
+  if (
+    !rewardsPosting ||
+    !cardPosting ||
+    !cardLabel ||
+    !rewardsPosting.amount?.currency ||
+    !cardPosting.amount?.currency
+  ) {
+    return { kind: 'unhandled' }
+  }
+
+  const pointsN = parseFloat(rewardsPosting.amount.numberText)
+  if (!Number.isFinite(pointsN) || pointsN >= 0) return { kind: 'unhandled' }
+
+  const cardN = parseFloat(cardPosting.amount.numberText)
+  if (!Number.isFinite(cardN) || cardN <= 0) return { kind: 'unhandled' }
+
+  const price = cardPosting.priceAmount
+  if (!price || !price.currency || cardPosting.atSigns !== 2) return { kind: 'unhandled' }
+  if (price.currency !== rewardsPosting.amount.currency) return { kind: 'unhandled' }
+
+  const cash = formatAmount(cardN)
+  const cashCcy = cardPosting.amount.currency
+  const points = formatAmount(Math.abs(pointsN))
+  const pointsUnit = rewardsPosting.amount.currency
+  return {
+    kind: 'ok',
+    text: `${cash} ${cashCcy} statement credit on ${cardLabel} using ${points} ${pointsUnit}`,
+  }
 }
 
 function mixedRedemptionHandler(txn: ParsedTxn): DescribeResult {
