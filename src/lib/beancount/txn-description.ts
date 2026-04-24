@@ -9,7 +9,12 @@ type DescribeHandler = (txn: ParsedTxn) => DescribeResult
 
 const FALLBACK = 'A quiet morning sip — draft summary goes here.'
 
-const HANDLERS: readonly DescribeHandler[] = [statusTierHandler, expensePaymentHandler]
+const HANDLERS: readonly DescribeHandler[] = [rewardsVoidHandler, expensePaymentHandler]
+
+const REWARDS_VOID_PATHS: readonly string[] = [
+  'Assets:Rewards:Status',
+  'Assets:Rewards:Points',
+]
 
 const PAYMENT_INSTRUMENT_PATHS: readonly string[] = [
   'Liabilities:CC',
@@ -90,15 +95,15 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
   return { kind: 'ok', text }
 }
 
-function statusTierHandler(txn: ParsedTxn): DescribeResult {
+function rewardsVoidHandler(txn: ParsedTxn): DescribeResult {
   if (txn.postings.length !== 2) return { kind: 'unhandled' }
-  let statusPosting: ParsedPosting | null = null
+  let rewardsPosting: ParsedPosting | null = null
   let hasVoid = false
   for (const posting of txn.postings) {
     const resolved = resolveAccount(posting.account)
     if (!resolved) return { kind: 'unhandled' }
-    if (resolved.matchedPath === 'Assets:Rewards:Status') {
-      statusPosting = posting
+    if (REWARDS_VOID_PATHS.includes(resolved.matchedPath)) {
+      rewardsPosting = posting
       continue
     }
     if (posting.account === 'Expenses:Void') {
@@ -107,13 +112,13 @@ function statusTierHandler(txn: ParsedTxn): DescribeResult {
     }
     return { kind: 'unhandled' }
   }
-  if (!statusPosting || !hasVoid || !statusPosting.amount?.currency) {
+  if (!rewardsPosting || !hasVoid || !rewardsPosting.amount?.currency) {
     return { kind: 'unhandled' }
   }
-  const n = parseFloat(statusPosting.amount.numberText)
+  const n = parseFloat(rewardsPosting.amount.numberText)
   if (!Number.isFinite(n) || n === 0) return { kind: 'unhandled' }
   const verb = n > 0 ? 'added' : 'expired'
-  const text = `${formatAmount(Math.abs(n))} ${statusPosting.amount.currency} ${verb}`
+  const text = `${formatAmount(Math.abs(n))} ${rewardsPosting.amount.currency} ${verb}`
   return { kind: 'ok', text }
 }
 
