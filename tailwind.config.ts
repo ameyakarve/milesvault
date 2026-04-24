@@ -30,9 +30,9 @@ const config: Config = {
           surface: '#E8EDF2',
           quiet: '#EEF2F6',
           rule: '#C5CEDA',
-          backdrop: '#BBC6D3',
-          accent: '#2F5D7A',
-          'accent-hover': '#224866',
+          backdrop: '#F4F6F8',
+          accent: '#0891B2',
+          'accent-hover': '#0E7490',
         },
         navy: {
           50: '#F8FAFC',
