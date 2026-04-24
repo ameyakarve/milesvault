@@ -12,6 +12,15 @@ const FALLBACK = '—'
 
 const HANDLERS: readonly DescribeHandler[] = [expensePaymentHandler]
 
+const PAYMENT_INSTRUMENT_PATHS: readonly string[] = [
+  'Liabilities:CC',
+  'Assets:DC',
+  'Assets:UPI',
+  'Assets:Cash',
+  'Assets:Bank',
+  'Assets:Loaded:PrepaidCards',
+]
+
 export function generateTxnDescription(txn: ParsedTxn): string {
   for (const handler of HANDLERS) {
     const result = handler(txn)
@@ -41,10 +50,7 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
       expenses.push(posting)
       continue
     }
-    if (
-      resolved.matchedPath.startsWith('Assets') ||
-      resolved.matchedPath.startsWith('Liabilities')
-    ) {
+    if (PAYMENT_INSTRUMENT_PATHS.includes(resolved.matchedPath)) {
       payments.push(posting)
       if (paymentAccount === null) {
         paymentAccount = posting.account
@@ -54,7 +60,7 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
       }
       continue
     }
-    untyped.push(posting.account)
+    return { kind: 'unhandled' }
   }
 
   if (untyped.length > 0) {

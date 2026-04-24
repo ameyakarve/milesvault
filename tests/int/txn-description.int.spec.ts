@@ -127,6 +127,24 @@ describe('generateTxnDescription — negative cases return fallback', () => {
     )
   })
 
+  it('returns fallback for rewards-points expiry (not a payment instrument)', () => {
+    const txn = firstEntry(`
+2026-12-31 * "Avios" "annual expiry"
+  Assets:Rewards:Points:Avios  -2000 AVIOS
+  Expenses:Void  2000 AVIOS
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback when paid via a typed but non-payment instrument', () => {
+    const txn = firstEntry(`
+2026-04-24 * "Gift card top-up"
+  Expenses:Misc  500 INR
+  Assets:Loaded:Wallets  -500 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
   it('flags untyped income postings in an expense txn', () => {
     const txn = firstEntry(`
 2026-04-24 * "Taxed"
