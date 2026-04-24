@@ -144,6 +144,9 @@ const aiField = StateField.define<AiSession | null>({
     }),
 })
 
+const SPARKLES_SVG =
+  '<svg class="cm-ai-sparkles" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>'
+
 class AiWidget extends WidgetType {
   constructor(readonly sessionId: string) {
     super()
@@ -156,20 +159,23 @@ class AiWidget extends WidgetType {
     root.className = 'cm-ai-widget'
     root.dataset.aiSession = this.sessionId
     root.innerHTML = `
-      <div class="cm-ai-messages"></div>
-      <div class="cm-ai-status" hidden></div>
       <form class="cm-ai-input-row">
-        <textarea class="cm-ai-input" rows="1" placeholder="Ask to edit any transaction… (Enter sends, Esc closes)"></textarea>
-        <button type="submit" class="cm-ai-send">Send</button>
-        <button type="button" class="cm-ai-close" aria-label="Close">×</button>
+        ${SPARKLES_SVG}
+        <input class="cm-ai-input" type="text" placeholder="ask the AI to edit this txn…" autocomplete="off" />
       </form>
+      <div class="cm-ai-response" hidden></div>
+      <div class="cm-ai-status" hidden></div>
+      <div class="cm-ai-actions">
+        <button type="button" class="cm-ai-undo" hidden>Undo AI edit</button>
+        <button type="button" class="cm-ai-dismiss">Dismiss</button>
+      </div>
     `
     const ac = new AbortController()
     widgetAborts.set(root, ac)
     wireWidget(root, view, this.sessionId, ac.signal)
     renderFull(root, view.state.field(aiField), view.state.doc.toString())
     queueMicrotask(() => {
-      root.querySelector<HTMLTextAreaElement>('.cm-ai-input')?.focus()
+      root.querySelector<HTMLInputElement>('.cm-ai-input')?.focus()
     })
     return root
   }
@@ -190,9 +196,10 @@ function wireWidget(
   sessionId: string,
   signal: AbortSignal,
 ) {
-  const input = root.querySelector<HTMLTextAreaElement>('.cm-ai-input')!
+  const input = root.querySelector<HTMLInputElement>('.cm-ai-input')!
   const form = root.querySelector<HTMLFormElement>('.cm-ai-input-row')!
-  const close = root.querySelector<HTMLButtonElement>('.cm-ai-close')!
+  const dismiss = root.querySelector<HTMLButtonElement>('.cm-ai-dismiss')!
+  const undoBtn = root.querySelector<HTMLButtonElement>('.cm-ai-undo')!
 
   form.addEventListener(
     'submit',
@@ -205,7 +212,7 @@ function wireWidget(
     },
     { signal },
   )
-  close.addEventListener(
+  dismiss.addEventListener(
     'click',
     (ev) => {
       ev.preventDefault()
@@ -213,65 +220,61 @@ function wireWidget(
     },
     { signal },
   )
+  undoBtn.addEventListener(
+    'click',
+    (ev) => {
+      ev.preventDefault()
+      const idx = Number(undoBtn.dataset.msg ?? '-1')
+      if (idx >= 0) undoEdit(view, idx)
+    },
+    { signal },
+  )
   input.addEventListener(
     'keydown',
     (ev) => {
-      if (ev.key === 'Enter' && !ev.shiftKey) {
-        ev.preventDefault()
-        form.requestSubmit()
-      } else if (ev.key === 'Escape') {
+      if (ev.key === 'Escape') {
         ev.preventDefault()
         closeWidget(view)
       }
     },
     { signal },
   )
-  root.addEventListener(
-    'click',
-    (ev) => {
-      const target = ev.target as HTMLElement
-      if (target.matches('.cm-ai-undo')) {
-        const idx = Number(target.dataset.msg)
-        undoEdit(view, idx)
-      }
-    },
-    { signal },
-  )
 }
 
-function renderMessageBubble(m: Message, index: number, currentDoc: string): HTMLDivElement {
-  const bubble = document.createElement('div')
-  bubble.className = `cm-ai-message cm-ai-${m.role}`
-  const body = document.createElement('div')
-  body.className = 'cm-ai-message-body'
-  body.textContent = m.content
-  bubble.appendChild(body)
-  if (m.applyError) {
-    const err = document.createElement('div')
-    err.className = 'cm-ai-apply-error'
-    err.textContent = `couldn't apply: ${m.applyError}`
-    bubble.appendChild(err)
+function latestAssistantIndex(state: AiSession): number {
+  for (let i = state.messages.length - 1; i >= 0; i--) {
+    if (state.messages[i].role === 'assistant') return i
   }
-  if (m.applied) {
-    const actions = document.createElement('div')
-    actions.className = 'cm-ai-actions'
-    const undo = document.createElement('button')
-    undo.className = 'cm-ai-undo'
-    undo.dataset.msg = String(index)
-    undo.textContent = 'Undo'
-    undo.disabled = currentDoc !== m.applied.afterBuffer
-    actions.appendChild(undo)
-    bubble.appendChild(actions)
-  }
-  return bubble
+  return -1
 }
 
 function renderFull(root: HTMLElement, state: AiSession | null, currentDoc: string) {
   if (!state || state.id !== root.dataset.aiSession) return
-  const messagesEl = root.querySelector<HTMLDivElement>('.cm-ai-messages')!
-  messagesEl.replaceChildren(
-    ...state.messages.map((m, i) => renderMessageBubble(m, i, currentDoc)),
-  )
+  const response = root.querySelector<HTMLDivElement>('.cm-ai-response')!
+  const idx = latestAssistantIndex(state)
+  const msg = idx >= 0 ? state.messages[idx] : null
+  if (msg && msg.content.length > 0) {
+    response.hidden = false
+    response.textContent = msg.content
+    if (msg.applyError) {
+      const err = document.createElement('div')
+      err.className = 'cm-ai-apply-error'
+      err.textContent = `couldn't apply: ${msg.applyError}`
+      response.appendChild(err)
+    }
+  } else {
+    response.hidden = true
+    response.textContent = ''
+  }
+  const undoBtn = root.querySelector<HTMLButtonElement>('.cm-ai-undo')!
+  if (msg?.applied) {
+    undoBtn.hidden = false
+    undoBtn.dataset.msg = String(idx)
+    undoBtn.disabled = currentDoc !== msg.applied.afterBuffer
+  } else {
+    undoBtn.hidden = true
+    delete undoBtn.dataset.msg
+  }
   renderStatus(root, state)
 }
 
@@ -288,49 +291,25 @@ function renderStatus(root: HTMLElement, state: AiSession) {
   } else {
     status.hidden = true
   }
-  const input = root.querySelector<HTMLTextAreaElement>('.cm-ai-input')!
+  const input = root.querySelector<HTMLInputElement>('.cm-ai-input')!
   input.disabled = state.status === 'streaming'
 }
 
 function refreshUndoButtons(root: HTMLElement, state: AiSession, currentDoc: string) {
-  const messagesEl = root.querySelector<HTMLDivElement>('.cm-ai-messages')!
-  state.messages.forEach((m, i) => {
-    if (!m.applied) return
-    const bubble = messagesEl.children[i] as HTMLElement | undefined
-    const btn = bubble?.querySelector<HTMLButtonElement>('.cm-ai-undo')
-    if (btn) btn.disabled = currentDoc !== m.applied.afterBuffer
-  })
+  const idx = latestAssistantIndex(state)
+  const msg = idx >= 0 ? state.messages[idx] : null
+  if (!msg?.applied) return
+  const btn = root.querySelector<HTMLButtonElement>('.cm-ai-undo')
+  if (btn) btn.disabled = currentDoc !== msg.applied.afterBuffer
 }
 
 function patchRender(
   root: HTMLElement,
-  prev: AiSession | null,
+  _prev: AiSession | null,
   next: AiSession,
   currentDoc: string,
 ) {
-  if (!prev || prev.id !== next.id || prev.messages.length !== next.messages.length) {
-    renderFull(root, next, currentDoc)
-    return
-  }
-  const lastIdx = next.messages.length - 1
-  const lastPrev = prev.messages[lastIdx]
-  const lastNext = next.messages[lastIdx]
-  const structureChanged =
-    !lastPrev ||
-    lastPrev.role !== lastNext.role ||
-    Boolean(lastPrev.applied) !== Boolean(lastNext.applied) ||
-    Boolean(lastPrev.applyError) !== Boolean(lastNext.applyError)
-  if (structureChanged) {
-    renderFull(root, next, currentDoc)
-    return
-  }
-  const messagesEl = root.querySelector<HTMLDivElement>('.cm-ai-messages')!
-  const lastBubble = messagesEl.children[lastIdx] as HTMLElement | undefined
-  const body = lastBubble?.querySelector<HTMLDivElement>('.cm-ai-message-body')
-  if (body && lastPrev.content !== lastNext.content) {
-    body.textContent = lastNext.content
-  }
-  renderStatus(root, next)
+  renderFull(root, next, currentDoc)
 }
 
 const aiSyncPlugin = ViewPlugin.fromClass(
@@ -508,88 +487,98 @@ const openKeymap = keymap.of([
   },
 ])
 
+const MONO_STACK = "'JetBrains Mono', ui-monospace, monospace"
+
 const aiTheme = EditorView.theme({
   '.cm-ai-widget': {
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    gap: '12px',
     margin: '8px 18px 12px',
-    padding: '10px 12px',
+    padding: '12px',
     borderRadius: '6px',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#EEF2F5',
     border: `1px solid ${SLATE_200}`,
-    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
     fontFamily: SANS_STACK,
     fontSize: '12px',
     lineHeight: '1.5',
     color: NAVY_700,
   },
-  '.cm-ai-messages': { display: 'flex', flexDirection: 'column', gap: '6px' },
-  '.cm-ai-messages:empty': { display: 'none' },
-  '.cm-ai-message': { display: 'flex', flexDirection: 'column', gap: '4px' },
-  '.cm-ai-user .cm-ai-message-body': { color: SLATE_600 },
-  '.cm-ai-user .cm-ai-message-body:before': { content: '"› "', color: SLATE_400 },
-  '.cm-ai-assistant .cm-ai-message-body': { color: NAVY_700 },
+  '.cm-ai-input-row': {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    paddingBottom: '8px',
+    borderBottom: `1px solid ${SLATE_200}`,
+  },
+  '.cm-ai-sparkles': {
+    flexShrink: 0,
+    color: SLATE_500,
+    width: '14px',
+    height: '14px',
+  },
+  '.cm-ai-input': {
+    flex: '1',
+    border: 'none',
+    background: 'transparent',
+    padding: '0',
+    fontFamily: SANS_STACK,
+    fontSize: '12px',
+    lineHeight: '1.5',
+    color: SLATE_600,
+    outline: 'none',
+  },
+  '.cm-ai-input::placeholder': { color: SLATE_400 },
+  '.cm-ai-response': {
+    padding: '8px',
+    backgroundColor: '#FFFFFF',
+    border: `1px solid ${SLATE_200}`,
+    borderRadius: '6px',
+    fontFamily: SANS_STACK,
+    fontSize: '12px',
+    color: SLATE_600,
+    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+    whiteSpace: 'pre-wrap',
+  },
   '.cm-ai-apply-error': {
-    margin: '4px 0 0',
+    marginTop: '6px',
     padding: '6px 8px',
     backgroundColor: SLATE_50,
-    borderRadius: '6px',
+    borderRadius: '4px',
     border: `1px solid ${SLATE_200}`,
     color: ROSE_700,
     fontSize: '11px',
   },
-  '.cm-ai-actions': { display: 'flex', gap: '6px', marginTop: '4px' },
-  '.cm-ai-actions button': {
-    padding: '2px 10px',
-    fontSize: '11px',
+  '.cm-ai-actions': {
+    display: 'flex',
+    gap: '8px',
+    paddingTop: '4px',
+  },
+  '.cm-ai-undo': {
+    padding: '2px 8px',
+    fontSize: '10px',
+    fontFamily: MONO_STACK,
     border: `1px solid ${SLATE_200}`,
     borderRadius: '4px',
     backgroundColor: '#FFFFFF',
-    color: NAVY_700,
+    color: SLATE_600,
     cursor: 'pointer',
+    transition: 'background-color 120ms ease',
   },
-  '.cm-ai-actions button:disabled': {
-    opacity: '0.4',
-    cursor: 'default',
-  },
-  '.cm-ai-input-row': {
-    display: 'flex',
-    gap: '6px',
-    alignItems: 'flex-start',
-  },
-  '.cm-ai-input': {
-    flex: '1',
-    resize: 'none',
-    border: `1px solid ${SLATE_200}`,
-    borderRadius: '6px',
-    padding: '6px 8px',
-    fontFamily: SANS_STACK,
-    fontSize: '12px',
-    lineHeight: '1.5',
-    color: NAVY_700,
-    backgroundColor: '#FFFFFF',
-    outline: 'none',
-  },
-  '.cm-ai-input:focus': { borderColor: NAVY_700 },
-  '.cm-ai-send, .cm-ai-close': {
-    padding: '6px 10px',
-    fontSize: '11px',
-    border: `1px solid ${SLATE_200}`,
-    borderRadius: '6px',
-    backgroundColor: NAVY_700,
-    color: '#FFFFFF',
+  '.cm-ai-undo:hover': { backgroundColor: SLATE_50 },
+  '.cm-ai-undo:disabled': { opacity: '0.4', cursor: 'default' },
+  '.cm-ai-dismiss': {
+    padding: '2px 6px',
+    fontSize: '10px',
+    fontFamily: MONO_STACK,
+    border: 'none',
+    background: 'transparent',
+    color: SLATE_400,
     cursor: 'pointer',
+    transition: 'color 120ms ease',
   },
-  '.cm-ai-close': {
-    backgroundColor: 'transparent',
-    color: SLATE_500,
-    borderColor: 'transparent',
-    fontSize: '16px',
-    lineHeight: '1',
-  },
+  '.cm-ai-dismiss:hover': { color: SLATE_600 },
   '.cm-ai-status': {
-    marginTop: '4px',
     fontSize: '11px',
     color: SLATE_500,
   },
