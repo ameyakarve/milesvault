@@ -112,10 +112,8 @@ function statusTierHandler(txn: ParsedTxn): DescribeResult {
   }
   const n = parseFloat(statusPosting.amount.numberText)
   if (!Number.isFinite(n) || n === 0) return { kind: 'unhandled' }
-  const tier = statusPosting.account.split(':').slice(3).join(' ')
-  if (!tier) return { kind: 'unhandled' }
-  const verb = n > 0 ? 'added to' : 'expired from'
-  const text = `${formatAmount(Math.abs(n))} ${statusPosting.amount.currency} ${verb} ${tier} status`
+  const verb = n > 0 ? 'added' : 'expired'
+  const text = `${formatAmount(Math.abs(n))} ${statusPosting.amount.currency} ${verb}`
   return { kind: 'ok', text }
 }
 

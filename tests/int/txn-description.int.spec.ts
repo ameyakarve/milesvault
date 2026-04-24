@@ -103,9 +103,7 @@ describe('generateTxnDescription — status tier handler', () => {
   Assets:Rewards:Status:Marriott  -50 MAR-NIGHTS
   Expenses:Void  50 MAR-NIGHTS
 `)
-    expect(generateTxnDescription(txn)).toBe(
-      '50 MAR-NIGHTS expired from Marriott status',
-    )
+    expect(generateTxnDescription(txn)).toBe('50 MAR-NIGHTS expired')
   })
 
   it('phrases status-tier accrual as added', () => {
@@ -114,9 +112,7 @@ describe('generateTxnDescription — status tier handler', () => {
   Assets:Rewards:Status:Marriott  10 MAR-NIGHTS
   Expenses:Void  -10 MAR-NIGHTS
 `)
-    expect(generateTxnDescription(txn)).toBe(
-      '10 MAR-NIGHTS added to Marriott status',
-    )
+    expect(generateTxnDescription(txn)).toBe('10 MAR-NIGHTS added')
   })
 
   it('does not trigger when there are extra postings', () => {
