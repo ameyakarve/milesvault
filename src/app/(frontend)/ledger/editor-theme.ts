@@ -76,6 +76,7 @@ export const scandiEditorTheme = EditorView.theme(
       content: '""',
     },
     '.cm-txn-band': { backgroundColor: SLATE_50 },
+    '.cm-txn-desc-gutter': { borderBottom: `1px solid ${SLATE_200}` },
     '.cm-txn-desc': {
       padding: '6px 12px 4px',
       color: MOCHA_700,
