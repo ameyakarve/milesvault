@@ -7,7 +7,7 @@ import {
   gutterLineClass,
 } from '@codemirror/view'
 import { cachedSplit, entryEndLineTrimmed } from './editor'
-import { PAPER_BG } from './editor-theme'
+import { PAPER_BG, SLATE_200 } from './editor-theme'
 
 const CARD = 'cm-card'
 const CARD_FIRST = 'cm-card-first'
@@ -73,9 +73,11 @@ const cardModeField = StateField.define<CardSets>({
 })
 
 const CARD_BG = '#FFFFFF'
-const SHADOW = '0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(15, 23, 42, 0.04)'
-const RADIUS = '10px'
+const BORDER = `1px solid ${SLATE_200}`
+const DROP_SHADOW = '0 1px 2px rgba(15, 23, 42, 0.04)'
+const RADIUS = '6px'
 const PAD_X = '20px'
+const GAP = '8px'
 
 const cardModeTheme = EditorView.theme(
   {
@@ -89,13 +91,20 @@ const cardModeTheme = EditorView.theme(
     [`.cm-line.${CARD}`]: {
       padding: `0 ${PAD_X}`,
       backgroundColor: `${CARD_BG} !important`,
+      borderLeft: BORDER,
+      borderRight: BORDER,
     },
     [`.cm-line.${CARD_LAST}`]: {
+      borderBottom: BORDER,
       borderBottomLeftRadius: RADIUS,
       borderBottomRightRadius: RADIUS,
-      boxShadow: SHADOW,
+      boxShadow: DROP_SHADOW,
+      marginBottom: GAP,
     },
     '.cm-txn-desc': {
+      borderTop: BORDER,
+      borderLeft: BORDER,
+      borderRight: BORDER,
       borderTopLeftRadius: RADIUS,
       borderTopRightRadius: RADIUS,
     },
