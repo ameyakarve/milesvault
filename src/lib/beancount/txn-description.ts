@@ -18,6 +18,9 @@ const PAYMENT_INSTRUMENT_PATHS: readonly string[] = [
   'Assets:Cash',
   'Assets:Bank',
   'Assets:Loaded:PrepaidCards',
+  'Assets:Loaded:ForexCards',
+  'Assets:Loaded:Wallets',
+  'Assets:Loaded:GiftCards',
 ]
 
 export function generateTxnDescription(txn: ParsedTxn): string {
