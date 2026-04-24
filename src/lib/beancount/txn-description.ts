@@ -1,3 +1,4 @@
+import { compressAmount } from './compress-amount'
 import { resolveAccount } from './entities/accounts'
 import type { ParsedPosting, ParsedTxn } from './parse'
 
@@ -138,5 +139,6 @@ function resolvePrice(
 }
 
 function formatAmount(n: number): string {
-  return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  const fixed = n.toFixed(2).replace(/\.?0+$/, '')
+  return compressAmount(fixed) ?? n.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }

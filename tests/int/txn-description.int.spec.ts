@@ -46,7 +46,7 @@ describe('generateTxnDescription — expense + payment handler', () => {
   Expenses:Food:Snacks  300 INR
   Liabilities:CC:HDFC:Infinia  -1500 INR
 `)
-    expect(generateTxnDescription(txn)).toBe('INR 1,500 paid using HDFC Infinia')
+    expect(generateTxnDescription(txn)).toBe('INR 1.5K paid using HDFC Infinia')
   })
 
   it('describes payment via UPI', () => {
@@ -103,7 +103,7 @@ describe('generateTxnDescription — rewards void handler', () => {
   Assets:Rewards:Points:Avios  -2000 AVIOS
   Expenses:Void  2000 AVIOS
 `)
-    expect(generateTxnDescription(txn)).toBe('2,000 AVIOS expired')
+    expect(generateTxnDescription(txn)).toBe('2K AVIOS expired')
   })
 
   it('phrases rewards-points accrual as added', () => {
