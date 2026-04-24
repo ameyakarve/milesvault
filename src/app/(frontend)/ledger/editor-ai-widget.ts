@@ -23,12 +23,15 @@ import {
   SLATE_600,
   SLATE_50,
 } from './editor-theme'
+import { applyProposal, type Op, type Snapshot } from './propose'
 
 type Role = 'user' | 'assistant'
+type AppliedEdit = { beforeBuffer: string; afterBuffer: string; summary: string }
 type Message = {
   role: Role
   content: string
-  editRange?: { from: number; to: number; insert: string }
+  applied?: AppliedEdit
+  applyError?: string
 }
 type AiStatus = 'idle' | 'streaming' | 'error'
 type AiSession = {
@@ -44,16 +47,32 @@ const aiClose = StateEffect.define<null>()
 const aiAppendUser = StateEffect.define<string>()
 const aiStreamStart = StateEffect.define<null>()
 const aiStreamDelta = StateEffect.define<string>()
-const aiStreamEnd = StateEffect.define<null>()
+const aiStreamEnd = StateEffect.define<{ applied?: AppliedEdit; applyError?: string }>()
 const aiStreamError = StateEffect.define<string>()
-const aiClearLast = StateEffect.define<null>()
 
-function parseEdit(text: string): { reply: string; edit: string | null } {
-  const editMatch = text.match(/<edit>([\s\S]*?)<\/edit>/)
+export const setAiSnapshots = StateEffect.define<readonly Snapshot[]>()
+const snapshotsField = StateField.define<readonly Snapshot[]>({
+  create: () => [],
+  update(value, tr) {
+    for (const e of tr.effects) if (e.is(setAiSnapshots)) return e.value
+    return value
+  },
+})
+
+function parseResponse(text: string): { reply: string; ops: Op[] | null } {
+  const opsMatch = text.match(/<ops>([\s\S]*?)<\/ops>/)
   const replyMatch = text.match(/<reply>([\s\S]*?)<\/reply>/)
-  const edit = editMatch ? editMatch[1].trim() : null
-  const reply = replyMatch ? replyMatch[1].trim() : text.replace(/<\/?(edit|reply)>/g, '').trim()
-  return { reply, edit }
+  let ops: Op[] | null = null
+  if (opsMatch) {
+    try {
+      const parsed = JSON.parse(opsMatch[1].trim())
+      if (Array.isArray(parsed) && parsed.length > 0) ops = parsed as Op[]
+    } catch {}
+  }
+  const reply = replyMatch
+    ? replyMatch[1].trim()
+    : text.replace(/<ops>[\s\S]*?<\/ops>/, '').replace(/<\/?reply>/g, '').trim()
+  return { reply, ops }
 }
 
 const aiField = StateField.define<AiSession | null>({
@@ -94,23 +113,18 @@ const aiField = StateField.define<AiSession | null>({
         const msgs = next.messages.slice()
         const last = msgs[msgs.length - 1]
         if (last && last.role === 'assistant') {
-          const { reply, edit } = parseEdit(last.content)
+          const finalContent =
+            e.value.applied?.summary ?? parseResponse(last.content).reply
           msgs[msgs.length - 1] = {
             role: 'assistant',
-            content: reply,
-            editRange: edit ? { ...next.selection, insert: edit } : undefined,
+            content: finalContent,
+            applied: e.value.applied,
+            applyError: e.value.applyError,
           }
         }
         next = { ...next, messages: msgs, status: 'idle' }
       } else if (next && e.is(aiStreamError)) {
         next = { ...next, status: 'error', error: e.value }
-      } else if (next && e.is(aiClearLast)) {
-        const msgs = next.messages.slice()
-        const last = msgs[msgs.length - 1]
-        if (last && last.role === 'assistant' && last.editRange) {
-          msgs[msgs.length - 1] = { role: 'assistant', content: last.content }
-          next = { ...next, messages: msgs }
-        }
       }
     }
     return next
@@ -143,7 +157,7 @@ class AiWidget extends WidgetType {
       <div class="cm-ai-messages"></div>
       <div class="cm-ai-status" hidden></div>
       <form class="cm-ai-input-row">
-        <textarea class="cm-ai-input" rows="1" placeholder="Ask to edit this transaction… (Enter sends, Esc closes)"></textarea>
+        <textarea class="cm-ai-input" rows="1" placeholder="Ask to edit any transaction… (Enter sends, Esc closes)"></textarea>
         <button type="submit" class="cm-ai-send">Send</button>
         <button type="button" class="cm-ai-close" aria-label="Close">×</button>
       </form>
@@ -151,7 +165,7 @@ class AiWidget extends WidgetType {
     const ac = new AbortController()
     widgetAborts.set(root, ac)
     wireWidget(root, view, this.sessionId, ac.signal)
-    renderFull(root, view.state.field(aiField))
+    renderFull(root, view.state.field(aiField), view.state.doc.toString())
     queueMicrotask(() => {
       root.querySelector<HTMLTextAreaElement>('.cm-ai-input')?.focus()
     })
@@ -214,51 +228,47 @@ function wireWidget(
     'click',
     (ev) => {
       const target = ev.target as HTMLElement
-      if (target.matches('.cm-ai-accept')) {
+      if (target.matches('.cm-ai-undo')) {
         const idx = Number(target.dataset.msg)
-        acceptEdit(view, idx)
-      } else if (target.matches('.cm-ai-reject')) {
-        view.dispatch({ effects: aiClearLast.of(null) })
+        undoEdit(view, idx)
       }
     },
     { signal },
   )
 }
 
-function renderMessageBubble(m: Message, index: number): HTMLDivElement {
+function renderMessageBubble(m: Message, index: number, currentDoc: string): HTMLDivElement {
   const bubble = document.createElement('div')
   bubble.className = `cm-ai-message cm-ai-${m.role}`
   const body = document.createElement('div')
   body.className = 'cm-ai-message-body'
   body.textContent = m.content
   bubble.appendChild(body)
-  if (m.editRange) {
-    const pre = document.createElement('pre')
-    pre.className = 'cm-ai-edit-preview'
-    pre.textContent = m.editRange.insert
-    bubble.appendChild(pre)
+  if (m.applyError) {
+    const err = document.createElement('div')
+    err.className = 'cm-ai-apply-error'
+    err.textContent = `couldn't apply: ${m.applyError}`
+    bubble.appendChild(err)
+  }
+  if (m.applied) {
     const actions = document.createElement('div')
     actions.className = 'cm-ai-actions'
-    const acceptBtn = document.createElement('button')
-    acceptBtn.className = 'cm-ai-accept'
-    acceptBtn.dataset.msg = String(index)
-    acceptBtn.textContent = 'Accept'
-    const rejectBtn = document.createElement('button')
-    rejectBtn.className = 'cm-ai-reject'
-    rejectBtn.dataset.msg = String(index)
-    rejectBtn.textContent = 'Reject'
-    actions.appendChild(acceptBtn)
-    actions.appendChild(rejectBtn)
+    const undo = document.createElement('button')
+    undo.className = 'cm-ai-undo'
+    undo.dataset.msg = String(index)
+    undo.textContent = 'Undo'
+    undo.disabled = currentDoc !== m.applied.afterBuffer
+    actions.appendChild(undo)
     bubble.appendChild(actions)
   }
   return bubble
 }
 
-function renderFull(root: HTMLElement, state: AiSession | null) {
+function renderFull(root: HTMLElement, state: AiSession | null, currentDoc: string) {
   if (!state || state.id !== root.dataset.aiSession) return
   const messagesEl = root.querySelector<HTMLDivElement>('.cm-ai-messages')!
   messagesEl.replaceChildren(
-    ...state.messages.map((m, i) => renderMessageBubble(m, i)),
+    ...state.messages.map((m, i) => renderMessageBubble(m, i, currentDoc)),
   )
   renderStatus(root, state)
 }
@@ -280,9 +290,24 @@ function renderStatus(root: HTMLElement, state: AiSession) {
   input.disabled = state.status === 'streaming'
 }
 
-function patchRender(root: HTMLElement, prev: AiSession | null, next: AiSession) {
+function refreshUndoButtons(root: HTMLElement, state: AiSession, currentDoc: string) {
+  const messagesEl = root.querySelector<HTMLDivElement>('.cm-ai-messages')!
+  state.messages.forEach((m, i) => {
+    if (!m.applied) return
+    const bubble = messagesEl.children[i] as HTMLElement | undefined
+    const btn = bubble?.querySelector<HTMLButtonElement>('.cm-ai-undo')
+    if (btn) btn.disabled = currentDoc !== m.applied.afterBuffer
+  })
+}
+
+function patchRender(
+  root: HTMLElement,
+  prev: AiSession | null,
+  next: AiSession,
+  currentDoc: string,
+) {
   if (!prev || prev.id !== next.id || prev.messages.length !== next.messages.length) {
-    renderFull(root, next)
+    renderFull(root, next, currentDoc)
     return
   }
   const lastIdx = next.messages.length - 1
@@ -291,9 +316,10 @@ function patchRender(root: HTMLElement, prev: AiSession | null, next: AiSession)
   const structureChanged =
     !lastPrev ||
     lastPrev.role !== lastNext.role ||
-    Boolean(lastPrev.editRange) !== Boolean(lastNext.editRange)
+    Boolean(lastPrev.applied) !== Boolean(lastNext.applied) ||
+    Boolean(lastPrev.applyError) !== Boolean(lastNext.applyError)
   if (structureChanged) {
-    renderFull(root, next)
+    renderFull(root, next, currentDoc)
     return
   }
   const messagesEl = root.querySelector<HTMLDivElement>('.cm-ai-messages')!
@@ -312,10 +338,12 @@ const aiSyncPlugin = ViewPlugin.fromClass(
     update(update: ViewUpdate) {
       const prev = update.startState.field(aiField, false)
       const next = update.state.field(aiField, false)
-      if (prev === next) return
+      const sessionChanged = prev !== next
       if (!next) {
-        this.root = null
-        this.sessionId = null
+        if (sessionChanged) {
+          this.root = null
+          this.sessionId = null
+        }
         return
       }
       if (this.sessionId !== next.id || !this.root?.isConnected) {
@@ -324,7 +352,13 @@ const aiSyncPlugin = ViewPlugin.fromClass(
         )
         this.sessionId = next.id
       }
-      if (this.root) patchRender(this.root, prev ?? null, next)
+      if (!this.root) return
+      const currentDoc = update.state.doc.toString()
+      if (sessionChanged) {
+        patchRender(this.root, prev ?? null, next, currentDoc)
+      } else if (update.docChanged && next.messages.some((m) => m.applied)) {
+        refreshUndoButtons(this.root, next, currentDoc)
+      }
     }
   },
 )
@@ -340,6 +374,8 @@ async function submitPrompt(view: EditorView, sessionId: string, text: string) {
   const after = view.state.field(aiField, false)
   if (!after) return
 
+  const buffer = view.state.doc.toString()
+  const snapshots = view.state.field(snapshotsField)
   const docLen = view.state.doc.length
   const surroundingFrom = view.state.doc.lineAt(Math.max(0, after.selection.from - 1)).from
   const surroundingTo = view.state.doc.lineAt(Math.min(docLen, after.selection.to + 1)).to
@@ -355,6 +391,8 @@ async function submitPrompt(view: EditorView, sessionId: string, text: string) {
         messages: after.messages
           .filter((m) => m.role !== 'assistant' || m.content.length > 0)
           .map(({ role, content }) => ({ role, content })),
+        buffer,
+        snapshots: snapshots.map((s) => ({ id: s.id, raw_text: s.raw_text })),
         selectionText,
         surrounding,
       }),
@@ -373,7 +411,31 @@ async function submitPrompt(view: EditorView, sessionId: string, text: string) {
     }
     const tail = decoder.decode()
     if (tail) view.dispatch({ effects: aiStreamDelta.of(tail) })
-    view.dispatch({ effects: aiStreamEnd.of(null) })
+
+    const finalState = view.state.field(aiField, false)
+    const lastMsg = finalState?.messages[finalState.messages.length - 1]
+    const parsed = parseResponse(lastMsg?.content ?? '')
+    if (!parsed.ops) {
+      view.dispatch({ effects: aiStreamEnd.of({}) })
+      return
+    }
+    const beforeBuffer = view.state.doc.toString()
+    const currentSnapshots = view.state.field(snapshotsField)
+    const result = applyProposal(beforeBuffer, currentSnapshots, parsed.ops)
+    if (result.ok !== true) {
+      view.dispatch({ effects: aiStreamEnd.of({ applyError: result.reason }) })
+      return
+    }
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: result.buffer },
+      effects: aiStreamEnd.of({
+        applied: {
+          beforeBuffer,
+          afterBuffer: result.buffer,
+          summary: parsed.reply,
+        },
+      }),
+    })
   } catch (err) {
     view.dispatch({ effects: aiStreamError.of((err as Error).message) })
   } finally {
@@ -381,18 +443,15 @@ async function submitPrompt(view: EditorView, sessionId: string, text: string) {
   }
 }
 
-function acceptEdit(view: EditorView, msgIndex: number) {
+function undoEdit(view: EditorView, msgIndex: number) {
   const state = view.state.field(aiField, false)
   if (!state) return
   const msg = state.messages[msgIndex]
-  if (!msg?.editRange) return
+  if (!msg?.applied) return
+  const current = view.state.doc.toString()
+  if (current !== msg.applied.afterBuffer) return
   view.dispatch({
-    changes: {
-      from: msg.editRange.from,
-      to: msg.editRange.to,
-      insert: msg.editRange.insert,
-    },
-    effects: aiClearLast.of(null),
+    changes: { from: 0, to: view.state.doc.length, insert: msg.applied.beforeBuffer },
   })
 }
 
@@ -462,16 +521,14 @@ const aiTheme = EditorView.theme({
   '.cm-ai-user .cm-ai-message-body': { color: SLATE_600 },
   '.cm-ai-user .cm-ai-message-body:before': { content: '"› "', color: SLATE_400 },
   '.cm-ai-assistant .cm-ai-message-body': { color: NAVY_700 },
-  '.cm-ai-edit-preview': {
+  '.cm-ai-apply-error': {
     margin: '4px 0 0',
-    padding: '8px 10px',
+    padding: '6px 8px',
     backgroundColor: SLATE_50,
     borderRadius: '6px',
     border: `1px solid ${SLATE_200}`,
-    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-    fontSize: '12px',
-    whiteSpace: 'pre',
-    overflowX: 'auto',
+    color: ROSE_700,
+    fontSize: '11px',
   },
   '.cm-ai-actions': { display: 'flex', gap: '6px', marginTop: '4px' },
   '.cm-ai-actions button': {
@@ -480,12 +537,12 @@ const aiTheme = EditorView.theme({
     border: `1px solid ${SLATE_200}`,
     borderRadius: '4px',
     backgroundColor: '#FFFFFF',
+    color: NAVY_700,
     cursor: 'pointer',
   },
-  '.cm-ai-actions .cm-ai-accept': {
-    backgroundColor: NAVY_700,
-    color: '#FFFFFF',
-    borderColor: NAVY_700,
+  '.cm-ai-actions button:disabled': {
+    opacity: '0.4',
+    cursor: 'default',
   },
   '.cm-ai-input-row': {
     display: 'flex',
@@ -532,6 +589,7 @@ const aiTheme = EditorView.theme({
 
 export const aiWidget: Extension = [
   aiField,
+  snapshotsField,
   aiSyncPlugin,
   Prec.highest(openKeymap),
   slashAiTrigger,
