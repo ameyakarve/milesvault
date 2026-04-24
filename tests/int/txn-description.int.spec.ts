@@ -96,6 +96,40 @@ describe('generateTxnDescription — expense + payment handler', () => {
   })
 })
 
+describe('generateTxnDescription — status tier handler', () => {
+  it('phrases status-tier expiry via Expenses:Void', () => {
+    const txn = firstEntry(`
+2026-12-31 * "Marriott" "tier reset"
+  Assets:Rewards:Status:Marriott  -50 MAR-NIGHTS
+  Expenses:Void  50 MAR-NIGHTS
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      '50 MAR-NIGHTS expired from Marriott status',
+    )
+  })
+
+  it('phrases status-tier accrual as added', () => {
+    const txn = firstEntry(`
+2026-04-24 * "Marriott" "night credit"
+  Assets:Rewards:Status:Marriott  10 MAR-NIGHTS
+  Expenses:Void  -10 MAR-NIGHTS
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      '10 MAR-NIGHTS added to Marriott status',
+    )
+  })
+
+  it('does not trigger when there are extra postings', () => {
+    const txn = firstEntry(`
+2026-04-24 * "Marriott" "night credit with fee"
+  Assets:Rewards:Status:Marriott  10 MAR-NIGHTS
+  Expenses:Void  -10 MAR-NIGHTS
+  Expenses:Services  0 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+})
+
 describe('generateTxnDescription — negative cases return fallback', () => {
   it('returns fallback when the txn has no expense postings', () => {
     const txn = firstEntry(`
