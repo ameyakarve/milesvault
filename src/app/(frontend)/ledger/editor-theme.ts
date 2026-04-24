@@ -17,6 +17,8 @@ const VIOLET_700 = '#6D28D9'
 const MOCHA_700 = '#6F4518'
 const ROSE_700 = '#BE123C'
 
+export const PAPER_BG = '#EEF2F6'
+
 const TOKEN_STYLE = {
   date: { color: NAVY_700, fontWeight: '600' },
   number: { color: NAVY_700, fontWeight: '600' },
@@ -48,14 +50,14 @@ export const scandiEditorTheme = EditorView.theme(
     '&': {
       height: '100%',
       fontSize: '13px',
-      backgroundColor: '#EEF2F6',
+      backgroundColor: PAPER_BG,
     },
     '.cm-scroller': {
       overflow: 'auto',
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
       lineHeight: '1.6',
       fontVariantNumeric: 'tabular-nums',
-      backgroundColor: '#EEF2F6',
+      backgroundColor: PAPER_BG,
     },
     '.cm-content': {
       padding: '12px 0',
@@ -126,7 +128,7 @@ export const scandiEditorTheme = EditorView.theme(
       boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
     },
     '.cm-gutters': {
-      backgroundColor: '#EEF2F6',
+      backgroundColor: PAPER_BG,
       color: SLATE_400,
       border: 'none',
       borderRight: `1px solid ${SLATE_100}`,

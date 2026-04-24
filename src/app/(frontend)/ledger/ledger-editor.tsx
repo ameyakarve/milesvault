@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import CodeMirror, { ExternalChange } from '@uiw/react-codemirror'
+import type { Extension } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import {
   type AccountCompleter,
@@ -21,6 +22,7 @@ type LedgerEditorProps = {
   onSave?: () => void
   readOnly?: boolean
   className?: string
+  extraExtensions?: Extension
 }
 
 export type LedgerEditorHandle = {
@@ -39,6 +41,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
     onSave,
     readOnly,
     className,
+    extraExtensions,
   },
   ref,
 ) {
@@ -88,6 +91,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
           },
         },
       ]),
+      ...(extraExtensions ? [extraExtensions] : []),
     ],
     [],
   )
