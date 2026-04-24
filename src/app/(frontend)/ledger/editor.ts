@@ -53,6 +53,7 @@ import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 import { txnDescriptions } from './editor-txn-descriptions'
+import { aiWidget } from './editor-ai-widget'
 
 const beancountLanguage = LRLanguage.define({
   name: 'beancount',
@@ -319,6 +320,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     amountChips,
     diffChips,
     txnDescriptions,
+    aiWidget,
     scandiEditorTheme,
   ]
 }
