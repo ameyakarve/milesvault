@@ -162,7 +162,7 @@ class AiWidget extends WidgetType {
     widgetAborts.delete(dom)
   }
   ignoreEvent(): boolean {
-    return false
+    return true
   }
 }
 
