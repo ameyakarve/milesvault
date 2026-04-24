@@ -422,7 +422,13 @@ async function submitPrompt(view: EditorView, sessionId: string, text: string) {
     }
     const beforeBuffer = view.state.doc.toString()
     const currentSnapshots = view.state.field(snapshotsField)
-    const result = applyProposal(beforeBuffer, currentSnapshots, parsed.ops)
+    const anchorRaw = view.state.doc.sliceString(after.selection.from, after.selection.to).trim()
+    const result = applyProposal(
+      beforeBuffer,
+      currentSnapshots,
+      parsed.ops,
+      anchorRaw ? { rawText: anchorRaw } : undefined,
+    )
     if (result.ok !== true) {
       view.dispatch({ effects: aiStreamEnd.of({ applyError: result.reason }) })
       return

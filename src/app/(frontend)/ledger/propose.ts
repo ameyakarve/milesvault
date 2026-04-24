@@ -37,10 +37,23 @@ function appendEntry(buffer: string, clean: string): string {
   return stripped.length === 0 ? `${clean}\n` : `${stripped}\n\n${clean}\n`
 }
 
+function insertAfterEndLine(buffer: string, endLine: number, clean: string): string {
+  const offsets = lineOffsets(buffer)
+  const insertAt = offsets[Math.min(endLine + 1, offsets.length - 1)]
+  const prefix = buffer.slice(0, insertAt)
+  const suffix = buffer.slice(insertAt)
+  const lead = prefix.length === 0 || prefix.endsWith('\n\n') ? '' : '\n'
+  const trail = suffix.length === 0 || suffix.startsWith('\n') ? '\n' : '\n\n'
+  return `${prefix}${lead}${clean}${trail}${suffix}`
+}
+
+export type InsertAnchor = { rawText: string }
+
 export function applyProposal(
   buffer: string,
   snapshots: ReadonlyArray<Snapshot>,
   ops: ReadonlyArray<Op>,
+  anchor?: InsertAnchor,
 ): ProposalResult {
   if (ops.length === 0) return { ok: true, buffer }
 
@@ -64,10 +77,18 @@ export function applyProposal(
   }
 
   let current = buffer
+  let anchorRaw = anchor?.rawText.trim() ?? null
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i]
     if (op.op === 'create') {
-      current = appendEntry(current, op.raw_text.trim())
+      const clean = op.raw_text.trim()
+      const loc = anchorRaw ? locateByRawText(current, anchorRaw) : null
+      if (loc) {
+        current = insertAfterEndLine(current, loc.endLine, clean)
+      } else {
+        current = appendEntry(current, clean)
+      }
+      anchorRaw = clean
       continue
     }
     const oldRaw = idToRaw.get(op.id)
