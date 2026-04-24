@@ -150,6 +150,7 @@ export function LedgerView({ email }: { email: string }) {
   const [buffer, setBuffer] = useState(baseline)
   useEffect(() => {
     setBuffer(baseline)
+    editorRef.current?.resetCursor()
   }, [baseline])
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')

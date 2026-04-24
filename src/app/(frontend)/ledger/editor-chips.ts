@@ -33,6 +33,12 @@ const INCOME_VOID_PATH = 'Income:Void'
 const CC_PATH = 'Liabilities:CC'
 const BANK_PATH = 'Assets:Bank'
 const GIFT_CARDS_PATH = 'Assets:Loaded:GiftCards'
+const FOREX_CARDS_PATH = 'Assets:Loaded:ForexCards'
+const PREPAID_CARDS_PATH = 'Assets:Loaded:PrepaidCards'
+const WALLETS_PATH = 'Assets:Loaded:Wallets'
+const DC_PATH = 'Assets:DC'
+const UPI_PATH = 'Assets:UPI'
+const CASH_PATH = 'Assets:Cash'
 
 function hitFor(
   acct: string,
@@ -64,7 +70,35 @@ function signAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
     return `Spend on ${r.chipLabel}`
   }
   if (r.matchedPath === CC_PATH) {
+    if (sign !== undefined && sign > 0) return `Credited to ${r.chipLabel} CC`
     return `Paid using ${r.chipLabel} CC`
+  }
+  if (r.matchedPath === DC_PATH) {
+    if (sign !== undefined && sign > 0) return `Credited to ${r.chipLabel} DC`
+    return `Paid using ${r.chipLabel} DC`
+  }
+  if (r.matchedPath === UPI_PATH) {
+    if (sign !== undefined && sign > 0) return `Credited to ${r.chipLabel} UPI`
+    return `Paid using ${r.chipLabel} UPI`
+  }
+  if (r.matchedPath === CASH_PATH) {
+    if (sign !== undefined && sign > 0) return `Credited to Cash`
+    return `Paid in Cash`
+  }
+  if (r.matchedPath === FOREX_CARDS_PATH && r.tail.length > 0) {
+    const brand = r.tail.join(' ')
+    if (sign !== undefined && sign > 0) return `Credited to ${brand} Forex card`
+    return `Paid using ${brand} Forex card`
+  }
+  if (r.matchedPath === PREPAID_CARDS_PATH && r.tail.length > 0) {
+    const brand = r.tail.join(' ')
+    if (sign !== undefined && sign > 0) return `Credited to ${brand} prepaid card`
+    return `Paid using ${brand} prepaid card`
+  }
+  if (r.matchedPath === WALLETS_PATH && r.tail.length > 0) {
+    const brand = r.tail.join(' ')
+    if (sign !== undefined && sign > 0) return `Credited to ${brand} wallet`
+    return `Paid using ${brand} wallet`
   }
   if (r.matchedPath === GIFT_CARDS_PATH && r.tail.length > 0) {
     const base = `${r.tail.join(' ')} gift card`

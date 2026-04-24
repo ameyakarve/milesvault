@@ -25,6 +25,7 @@ type LedgerEditorProps = {
 
 export type LedgerEditorHandle = {
   replaceDoc: (next: string) => void
+  resetCursor: () => void
   getView: () => EditorView | null
 }
 
@@ -59,6 +60,12 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
           changes: { from: 0, to: view.state.doc.length, insert: next },
           annotations: [ExternalChange.of(true)],
         })
+      },
+      resetCursor: () => {
+        const view = viewRef.current
+        if (!view) return
+        view.dispatch({ selection: { anchor: 0, head: 0 }, scrollIntoView: true })
+        view.focus()
       },
       getView: () => viewRef.current,
     }),
@@ -116,6 +123,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
       onCreateEditor={(view) => {
         viewRef.current = view
         view.dispatch({ selection: { anchor: 0, head: 0 }, scrollIntoView: true })
+        view.focus()
       }}
       extensions={extensions}
       basicSetup={{
