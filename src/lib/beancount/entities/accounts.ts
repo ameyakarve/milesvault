@@ -34,6 +34,7 @@ import {
   Plug,
   Receipt,
   Repeat,
+  Scale,
   ShieldPlus,
   Shirt,
   ShoppingBag,
@@ -307,7 +308,7 @@ const NODES: readonly NodeSpec[] = [
     color: 'slate',
   }),
 
-  n('Expenses:Void', { glyph: g(Sparkles, 'void', 'Void'), color: 'sky' }),
+  n('Expenses:Void', { glyph: g(Scale, 'void', 'Void'), color: 'sky' }),
   n('Expenses:Taxes', { glyph: g(Receipt, 'taxes', 'Taxes'), color: 'slate' }),
   n('Expenses:Misc', { glyph: g(CircleEllipsis, 'misc', 'Misc'), color: 'slate' }),
 ]
