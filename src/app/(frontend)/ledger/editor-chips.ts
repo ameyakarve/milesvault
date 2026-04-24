@@ -113,7 +113,8 @@ function signAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
     return `${r.tail.join(':')} Status: ${sign > 0 ? 'earned' : 'expired'}`
   }
   if (r.matchedPath === BANK_PATH && r.tail.length > 0) {
-    return `${sign > 0 ? 'Credited' : 'Debited'} from ${r.chipLabel}`
+    if (sign > 0) return `Credited to ${r.chipLabel}`
+    return `Debited from ${r.chipLabel}`
   }
   return r.chipLabel
 }

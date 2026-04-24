@@ -18,6 +18,7 @@ const HANDLERS: readonly DescribeHandler[] = [
   rewardsTransferHandler,
   mixedRedemptionHandler,
   rewardsRedemptionHandler,
+  expenseWithCashbackHandler,
   expensePaymentHandler,
 ]
 
@@ -311,6 +312,66 @@ function giftCardRedemptionHandler(txn: ParsedTxn): DescribeResult {
   return {
     kind: 'ok',
     text: `${points} ${pointsUnit} redeemed for ${giftCcy} ${giftAmount} ${giftLabel}`,
+  }
+}
+
+function expenseWithCashbackHandler(txn: ParsedTxn): DescribeResult {
+  if (txn.postings.length !== 4) return { kind: 'unhandled' }
+  let expense: ParsedPosting | null = null
+  const ccPostings: ParsedPosting[] = []
+  let cardAccount: string | null = null
+  let cardLabel: string | null = null
+  let incomeVoid: ParsedPosting | null = null
+
+  for (const posting of txn.postings) {
+    const resolved = resolveAccount(posting.account)
+    if (!resolved) return { kind: 'unhandled' }
+    if (resolved.matchedPath.startsWith('Expenses:')) {
+      if (expense !== null) return { kind: 'unhandled' }
+      expense = posting
+      continue
+    }
+    if (resolved.matchedPath === CC_PATH) {
+      if (cardAccount === null) {
+        cardAccount = posting.account
+        cardLabel = resolved.chipLabel
+      } else if (cardAccount !== posting.account) {
+        return { kind: 'unhandled' }
+      }
+      ccPostings.push(posting)
+      continue
+    }
+    if (posting.account === INCOME_VOID_PATH) {
+      if (incomeVoid !== null) return { kind: 'unhandled' }
+      incomeVoid = posting
+      continue
+    }
+    return { kind: 'unhandled' }
+  }
+
+  if (!expense || !incomeVoid || ccPostings.length !== 2 || cardLabel === null) {
+    return { kind: 'unhandled' }
+  }
+  const expCcy = expense.amount?.currency
+  if (!expCcy) return { kind: 'unhandled' }
+  const expN = parseFloat(expense.amount!.numberText)
+  if (!Number.isFinite(expN) || expN <= 0) return { kind: 'unhandled' }
+
+  let cashbackN: number | null = null
+  for (const p of ccPostings) {
+    if (!p.amount?.currency || p.amount.currency !== expCcy) return { kind: 'unhandled' }
+    const n = parseFloat(p.amount.numberText)
+    if (!Number.isFinite(n) || n === 0) return { kind: 'unhandled' }
+    if (n > 0) {
+      if (cashbackN !== null) return { kind: 'unhandled' }
+      cashbackN = n
+    }
+  }
+  if (cashbackN === null) return { kind: 'unhandled' }
+
+  return {
+    kind: 'ok',
+    text: `${expCcy} ${formatAmount(expN)} Paid with ${cardLabel} with ${expCcy} ${formatAmount(cashbackN)} cashback`,
   }
 }
 
