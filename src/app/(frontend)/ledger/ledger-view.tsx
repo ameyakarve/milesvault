@@ -74,7 +74,8 @@ function PaginationStrip({
   )
 }
 
-export function LedgerView(_: { email: string }) {
+export function LedgerView({ email }: { email: string }) {
+  const avatarInitial = (email?.[0] ?? 'a').toUpperCase()
   const [page, setPage] = useState(1)
   const state = useTransactions(page)
   const snapshots = useMemo(() => buildSnapshots(state.rows), [state.rows])
@@ -202,16 +203,47 @@ export function LedgerView(_: { email: string }) {
       : undefined
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-white text-navy-700 overflow-hidden font-sans">
-      <header className="h-[32px] px-4 flex items-center justify-between bg-white shrink-0 z-20 border-b border-slate-200">
-        <div className="flex items-center gap-2">
-          <span className="font-sans font-medium text-navy-700 text-[13px]">milesvault</span>
-          <span className="font-sans font-normal text-slate-500 text-[12px]">/ ledger</span>
+    <div className="w-screen h-screen flex flex-col bg-scandi-backdrop text-navy-700 overflow-hidden font-sans">
+      <header className="w-full bg-white border-b border-slate-200 shrink-0 z-20">
+        <div className="flex justify-between items-center w-full px-6 py-3 max-w-[960px] mx-auto">
+          <div className="flex items-center gap-6">
+            <span className="text-[13px] font-black tracking-tighter text-navy-700 uppercase">
+              milesvault
+            </span>
+            <nav className="flex items-center gap-6">
+              <a
+                href="#"
+                className="text-[12px] uppercase tracking-wider font-bold text-scandi-accent border-b-2 border-scandi-accent pb-1"
+              >
+                Ledger
+              </a>
+              <a
+                href="#"
+                className="text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-700 transition-colors"
+              >
+                Dashboard
+              </a>
+              <a
+                href="#"
+                className="text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-700 transition-colors"
+              >
+                Insights
+              </a>
+            </nav>
+          </div>
+          <div className="flex items-center gap-3">
+            <HelpButton />
+            <div
+              className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center"
+              title={email}
+            >
+              <span className="text-[11px] font-medium text-slate-600">{avatarInitial}</span>
+            </div>
+          </div>
         </div>
-        <HelpButton />
       </header>
 
-      <main className="flex-1 flex flex-col bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
+      <main className="flex-1 flex flex-col bg-scandi-backdrop overflow-hidden min-h-0 w-full max-w-[960px] mx-auto">
         <section className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           <PaneCap className="justify-between">
             <PaneLabel>EDITOR</PaneLabel>
