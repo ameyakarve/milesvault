@@ -3,7 +3,6 @@ import type { ParsedPosting, ParsedTxn } from './parse'
 
 export type DescribeResult =
   | { kind: 'ok'; text: string }
-  | { kind: 'untyped'; reason: string }
   | { kind: 'unhandled' }
 
 type DescribeHandler = (txn: ParsedTxn) => DescribeResult
@@ -25,48 +24,38 @@ export function generateTxnDescription(txn: ParsedTxn): string {
   for (const handler of HANDLERS) {
     const result = handler(txn)
     if (result.kind === 'ok') return result.text
-    if (result.kind === 'untyped') return `⚠ ${result.reason}`
   }
   return FALLBACK
 }
 
 function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
-  if (!txn.postings.some(isExpensePosting)) return { kind: 'unhandled' }
-
   const expenses: ParsedPosting[] = []
-  const payments: ParsedPosting[] = []
-  const untyped: string[] = []
   let paymentAccount: string | null = null
   let paymentLabel: string | null = null
-  let mixedPayment = false
+  let paymentCount = 0
 
   for (const posting of txn.postings) {
     const resolved = resolveAccount(posting.account)
-    if (!resolved || !resolved.glyph) {
-      untyped.push(posting.account)
-      continue
-    }
+    if (!resolved) return { kind: 'unhandled' }
+
     if (resolved.matchedPath.startsWith('Expenses')) {
       expenses.push(posting)
       continue
     }
     if (PAYMENT_INSTRUMENT_PATHS.includes(resolved.matchedPath)) {
-      payments.push(posting)
+      paymentCount += 1
       if (paymentAccount === null) {
         paymentAccount = posting.account
         paymentLabel = resolved.chipLabel
       } else if (paymentAccount !== posting.account) {
-        mixedPayment = true
+        return { kind: 'unhandled' }
       }
       continue
     }
-    untyped.push(posting.account)
+    return { kind: 'unhandled' }
   }
 
-  if (untyped.length > 0) {
-    return { kind: 'untyped', reason: `Untyped account: ${untyped.join(', ')}` }
-  }
-  if (payments.length === 0 || mixedPayment || paymentLabel === null) {
+  if (expenses.length === 0 || paymentCount === 0 || paymentLabel === null) {
     return { kind: 'unhandled' }
   }
 
@@ -84,11 +73,6 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
     kind: 'ok',
     text: `${currency} ${formatAmount(total)} paid using ${paymentLabel}`,
   }
-}
-
-function isExpensePosting(p: ParsedPosting): boolean {
-  const r = resolveAccount(p.account)
-  return r?.matchedPath.startsWith('Expenses') ?? false
 }
 
 function formatAmount(n: number): string {
