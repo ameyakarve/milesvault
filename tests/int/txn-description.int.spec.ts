@@ -11,6 +11,25 @@ function firstEntry(source: string): ParsedTxn {
 }
 
 describe('generateTxnDescription — expense + payment handler', () => {
+  it('phrases a refund (net-negative expense) as "refunded to"', () => {
+    const txn = firstEntry(`
+2026-04-24 * "Amazon" "return"
+  Expenses:Shopping  -500 INR
+  Liabilities:CC:HDFC:Infinia  500 INR
+`)
+    expect(generateTxnDescription(txn)).toBe('INR 500 refunded to HDFC Infinia')
+  })
+
+  it('phrases a partial refund as "refunded to" when net expense is negative', () => {
+    const txn = firstEntry(`
+2026-04-24 * "Amazon" "partial return"
+  Expenses:Shopping  200 INR
+  Expenses:Shopping  -500 INR
+  Assets:DC:HDFC  300 INR
+`)
+    expect(generateTxnDescription(txn)).toBe('INR 300 refunded to HDFC')
+  })
+
   it('describes single expense paid via credit card', () => {
     const txn = firstEntry(`
 2026-04-24 * "Starbucks" "Latte"

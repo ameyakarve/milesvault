@@ -82,9 +82,10 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
     resolvedTotal += resolved.amount
   }
 
-  let text = `${currency} ${formatAmount(total)} paid using ${paymentLabel}`
+  const verb = total < 0 ? 'refunded to' : 'paid using'
+  let text = `${currency} ${formatAmount(Math.abs(total))} ${verb} ${paymentLabel}`
   if (hasPrice && !priceSkew && resolvedCurrency !== null) {
-    text += ` (${resolvedCurrency} ${formatAmount(resolvedTotal)})`
+    text += ` (${resolvedCurrency} ${formatAmount(Math.abs(resolvedTotal))})`
   }
   return { kind: 'ok', text }
 }
