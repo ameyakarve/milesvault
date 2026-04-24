@@ -48,8 +48,18 @@ export function renderChip(spec: ChipSpec): HTMLElement {
   const leading = DOTS_LEADING.has(spec.variant)
 
   if (leading) appendDots(span, padCh)
-  if (spec.svg) appendIcon(span, spec.svg)
-  if (spec.label) span.appendChild(document.createTextNode(spec.label))
+
+  if (spec.variant === 'account') {
+    const pill = document.createElement('span')
+    pill.className = 'cm-chip__pill'
+    if (spec.svg) appendIcon(pill, spec.svg)
+    if (spec.label) pill.appendChild(document.createTextNode(spec.label))
+    span.appendChild(pill)
+  } else {
+    if (spec.svg) appendIcon(span, spec.svg)
+    if (spec.label) span.appendChild(document.createTextNode(spec.label))
+  }
+
   if (!leading) appendDots(span, padCh)
 
   return span
