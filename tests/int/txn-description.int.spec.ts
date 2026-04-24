@@ -134,13 +134,22 @@ describe('generateTxnDescription — negative cases return fallback', () => {
     expect(generateTxnDescription(txn)).toBe(FALLBACK)
   })
 
-  it('returns fallback for a typed-but-non-payment instrument', () => {
+  it('describes payment via wallet', () => {
     const txn = firstEntry(`
-2026-04-24 * "Gift card top-up"
-  Expenses:Misc  500 INR
-  Assets:Loaded:Wallets  -500 INR
+2026-04-24 * "Snacks"
+  Expenses:Food:Snacks  120 INR
+  Assets:Loaded:Wallets:Paytm  -120 INR
 `)
-    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+    expect(generateTxnDescription(txn)).toBe('INR 120 paid using Paytm')
+  })
+
+  it('describes payment via forex card', () => {
+    const txn = firstEntry(`
+2026-04-24 * "Coffee abroad"
+  Expenses:Food:Coffee  5 USD
+  Assets:Loaded:ForexCards:HDFC  -5 USD
+`)
+    expect(generateTxnDescription(txn)).toBe('USD 5 paid using HDFC')
   })
 
   it('returns fallback for income postings in an expense-shaped txn', () => {
