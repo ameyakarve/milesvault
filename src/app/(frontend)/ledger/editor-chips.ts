@@ -25,6 +25,7 @@ type Hit = {
 }
 
 const POINTS_PATH = 'Assets:Rewards:Points'
+const STATUS_PATH = 'Assets:Rewards:Status'
 
 function hitFor(acct: string, start: number, signByAcctPos: Map<number, number>): Hit | null {
   const r = resolveAccount(acct)
@@ -33,15 +34,20 @@ function hitFor(acct: string, start: number, signByAcctPos: Map<number, number>)
     from: start,
     to: start + r.consumedLen,
     glyph: r.glyph,
-    chipLabel: pointsAwareLabel(r, signByAcctPos.get(start)),
+    chipLabel: signAwareLabel(r, signByAcctPos.get(start)),
     tooltip: tooltipFor(acct, r),
   }
 }
 
-function pointsAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
-  if (r.matchedPath !== POINTS_PATH || r.tail.length === 0) return r.chipLabel
-  if (sign === undefined || sign === 0) return r.chipLabel
-  return `${r.chipLabel} ${sign > 0 ? 'earned' : 'burned'}`
+function signAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
+  if (sign === undefined || sign === 0 || r.tail.length === 0) return r.chipLabel
+  if (r.matchedPath === POINTS_PATH) {
+    return `${r.chipLabel} ${sign > 0 ? 'earned' : 'burned'}`
+  }
+  if (r.matchedPath === STATUS_PATH) {
+    return `${r.tail.join(':')} Status: ${sign > 0 ? 'earned' : 'expired'}`
+  }
+  return r.chipLabel
 }
 
 function tooltipFor(acct: string, r: ResolvedAccount): string {
