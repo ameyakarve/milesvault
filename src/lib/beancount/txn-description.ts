@@ -60,7 +60,7 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
       }
       continue
     }
-    return { kind: 'unhandled' }
+    untyped.push(posting.account)
   }
 
   if (untyped.length > 0) {
