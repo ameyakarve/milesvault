@@ -15,6 +15,7 @@ const HANDLERS: readonly DescribeHandler[] = [
   cardVoidAdjustmentHandler,
   statementCreditHandler,
   giftCardRedemptionHandler,
+  rewardsTransferHandler,
   mixedRedemptionHandler,
   rewardsRedemptionHandler,
   expensePaymentHandler,
@@ -310,6 +311,38 @@ function giftCardRedemptionHandler(txn: ParsedTxn): DescribeResult {
   return {
     kind: 'ok',
     text: `${points} ${pointsUnit} redeemed for ${giftCcy} ${giftAmount} ${giftLabel}`,
+  }
+}
+
+function rewardsTransferHandler(txn: ParsedTxn): DescribeResult {
+  if (txn.postings.length !== 2) return { kind: 'unhandled' }
+  let source: ParsedPosting | null = null
+  let dest: ParsedPosting | null = null
+  for (const posting of txn.postings) {
+    const resolved = resolveAccount(posting.account)
+    if (!resolved || resolved.matchedPath !== REWARDS_POINTS_PATH) return { kind: 'unhandled' }
+    if (!posting.amount?.currency) return { kind: 'unhandled' }
+    const n = parseFloat(posting.amount.numberText)
+    if (!Number.isFinite(n)) return { kind: 'unhandled' }
+    if (n < 0) {
+      if (source !== null) return { kind: 'unhandled' }
+      source = posting
+    } else if (n > 0) {
+      if (dest !== null) return { kind: 'unhandled' }
+      dest = posting
+    } else {
+      return { kind: 'unhandled' }
+    }
+  }
+  if (!source || !dest || !source.amount || !dest.amount) return { kind: 'unhandled' }
+
+  const sourceN = parseFloat(source.amount.numberText)
+  const destN = parseFloat(dest.amount.numberText)
+  const sourceUnit = source.amount.currency
+  const destUnit = dest.amount.currency
+  return {
+    kind: 'ok',
+    text: `${formatAmount(Math.abs(sourceN))} ${sourceUnit} transferred to ${formatAmount(destN)} ${destUnit}`,
   }
 }
 

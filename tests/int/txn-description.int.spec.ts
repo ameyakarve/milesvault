@@ -267,6 +267,45 @@ describe('generateTxnDescription — statement credit handler', () => {
   })
 })
 
+describe('generateTxnDescription — rewards transfer handler', () => {
+  it('phrases a same-rate transfer', () => {
+    const txn = firstEntry(`
+2026-04-21 * "Amex MR" "transfer to Marriott Bonvoy"
+  Assets:Rewards:Points:MR         -20000 MR
+  Assets:Rewards:Points:Marriott    20000 MARRIOTT @@ 20000 MR
+`)
+    expect(generateTxnDescription(txn)).toBe('20K MR transferred to 20K MARRIOTT')
+  })
+
+  it('handles @@ on the source (negative) posting', () => {
+    const txn = firstEntry(`
+2026-04-21 * "Amex MR" "transfer to Marriott, price on source"
+  Assets:Rewards:Points:MR         -20000 MR @@ 20000 MARRIOTT
+  Assets:Rewards:Points:Marriott    20000 MARRIOTT
+`)
+    expect(generateTxnDescription(txn)).toBe('20K MR transferred to 20K MARRIOTT')
+  })
+
+  it('phrases a non-unity transfer ratio', () => {
+    const txn = firstEntry(`
+2026-04-20 * "HDFC SmartBuy" "transfer to Avios"
+  Assets:Rewards:Points:SmartBuy   -10000 SMARTBUY
+  Assets:Rewards:Points:Avios       15000 AVIOS @@ 10000 SMARTBUY
+`)
+    expect(generateTxnDescription(txn)).toBe('10K SMARTBUY transferred to 15K AVIOS')
+  })
+
+  it('returns fallback when a third non-rewards leg is present', () => {
+    const txn = firstEntry(`
+2026-04-21 * "Amex MR" "three legs"
+  Assets:Rewards:Points:MR         -20000 MR
+  Assets:Rewards:Points:Marriott    20000 MARRIOTT @@ 20000 MR
+  Expenses:Misc                         0 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+})
+
 describe('generateTxnDescription — gift card redemption handler', () => {
   it('phrases points redeemed for a gift card', () => {
     const txn = firstEntry(`
