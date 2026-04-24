@@ -1,47 +1,45 @@
 import { getChunks } from '@codemirror/merge'
 import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view'
-import {
-  ANY_ACCOUNT_RE,
-  chipSlotWidth,
-  resolveAccount,
-  toChipSvg,
-} from '@/lib/beancount/entities'
-import { hitsForLine } from './editor-header-chips'
+import { chipSlotWidth, chipVisualWidth, resolveAccount } from '@/lib/beancount/entities'
+import { parseBuffer } from '@/lib/beancount/parse'
+import { renderChip, type ChipSpec } from './chip-widget'
+import { hitsForTxn } from './editor-header-chips'
 
-type ChipSpec = {
-  from: number
-  to: number
-  label: string
-  svg: string
-  title: string
-}
+type PositionedChip = ChipSpec & { from: number; to: number }
 
-function accountSpecs(text: string): ChipSpec[] {
-  const out: ChipSpec[] = []
-  for (const m of text.matchAll(ANY_ACCOUNT_RE)) {
-    const acct = m[0]
-    const from = m.index ?? 0
-    const r = resolveAccount(acct)
+function buildChipSpecs(text: string): PositionedChip[] {
+  const { entries, accounts } = parseBuffer(text)
+  const specs: PositionedChip[] = []
+  for (const txn of entries) {
+    for (const h of hitsForTxn(txn)) {
+      specs.push({
+        from: h.from,
+        to: h.to,
+        variant: h.variant,
+        label: h.label,
+        tooltip: h.tooltip,
+        svg: h.svg,
+        width: chipVisualWidth(h.label, h.svg !== undefined),
+      })
+    }
+  }
+  for (const a of accounts) {
+    const r = resolveAccount(a.account)
     if (!r || !r.glyph) continue
-    out.push({
-      from,
-      to: from + r.consumedLen,
-      label: r.chipLabel,
+    const to = a.range.from + r.consumedLen
+    const label = r.chipLabel
+    specs.push({
+      from: a.range.from,
+      to,
+      variant: 'account',
+      label,
+      tooltip: a.account.slice(0, r.consumedLen),
       svg: r.glyph.svg,
-      title: acct.slice(0, r.consumedLen),
+      width: chipSlotWidth(to - a.range.from, label),
     })
   }
-  return out
-}
-
-function buildChipSpecs(text: string): ChipSpec[] {
-  const specs: ChipSpec[] = []
-  for (const h of hitsForLine(text, 0)) {
-    specs.push({ from: h.from, to: h.to, label: h.label, svg: h.svg, title: h.tooltip })
-  }
-  for (const s of accountSpecs(text)) specs.push(s)
   specs.sort((a, b) => a.from - b.from)
-  const merged: ChipSpec[] = []
+  const merged: PositionedChip[] = []
   let cursor = 0
   for (const s of specs) {
     if (s.from < cursor) continue
@@ -49,19 +47,6 @@ function buildChipSpecs(text: string): ChipSpec[] {
     cursor = s.to
   }
   return merged
-}
-
-function makeChipSpan(spec: ChipSpec): HTMLSpanElement {
-  const span = document.createElement('span')
-  span.className = 'cm-account-glyph'
-  span.style.width = `${chipSlotWidth(spec.to - spec.from, spec.label)}ch`
-  span.setAttribute('aria-label', spec.title)
-  span.innerHTML = toChipSvg(spec.svg)
-  const lbl = document.createElement('span')
-  lbl.className = 'cm-account-glyph-chip'
-  lbl.textContent = spec.label
-  span.appendChild(lbl)
-  return span
 }
 
 function rememberRaw(chunk: HTMLElement): void {
@@ -84,7 +69,7 @@ function renderChipped(chunk: HTMLElement): void {
     let cursor = 0
     for (const s of specs) {
       if (s.from > cursor) del.appendChild(document.createTextNode(text.slice(cursor, s.from)))
-      del.appendChild(makeChipSpan(s))
+      del.appendChild(renderChip(s))
       cursor = s.to
     }
     if (cursor < text.length) del.appendChild(document.createTextNode(text.slice(cursor)))
