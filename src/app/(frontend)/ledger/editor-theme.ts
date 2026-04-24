@@ -223,6 +223,53 @@ export const scandiEditorTheme = EditorView.theme(
       borderRadius: '4px',
       boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
     },
+    '.cm-tooltip.cm-tooltip-autocomplete': {
+      backgroundColor: '#ffffff',
+      border: `1px solid ${SLATE_200}`,
+      borderRadius: '6px',
+      boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
+      fontFamily: SANS_STACK,
+      padding: '4px',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+      fontFamily: SANS_STACK,
+      maxHeight: '240px',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li': {
+      padding: '4px 8px',
+      borderRadius: '4px',
+      color: NAVY_600,
+      fontSize: '12px',
+      lineHeight: '1.5',
+    },
+    '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+      backgroundColor: SLATE_50,
+      color: NAVY_700,
+    },
+    '.cm-completionIcon': {
+      width: '1em',
+      marginRight: '6px',
+      opacity: '0.7',
+      color: SLATE_500,
+      fontSize: '11px',
+    },
+    '.cm-completionIcon-keyword:after': { content: '"/"' },
+    '.cm-completionIcon-class:after': { content: '"\u25E6"' },
+    '.cm-completionLabel': {
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      fontSize: '12px',
+    },
+    '.cm-completionMatchedText': {
+      textDecoration: 'none',
+      color: NAVY_700,
+      fontWeight: '600',
+    },
+    '.cm-completionDetail': {
+      marginLeft: '10px',
+      color: SLATE_500,
+      fontStyle: 'normal',
+      fontSize: '11px',
+    },
     '.cm-gutters': {
       backgroundColor: PAPER_BG,
       color: SLATE_400,

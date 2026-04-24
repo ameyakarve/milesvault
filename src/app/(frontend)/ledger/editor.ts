@@ -54,6 +54,10 @@ import { dayDividers } from './editor-day-dividers'
 import { docHeader } from './editor-doc-header'
 import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
+import {
+  slashCompletionSource,
+  slashCompletionTrigger,
+} from './editor-slash-menu'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 import { txnDescriptions } from './editor-txn-descriptions'
 import { aiWidget } from './editor-ai-widget'
@@ -314,8 +318,12 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     composedLinter,
     lintGutter(),
     accountCompleterField,
-    autocompletion({ override: [accountCompletionSource], activateOnTyping: true }),
+    autocompletion({
+      override: [accountCompletionSource, slashCompletionSource],
+      activateOnTyping: true,
+    }),
     autocompleteColonTrigger,
+    slashCompletionTrigger,
     accountChips,
     accountChipTooltip,
     headerChips,
