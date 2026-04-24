@@ -12,12 +12,12 @@ const SLATE_100 = '#F1F5F9'
 export const SLATE_50 = '#F8FAFC'
 const SKY_700 = '#0369A1'
 const AMBER_700 = '#B45309'
-const TEAL_700 = '#0F766E'
+export const TEAL_PRIMARY = '#0891B2'
 const VIOLET_700 = '#6D28D9'
 const MOCHA_700 = '#6F4518'
 export const ROSE_700 = '#BE123C'
 
-export const PAPER_BG = '#EEF2F6'
+export const PAPER_BG = '#F4F6F8'
 
 export const SANS_STACK =
   "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -31,7 +31,7 @@ const TOKEN_STYLE = {
 } as const
 
 export const scandiHighlight = HighlightStyle.define([
-  { tag: t.lineComment, color: SLATE_400, fontStyle: 'italic' },
+  { tag: t.lineComment, color: SLATE_400 },
   { tag: t.string, ...TOKEN_STYLE.string },
   { tag: t.number, ...TOKEN_STYLE.number },
   { tag: t.literal, ...TOKEN_STYLE.date },
@@ -41,8 +41,8 @@ export const scandiHighlight = HighlightStyle.define([
   { tag: t.modifier, color: NAVY_600, fontWeight: '600' },
   { tag: t.keyword, color: NAVY_600, fontWeight: '600' },
   { tag: t.tagName, color: VIOLET_700, fontWeight: '500' },
-  { tag: t.link, color: TEAL_700, fontWeight: '500' },
-  { tag: t.propertyName, color: SLATE_500, fontStyle: 'italic' },
+  { tag: t.link, color: TEAL_PRIMARY, fontWeight: '500' },
+  { tag: t.propertyName, color: SLATE_500 },
   { tag: [t.operator, t.arithmeticOperator], color: SLATE_400 },
   { tag: [t.brace, t.paren, t.separator, t.punctuation], color: SLATE_200 },
   { tag: t.heading, color: NAVY_600, fontWeight: '600' },
@@ -52,13 +52,13 @@ export const scandiEditorTheme = EditorView.theme(
   {
     '&': {
       height: '100%',
-      fontSize: '13px',
+      fontSize: '12.5px',
       backgroundColor: PAPER_BG,
     },
     '.cm-scroller': {
       overflow: 'auto',
       fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-      lineHeight: '1.6',
+      lineHeight: '1.5',
       fontVariantNumeric: 'tabular-nums',
       backgroundColor: PAPER_BG,
     },
