@@ -51,6 +51,7 @@ import { amountChips } from './editor-amount-chips'
 import { accountChips, accountChipTooltip } from './editor-chips'
 import { commentLines } from './editor-comments'
 import { dayDividers } from './editor-day-dividers'
+import { docHeader } from './editor-doc-header'
 import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
@@ -322,6 +323,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     amountChips,
     diffChips,
     commentLines,
+    docHeader,
     dayDividers,
     txnDescriptions,
     aiWidget,
