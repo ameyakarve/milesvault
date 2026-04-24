@@ -13,14 +13,32 @@ type SlashCommand = {
   apply: (view: EditorView, from: number, to: number) => void
 }
 
-function applyTxn(view: EditorView, from: number, to: number) {
+function txnSkeleton(): { text: string; payeeOffset: number } {
   const date = new Date().toISOString().slice(0, 10)
-  const insert = `${date} * "" ""\n  \n  \n`
-  const payeeAnchor = from + date.length + 4
+  return {
+    text: `${date} * "" ""\n  \n  \n`,
+    payeeOffset: date.length + 4,
+  }
+}
+
+function applyTxn(view: EditorView, from: number, to: number) {
+  const { text, payeeOffset } = txnSkeleton()
   view.dispatch({
-    changes: { from, to, insert },
-    selection: { anchor: payeeAnchor },
+    changes: { from, to, insert: text },
+    selection: { anchor: from + payeeOffset },
   })
+}
+
+export function insertNewTxnAtTop(view: EditorView) {
+  const { text, payeeOffset } = txnSkeleton()
+  const hasContent = view.state.doc.length > 0
+  const insert = hasContent ? `${text}\n` : text
+  view.dispatch({
+    changes: { from: 0, to: 0, insert },
+    selection: { anchor: payeeOffset },
+    scrollIntoView: true,
+  })
+  view.focus()
 }
 
 function applyComment(view: EditorView, from: number, to: number) {
