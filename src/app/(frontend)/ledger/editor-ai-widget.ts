@@ -23,6 +23,7 @@ import {
   SLATE_600,
   SLATE_50,
 } from './editor-theme'
+import { splitEntries } from '@/lib/beancount/extract'
 import { applyProposal, type Op, type Snapshot } from './propose'
 
 type Role = 'user' | 'assistant'
@@ -134,9 +135,9 @@ const aiField = StateField.define<AiSession | null>({
       if (!s) return Decoration.none
       const b = new RangeSetBuilder<Decoration>()
       b.add(
-        s.selection.from,
-        s.selection.from,
-        Decoration.widget({ widget: new AiWidget(s.id), block: true, side: -1 }),
+        s.selection.to,
+        s.selection.to,
+        Decoration.widget({ widget: new AiWidget(s.id), block: true, side: 1 }),
       )
       return b.finish() as DecorationSet
     }),
@@ -466,10 +467,17 @@ function openForCurrentSelection(view: EditorView) {
     closeWidget(view)
     return
   }
+  const doc = view.state.doc
   const sel = view.state.selection.main
-  const line = view.state.doc.lineAt(sel.head)
-  const selection =
-    sel.from === sel.to ? { from: line.from, to: line.to } : { from: sel.from, to: sel.to }
+  const cursorLine = doc.lineAt(sel.head)
+  const entries = splitEntries(doc.toString())
+  const cursorLineIdx = cursorLine.number - 1
+  const containing = entries.find(
+    (e) => cursorLineIdx >= e.startLine && cursorLineIdx <= e.endLine,
+  )
+  const selection = containing
+    ? { from: doc.line(containing.startLine + 1).from, to: doc.line(containing.endLine + 1).to }
+    : { from: cursorLine.from, to: cursorLine.to }
   view.dispatch({ effects: aiOpen.of({ selection }) })
 }
 
