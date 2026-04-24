@@ -467,6 +467,15 @@ function closeWidget(view: EditorView) {
   view.focus()
 }
 
+export function openAiForRange(view: EditorView, from: number, to: number): void {
+  const existing = view.state.field(aiField, false)
+  if (existing) {
+    closeWidget(view)
+    return
+  }
+  view.dispatch({ selection: { anchor: from, head: to }, effects: aiOpen.of({ selection: { from, to } }) })
+}
+
 function openForCurrentSelection(view: EditorView) {
   const existing = view.state.field(aiField, false)
   if (existing) {
