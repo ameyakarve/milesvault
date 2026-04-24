@@ -7,7 +7,7 @@ export type DescribeResult =
 
 type DescribeHandler = (txn: ParsedTxn) => DescribeResult
 
-const FALLBACK = '—'
+const FALLBACK = 'A quiet morning sip — draft summary goes here.'
 
 const HANDLERS: readonly DescribeHandler[] = [expensePaymentHandler]
 
