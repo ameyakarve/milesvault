@@ -9,29 +9,38 @@ import { generateTxnDescription } from '@/lib/beancount/txn-description'
 import { cachedParse } from './parse-cache'
 
 class TxnDescWidget extends WidgetType {
-  constructor(readonly text: string) {
+  constructor(
+    readonly text: string,
+    readonly banded: boolean,
+  ) {
     super()
   }
   toDOM(): HTMLElement {
     const div = document.createElement('div')
-    div.className = 'cm-txn-desc'
+    div.className = this.banded ? 'cm-txn-desc cm-txn-band' : 'cm-txn-desc'
     div.textContent = this.text
     return div
   }
   eq(other: WidgetType): boolean {
-    return other instanceof TxnDescWidget && other.text === this.text
+    return (
+      other instanceof TxnDescWidget &&
+      other.text === this.text &&
+      other.banded === this.banded
+    )
   }
 }
 
 function buildTxnDescs(doc: Text): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
-  for (const txn of cachedParse(doc).entries) {
+  const entries = cachedParse(doc).entries
+  for (let i = 0; i < entries.length; i++) {
+    const txn = entries[i]
     const pos = txn.headerRange.from
     builder.add(
       pos,
       pos,
       Decoration.widget({
-        widget: new TxnDescWidget(generateTxnDescription(txn)),
+        widget: new TxnDescWidget(generateTxnDescription(txn), i % 2 === 0),
         block: true,
         side: -1,
       }),
