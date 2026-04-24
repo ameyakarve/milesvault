@@ -49,6 +49,7 @@ import {
 } from '@/lib/beancount/validators'
 import { amountChips } from './editor-amount-chips'
 import { accountChips, accountChipTooltip } from './editor-chips'
+import { commentLines } from './editor-comments'
 import { dayDividers } from './editor-day-dividers'
 import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
@@ -320,6 +321,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     headerChipTooltip,
     amountChips,
     diffChips,
+    commentLines,
     dayDividers,
     txnDescriptions,
     aiWidget,

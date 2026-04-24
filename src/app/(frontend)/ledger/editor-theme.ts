@@ -143,6 +143,11 @@ export const scandiEditorTheme = EditorView.theme(
       backgroundColor: PAPER_BG,
     },
     '.cm-day-divider-gutter': { backgroundColor: PAPER_BG },
+    '.cm-line.cm-line-comment': {
+      backgroundColor: `${SLATE_50} !important`,
+      boxShadow: `inset 2px 0 0 0 ${SLATE_200}`,
+      color: SLATE_500,
+    },
     '.cm-chip': {
       display: 'inline-block',
       verticalAlign: 'baseline',
