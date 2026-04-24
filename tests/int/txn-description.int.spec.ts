@@ -116,45 +116,39 @@ describe('generateTxnDescription — negative cases return fallback', () => {
     expect(generateTxnDescription(txn)).toBe(FALLBACK)
   })
 
-  it('flags untyped accounts with a warning prefix', () => {
+  it('returns fallback for unrecognised posting accounts', () => {
     const txn = firstEntry(`
 2026-04-24 * "Mystery"
   Expenses:Food:Coffee  100 INR
   Liabilities:Unknown:Thing  -100 INR
 `)
-    expect(generateTxnDescription(txn)).toMatch(
-      /^⚠ Untyped account: Liabilities:Unknown:Thing$/,
-    )
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
   })
 
-  it('flags rewards-points expiry as untyped (not a payment instrument)', () => {
+  it('returns fallback for rewards-points expiry (not a payment instrument)', () => {
     const txn = firstEntry(`
 2026-12-31 * "Avios" "annual expiry"
   Assets:Rewards:Points:Avios  -2000 AVIOS
   Expenses:Void  2000 AVIOS
 `)
-    expect(generateTxnDescription(txn)).toMatch(
-      /^⚠ Untyped account: Assets:Rewards:Points:Avios$/,
-    )
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
   })
 
-  it('flags a typed-but-non-payment instrument as untyped', () => {
+  it('returns fallback for a typed-but-non-payment instrument', () => {
     const txn = firstEntry(`
 2026-04-24 * "Gift card top-up"
   Expenses:Misc  500 INR
   Assets:Loaded:Wallets  -500 INR
 `)
-    expect(generateTxnDescription(txn)).toMatch(
-      /^⚠ Untyped account: Assets:Loaded:Wallets$/,
-    )
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
   })
 
-  it('flags untyped income postings in an expense txn', () => {
+  it('returns fallback for income postings in an expense-shaped txn', () => {
     const txn = firstEntry(`
 2026-04-24 * "Taxed"
   Expenses:Taxes  1000 INR
   Income:Salary  -1000 INR
 `)
-    expect(generateTxnDescription(txn)).toMatch(/^⚠ /)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
   })
 })
