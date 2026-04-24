@@ -2,6 +2,7 @@ import { RangeSetBuilder } from '@codemirror/state'
 import { Decoration, type DecorationSet, type EditorView } from '@codemirror/view'
 import {
   chipSlotWidth,
+  chipVisualWidth,
   type Glyph,
   resolveAccount,
   type ResolvedAccount,
@@ -13,6 +14,7 @@ import {
   isInVisibleRange,
   makeChipPlugin,
   makeChipTooltip,
+  postingAmountStartMap,
   postingSignMap,
 } from './parse-cache'
 
@@ -26,26 +28,39 @@ type Hit = {
 
 const POINTS_PATH = 'Assets:Rewards:Points'
 const STATUS_PATH = 'Assets:Rewards:Status'
+const VOID_PATH = 'Expenses:Void'
 
-function hitFor(acct: string, start: number, signByAcctPos: Map<number, number>): Hit | null {
+function hitFor(
+  acct: string,
+  start: number,
+  signByAcctPos: Map<number, number>,
+  amountStartByAcctPos: Map<number, number>,
+): Hit | null {
   const r = resolveAccount(acct)
   if (!r || !r.glyph) return null
+  const chipLabel = signAwareLabel(r, signByAcctPos.get(start))
+  const rawEnd = start + r.consumedLen
+  const overflows = chipVisualWidth(chipLabel) > r.consumedLen
+  const to = overflows ? (amountStartByAcctPos.get(start) ?? rawEnd) : rawEnd
   return {
     from: start,
-    to: start + r.consumedLen,
+    to,
     glyph: r.glyph,
-    chipLabel: signAwareLabel(r, signByAcctPos.get(start)),
+    chipLabel,
     tooltip: tooltipFor(acct, r),
   }
 }
 
 function signAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
-  if (sign === undefined || sign === 0 || r.tail.length === 0) return r.chipLabel
-  if (r.matchedPath === POINTS_PATH) {
+  if (sign === undefined || sign === 0) return r.chipLabel
+  if (r.matchedPath === POINTS_PATH && r.tail.length > 0) {
     return `${r.chipLabel} ${sign > 0 ? 'earned' : 'burned'}`
   }
-  if (r.matchedPath === STATUS_PATH) {
+  if (r.matchedPath === STATUS_PATH && r.tail.length > 0) {
     return `${r.tail.join(':')} Status: ${sign > 0 ? 'earned' : 'expired'}`
+  }
+  if (r.matchedPath === VOID_PATH) {
+    return 'Balancing entry for bookkeeping'
   }
   return r.chipLabel
 }
@@ -57,10 +72,11 @@ function tooltipFor(acct: string, r: ResolvedAccount): string {
 function findAccountHits(view: EditorView): Hit[] {
   const parse = cachedParse(view.state.doc)
   const signs = postingSignMap(parse)
+  const amountStarts = postingAmountStartMap(parse)
   const hits: Hit[] = []
   for (const a of parse.accounts) {
     if (!isInVisibleRange(view, a.range.from)) continue
-    const hit = hitFor(a.account, a.range.from, signs)
+    const hit = hitFor(a.account, a.range.from, signs, amountStarts)
     if (hit) hits.push(hit)
   }
   return hits
@@ -94,8 +110,9 @@ export const accountChips = makeChipPlugin(buildChipDecorations)
 function hitAtPos(view: EditorView, pos: number): Hit | null {
   const parse = cachedParse(view.state.doc)
   const signs = postingSignMap(parse)
+  const amountStarts = postingAmountStartMap(parse)
   for (const a of parse.accounts) {
-    const hit = hitFor(a.account, a.range.from, signs)
+    const hit = hitFor(a.account, a.range.from, signs, amountStarts)
     if (!hit) continue
     if (pos >= hit.from && pos < hit.to) return hit
   }
