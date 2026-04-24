@@ -2,6 +2,7 @@
 
 import type { Ref } from 'react'
 import { LedgerEditor, type LedgerEditorHandle } from './ledger-editor'
+import { cardMode } from './editor-card-mode'
 
 export type FetchStatus = 'loading' | 'idle' | 'error'
 export type Entry = { text: string; snapshotId: number | null }
@@ -48,6 +49,7 @@ export function TextPane({
         onChange={onBufferChange}
         onSave={onSave}
         readOnly={readOnly}
+        extraExtensions={cardMode}
       />
     </div>
   )
