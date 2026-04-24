@@ -76,7 +76,6 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
   )
 
   const initialBaselineRef = useRef(baseline ?? '')
-  const initialExtraExtensionsRef = useRef(extraExtensions)
   const extensions = useMemo(
     () => [
       ...buildScandiBeancountExtensions(initialBaselineRef.current),
@@ -92,7 +91,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
           },
         },
       ]),
-      ...(initialExtraExtensionsRef.current ? [initialExtraExtensionsRef.current] : []),
+      ...(extraExtensions ? [extraExtensions] : []),
     ],
     [],
   )

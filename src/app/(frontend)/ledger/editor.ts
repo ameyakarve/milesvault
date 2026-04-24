@@ -113,18 +113,21 @@ export function cachedSplit(doc: Text): ReturnType<typeof splitEntries> {
   return hit
 }
 
+export function entryEndLineTrimmed(doc: Text, entry: { startLine: number; endLine: number }) {
+  let end = entry.endLine
+  while (end > entry.startLine && doc.line(end + 1).text.trim() === '') end -= 1
+  return end
+}
+
 const beancountFoldService = foldService.of((state, lineStart) => {
   const doc = state.doc
   const headerLineNum = doc.lineAt(lineStart).number - 1
   const entry = cachedSplit(doc).find((e) => e.startLine === headerLineNum)
   if (!entry) return null
-  let endLine1 = entry.endLine + 1
-  while (endLine1 > entry.startLine + 1 && doc.line(endLine1).text.trim() === '') {
-    endLine1 -= 1
-  }
-  if (endLine1 === entry.startLine + 1) return null
+  const end = entryEndLineTrimmed(doc, entry)
+  if (end === entry.startLine) return null
   const headerLine = doc.line(entry.startLine + 1)
-  const lastLine = doc.line(endLine1)
+  const lastLine = doc.line(end + 1)
   return { from: headerLine.to, to: lastLine.to }
 })
 
@@ -165,7 +168,7 @@ type EntryBandSets = {
 function buildEntryBandsFromDoc(doc: Text): EntryBandSets {
   const lineBuilder = new RangeSetBuilder<Decoration>()
   const gutterBuilder = new RangeSetBuilder<GutterMarker>()
-  const entries = splitEntries(doc.toString())
+  const entries = cachedSplit(doc)
   for (let i = 0; i < entries.length; i++) {
     if (i % 2 === 1) continue
     const e = entries[i]

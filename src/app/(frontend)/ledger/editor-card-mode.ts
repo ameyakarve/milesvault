@@ -6,7 +6,8 @@ import {
   GutterMarker,
   gutterLineClass,
 } from '@codemirror/view'
-import { cachedSplit } from './editor'
+import { cachedSplit, entryEndLineTrimmed } from './editor'
+import { PAPER_BG } from './editor-theme'
 
 const CARD = 'cm-card'
 const CARD_FIRST = 'cm-card-first'
@@ -42,8 +43,7 @@ function buildCardSets(doc: Text): CardSets {
   const gutterBuilder = new RangeSetBuilder<GutterMarker>()
   for (const e of cachedSplit(doc)) {
     const start = e.startLine
-    let end = e.endLine
-    while (end > start && doc.line(end + 1).text.trim() === '') end -= 1
+    const end = entryEndLineTrimmed(doc, e)
     if (start === end) {
       const line = doc.line(start + 1)
       lineBuilder.add(line.from, line.from, cardSolo)
@@ -72,7 +72,6 @@ const cardModeField = StateField.define<CardSets>({
   ],
 })
 
-const PAPER_BG = '#EEF2F6'
 const CARD_BG = '#FFFFFF'
 const SHADOW = '0 1px 2px rgba(15, 23, 42, 0.05), 0 0 0 1px rgba(15, 23, 42, 0.04)'
 const RADIUS = '10px'
@@ -82,7 +81,7 @@ const cardModeTheme = EditorView.theme(
   {
     '&': { backgroundColor: `${PAPER_BG} !important` },
     '.cm-scroller': { backgroundColor: `${PAPER_BG} !important` },
-    '.cm-content': { padding: '6px 18px 28px !important' },
+    '.cm-content': { padding: '6px 18px 28px' },
     '.cm-gutters': { backgroundColor: `${PAPER_BG} !important`, border: 'none' },
     '.cm-gutterElement': { borderBottom: 'none !important' },
     '.cm-line': { borderBottom: 'none !important' },
