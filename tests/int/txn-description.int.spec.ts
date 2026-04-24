@@ -196,6 +196,43 @@ describe('generateTxnDescription — rewards redemption handler', () => {
   })
 })
 
+describe('generateTxnDescription — expense with cashback handler', () => {
+  it('phrases a single-card expense + inline cashback', () => {
+    const txn = firstEntry(`
+2026-04-19 * "Ramesh Cafe" "SIK coffee combo"
+  Expenses:Food:Coffee                    200 INR
+  Liabilities:CC:HSBC:Cashback           -200 INR
+  Income:Void                             -10 INR
+  Liabilities:CC:HSBC:Cashback             10 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      'INR 200 Paid with HSBC Cashback with INR 10 cashback',
+    )
+  })
+
+  it('returns fallback when the two CC legs use different cards', () => {
+    const txn = firstEntry(`
+2026-04-19 * "Split cards"
+  Expenses:Food:Coffee                    200 INR
+  Liabilities:CC:HSBC:Cashback           -200 INR
+  Income:Void                             -10 INR
+  Liabilities:CC:HDFC:Infinia              10 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback when both CC legs have the same sign', () => {
+    const txn = firstEntry(`
+2026-04-19 * "Both legs negative"
+  Expenses:Food:Coffee                    210 INR
+  Liabilities:CC:HSBC:Cashback           -100 INR
+  Liabilities:CC:HSBC:Cashback           -100 INR
+  Income:Void                              -10 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+})
+
 describe('generateTxnDescription — card + Income:Void adjustment handler', () => {
   it('phrases a statement cashback as credited', () => {
     const txn = firstEntry(`
