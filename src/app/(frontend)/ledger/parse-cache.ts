@@ -46,6 +46,23 @@ export function postingSignMap(parse: ParseResult): Map<number, number> {
   return m
 }
 
+const amountStartMapCache = new WeakMap<ParseResult, Map<number, number>>()
+
+export function postingAmountStartMap(parse: ParseResult): Map<number, number> {
+  let m = amountStartMapCache.get(parse)
+  if (!m) {
+    m = new Map()
+    for (const txn of parse.entries) {
+      for (const p of txn.postings) {
+        if (!p.amount) continue
+        m.set(p.accountRange.from, p.amount.range.from)
+      }
+    }
+    amountStartMapCache.set(parse, m)
+  }
+  return m
+}
+
 export function makeChipPlugin(build: (view: EditorView) => DecorationSet) {
   return ViewPlugin.fromClass(
     class {
