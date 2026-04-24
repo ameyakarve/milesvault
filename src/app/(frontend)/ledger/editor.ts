@@ -104,7 +104,7 @@ const beancountTabKeymap = keymap.of([
 ])
 
 const splitCache = new WeakMap<Text, ReturnType<typeof splitEntries>>()
-function cachedSplit(doc: Text): ReturnType<typeof splitEntries> {
+export function cachedSplit(doc: Text): ReturnType<typeof splitEntries> {
   let hit = splitCache.get(doc)
   if (!hit) {
     hit = splitEntries(doc.toString())

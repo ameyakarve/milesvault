@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
+import type { Extension } from '@codemirror/state'
 import { LedgerEditor } from './ledger-editor'
+import { cardMode } from './editor-card-mode'
 import type { AccountCompleter, Validator } from './editor'
 
 const BASELINE = `2026-04-17 * "Amudham" "coffee"
@@ -48,11 +50,13 @@ function Host({
   baseline,
   validators,
   completeAccount,
+  extraExtensions,
 }: {
   initialValue: string
   baseline?: string
   validators?: readonly Validator[]
   completeAccount?: AccountCompleter
+  extraExtensions?: Extension
 }) {
   const [value, setValue] = useState(initialValue)
   return (
@@ -62,6 +66,7 @@ function Host({
       baseline={baseline}
       validators={validators}
       completeAccount={completeAccount}
+      extraExtensions={extraExtensions}
       onChange={setValue}
     />
   )
@@ -340,6 +345,18 @@ export const KitchenSink: Story = {
       description: {
         story:
           'Broad buffer covering forex, rewards/points, cashback, refunds, P2P, multi-currency @@ prices, tags and links — a single place to eyeball chip rendering, alignment, and validators.',
+      },
+    },
+  },
+}
+
+export const CardMode: Story = {
+  args: { initialValue: KITCHEN_SINK, baseline: KITCHEN_SINK, extraExtensions: cardMode },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Prototype timeline look: each transaction floats as a rounded white card on a warm paper background. Opt-in via the `extraExtensions={cardMode}` prop — main ledger view is unaffected.',
       },
     },
   },
