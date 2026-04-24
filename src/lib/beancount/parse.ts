@@ -17,6 +17,8 @@ export type ParsedPosting = {
   account: string
   accountRange: Range
   amount: ParsedAmount | null
+  priceAmount: ParsedAmount | null
+  atSigns: 1 | 2 | null
 }
 
 export type ParsedString = {
@@ -184,12 +186,26 @@ function readPosting(node: SyntaxNode, doc: string): ParsedPosting | null {
   const amountNode = node.getChild('Amount')
   const amount = amountNode ? readAmount(amountNode, doc) : null
 
+  const priceNode = node.getChild('PriceAnnotation')
+  let priceAmount: ParsedAmount | null = null
+  let atSigns: 1 | 2 | null = null
+  if (priceNode) {
+    const opNode = priceNode.getChild('PriceOp')
+    const priceAmountNode = priceNode.getChild('Amount')
+    if (opNode && priceAmountNode) {
+      atSigns = doc.slice(opNode.from, opNode.to) === '@@' ? 2 : 1
+      priceAmount = readAmount(priceAmountNode, doc)
+    }
+  }
+
   return {
     range: { from: node.from, to: node.to },
     flag,
     account,
     accountRange,
     amount,
+    priceAmount,
+    atSigns,
   }
 }
 
