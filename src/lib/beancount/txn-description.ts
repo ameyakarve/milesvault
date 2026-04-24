@@ -12,6 +12,7 @@ const FALLBACK = 'A quiet morning sip — draft summary goes here.'
 
 const HANDLERS: readonly DescribeHandler[] = [
   rewardsVoidHandler,
+  mixedRedemptionHandler,
   rewardsRedemptionHandler,
   expensePaymentHandler,
 ]
@@ -168,6 +169,82 @@ function rewardsRedemptionHandler(txn: ParsedTxn): DescribeResult {
   const unit = rewardsPosting.amount.currency
   const amount = formatAmount(total)
   return { kind: 'ok', text: `${points} ${unit} redeemed for ${currency} ${amount}` }
+}
+
+function mixedRedemptionHandler(txn: ParsedTxn): DescribeResult {
+  const expenses: ParsedPosting[] = []
+  const payments: ParsedPosting[] = []
+  let paymentAccount: string | null = null
+  let paymentLabel: string | null = null
+  let rewardsPosting: ParsedPosting | null = null
+
+  for (const posting of txn.postings) {
+    const resolved = resolveAccount(posting.account)
+    if (!resolved) return { kind: 'unhandled' }
+    if (resolved.matchedPath.startsWith('Expenses')) {
+      expenses.push(posting)
+      continue
+    }
+    if (resolved.matchedPath === REWARDS_POINTS_PATH) {
+      if (rewardsPosting !== null) return { kind: 'unhandled' }
+      rewardsPosting = posting
+      continue
+    }
+    if (PAYMENT_INSTRUMENT_PATHS.includes(resolved.matchedPath)) {
+      payments.push(posting)
+      if (paymentAccount === null) {
+        paymentAccount = posting.account
+        paymentLabel = resolved.chipLabel
+      } else if (paymentAccount !== posting.account) {
+        return { kind: 'unhandled' }
+      }
+      continue
+    }
+    return { kind: 'unhandled' }
+  }
+
+  if (
+    expenses.length === 0 ||
+    payments.length === 0 ||
+    rewardsPosting === null ||
+    paymentLabel === null ||
+    !rewardsPosting.amount?.currency
+  ) {
+    return { kind: 'unhandled' }
+  }
+  const pointsN = parseFloat(rewardsPosting.amount.numberText)
+  if (!Number.isFinite(pointsN) || pointsN >= 0) return { kind: 'unhandled' }
+
+  const currency = expenses[0].amount?.currency
+  if (!currency) return { kind: 'unhandled' }
+  let expenseTotal = 0
+  for (const e of expenses) {
+    if (!e.amount || e.amount.currency !== currency) return { kind: 'unhandled' }
+    const n = parseFloat(e.amount.numberText)
+    if (!Number.isFinite(n)) return { kind: 'unhandled' }
+    expenseTotal += n
+  }
+  if (expenseTotal <= 0) return { kind: 'unhandled' }
+
+  let paymentTotal = 0
+  for (const p of payments) {
+    if (!p.amount || p.amount.currency !== currency) return { kind: 'unhandled' }
+    const n = parseFloat(p.amount.numberText)
+    if (!Number.isFinite(n) || n >= 0) return { kind: 'unhandled' }
+    paymentTotal += Math.abs(n)
+  }
+
+  const price = resolvePrice(rewardsPosting, pointsN)
+  if (!price || price.currency !== currency) return { kind: 'unhandled' }
+
+  const points = formatAmount(Math.abs(pointsN))
+  const unit = rewardsPosting.amount.currency
+  const cashPart = formatAmount(paymentTotal)
+  const expenseText = formatAmount(expenseTotal)
+  return {
+    kind: 'ok',
+    text: `${points} ${unit} + ${cashPart} ${currency} paid with ${paymentLabel} for ${currency} ${expenseText} redemption`,
+  }
 }
 
 function resolvePrice(

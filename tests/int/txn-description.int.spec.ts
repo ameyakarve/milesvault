@@ -196,6 +196,64 @@ describe('generateTxnDescription — rewards redemption handler', () => {
   })
 })
 
+describe('generateTxnDescription — mixed redemption handler', () => {
+  it('phrases points + cash redemption', () => {
+    const txn = firstEntry(`
+2026-06-01 * "BA" "award flight LHR-BOM"
+  Assets:Rewards:Points:MaharajaClub  -20000 MAHARAJA_POINTS @@ 47500 INR
+  Liabilities:CC:HDFC:Infinia  -2500 INR
+  Expenses:Travel:Flights  50000 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      '20K MAHARAJA_POINTS + 2.5K INR paid with HDFC Infinia for INR 50K redemption',
+    )
+  })
+
+  it('sums multiple expense lines in same currency', () => {
+    const txn = firstEntry(`
+2026-06-01 * "BA" "award flight + taxes"
+  Expenses:Travel:Flights  48000 INR
+  Expenses:Taxes  2000 INR
+  Assets:Rewards:Points:MaharajaClub  -20000 MAHARAJA_POINTS @@ 47500 INR
+  Liabilities:CC:HDFC:Infinia  -2500 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      '20K MAHARAJA_POINTS + 2.5K INR paid with HDFC Infinia for INR 50K redemption',
+    )
+  })
+
+  it('returns fallback when points posting lacks a price', () => {
+    const txn = firstEntry(`
+2026-06-01 * "BA" "no price"
+  Expenses:Travel:Flights  50000 INR
+  Assets:Rewards:Points:MaharajaClub  -20000 MAHARAJA_POINTS
+  Liabilities:CC:HDFC:Infinia  -2500 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback when price currency differs from expense currency', () => {
+    const txn = firstEntry(`
+2026-06-01 * "BA" "mismatched price currency"
+  Expenses:Travel:Flights  50000 INR
+  Assets:Rewards:Points:MaharajaClub  -20000 MAHARAJA_POINTS @@ 570 USD
+  Liabilities:CC:HDFC:Infinia  -2500 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+
+  it('returns fallback when multiple payment accounts are used', () => {
+    const txn = firstEntry(`
+2026-06-01 * "BA" "split payment"
+  Expenses:Travel:Flights  50000 INR
+  Assets:Rewards:Points:MaharajaClub  -20000 MAHARAJA_POINTS @@ 47500 INR
+  Liabilities:CC:HDFC:Infinia  -1500 INR
+  Assets:Cash  -1000 INR
+`)
+    expect(generateTxnDescription(txn)).toBe(FALLBACK)
+  })
+})
+
 describe('generateTxnDescription — negative cases return fallback', () => {
   it('returns fallback when the txn has no expense postings', () => {
     const txn = firstEntry(`
