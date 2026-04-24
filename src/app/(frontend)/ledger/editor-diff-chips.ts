@@ -57,20 +57,31 @@ function rememberRaw(chunk: HTMLElement): void {
 }
 
 function renderChipped(chunk: HTMLElement): void {
-  const dels = chunk.querySelectorAll<HTMLElement>('.cm-deletedLine > del')
-  for (const del of dels) {
-    const text = del.dataset.raw ?? del.textContent ?? ''
-    const specs = buildChipSpecs(text)
-    if (specs.length === 0) {
+  const dels = Array.from(chunk.querySelectorAll<HTMLElement>('.cm-deletedLine > del'))
+  if (dels.length === 0) return
+  const texts = dels.map((d) => d.dataset.raw ?? d.textContent ?? '')
+  const joined = texts.join('\n')
+  const specs = buildChipSpecs(joined)
+  const lineStarts: number[] = [0]
+  for (const t of texts) lineStarts.push(lineStarts[lineStarts.length - 1] + t.length + 1)
+  for (let i = 0; i < dels.length; i++) {
+    const del = dels[i]
+    const text = texts[i]
+    const lineFrom = lineStarts[i]
+    const lineTo = lineFrom + text.length
+    const lineSpecs = specs.filter((s) => s.from >= lineFrom && s.to <= lineTo)
+    if (lineSpecs.length === 0) {
       del.textContent = text
       continue
     }
     del.replaceChildren()
     let cursor = 0
-    for (const s of specs) {
-      if (s.from > cursor) del.appendChild(document.createTextNode(text.slice(cursor, s.from)))
+    for (const s of lineSpecs) {
+      const localFrom = s.from - lineFrom
+      const localTo = s.to - lineFrom
+      if (localFrom > cursor) del.appendChild(document.createTextNode(text.slice(cursor, localFrom)))
       del.appendChild(renderChip(s))
-      cursor = s.to
+      cursor = localTo
     }
     if (cursor < text.length) del.appendChild(document.createTextNode(text.slice(cursor)))
   }
