@@ -1,26 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  Filter,
-  Plus,
-  RotateCcw,
-  Save,
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Transaction } from '@/durable/ledger-types'
 import { format } from '@/lib/beancount/format'
 import { type BufferState, evaluateBuffer } from './buffer-state'
 import { composeBuffer } from './editor'
 import { setAiSnapshots } from './editor-ai-widget'
-import { insertNewTxnAtTop } from './editor-slash-menu'
-import { ChromeIconButton, PaneCap, PaneLabel } from './ledger-chrome'
-import { HelpButton } from './ledger-help'
 import type { LedgerEditorHandle } from './ledger-editor'
+import { FilterBar } from './ledger-filter-bar'
+import { HelpButton } from './ledger-help'
 import { TextPane } from './ledger-panes'
-import { SavePill } from './save-status'
 import { buildSnapshots, PAGE_SIZE, useTransactions } from './use-transactions'
 
 function PaginationStrip({
@@ -96,18 +86,6 @@ export function LedgerView({ email }: { email: string }) {
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
   const saving = saveStatus === 'saving'
   const locked = saving
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return
-    const handle = setTimeout(() => setCopied(false), 1500)
-    return () => clearTimeout(handle)
-  }, [copied])
-  async function onCopyBuffer() {
-    try {
-      await navigator.clipboard.writeText(buffer)
-      setCopied(true)
-    } catch {}
-  }
 
   const editorRef = useRef<LedgerEditorHandle | null>(null)
 
@@ -167,12 +145,6 @@ export function LedgerView({ email }: { email: string }) {
     setBuffer(baseline)
     setSaveStatus('idle')
     setSaveErrorMsg(null)
-  }
-
-  function onNewEntry() {
-    const view = editorRef.current?.getView()
-    if (!view) return
-    insertNewTxnAtTop(view)
   }
 
   const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
@@ -243,63 +215,21 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col bg-scandi-backdrop overflow-hidden min-h-0 w-full max-w-[960px] mx-auto">
-        <section className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-          <PaneCap className="justify-between">
-            <PaneLabel>EDITOR</PaneLabel>
-            <div className="flex items-center">
-              <ChromeIconButton
-                icon={Plus}
-                title={locked ? 'new entry (saving)' : 'new entry'}
-                disabled={locked}
-                onClick={onNewEntry}
-              />
-              <ChromeIconButton
-                icon={Save}
-                title={
-                  saving
-                    ? 'saving…'
-                    : bufferState.kind === 'dirty'
-                      ? 'save (fix parse errors first)'
-                      : bufferState.kind === 'staged' && !bufferState.validated
-                        ? 'save (fix validation errors first)'
-                        : 'save · ⌘S'
-                }
-                dirty={dirty}
-                disabled={!saveEnabled || locked}
-                onClick={onSave}
-              />
-              <ChromeIconButton
-                icon={RotateCcw}
-                title={saving ? 'revert (saving)' : 'revert'}
-                disabled={!dirty || locked}
-                onClick={onRevert}
-              />
-              <SavePill
-                saveStatus={saveStatus}
-                bufferState={bufferState}
-                errorMsg={saveErrorMsg}
-              />
-              <div className="h-[16px] w-px bg-slate-400 mx-2" />
-              <ChromeIconButton
-                icon={Filter}
-                title={
-                  saving
-                    ? 'filter (saving)'
-                    : dirty
-                      ? 'filter (save or revert first)'
-                      : 'filter'
-                }
-                disabled={pageLocked}
-              />
-              <ChromeIconButton
-                icon={Copy}
-                title={copied ? 'copied' : 'copy buffer'}
-                onClick={onCopyBuffer}
-                active={copied}
-              />
-            </div>
-          </PaneCap>
+      <main className="flex-1 flex flex-col bg-scandi-backdrop overflow-hidden min-h-0 w-full max-w-[960px] mx-auto pt-6">
+        <FilterBar
+          total={state.total}
+          pageRows={state.rows.length}
+          saveStatus={saveStatus}
+          bufferState={bufferState}
+          saveErrorMsg={saveErrorMsg}
+          saving={saving}
+          dirty={dirty}
+          saveEnabled={saveEnabled}
+          locked={locked}
+          onSave={onSave}
+          onRevert={onRevert}
+        />
+        <section className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden mt-4">
           <div className="flex-1 min-h-0 bg-white flex flex-col overflow-hidden relative">
             <TextPane
               status={state.status}

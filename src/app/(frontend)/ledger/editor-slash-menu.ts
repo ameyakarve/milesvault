@@ -29,18 +29,6 @@ function applyTxn(view: EditorView, from: number, to: number) {
   })
 }
 
-export function insertNewTxnAtTop(view: EditorView) {
-  const { text, payeeOffset } = txnSkeleton()
-  const hasContent = view.state.doc.length > 0
-  const insert = hasContent ? `${text}\n` : text
-  view.dispatch({
-    changes: { from: 0, to: 0, insert },
-    selection: { anchor: payeeOffset },
-    scrollIntoView: true,
-  })
-  view.focus()
-}
-
 function applyComment(view: EditorView, from: number, to: number) {
   const insert = '; '
   view.dispatch({
