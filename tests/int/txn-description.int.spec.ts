@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseBuffer, type ParsedTxn } from '@/lib/beancount/parse'
 import { generateTxnDescription } from '@/lib/beancount/txn-description'
 
-const FALLBACK = '—'
+const FALLBACK = 'A quiet morning sip — draft summary goes here.'
 
 function firstEntry(source: string): ParsedTxn {
   const { entries } = parseBuffer(source)
