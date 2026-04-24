@@ -44,7 +44,8 @@ export function renderChip(spec: ChipSpec): HTMLElement {
   span.setAttribute('aria-label', spec.tooltip)
 
   const contentWidth = spec.label.length + (spec.svg ? 3 : 0)
-  const padCh = Math.max(0, spec.width - contentWidth)
+  const pillMargin = spec.variant === 'account' ? 1 : 0
+  const padCh = Math.max(0, spec.width - contentWidth - pillMargin)
   const leading = DOTS_LEADING.has(spec.variant)
 
   if (leading) appendDots(span, padCh)
