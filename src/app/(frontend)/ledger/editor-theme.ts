@@ -15,6 +15,7 @@ const AMBER_700 = '#B45309'
 const TEAL_700 = '#0F766E'
 const VIOLET_700 = '#6D28D9'
 const MOCHA_700 = '#6F4518'
+const ROSE_700 = '#BE123C'
 
 const TOKEN_STYLE = {
   date: { color: NAVY_700, fontWeight: '600' },
@@ -104,7 +105,7 @@ export const scandiEditorTheme = EditorView.theme(
     },
     '.cm-chip--account': TOKEN_STYLE.account,
     '.cm-chip--date': TOKEN_STYLE.date,
-    '.cm-chip--payee': TOKEN_STYLE.string,
+    '.cm-chip--payee': { ...TOKEN_STYLE.string, color: ROSE_700 },
     '.cm-chip--narration': { ...TOKEN_STYLE.string, color: SLATE_500 },
     '.cm-chip--flag-pending': TOKEN_STYLE.flag,
     '.cm-chip--amount': {
