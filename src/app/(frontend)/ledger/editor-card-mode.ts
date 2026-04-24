@@ -5,6 +5,8 @@ import {
   EditorView,
   GutterMarker,
   gutterLineClass,
+  ViewPlugin,
+  type ViewUpdate,
 } from '@codemirror/view'
 import { cachedSplit, entryEndLineTrimmed } from './editor'
 import { PAPER_BG, SLATE_200 } from './editor-theme'
@@ -13,6 +15,9 @@ const CARD = 'cm-card'
 const CARD_FIRST = 'cm-card-first'
 const CARD_LAST = 'cm-card-last'
 const CARD_MID = 'cm-card-mid'
+const CARD_ACTIVE = 'cm-card-active'
+
+const cardActive = Decoration.line({ attributes: { class: CARD_ACTIVE } })
 
 const cardFirst = Decoration.line({ attributes: { class: `${CARD} ${CARD_FIRST}` } })
 const cardLast = Decoration.line({ attributes: { class: `${CARD} ${CARD_LAST}` } })
@@ -61,6 +66,36 @@ function buildCardSets(doc: Text): CardSets {
   return { lines: lineBuilder.finish(), gutter: gutterBuilder.finish() }
 }
 
+function buildActiveCard(view: EditorView): DecorationSet {
+  const doc = view.state.doc
+  const cursor = view.state.selection.main.head
+  const cursorLine = doc.lineAt(cursor).number - 1
+  const builder = new RangeSetBuilder<Decoration>()
+  for (const e of cachedSplit(doc)) {
+    const start = e.startLine
+    const end = entryEndLineTrimmed(doc, e)
+    if (cursorLine < start || cursorLine > end) continue
+    for (let ln = start; ln <= end; ln++) {
+      const line = doc.line(ln + 1)
+      builder.add(line.from, line.from, cardActive)
+    }
+    break
+  }
+  return builder.finish()
+}
+
+const activeCardPlugin = ViewPlugin.define(
+  (view) => ({
+    decorations: buildActiveCard(view),
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+        this.decorations = buildActiveCard(update.view)
+      }
+    },
+  }),
+  { decorations: (v) => v.decorations },
+)
+
 const cardModeField = StateField.define<CardSets>({
   create: (state) => buildCardSets(state.doc),
   update(value, tr) {
@@ -73,6 +108,8 @@ const cardModeField = StateField.define<CardSets>({
 })
 
 const CARD_BG = '#FFFFFF'
+const ACTIVE_BG = 'rgba(15, 118, 110, 0.04)'
+const ACTIVE_BORDER = '1px solid rgba(15, 118, 110, 0.35)'
 const BORDER = `1px solid ${SLATE_200}`
 const DROP_SHADOW = '0 1px 2px rgba(15, 23, 42, 0.04)'
 const RADIUS = '6px'
@@ -112,8 +149,19 @@ const cardModeTheme = EditorView.theme(
       borderTopLeftRadius: RADIUS,
       borderBottom: 'none !important',
     },
+    [`.cm-line.${CARD}.${CARD_ACTIVE}`]: {
+      backgroundColor: `${ACTIVE_BG} !important`,
+      borderLeft: ACTIVE_BORDER,
+      borderRight: ACTIVE_BORDER,
+    },
+    [`.cm-line.${CARD_FIRST}.${CARD_ACTIVE}`]: {
+      borderTop: ACTIVE_BORDER,
+    },
+    [`.cm-line.${CARD_LAST}.${CARD_ACTIVE}`]: {
+      borderBottom: ACTIVE_BORDER,
+    },
   },
   { dark: false },
 )
 
-export const cardMode = [cardModeField, cardModeTheme]
+export const cardMode = [cardModeField, activeCardPlugin, cardModeTheme]
