@@ -143,6 +143,28 @@ describe('generateTxnDescription — negative cases return fallback', () => {
     expect(generateTxnDescription(txn)).toBe('INR 120 paid using Paytm')
   })
 
+  it('includes resolved amount in brackets for @@ forex price', () => {
+    const txn = firstEntry(`
+2026-04-20 * "Louvre" "museum admission"
+  Assets:Loaded:ForexCards:HDFC  -19.25 USD
+  Expenses:Travel:Museums  17 EUR @@ 19.25 USD
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      'EUR 17 paid using HDFC (USD 19.25)',
+    )
+  })
+
+  it('includes resolved amount in brackets for @ per-unit price', () => {
+    const txn = firstEntry(`
+2026-04-20 * "Currency exchange"
+  Assets:Loaded:ForexCards:HDFC  -100 USD
+  Expenses:Travel:Local  20 EUR @ 5 USD
+`)
+    expect(generateTxnDescription(txn)).toBe(
+      'EUR 20 paid using HDFC (USD 100)',
+    )
+  })
+
   it('describes payment via forex card', () => {
     const txn = firstEntry(`
 2026-04-24 * "Coffee abroad"

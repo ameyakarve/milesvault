@@ -65,17 +65,43 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
   const currency = expenses[0].amount?.currency
   if (!currency) return { kind: 'unhandled' }
   let total = 0
+  let resolvedCurrency: string | null = null
+  let resolvedTotal = 0
+  let hasPrice = false
+  let priceSkew = false
   for (const e of expenses) {
     if (!e.amount || e.amount.currency !== currency) return { kind: 'unhandled' }
     const n = parseFloat(e.amount.numberText)
     if (!Number.isFinite(n)) return { kind: 'unhandled' }
     total += n
+    const resolved = resolvePrice(e, n)
+    if (!resolved) continue
+    hasPrice = true
+    if (resolvedCurrency === null) resolvedCurrency = resolved.currency
+    else if (resolvedCurrency !== resolved.currency) priceSkew = true
+    resolvedTotal += resolved.amount
   }
 
-  return {
-    kind: 'ok',
-    text: `${currency} ${formatAmount(total)} paid using ${paymentLabel}`,
+  let text = `${currency} ${formatAmount(total)} paid using ${paymentLabel}`
+  if (hasPrice && !priceSkew && resolvedCurrency !== null) {
+    text += ` (${resolvedCurrency} ${formatAmount(resolvedTotal)})`
   }
+  return { kind: 'ok', text }
+}
+
+function resolvePrice(
+  posting: ParsedPosting,
+  amountN: number,
+): { amount: number; currency: string } | null {
+  const price = posting.priceAmount
+  if (!price || !price.currency || posting.atSigns === null) return null
+  const pn = parseFloat(price.numberText)
+  if (!Number.isFinite(pn)) return null
+  if (posting.atSigns === 2) {
+    const sign = amountN < 0 ? -1 : 1
+    return { amount: sign * pn, currency: price.currency }
+  }
+  return { amount: amountN * pn, currency: price.currency }
 }
 
 function formatAmount(n: number): string {
