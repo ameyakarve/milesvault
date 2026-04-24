@@ -28,7 +28,8 @@ type Hit = {
 
 const POINTS_PATH = 'Assets:Rewards:Points'
 const STATUS_PATH = 'Assets:Rewards:Status'
-const VOID_PATH = 'Expenses:Void'
+const EXPENSES_VOID_PATH = 'Expenses:Void'
+const INCOME_VOID_PATH = 'Income:Void'
 
 function hitFor(
   acct: string,
@@ -59,7 +60,7 @@ function signAwareLabel(r: ResolvedAccount, sign: number | undefined): string {
   if (r.matchedPath === STATUS_PATH && r.tail.length > 0) {
     return `${r.tail.join(':')} Status: ${sign > 0 ? 'earned' : 'expired'}`
   }
-  if (r.matchedPath === VOID_PATH) {
+  if (r.matchedPath === EXPENSES_VOID_PATH || r.matchedPath === INCOME_VOID_PATH) {
     return 'Balancing entry for bookkeeping'
   }
   return r.chipLabel
