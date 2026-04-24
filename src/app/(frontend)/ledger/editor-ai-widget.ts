@@ -340,8 +340,9 @@ async function submitPrompt(view: EditorView, sessionId: string, text: string) {
   const after = view.state.field(aiField, false)
   if (!after) return
 
-  const surroundingFrom = view.state.doc.lineAt(after.selection.from - 1).from
-  const surroundingTo = view.state.doc.lineAt(after.selection.to + 1).to
+  const docLen = view.state.doc.length
+  const surroundingFrom = view.state.doc.lineAt(Math.max(0, after.selection.from - 1)).from
+  const surroundingTo = view.state.doc.lineAt(Math.min(docLen, after.selection.to + 1)).to
   const surrounding = view.state.doc.sliceString(surroundingFrom, surroundingTo)
   const selectionText = view.state.doc.sliceString(after.selection.from, after.selection.to)
 
