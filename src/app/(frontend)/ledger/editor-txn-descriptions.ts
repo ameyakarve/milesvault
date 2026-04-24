@@ -10,6 +10,7 @@ import {
 import { generateTxnDescription } from '@/lib/beancount/txn-description'
 import { cachedParse } from './parse-cache'
 import { pickCategoryIcon, renderIconSVG } from './editor-txn-icon'
+import { openAiForRange } from './editor-ai-widget'
 
 class TxnDescGutterMarker extends GutterMarker {
   elementClass = 'cm-txn-desc-gutter'
@@ -20,21 +21,34 @@ class TxnDescWidget extends WidgetType {
   constructor(
     readonly text: string,
     readonly iconKey: string | null,
+    readonly rangeFrom: number,
+    readonly rangeTo: number,
   ) {
     super()
   }
-  toDOM(): HTMLElement {
+  toDOM(view: EditorView): HTMLElement {
     const div = document.createElement('div')
     div.className = 'cm-txn-desc'
-    div.innerHTML = `<span class="cm-txn-desc-icon-slot">${renderIconSVG(this.iconKey)}</span><span class="cm-txn-desc-text">${escapeHtml(this.text)}</span>`
+    div.innerHTML = `<span class="cm-txn-desc-icon-slot">${renderIconSVG(this.iconKey)}</span><span class="cm-txn-desc-text">${escapeHtml(this.text)}</span><button type="button" class="cm-txn-desc-handle" aria-label="Edit with AI" title="Edit with AI (⌘I)">⋯</button>`
+    const handle = div.querySelector<HTMLButtonElement>('.cm-txn-desc-handle')
+    handle?.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      openAiForRange(view, this.rangeFrom, this.rangeTo)
+    })
     return div
   }
   eq(other: WidgetType): boolean {
     return (
       other instanceof TxnDescWidget &&
       other.text === this.text &&
-      other.iconKey === this.iconKey
+      other.iconKey === this.iconKey &&
+      other.rangeFrom === this.rangeFrom &&
+      other.rangeTo === this.rangeTo
     )
+  }
+  ignoreEvent(): boolean {
+    return false
   }
 }
 
@@ -61,7 +75,12 @@ function buildTxnDescs(doc: Text): DecorationSet {
       pos,
       pos,
       Decoration.widget({
-        widget: new TxnDescWidget(generateTxnDescription(txn), pickCategoryIcon(txn)),
+        widget: new TxnDescWidget(
+          generateTxnDescription(txn),
+          pickCategoryIcon(txn),
+          txn.range.from,
+          txn.range.to,
+        ),
         block: true,
         side: -1,
       }),
