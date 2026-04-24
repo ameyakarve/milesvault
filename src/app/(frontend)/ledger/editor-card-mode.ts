@@ -108,8 +108,8 @@ const cardModeField = StateField.define<CardSets>({
 })
 
 const CARD_BG = '#FFFFFF'
-const ACTIVE_BG = 'rgba(15, 118, 110, 0.04)'
-const ACTIVE_BORDER = '1px solid rgba(15, 118, 110, 0.35)'
+const ACTIVE_BG = 'rgba(8, 145, 178, 0.04)'
+const ACTIVE_BORDER = '1px solid rgba(8, 145, 178, 0.35)'
 const BORDER = `1px solid ${SLATE_200}`
 const DROP_SHADOW = '0 1px 2px rgba(15, 23, 42, 0.04)'
 const RADIUS = '6px'
