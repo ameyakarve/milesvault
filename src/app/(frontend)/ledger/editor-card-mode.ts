@@ -96,14 +96,13 @@ const cardModeTheme = EditorView.theme(
       boxShadow: SHADOW,
     },
     '.cm-txn-desc': {
-      padding: `0 ${PAD_X}`,
-      backgroundColor: `${CARD_BG} !important`,
       borderTopLeftRadius: RADIUS,
       borderTopRightRadius: RADIUS,
-      boxShadow: SHADOW,
+    },
+    '.cm-txn-desc-gutter': {
+      borderTopLeftRadius: RADIUS,
       borderBottom: 'none !important',
     },
-    '.cm-txn-desc-gutter': { borderBottom: 'none !important' },
   },
   { dark: false },
 )
