@@ -17,6 +17,7 @@ import { composeBuffer } from './editor'
 import { setAiSnapshots } from './editor-ai-widget'
 import { insertNewTxnAtTop } from './editor-slash-menu'
 import { ChromeIconButton, PaneCap, PaneLabel } from './ledger-chrome'
+import { HelpButton } from './ledger-help'
 import type { LedgerEditorHandle } from './ledger-editor'
 import { TextPane } from './ledger-panes'
 import { SavePill } from './save-status'
@@ -202,11 +203,12 @@ export function LedgerView(_: { email: string }) {
 
   return (
     <div className="w-screen h-screen flex flex-col bg-white text-navy-700 overflow-hidden font-sans">
-      <header className="h-[32px] px-4 flex items-center bg-white shrink-0 z-20 border-b border-slate-200">
+      <header className="h-[32px] px-4 flex items-center justify-between bg-white shrink-0 z-20 border-b border-slate-200">
         <div className="flex items-center gap-2">
           <span className="font-sans font-medium text-navy-700 text-[13px]">milesvault</span>
           <span className="font-sans font-normal text-slate-500 text-[12px]">/ ledger</span>
         </div>
+        <HelpButton />
       </header>
 
       <main className="flex-1 flex flex-col bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
