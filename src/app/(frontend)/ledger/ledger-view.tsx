@@ -15,6 +15,7 @@ import { format } from '@/lib/beancount/format'
 import { type BufferState, evaluateBuffer } from './buffer-state'
 import { composeBuffer } from './editor'
 import { setAiSnapshots } from './editor-ai-widget'
+import { insertNewTxnAtTop } from './editor-slash-menu'
 import { ChromeIconButton, PaneCap, PaneLabel } from './ledger-chrome'
 import type { LedgerEditorHandle } from './ledger-editor'
 import { TextPane } from './ledger-panes'
@@ -166,6 +167,12 @@ export function LedgerView(_: { email: string }) {
     setSaveErrorMsg(null)
   }
 
+  function onNewEntry() {
+    const view = editorRef.current?.getView()
+    if (!view) return
+    insertNewTxnAtTop(view)
+  }
+
   const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
@@ -207,7 +214,12 @@ export function LedgerView(_: { email: string }) {
           <PaneCap className="justify-between">
             <PaneLabel>EDITOR</PaneLabel>
             <div className="flex items-center">
-              <ChromeIconButton icon={Plus} title="new entry" />
+              <ChromeIconButton
+                icon={Plus}
+                title={locked ? 'new entry (saving)' : 'new entry'}
+                disabled={locked}
+                onClick={onNewEntry}
+              />
               <ChromeIconButton
                 icon={Save}
                 title={
