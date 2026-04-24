@@ -52,6 +52,7 @@ import { accountChips, accountChipTooltip } from './editor-chips'
 import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
+import { txnDescriptions } from './editor-txn-descriptions'
 
 const beancountLanguage = LRLanguage.define({
   name: 'beancount',
@@ -166,7 +167,7 @@ function buildEntryBandsFromDoc(doc: Text): EntryBandSets {
   const gutterBuilder = new RangeSetBuilder<GutterMarker>()
   const entries = splitEntries(doc.toString())
   for (let i = 0; i < entries.length; i++) {
-    if (i % 2 === 0) continue
+    if (i % 2 === 1) continue
     const e = entries[i]
     for (let ln = e.startLine; ln <= e.endLine; ln++) {
       const line = doc.line(ln + 1)
@@ -314,6 +315,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     headerChipTooltip,
     amountChips,
     diffChips,
+    txnDescriptions,
     scandiEditorTheme,
   ]
 }

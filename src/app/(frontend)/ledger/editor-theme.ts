@@ -14,6 +14,7 @@ const SKY_700 = '#0369A1'
 const AMBER_700 = '#B45309'
 const TEAL_700 = '#0F766E'
 const VIOLET_700 = '#6D28D9'
+const MOCHA_700 = '#6F4518'
 
 const TOKEN_STYLE = {
   date: { color: NAVY_700, fontWeight: '600' },
@@ -75,6 +76,15 @@ export const scandiEditorTheme = EditorView.theme(
       content: '""',
     },
     '.cm-txn-band': { backgroundColor: SLATE_50 },
+    '.cm-txn-desc': {
+      padding: '6px 12px 4px',
+      color: MOCHA_700,
+      fontSize: '11px',
+      fontStyle: 'italic',
+      fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+      letterSpacing: '0.01em',
+      lineHeight: '1.4',
+    },
     '.cm-chip': {
       display: 'inline-block',
       verticalAlign: 'baseline',

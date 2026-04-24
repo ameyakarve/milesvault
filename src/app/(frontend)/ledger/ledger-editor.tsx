@@ -115,6 +115,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
       readOnly={readOnly ?? false}
       onCreateEditor={(view) => {
         viewRef.current = view
+        view.dispatch({ selection: { anchor: 0, head: 0 }, scrollIntoView: true })
       }}
       extensions={extensions}
       basicSetup={{
