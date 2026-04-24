@@ -10,10 +10,17 @@ import {
 import { generateTxnDescription } from '@/lib/beancount/txn-description'
 import { cachedParse } from './parse-cache'
 
-class TxnBandMarker extends GutterMarker {
-  elementClass = 'cm-txn-band'
+class TxnDescGutterMarker extends GutterMarker {
+  constructor(readonly banded: boolean) {
+    super()
+    this.elementClass = banded ? 'cm-txn-desc-gutter cm-txn-band' : 'cm-txn-desc-gutter'
+  }
+  eq(other: GutterMarker): boolean {
+    return other instanceof TxnDescGutterMarker && other.banded === this.banded
+  }
 }
-const txnBandMarker = new TxnBandMarker()
+const bandedDescMarker = new TxnDescGutterMarker(true)
+const plainDescMarker = new TxnDescGutterMarker(false)
 
 class TxnDescWidget extends WidgetType {
   constructor(
@@ -64,7 +71,8 @@ export const txnDescriptions = [
     },
     provide: (f) => EditorView.decorations.from(f),
   }),
-  gutterWidgetClass.of((_view, widget) =>
-    widget instanceof TxnDescWidget && widget.banded ? txnBandMarker : null,
-  ),
+  gutterWidgetClass.of((_view, widget) => {
+    if (!(widget instanceof TxnDescWidget)) return null
+    return widget.banded ? bandedDescMarker : plainDescMarker
+  }),
 ]
