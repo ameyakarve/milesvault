@@ -1,0 +1,538 @@
+import {
+  type Extension,
+  Prec,
+  RangeSetBuilder,
+  StateEffect,
+  StateField,
+} from '@codemirror/state'
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  keymap,
+  ViewPlugin,
+  type ViewUpdate,
+  WidgetType,
+} from '@codemirror/view'
+import {
+  NAVY_700,
+  ROSE_700,
+  SLATE_200,
+  SLATE_400,
+  SLATE_500,
+  SLATE_600,
+  SLATE_50,
+} from './editor-theme'
+
+type Role = 'user' | 'assistant'
+type Message = {
+  role: Role
+  content: string
+  editRange?: { from: number; to: number; insert: string }
+}
+type AiStatus = 'idle' | 'streaming' | 'error'
+type AiSession = {
+  id: string
+  selection: { from: number; to: number }
+  messages: Message[]
+  status: AiStatus
+  error: string | null
+}
+
+const aiOpen = StateEffect.define<{ selection: { from: number; to: number } }>()
+const aiClose = StateEffect.define<null>()
+const aiAppendUser = StateEffect.define<string>()
+const aiStreamStart = StateEffect.define<null>()
+const aiStreamDelta = StateEffect.define<string>()
+const aiStreamEnd = StateEffect.define<null>()
+const aiStreamError = StateEffect.define<string>()
+const aiClearLast = StateEffect.define<null>()
+
+function parseEdit(text: string): { reply: string; edit: string | null } {
+  const editMatch = text.match(/<edit>([\s\S]*?)<\/edit>/)
+  const replyMatch = text.match(/<reply>([\s\S]*?)<\/reply>/)
+  const edit = editMatch ? editMatch[1].trim() : null
+  const reply = replyMatch ? replyMatch[1].trim() : text.replace(/<\/?(edit|reply)>/g, '').trim()
+  return { reply, edit }
+}
+
+const aiField = StateField.define<AiSession | null>({
+  create: () => null,
+  update(value, tr) {
+    let next = value
+    for (const e of tr.effects) {
+      if (e.is(aiOpen)) {
+        next = {
+          id: crypto.randomUUID(),
+          selection: e.value.selection,
+          messages: [],
+          status: 'idle',
+          error: null,
+        }
+      } else if (e.is(aiClose)) {
+        next = null
+      } else if (next && e.is(aiAppendUser)) {
+        next = {
+          ...next,
+          messages: [...next.messages, { role: 'user', content: e.value }],
+        }
+      } else if (next && e.is(aiStreamStart)) {
+        next = {
+          ...next,
+          messages: [...next.messages, { role: 'assistant', content: '' }],
+          status: 'streaming',
+          error: null,
+        }
+      } else if (next && e.is(aiStreamDelta)) {
+        const msgs = next.messages.slice()
+        const last = msgs[msgs.length - 1]
+        if (last && last.role === 'assistant') {
+          msgs[msgs.length - 1] = { ...last, content: last.content + e.value }
+          next = { ...next, messages: msgs }
+        }
+      } else if (next && e.is(aiStreamEnd)) {
+        const msgs = next.messages.slice()
+        const last = msgs[msgs.length - 1]
+        if (last && last.role === 'assistant') {
+          const { reply, edit } = parseEdit(last.content)
+          msgs[msgs.length - 1] = {
+            role: 'assistant',
+            content: reply,
+            editRange: edit ? { ...next.selection, insert: edit } : undefined,
+          }
+        }
+        next = { ...next, messages: msgs, status: 'idle' }
+      } else if (next && e.is(aiStreamError)) {
+        next = { ...next, status: 'error', error: e.value }
+      } else if (next && e.is(aiClearLast)) {
+        const msgs = next.messages.slice()
+        const last = msgs[msgs.length - 1]
+        if (last && last.role === 'assistant' && last.editRange) {
+          msgs[msgs.length - 1] = { role: 'assistant', content: last.content }
+          next = { ...next, messages: msgs }
+        }
+      }
+    }
+    return next
+  },
+  provide: (f) =>
+    EditorView.decorations.from(f, (s) => {
+      if (!s) return Decoration.none
+      const b = new RangeSetBuilder<Decoration>()
+      b.add(
+        s.selection.from,
+        s.selection.from,
+        Decoration.widget({ widget: new AiWidget(s.id), block: true, side: -1 }),
+      )
+      return b.finish() as DecorationSet
+    }),
+})
+
+class AiWidget extends WidgetType {
+  constructor(readonly sessionId: string) {
+    super()
+  }
+  eq(other: WidgetType): boolean {
+    return other instanceof AiWidget && other.sessionId === this.sessionId
+  }
+  toDOM(view: EditorView): HTMLElement {
+    const root = document.createElement('div')
+    root.className = 'cm-ai-widget'
+    root.dataset.aiSession = this.sessionId
+    root.innerHTML = `
+      <div class="cm-ai-messages"></div>
+      <div class="cm-ai-status" hidden></div>
+      <form class="cm-ai-input-row">
+        <textarea class="cm-ai-input" rows="1" placeholder="Ask to edit this transaction… (Enter sends, Esc closes)"></textarea>
+        <button type="submit" class="cm-ai-send">Send</button>
+        <button type="button" class="cm-ai-close" aria-label="Close">×</button>
+      </form>
+    `
+    const ac = new AbortController()
+    widgetAborts.set(root, ac)
+    wireWidget(root, view, this.sessionId, ac.signal)
+    renderFull(root, view.state.field(aiField))
+    queueMicrotask(() => {
+      root.querySelector<HTMLTextAreaElement>('.cm-ai-input')?.focus()
+    })
+    return root
+  }
+  destroy(dom: HTMLElement): void {
+    widgetAborts.get(dom)?.abort()
+    widgetAborts.delete(dom)
+  }
+  ignoreEvent(): boolean {
+    return false
+  }
+}
+
+const widgetAborts = new WeakMap<HTMLElement, AbortController>()
+
+function wireWidget(
+  root: HTMLElement,
+  view: EditorView,
+  sessionId: string,
+  signal: AbortSignal,
+) {
+  const input = root.querySelector<HTMLTextAreaElement>('.cm-ai-input')!
+  const form = root.querySelector<HTMLFormElement>('.cm-ai-input-row')!
+  const close = root.querySelector<HTMLButtonElement>('.cm-ai-close')!
+
+  form.addEventListener(
+    'submit',
+    (ev) => {
+      ev.preventDefault()
+      const text = input.value.trim()
+      if (!text) return
+      input.value = ''
+      void submitPrompt(view, sessionId, text)
+    },
+    { signal },
+  )
+  close.addEventListener(
+    'click',
+    (ev) => {
+      ev.preventDefault()
+      closeWidget(view)
+    },
+    { signal },
+  )
+  input.addEventListener(
+    'keydown',
+    (ev) => {
+      if (ev.key === 'Enter' && !ev.shiftKey) {
+        ev.preventDefault()
+        form.requestSubmit()
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault()
+        closeWidget(view)
+      }
+    },
+    { signal },
+  )
+  root.addEventListener(
+    'click',
+    (ev) => {
+      const target = ev.target as HTMLElement
+      if (target.matches('.cm-ai-accept')) {
+        const idx = Number(target.dataset.msg)
+        acceptEdit(view, idx)
+      } else if (target.matches('.cm-ai-reject')) {
+        view.dispatch({ effects: aiClearLast.of(null) })
+      }
+    },
+    { signal },
+  )
+}
+
+function renderMessageBubble(m: Message, index: number): HTMLDivElement {
+  const bubble = document.createElement('div')
+  bubble.className = `cm-ai-message cm-ai-${m.role}`
+  const body = document.createElement('div')
+  body.className = 'cm-ai-message-body'
+  body.textContent = m.content
+  bubble.appendChild(body)
+  if (m.editRange) {
+    const pre = document.createElement('pre')
+    pre.className = 'cm-ai-edit-preview'
+    pre.textContent = m.editRange.insert
+    bubble.appendChild(pre)
+    const actions = document.createElement('div')
+    actions.className = 'cm-ai-actions'
+    const acceptBtn = document.createElement('button')
+    acceptBtn.className = 'cm-ai-accept'
+    acceptBtn.dataset.msg = String(index)
+    acceptBtn.textContent = 'Accept'
+    const rejectBtn = document.createElement('button')
+    rejectBtn.className = 'cm-ai-reject'
+    rejectBtn.dataset.msg = String(index)
+    rejectBtn.textContent = 'Reject'
+    actions.appendChild(acceptBtn)
+    actions.appendChild(rejectBtn)
+    bubble.appendChild(actions)
+  }
+  return bubble
+}
+
+function renderFull(root: HTMLElement, state: AiSession | null) {
+  if (!state || state.id !== root.dataset.aiSession) return
+  const messagesEl = root.querySelector<HTMLDivElement>('.cm-ai-messages')!
+  messagesEl.replaceChildren(
+    ...state.messages.map((m, i) => renderMessageBubble(m, i)),
+  )
+  renderStatus(root, state)
+}
+
+function renderStatus(root: HTMLElement, state: AiSession) {
+  const status = root.querySelector<HTMLDivElement>('.cm-ai-status')!
+  if (state.status === 'error') {
+    status.hidden = false
+    status.textContent = state.error ?? 'something went wrong'
+    status.className = 'cm-ai-status cm-ai-status-error'
+  } else if (state.status === 'streaming') {
+    status.hidden = false
+    status.textContent = 'thinking…'
+    status.className = 'cm-ai-status cm-ai-status-streaming'
+  } else {
+    status.hidden = true
+  }
+  const input = root.querySelector<HTMLTextAreaElement>('.cm-ai-input')!
+  input.disabled = state.status === 'streaming'
+}
+
+function patchRender(root: HTMLElement, prev: AiSession | null, next: AiSession) {
+  if (!prev || prev.id !== next.id || prev.messages.length !== next.messages.length) {
+    renderFull(root, next)
+    return
+  }
+  const lastIdx = next.messages.length - 1
+  const lastPrev = prev.messages[lastIdx]
+  const lastNext = next.messages[lastIdx]
+  const structureChanged =
+    !lastPrev ||
+    lastPrev.role !== lastNext.role ||
+    Boolean(lastPrev.editRange) !== Boolean(lastNext.editRange)
+  if (structureChanged) {
+    renderFull(root, next)
+    return
+  }
+  const messagesEl = root.querySelector<HTMLDivElement>('.cm-ai-messages')!
+  const lastBubble = messagesEl.children[lastIdx] as HTMLElement | undefined
+  const body = lastBubble?.querySelector<HTMLDivElement>('.cm-ai-message-body')
+  if (body && lastPrev.content !== lastNext.content) {
+    body.textContent = lastNext.content
+  }
+  renderStatus(root, next)
+}
+
+const aiSyncPlugin = ViewPlugin.fromClass(
+  class {
+    root: HTMLElement | null = null
+    sessionId: string | null = null
+    update(update: ViewUpdate) {
+      const prev = update.startState.field(aiField, false)
+      const next = update.state.field(aiField, false)
+      if (prev === next) return
+      if (!next) {
+        this.root = null
+        this.sessionId = null
+        return
+      }
+      if (this.sessionId !== next.id || !this.root?.isConnected) {
+        this.root = update.view.dom.querySelector<HTMLElement>(
+          `.cm-ai-widget[data-ai-session="${next.id}"]`,
+        )
+        this.sessionId = next.id
+      }
+      if (this.root) patchRender(this.root, prev ?? null, next)
+    }
+  },
+)
+
+async function submitPrompt(view: EditorView, sessionId: string, text: string) {
+  const pre = view.state.field(aiField, false)
+  if (!pre || pre.id !== sessionId) return
+
+  view.dispatch({
+    effects: [aiAppendUser.of(text), aiStreamStart.of(null)],
+  })
+
+  const after = view.state.field(aiField, false)
+  if (!after) return
+
+  const surroundingFrom = view.state.doc.lineAt(after.selection.from - 1).from
+  const surroundingTo = view.state.doc.lineAt(after.selection.to + 1).to
+  const surrounding = view.state.doc.sliceString(surroundingFrom, surroundingTo)
+  const selectionText = view.state.doc.sliceString(after.selection.from, after.selection.to)
+
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  try {
+    const res = await fetch('/api/ledger/ai-inline', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        messages: after.messages
+          .filter((m) => m.role !== 'assistant' || m.content.length > 0)
+          .map(({ role, content }) => ({ role, content })),
+        selectionText,
+        surrounding,
+      }),
+    })
+    if (!res.ok || !res.body) {
+      view.dispatch({ effects: aiStreamError.of(`server ${res.status}`) })
+      return
+    }
+    reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value, { stream: true })
+      if (chunk) view.dispatch({ effects: aiStreamDelta.of(chunk) })
+    }
+    const tail = decoder.decode()
+    if (tail) view.dispatch({ effects: aiStreamDelta.of(tail) })
+    view.dispatch({ effects: aiStreamEnd.of(null) })
+  } catch (err) {
+    view.dispatch({ effects: aiStreamError.of((err as Error).message) })
+  } finally {
+    reader?.releaseLock()
+  }
+}
+
+function acceptEdit(view: EditorView, msgIndex: number) {
+  const state = view.state.field(aiField, false)
+  if (!state) return
+  const msg = state.messages[msgIndex]
+  if (!msg?.editRange) return
+  view.dispatch({
+    changes: {
+      from: msg.editRange.from,
+      to: msg.editRange.to,
+      insert: msg.editRange.insert,
+    },
+    effects: aiClearLast.of(null),
+  })
+}
+
+function closeWidget(view: EditorView) {
+  view.dispatch({ effects: aiClose.of(null) })
+  view.focus()
+}
+
+function openForCurrentSelection(view: EditorView) {
+  const existing = view.state.field(aiField, false)
+  if (existing) {
+    closeWidget(view)
+    return
+  }
+  const sel = view.state.selection.main
+  const line = view.state.doc.lineAt(sel.head)
+  const selection =
+    sel.from === sel.to ? { from: line.from, to: line.to } : { from: sel.from, to: sel.to }
+  view.dispatch({ effects: aiOpen.of({ selection }) })
+}
+
+const openKeymap = keymap.of([
+  {
+    key: 'Mod-i',
+    preventDefault: true,
+    run: (view) => {
+      openForCurrentSelection(view)
+      return true
+    },
+  },
+])
+
+const SLASH_AI_RE = /^\s*\/ai\s*$/
+
+const slashAiTrigger = EditorView.updateListener.of((u) => {
+  if (!u.docChanged) return
+  if (u.state.field(aiField, false)) return
+  const line = u.state.doc.lineAt(u.state.selection.main.head)
+  if (!SLASH_AI_RE.test(line.text)) return
+  queueMicrotask(() => {
+    u.view.dispatch({
+      changes: { from: line.from, to: line.to, insert: '' },
+    })
+    openForCurrentSelection(u.view)
+  })
+})
+
+const aiTheme = EditorView.theme({
+  '.cm-ai-widget': {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    margin: '8px 12px',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    backgroundColor: '#FFFFFF',
+    border: `1px dashed ${SLATE_400}`,
+    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: '12px',
+    lineHeight: '1.5',
+    color: NAVY_700,
+  },
+  '.cm-ai-messages': { display: 'flex', flexDirection: 'column', gap: '6px' },
+  '.cm-ai-messages:empty': { display: 'none' },
+  '.cm-ai-message': { display: 'flex', flexDirection: 'column', gap: '4px' },
+  '.cm-ai-user .cm-ai-message-body': { color: SLATE_600 },
+  '.cm-ai-user .cm-ai-message-body:before': { content: '"› "', color: SLATE_400 },
+  '.cm-ai-assistant .cm-ai-message-body': { color: NAVY_700 },
+  '.cm-ai-edit-preview': {
+    margin: '4px 0 0',
+    padding: '8px 10px',
+    backgroundColor: SLATE_50,
+    borderRadius: '6px',
+    border: `1px solid ${SLATE_200}`,
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: '12px',
+    whiteSpace: 'pre',
+    overflowX: 'auto',
+  },
+  '.cm-ai-actions': { display: 'flex', gap: '6px', marginTop: '4px' },
+  '.cm-ai-actions button': {
+    padding: '2px 10px',
+    fontSize: '11px',
+    border: `1px solid ${SLATE_200}`,
+    borderRadius: '4px',
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
+  },
+  '.cm-ai-actions .cm-ai-accept': {
+    backgroundColor: NAVY_700,
+    color: '#FFFFFF',
+    borderColor: NAVY_700,
+  },
+  '.cm-ai-input-row': {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'flex-start',
+  },
+  '.cm-ai-input': {
+    flex: '1',
+    resize: 'none',
+    border: `1px solid ${SLATE_200}`,
+    borderRadius: '6px',
+    padding: '6px 8px',
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+    fontSize: '12px',
+    lineHeight: '1.5',
+    color: NAVY_700,
+    backgroundColor: '#FFFFFF',
+    outline: 'none',
+  },
+  '.cm-ai-input:focus': { borderColor: NAVY_700 },
+  '.cm-ai-send, .cm-ai-close': {
+    padding: '6px 10px',
+    fontSize: '11px',
+    border: `1px solid ${SLATE_200}`,
+    borderRadius: '6px',
+    backgroundColor: NAVY_700,
+    color: '#FFFFFF',
+    cursor: 'pointer',
+  },
+  '.cm-ai-close': {
+    backgroundColor: 'transparent',
+    color: SLATE_500,
+    borderColor: 'transparent',
+    fontSize: '16px',
+    lineHeight: '1',
+  },
+  '.cm-ai-status': {
+    marginTop: '4px',
+    fontSize: '11px',
+    color: SLATE_500,
+  },
+  '.cm-ai-status-error': { color: ROSE_700 },
+})
+
+export const aiWidget: Extension = [
+  aiField,
+  aiSyncPlugin,
+  Prec.highest(openKeymap),
+  slashAiTrigger,
+  aiTheme,
+]

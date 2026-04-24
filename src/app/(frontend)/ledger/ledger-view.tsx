@@ -17,9 +17,7 @@ import { composeBuffer } from './editor'
 import { ChromeIconButton, PaneCap, PaneLabel } from './ledger-chrome'
 import type { LedgerEditorHandle } from './ledger-editor'
 import { type FetchStatus, TextPane } from './ledger-panes'
-import { applyProposal, type Op } from './propose'
 import { SavePill } from './save-status'
-import { ThinkPane } from './think-pane'
 
 const PAGE_SIZE = 50
 
@@ -139,7 +137,7 @@ function PaginationStrip({
   )
 }
 
-export function LedgerView({ email }: { email: string }) {
+export function LedgerView(_: { email: string }) {
   const [page, setPage] = useState(1)
   const state = useTransactions(page)
   const snapshots = useMemo(() => buildSnapshots(state.rows), [state.rows])
@@ -155,9 +153,8 @@ export function LedgerView({ email }: { email: string }) {
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
-  const [aiBusy, setAiBusy] = useState(false)
   const saving = saveStatus === 'saving'
-  const locked = aiBusy || saving
+  const locked = saving
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     if (!copied) return
@@ -254,11 +251,9 @@ export function LedgerView({ email }: { email: string }) {
   const pageLocked = locked || dirty
   const pageLockTitle = saving
     ? 'paging disabled (saving)'
-    : aiBusy
-      ? 'paging disabled (assistant working)'
-      : dirty
-        ? 'save or revert first'
-        : undefined
+    : dirty
+      ? 'save or revert first'
+      : undefined
 
   return (
     <div className="w-screen h-screen flex flex-col bg-white text-navy-700 overflow-hidden font-sans">
@@ -269,8 +264,8 @@ export function LedgerView({ email }: { email: string }) {
         </div>
       </header>
 
-      <main className="flex-1 grid grid-cols-[2fr_1fr] gap-[1px] bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
-        <section className="flex flex-col min-w-0 min-h-0 overflow-hidden">
+      <main className="flex-1 flex flex-col bg-scandi-backdrop border-y border-y-scandi-backdrop overflow-hidden min-h-0">
+        <section className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           <PaneCap className="justify-between">
             <PaneLabel>EDITOR</PaneLabel>
             <div className="flex items-center">
@@ -280,13 +275,11 @@ export function LedgerView({ email }: { email: string }) {
                 title={
                   saving
                     ? 'saving…'
-                    : aiBusy
-                      ? 'save (assistant working)'
-                      : bufferState.kind === 'dirty'
-                        ? 'save (fix parse errors first)'
-                        : bufferState.kind === 'staged' && !bufferState.validated
-                          ? 'save (fix validation errors first)'
-                          : 'save · ⌘S'
+                    : bufferState.kind === 'dirty'
+                      ? 'save (fix parse errors first)'
+                      : bufferState.kind === 'staged' && !bufferState.validated
+                        ? 'save (fix validation errors first)'
+                        : 'save · ⌘S'
                 }
                 dirty={dirty}
                 disabled={!saveEnabled || locked}
@@ -294,13 +287,7 @@ export function LedgerView({ email }: { email: string }) {
               />
               <ChromeIconButton
                 icon={RotateCcw}
-                title={
-                  saving
-                    ? 'revert (saving)'
-                    : aiBusy
-                      ? 'revert (assistant working)'
-                      : 'revert'
-                }
+                title={saving ? 'revert (saving)' : 'revert'}
                 disabled={!dirty || locked}
                 onClick={onRevert}
               />
@@ -315,11 +302,9 @@ export function LedgerView({ email }: { email: string }) {
                 title={
                   saving
                     ? 'filter (saving)'
-                    : aiBusy
-                      ? 'filter (assistant working)'
-                      : dirty
-                        ? 'filter (save or revert first)'
-                        : 'filter'
+                    : dirty
+                      ? 'filter (save or revert first)'
+                      : 'filter'
                 }
                 disabled={pageLocked}
               />
@@ -344,22 +329,6 @@ export function LedgerView({ email }: { email: string }) {
             />
           </div>
         </section>
-
-        <ThinkPane
-          email={email}
-          buffer={buffer}
-          snapshots={snapshots}
-          saving={saving}
-          onAiBusyChange={setAiBusy}
-          onPropose={(ops: readonly Op[]) => {
-            const res = applyProposal(buffer, snapshots, ops)
-            if (res.ok === true) {
-              setBuffer(res.buffer)
-              return { ok: true }
-            }
-            return { ok: false, reason: res.reason }
-          }}
-        />
       </main>
 
       <PaginationStrip
