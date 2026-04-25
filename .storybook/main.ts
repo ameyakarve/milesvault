@@ -10,6 +10,15 @@ const config: StorybookConfig = {
     check: false,
     reactDocgen: false,
   },
+  viteFinal: async (cfg) => {
+    cfg.define = {
+      ...(cfg.define ?? {}),
+      __dirname: '"/"',
+      __filename: '"/index.js"',
+      'process.env.STORYBOOK': '"true"',
+    }
+    return cfg
+  },
 }
 
 export default config

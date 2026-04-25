@@ -4,7 +4,6 @@ import {
   startCompletion,
 } from '@codemirror/autocomplete'
 import { EditorView } from '@codemirror/view'
-import { openAiForCurrentSelection } from './editor-ai-widget'
 
 type SlashCommand = {
   name: string
@@ -37,11 +36,6 @@ function applyComment(view: EditorView, from: number, to: number) {
   })
 }
 
-function applyAi(view: EditorView, from: number, to: number) {
-  view.dispatch({ changes: { from, to, insert: '' } })
-  openAiForCurrentSelection(view)
-}
-
 const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: 'txn',
@@ -54,12 +48,6 @@ const SLASH_COMMANDS: SlashCommand[] = [
     label: '/comment',
     detail: 'Insert a `;` comment line',
     apply: applyComment,
-  },
-  {
-    name: 'ai',
-    label: '/ai',
-    detail: 'Edit current transaction with AI',
-    apply: applyAi,
   },
 ]
 

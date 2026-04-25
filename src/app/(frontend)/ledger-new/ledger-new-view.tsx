@@ -15,10 +15,11 @@ import type { Transaction } from '@/durable/ledger-types'
 import { format } from '@/lib/beancount/format'
 import { type BufferState, evaluateBuffer } from '../ledger/buffer-state'
 import { composeBuffer } from '../ledger/editor'
-import { setAiSnapshots } from '../ledger/editor-ai-widget'
 import type { LedgerEditorHandle } from '../ledger/ledger-editor'
 import { TextPane } from '../ledger/ledger-panes'
 import { buildSnapshots, PAGE_SIZE, useTransactions } from '../ledger/use-transactions'
+import { AiPane } from './ai-pane'
+import { applyProposal, type Op } from './propose'
 
 function TopNav({ initial }: { initial: string }) {
   return (
@@ -243,9 +244,6 @@ export function LedgerNewView({ email }: { email: string }) {
     setBuffer(baseline)
     editorRef.current?.resetCursor()
   }, [baseline])
-  useEffect(() => {
-    editorRef.current?.getView()?.dispatch({ effects: setAiSnapshots.of(snapshots) })
-  }, [snapshots])
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
@@ -309,6 +307,14 @@ export function LedgerNewView({ email }: { email: string }) {
     setSaveErrorMsg(null)
   }
 
+  function onAiPropose(ops: readonly Op[]): { ok: boolean; reason?: string } {
+    const result = applyProposal(buffer, snapshots, ops)
+    if (!result.ok) return result
+    editorRef.current?.replaceDoc(result.buffer)
+    setBuffer(result.buffer)
+    return { ok: true }
+  }
+
   const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
   useEffect(() => {
     if (page > totalPages) setPage(totalPages)
@@ -369,42 +375,15 @@ export function LedgerNewView({ email }: { email: string }) {
             )}
           </div>
         </main>
-        <AiRail />
+        <AiPane
+          email={email}
+          buffer={buffer}
+          snapshots={snapshots}
+          saving={locked}
+          onPropose={onAiPropose}
+        />
       </div>
       <MobileAiBar />
     </div>
-  )
-}
-
-function AiRail() {
-  return (
-    <aside className="hidden md:flex w-[360px] shrink-0 border-l border-slate-200 bg-[#F4F6F8] flex-col">
-      <div className="flex items-center justify-between h-[36px] px-4 mt-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <span className="w-[6px] h-[6px] rounded-full bg-teal-500" />
-          <span className="font-sans text-[11px] uppercase tracking-wider font-bold text-slate-500">
-            AI
-          </span>
-        </div>
-        <button
-          type="button"
-          aria-disabled
-          className="h-[24px] w-[24px] flex items-center justify-center text-slate-400 hover:bg-slate-100 rounded-[4px]"
-        >
-          <MoreHorizontal className="w-[14px] h-[14px]" strokeWidth={1.5} />
-        </button>
-      </div>
-      <div className="flex-1 min-h-0" />
-      <div className="px-3 pb-3 pt-2 border-t border-slate-100">
-        <div className="flex items-center h-[36px] bg-white border border-slate-200 rounded-[6px] px-3">
-          <span className="flex-1 text-[12px] font-sans text-slate-400">
-            Edit this card with AI…
-          </span>
-          <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1 rounded">
-            ⌘J
-          </span>
-        </div>
-      </div>
-    </aside>
   )
 }
