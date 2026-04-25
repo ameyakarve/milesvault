@@ -1,7 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, MoreHorizontal, Search, Sparkles } from 'lucide-react'
+import {
+  ArrowUp,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Mic,
+  MoreHorizontal,
+  Search,
+} from 'lucide-react'
 import type { Transaction } from '@/durable/ledger-types'
 import { format } from '@/lib/beancount/format'
 import { type BufferState, evaluateBuffer } from '../ledger/buffer-state'
@@ -11,50 +20,9 @@ import type { LedgerEditorHandle } from '../ledger/ledger-editor'
 import { TextPane } from '../ledger/ledger-panes'
 import { buildSnapshots, PAGE_SIZE, useTransactions } from '../ledger/use-transactions'
 
-const FILTER_ROW = (
-  <>
-    <span className="text-[11px] font-sans text-slate-400">Filter:</span>
-    <span className="bg-white border border-[#0891B2] text-[#0891B2] px-[8px] py-[2px] rounded-[4px] text-[11px] font-mono flex items-center h-[20px]">
-      @expenses:food
-      <span className="text-[#0891B2] ml-1">×</span>
-    </span>
-    <span className="text-[11px] font-mono text-slate-300">·</span>
-    <span className="bg-white border border-slate-200 text-slate-700 px-[8px] py-[2px] rounded-[4px] text-[11px] font-mono flex items-center h-[20px]">
-      Apr 2026
-      <span className="text-slate-400 ml-1">⌄</span>
-    </span>
-    <span className="text-[11px] font-mono text-slate-300">·</span>
-    <span className="bg-white border border-slate-200 text-slate-700 px-[8px] py-[2px] rounded-[4px] text-[11px] font-mono flex items-center h-[20px]">
-      #cashback
-      <span className="text-slate-400 ml-1">×</span>
-    </span>
-    <span className="text-[11px] font-mono text-slate-300">·</span>
-    <span className="border border-dashed border-slate-300 text-slate-500 px-[8px] py-[2px] rounded-[4px] text-[11px] font-mono flex items-center h-[20px]">
-      + Filter
-    </span>
-    <span className="text-[11px] font-mono text-slate-300">·</span>
-  </>
-)
-
-const CHEAT_STRIP = (
-  <div className="flex items-center text-[10px] font-mono text-slate-400">
-    <span className="text-slate-600 font-bold">⌘S</span>
-    <span className="ml-1">save</span>
-    <span className="text-slate-300 mx-2">·</span>
-    <span className="text-slate-600 font-bold">⌘K</span>
-    <span className="ml-1">search</span>
-    <span className="text-slate-300 mx-2">·</span>
-    <span className="text-slate-600 font-bold">⌘J</span>
-    <span className="ml-1">ask AI</span>
-    <span className="text-slate-300 mx-2">·</span>
-    <span className="text-slate-600 font-bold">/</span>
-    <span className="ml-1">cmds</span>
-  </div>
-)
-
 function TopNav({ initial }: { initial: string }) {
   return (
-    <nav className="w-full bg-white border-b border-slate-200">
+    <nav className="hidden md:block w-full bg-white border-b border-slate-200">
       <div className="flex justify-between items-center w-full px-6 py-3 max-w-[960px] mx-auto">
         <div className="flex items-center space-x-6">
           <span className="text-[13px] font-black tracking-tighter text-navy-900 uppercase">
@@ -91,143 +59,167 @@ function TopNav({ initial }: { initial: string }) {
   )
 }
 
-function ChromeRow({
-  total,
-  dirty,
-  saveEnabled,
-  locked,
-  onSave,
-  onReset,
-  lastSaved,
-}: {
-  total: number
-  dirty: boolean
-  saveEnabled: boolean
-  locked: boolean
-  onSave: () => void
-  onReset: () => void
-  lastSaved: string
-}) {
-  const shown = Math.min(total, PAGE_SIZE)
-  return (
-    <div className="w-full pl-[44px] flex flex-col mb-6 bg-[#F4F6F8]">
-      <div className="flex justify-between items-center h-[36px] border-b border-slate-100 pr-2">
-        <div className="flex items-center space-x-[8px]">
-          {FILTER_ROW}
-          <span className="text-[11px] font-mono text-slate-500 ml-[6px]">
-            {shown} of {total} txns
-          </span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div
-            className="w-[6px] h-[6px] rounded-full"
-            style={{ background: dirty ? '#F59E0B' : '#14B8A6' }}
-          />
-          <div className="text-[11px] font-mono">
-            <span className="text-slate-700 font-medium">
-              {dirty ? 'unsaved edits' : 'all changes saved'}
-            </span>{' '}
-            <span className="text-slate-400">· last saved {lastSaved}</span>
-          </div>
-        </div>
-      </div>
+const MOBILE_ICON_BTN =
+  'w-9 h-9 bg-slate-100 rounded-[8px] flex items-center justify-center text-slate-500'
 
-      <div className="flex items-center justify-between h-[36px] pr-2">
-        {CHEAT_STRIP}
-        <div className="flex items-center justify-end space-x-[6px]">
-          <div className="relative h-[28px] bg-white border border-slate-200 rounded-[4px] flex items-center">
-            <Search className="absolute left-2 w-[14px] h-[14px] text-slate-400" strokeWidth={1.5} />
-            <input
-              className="w-[200px] h-full bg-transparent border-0 text-[12px] font-mono pl-8 pr-10 focus:ring-0 placeholder:text-slate-400"
-              placeholder="search txns…"
-              type="text"
-              aria-disabled
-            />
-            <span className="absolute right-2 text-[10px] font-mono text-slate-500 bg-slate-100 px-1 rounded">
-              ⌘K
-            </span>
-          </div>
-          <button
-            type="button"
-            aria-disabled
-            className="h-[28px] bg-transparent border border-transparent rounded-[4px] px-[12px] flex items-center hover:bg-slate-50 transition-colors"
-          >
-            <Sparkles className="text-slate-500 w-[14px] h-[14px]" strokeWidth={1.5} />
-            <span className="ml-[6px] text-[11px] font-mono text-slate-600">Ask AI</span>
-            <span className="ml-[6px] text-[10px] font-mono text-slate-500 bg-slate-100 px-1 rounded">
-              ⌘J
-            </span>
-          </button>
-          <button
-            onClick={onReset}
-            disabled={!dirty || locked}
-            className="h-[28px] bg-transparent text-slate-600 border border-transparent rounded-[4px] px-[12px] text-[11px] font-mono hover:bg-slate-50 transition-colors flex items-center disabled:opacity-40 disabled:cursor-default"
-          >
-            Reset
-          </button>
-          <button
-            onClick={onSave}
-            disabled={!saveEnabled || locked}
-            className="h-[28px] bg-[#0891B2] text-white rounded-[4px] px-[12px] text-[11px] font-mono hover:opacity-90 transition-opacity flex items-center disabled:opacity-40 disabled:cursor-default"
-          >
-            Save
-            <span className="ml-[6px] text-[10px] font-mono text-[#0891B2] bg-white px-1 rounded font-bold">
-              ⌘S
-            </span>
-          </button>
-          <button
-            type="button"
-            aria-disabled
-            className="h-[28px] w-[28px] flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded-[4px]"
-          >
-            <MoreHorizontal className="w-[14px] h-[14px]" strokeWidth={1.5} />
-          </button>
+function MobileTopNav() {
+  return (
+    <nav className="md:hidden w-full h-[56px] bg-white border-b border-slate-200 flex items-center justify-between px-4">
+      <div className="flex items-center gap-3">
+        <ChevronLeft className="w-6 h-6 text-slate-600" strokeWidth={2} />
+        <h1 className="text-[16px] font-semibold text-[#0F172A]">Ledger</h1>
+      </div>
+      <button
+        type="button"
+        aria-disabled
+        aria-label="Menu"
+        className="w-9 h-9 flex items-center justify-center text-slate-500"
+      >
+        <MoreHorizontal className="w-5 h-5" strokeWidth={2} />
+      </button>
+    </nav>
+  )
+}
+
+function MobileAiBar() {
+  return (
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 px-4 py-3 pb-[max(env(safe-area-inset-bottom),12px)] shadow-[0_-4px_12px_rgba(15,23,42,0.06)]">
+      <div className="flex items-center gap-2 h-[40px]">
+        <button type="button" aria-disabled aria-label="Voice input" className={MOBILE_ICON_BTN}>
+          <Mic className="w-5 h-5" strokeWidth={2} />
+        </button>
+        <button type="button" aria-disabled aria-label="Camera" className={MOBILE_ICON_BTN}>
+          <Camera className="w-5 h-5" strokeWidth={2} />
+        </button>
+        <div className="flex-1 h-10 bg-[#F1F5F9] border border-slate-200 rounded-full px-4 flex items-center">
+          <span className="text-[14px] text-slate-400">Edit this card with AI…</span>
         </div>
+        <button
+          type="button"
+          aria-disabled
+          aria-label="Send"
+          className="w-10 h-10 bg-[#0F172A] rounded-[8px] flex items-center justify-center text-white"
+        >
+          <ArrowUp className="w-5 h-5" strokeWidth={2} />
+        </button>
       </div>
     </div>
   )
 }
 
-function Pager({
-  page,
+function ChromeRow({
   total,
+  shown,
+  page,
+  totalPages,
   onPage,
+  pageLocked,
+  dirty,
+  saveEnabled,
   locked,
+  onSave,
+  onReset,
 }: {
-  page: number
   total: number
+  shown: number
+  page: number
+  totalPages: number
   onPage: (p: number) => void
+  pageLocked: boolean
+  dirty: boolean
+  saveEnabled: boolean
   locked: boolean
+  onSave: () => void
+  onReset: () => void
 }) {
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const prevDisabled = locked || page <= 1
-  const nextDisabled = locked || page >= totalPages
-  const shown = Math.min(total, PAGE_SIZE)
+  const prevDisabled = pageLocked || page <= 1
+  const nextDisabled = pageLocked || page >= totalPages
+  const saveRing = dirty
+    ? 'ring-2 ring-amber-500 ring-offset-1 ring-offset-[#F4F6F8]'
+    : ''
   return (
-    <div className="flex justify-center mt-8 w-full">
-      <div className="h-[48px] flex items-center justify-between bg-white border border-slate-200 rounded-[6px] px-4 w-[380px]">
+    <div className="sticky top-0 z-10 w-full h-[48px] mb-2 pl-2 md:pl-[44px] flex items-center gap-2 md:gap-3 bg-[#F4F6F8]">
+      <div className="flex items-center shrink-0">
         <button
-          onClick={() => onPage(page - 1)}
-          disabled={prevDisabled}
-          className="text-slate-600 hover:bg-slate-50 border border-slate-200 bg-white px-3 py-1.5 rounded-[4px] flex items-center text-[12px] font-mono transition-colors disabled:text-slate-300 disabled:border-slate-100 disabled:hover:bg-transparent"
+          type="button"
+          onClick={onSave}
+          disabled={!saveEnabled || locked}
+          className={`h-[36px] px-4 bg-[#0891B2] text-white rounded-[4px] flex items-center hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-default ${saveRing}`}
         >
-          <ChevronLeft className="w-[14px] h-[14px] mr-1" strokeWidth={1.5} /> Prev
-        </button>
-        <div className="font-mono text-[11px]">
-          <span className="text-navy-900 font-medium">
-            Page {page} of {totalPages}
+          <span className="text-[13px] font-mono font-bold">Save</span>
+          <span className="hidden md:inline-flex ml-2 text-[10px] font-mono font-bold bg-white/20 px-1.5 py-0.5 rounded-[2px]">
+            ⌘S
           </span>
-          <span className="text-slate-400 mx-1">·</span>
-          <span className="text-slate-500">
-            {shown} of {total} txns
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={!dirty || locked}
+          className="ml-2 md:ml-3 h-[36px] px-3 text-[13px] font-mono font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 rounded-[4px] transition-colors disabled:opacity-40 disabled:cursor-default"
+        >
+          Reset
+        </button>
+        <div className="hidden md:block ml-3 pl-3 border-l border-slate-300">
+          <span
+            className={`text-[12px] font-mono font-medium ${dirty ? 'text-slate-700' : 'text-slate-400'}`}
+          >
+            {dirty ? 'unsaved edits' : 'all changes saved'}
           </span>
         </div>
+      </div>
+      <div className="flex items-center shrink-0">
         <button
+          type="button"
+          onClick={() => onPage(page - 1)}
+          disabled={prevDisabled}
+          aria-label="Previous page"
+          className="w-9 h-9 flex items-center justify-center text-slate-600 hover:bg-slate-200/60 rounded-[4px] transition-colors disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-default"
+        >
+          <ChevronLeft className="w-5 h-5" strokeWidth={2} />
+        </button>
+        <span className="px-2 text-[12px] font-mono font-medium text-slate-700 tabular-nums">
+          {shown} of {total}
+        </span>
+        <button
+          type="button"
           onClick={() => onPage(page + 1)}
           disabled={nextDisabled}
-          className="text-slate-600 hover:bg-slate-50 border border-slate-200 bg-white px-3 py-1.5 rounded-[4px] flex items-center text-[12px] font-mono transition-colors disabled:text-slate-300 disabled:border-slate-100 disabled:hover:bg-transparent"
+          aria-label="Next page"
+          className="w-9 h-9 flex items-center justify-center text-slate-600 hover:bg-slate-200/60 rounded-[4px] transition-colors disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-default"
         >
-          Next <ChevronRight className="w-[14px] h-[14px] ml-1" strokeWidth={1.5} />
+          <ChevronRight className="w-5 h-5" strokeWidth={2} />
+        </button>
+      </div>
+      <button
+        type="button"
+        aria-disabled
+        aria-label="Search"
+        className="hidden md:flex flex-1 min-w-0 h-[36px] bg-slate-100 rounded-[4px] px-3 items-center text-slate-600 hover:bg-slate-200 transition-colors"
+      >
+        <Search className="w-[18px] h-[18px] shrink-0" strokeWidth={2} />
+        <span className="ml-2 flex-1 text-left text-[13px] font-mono font-medium">
+          Search txns…
+        </span>
+        <span className="text-[10px] font-mono font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded-[2px] uppercase">
+          ⌘K
+        </span>
+      </button>
+      <div className="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          aria-disabled
+          aria-label="Filter"
+          className="w-9 h-9 bg-slate-100 rounded-[4px] flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+        >
+          <Filter className="w-[18px] h-[18px]" strokeWidth={2} />
+        </button>
+        <button
+          type="button"
+          aria-disabled
+          aria-label="Search"
+          className="md:hidden w-9 h-9 bg-slate-100 rounded-[4px] flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+        >
+          <Search className="w-[18px] h-[18px]" strokeWidth={2} />
         </button>
       </div>
     </div>
@@ -255,7 +247,6 @@ export function LedgerNewView({ email }: { email: string }) {
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
-  const [lastSaved, setLastSaved] = useState<string>('—')
   const locked = saveStatus === 'saving'
 
   async function onSave() {
@@ -304,10 +295,6 @@ export function LedgerNewView({ email }: { email: string }) {
       }
       state.replaceRows(payload.transactions)
       setSaveStatus('idle')
-      const now = new Date()
-      setLastSaved(
-        `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
-      )
     } catch (e) {
       setSaveStatus('error')
       setSaveErrorMsg(e instanceof Error ? e.message : String(e))
@@ -343,38 +330,79 @@ export function LedgerNewView({ email }: { email: string }) {
   const pageLocked = locked || dirty
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F4F6F8] text-navy-900 font-sans">
+    <div className="h-screen flex flex-col bg-[#F4F6F8] text-navy-900 font-sans overflow-x-hidden">
       <TopNav initial={initial} />
-      <main className="w-full max-w-[960px] flex-1 flex flex-col pt-6 pb-12 mx-auto">
-        <ChromeRow
-          total={state.total}
-          dirty={dirty}
-          saveEnabled={saveEnabled}
-          locked={locked}
-          onSave={onSave}
-          onReset={onRevert}
-          lastSaved={lastSaved}
-        />
+      <MobileTopNav />
+      <div className="flex-1 flex w-full min-h-0">
+        <main className="flex-1 overflow-y-auto min-w-0">
+          <div className="w-full max-w-[960px] flex flex-col pt-1 pb-[120px] md:pb-6 px-4 md:px-0 mx-auto">
+            <ChromeRow
+              total={state.total}
+              shown={state.rows.length}
+              page={page}
+              totalPages={totalPages}
+              onPage={setPage}
+              pageLocked={pageLocked}
+              dirty={dirty}
+              saveEnabled={saveEnabled}
+              locked={locked}
+              onSave={onSave}
+              onReset={onRevert}
+            />
+            <TextPane
+              status={state.status}
+              errorMsg={state.errorMsg}
+              buffer={buffer}
+              baseline={baseline}
+              onBufferChange={setBuffer}
+              onSave={onSave}
+              readOnly={locked}
+              editorRef={editorRef}
+            />
 
-        <TextPane
-          status={state.status}
-          errorMsg={state.errorMsg}
-          buffer={buffer}
-          baseline={baseline}
-          onBufferChange={setBuffer}
-          onSave={onSave}
-          readOnly={locked}
-          editorRef={editorRef}
-        />
-
-        <Pager page={page} total={state.total} onPage={setPage} locked={pageLocked} />
-
-        {saveErrorMsg && (
-          <div className="mt-3 mx-auto text-[11px] font-mono text-red-600">
-            {saveErrorMsg}
+            {saveErrorMsg && (
+              <div className="mt-3 mx-auto text-[11px] font-mono text-red-600">
+                {saveErrorMsg}
+              </div>
+            )}
           </div>
-        )}
-      </main>
+        </main>
+        <AiRail />
+      </div>
+      <MobileAiBar />
     </div>
+  )
+}
+
+function AiRail() {
+  return (
+    <aside className="hidden md:flex w-[360px] shrink-0 border-l border-slate-200 bg-[#F4F6F8] flex-col">
+      <div className="flex items-center justify-between h-[36px] px-4 mt-3 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <span className="w-[6px] h-[6px] rounded-full bg-teal-500" />
+          <span className="font-sans text-[11px] uppercase tracking-wider font-bold text-slate-500">
+            AI
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-disabled
+          className="h-[24px] w-[24px] flex items-center justify-center text-slate-400 hover:bg-slate-100 rounded-[4px]"
+        >
+          <MoreHorizontal className="w-[14px] h-[14px]" strokeWidth={1.5} />
+        </button>
+      </div>
+      <div className="flex-1 min-h-0" />
+      <div className="px-3 pb-3 pt-2 border-t border-slate-100">
+        <div className="flex items-center h-[36px] bg-white border border-slate-200 rounded-[6px] px-3">
+          <span className="flex-1 text-[12px] font-sans text-slate-400">
+            Edit this card with AI…
+          </span>
+          <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1 rounded">
+            ⌘J
+          </span>
+        </div>
+      </div>
+    </aside>
   )
 }
