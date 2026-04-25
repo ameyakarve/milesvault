@@ -105,14 +105,24 @@ function AiPaneInner({
     agent,
     tools,
     onToolCall: async ({ toolCall, addToolOutput }) => {
+      console.log(
+        `[ai-pane] onToolCall name=${toolCall.toolName} id=${toolCall.toolCallId}`,
+      )
       const entry = (tools as Record<string, { execute?: (input: unknown) => unknown }>)[
         toolCall.toolName
       ]
-      if (!entry?.execute) return
+      if (!entry?.execute) {
+        console.warn(`[ai-pane] onToolCall: no execute for ${toolCall.toolName}`)
+        return
+      }
       try {
         const output = await entry.execute(toolCall.input)
         addToolOutput({ toolCallId: toolCall.toolCallId, output })
       } catch (e) {
+        console.error(
+          `[ai-pane] onToolCall execute threw for ${toolCall.toolName}:`,
+          e,
+        )
         addToolOutput({
           toolCallId: toolCall.toolCallId,
           output: null,
@@ -124,7 +134,12 @@ function AiPaneInner({
     onError: (e) => {
       console.error(
         '[ai-pane] useAgentChat error:',
-        e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+        e instanceof Error ? `${e.name}: ${e.message}\n${e.stack}` : String(e),
+      )
+    },
+    onFinish: ({ message, isError, isAbort, isDisconnect, finishReason }) => {
+      console.log(
+        `[ai-pane] onFinish msgId=${message?.id} parts=${message?.parts?.length ?? 0} isError=${isError} isAbort=${isAbort} isDisconnect=${isDisconnect} finishReason=${finishReason}`,
       )
     },
   })
@@ -148,14 +163,20 @@ function AiPaneInner({
     onAiBusyChange?.(busy)
   }, [busy, onAiBusyChange])
 
+  useEffect(() => {
+    console.log(`[ai-pane] status=${status} msgs=${messages.length} busy=${busy}`)
+  }, [status, messages.length, busy])
+
   const onSubmit = (text: string) => {
     if (!text || chatLocked) return
+    console.log(`[ai-pane] sendMessage textLen=${text.length}`)
     proposeFiredRef.current = false
     setBusy(true)
     sendMessage({ text })
   }
 
   const onClear = () => {
+    console.log('[ai-pane] clearHistory')
     proposeFiredRef.current = false
     setBusy(false)
     clearHistory()
