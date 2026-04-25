@@ -131,7 +131,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
       }}
       extensions={extensions}
       basicSetup={{
-        lineNumbers: true,
+        lineNumbers: false,
         highlightActiveLine: false,
         highlightActiveLineGutter: true,
         foldGutter: true,
