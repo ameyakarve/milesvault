@@ -51,10 +51,11 @@ const PAYMENT_INSTRUMENT_PATHS: ReadonlySet<string> = new Set([
 const PAYMENT_TYPE_SUFFIX_PATHS: ReadonlySet<string> = new Set([CC_PATH, DC_PATH, UPI_PATH])
 
 function paymentLabelFor(resolved: ResolvedAccount): string {
+  const display = resolved.chipLabel.replace(/:/g, ' ')
   if (PAYMENT_TYPE_SUFFIX_PATHS.has(resolved.matchedPath) && resolved.glyph) {
-    return `${resolved.chipLabel} ${resolved.glyph.chipLabel}`
+    return `${display} ${resolved.glyph.chipLabel}`
   }
-  return resolved.chipLabel
+  return display
 }
 
 export function generateTxnDescription(txn: ParsedTxn): string {

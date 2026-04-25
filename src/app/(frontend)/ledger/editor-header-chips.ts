@@ -86,7 +86,7 @@ export function hitsForTxn(txn: ParsedTxn): HeaderHit[] {
       from: tag.range.from,
       to: tag.range.to,
       variant: 'tag',
-      label: tag.text,
+      label: `#${tag.text}`,
       tooltip: `tag: ${tag.text}`,
     })
   }
