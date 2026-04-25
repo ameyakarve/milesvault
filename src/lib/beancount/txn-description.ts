@@ -1,4 +1,3 @@
-import { compressAmount } from './compress-amount'
 import { resolveAccount } from './entities/accounts'
 import type { ParsedPosting, ParsedTxn } from './parse'
 
@@ -44,6 +43,14 @@ const PAYMENT_INSTRUMENT_PATHS: readonly string[] = [
   'Assets:Loaded:GiftCards',
 ]
 
+function paymentVerb(matchedPath: string, chipLabel: string): string {
+  if (matchedPath === 'Liabilities:CC') return `${chipLabel} CC`
+  if (matchedPath === 'Assets:DC') return `${chipLabel} DC`
+  if (matchedPath === 'Assets:UPI') return `${chipLabel} UPI`
+  if (matchedPath === 'Assets:Cash') return 'Cash'
+  return chipLabel
+}
+
 export function generateTxnDescription(txn: ParsedTxn): string {
   for (const handler of HANDLERS) {
     const result = handler(txn)
@@ -54,6 +61,7 @@ export function generateTxnDescription(txn: ParsedTxn): string {
 
 function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
   const expenses: ParsedPosting[] = []
+  const paymentPostings: ParsedPosting[] = []
   let paymentAccount: string | null = null
   let paymentLabel: string | null = null
   let paymentCount = 0
@@ -68,9 +76,10 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
     }
     if (PAYMENT_INSTRUMENT_PATHS.includes(resolved.matchedPath)) {
       paymentCount += 1
+      paymentPostings.push(posting)
       if (paymentAccount === null) {
         paymentAccount = posting.account
-        paymentLabel = resolved.chipLabel
+        paymentLabel = paymentVerb(resolved.matchedPath, resolved.chipLabel)
       } else if (paymentAccount !== posting.account) {
         return { kind: 'unhandled' }
       }
@@ -108,7 +117,27 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
   if (hasPrice && !priceSkew && resolvedCurrency !== null) {
     text += ` (${resolvedCurrency} ${formatAmount(Math.abs(resolvedTotal))})`
   }
+  const fxRate = paymentFxRate(paymentPostings, currency)
+  if (fxRate) {
+    text += ` · @ ${fxRate.currency} ${formatAmount(fxRate.rate)}`
+  }
   return { kind: 'ok', text }
+}
+
+function paymentFxRate(
+  payments: readonly ParsedPosting[],
+  expenseCurrency: string,
+): { rate: number; currency: string } | null {
+  for (const p of payments) {
+    if (!p.amount || p.amount.currency === expenseCurrency) continue
+    if (!p.priceAmount || p.priceAmount.currency !== expenseCurrency) continue
+    const payN = parseFloat(p.amount.numberText)
+    const priceN = parseFloat(p.priceAmount.numberText)
+    if (!Number.isFinite(payN) || !Number.isFinite(priceN) || priceN === 0) continue
+    const rate = Math.abs(payN) / Math.abs(p.atSigns === 2 ? priceN : payN * priceN)
+    return { rate, currency: p.amount.currency }
+  }
+  return null
 }
 
 function rewardsVoidHandler(txn: ParsedTxn): DescribeResult {
@@ -133,8 +162,10 @@ function rewardsVoidHandler(txn: ParsedTxn): DescribeResult {
   }
   const n = parseFloat(rewardsPosting.amount.numberText)
   if (!Number.isFinite(n) || n === 0) return { kind: 'unhandled' }
-  const verb = n > 0 ? 'added' : 'expired'
-  const text = `${formatAmount(Math.abs(n))} ${rewardsPosting.amount.currency} ${verb}`
+  const verb = n > 0 ? 'earned' : 'expired'
+  const payee = txn.payee?.text
+  const tail = payee ? ` on ${payee}` : ''
+  const text = `${formatAmount(Math.abs(n))} ${rewardsPosting.amount.currency} ${verb}${tail}`
   return { kind: 'ok', text }
 }
 
@@ -204,10 +235,17 @@ function cardVoidAdjustmentHandler(txn: ParsedTxn): DescribeResult {
   }
   const n = parseFloat(cardPosting.amount.numberText)
   if (!Number.isFinite(n) || n === 0) return { kind: 'unhandled' }
+  const isCashback = txn.tags.some((t) => t.text === 'cashback') && n < 0
+  if (isCashback) {
+    return {
+      kind: 'ok',
+      text: `${cardPosting.amount.currency} ${formatAmount(Math.abs(n))} cashback on ${cardLabel} CC`,
+    }
+  }
   const verb = n > 0 ? 'credited' : 'debited'
   return {
     kind: 'ok',
-    text: `${cardPosting.amount.currency} ${formatAmount(Math.abs(n))} ${verb} to ${cardLabel}`,
+    text: `${cardPosting.amount.currency} ${formatAmount(Math.abs(n))} ${verb} to ${cardLabel} CC`,
   }
 }
 
@@ -494,6 +532,5 @@ function resolvePrice(
 }
 
 function formatAmount(n: number): string {
-  const fixed = n.toFixed(2).replace(/\.?0+$/, '')
-  return compressAmount(fixed) ?? n.toLocaleString('en-US', { maximumFractionDigits: 2 })
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
