@@ -1,4 +1,4 @@
-import { resolveAccount } from './entities/accounts'
+import { resolveAccount, type ResolvedAccount } from './entities/accounts'
 import type { ParsedPosting, ParsedTxn } from './parse'
 
 export type DescribeResult =
@@ -28,27 +28,33 @@ const REWARDS_VOID_PATHS: readonly string[] = [
 
 const REWARDS_POINTS_PATH = 'Assets:Rewards:Points'
 const CC_PATH = 'Liabilities:CC'
+const DC_PATH = 'Assets:DC'
+const UPI_PATH = 'Assets:UPI'
+const CASH_PATH = 'Assets:Cash'
+const BANK_PATH = 'Assets:Bank'
 const GIFT_CARDS_PATH = 'Assets:Loaded:GiftCards'
 const INCOME_VOID_PATH = 'Income:Void'
+const TAG_CASHBACK = 'cashback'
 
-const PAYMENT_INSTRUMENT_PATHS: readonly string[] = [
-  'Liabilities:CC',
-  'Assets:DC',
-  'Assets:UPI',
-  'Assets:Cash',
-  'Assets:Bank',
+const PAYMENT_INSTRUMENT_PATHS: ReadonlySet<string> = new Set([
+  CC_PATH,
+  DC_PATH,
+  UPI_PATH,
+  CASH_PATH,
+  BANK_PATH,
   'Assets:Loaded:PrepaidCards',
   'Assets:Loaded:ForexCards',
   'Assets:Loaded:Wallets',
-  'Assets:Loaded:GiftCards',
-]
+  GIFT_CARDS_PATH,
+])
 
-function paymentVerb(matchedPath: string, chipLabel: string): string {
-  if (matchedPath === 'Liabilities:CC') return `${chipLabel} CC`
-  if (matchedPath === 'Assets:DC') return `${chipLabel} DC`
-  if (matchedPath === 'Assets:UPI') return `${chipLabel} UPI`
-  if (matchedPath === 'Assets:Cash') return 'Cash'
-  return chipLabel
+const PAYMENT_TYPE_SUFFIX_PATHS: ReadonlySet<string> = new Set([CC_PATH, DC_PATH, UPI_PATH])
+
+function paymentLabelFor(resolved: ResolvedAccount): string {
+  if (PAYMENT_TYPE_SUFFIX_PATHS.has(resolved.matchedPath) && resolved.glyph) {
+    return `${resolved.chipLabel} ${resolved.glyph.chipLabel}`
+  }
+  return resolved.chipLabel
 }
 
 export function generateTxnDescription(txn: ParsedTxn): string {
@@ -74,12 +80,12 @@ function expensePaymentHandler(txn: ParsedTxn): DescribeResult {
       expenses.push(posting)
       continue
     }
-    if (PAYMENT_INSTRUMENT_PATHS.includes(resolved.matchedPath)) {
+    if (PAYMENT_INSTRUMENT_PATHS.has(resolved.matchedPath)) {
       paymentCount += 1
       paymentPostings.push(posting)
       if (paymentAccount === null) {
         paymentAccount = posting.account
-        paymentLabel = paymentVerb(resolved.matchedPath, resolved.chipLabel)
+        paymentLabel = paymentLabelFor(resolved)
       } else if (paymentAccount !== posting.account) {
         return { kind: 'unhandled' }
       }
@@ -235,7 +241,7 @@ function cardVoidAdjustmentHandler(txn: ParsedTxn): DescribeResult {
   }
   const n = parseFloat(cardPosting.amount.numberText)
   if (!Number.isFinite(n) || n === 0) return { kind: 'unhandled' }
-  const isCashback = txn.tags.some((t) => t.text === 'cashback') && n < 0
+  const isCashback = txn.tags.some((t) => t.text === TAG_CASHBACK) && n < 0
   if (isCashback) {
     return {
       kind: 'ok',
@@ -459,7 +465,7 @@ function mixedRedemptionHandler(txn: ParsedTxn): DescribeResult {
       rewardsPosting = posting
       continue
     }
-    if (PAYMENT_INSTRUMENT_PATHS.includes(resolved.matchedPath)) {
+    if (PAYMENT_INSTRUMENT_PATHS.has(resolved.matchedPath)) {
       payments.push(posting)
       if (paymentAccount === null) {
         paymentAccount = posting.account

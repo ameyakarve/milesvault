@@ -13,7 +13,6 @@ await page.goto(
 )
 await page.waitForSelector('.cm-content', { timeout: 15000 })
 await page.waitForTimeout(2500)
-// click on cashback card body to position cursor inside last entry
 const lines = await page.locator('.cm-content .cm-line').all()
 if (lines.length >= 4) {
   await lines[lines.length - 4].click({ position: { x: 5, y: 5 } })
