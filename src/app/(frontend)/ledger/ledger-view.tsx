@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Transaction } from '@/durable/ledger-types'
 import { format } from '@/lib/beancount/format'
-import { type BufferState, evaluateBuffer } from './buffer-state'
+import { type BufferState, countEditedEntries, evaluateBuffer } from './buffer-state'
 import { composeBuffer } from './editor'
 import { setAiSnapshots } from './editor-ai-widget'
 import type { LedgerEditorHandle } from './ledger-editor'
@@ -78,7 +78,15 @@ function PaginationPill({
   )
 }
 
-export function LedgerView({ email }: { email: string }) {
+export function LedgerView({
+  email,
+  initialLastSavedAt = null,
+  storyEditCount = 0,
+}: {
+  email: string
+  initialLastSavedAt?: Date | null
+  storyEditCount?: number
+}) {
   const avatarInitial = (email?.[0] ?? 'a').toUpperCase()
   const [page, setPage] = useState(1)
   const state = useTransactions(page)
@@ -98,7 +106,7 @@ export function LedgerView({ email }: { email: string }) {
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(initialLastSavedAt)
   const saving = saveStatus === 'saving'
   const locked = saving
 
@@ -179,7 +187,13 @@ export function LedgerView({ email }: { email: string }) {
     }, 250)
     return () => clearTimeout(handle)
   }, [buffer, baseline, state.status])
-  const dirty = bufferState.kind !== 'clean'
+  const realDirty = bufferState.kind !== 'clean'
+  const dirty = realDirty || storyEditCount > 0
+  const realEditCount = useMemo(
+    () => (realDirty ? countEditedEntries(buffer, baseline) : 0),
+    [realDirty, buffer, baseline],
+  )
+  const editCount = storyEditCount > 0 ? storyEditCount : realEditCount
   const saveEnabled =
     bufferState.kind === 'pending' ||
     (bufferState.kind === 'staged' && bufferState.validated)
@@ -240,6 +254,7 @@ export function LedgerView({ email }: { email: string }) {
           saveErrorMsg={saveErrorMsg}
           saving={saving}
           dirty={dirty}
+          editCount={editCount}
           saveEnabled={saveEnabled}
           locked={locked}
           lastSavedAt={lastSavedAt}

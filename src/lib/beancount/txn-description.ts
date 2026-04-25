@@ -241,7 +241,7 @@ function cardVoidAdjustmentHandler(txn: ParsedTxn): DescribeResult {
   }
   const n = parseFloat(cardPosting.amount.numberText)
   if (!Number.isFinite(n) || n === 0) return { kind: 'unhandled' }
-  const isCashback = txn.tags.some((t) => t.text === TAG_CASHBACK) && n < 0
+  const isCashback = txn.tags.some((t) => t.text === TAG_CASHBACK)
   if (isCashback) {
     return {
       kind: 'ok',
