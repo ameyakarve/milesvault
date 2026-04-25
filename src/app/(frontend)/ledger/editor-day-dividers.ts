@@ -2,14 +2,26 @@ import { GutterMarker, gutter } from '@codemirror/view'
 import { TxnDescWidget } from './editor-txn-descriptions'
 
 class DayLabelMarker extends GutterMarker {
+  readonly month: string
+  readonly day: string
   constructor(readonly label: string) {
     super()
+    const [month, day] = label.split(' ')
+    this.month = month ?? label
+    this.day = day ?? ''
   }
   toDOM(): Node {
-    const span = document.createElement('span')
-    span.className = 'cm-day-label'
-    span.textContent = this.label
-    return span
+    const root = document.createElement('div')
+    root.className = 'cm-day-label'
+    const monthEl = document.createElement('span')
+    monthEl.className = 'cm-day-label__month'
+    monthEl.textContent = this.month
+    const dayEl = document.createElement('span')
+    dayEl.className = 'cm-day-label__day'
+    dayEl.textContent = this.day
+    root.appendChild(monthEl)
+    root.appendChild(dayEl)
+    return root
   }
   eq(other: GutterMarker): boolean {
     return other instanceof DayLabelMarker && other.label === this.label

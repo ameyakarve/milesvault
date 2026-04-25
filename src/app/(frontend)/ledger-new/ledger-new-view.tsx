@@ -138,7 +138,7 @@ function ChromeRow({
     ? 'ring-2 ring-amber-500 ring-offset-1 ring-offset-[#F4F6F8]'
     : ''
   return (
-    <div className="sticky top-0 z-10 w-full h-[48px] mb-2 pl-2 md:pl-[44px] flex items-center gap-2 md:gap-3 bg-[#F4F6F8]">
+    <div className="sticky top-0 z-10 w-full h-[48px] mb-2 pl-2 md:pl-[60px] flex items-center gap-2 md:gap-3 bg-[#F4F6F8]">
       <div className="flex items-center shrink-0">
         <button
           type="button"
