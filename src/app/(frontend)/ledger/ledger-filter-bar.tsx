@@ -13,6 +13,7 @@ export function FilterBar({
   saveErrorMsg,
   saving,
   dirty,
+  editCount,
   saveEnabled,
   locked,
   lastSavedAt,
@@ -26,6 +27,7 @@ export function FilterBar({
   saveErrorMsg: string | null
   saving: boolean
   dirty: boolean
+  editCount: number
   saveEnabled: boolean
   locked: boolean
   lastSavedAt: Date | null
@@ -61,6 +63,7 @@ export function FilterBar({
           saveErrorMsg={saveErrorMsg}
           saving={saving}
           dirty={dirty}
+          editCount={editCount}
           lastSavedAt={lastSavedAt}
         />
       </div>
@@ -189,6 +192,7 @@ function SaveIndicator({
   saveErrorMsg,
   saving,
   dirty,
+  editCount,
   lastSavedAt,
 }: {
   saveStatus: SaveStatus
@@ -196,6 +200,7 @@ function SaveIndicator({
   saveErrorMsg: string | null
   saving: boolean
   dirty: boolean
+  editCount: number
   lastSavedAt: Date | null
 }) {
   if (saving) {
@@ -216,12 +221,15 @@ function SaveIndicator({
     )
   }
   if (dirty) {
+    const editsWord = editCount === 1 ? 'edit' : 'edits'
     const label =
       bufferState.kind === 'dirty'
         ? 'parse errors'
         : bufferState.kind === 'staged' && !bufferState.validated
           ? 'validation errors'
-          : 'unsaved edits'
+          : editCount > 0
+            ? `${editCount} unsaved ${editsWord}`
+            : 'unsaved edits'
     return (
       <Indicator color="bg-amber-500">
         <span className="text-slate-700 font-medium">{label}</span>

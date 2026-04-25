@@ -55,8 +55,8 @@ const TXNS: Transaction[] = [
     created_at: NOW,
     updated_at: NOW,
     raw_text: `2026-04-18 * "HDFC" "1% cashback on fuel" #cashback
-  Liabilities:CC:HDFC:Infinia           -47.00 INR
-  Income:Void                            47.00 INR
+  Liabilities:CC:HDFC:Infinia            47.00 INR
+  Income:Void                           -47.00 INR
 `,
   },
 ]
@@ -92,8 +92,16 @@ if (typeof window !== 'undefined') {
   }
 }
 
+const SEEDED_LAST_SAVED = new Date(2026, 3, 25, 14, 32, 0)
+
 function MockedShell() {
-  return <LedgerView email="ameya.karve@gmail.com" />
+  return (
+    <LedgerView
+      email="ameya.karve@gmail.com"
+      initialLastSavedAt={SEEDED_LAST_SAVED}
+      storyEditCount={3}
+    />
+  )
 }
 
 const meta: Meta<typeof MockedShell> = {
