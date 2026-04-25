@@ -12,17 +12,26 @@ import { cachedParse } from './parse-cache'
 import { pickCategoryIcon, renderIconSVG } from './editor-txn-icon'
 import { openAiForRange } from './editor-ai-widget'
 
+function dayLabelText(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  const mmm = d.toLocaleString('en', { month: 'short' }).toUpperCase()
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mmm} ${dd}`
+}
+
 class TxnDescGutterMarker extends GutterMarker {
   elementClass = 'cm-txn-desc-gutter'
 }
 const descGutterMarker = new TxnDescGutterMarker()
 
-class TxnDescWidget extends WidgetType {
+export class TxnDescWidget extends WidgetType {
   constructor(
     readonly text: string,
     readonly iconKey: string | null,
     readonly rangeFrom: number,
     readonly rangeTo: number,
+    readonly dayLabel: string | null,
   ) {
     super()
   }
@@ -44,7 +53,8 @@ class TxnDescWidget extends WidgetType {
       other.text === this.text &&
       other.iconKey === this.iconKey &&
       other.rangeFrom === this.rangeFrom &&
-      other.rangeTo === this.rangeTo
+      other.rangeTo === this.rangeTo &&
+      other.dayLabel === this.dayLabel
     )
   }
   ignoreEvent(): boolean {
@@ -69,8 +79,11 @@ function escapeHtml(s: string): string {
 function buildTxnDescs(doc: Text): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const entries = cachedParse(doc).entries
+  let prevDate: string | null = null
   for (const txn of entries) {
     const pos = txn.headerRange.from
+    const dayLabel = txn.date === prevDate ? null : dayLabelText(txn.date)
+    prevDate = txn.date
     builder.add(
       pos,
       pos,
@@ -80,6 +93,7 @@ function buildTxnDescs(doc: Text): DecorationSet {
           pickCategoryIcon(txn),
           txn.range.from,
           txn.range.to,
+          dayLabel,
         ),
         block: true,
         side: -1,

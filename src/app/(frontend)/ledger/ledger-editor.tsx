@@ -134,7 +134,7 @@ export const LedgerEditor = forwardRef<LedgerEditorHandle, LedgerEditorProps>(fu
         lineNumbers: false,
         highlightActiveLine: false,
         highlightActiveLineGutter: true,
-        foldGutter: true,
+        foldGutter: false,
         foldKeymap: true,
         autocompletion: false,
         searchKeymap: false,

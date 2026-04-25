@@ -143,7 +143,7 @@ const NODES: readonly NodeSpec[] = [
     glyph: g(ShoppingBasket, 'groceries', 'Groceries'),
     color: 'amber',
   }),
-  n('Expenses:Food:Delivery', { glyph: g(Bike, 'delivery', 'Delivery'), color: 'amber' }),
+  n('Expenses:Food:Delivery', { glyph: g(Bike, 'delivery', 'Food:Delivery'), color: 'amber' }),
   n('Expenses:Food:Snacks', { glyph: g(Cookie, 'snacks', 'Snacks'), color: 'amber' }),
   n('Expenses:Food:Restaurant', {
     glyph: g(UtensilsCrossed, 'restaurant', 'Restaurant'),
@@ -371,7 +371,7 @@ export function resolveAccount(path: string): ResolvedAccount | null {
   if (tail.length === 0) {
     chipLabel = glyph?.chipLabel ?? matchedPath
   } else {
-    const tailStr = tail.join(' ')
+    const tailStr = tail.join(':')
     chipLabel = prefixChip && glyph ? `${glyph.chipLabel}: ${tailStr}` : tailStr
   }
   return {

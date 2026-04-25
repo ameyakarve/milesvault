@@ -21,7 +21,6 @@ function findAmountHits(view: EditorView): Hit[] {
     const raw = amt.numberText
     if (!raw) continue
     const compressed = compressAmount(raw)
-    if (!compressed) continue
     const from = amt.range.from
     hits.push({
       from,
@@ -40,7 +39,9 @@ function buildAmountDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
     if (isChipSuppressed(skip, h)) continue
-    const width = h.primary ? h.to - h.from : h.compressed.length
+    const width = h.primary
+      ? Math.max(h.to - h.from, h.compressed.length)
+      : h.compressed.length
     builder.add(
       h.from,
       h.to,

@@ -142,6 +142,8 @@ function buildChipDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
     if (isChipSuppressed(skip, h)) continue
+    const isExpense =
+      h.chipLabel.startsWith('Spend on ') || h.chipLabel.startsWith('Refunded to ')
     builder.add(
       h.from,
       h.to,
@@ -150,7 +152,7 @@ function buildChipDecorations(view: EditorView): DecorationSet {
           variant: 'account',
           label: h.chipLabel,
           tooltip: h.tooltip,
-          svg: h.glyph.svg,
+          svg: isExpense ? undefined : h.glyph.svg,
           width: chipSlotWidth(h.to - h.from, h.chipLabel),
         }),
       }),

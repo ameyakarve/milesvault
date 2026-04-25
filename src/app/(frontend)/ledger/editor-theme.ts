@@ -55,18 +55,18 @@ export const scandiEditorTheme = EditorView.theme(
   {
     '&': {
       height: '100%',
-      fontSize: '12.5px',
+      fontSize: '14px',
       backgroundColor: PAPER_BG,
     },
     '.cm-scroller': {
       overflow: 'auto',
       fontFamily: MONO_STACK,
-      lineHeight: '1.5',
+      lineHeight: '1.6',
       fontVariantNumeric: 'tabular-nums',
       backgroundColor: PAPER_BG,
     },
     '.cm-content': {
-      padding: '12px 0',
+      padding: '17px 0 12px',
       caretColor: NAVY_600,
       color: NAVY_600,
       backgroundColor: 'transparent',
@@ -75,14 +75,11 @@ export const scandiEditorTheme = EditorView.theme(
       padding: '0 12px',
       borderBottom: `1px solid ${SLATE_200}`,
     },
-    '.cm-chip__dots, .cm-highlightSpace': {
+    '.cm-chip__dots, .cm-leader-dots': {
       backgroundImage: `radial-gradient(circle, ${SLATE_300} 1px, transparent 1.25px)`,
       backgroundSize: '1ch 100%',
       backgroundRepeat: 'repeat-x',
       backgroundPosition: '0 55%',
-    },
-    '.cm-highlightSpace:before': {
-      content: '""',
     },
     '.cm-txn-band': { backgroundColor: SLATE_50 },
     '.cm-txn-desc-gutter': {
@@ -93,13 +90,13 @@ export const scandiEditorTheme = EditorView.theme(
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      height: '24px',
-      padding: '0 12px',
+      height: '32px',
+      padding: '0 24px',
       backgroundColor: SLATE_50,
       color: NAVY_600,
-      fontSize: '11px',
+      fontSize: '12.5px',
       fontFamily: MONO_STACK,
-      lineHeight: '24px',
+      lineHeight: '32px',
       borderBottom: `1px solid ${SLATE_100}`,
     },
     '.cm-txn-desc-icon-slot': {
@@ -116,7 +113,7 @@ export const scandiEditorTheme = EditorView.theme(
       height: '14px',
       display: 'block',
     },
-    '.cm-txn-desc:has(+ .cm-line.cm-card-active)': { color: SLATE_500 },
+    '.cm-txn-desc:has(+ .cm-line.cm-card-active)': { color: NAVY_700, fontWeight: '600' },
     '.cm-txn-desc-text': { flex: 1, minWidth: 0 },
     '.cm-txn-desc-handle': {
       flexShrink: 0,
@@ -142,10 +139,10 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-day-label-gutter': {
       backgroundColor: PAPER_BG,
       borderRight: 'none',
-      minWidth: '52px',
+      minWidth: '0',
     },
     '.cm-day-label-gutter .cm-gutterElement': {
-      padding: '0 12px 0 4px',
+      padding: '0 4px 0 0',
       borderBottom: 'none',
       textAlign: 'right',
     },
@@ -180,26 +177,26 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-chip__pill': {
       display: 'inline-block',
       backgroundColor: '#FFFFFF',
-      border: `1px solid ${SLATE_200}`,
+      border: `1px solid ${SLATE_300}`,
       borderRadius: '4px',
-      padding: '0 6px',
+      padding: '2px 14px',
       color: SLATE_700,
       marginRight: '1ch',
+      fontSize: '13px',
     },
     '.cm-chip--date': TOKEN_STYLE.date,
-    '.cm-chip--payee': { ...TOKEN_STYLE.string, color: ROSE_700 },
-    '.cm-chip--narration': { ...TOKEN_STYLE.string, color: SLATE_500 },
+    '.cm-chip--payee': TOKEN_STYLE.string,
+    '.cm-chip--narration': { ...TOKEN_STYLE.string, color: SLATE_400 },
     '.cm-chip--flag-pending': TOKEN_STYLE.flag,
     '.cm-chip--flag-cleared': { color: SLATE_400 },
     '.cm-chip--tag': {
-      color: SLATE_600,
-      fontWeight: '500',
-      fontVariant: 'all-small-caps',
-      letterSpacing: '0.04em',
+      color: NAVY_700,
+      fontWeight: '700',
     },
     '.cm-chip--amount': {
       ...TOKEN_STYLE.number,
       textAlign: 'right',
+      fontSize: '14px',
       fontVariantNumeric: 'tabular-nums',
     },
     '.cm-chip-tip': {

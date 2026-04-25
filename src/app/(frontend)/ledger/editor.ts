@@ -35,7 +35,6 @@ import {
   EditorView,
   GutterMarker,
   gutterLineClass,
-  highlightWhitespace,
   keymap,
 } from '@codemirror/view'
 import { parser } from 'lezer-beancount'
@@ -53,6 +52,7 @@ import { commentLines } from './editor-comments'
 import { dayDividers } from './editor-day-dividers'
 import { diffChips } from './editor-diff-chips'
 import { headerChips, headerChipTooltip } from './editor-header-chips'
+import { leaderDots } from './editor-leaders'
 import {
   slashCompletionSource,
   slashCompletionTrigger,
@@ -306,7 +306,7 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     beancountTabKeymap,
     trimTrailingWhitespace,
     entryBandField,
-    highlightWhitespace(),
+    leaderDots,
     unifiedMergeView({
       original: initialBaseline,
       mergeControls: false,
