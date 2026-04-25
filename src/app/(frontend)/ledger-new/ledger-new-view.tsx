@@ -23,37 +23,42 @@ import { buildSnapshots, PAGE_SIZE, useTransactions } from '../ledger/use-transa
 function TopNav({ initial }: { initial: string }) {
   return (
     <nav className="hidden md:block w-full bg-white border-b border-slate-200">
-      <div className="flex justify-between items-center w-full px-6 py-3 max-w-[960px] mx-auto">
-        <div className="flex items-center space-x-6">
-          <span className="text-[13px] font-black tracking-tighter text-navy-900 uppercase">
-            milesvault
-          </span>
-          <div className="flex space-x-6">
-            <a
-              className="font-sans text-[12px] uppercase tracking-wider font-bold text-[#0891B2] border-b-2 border-[#0891B2] pb-1"
-              href="#"
-            >
-              Ledger
-            </a>
-            <a
-              className="font-sans text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-900 transition-colors"
-              href="#"
-            >
-              Dashboard
-            </a>
-            <a
-              className="font-sans text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-900 transition-colors"
-              href="#"
-            >
-              Insights
-            </a>
+      <div className="flex w-full">
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-center w-full max-w-[960px] mx-auto pl-[60px] pr-6 py-3">
+            <div className="flex items-center space-x-6">
+              <span className="text-[13px] font-black tracking-tighter text-navy-900 uppercase">
+                milesvault
+              </span>
+              <div className="flex space-x-6">
+                <a
+                  className="font-sans text-[12px] uppercase tracking-wider font-bold text-[#0891B2] border-b-2 border-[#0891B2] pb-1"
+                  href="#"
+                >
+                  Ledger
+                </a>
+                <a
+                  className="font-sans text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-900 transition-colors"
+                  href="#"
+                >
+                  Dashboard
+                </a>
+                <a
+                  className="font-sans text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-900 transition-colors"
+                  href="#"
+                >
+                  Insights
+                </a>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <div className="w-6 h-6 rounded-full bg-[#F1F5F9] flex items-center justify-center">
+                <span className="font-sans text-[11px] font-medium text-[#475569]">{initial}</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="flex items-center space-x-4">
-          <div className="w-6 h-6 rounded-full bg-[#F1F5F9] flex items-center justify-center">
-            <span className="font-sans text-[11px] font-medium text-[#475569]">{initial}</span>
-          </div>
-        </div>
+        <div className="w-[360px] shrink-0" aria-hidden />
       </div>
     </nav>
   )
