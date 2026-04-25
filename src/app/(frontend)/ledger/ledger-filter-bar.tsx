@@ -15,6 +15,7 @@ export function FilterBar({
   dirty,
   saveEnabled,
   locked,
+  lastSavedAt,
   onSave,
   onRevert,
 }: {
@@ -27,6 +28,7 @@ export function FilterBar({
   dirty: boolean
   saveEnabled: boolean
   locked: boolean
+  lastSavedAt: Date | null
   onSave: () => void
   onRevert: () => void
 }) {
@@ -44,7 +46,7 @@ export function FilterBar({
           </FilterChip>
           <Sep />
           <FilterChip tone="plain">
-            #cashback<span className="ml-1 text-slate-400">×</span>
+            #cashback<span className="ml-1 text-slate-400">⌄</span>
           </FilterChip>
           <Sep />
           <FilterChip tone="dashed">+ Filter</FilterChip>
@@ -59,6 +61,7 @@ export function FilterBar({
           saveErrorMsg={saveErrorMsg}
           saving={saving}
           dirty={dirty}
+          lastSavedAt={lastSavedAt}
         />
       </div>
       <div className="flex items-center justify-between h-9 pr-2">
@@ -176,18 +179,24 @@ function Cap({ children }: { children: React.ReactNode }) {
   return <span className="ml-1">{children}</span>
 }
 
+function formatHHMM(d: Date): string {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function SaveIndicator({
   saveStatus,
   bufferState,
   saveErrorMsg,
   saving,
   dirty,
+  lastSavedAt,
 }: {
   saveStatus: SaveStatus
   bufferState: BufferState
   saveErrorMsg: string | null
   saving: boolean
   dirty: boolean
+  lastSavedAt: Date | null
 }) {
   if (saving) {
     return (
@@ -216,12 +225,17 @@ function SaveIndicator({
     return (
       <Indicator color="bg-amber-500">
         <span className="text-slate-700 font-medium">{label}</span>
+        {lastSavedAt ? (
+          <span className="text-slate-400"> · last saved {formatHHMM(lastSavedAt)}</span>
+        ) : null}
       </Indicator>
     )
   }
   return (
     <Indicator color="bg-emerald-500">
-      <span className="text-slate-500">saved</span>
+      <span className="text-slate-500">
+        {lastSavedAt ? `last saved ${formatHHMM(lastSavedAt)}` : 'saved'}
+      </span>
     </Indicator>
   )
 }

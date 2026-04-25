@@ -1,31 +1,19 @@
-import { RangeSetBuilder, StateField, type Text } from '@codemirror/state'
-import {
-  Decoration,
-  type DecorationSet,
-  EditorView,
-  GutterMarker,
-  gutterWidgetClass,
-  WidgetType,
-} from '@codemirror/view'
+import { RangeSet, RangeSetBuilder, StateField, type Text } from '@codemirror/state'
+import { GutterMarker, gutter } from '@codemirror/view'
 import { cachedParse } from './parse-cache'
 
-class DayDividerGutterMarker extends GutterMarker {
-  elementClass = 'cm-day-divider-gutter'
-}
-const dayGutterMarker = new DayDividerGutterMarker()
-
-class DayDividerWidget extends WidgetType {
+class DayLabelMarker extends GutterMarker {
   constructor(readonly label: string) {
     super()
   }
-  toDOM(): HTMLElement {
-    const div = document.createElement('div')
-    div.className = 'cm-day-divider'
-    div.textContent = this.label
-    return div
+  toDOM(): Node {
+    const span = document.createElement('span')
+    span.className = 'cm-day-label'
+    span.textContent = this.label
+    return span
   }
-  eq(other: WidgetType): boolean {
-    return other instanceof DayDividerWidget && other.label === this.label
+  eq(other: GutterMarker): boolean {
+    return other instanceof DayLabelMarker && other.label === this.label
   }
 }
 
@@ -37,37 +25,30 @@ function labelFor(iso: string): string {
   return `${mmm} ${dd}`
 }
 
-function buildDividers(doc: Text): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>()
+function buildDayMarkers(doc: Text): RangeSet<GutterMarker> {
+  const builder = new RangeSetBuilder<GutterMarker>()
   const entries = cachedParse(doc).entries
   let prevDate: string | null = null
   for (const txn of entries) {
     if (txn.date === prevDate) continue
     prevDate = txn.date
     const pos = txn.headerRange.from
-    builder.add(
-      pos,
-      pos,
-      Decoration.widget({
-        widget: new DayDividerWidget(labelFor(txn.date)),
-        block: true,
-        side: -2,
-      }),
-    )
+    builder.add(pos, pos, new DayLabelMarker(labelFor(txn.date)))
   }
   return builder.finish()
 }
 
-export const dayDividers = [
-  StateField.define<DecorationSet>({
-    create: (state) => buildDividers(state.doc),
-    update(value, tr) {
-      return tr.docChanged ? buildDividers(tr.newDoc) : value
-    },
-    provide: (f) => EditorView.decorations.from(f),
-  }),
-  gutterWidgetClass.of((_view, widget) => {
-    if (!(widget instanceof DayDividerWidget)) return null
-    return dayGutterMarker
-  }),
-]
+const dayLabelField = StateField.define<RangeSet<GutterMarker>>({
+  create: (state) => buildDayMarkers(state.doc),
+  update(value, tr) {
+    return tr.docChanged ? buildDayMarkers(tr.newDoc) : value
+  },
+})
+
+const dayLabelGutter = gutter({
+  class: 'cm-day-label-gutter',
+  markers: (view) => view.state.field(dayLabelField),
+  initialSpacer: () => new DayLabelMarker('APR 00'),
+})
+
+export const dayDividers = [dayLabelField, dayLabelGutter]

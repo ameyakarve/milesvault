@@ -98,6 +98,7 @@ export function LedgerView({ email }: { email: string }) {
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const saving = saveStatus === 'saving'
   const locked = saving
 
@@ -149,6 +150,7 @@ export function LedgerView({ email }: { email: string }) {
       }
       state.replaceRows(payload.transactions)
       setSaveStatus('idle')
+      setLastSavedAt(new Date())
     } catch (e) {
       setSaveStatus('error')
       setSaveErrorMsg(e instanceof Error ? e.message : String(e))
@@ -240,6 +242,7 @@ export function LedgerView({ email }: { email: string }) {
           dirty={dirty}
           saveEnabled={saveEnabled}
           locked={locked}
+          lastSavedAt={lastSavedAt}
           onSave={onSave}
           onRevert={onRevert}
         />

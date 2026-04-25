@@ -148,7 +148,6 @@ const cardModeTheme = EditorView.theme(
       borderTopRightRadius: RADIUS,
     },
     '.cm-txn-desc-gutter': {
-      borderTopLeftRadius: RADIUS,
       borderBottom: 'none !important',
     },
     [`.cm-line.${CARD}.${CARD_ACTIVE}`]: {

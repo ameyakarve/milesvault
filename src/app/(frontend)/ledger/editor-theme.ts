@@ -139,16 +139,23 @@ export const scandiEditorTheme = EditorView.theme(
       backgroundColor: SLATE_200,
       color: SLATE_600,
     },
-    '.cm-day-divider': {
-      padding: '18px 12px 6px',
+    '.cm-day-label-gutter': {
+      backgroundColor: PAPER_BG,
+      borderRight: 'none',
+      minWidth: '52px',
+    },
+    '.cm-day-label-gutter .cm-gutterElement': {
+      padding: '0 12px 0 4px',
+      borderBottom: 'none',
+      textAlign: 'right',
+    },
+    '.cm-day-label': {
       color: NAVY_700,
       fontFamily: MONO_STACK,
       fontSize: '11px',
       fontWeight: '700',
       letterSpacing: '0.04em',
-      backgroundColor: PAPER_BG,
     },
-    '.cm-day-divider-gutter': { backgroundColor: PAPER_BG },
     '.cm-line.cm-line-comment': {
       backgroundColor: `${SLATE_50} !important`,
       boxShadow: `inset 2px 0 0 0 ${SLATE_200}`,
