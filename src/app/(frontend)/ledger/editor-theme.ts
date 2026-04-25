@@ -20,6 +20,9 @@ const MOCHA_700 = '#6F4518'
 export const ROSE_700 = '#BE123C'
 
 export const PAPER_BG = '#F4F6F8'
+export const PAPER_WHITE = '#FFFFFF'
+
+export const DESC_ROW_HEIGHT = '32px'
 
 export const SANS_STACK =
   "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -90,7 +93,7 @@ export const scandiEditorTheme = EditorView.theme(
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      height: '32px',
+      height: DESC_ROW_HEIGHT,
       padding: '0 24px',
       backgroundColor: SLATE_50,
       color: NAVY_600,
@@ -139,19 +142,55 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-day-label-gutter': {
       backgroundColor: PAPER_BG,
       borderRight: 'none',
-      minWidth: '0',
+      minWidth: '60px',
     },
     '.cm-day-label-gutter .cm-gutterElement': {
-      padding: '0 4px 0 0',
+      position: 'relative',
+      padding: '0',
       borderBottom: 'none',
-      textAlign: 'right',
+      backgroundColor: 'transparent',
+      overflow: 'visible',
     },
     '.cm-day-label': {
+      position: 'absolute',
+      top: DESC_ROW_HEIGHT,
+      left: '8px',
+      width: '44px',
+      height: '60px',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: PAPER_WHITE,
+      border: `1px solid ${SLATE_200}`,
+      borderRadius: '4px',
+      overflow: 'hidden',
+      boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+      pointerEvents: 'none',
+    },
+    '.cm-day-label__month': {
+      backgroundColor: SLATE_50,
+      borderBottom: `1px solid ${SLATE_200}`,
+      color: SLATE_500,
+      fontFamily: MONO_STACK,
+      fontSize: '9px',
+      fontWeight: '700',
+      letterSpacing: '0.06em',
+      lineHeight: '1',
+      padding: '3px 0 2px',
+      textAlign: 'center',
+    },
+    '.cm-day-label__day': {
+      flex: '1',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
       color: NAVY_700,
       fontFamily: MONO_STACK,
-      fontSize: '11px',
+      fontSize: '18px',
       fontWeight: '700',
-      letterSpacing: '0.04em',
+      lineHeight: '1',
+    },
+    '@media (max-width: 767px)': {
+      '.cm-day-label-gutter': { display: 'none !important' },
     },
     '.cm-line.cm-line-comment': {
       backgroundColor: `${SLATE_50} !important`,
@@ -176,7 +215,7 @@ export const scandiEditorTheme = EditorView.theme(
     '.cm-chip--account': { color: SLATE_700 },
     '.cm-chip__pill': {
       display: 'inline-block',
-      backgroundColor: '#FFFFFF',
+      backgroundColor: PAPER_WHITE,
       border: `1px solid ${SLATE_300}`,
       borderRadius: '4px',
       padding: '2px 14px',
@@ -206,13 +245,13 @@ export const scandiEditorTheme = EditorView.theme(
       fontFamily: SANS_STACK,
     },
     '.cm-tooltip.cm-tooltip-hover': {
-      backgroundColor: '#ffffff',
+      backgroundColor: PAPER_WHITE,
       border: `1px solid ${SLATE_200}`,
       borderRadius: '4px',
       boxShadow: '0 2px 8px rgba(15, 23, 42, 0.08)',
     },
     '.cm-tooltip.cm-tooltip-autocomplete': {
-      backgroundColor: '#ffffff',
+      backgroundColor: PAPER_WHITE,
       border: `1px solid ${SLATE_200}`,
       borderRadius: '6px',
       boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
