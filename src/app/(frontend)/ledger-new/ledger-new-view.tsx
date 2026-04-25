@@ -23,42 +23,39 @@ import { buildSnapshots, PAGE_SIZE, useTransactions } from '../ledger/use-transa
 function TopNav({ initial }: { initial: string }) {
   return (
     <nav className="hidden md:block w-full bg-white border-b border-slate-200">
-      <div className="flex w-full">
+      <div className="flex w-full items-center">
         <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-center w-full max-w-[960px] mx-auto pl-[60px] pr-6 py-3">
-            <div className="flex items-center space-x-6">
-              <span className="text-[13px] font-black tracking-tighter text-navy-900 uppercase">
-                milesvault
-              </span>
-              <div className="flex space-x-6">
-                <a
-                  className="font-sans text-[12px] uppercase tracking-wider font-bold text-[#0891B2] border-b-2 border-[#0891B2] pb-1"
-                  href="#"
-                >
-                  Ledger
-                </a>
-                <a
-                  className="font-sans text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-900 transition-colors"
-                  href="#"
-                >
-                  Dashboard
-                </a>
-                <a
-                  className="font-sans text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-900 transition-colors"
-                  href="#"
-                >
-                  Insights
-                </a>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-6 h-6 rounded-full bg-[#F1F5F9] flex items-center justify-center">
-                <span className="font-sans text-[11px] font-medium text-[#475569]">{initial}</span>
-              </div>
+          <div className="flex items-center w-full max-w-[960px] mx-auto pl-[60px] pr-6 py-3 space-x-6">
+            <span className="text-[13px] font-black tracking-tighter text-navy-900 uppercase">
+              milesvault
+            </span>
+            <div className="flex space-x-6">
+              <a
+                className="font-sans text-[12px] uppercase tracking-wider font-bold text-[#0891B2] border-b-2 border-[#0891B2] pb-1"
+                href="#"
+              >
+                Ledger
+              </a>
+              <a
+                className="font-sans text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-900 transition-colors"
+                href="#"
+              >
+                Dashboard
+              </a>
+              <a
+                className="font-sans text-[12px] uppercase tracking-wider font-bold text-slate-500 pb-1 hover:text-navy-900 transition-colors"
+                href="#"
+              >
+                Insights
+              </a>
             </div>
           </div>
         </div>
-        <div className="w-[360px] shrink-0" aria-hidden />
+        <div className="w-[360px] shrink-0 flex items-center justify-end pr-6">
+          <div className="w-6 h-6 rounded-full bg-[#F1F5F9] flex items-center justify-center">
+            <span className="font-sans text-[11px] font-medium text-[#475569]">{initial}</span>
+          </div>
+        </div>
       </div>
     </nav>
   )
@@ -160,7 +157,7 @@ function ChromeRow({
           type="button"
           onClick={onReset}
           disabled={!dirty || locked}
-          className="ml-2 md:ml-3 h-[36px] px-3 text-[13px] font-mono font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 rounded-[4px] transition-colors disabled:opacity-40 disabled:cursor-default"
+          className="ml-2 md:ml-3 h-[36px] px-3 text-[13px] font-mono font-medium text-slate-600 bg-white border border-slate-200 hover:text-slate-900 hover:bg-slate-100 rounded-[4px] transition-colors disabled:opacity-40 disabled:cursor-default"
         >
           Reset
         </button>
@@ -178,7 +175,7 @@ function ChromeRow({
           onClick={() => onPage(page - 1)}
           disabled={prevDisabled}
           aria-label="Previous page"
-          className="w-9 h-9 flex items-center justify-center text-slate-600 hover:bg-slate-200/60 rounded-[4px] transition-colors disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-default"
+          className="w-9 h-9 flex items-center justify-center text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-[4px] transition-colors disabled:text-slate-300 disabled:hover:bg-white disabled:cursor-default"
         >
           <ChevronLeft className="w-5 h-5" strokeWidth={2} />
         </button>
@@ -190,7 +187,7 @@ function ChromeRow({
           onClick={() => onPage(page + 1)}
           disabled={nextDisabled}
           aria-label="Next page"
-          className="w-9 h-9 flex items-center justify-center text-slate-600 hover:bg-slate-200/60 rounded-[4px] transition-colors disabled:text-slate-300 disabled:hover:bg-transparent disabled:cursor-default"
+          className="w-9 h-9 flex items-center justify-center text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-[4px] transition-colors disabled:text-slate-300 disabled:hover:bg-white disabled:cursor-default"
         >
           <ChevronRight className="w-5 h-5" strokeWidth={2} />
         </button>
@@ -199,7 +196,7 @@ function ChromeRow({
         type="button"
         aria-disabled
         aria-label="Search"
-        className="hidden md:flex flex-1 min-w-0 h-[36px] bg-slate-100 rounded-[4px] px-3 items-center text-slate-600 hover:bg-slate-200 transition-colors"
+        className="hidden md:flex flex-1 min-w-0 h-[36px] bg-slate-100 border border-slate-200 rounded-[4px] px-3 items-center text-slate-600 hover:bg-slate-200 transition-colors"
       >
         <Search className="w-[18px] h-[18px] shrink-0" strokeWidth={2} />
         <span className="ml-2 flex-1 text-left text-[13px] font-mono font-medium">
@@ -214,7 +211,7 @@ function ChromeRow({
           type="button"
           aria-disabled
           aria-label="Filter"
-          className="w-9 h-9 bg-slate-100 rounded-[4px] flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+          className="w-9 h-9 bg-slate-100 border border-slate-200 rounded-[4px] flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
         >
           <Filter className="w-[18px] h-[18px]" strokeWidth={2} />
         </button>
@@ -222,7 +219,7 @@ function ChromeRow({
           type="button"
           aria-disabled
           aria-label="Search"
-          className="md:hidden w-9 h-9 bg-slate-100 rounded-[4px] flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
+          className="md:hidden w-9 h-9 bg-slate-100 border border-slate-200 rounded-[4px] flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors"
         >
           <Search className="w-[18px] h-[18px]" strokeWidth={2} />
         </button>
@@ -340,7 +337,7 @@ export function LedgerNewView({ email }: { email: string }) {
       <MobileTopNav />
       <div className="flex-1 flex w-full min-h-0">
         <main className="flex-1 overflow-y-auto min-w-0">
-          <div className="w-full max-w-[960px] flex flex-col pt-1 pb-[120px] md:pb-6 px-4 md:px-0 mx-auto">
+          <div className="w-full max-w-[960px] flex flex-col pt-1 pb-[120px] md:pb-6 px-4 md:pl-0 md:pr-6 mx-auto">
             <ChromeRow
               total={state.total}
               shown={state.rows.length}
