@@ -60,7 +60,6 @@ import {
 } from './editor-slash-menu'
 import { scandiEditorTheme, scandiHighlight } from './editor-theme'
 import { txnDescriptions } from './editor-txn-descriptions'
-import { aiWidget } from './editor-ai-widget'
 
 const beancountLanguage = LRLanguage.define({
   name: 'beancount',
@@ -334,7 +333,6 @@ export function buildScandiBeancountExtensions(initialBaseline: string) {
     dayDividers,
     editorHints,
     txnDescriptions,
-    aiWidget,
     scandiEditorTheme,
   ]
 }

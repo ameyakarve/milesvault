@@ -6,7 +6,6 @@ import type { Transaction } from '@/durable/ledger-types'
 import { format } from '@/lib/beancount/format'
 import { type BufferState, countEditedEntries, evaluateBuffer } from './buffer-state'
 import { composeBuffer } from './editor'
-import { setAiSnapshots } from './editor-ai-widget'
 import type { LedgerEditorHandle } from './ledger-editor'
 import { FilterBar } from './ledger-filter-bar'
 import { HelpButton } from './ledger-help'
@@ -100,10 +99,6 @@ export function LedgerView({
     setBuffer(baseline)
     editorRef.current?.resetCursor()
   }, [baseline])
-  useEffect(() => {
-    editorRef.current?.getView()?.dispatch({ effects: setAiSnapshots.of(snapshots) })
-  }, [snapshots])
-
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(initialLastSavedAt)

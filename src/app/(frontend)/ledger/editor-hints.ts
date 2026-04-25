@@ -7,7 +7,6 @@ class HintsWidget extends WidgetType {
     root.className = 'cm-editor-hints'
     root.innerHTML = [
       '<kbd>⌘S</kbd> save',
-      '<kbd>⌘I</kbd> edit with AI',
       '<kbd>/</kbd> slash commands',
       '<kbd>:</kbd> account autocomplete',
     ].join('<span class="cm-editor-hints__sep">·</span>')
