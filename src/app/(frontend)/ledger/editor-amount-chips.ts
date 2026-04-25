@@ -2,7 +2,7 @@ import { RangeSetBuilder } from '@codemirror/state'
 import { Decoration, type DecorationSet, type EditorView } from '@codemirror/view'
 import { compressAmount } from '@/lib/beancount/compress-amount'
 import { ChipWidget } from './chip-widget'
-import { activeEntryRange, cursorPos } from './editor-chip-state'
+import { chipSuppressContext, isChipSuppressed } from './editor-chip-state'
 import { cachedParse, isInVisibleRange, makeChipPlugin } from './parse-cache'
 
 type Hit = {
@@ -35,13 +35,11 @@ function findAmountHits(view: EditorView): Hit[] {
 }
 
 function buildAmountDecorations(view: EditorView): DecorationSet {
-  const cursor = cursorPos(view.state)
-  const active = activeEntryRange(view.state)
+  const skip = chipSuppressContext(view.state)
   const hits = findAmountHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
-    if (cursor >= h.from && cursor <= h.to) continue
-    if (active && h.from >= active.from && h.to <= active.to) continue
+    if (isChipSuppressed(skip, h)) continue
     const width = h.primary ? h.to - h.from : h.compressed.length
     builder.add(
       h.from,

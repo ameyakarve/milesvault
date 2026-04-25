@@ -8,7 +8,7 @@ import {
   type ResolvedAccount,
 } from '@/lib/beancount/entities'
 import { ChipWidget } from './chip-widget'
-import { activeEntryRange, cursorPos } from './editor-chip-state'
+import { chipSuppressContext, isChipSuppressed } from './editor-chip-state'
 import {
   cachedParse,
   isInVisibleRange,
@@ -137,13 +137,11 @@ function findAccountHits(view: EditorView): Hit[] {
 }
 
 function buildChipDecorations(view: EditorView): DecorationSet {
-  const cursor = cursorPos(view.state)
-  const active = activeEntryRange(view.state)
+  const skip = chipSuppressContext(view.state)
   const hits = findAccountHits(view).sort((a, b) => a.from - b.from)
   const builder = new RangeSetBuilder<Decoration>()
   for (const h of hits) {
-    if (cursor >= h.from && cursor <= h.to) continue
-    if (active && h.from >= active.from && h.to <= active.to) continue
+    if (isChipSuppressed(skip, h)) continue
     builder.add(
       h.from,
       h.to,
