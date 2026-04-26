@@ -10,4 +10,5 @@ export default meta
 
 type Story = StoryObj<typeof HomeChrome>
 
-export const StitchParity: Story = {}
+export const Collapsed: Story = {}
+export const StitchParity: Story = Collapsed
