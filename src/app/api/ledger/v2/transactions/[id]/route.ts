@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import type { TransactionInput } from '@/durable/ledger-v2-types'
+import { parseText } from '@/lib/beancount/v2-ast'
 import { withLedger } from '@/lib/ledger-route-handler'
 
 export const dynamic = 'force-dynamic'
@@ -23,16 +23,21 @@ export const PATCH = withLedger<{ id: string }>(async ({ client, req, params }) 
   const body = (await req
     .json()
     .catch((): null => null)) as
-    | (TransactionInput & { expected_updated_at?: number })
+    | { raw_text?: unknown; expected_updated_at?: unknown }
     | null
-  if (!body || typeof body.expected_updated_at !== 'number') {
+  if (
+    !body ||
+    typeof body.raw_text !== 'string' ||
+    typeof body.expected_updated_at !== 'number'
+  ) {
     return NextResponse.json(
-      { errors: ['expected_updated_at required'] },
+      { errors: ['raw_text and expected_updated_at required'] },
       { status: 400 },
     )
   }
-  const { expected_updated_at, ...input } = body
-  const result = await client.v2_update(id, expected_updated_at, input)
+  const parsed = parseText(body.raw_text)
+  if (parsed.ok === false) return NextResponse.json({ errors: parsed.errors }, { status: 400 })
+  const result = await client.v2_update(id, body.expected_updated_at, parsed.input)
   if (result.ok === true) return NextResponse.json(result.transaction)
   if (result.kind === 'not_found') return new NextResponse('not found', { status: 404 })
   if (result.kind === 'conflict') {
