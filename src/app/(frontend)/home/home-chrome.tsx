@@ -139,21 +139,19 @@ export function HomeChrome() {
           <div className="p-2 text-slate-400 hover:text-teal-500 transition-all cursor-pointer">
             <span className="material-symbols-outlined">lightbulb</span>
           </div>
-          {hasRecents && (
-            <button
-              type="button"
-              onClick={() => setPaneOpen((v) => !v)}
-              className={`p-2 cursor-pointer transition-all ${
-                paneOpen
-                  ? 'bg-teal-50 text-teal-600 border-r-2 border-teal-500'
-                  : 'text-slate-400 hover:text-teal-500'
-              }`}
-              aria-label="Toggle accounts"
-              aria-pressed={paneOpen}
-            >
-              <span className="material-symbols-outlined">account_balance</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setPaneOpen((v) => !v)}
+            className={`p-2 cursor-pointer transition-all ${
+              paneOpen
+                ? 'bg-teal-50 text-teal-600 border-r-2 border-teal-500'
+                : 'text-slate-400 hover:text-teal-500'
+            }`}
+            aria-label="Toggle accounts"
+            aria-pressed={paneOpen}
+          >
+            <span className="material-symbols-outlined">account_balance</span>
+          </button>
         </div>
         <div className="mt-auto flex flex-col gap-4 items-center">
           <div className="p-2 text-slate-400 hover:text-teal-500 cursor-pointer">
@@ -162,50 +160,65 @@ export function HomeChrome() {
         </div>
       </nav>
 
-      {paneOpen && hasRecents && (
-        <aside className="w-[264px] bg-[#F4F6F8] border-r border-[#E2E8F0] flex flex-col shrink-0">
-          <div className="p-4 border-b border-[#E2E8F0]">
-            <div className="flex justify-between items-center">
-              <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-900">
-                Recent Accounts
-              </h2>
-              <button
-                type="button"
-                onClick={() => setPaneOpen(false)}
-                className="flex items-center gap-1 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-                <span className="text-[14px] font-medium">Collapse</span>
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto py-2">
-            {accounts.map((acc) => {
-              const active = acc === selectedAccount
-              return (
+      {paneOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close accounts"
+            onClick={() => setPaneOpen(false)}
+            className="fixed inset-0 z-40 bg-transparent cursor-default"
+          />
+          <aside
+            className="fixed top-0 left-[48px] z-50 w-[264px] h-screen bg-[#F4F6F8] border-r border-[#E2E8F0] shadow-xl flex flex-col"
+            role="dialog"
+            aria-label="Recent accounts"
+          >
+            <div className="p-4 border-b border-[#E2E8F0]">
+              <div className="flex justify-between items-center">
+                <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-900">
+                  Recent Accounts
+                </h2>
                 <button
-                  key={acc}
                   type="button"
-                  onClick={() => {
-                    setAccountOverride(acc)
-                    setTxnOverride(null)
-                    void accountsQuery.touch(acc)
-                  }}
-                  className={
-                    active
-                      ? 'w-full px-4 py-2 bg-teal-50 text-teal-900 border-r-4 border-teal-500 cursor-pointer flex justify-between items-center text-left'
-                      : 'w-full px-4 py-2 hover:bg-[#F2F3FF] transition-colors cursor-pointer flex justify-between items-center text-left'
-                  }
-                  title={acc}
+                  onClick={() => setPaneOpen(false)}
+                  className="flex items-center gap-1 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
                 >
-                  <span className="text-[12px] font-medium text-slate-700 truncate">
-                    {displayAccountName(acc)}
-                  </span>
+                  <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                  <span className="text-[14px] font-medium">Collapse</span>
                 </button>
-              )
-            })}
-          </div>
-        </aside>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto py-2">
+              {!hasRecents && (
+                <div className="px-4 py-3 text-[11px] text-slate-400">No recent accounts yet.</div>
+              )}
+              {accounts.map((acc) => {
+                const active = acc === selectedAccount
+                return (
+                  <button
+                    key={acc}
+                    type="button"
+                    onClick={() => {
+                      setAccountOverride(acc)
+                      setTxnOverride(null)
+                      void accountsQuery.touch(acc)
+                    }}
+                    className={
+                      active
+                        ? 'w-full px-4 py-2 bg-teal-50 text-teal-900 border-r-4 border-teal-500 cursor-pointer flex justify-between items-center text-left'
+                        : 'w-full px-4 py-2 hover:bg-[#F2F3FF] transition-colors cursor-pointer flex justify-between items-center text-left'
+                    }
+                    title={acc}
+                  >
+                    <span className="text-[12px] font-medium text-slate-700 truncate">
+                      {displayAccountName(acc)}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </aside>
+        </>
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
