@@ -1,11 +1,10 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import type { Transaction } from '@/durable/ledger-types'
+import type { Posting, TransactionV2 } from '@/durable/ledger-v2-types'
 import { splitCamel } from '@/lib/beancount/account-display'
 import { useAccounts } from './use-accounts'
 import { useAccountTransactions } from './use-account-transactions'
-import { parseTxn, postingForAccount, type ParsedTxn } from './parse-raw'
 
 const TOP_LEVELS = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'] as const
 type TopLevel = (typeof TOP_LEVELS)[number]
@@ -54,8 +53,7 @@ function categoryChip(path: string): string | null {
 }
 
 type LedgerRow = {
-  txn: Transaction
-  parsed: ParsedTxn
+  txn: TransactionV2
   amount: number
   currency: string | null
   balance: number
@@ -66,26 +64,27 @@ type LedgerSummary = {
   dominantCurrency: string | null
 }
 
-function buildLedgerRows(txns: Transaction[], account: string): LedgerSummary {
-  const parsed = txns
-    .map((t) => ({ txn: t, parsed: parseTxn(t.raw_text) }))
-    .filter((x): x is { txn: Transaction; parsed: ParsedTxn } => x.parsed != null)
-  parsed.sort((a, b) => a.parsed.header.date.localeCompare(b.parsed.header.date))
+function postingForAccount(txn: TransactionV2, account: string): Posting | null {
+  return txn.postings.find((p) => p.account === account) ?? null
+}
+
+function postingAmountNumber(p: Posting | null): number {
+  if (!p || p.amount == null) return 0
+  const n = parseFloat(p.amount)
+  return Number.isFinite(n) ? n : 0
+}
+
+function buildLedgerRows(txns: TransactionV2[], account: string): LedgerSummary {
+  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date))
   const counts = new Map<string, number>()
   let bal = 0
   const out: LedgerRow[] = []
-  for (const item of parsed) {
-    const post = postingForAccount(item.parsed, account)
-    const amt = post?.amount ?? 0
+  for (const txn of sorted) {
+    const post = postingForAccount(txn, account)
+    const amt = postingAmountNumber(post)
     bal += amt
     if (post?.currency) counts.set(post.currency, (counts.get(post.currency) ?? 0) + 1)
-    out.push({
-      txn: item.txn,
-      parsed: item.parsed,
-      amount: amt,
-      currency: post?.currency ?? null,
-      balance: bal,
-    })
+    out.push({ txn, amount: amt, currency: post?.currency ?? null, balance: bal })
   }
   let dominantCurrency: string | null = null
   let max = 0
@@ -144,7 +143,7 @@ export function HomeChrome() {
       : (ledger.rows[0]?.txn.id ?? null)
   const selectedRow = ledger.rows.find((r) => r.txn.id === selectedTxnId) ?? null
   const currentBalance = ledger.rows[0]?.balance ?? 0
-  const lastActivity = ledger.rows[0]?.parsed.header.date ?? null
+  const lastActivity = ledger.rows[0]?.txn.date ?? null
 
   const accountChip = selectedAccount ? categoryChip(selectedAccount) : null
   const accountTitle = selectedAccount ? displayAccountName(selectedAccount) : null
@@ -393,10 +392,10 @@ export function HomeChrome() {
           </div>
           <div className="min-w-0">
             <div className="text-[10px] font-bold text-slate-400 uppercase">
-              {selectedRow ? selectedRow.parsed.header.date : '—'}
+              {selectedRow ? selectedRow.txn.date : '—'}
             </div>
             <div className="text-[13px] font-bold text-slate-900 truncate">
-              {selectedRow?.parsed.header.payee ?? selectedRow?.parsed.header.narration ?? '—'}
+              {selectedRow?.txn.payee || selectedRow?.txn.narration || '—'}
             </div>
           </div>
         </div>
@@ -407,18 +406,21 @@ export function HomeChrome() {
                 Postings
               </div>
               <div className="flex flex-col gap-2">
-                {selectedRow.parsed.postings.map((p, i) => (
-                  <div key={i} className="flex justify-between items-baseline gap-3">
-                    <span className="text-[11px] text-slate-700 truncate" title={p.account}>
-                      {p.account}
-                    </span>
-                    <span className="data-mono text-[11px] text-slate-500 shrink-0">
-                      {p.amount != null
-                        ? `${amountFmt.format(p.amount)} ${p.currency ?? ''}`.trim()
-                        : '—'}
-                    </span>
-                  </div>
-                ))}
+                {selectedRow.txn.postings.map((p, i) => {
+                  const amt = postingAmountNumber(p)
+                  return (
+                    <div key={i} className="flex justify-between items-baseline gap-3">
+                      <span className="text-[11px] text-slate-700 truncate" title={p.account}>
+                        {p.account}
+                      </span>
+                      <span className="data-mono text-[11px] text-slate-500 shrink-0">
+                        {p.amount != null
+                          ? `${amountFmt.format(amt)} ${p.currency ?? ''}`.trim()
+                          : '—'}
+                      </span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -439,12 +441,12 @@ function LedgerRowView({
 }) {
   const debit = row.amount > 0 ? row.amount : null
   const credit = row.amount < 0 ? -row.amount : null
-  const { payee, narration } = row.parsed.header
-  const label = payee && narration ? `${payee} · ${narration}` : (narration ?? payee ?? '—')
+  const { payee, narration } = row.txn
+  const label = payee && narration ? `${payee} · ${narration}` : (narration || payee || '—')
   const cells = (
     <>
       <div className={`data-mono text-[12px] ${active ? 'font-bold text-teal-600' : 'text-slate-500'}`}>
-        {row.parsed.header.date}
+        {row.txn.date}
       </div>
       <div
         className={`text-[12.5px] truncate ${active ? 'font-bold text-slate-900' : 'font-medium text-slate-900'}`}
