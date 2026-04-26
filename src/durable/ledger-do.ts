@@ -367,8 +367,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
          UNION SELECT account FROM directives_open WHERE account != ''
          UNION SELECT account FROM directives_close WHERE account != ''
          UNION SELECT account FROM directives_balance WHERE account != ''
-         UNION SELECT account_source AS account FROM directives_pad WHERE account_source != ''
-         UNION SELECT account_dest AS account FROM directives_pad WHERE account_dest != ''
+         UNION SELECT account FROM directives_pad WHERE account != ''
+         UNION SELECT account_pad AS account FROM directives_pad WHERE account_pad != ''
          UNION SELECT account FROM directives_note WHERE account != ''
          UNION SELECT account FROM directives_document WHERE account != ''
          ORDER BY account`,
