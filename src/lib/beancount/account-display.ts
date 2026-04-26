@@ -1,6 +1,10 @@
 const TOP_LEVELS = new Set(['Assets', 'Liabilities', 'Expenses', 'Income', 'Equity'])
 export const CREDIT_CARD_GROUPS = new Set(['CC'])
 
+export function splitCamel(s: string): string {
+  return s.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+}
+
 export function accountDisplayName(path: string): string {
   const parts = path.split(':').filter(Boolean)
   if (parts.length === 0) return path
