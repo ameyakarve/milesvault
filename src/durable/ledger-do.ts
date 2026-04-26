@@ -42,13 +42,16 @@ import type {
 } from './ledger-v2-types'
 import type { SearchFilter } from './search-parser'
 
-const MAX_UPDATED_AT_SQL = `SELECT MAX(m) AS m FROM (
+// workerd caps SQLITE_LIMIT_COMPOUND_SELECT at 5; split 10 tables across 2 statements.
+const MAX_UPDATED_AT_SQL_A = `SELECT MAX(m) AS m FROM (
   SELECT MAX(updated_at) AS m FROM transactions_v2
   UNION ALL SELECT MAX(updated_at) FROM directives_open
   UNION ALL SELECT MAX(updated_at) FROM directives_close
   UNION ALL SELECT MAX(updated_at) FROM directives_commodity
   UNION ALL SELECT MAX(updated_at) FROM directives_balance
-  UNION ALL SELECT MAX(updated_at) FROM directives_pad
+)`
+const MAX_UPDATED_AT_SQL_B = `SELECT MAX(m) AS m FROM (
+  SELECT MAX(updated_at) AS m FROM directives_pad
   UNION ALL SELECT MAX(updated_at) FROM directives_price
   UNION ALL SELECT MAX(updated_at) FROM directives_note
   UNION ALL SELECT MAX(updated_at) FROM directives_document
@@ -251,26 +254,32 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
 
   async v2_directive_list(limit: number, offset: number): Promise<DirectiveListResult> {
     const total = this.directiveTotalCount()
-    const refs = this.sql
-      .exec<{ kind: string; id: number; date: number }>(
-        `SELECT * FROM (
-           SELECT 'transaction' AS kind, id, date FROM transactions_v2
-           UNION ALL SELECT 'open', id, date FROM directives_open
-           UNION ALL SELECT 'close', id, date FROM directives_close
-           UNION ALL SELECT 'commodity', id, date FROM directives_commodity
-           UNION ALL SELECT 'balance', id, date FROM directives_balance
-           UNION ALL SELECT 'pad', id, date FROM directives_pad
-           UNION ALL SELECT 'price', id, date FROM directives_price
-           UNION ALL SELECT 'note', id, date FROM directives_note
-           UNION ALL SELECT 'document', id, date FROM directives_document
-           UNION ALL SELECT 'event', id, date FROM directives_event
-         )
-         ORDER BY date DESC, kind ASC, id DESC
-         LIMIT ? OFFSET ?`,
-        limit,
-        offset,
+    // workerd caps SQLITE_LIMIT_COMPOUND_SELECT at 5; merge two halves in JS.
+    const cap = limit + offset
+    const halfA = `SELECT * FROM (
+        SELECT 'transaction' AS kind, id, date FROM transactions_v2
+        UNION ALL SELECT 'open', id, date FROM directives_open
+        UNION ALL SELECT 'close', id, date FROM directives_close
+        UNION ALL SELECT 'commodity', id, date FROM directives_commodity
+        UNION ALL SELECT 'balance', id, date FROM directives_balance
       )
-      .toArray()
+      ORDER BY date DESC, kind ASC, id DESC
+      LIMIT ?`
+    const halfB = `SELECT * FROM (
+        SELECT 'pad' AS kind, id, date FROM directives_pad
+        UNION ALL SELECT 'price', id, date FROM directives_price
+        UNION ALL SELECT 'note', id, date FROM directives_note
+        UNION ALL SELECT 'document', id, date FROM directives_document
+        UNION ALL SELECT 'event', id, date FROM directives_event
+      )
+      ORDER BY date DESC, kind ASC, id DESC
+      LIMIT ?`
+    const a = this.sql.exec<{ kind: string; id: number; date: number }>(halfA, cap).toArray()
+    const b = this.sql.exec<{ kind: string; id: number; date: number }>(halfB, cap).toArray()
+    const merged = [...a, ...b].sort((x, y) =>
+      y.date - x.date || x.kind.localeCompare(y.kind) || y.id - x.id,
+    )
+    const refs = merged.slice(offset, offset + limit)
     const rows: DirectiveV2[] = []
     for (const r of refs) {
       const out = this.readDirective(r.kind as DirectiveKind, r.id)
@@ -361,15 +370,16 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async v2_listAccounts(): Promise<string[]> {
-    const queries: string[] = [
-      `SELECT DISTINCT account FROM postings WHERE account != ''`,
-      `SELECT DISTINCT account FROM directives_open WHERE account != ''`,
-      `SELECT DISTINCT account FROM directives_close WHERE account != ''`,
-      `SELECT DISTINCT account FROM directives_balance WHERE account != ''`,
-      `SELECT DISTINCT account FROM directives_pad WHERE account != ''`,
-      `SELECT DISTINCT account_pad AS account FROM directives_pad WHERE account_pad != ''`,
-      `SELECT DISTINCT account FROM directives_note WHERE account != ''`,
-      `SELECT DISTINCT account FROM directives_document WHERE account != ''`,
+    // workerd caps SQLITE_LIMIT_COMPOUND_SELECT at 5; split 8 sources across 2 statements.
+    const queries = [
+      `SELECT account FROM postings WHERE account != ''
+       UNION SELECT account FROM directives_open WHERE account != ''
+       UNION SELECT account FROM directives_close WHERE account != ''
+       UNION SELECT account FROM directives_balance WHERE account != ''
+       UNION SELECT account FROM directives_pad WHERE account != ''`,
+      `SELECT account_pad AS account FROM directives_pad WHERE account_pad != ''
+       UNION SELECT account FROM directives_note WHERE account != ''
+       UNION SELECT account FROM directives_document WHERE account != ''`,
     ]
     const set = new Set<string>()
     for (const q of queries) {
@@ -378,6 +388,27 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }
     }
     return Array.from(set).sort()
+  }
+
+  async v2_recent_accounts_list(limit: number): Promise<string[]> {
+    return this.sql
+      .exec<{ account: string }>(
+        `SELECT account FROM account_recents
+         ORDER BY last_viewed_at DESC
+         LIMIT ?`,
+        limit,
+      )
+      .toArray()
+      .map((r) => r.account)
+  }
+
+  async v2_recent_account_touch(account: string): Promise<void> {
+    this.sql.exec(
+      `INSERT INTO account_recents (account, last_viewed_at) VALUES (?, ?)
+       ON CONFLICT(account) DO UPDATE SET last_viewed_at = excluded.last_viewed_at`,
+      account,
+      Date.now(),
+    )
   }
 
   async v2_search(filter: SearchFilter, limit: number, offset: number): Promise<V2ListResult> {
@@ -503,8 +534,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private maxUpdatedAtSync(): number {
-    const r = this.sql.exec<{ m: number | null }>(MAX_UPDATED_AT_SQL).toArray()[0]
-    return r?.m ?? 0
+    const a = this.sql.exec<{ m: number | null }>(MAX_UPDATED_AT_SQL_A).toArray()[0]?.m ?? 0
+    const b = this.sql.exec<{ m: number | null }>(MAX_UPDATED_AT_SQL_B).toArray()[0]?.m ?? 0
+    return Math.max(a, b)
   }
 
   private latestOpenConstraints(account: string): string[] | null {
