@@ -10,6 +10,13 @@ import {
   type Transaction,
 } from '@/durable/ledger-types'
 import type {
+  DirectiveCreateResult,
+  DirectiveDeleteResult,
+  DirectiveInput,
+  DirectiveKind,
+  DirectiveListResult,
+  DirectiveUpdateResult,
+  DirectiveV2,
   TransactionInput,
   TransactionV2,
   V2CreateResult,
@@ -70,7 +77,26 @@ export type LedgerClient = {
     input: TransactionInput,
   ): Promise<V2UpdateResult>
   v2_delete(id: number, expected_updated_at: number): Promise<V2DeleteResult>
+  v2_directive_create(directives: DirectiveInput[]): Promise<DirectiveCreateResult>
+  v2_directive_get(kind: DirectiveKind, id: number): Promise<DirectiveV2 | null>
+  v2_directive_list(limit?: number, offset?: number): Promise<DirectiveListResult>
+  v2_directive_update(
+    kind: DirectiveKind,
+    id: number,
+    expected_updated_at: number,
+    directive: DirectiveInput,
+  ): Promise<DirectiveUpdateResult>
+  v2_directive_delete(
+    kind: DirectiveKind,
+    id: number,
+    expected_updated_at: number,
+  ): Promise<DirectiveDeleteResult>
 }
+
+const DIRECTIVE_KINDS: readonly DirectiveKind[] = [
+  'transaction', 'open', 'close', 'commodity', 'balance',
+  'pad', 'price', 'note', 'document', 'event',
+]
 
 export class LedgerInputError extends Error {
   constructor(
@@ -208,6 +234,43 @@ export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerCl
       return stub.v2_delete(id, expected_updated_at)
     },
 
+    async v2_directive_create(directives) {
+      if (!Array.isArray(directives) || directives.length === 0) {
+        throw new LedgerInputError(['directives must be a non-empty array.'])
+      }
+      return stub.v2_directive_create(directives)
+    },
+
+    async v2_directive_get(kind, id) {
+      assertDirectiveKind(kind)
+      assertPositiveInt(id, 'id')
+      return stub.v2_directive_get(kind, id)
+    },
+
+    async v2_directive_list(limit = DEFAULT_LIMIT, offset = 0) {
+      const l = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT)
+      const o = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0)
+      return stub.v2_directive_list(l, o)
+    },
+
+    async v2_directive_update(kind, id, expected_updated_at, directive) {
+      assertDirectiveKind(kind)
+      assertPositiveInt(id, 'id')
+      if (!Number.isInteger(expected_updated_at)) {
+        throw new LedgerInputError(['expected_updated_at must be an integer.'])
+      }
+      return stub.v2_directive_update(kind, id, expected_updated_at, directive)
+    },
+
+    async v2_directive_delete(kind, id, expected_updated_at) {
+      assertDirectiveKind(kind)
+      assertPositiveInt(id, 'id')
+      if (!Number.isInteger(expected_updated_at)) {
+        throw new LedgerInputError(['expected_updated_at must be an integer.'])
+      }
+      return stub.v2_directive_delete(kind, id, expected_updated_at)
+    },
+
     async replaceBuffer(input) {
       if (!Array.isArray(input.knownIds)) {
         throw new LedgerInputError(['knownIds must be an array.'])
@@ -262,6 +325,12 @@ function assertRawText(v: unknown, field: string): asserts v is string {
   }
   if (new TextEncoder().encode(v).byteLength > MAX_RAW_TEXT_BYTES) {
     throw new LedgerInputError([`${field} exceeds ${MAX_RAW_TEXT_BYTES} bytes.`])
+  }
+}
+
+export function assertDirectiveKind(v: unknown): asserts v is DirectiveKind {
+  if (typeof v !== 'string' || !(DIRECTIVE_KINDS as readonly string[]).includes(v)) {
+    throw new LedgerInputError([`kind must be one of ${DIRECTIVE_KINDS.join('|')} (got '${String(v)}').`])
   }
 }
 

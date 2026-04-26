@@ -1,19 +1,37 @@
 import {
+  Balance as BcBalance,
+  Close as BcClose,
+  Commodity as BcCommodity,
+  Document as BcDocument,
+  Event as BcEvent,
+  Note as BcNote,
+  Open as BcOpen,
+  Pad as BcPad,
   ParseResult,
   Posting as BcPosting,
+  Price as BcPrice,
   Tag as BcTag,
   Transaction as BcTransaction,
   Value,
   parse,
 } from 'beancount'
-import type { PostingInput, TransactionInput } from '@/durable/ledger-v2-types'
+import type {
+  BalanceInput,
+  CloseInput,
+  CommodityInput,
+  DirectiveInput,
+  DocumentInput,
+  EventInput,
+  NoteInput,
+  OpenInput,
+  PadInput,
+  PostingInput,
+  PriceInput,
+  TransactionInput,
+} from '@/durable/ledger-v2-types'
 
-const ACCOUNT_RE = /^[A-Z][A-Za-z0-9-]*(:[A-Z][A-Za-z0-9-]*)+$/
-const DECIMAL_RE = /^-?\d+(\.\d+)?$/
-const CURRENCY_RE = /^[A-Z][A-Z0-9'._-]{0,22}[A-Z0-9]$|^[A-Z]$/
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-const TAG_RE = /^[A-Za-z0-9-_/]+$/
-const LINK_RE = /^[A-Za-z0-9-_/.]+$/
+const DECIMAL_RE = /^-?\d+(\.\d+)?$/
 
 export function dateToInt(ymd: string): number {
   if (!DATE_RE.test(ymd)) throw new Error(`invalid date '${ymd}'`)
@@ -38,97 +56,59 @@ export function scaleDecimal(s: string): { scaled: number; scale: number } {
 
 export function validateInput(input: TransactionInput): string[] {
   const errs: string[] = []
-  if (!DATE_RE.test(input.date)) errs.push(`date must match YYYY-MM-DD: '${input.date}'`)
-  if (input.flag != null && input.flag !== '*' && input.flag !== '!') {
-    errs.push(`flag must be '*' or '!' (got '${input.flag}')`)
-  }
   if (!Array.isArray(input.postings) || input.postings.length < 2) {
     errs.push('at least 2 postings are required')
-  }
-  for (const t of input.tags ?? []) {
-    if (!TAG_RE.test(t)) errs.push(`invalid tag '${t}'`)
-  }
-  for (const l of input.links ?? []) {
-    if (!LINK_RE.test(l)) errs.push(`invalid link '${l}'`)
-  }
-  for (let i = 0; i < (input.postings ?? []).length; i++) {
-    const p = input.postings[i]
-    if (!ACCOUNT_RE.test(p.account)) {
-      errs.push(`postings[${i}].account invalid: '${p.account}'`)
-    }
-    if (p.flag != null && p.flag !== '*' && p.flag !== '!') {
-      errs.push(`postings[${i}].flag must be '*' or '!' (got '${p.flag}')`)
-    }
-    if (p.amount != null && !DECIMAL_RE.test(p.amount)) {
-      errs.push(`postings[${i}].amount must be a decimal string (got '${p.amount}')`)
-    }
-    if (p.currency != null && !CURRENCY_RE.test(p.currency)) {
-      errs.push(`postings[${i}].currency invalid: '${p.currency}'`)
-    }
-    if ((p.amount == null) !== (p.currency == null)) {
-      errs.push(`postings[${i}]: amount and currency must both be set or both be omitted`)
-    }
-    if (p.price_at_signs != null && ![0, 1, 2].includes(p.price_at_signs)) {
-      errs.push(`postings[${i}].price_at_signs must be 0|1|2`)
-    }
-    if (p.price_amount != null && !DECIMAL_RE.test(p.price_amount)) {
-      errs.push(`postings[${i}].price_amount must be a decimal string`)
-    }
-    if (p.price_currency != null && !CURRENCY_RE.test(p.price_currency)) {
-      errs.push(`postings[${i}].price_currency invalid: '${p.price_currency}'`)
-    }
+    return errs
   }
 
-  if (errs.length === 0) {
-    type Term = { ccy: string; scaled: bigint; scale: number }
-    const terms: Term[] = []
-    let inferred = 0
-    try {
-      for (const p of input.postings) {
-        if (p.amount == null || p.currency == null) {
-          inferred += 1
-          continue
-        }
-        const amt = scaleDecimal(p.amount)
-        const ccy = p.price_currency ?? p.currency
-        if (p.price_amount != null) {
-          const px = scaleDecimal(p.price_amount)
-          if (p.price_at_signs === 2) {
-            const sign = amt.scaled === 0 ? 0n : amt.scaled > 0 ? 1n : -1n
-            terms.push({ ccy, scaled: sign * BigInt(px.scaled), scale: px.scale })
-          } else {
-            terms.push({
-              ccy,
-              scaled: BigInt(amt.scaled) * BigInt(px.scaled),
-              scale: amt.scale + px.scale,
-            })
-          }
+  type Term = { ccy: string; scaled: bigint; scale: number }
+  const terms: Term[] = []
+  let inferred = 0
+  try {
+    for (const p of input.postings) {
+      if (p.amount == null || p.currency == null) {
+        inferred += 1
+        continue
+      }
+      const amt = scaleDecimal(p.amount)
+      const ccy = p.price_currency ?? p.currency
+      if (p.price_amount != null) {
+        const px = scaleDecimal(p.price_amount)
+        if (p.price_at_signs === 2) {
+          const sign = amt.scaled === 0 ? 0n : amt.scaled > 0 ? 1n : -1n
+          terms.push({ ccy, scaled: sign * BigInt(px.scaled), scale: px.scale })
         } else {
-          terms.push({ ccy, scaled: BigInt(amt.scaled), scale: amt.scale })
+          terms.push({
+            ccy,
+            scaled: BigInt(amt.scaled) * BigInt(px.scaled),
+            scale: amt.scale + px.scale,
+          })
         }
+      } else {
+        terms.push({ ccy, scaled: BigInt(amt.scaled), scale: amt.scale })
       }
-    } catch (e) {
-      errs.push(e instanceof Error ? e.message : String(e))
-      return errs
     }
-    if (inferred > 1) {
-      errs.push('at most one posting may omit amount/currency (inferred)')
-    } else if (inferred === 0) {
-      const byCcy = new Map<string, Term[]>()
-      for (const t of terms) {
-        const arr = byCcy.get(t.ccy) ?? []
-        arr.push(t)
-        byCcy.set(t.ccy, arr)
+  } catch (e) {
+    errs.push(e instanceof Error ? e.message : String(e))
+    return errs
+  }
+  if (inferred > 1) {
+    errs.push('at most one posting may omit amount/currency (inferred)')
+  } else if (inferred === 0) {
+    const byCcy = new Map<string, Term[]>()
+    for (const t of terms) {
+      const arr = byCcy.get(t.ccy) ?? []
+      arr.push(t)
+      byCcy.set(t.ccy, arr)
+    }
+    for (const [ccy, ts] of byCcy) {
+      const maxScale = ts.reduce((m, t) => (t.scale > m ? t.scale : m), 0)
+      let sum = 0n
+      for (const t of ts) {
+        sum += t.scaled * 10n ** BigInt(maxScale - t.scale)
       }
-      for (const [ccy, ts] of byCcy) {
-        const maxScale = ts.reduce((m, t) => (t.scale > m ? t.scale : m), 0)
-        let sum = 0n
-        for (const t of ts) {
-          sum += t.scaled * 10n ** BigInt(maxScale - t.scale)
-        }
-        if (sum !== 0n) {
-          errs.push(`postings do not balance for ${ccy}: sum=${formatScaled(sum, maxScale)}`)
-        }
+      if (sum !== 0n) {
+        errs.push(`postings do not balance for ${ccy}: sum=${formatScaled(sum, maxScale)}`)
       }
     }
   }
@@ -229,22 +209,237 @@ function astToInput(txn: BcTransaction): TransactionInput {
   }
 }
 
-export function parseText(
-  raw: string,
-): { ok: true; input: TransactionInput } | { ok: false; errors: string[] } {
-  const trimmed = raw.trim()
-  if (!trimmed) return { ok: false, errors: ['empty input'] }
-  try {
-    const result = parse(trimmed)
-    if (result.transactions.length === 0) {
-      return { ok: false, errors: ['no transaction directive found'] }
+function buildOpenAst(input: OpenInput): BcOpen {
+  return new BcOpen({
+    date: input.date,
+    account: input.account,
+    bookingMethod: input.booking_method ?? undefined,
+    constraintCurrencies:
+      input.constraint_currencies && input.constraint_currencies.length > 0
+        ? input.constraint_currencies
+        : undefined,
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+function buildCloseAst(input: CloseInput): BcClose {
+  return new BcClose({
+    date: input.date,
+    account: input.account,
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+function buildCommodityAst(input: CommodityInput): BcCommodity {
+  return new BcCommodity({
+    date: input.date,
+    currency: input.currency,
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+function buildBalanceAst(input: BalanceInput): BcBalance {
+  return new BcBalance({
+    date: input.date,
+    account: input.account,
+    amount: input.amount,
+    currency: input.currency,
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+function buildPadAst(input: PadInput): BcPad {
+  return new BcPad({
+    date: input.date,
+    account: input.account,
+    accountPad: input.account_pad,
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+function buildPriceAst(input: PriceInput): BcPrice {
+  return new BcPrice({
+    date: input.date,
+    commodity: input.commodity,
+    currency: input.currency,
+    amount: input.amount,
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+function buildNoteAst(input: NoteInput): BcNote {
+  return new BcNote({
+    date: input.date,
+    account: input.account,
+    description: input.description,
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+function buildDocumentAst(input: DocumentInput): BcDocument {
+  return new BcDocument({
+    date: input.date,
+    account: input.account,
+    pathToDocument: input.filename,
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+function buildEventAst(input: EventInput): BcEvent {
+  return new BcEvent({
+    date: input.date,
+    name: input.name,
+    value: new Value({ type: 'string', value: input.value }),
+    metadata: metaToValueMap(input.meta ?? null),
+  })
+}
+
+export function serializeDirective(d: DirectiveInput): string {
+  switch (d.kind) {
+    case 'transaction':
+      return serializeTransaction(buildTransactionAst(d.input))
+    case 'open':
+    case 'close':
+    case 'commodity':
+    case 'balance':
+    case 'pad':
+    case 'price':
+    case 'note':
+    case 'document':
+    case 'event': {
+      const node =
+        d.kind === 'open'
+          ? buildOpenAst(d.input)
+          : d.kind === 'close'
+            ? buildCloseAst(d.input)
+            : d.kind === 'commodity'
+              ? buildCommodityAst(d.input)
+              : d.kind === 'balance'
+                ? buildBalanceAst(d.input)
+                : d.kind === 'pad'
+                  ? buildPadAst(d.input)
+                  : d.kind === 'price'
+                    ? buildPriceAst(d.input)
+                    : d.kind === 'note'
+                      ? buildNoteAst(d.input)
+                      : d.kind === 'document'
+                        ? buildDocumentAst(d.input)
+                        : buildEventAst(d.input)
+      const result = new ParseResult([node])
+      return result.toFormattedString().trim() + '\n'
     }
-    if (result.transactions.length > 1) {
-      return { ok: false, errors: ['expected exactly one transaction'] }
-    }
-    return { ok: true, input: astToInput(result.transactions[0]) }
-  } catch (e) {
-    return { ok: false, errors: [e instanceof Error ? e.message : String(e)] }
   }
 }
 
+function openToInput(n: BcOpen): OpenInput {
+  return {
+    date: n.date.toString(),
+    account: n.account,
+    booking_method: n.bookingMethod ?? null,
+    constraint_currencies: n.constraintCurrencies ?? [],
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+function closeToInput(n: BcClose): CloseInput {
+  return {
+    date: n.date.toString(),
+    account: n.account,
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+function commodityToInput(n: BcCommodity): CommodityInput {
+  return {
+    date: n.date.toString(),
+    currency: n.currency,
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+function balanceToInput(n: BcBalance): BalanceInput {
+  return {
+    date: n.date.toString(),
+    account: n.account,
+    amount: n.amount,
+    currency: n.currency,
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+function padToInput(n: BcPad): PadInput {
+  return {
+    date: n.date.toString(),
+    account: n.account,
+    account_pad: n.accountPad,
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+function priceToInput(n: BcPrice): PriceInput {
+  return {
+    date: n.date.toString(),
+    commodity: n.commodity,
+    currency: n.currency,
+    amount: n.amount,
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+function noteToInput(n: BcNote): NoteInput {
+  return {
+    date: n.date.toString(),
+    account: n.account,
+    description: n.description,
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+function documentToInput(n: BcDocument): DocumentInput {
+  return {
+    date: n.date.toString(),
+    account: n.account,
+    filename: n.pathToDocument,
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+function eventToInput(n: BcEvent): EventInput {
+  return {
+    date: n.date.toString(),
+    name: n.name,
+    value: String((n.value as { value: unknown }).value),
+    meta: valueMapToMeta(n.metadata),
+  }
+}
+
+export function parseText(
+  raw: string,
+): { ok: true; directives: DirectiveInput[] } | { ok: false; errors: string[] } {
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: false, errors: ['empty input'] }
+  let result: ParseResult
+  try {
+    result = parse(trimmed)
+  } catch (e) {
+    return { ok: false, errors: [e instanceof Error ? e.message : String(e)] }
+  }
+  const errs: string[] = []
+  if (result.option.length > 0) errs.push("'option' directive is not supported")
+  if (result.plugin.length > 0) errs.push("'plugin' directive is not supported")
+  if (result.include.length > 0) errs.push("'include' directive is not supported")
+  if (result.pushtag.length > 0) errs.push("'pushtag' directive is not supported")
+  if (result.poptag.length > 0) errs.push("'poptag' directive is not supported")
+  if (result.query.length > 0) errs.push("'query' directive is not supported")
+  if (result.custom.length > 0) errs.push("'custom' directive is not supported")
+  if (errs.length > 0) return { ok: false, errors: errs }
+
+  const directives: DirectiveInput[] = []
+  for (const t of result.transactions) directives.push({ kind: 'transaction', input: astToInput(t) })
+  for (const n of result.open) directives.push({ kind: 'open', input: openToInput(n) })
+  for (const n of result.close) directives.push({ kind: 'close', input: closeToInput(n) })
+  for (const n of result.commodity) directives.push({ kind: 'commodity', input: commodityToInput(n) })
+  for (const n of result.balance) directives.push({ kind: 'balance', input: balanceToInput(n) })
+  for (const n of result.pad) directives.push({ kind: 'pad', input: padToInput(n) })
+  for (const n of result.price) directives.push({ kind: 'price', input: priceToInput(n) })
+  for (const n of result.note) directives.push({ kind: 'note', input: noteToInput(n) })
+  for (const n of result.document) directives.push({ kind: 'document', input: documentToInput(n) })
+  for (const n of result.event) directives.push({ kind: 'event', input: eventToInput(n) })
+
+  if (directives.length === 0) {
+    return { ok: false, errors: ['no supported directive found'] }
+  }
+  return { ok: true, directives }
+}

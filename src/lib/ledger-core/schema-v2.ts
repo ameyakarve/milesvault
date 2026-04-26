@@ -148,4 +148,79 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       updated_at    INTEGER NOT NULL
     )`,
   ],
+  [
+    'directives_note',
+    `CREATE TABLE IF NOT EXISTS directives_note (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      date        INTEGER NOT NULL,
+      account     TEXT NOT NULL,
+      description TEXT NOT NULL,
+      meta_json   TEXT NOT NULL DEFAULT '{}',
+      raw_text    TEXT NOT NULL,
+      created_at  INTEGER NOT NULL,
+      updated_at  INTEGER NOT NULL
+    )`,
+  ],
+  [
+    'directives_document',
+    `CREATE TABLE IF NOT EXISTS directives_document (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      date       INTEGER NOT NULL,
+      account    TEXT NOT NULL,
+      filename   TEXT NOT NULL,
+      meta_json  TEXT NOT NULL DEFAULT '{}',
+      raw_text   TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+  ],
+  [
+    'directives_event',
+    `CREATE TABLE IF NOT EXISTS directives_event (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      date       INTEGER NOT NULL,
+      name       TEXT NOT NULL,
+      value      TEXT NOT NULL,
+      meta_json  TEXT NOT NULL DEFAULT '{}',
+      raw_text   TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`,
+  ],
+  [
+    'idx_directives_open_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_open_date_id ON directives_open(date DESC, id DESC)',
+  ],
+  [
+    'idx_directives_close_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_close_date_id ON directives_close(date DESC, id DESC)',
+  ],
+  [
+    'idx_directives_commodity_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_commodity_date_id ON directives_commodity(date DESC, id DESC)',
+  ],
+  [
+    'idx_directives_balance_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_balance_date_id ON directives_balance(date DESC, id DESC)',
+  ],
+  [
+    'idx_directives_pad_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_pad_date_id ON directives_pad(date DESC, id DESC)',
+  ],
+  [
+    'idx_directives_price_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_price_date_id ON directives_price(date DESC, id DESC)',
+  ],
+  [
+    'idx_directives_note_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_note_date_id ON directives_note(date DESC, id DESC)',
+  ],
+  [
+    'idx_directives_document_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_document_date_id ON directives_document(date DESC, id DESC)',
+  ],
+  [
+    'idx_directives_event_date_id',
+    'CREATE INDEX IF NOT EXISTS idx_directives_event_date_id ON directives_event(date DESC, id DESC)',
+  ],
 ]

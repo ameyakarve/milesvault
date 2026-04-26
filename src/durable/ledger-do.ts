@@ -9,10 +9,28 @@ import {
   dateFromInt,
   dateToInt,
   scaleDecimal,
+  serializeDirective,
   serializeTransaction,
   validateInput,
 } from '@/lib/beancount/v2-ast'
 import type {
+  DirectiveBalance,
+  DirectiveClose,
+  DirectiveCommodity,
+  DirectiveCreateResult,
+  DirectiveDeleteResult,
+  DirectiveDocument,
+  DirectiveEvent,
+  DirectiveInput,
+  DirectiveKind,
+  DirectiveListResult,
+  DirectiveNote,
+  DirectiveOpen,
+  DirectivePad,
+  DirectivePrice,
+  DirectiveTransaction,
+  DirectiveUpdateResult,
+  DirectiveV2,
   Posting as PostingV2,
   PostingInput,
   TransactionInput,
@@ -624,6 +642,633 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     return result
   }
 
+  async v2_directive_create(directives: DirectiveInput[]): Promise<DirectiveCreateResult> {
+    if (directives.length === 0) return { ok: false, errors: ['no directives provided'] }
+    const prepared: { d: DirectiveInput; rawText: string }[] = []
+    for (let i = 0; i < directives.length; i++) {
+      const d = directives[i]
+      if (d.kind === 'transaction') {
+        const errs = validateInput(d.input)
+        if (errs.length > 0) {
+          return { ok: false, errors: errs.map((e) => `directives[${i}]: ${e}`) }
+        }
+      }
+      let rawText: string
+      try {
+        rawText = serializeDirective(d)
+      } catch (e) {
+        return { ok: false, errors: [`directives[${i}]: serialize failed: ${String(e)}`] }
+      }
+      prepared.push({ d, rawText })
+    }
+    const created: DirectiveV2[] = []
+    this.ctx.storage.transactionSync(() => {
+      const now = Date.now()
+      for (const { d, rawText } of prepared) {
+        const id = this.insertDirective(d, rawText, now, now)
+        if (id == null) continue
+        const out = this.readDirective(d.kind, id)
+        if (out) created.push(out)
+      }
+    })
+    return { ok: true, directives: created }
+  }
+
+  async v2_directive_get(kind: DirectiveKind, id: number): Promise<DirectiveV2 | null> {
+    return this.readDirective(kind, id)
+  }
+
+  async v2_directive_list(limit: number, offset: number): Promise<DirectiveListResult> {
+    const total = this.directiveTotalCount()
+    const refs = this.sql
+      .exec<{ kind: string; id: number; date: number }>(
+        `SELECT * FROM (
+           SELECT 'transaction' AS kind, id, date FROM transactions_v2
+           UNION ALL SELECT 'open', id, date FROM directives_open
+           UNION ALL SELECT 'close', id, date FROM directives_close
+           UNION ALL SELECT 'commodity', id, date FROM directives_commodity
+           UNION ALL SELECT 'balance', id, date FROM directives_balance
+           UNION ALL SELECT 'pad', id, date FROM directives_pad
+           UNION ALL SELECT 'price', id, date FROM directives_price
+           UNION ALL SELECT 'note', id, date FROM directives_note
+           UNION ALL SELECT 'document', id, date FROM directives_document
+           UNION ALL SELECT 'event', id, date FROM directives_event
+         )
+         ORDER BY date DESC, kind ASC, id DESC
+         LIMIT ? OFFSET ?`,
+        limit,
+        offset,
+      )
+      .toArray()
+    const rows: DirectiveV2[] = []
+    for (const r of refs) {
+      const out = this.readDirective(r.kind as DirectiveKind, r.id)
+      if (out) rows.push(out)
+    }
+    return { rows, total, limit, offset }
+  }
+
+  async v2_directive_update(
+    kind: DirectiveKind,
+    id: number,
+    expected_updated_at: number,
+    d: DirectiveInput,
+  ): Promise<DirectiveUpdateResult> {
+    if (d.kind !== kind) {
+      return { ok: false, kind: 'wrong_kind', expected: kind, actual: d.kind }
+    }
+    if (d.kind === 'transaction') {
+      const errs = validateInput(d.input)
+      if (errs.length > 0) return { ok: false, kind: 'validation', errors: errs }
+    }
+    let rawText: string
+    try {
+      rawText = serializeDirective(d)
+    } catch (e) {
+      return { ok: false, kind: 'validation', errors: [`serialize failed: ${String(e)}`] }
+    }
+    let result: DirectiveUpdateResult = { ok: false, kind: 'not_found' }
+    this.ctx.storage.transactionSync(() => {
+      const table = directiveTable(kind)
+      const current = this.sql
+        .exec<{ updated_at: number; created_at: number }>(
+          `SELECT updated_at, created_at FROM ${table} WHERE id = ?`,
+          id,
+        )
+        .toArray()[0]
+      if (!current) {
+        result = { ok: false, kind: 'not_found' }
+        return
+      }
+      if (current.updated_at !== expected_updated_at) {
+        result = { ok: false, kind: 'conflict', current_updated_at: current.updated_at }
+        return
+      }
+      const now = Date.now()
+      const nextUpdated = Math.max(now, current.updated_at + 1)
+      this.deleteDirectiveRow(kind, id)
+      const newId = this.insertDirective(d, rawText, nextUpdated, current.created_at, id)
+      if (newId == null) {
+        result = { ok: false, kind: 'not_found' }
+        return
+      }
+      const out = this.readDirective(kind, newId)
+      result = out ? { ok: true, directive: out } : { ok: false, kind: 'not_found' }
+    })
+    return result
+  }
+
+  async v2_directive_delete(
+    kind: DirectiveKind,
+    id: number,
+    expected_updated_at: number,
+  ): Promise<DirectiveDeleteResult> {
+    let result: DirectiveDeleteResult = { ok: false, kind: 'not_found' }
+    this.ctx.storage.transactionSync(() => {
+      const table = directiveTable(kind)
+      const current = this.sql
+        .exec<{ updated_at: number }>(
+          `SELECT updated_at FROM ${table} WHERE id = ?`,
+          id,
+        )
+        .toArray()[0]
+      if (!current) {
+        result = { ok: false, kind: 'not_found' }
+        return
+      }
+      if (current.updated_at !== expected_updated_at) {
+        result = { ok: false, kind: 'conflict', current_updated_at: current.updated_at }
+        return
+      }
+      this.deleteDirectiveRow(kind, id)
+      result = { ok: true }
+    })
+    return result
+  }
+
+  private directiveTotalCount(): number {
+    const row = this.sql
+      .exec<{ c: number }>(
+        `SELECT (
+           (SELECT COUNT(*) FROM transactions_v2)
+         + (SELECT COUNT(*) FROM directives_open)
+         + (SELECT COUNT(*) FROM directives_close)
+         + (SELECT COUNT(*) FROM directives_commodity)
+         + (SELECT COUNT(*) FROM directives_balance)
+         + (SELECT COUNT(*) FROM directives_pad)
+         + (SELECT COUNT(*) FROM directives_price)
+         + (SELECT COUNT(*) FROM directives_note)
+         + (SELECT COUNT(*) FROM directives_document)
+         + (SELECT COUNT(*) FROM directives_event)
+         ) AS c`,
+        )
+      .toArray()[0]
+    return row?.c ?? 0
+  }
+
+  private insertDirective(
+    d: DirectiveInput,
+    rawText: string,
+    updatedAt: number,
+    createdAt: number,
+    forcedId?: number,
+  ): number | null {
+    if (d.kind === 'transaction') {
+      const id = this.insertTransactionRow(d.input, rawText, updatedAt, createdAt, forcedId)
+      if (id == null) return null
+      this.insertV2Children(id, d.input)
+      return id
+    }
+    return this.insertNonTxnDirective(d, rawText, updatedAt, createdAt, forcedId)
+  }
+
+  private insertTransactionRow(
+    input: TransactionInput,
+    rawText: string,
+    updatedAt: number,
+    createdAt: number,
+    forcedId?: number,
+  ): number | null {
+    const idCol = forcedId != null ? 'id, ' : ''
+    const idVal = forcedId != null ? '?, ' : ''
+    const baseArgs = [
+      dateToInt(input.date),
+      input.flag ?? null,
+      input.payee ?? '',
+      input.narration ?? '',
+      JSON.stringify(input.meta ?? {}),
+      rawText,
+      createdAt,
+      updatedAt,
+    ] as const
+    const args = forcedId != null ? [forcedId, ...baseArgs] : baseArgs
+    const r = this.sql
+      .exec<{ id: number }>(
+        `INSERT INTO transactions_v2
+           (${idCol}date, flag, payee, narration, meta_json, raw_text, created_at, updated_at)
+         VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?)
+         RETURNING id`,
+        ...args,
+      )
+      .toArray()[0]
+    return r?.id ?? null
+  }
+
+  private insertNonTxnDirective(
+    d: Exclude<DirectiveInput, { kind: 'transaction' }>,
+    rawText: string,
+    updatedAt: number,
+    createdAt: number,
+    forcedId?: number,
+  ): number | null {
+    const dateInt = dateToInt(d.input.date)
+    const meta = JSON.stringify(d.input.meta ?? {})
+    const idCol = forcedId != null ? 'id, ' : ''
+    const idVal = forcedId != null ? '?, ' : ''
+    const idArgs: SqlStorageValue[] = forcedId != null ? [forcedId] : []
+    const tail: SqlStorageValue[] = [meta, rawText, createdAt, updatedAt]
+    switch (d.kind) {
+      case 'open': {
+        const i = d.input
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_open (${idCol}date, account, booking_method, constraint_currencies, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.account,
+            i.booking_method ?? null,
+            JSON.stringify(i.constraint_currencies ?? []),
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+      case 'close': {
+        const i = d.input
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_close (${idCol}date, account, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.account,
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+      case 'commodity': {
+        const i = d.input
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_commodity (${idCol}date, currency, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.currency,
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+      case 'balance': {
+        const i = d.input
+        const amt = scaleDecimal(i.amount)
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_balance (${idCol}date, account, amount, amount_scaled, scale, currency, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.account,
+            i.amount,
+            amt.scaled,
+            amt.scale,
+            i.currency,
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+      case 'pad': {
+        const i = d.input
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_pad (${idCol}date, account, account_pad, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.account,
+            i.account_pad,
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+      case 'price': {
+        const i = d.input
+        const amt = scaleDecimal(i.amount)
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_price (${idCol}date, commodity, currency, amount, amount_scaled, scale, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.commodity,
+            i.currency,
+            i.amount,
+            amt.scaled,
+            amt.scale,
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+      case 'note': {
+        const i = d.input
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_note (${idCol}date, account, description, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.account,
+            i.description,
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+      case 'document': {
+        const i = d.input
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_document (${idCol}date, account, filename, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.account,
+            i.filename,
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+      case 'event': {
+        const i = d.input
+        const row = this.sql
+          .exec<{ id: number }>(
+            `INSERT INTO directives_event (${idCol}date, name, value, meta_json, raw_text, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            ...idArgs,
+            dateInt,
+            i.name,
+            i.value,
+            ...tail,
+          )
+          .toArray()[0]
+        return row?.id ?? null
+      }
+    }
+  }
+
+  private deleteDirectiveRow(kind: DirectiveKind, id: number): void {
+    const table = directiveTable(kind)
+    this.sql.exec(`DELETE FROM ${table} WHERE id = ?`, id)
+  }
+
+  private readDirective(kind: DirectiveKind, id: number): DirectiveV2 | null {
+    if (kind === 'transaction') {
+      const t = this.readV2Transaction(id)
+      return t ? ({ ...t, kind: 'transaction' } as DirectiveTransaction) : null
+    }
+    return this.readNonTxnDirective(kind, id)
+  }
+
+  private readNonTxnDirective(kind: DirectiveKind, id: number): DirectiveV2 | null {
+    switch (kind) {
+      case 'open': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            booking_method: string | null
+            constraint_currencies: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_open WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'open',
+          id: r.id,
+          date: dateFromInt(r.date),
+          account: r.account,
+          booking_method: r.booking_method,
+          constraint_currencies: parseStringArray(r.constraint_currencies),
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectiveOpen
+      }
+      case 'close': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_close WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'close',
+          id: r.id,
+          date: dateFromInt(r.date),
+          account: r.account,
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectiveClose
+      }
+      case 'commodity': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            currency: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_commodity WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'commodity',
+          id: r.id,
+          date: dateFromInt(r.date),
+          currency: r.currency,
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectiveCommodity
+      }
+      case 'balance': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            amount: string
+            currency: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_balance WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'balance',
+          id: r.id,
+          date: dateFromInt(r.date),
+          account: r.account,
+          amount: r.amount,
+          currency: r.currency,
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectiveBalance
+      }
+      case 'pad': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            account_pad: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_pad WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'pad',
+          id: r.id,
+          date: dateFromInt(r.date),
+          account: r.account,
+          account_pad: r.account_pad,
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectivePad
+      }
+      case 'price': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            commodity: string
+            currency: string
+            amount: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_price WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'price',
+          id: r.id,
+          date: dateFromInt(r.date),
+          commodity: r.commodity,
+          currency: r.currency,
+          amount: r.amount,
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectivePrice
+      }
+      case 'note': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            description: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_note WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'note',
+          id: r.id,
+          date: dateFromInt(r.date),
+          account: r.account,
+          description: r.description,
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectiveNote
+      }
+      case 'document': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            filename: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_document WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'document',
+          id: r.id,
+          date: dateFromInt(r.date),
+          account: r.account,
+          filename: r.filename,
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectiveDocument
+      }
+      case 'event': {
+        const r = this.sql
+          .exec<{
+            id: number
+            date: number
+            name: string
+            value: string
+            meta_json: string
+            raw_text: string
+            created_at: number
+            updated_at: number
+          }>(`SELECT * FROM directives_event WHERE id = ?`, id)
+          .toArray()[0]
+        if (!r) return null
+        return {
+          kind: 'event',
+          id: r.id,
+          date: dateFromInt(r.date),
+          name: r.name,
+          value: r.value,
+          meta: parseMeta(r.meta_json),
+          raw_text: r.raw_text,
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        } satisfies DirectiveEvent
+      }
+      case 'transaction':
+        return null
+    }
+  }
+
   private insertV2Children(txnId: number, input: TransactionInput): void {
     const dateInt = dateToInt(input.date)
     for (let i = 0; i < input.postings.length; i++) {
@@ -767,6 +1412,30 @@ function prepareV2Input(
   } catch (e) {
     return { ok: false, errors: [`serialize failed: ${String(e)}`] }
   }
+}
+
+function directiveTable(kind: DirectiveKind): string {
+  switch (kind) {
+    case 'transaction': return 'transactions_v2'
+    case 'open': return 'directives_open'
+    case 'close': return 'directives_close'
+    case 'commodity': return 'directives_commodity'
+    case 'balance': return 'directives_balance'
+    case 'pad': return 'directives_pad'
+    case 'price': return 'directives_price'
+    case 'note': return 'directives_note'
+    case 'document': return 'directives_document'
+    case 'event': return 'directives_event'
+  }
+}
+
+function parseStringArray(json: string): string[] {
+  if (json === '[]' || json === '') return []
+  try {
+    const parsed = JSON.parse(json) as unknown
+    if (Array.isArray(parsed)) return parsed.filter((v): v is string => typeof v === 'string')
+  } catch {}
+  return []
 }
 
 function parseMeta(json: string): Record<string, string> {

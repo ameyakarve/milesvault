@@ -9,7 +9,7 @@ export const GET = withLedger(async ({ client, req }) => {
   const url = new URL(req.url)
   const limit = Number(url.searchParams.get('limit') ?? DEFAULT_LIMIT)
   const offset = Number(url.searchParams.get('offset') ?? 0)
-  const result = await client.v2_list(limit, offset)
+  const result = await client.v2_directive_list(limit, offset)
   return NextResponse.json(result)
 })
 
@@ -20,7 +20,9 @@ export const POST = withLedger(async ({ client, req }) => {
   }
   const parsed = parseText(body.raw_text)
   if (parsed.ok === false) return NextResponse.json({ errors: parsed.errors }, { status: 400 })
-  const result = await client.v2_create(parsed.input)
-  if (result.ok === true) return NextResponse.json(result.transaction, { status: 201 })
+  const result = await client.v2_directive_create(parsed.directives)
+  if (result.ok === true) {
+    return NextResponse.json({ directives: result.directives }, { status: 201 })
+  }
   return NextResponse.json({ errors: result.errors }, { status: 400 })
 })

@@ -1,14 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import type { TransactionV2, V2ListResult } from '@/durable/ledger-v2-types'
+import type { DirectiveKind, DirectiveListResult, DirectiveV2 } from '@/durable/ledger-v2-types'
 
-const API = '/api/ledger/v2/transactions'
+const API = '/api/ledger/v2/directives'
 
 type ListState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'ready'; rows: TransactionV2[]; total: number }
+  | { status: 'ready'; rows: DirectiveV2[]; total: number }
   | { status: 'error'; message: string }
 
 const today = (): string => new Date().toISOString().slice(0, 10)
@@ -18,7 +18,7 @@ const blankDraft = (): string =>
 
 export function TransactionsView() {
   const [list, setList] = useState<ListState>({ status: 'idle' })
-  const [editing, setEditing] = useState<{ id: number; expected: number } | null>(null)
+  const [editing, setEditing] = useState<{ kind: DirectiveKind; id: number; expected: number } | null>(null)
   const [draft, setDraft] = useState<string>(blankDraft())
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
@@ -28,7 +28,7 @@ export function TransactionsView() {
     try {
       const res = await fetch(`${API}?limit=100`, { credentials: 'include' })
       if (!res.ok) throw new Error(`list ${res.status}`)
-      const data = (await res.json()) as V2ListResult
+      const data = (await res.json()) as DirectiveListResult
       setList({ status: 'ready', rows: data.rows, total: data.total })
     } catch (e) {
       setList({ status: 'error', message: e instanceof Error ? e.message : String(e) })
@@ -45,9 +45,9 @@ export function TransactionsView() {
     setErrors([])
   }
 
-  const startEdit = (t: TransactionV2) => {
-    setEditing({ id: t.id, expected: t.updated_at })
-    setDraft(t.raw_text)
+  const startEdit = (d: DirectiveV2) => {
+    setEditing({ kind: d.kind, id: d.id, expected: d.updated_at })
+    setDraft(d.raw_text)
     setErrors([])
   }
 
@@ -58,7 +58,7 @@ export function TransactionsView() {
     try {
       let res: Response
       if (editing) {
-        res = await fetch(`${API}/${editing.id}`, {
+        res = await fetch(`${API}/${editing.kind}/${editing.id}`, {
           method: 'PATCH',
           credentials: 'include',
           headers: { 'content-type': 'application/json' },
@@ -73,7 +73,7 @@ export function TransactionsView() {
         })
       }
       if (res.status === 409) {
-        setErrors(['conflict — this transaction was modified elsewhere; refresh to see latest.'])
+        setErrors(['conflict — this directive was modified elsewhere; refresh to see latest.'])
         return
       }
       if (!res.ok) {
@@ -93,23 +93,23 @@ export function TransactionsView() {
     }
   }
 
-  const onDelete = async (t: TransactionV2) => {
-    if (!confirm(`delete txn #${t.id} (${t.date} ${t.payee || t.narration})?`)) return
+  const onDelete = async (d: DirectiveV2) => {
+    if (!confirm(`delete ${d.kind} #${d.id} (${d.date})?`)) return
     setBusy(true)
     try {
       const res = await fetch(
-        `${API}/${t.id}?expected_updated_at=${t.updated_at}`,
+        `${API}/${d.kind}/${d.id}?expected_updated_at=${d.updated_at}`,
         { method: 'DELETE', credentials: 'include' },
       )
       if (res.status === 409) {
-        setErrors(['conflict — this transaction was modified elsewhere; refresh to see latest.'])
+        setErrors(['conflict — this directive was modified elsewhere; refresh to see latest.'])
         return
       }
       if (!res.ok) {
         setErrors([`delete failed: ${res.status}`])
         return
       }
-      if (editing?.id === t.id) resetDraft()
+      if (editing?.kind === d.kind && editing.id === d.id) resetDraft()
       await refresh()
     } finally {
       setBusy(false)
@@ -121,7 +121,7 @@ export function TransactionsView() {
       <div className="max-w-5xl mx-auto flex flex-col gap-6">
         <header className="flex items-baseline justify-between">
           <h1 className="font-mono text-sm uppercase tracking-[0.12em] text-navy-700">
-            transactions · v2
+            ledger · v2
           </h1>
           <span className="font-mono text-[10px] text-slate-500 uppercase tracking-[0.08em]">
             {list.status === 'ready' ? `${list.total} total` : list.status}
@@ -131,7 +131,7 @@ export function TransactionsView() {
         <section className="border border-scandi-rule bg-white p-4">
           <header className="flex items-center justify-between mb-3">
             <h2 className="font-mono text-[11px] uppercase tracking-[0.08em] text-slate-500">
-              {editing ? `edit #${editing.id}` : 'new transaction'}
+              {editing ? `edit ${editing.kind} #${editing.id}` : 'new directive'}
             </h2>
             <span className="font-mono text-[10px] text-slate-400">beancount</span>
           </header>
@@ -140,9 +140,9 @@ export function TransactionsView() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               spellCheck={false}
-              rows={8}
+              rows={10}
               className="border border-scandi-rule px-3 py-2 w-full font-mono text-[12px] leading-relaxed text-navy-700 focus:outline-none focus:border-scandi-accent"
-              placeholder='2026-04-26 * "Payee" "Narration"&#10;  Assets:Bank:Checking  -100.00 USD&#10;  Expenses:Misc       100.00 USD'
+              placeholder='2026-04-26 open Assets:Bank:Checking USD&#10;or&#10;2026-04-26 * "Payee" "Narration"&#10;  Assets:Bank:Checking  -100.00 USD&#10;  Expenses:Misc       100.00 USD'
             />
             {errors.length > 0 ? (
               <div className="border border-red-200 bg-red-50 px-3 py-2 text-red-700 flex flex-col gap-1">
@@ -191,17 +191,17 @@ export function TransactionsView() {
             <p className="px-4 py-6 font-mono text-[11px] text-red-600">{list.message}</p>
           ) : list.status === 'ready' && list.rows.length === 0 ? (
             <p className="px-4 py-6 font-mono text-[11px] text-slate-500">
-              no transactions yet — create one above.
+              no directives yet — create one above.
             </p>
           ) : list.status === 'ready' ? (
             <ul className="divide-y divide-scandi-rule">
-              {list.rows.map((t) => (
+              {list.rows.map((d) => (
                 <Row
-                  key={t.id}
-                  txn={t}
-                  isEditing={editing?.id === t.id}
-                  onEdit={() => startEdit(t)}
-                  onDelete={() => void onDelete(t)}
+                  key={`${d.kind}-${d.id}`}
+                  directive={d}
+                  isEditing={editing?.kind === d.kind && editing.id === d.id}
+                  onEdit={() => startEdit(d)}
+                  onDelete={() => void onDelete(d)}
                 />
               ))}
             </ul>
@@ -213,13 +213,13 @@ export function TransactionsView() {
 }
 
 type RowProps = {
-  txn: TransactionV2
+  directive: DirectiveV2
   isEditing: boolean
   onEdit: () => void
   onDelete: () => void
 }
 
-function Row({ txn, isEditing, onEdit, onDelete }: RowProps) {
+function Row({ directive, isEditing, onEdit, onDelete }: RowProps) {
   return (
     <li
       className={`px-4 py-3 font-mono text-[11px] flex flex-col gap-1 ${
@@ -228,12 +228,11 @@ function Row({ txn, isEditing, onEdit, onDelete }: RowProps) {
     >
       <header className="flex items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-slate-500 shrink-0">{txn.date}</span>
-          <span className="text-slate-400 shrink-0">{txn.flag ?? ' '}</span>
-          <span className="text-navy-700 truncate">
-            {txn.payee ? `"${txn.payee}" ` : ''}
-            {txn.narration ? `"${txn.narration}"` : ''}
+          <span className="text-slate-500 shrink-0">{directive.date}</span>
+          <span className="text-slate-400 uppercase tracking-[0.08em] text-[10px] shrink-0">
+            {directive.kind}
           </span>
+          <span className="text-navy-700 truncate">{summary(directive)}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -252,7 +251,31 @@ function Row({ txn, isEditing, onEdit, onDelete }: RowProps) {
           </button>
         </div>
       </header>
-      <pre className="whitespace-pre text-slate-600 leading-relaxed">{txn.raw_text.trimEnd()}</pre>
+      <pre className="whitespace-pre text-slate-600 leading-relaxed">
+        {directive.raw_text.trimEnd()}
+      </pre>
     </li>
   )
+}
+
+function summary(d: DirectiveV2): string {
+  switch (d.kind) {
+    case 'transaction':
+      return [d.payee && `"${d.payee}"`, d.narration && `"${d.narration}"`]
+        .filter(Boolean)
+        .join(' ')
+    case 'open':
+    case 'close':
+    case 'note':
+    case 'document':
+    case 'pad':
+    case 'balance':
+      return d.account
+    case 'commodity':
+      return d.currency
+    case 'price':
+      return `${d.commodity} → ${d.amount} ${d.currency}`
+    case 'event':
+      return `${d.name}: ${d.value}`
+  }
 }
