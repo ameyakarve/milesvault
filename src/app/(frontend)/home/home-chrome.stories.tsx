@@ -10,4 +10,4 @@ export default meta
 
 type Story = StoryObj<typeof HomeChrome>
 
-export const StitchParity: Story = {}
+export const Default: Story = {}
