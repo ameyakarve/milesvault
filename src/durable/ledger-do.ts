@@ -361,20 +361,23 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async v2_listAccounts(): Promise<string[]> {
-    const rows = this.sql
-      .exec<{ account: string }>(
-        `SELECT account FROM postings WHERE account != ''
-         UNION SELECT account FROM directives_open WHERE account != ''
-         UNION SELECT account FROM directives_close WHERE account != ''
-         UNION SELECT account FROM directives_balance WHERE account != ''
-         UNION SELECT account FROM directives_pad WHERE account != ''
-         UNION SELECT account_pad AS account FROM directives_pad WHERE account_pad != ''
-         UNION SELECT account FROM directives_note WHERE account != ''
-         UNION SELECT account FROM directives_document WHERE account != ''
-         ORDER BY account`,
-      )
-      .toArray()
-    return rows.map((r) => r.account)
+    const queries: string[] = [
+      `SELECT DISTINCT account FROM postings WHERE account != ''`,
+      `SELECT DISTINCT account FROM directives_open WHERE account != ''`,
+      `SELECT DISTINCT account FROM directives_close WHERE account != ''`,
+      `SELECT DISTINCT account FROM directives_balance WHERE account != ''`,
+      `SELECT DISTINCT account FROM directives_pad WHERE account != ''`,
+      `SELECT DISTINCT account_pad AS account FROM directives_pad WHERE account_pad != ''`,
+      `SELECT DISTINCT account FROM directives_note WHERE account != ''`,
+      `SELECT DISTINCT account FROM directives_document WHERE account != ''`,
+    ]
+    const set = new Set<string>()
+    for (const q of queries) {
+      for (const r of this.sql.exec<{ account: string }>(q).toArray()) {
+        set.add(r.account)
+      }
+    }
+    return Array.from(set).sort()
   }
 
   async v2_search(filter: SearchFilter, limit: number, offset: number): Promise<V2ListResult> {
