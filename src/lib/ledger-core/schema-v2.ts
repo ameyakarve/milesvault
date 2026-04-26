@@ -223,4 +223,15 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
     'idx_directives_event_date_id',
     'CREATE INDEX IF NOT EXISTS idx_directives_event_date_id ON directives_event(date DESC, id DESC)',
   ],
+  [
+    'account_recents',
+    `CREATE TABLE IF NOT EXISTS account_recents (
+      account        TEXT    PRIMARY KEY,
+      last_viewed_at INTEGER NOT NULL
+    )`,
+  ],
+  [
+    'idx_account_recents_last_viewed',
+    'CREATE INDEX IF NOT EXISTS idx_account_recents_last_viewed ON account_recents(last_viewed_at DESC)',
+  ],
 ]

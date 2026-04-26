@@ -3,12 +3,10 @@
 import React, { useMemo, useState } from 'react'
 import type { Posting, TransactionV2 } from '@/durable/ledger-v2-types'
 import { splitCamel } from '@/lib/beancount/account-display'
-import { useAccounts } from './use-accounts'
+import { useRecentAccounts } from './use-accounts'
 import { useAccountTransactions } from './use-account-transactions'
 
 const TOP_LEVELS = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'] as const
-type TopLevel = (typeof TOP_LEVELS)[number]
-type GroupKey = TopLevel | 'Other'
 
 const EMPTY_ACCOUNTS: readonly string[] = []
 
@@ -30,11 +28,6 @@ function currencyFmt(currency: string): Intl.NumberFormat {
     currencyFmtCache.set(currency, f)
   }
   return f
-}
-
-function topLevelOf(path: string): GroupKey {
-  const head = path.split(':')[0]
-  return (TOP_LEVELS as readonly string[]).includes(head) ? (head as TopLevel) : 'Other'
 }
 
 function displayAccountName(path: string): string {
@@ -94,17 +87,14 @@ function buildLedgerRows(txns: TransactionV2[], account: string): LedgerSummary 
 }
 
 export function HomeChrome() {
-  const accountsQuery = useAccounts()
+  const accountsQuery = useRecentAccounts()
   const accountsData = accountsQuery.data
   const [paneOpen, setPaneOpen] = useState(false)
   const [accountOverride, setAccountOverride] = useState<string | null>(null)
   const [txnOverride, setTxnOverride] = useState<number | null>(null)
-  const [openGroups, setOpenGroups] = useState<Set<GroupKey>>(
-    () => new Set<GroupKey>(['Liabilities', 'Assets']),
-  )
-  const [filter, setFilter] = useState('')
 
   const accounts = accountsData?.accounts ?? EMPTY_ACCOUNTS
+  const hasRecents = accounts.length > 0
   const selectedAccount =
     accountOverride && accounts.includes(accountOverride)
       ? accountOverride
@@ -121,21 +111,6 @@ export function HomeChrome() {
         : { rows: [], dominantCurrency: null },
     [txnsData, selectedAccount],
   )
-
-  const groups = useMemo(() => {
-    const m = new Map<GroupKey, string[]>()
-    const q = filter.trim().toLowerCase()
-    const list = accountsData?.accounts ?? EMPTY_ACCOUNTS
-    for (const a of list) {
-      if (q && !a.toLowerCase().includes(q) && !displayAccountName(a).toLowerCase().includes(q)) {
-        continue
-      }
-      const k = topLevelOf(a)
-      if (!m.has(k)) m.set(k, [])
-      m.get(k)!.push(a)
-    }
-    return m
-  }, [accountsData, filter])
 
   const selectedTxnId =
     txnOverride && ledger.rows.some((r) => r.txn.id === txnOverride)
@@ -164,19 +139,21 @@ export function HomeChrome() {
           <div className="p-2 text-slate-400 hover:text-teal-500 transition-all cursor-pointer">
             <span className="material-symbols-outlined">lightbulb</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setPaneOpen((v) => !v)}
-            className={`p-2 cursor-pointer transition-all ${
-              paneOpen
-                ? 'bg-teal-50 text-teal-600 border-r-2 border-teal-500'
-                : 'text-slate-400 hover:text-teal-500'
-            }`}
-            aria-label="Toggle accounts"
-            aria-pressed={paneOpen}
-          >
-            <span className="material-symbols-outlined">account_balance</span>
-          </button>
+          {hasRecents && (
+            <button
+              type="button"
+              onClick={() => setPaneOpen((v) => !v)}
+              className={`p-2 cursor-pointer transition-all ${
+                paneOpen
+                  ? 'bg-teal-50 text-teal-600 border-r-2 border-teal-500'
+                  : 'text-slate-400 hover:text-teal-500'
+              }`}
+              aria-label="Toggle accounts"
+              aria-pressed={paneOpen}
+            >
+              <span className="material-symbols-outlined">account_balance</span>
+            </button>
+          )}
         </div>
         <div className="mt-auto flex flex-col gap-4 items-center">
           <div className="p-2 text-slate-400 hover:text-teal-500 cursor-pointer">
@@ -185,12 +162,12 @@ export function HomeChrome() {
         </div>
       </nav>
 
-      {paneOpen && (
+      {paneOpen && hasRecents && (
         <aside className="w-[264px] bg-[#F4F6F8] border-r border-[#E2E8F0] flex flex-col shrink-0">
           <div className="p-4 border-b border-[#E2E8F0]">
             <div className="flex justify-between items-center">
               <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-900">
-                Accounts
+                Recent Accounts
               </h2>
               <button
                 type="button"
@@ -201,80 +178,30 @@ export function HomeChrome() {
                 <span className="text-[14px] font-medium">Collapse</span>
               </button>
             </div>
-            <div className="mt-3 relative">
-              <span className="material-symbols-outlined absolute left-2 top-1.5 text-[16px] text-slate-400">
-                search
-              </span>
-              <input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="w-full bg-white border border-[#E2E8F0] text-[11px] pl-8 py-1.5 rounded-[6px] focus:ring-0 focus:border-teal-500"
-                placeholder="Filter accounts..."
-                type="text"
-              />
-            </div>
           </div>
           <div className="flex-1 overflow-y-auto py-2">
-            {accountsQuery.status === 'loading' && (
-              <div className="px-4 py-2 text-[11px] text-slate-400">Loading accounts…</div>
-            )}
-            {accountsQuery.status === 'error' && (
-              <div className="px-4 py-2 text-[11px] text-rose-600">
-                Failed to load: {accountsQuery.errorMsg}
-              </div>
-            )}
-            {accountsQuery.status === 'idle' && accounts.length === 0 && (
-              <div className="px-4 py-2 text-[11px] text-slate-400">No accounts yet.</div>
-            )}
-            {Array.from(groups.entries()).map(([group, accs]) => {
-              const isOpen = openGroups.has(group)
+            {accounts.map((acc) => {
+              const active = acc === selectedAccount
               return (
-                <React.Fragment key={group}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpenGroups((prev) => {
-                        const next = new Set(prev)
-                        if (next.has(group)) next.delete(group)
-                        else next.add(group)
-                        return next
-                      })
-                    }}
-                    className="w-full px-4 py-2 flex items-center gap-1 cursor-pointer hover:bg-slate-100 transition-colors text-left"
-                  >
-                    <span className="material-symbols-outlined text-[14px] text-slate-400">
-                      {isOpen ? 'arrow_drop_down' : 'arrow_right'}
-                    </span>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                      {group}
-                    </div>
-                    <div className="ml-auto text-[10px] text-slate-400 font-mono">{accs.length}</div>
-                  </button>
-                  {isOpen &&
-                    accs.map((acc) => {
-                      const active = acc === selectedAccount
-                      return (
-                        <button
-                          key={acc}
-                          type="button"
-                          onClick={() => {
-                            setAccountOverride(acc)
-                            setTxnOverride(null)
-                          }}
-                          className={
-                            active
-                              ? 'w-full pl-8 pr-4 py-2 bg-teal-50 text-teal-900 border-r-4 border-teal-500 cursor-pointer flex justify-between items-center text-left'
-                              : 'w-full pl-8 pr-4 py-2 hover:bg-[#F2F3FF] transition-colors cursor-pointer flex justify-between items-center text-left'
-                          }
-                          title={acc}
-                        >
-                          <span className="text-[12px] font-medium text-slate-700 truncate">
-                            {displayAccountName(acc)}
-                          </span>
-                        </button>
-                      )
-                    })}
-                </React.Fragment>
+                <button
+                  key={acc}
+                  type="button"
+                  onClick={() => {
+                    setAccountOverride(acc)
+                    setTxnOverride(null)
+                    void accountsQuery.touch(acc)
+                  }}
+                  className={
+                    active
+                      ? 'w-full px-4 py-2 bg-teal-50 text-teal-900 border-r-4 border-teal-500 cursor-pointer flex justify-between items-center text-left'
+                      : 'w-full px-4 py-2 hover:bg-[#F2F3FF] transition-colors cursor-pointer flex justify-between items-center text-left'
+                  }
+                  title={acc}
+                >
+                  <span className="text-[12px] font-medium text-slate-700 truncate">
+                    {displayAccountName(acc)}
+                  </span>
+                </button>
               )
             })}
           </div>
