@@ -4,6 +4,7 @@ import {
   Tag as BcTag,
   Transaction as BcTransaction,
   Value,
+  parse,
 } from 'beancount'
 import type { PostingInput, TransactionInput } from '@/durable/ledger-v2-types'
 
@@ -190,5 +191,60 @@ export function serializeTransaction(txn: BcTransaction): string {
   const result = new ParseResult([txn])
   const col = result.calculateCurrencyColumn({ minPadding: 2 })
   return result.toFormattedString({ currencyColumn: col }).trim() + '\n'
+}
+
+function valueMapToMeta(
+  m: Record<string, Value> | undefined,
+): Record<string, string> | null {
+  if (!m) return null
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(m)) {
+    out[k] = String((v as { value: unknown }).value)
+  }
+  return Object.keys(out).length > 0 ? out : null
+}
+
+function astToInput(txn: BcTransaction): TransactionInput {
+  const flag = txn.flag === '*' || txn.flag === '!' ? txn.flag : null
+  return {
+    date: txn.date.toString(),
+    flag,
+    payee: txn.payee || undefined,
+    narration: txn.narration ?? undefined,
+    postings: txn.postings.map((p) => ({
+      flag: p.flag ?? null,
+      account: p.account,
+      amount: p.amount ?? null,
+      currency: p.currency ?? null,
+      cost_raw: p.cost ?? null,
+      price_at_signs: (p.atSigns === 1 || p.atSigns === 2 ? p.atSigns : 0) as 0 | 1 | 2,
+      price_amount: p.priceAmount ?? null,
+      price_currency: p.priceCurrency ?? null,
+      comment: p.comment ?? null,
+      meta: valueMapToMeta(p.metadata),
+    })),
+    tags: txn.tags.map((t) => t.content),
+    links: Array.from(txn.links),
+    meta: valueMapToMeta(txn.metadata),
+  }
+}
+
+export function parseText(
+  raw: string,
+): { ok: true; input: TransactionInput } | { ok: false; errors: string[] } {
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: false, errors: ['empty input'] }
+  try {
+    const result = parse(trimmed)
+    if (result.transactions.length === 0) {
+      return { ok: false, errors: ['no transaction directive found'] }
+    }
+    if (result.transactions.length > 1) {
+      return { ok: false, errors: ['expected exactly one transaction'] }
+    }
+    return { ok: true, input: astToInput(result.transactions[0]) }
+  } catch (e) {
+    return { ok: false, errors: [e instanceof Error ? e.message : String(e)] }
+  }
 }
 

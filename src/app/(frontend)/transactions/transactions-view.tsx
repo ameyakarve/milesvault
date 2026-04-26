@@ -1,12 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import type {
-  PostingInput,
-  TransactionInput,
-  TransactionV2,
-  V2ListResult,
-} from '@/durable/ledger-v2-types'
+import type { TransactionV2, V2ListResult } from '@/durable/ledger-v2-types'
 
 const API = '/api/ledger/v2/transactions'
 
@@ -18,26 +13,13 @@ type ListState =
 
 const today = (): string => new Date().toISOString().slice(0, 10)
 
-const blankPosting = (): PostingInput => ({
-  account: '',
-  amount: '',
-  currency: '',
-})
-
-const blankInput = (): TransactionInput => ({
-  date: today(),
-  flag: '*',
-  payee: '',
-  narration: '',
-  postings: [blankPosting(), blankPosting()],
-  tags: [],
-  links: [],
-})
+const blankDraft = (): string =>
+  `${today()} * "" ""\n  Assets:Bank:Checking  -100.00 USD\n  Expenses:Misc       100.00 USD\n`
 
 export function TransactionsView() {
   const [list, setList] = useState<ListState>({ status: 'idle' })
   const [editing, setEditing] = useState<{ id: number; expected: number } | null>(null)
-  const [draft, setDraft] = useState<TransactionInput>(blankInput())
+  const [draft, setDraft] = useState<string>(blankDraft())
   const [busy, setBusy] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
 
@@ -59,33 +41,13 @@ export function TransactionsView() {
 
   const resetDraft = () => {
     setEditing(null)
-    setDraft(blankInput())
+    setDraft(blankDraft())
     setErrors([])
   }
 
   const startEdit = (t: TransactionV2) => {
     setEditing({ id: t.id, expected: t.updated_at })
-    setDraft({
-      date: t.date,
-      flag: t.flag,
-      payee: t.payee,
-      narration: t.narration,
-      postings: t.postings.map((p) => ({
-        account: p.account,
-        flag: p.flag,
-        amount: p.amount,
-        currency: p.currency,
-        cost_raw: p.cost_raw,
-        price_at_signs: p.price_at_signs,
-        price_amount: p.price_amount,
-        price_currency: p.price_currency,
-        comment: p.comment,
-        meta: p.meta,
-      })),
-      tags: [...t.tags],
-      links: [...t.links],
-      meta: { ...t.meta },
-    })
+    setDraft(t.raw_text)
     setErrors([])
   }
 
@@ -94,37 +56,20 @@ export function TransactionsView() {
     setBusy(true)
     setErrors([])
     try {
-      const cleaned: TransactionInput = {
-        ...draft,
-        postings: draft.postings.map((p) => ({
-          account: p.account.trim(),
-          flag: p.flag || null,
-          amount: p.amount?.trim() ? p.amount.trim() : null,
-          currency: p.currency?.trim() ? p.currency.trim() : null,
-          cost_raw: p.cost_raw ?? null,
-          price_at_signs: p.price_at_signs ?? 0,
-          price_amount: p.price_amount ?? null,
-          price_currency: p.price_currency ?? null,
-          comment: p.comment ?? null,
-          meta: p.meta ?? null,
-        })),
-        payee: draft.payee?.trim() || '',
-        narration: draft.narration?.trim() || '',
-      }
       let res: Response
       if (editing) {
         res = await fetch(`${API}/${editing.id}`, {
           method: 'PATCH',
           credentials: 'include',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ ...cleaned, expected_updated_at: editing.expected }),
+          body: JSON.stringify({ raw_text: draft, expected_updated_at: editing.expected }),
         })
       } else {
         res = await fetch(API, {
           method: 'POST',
           credentials: 'include',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(cleaned),
+          body: JSON.stringify({ raw_text: draft }),
         })
       }
       if (res.status === 409) {
@@ -184,18 +129,47 @@ export function TransactionsView() {
         </header>
 
         <section className="border border-scandi-rule bg-white p-4">
-          <h2 className="font-mono text-[11px] uppercase tracking-[0.08em] text-slate-500 mb-3">
-            {editing ? `edit #${editing.id}` : 'new transaction'}
-          </h2>
-          <Form
-            value={draft}
-            onChange={setDraft}
-            onSubmit={onSubmit}
-            onCancel={editing ? resetDraft : undefined}
-            busy={busy}
-            errors={errors}
-            submitLabel={editing ? 'save' : 'create'}
-          />
+          <header className="flex items-center justify-between mb-3">
+            <h2 className="font-mono text-[11px] uppercase tracking-[0.08em] text-slate-500">
+              {editing ? `edit #${editing.id}` : 'new transaction'}
+            </h2>
+            <span className="font-mono text-[10px] text-slate-400">beancount</span>
+          </header>
+          <form onSubmit={onSubmit} className="flex flex-col gap-3 font-mono text-[11px]">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              spellCheck={false}
+              rows={8}
+              className="border border-scandi-rule px-3 py-2 w-full font-mono text-[12px] leading-relaxed text-navy-700 focus:outline-none focus:border-scandi-accent"
+              placeholder='2026-04-26 * "Payee" "Narration"&#10;  Assets:Bank:Checking  -100.00 USD&#10;  Expenses:Misc       100.00 USD'
+            />
+            {errors.length > 0 ? (
+              <div className="border border-red-200 bg-red-50 px-3 py-2 text-red-700 flex flex-col gap-1">
+                {errors.map((m, i) => (
+                  <p key={i}>{m}</p>
+                ))}
+              </div>
+            ) : null}
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={busy || !draft.trim()}
+                className="bg-scandi-accent text-white px-3 py-1 hover:bg-scandi-accent-hover disabled:opacity-40"
+              >
+                {busy ? '…' : editing ? 'save' : 'create'}
+              </button>
+              {editing ? (
+                <button
+                  type="button"
+                  onClick={resetDraft}
+                  className="px-3 py-1 border border-scandi-rule text-navy-700 hover:bg-scandi-quiet"
+                >
+                  cancel
+                </button>
+              ) : null}
+            </div>
+          </form>
         </section>
 
         <section className="border border-scandi-rule bg-white">
@@ -235,150 +209,6 @@ export function TransactionsView() {
         </section>
       </div>
     </div>
-  )
-}
-
-type FormProps = {
-  value: TransactionInput
-  onChange: (v: TransactionInput) => void
-  onSubmit: (e: React.FormEvent) => void
-  onCancel?: () => void
-  busy: boolean
-  errors: string[]
-  submitLabel: string
-}
-
-function Form({ value, onChange, onSubmit, onCancel, busy, errors, submitLabel }: FormProps) {
-  const updatePosting = (i: number, patch: Partial<PostingInput>) => {
-    const next = value.postings.map((p, idx) => (idx === i ? { ...p, ...patch } : p))
-    onChange({ ...value, postings: next })
-  }
-  const addPosting = () => onChange({ ...value, postings: [...value.postings, blankPosting()] })
-  const removePosting = (i: number) => {
-    if (value.postings.length <= 2) return
-    onChange({ ...value, postings: value.postings.filter((_, idx) => idx !== i) })
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-3 font-mono text-[11px]">
-      <div className="grid grid-cols-[140px_60px_1fr_1fr] gap-2">
-        <Field label="date">
-          <input
-            type="date"
-            value={value.date}
-            onChange={(e) => onChange({ ...value, date: e.target.value })}
-            className="border border-scandi-rule px-2 py-1 w-full"
-            required
-          />
-        </Field>
-        <Field label="flag">
-          <select
-            value={value.flag ?? ''}
-            onChange={(e) =>
-              onChange({ ...value, flag: (e.target.value || null) as '*' | '!' | null })
-            }
-            className="border border-scandi-rule px-2 py-1 w-full"
-          >
-            <option value="*">*</option>
-            <option value="!">!</option>
-            <option value="">—</option>
-          </select>
-        </Field>
-        <Field label="payee">
-          <input
-            value={value.payee ?? ''}
-            onChange={(e) => onChange({ ...value, payee: e.target.value })}
-            className="border border-scandi-rule px-2 py-1 w-full"
-          />
-        </Field>
-        <Field label="narration">
-          <input
-            value={value.narration ?? ''}
-            onChange={(e) => onChange({ ...value, narration: e.target.value })}
-            className="border border-scandi-rule px-2 py-1 w-full"
-          />
-        </Field>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">postings</span>
-        {value.postings.map((p, i) => (
-          <div key={i} className="grid grid-cols-[2fr_1fr_80px_30px] gap-2 items-center">
-            <input
-              placeholder="Assets:Bank:Checking"
-              value={p.account}
-              onChange={(e) => updatePosting(i, { account: e.target.value })}
-              className="border border-scandi-rule px-2 py-1"
-              required
-            />
-            <input
-              placeholder="amount"
-              value={p.amount ?? ''}
-              onChange={(e) => updatePosting(i, { amount: e.target.value })}
-              className="border border-scandi-rule px-2 py-1"
-            />
-            <input
-              placeholder="USD"
-              value={p.currency ?? ''}
-              onChange={(e) => updatePosting(i, { currency: e.target.value.toUpperCase() })}
-              className="border border-scandi-rule px-2 py-1"
-            />
-            <button
-              type="button"
-              onClick={() => removePosting(i)}
-              disabled={value.postings.length <= 2}
-              className="text-slate-400 hover:text-red-600 disabled:opacity-30 text-[14px]"
-              title="remove posting"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={addPosting}
-          className="self-start mt-1 text-[10px] uppercase tracking-[0.08em] text-slate-500 hover:text-navy-700"
-        >
-          + posting
-        </button>
-      </div>
-
-      {errors.length > 0 ? (
-        <ul className="border border-red-200 bg-red-50 px-3 py-2 text-red-700 text-[11px] flex flex-col gap-1">
-          {errors.map((m, i) => (
-            <li key={i}>{m}</li>
-          ))}
-        </ul>
-      ) : null}
-
-      <div className="flex items-center gap-2 mt-1">
-        <button
-          type="submit"
-          disabled={busy}
-          className="bg-scandi-accent text-white px-3 py-1 hover:bg-scandi-accent-hover disabled:opacity-40"
-        >
-          {busy ? '…' : submitLabel}
-        </button>
-        {onCancel ? (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-3 py-1 border border-scandi-rule text-navy-700 hover:bg-scandi-quiet"
-          >
-            cancel
-          </button>
-        ) : null}
-      </div>
-    </form>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">{label}</span>
-      {children}
-    </label>
   )
 }
 
