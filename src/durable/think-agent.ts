@@ -110,7 +110,7 @@ export class ThinkAgent extends Think<Cloudflare.Env> {
     let userAccounts: string[] = []
     try {
       const client = createLedgerClient(this.env, email)
-      userAccounts = await client.listAccounts()
+      userAccounts = await client.v2_listAccounts()
     } catch (e) {
       if (!(e instanceof LedgerBindingError)) {
         console.warn('[think] listAccounts failed', String(e))

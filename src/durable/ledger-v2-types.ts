@@ -242,3 +242,8 @@ export type DirectiveListResult = {
   limit: number
   offset: number
 }
+
+export type V2ReplaceAllResult =
+  | { ok: true; directives: DirectiveV2[]; max_updated_at: number }
+  | { ok: false; kind: 'validation'; errors: string[] }
+  | { ok: false; kind: 'conflict'; current_max_updated_at: number }

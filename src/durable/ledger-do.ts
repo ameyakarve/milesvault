@@ -1,17 +1,16 @@
 import { DurableObject } from 'cloudflare:workers'
-import { extractTxn, splitEntries, type ExtractedTxn } from '@/lib/beancount/extract'
-import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import { SCHEMA_STEPS_V2 } from '@/lib/ledger-core/schema-v2'
-import { ROW_COLS, buildSearchWhere } from '@/lib/ledger-core/queries'
-import { distinctAccountsFromRawTexts } from '@/lib/ledger-core/accounts'
 import {
   buildTransactionAst,
   dateFromInt,
   dateToInt,
+  parseText,
   scaleDecimal,
   serializeDirective,
   serializeTransaction,
+  validateDirective,
   validateInput,
+  type ConstraintResolver,
 } from '@/lib/beancount/v2-ast'
 import type {
   DirectiveBalance,
@@ -38,21 +37,23 @@ import type {
   V2CreateResult,
   V2DeleteResult,
   V2ListResult,
+  V2ReplaceAllResult,
   V2UpdateResult,
 } from './ledger-v2-types'
-import type {
-  TransactionRow,
-  BatchApplyInput,
-  BatchApplyResult,
-  BatchValidationError,
-  BatchConflict,
-  ReplaceBufferInput,
-  ReplaceBufferResult,
-  ReplaceBufferConflict,
-} from './ledger-types'
 import type { SearchFilter } from './search-parser'
 
-type BatchError = { index: number; errors: string[] }
+const MAX_UPDATED_AT_SQL = `SELECT MAX(m) AS m FROM (
+  SELECT MAX(updated_at) AS m FROM transactions_v2
+  UNION ALL SELECT MAX(updated_at) FROM directives_open
+  UNION ALL SELECT MAX(updated_at) FROM directives_close
+  UNION ALL SELECT MAX(updated_at) FROM directives_commodity
+  UNION ALL SELECT MAX(updated_at) FROM directives_balance
+  UNION ALL SELECT MAX(updated_at) FROM directives_pad
+  UNION ALL SELECT MAX(updated_at) FROM directives_price
+  UNION ALL SELECT MAX(updated_at) FROM directives_note
+  UNION ALL SELECT MAX(updated_at) FROM directives_document
+  UNION ALL SELECT MAX(updated_at) FROM directives_event
+)`
 
 export class LedgerDO extends DurableObject<CloudflareEnv> {
   private sql: SqlStorage
@@ -64,25 +65,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private migrate(): void {
-    const cols = this.sql
-      .exec<{ name: string }>("SELECT name FROM pragma_table_info('transactions')")
-      .toArray()
-      .map((r) => r.name)
-    if (cols.length > 0 && !cols.includes('date')) {
-      console.warn('[migrate] transactions table missing `date` column — dropping to rebuild', {
-        cols,
-      })
-      this.sql.exec('DROP TABLE IF EXISTS transactions_fts')
-      this.sql.exec('DROP TABLE IF EXISTS transactions')
-    }
-    for (const [label, sql] of SCHEMA_STEPS) {
-      try {
-        this.sql.exec(sql)
-      } catch (e) {
-        console.error(`[migrate] step ${label} failed`, { err: String(e) })
-        throw e
-      }
-    }
     for (const [label, sql] of SCHEMA_STEPS_V2) {
       try {
         this.sql.exec(sql)
@@ -91,416 +73,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         throw e
       }
     }
-  }
-
-  async listAccounts(): Promise<string[]> {
-    const rows = this.sql
-      .exec<{ raw_text: string }>('SELECT raw_text FROM transactions')
-      .toArray()
-    return distinctAccountsFromRawTexts(rows.map((r) => r.raw_text))
-  }
-
-  async get(id: number): Promise<TransactionRow | null> {
-    const row = this.sql
-      .exec<TransactionRow>(
-        `SELECT ${ROW_COLS} FROM transactions WHERE id = ?`,
-        id,
-      )
-      .toArray()[0]
-    return row ?? null
-  }
-
-  async search(
-    filter: SearchFilter,
-    limit: number,
-    offset: number,
-  ): Promise<{ rows: TransactionRow[]; total: number }> {
-    const { whereSql, params } = buildSearchWhere(filter)
-    const sqlParams = params as SqlStorageValue[]
-    const total =
-      this.sql
-        .exec<{ c: number }>(
-          `SELECT COUNT(*) AS c FROM transactions t ${whereSql}`,
-          ...sqlParams,
-        )
-        .toArray()[0]?.c ?? 0
-    const rows = this.sql
-      .exec<TransactionRow>(
-        `SELECT ${ROW_COLS} FROM transactions t
-         ${whereSql}
-         ORDER BY t.date DESC, t.id DESC
-         LIMIT ? OFFSET ?`,
-        ...sqlParams,
-        limit,
-        offset,
-      )
-      .toArray()
-    return { rows, total }
-  }
-
-  async create(
-    raw_text: string,
-  ): Promise<{ ok: true; row: TransactionRow } | { ok: false; errors: string[] }> {
-    const trimmed = raw_text.trim()
-    if (trimmed.length === 0) return { ok: false, errors: ['Empty input.'] }
-    const result = extractTxn(trimmed)
-    if (result.ok !== true) {
-      return { ok: false, errors: result.diagnostics.map((d) => d.message) }
-    }
-    const { date, flag, t_payee, t_account, t_currency, t_tag, t_link } = result.value
-    const now = Date.now()
-    const row = this.sql
-      .exec<TransactionRow>(
-        `INSERT INTO transactions
-           (raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         RETURNING ${ROW_COLS}`,
-        trimmed,
-        date,
-        flag,
-        t_payee,
-        t_account,
-        t_currency,
-        t_tag,
-        t_link,
-        now,
-        now,
-      )
-      .toArray()[0]
-    return row ? { ok: true, row } : { ok: false, errors: ['Insert failed.'] }
-  }
-
-  async createBatch(
-    raw_texts: string[],
-  ): Promise<
-    { ok: true; rows: TransactionRow[] } | { ok: false; errors: BatchError[] }
-  > {
-    const validated: { trimmed: string; extracted: ExtractedTxn }[] = []
-    const errors: BatchError[] = []
-    for (let i = 0; i < raw_texts.length; i++) {
-      const trimmed = raw_texts[i].trim()
-      if (trimmed.length === 0) {
-        errors.push({ index: i, errors: ['Empty input.'] })
-        continue
-      }
-      const result = extractTxn(trimmed)
-      if (result.ok !== true) {
-        errors.push({ index: i, errors: result.diagnostics.map((d) => d.message) })
-        continue
-      }
-      validated.push({ trimmed, extracted: result.value })
-    }
-    if (errors.length > 0) return { ok: false, errors }
-
-    const rows: TransactionRow[] = []
-    this.ctx.storage.transactionSync(() => {
-      const now = Date.now()
-      for (const { trimmed, extracted } of validated) {
-        const { date, flag, t_payee, t_account, t_currency, t_tag, t_link } = extracted
-        const row = this.sql
-          .exec<TransactionRow>(
-            `INSERT INTO transactions
-               (raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             RETURNING ${ROW_COLS}`,
-            trimmed,
-            date,
-            flag,
-            t_payee,
-            t_account,
-            t_currency,
-            t_tag,
-            t_link,
-            now,
-            now,
-          )
-          .toArray()[0]
-        if (row) rows.push(row)
-      }
-    })
-    return { ok: true, rows }
-  }
-
-  async applyBatch(input: BatchApplyInput): Promise<BatchApplyResult> {
-    const updates = input.updates ?? []
-    const creates = input.creates ?? []
-    const deletes = input.deletes ?? []
-
-    const seenIds = new Set<number>()
-    const requestErrors: string[] = []
-    for (const u of updates) {
-      if (seenIds.has(u.id)) requestErrors.push(`Duplicate id ${u.id} in updates/deletes.`)
-      seenIds.add(u.id)
-    }
-    for (const d of deletes) {
-      if (seenIds.has(d.id)) requestErrors.push(`Duplicate id ${d.id} in updates/deletes.`)
-      seenIds.add(d.id)
-    }
-    if (requestErrors.length > 0) {
-      return {
-        ok: false,
-        kind: 'validation',
-        errors: [{ section: 'request', index: -1, errors: requestErrors }],
-      }
-    }
-
-    const validationErrors: BatchValidationError[] = []
-    const parsedUpdates: {
-      id: number
-      expected_updated_at: number
-      trimmed: string
-      extracted: ExtractedTxn
-    }[] = []
-    const parsedCreates: { trimmed: string; extracted: ExtractedTxn }[] = []
-
-    for (let i = 0; i < updates.length; i++) {
-      const u = updates[i]
-      const trimmed = u.raw_text.trim()
-      if (trimmed.length === 0) {
-        validationErrors.push({ section: 'updates', index: i, errors: ['Empty input.'] })
-        continue
-      }
-      const result = extractTxn(trimmed)
-      if (result.ok !== true) {
-        validationErrors.push({
-          section: 'updates',
-          index: i,
-          errors: result.diagnostics.map((d) => d.message),
-        })
-        continue
-      }
-      parsedUpdates.push({
-        id: u.id,
-        expected_updated_at: u.expected_updated_at,
-        trimmed,
-        extracted: result.value,
-      })
-    }
-    for (let i = 0; i < creates.length; i++) {
-      const c = creates[i]
-      const trimmed = c.raw_text.trim()
-      if (trimmed.length === 0) {
-        validationErrors.push({ section: 'creates', index: i, errors: ['Empty input.'] })
-        continue
-      }
-      const result = extractTxn(trimmed)
-      if (result.ok !== true) {
-        validationErrors.push({
-          section: 'creates',
-          index: i,
-          errors: result.diagnostics.map((d) => d.message),
-        })
-        continue
-      }
-      parsedCreates.push({ trimmed, extracted: result.value })
-    }
-    if (validationErrors.length > 0) {
-      return { ok: false, kind: 'validation', errors: validationErrors }
-    }
-
-    const conflicts: BatchConflict[] = []
-    for (let i = 0; i < parsedUpdates.length; i++) {
-      const u = parsedUpdates[i]
-      const current = this.sql
-        .exec<{ updated_at: number }>(
-          'SELECT updated_at FROM transactions WHERE id = ?',
-          u.id,
-        )
-        .toArray()[0]
-      if (!current || current.updated_at !== u.expected_updated_at) {
-        conflicts.push({
-          section: 'updates',
-          index: i,
-          id: u.id,
-          expected_updated_at: u.expected_updated_at,
-          current_updated_at: current?.updated_at ?? null,
-        })
-      }
-    }
-    for (let i = 0; i < deletes.length; i++) {
-      const d = deletes[i]
-      const current = this.sql
-        .exec<{ updated_at: number }>(
-          'SELECT updated_at FROM transactions WHERE id = ?',
-          d.id,
-        )
-        .toArray()[0]
-      if (!current || current.updated_at !== d.expected_updated_at) {
-        conflicts.push({
-          section: 'deletes',
-          index: i,
-          id: d.id,
-          expected_updated_at: d.expected_updated_at,
-          current_updated_at: current?.updated_at ?? null,
-        })
-      }
-    }
-    if (conflicts.length > 0) {
-      console.warn(
-        `[ledger-do] applyBatch conflict n=${conflicts.length} sections=${conflicts.map((c) => `${c.section}:${c.id}`).join(',')}`,
-      )
-      return { ok: false, kind: 'conflict', conflicts }
-    }
-
-    const updated: TransactionRow[] = []
-    const created: TransactionRow[] = []
-    const deleted: number[] = []
-
-    this.ctx.storage.transactionSync(() => {
-      const now = Date.now()
-      for (const d of deletes) {
-        const row = this.sql
-          .exec<{ id: number }>('DELETE FROM transactions WHERE id = ? RETURNING id', d.id)
-          .toArray()[0]
-        if (row) deleted.push(row.id)
-      }
-      for (const u of parsedUpdates) {
-        const { date, flag, t_payee, t_account, t_currency, t_tag, t_link } = u.extracted
-        const row = this.sql
-          .exec<TransactionRow>(
-            `UPDATE transactions SET
-               raw_text = ?, date = ?, flag = ?,
-               t_payee = ?, t_account = ?, t_currency = ?, t_tag = ?, t_link = ?,
-               updated_at = max(?, updated_at + 1)
-             WHERE id = ?
-             RETURNING ${ROW_COLS}`,
-            u.trimmed,
-            date,
-            flag,
-            t_payee,
-            t_account,
-            t_currency,
-            t_tag,
-            t_link,
-            now,
-            u.id,
-          )
-          .toArray()[0]
-        if (row) updated.push(row)
-      }
-      for (const c of parsedCreates) {
-        const { date, flag, t_payee, t_account, t_currency, t_tag, t_link } = c.extracted
-        const row = this.sql
-          .exec<TransactionRow>(
-            `INSERT INTO transactions
-               (raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             RETURNING ${ROW_COLS}`,
-            c.trimmed,
-            date,
-            flag,
-            t_payee,
-            t_account,
-            t_currency,
-            t_tag,
-            t_link,
-            now,
-            now,
-          )
-          .toArray()[0]
-        if (row) created.push(row)
-      }
-    })
-
-    console.log(
-      `[ledger-do] applyBatch ok updated=${updated.length} created=${created.length} deleted=${deleted.length}`,
-    )
-    return { ok: true, updated, created, deleted }
-  }
-
-  async replaceBuffer(input: ReplaceBufferInput): Promise<ReplaceBufferResult> {
-    const conflicts: ReplaceBufferConflict[] = []
-    for (const k of input.knownIds) {
-      const current = this.sql
-        .exec<{ updated_at: number }>(
-          'SELECT updated_at FROM transactions WHERE id = ?',
-          k.id,
-        )
-        .toArray()[0]
-      if (!current || current.updated_at !== k.expected_updated_at) {
-        conflicts.push({
-          id: k.id,
-          expected_updated_at: k.expected_updated_at,
-          current_updated_at: current?.updated_at ?? null,
-        })
-      }
-    }
-    if (conflicts.length > 0) {
-      console.warn(
-        `[ledger-do] replaceBuffer conflict n=${conflicts.length} ids=${conflicts.map((c) => c.id).join(',')}`,
-      )
-      return { ok: false, kind: 'conflict', conflicts }
-    }
-
-    const entries = splitEntries(input.buffer)
-      .map((e) => e.text.trim())
-      .filter((s) => s.length > 0)
-
-    const rows: TransactionRow[] = []
-    this.ctx.storage.transactionSync(() => {
-      const now = Date.now()
-      for (const k of input.knownIds) {
-        this.sql.exec('DELETE FROM transactions WHERE id = ?', k.id)
-      }
-      for (const entry of entries) {
-        const parsed = extractTxn(entry)
-        const cols: ExtractedTxn =
-          parsed.ok === true
-            ? parsed.value
-            : {
-                date: 0,
-                flag: null,
-                t_payee: '',
-                t_account: '',
-                t_currency: '',
-                t_tag: '',
-                t_link: '',
-              }
-        const row = this.sql
-          .exec<TransactionRow>(
-            `INSERT INTO transactions
-               (raw_text, date, flag, t_payee, t_account, t_currency, t_tag, t_link, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             RETURNING ${ROW_COLS}`,
-            entry,
-            cols.date,
-            cols.flag,
-            cols.t_payee,
-            cols.t_account,
-            cols.t_currency,
-            cols.t_tag,
-            cols.t_link,
-            now,
-            now,
-          )
-          .toArray()[0]
-        if (row) rows.push(row)
-      }
-    })
-    rows.sort((a, b) => b.date - a.date || b.id - a.id)
-    console.log(
-      `[ledger-do] replaceBuffer ok entries=${entries.length} replaced=${input.knownIds.length}`,
-    )
-    return { ok: true, rows }
-  }
-
-  async update(_id: number, _raw_text: string): Promise<TransactionRow | null> {
-    return null
-  }
-
-  async remove(id: number): Promise<boolean> {
-    const deleted = this.sql
-      .exec<{ id: number }>('DELETE FROM transactions WHERE id = ? RETURNING id', id)
-      .toArray()
-    return deleted.length > 0
-  }
-
-  async exportAll(): Promise<TransactionRow[]> {
-    return []
-  }
-
-  async importAll(_rows: TransactionRow[]): Promise<{ copied: number }> {
-    return { copied: 0 }
   }
 
   async v2_create(input: TransactionInput): Promise<V2CreateResult> {
@@ -644,14 +216,13 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
 
   async v2_directive_create(directives: DirectiveInput[]): Promise<DirectiveCreateResult> {
     if (directives.length === 0) return { ok: false, errors: ['no directives provided'] }
+    const resolve = this.batchResolver(directives)
     const prepared: { d: DirectiveInput; rawText: string }[] = []
     for (let i = 0; i < directives.length; i++) {
       const d = directives[i]
-      if (d.kind === 'transaction') {
-        const errs = validateInput(d.input)
-        if (errs.length > 0) {
-          return { ok: false, errors: errs.map((e) => `directives[${i}]: ${e}`) }
-        }
+      const errs = validateDirective(d, resolve)
+      if (errs.length > 0) {
+        return { ok: false, errors: errs.map((e) => `directives[${i}]: ${e}`) }
       }
       let rawText: string
       try {
@@ -717,10 +288,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     if (d.kind !== kind) {
       return { ok: false, kind: 'wrong_kind', expected: kind, actual: d.kind }
     }
-    if (d.kind === 'transaction') {
-      const errs = validateInput(d.input)
-      if (errs.length > 0) return { ok: false, kind: 'validation', errors: errs }
-    }
+    const resolve = this.batchResolver([d])
+    const errs = validateDirective(d, resolve)
+    if (errs.length > 0) return { ok: false, kind: 'validation', errors: errs }
     let rawText: string
     try {
       rawText = serializeDirective(d)
@@ -784,6 +354,185 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       result = { ok: true }
     })
     return result
+  }
+
+  async v2_account_constraints(account: string): Promise<string[] | null> {
+    return this.latestOpenConstraints(account)
+  }
+
+  async v2_listAccounts(): Promise<string[]> {
+    const rows = this.sql
+      .exec<{ account: string }>(
+        `SELECT account FROM postings WHERE account != ''
+         UNION SELECT account FROM directives_open WHERE account != ''
+         UNION SELECT account FROM directives_close WHERE account != ''
+         UNION SELECT account FROM directives_balance WHERE account != ''
+         UNION SELECT account_source AS account FROM directives_pad WHERE account_source != ''
+         UNION SELECT account_dest AS account FROM directives_pad WHERE account_dest != ''
+         UNION SELECT account FROM directives_note WHERE account != ''
+         UNION SELECT account FROM directives_document WHERE account != ''
+         ORDER BY account`,
+      )
+      .toArray()
+    return rows.map((r) => r.account)
+  }
+
+  async v2_search(filter: SearchFilter, limit: number, offset: number): Promise<V2ListResult> {
+    const where: string[] = []
+    const args: SqlStorageValue[] = []
+    if (filter.accountTokens.length > 0) {
+      const sub: string[] = []
+      for (const tok of filter.accountTokens) {
+        sub.push(`LOWER(p.account) LIKE ?`)
+        args.push(`%${tok.toLowerCase()}%`)
+      }
+      where.push(
+        `t.id IN (SELECT p.txn_id FROM postings p WHERE ${sub.join(' AND ')})`,
+      )
+    }
+    if (filter.tagTokens.length > 0) {
+      for (const tok of filter.tagTokens) {
+        where.push(`t.id IN (SELECT txn_id FROM txn_tags WHERE LOWER(tag) = ?)`)
+        args.push(tok.toLowerCase())
+      }
+    }
+    if (filter.linkTokens.length > 0) {
+      for (const tok of filter.linkTokens) {
+        where.push(`t.id IN (SELECT txn_id FROM txn_links WHERE LOWER(link) = ?)`)
+        args.push(tok.toLowerCase())
+      }
+    }
+    if (filter.dateFrom != null) {
+      where.push('t.date >= ?')
+      args.push(filter.dateFrom)
+    }
+    if (filter.dateTo != null) {
+      where.push('t.date <= ?')
+      args.push(filter.dateTo)
+    }
+    for (const tok of filter.freeTokens) {
+      where.push(`(LOWER(t.payee) LIKE ? OR LOWER(t.narration) LIKE ? OR LOWER(t.raw_text) LIKE ?)`)
+      const like = `%${tok.toLowerCase()}%`
+      args.push(like, like, like)
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+    const totalRow = this.sql
+      .exec<{ c: number }>(`SELECT COUNT(*) AS c FROM transactions_v2 t ${whereSql}`, ...args)
+      .toArray()[0]
+    const total = totalRow?.c ?? 0
+    const ids = this.sql
+      .exec<{ id: number }>(
+        `SELECT t.id FROM transactions_v2 t ${whereSql}
+         ORDER BY t.date DESC, t.id DESC LIMIT ? OFFSET ?`,
+        ...args,
+        limit,
+        offset,
+      )
+      .toArray()
+      .map((r) => r.id)
+    const rows: TransactionV2[] = []
+    for (const id of ids) {
+      const t = this.readV2Transaction(id)
+      if (t) rows.push(t)
+    }
+    return { rows, total, limit, offset }
+  }
+
+  async v2_max_updated_at(): Promise<number> {
+    return this.maxUpdatedAtSync()
+  }
+
+  async v2_replace_all(
+    buffer: string,
+    expected_max_updated_at: number,
+  ): Promise<V2ReplaceAllResult> {
+    const parsed = parseText(buffer)
+    if (parsed.ok === false) return { ok: false, kind: 'validation', errors: parsed.errors }
+    const directives = parsed.directives
+    const resolve = this.batchResolver(directives)
+    const prepared: { d: DirectiveInput; rawText: string }[] = []
+    for (let i = 0; i < directives.length; i++) {
+      const d = directives[i]
+      const errs = validateDirective(d, resolve)
+      if (errs.length > 0) {
+        return { ok: false, kind: 'validation', errors: errs.map((e) => `directives[${i}]: ${e}`) }
+      }
+      let rawText: string
+      try {
+        rawText = serializeDirective(d)
+      } catch (e) {
+        return {
+          ok: false,
+          kind: 'validation',
+          errors: [`directives[${i}]: serialize failed: ${String(e)}`],
+        }
+      }
+      prepared.push({ d, rawText })
+    }
+    let result: V2ReplaceAllResult = { ok: false, kind: 'conflict', current_max_updated_at: 0 }
+    this.ctx.storage.transactionSync(() => {
+      const current = this.maxUpdatedAtSync()
+      if (current !== expected_max_updated_at) {
+        result = { ok: false, kind: 'conflict', current_max_updated_at: current }
+        return
+      }
+      this.sql.exec('DELETE FROM transactions_v2')
+      this.sql.exec('DELETE FROM directives_open')
+      this.sql.exec('DELETE FROM directives_close')
+      this.sql.exec('DELETE FROM directives_commodity')
+      this.sql.exec('DELETE FROM directives_balance')
+      this.sql.exec('DELETE FROM directives_pad')
+      this.sql.exec('DELETE FROM directives_price')
+      this.sql.exec('DELETE FROM directives_note')
+      this.sql.exec('DELETE FROM directives_document')
+      this.sql.exec('DELETE FROM directives_event')
+      const out: DirectiveV2[] = []
+      const now = Date.now()
+      for (const { d, rawText } of prepared) {
+        const id = this.insertDirective(d, rawText, now, now)
+        if (id == null) continue
+        const dir = this.readDirective(d.kind, id)
+        if (dir) out.push(dir)
+      }
+      result = { ok: true, directives: out, max_updated_at: now }
+    })
+    return result
+  }
+
+  private maxUpdatedAtSync(): number {
+    const r = this.sql.exec<{ m: number | null }>(MAX_UPDATED_AT_SQL).toArray()[0]
+    return r?.m ?? 0
+  }
+
+  private latestOpenConstraints(account: string): string[] | null {
+    const r = this.sql
+      .exec<{ constraint_currencies: string }>(
+        `SELECT constraint_currencies FROM directives_open
+         WHERE account = ?
+         ORDER BY date DESC, id DESC LIMIT 1`,
+        account,
+      )
+      .toArray()[0]
+    if (!r) return null
+    return parseStringArray(r.constraint_currencies)
+  }
+
+  private batchResolver(directives: DirectiveInput[]): ConstraintResolver {
+    const inBatch = new Map<string, string[]>()
+    for (const d of directives) {
+      if (d.kind === 'open') {
+        inBatch.set(d.input.account, d.input.constraint_currencies ?? [])
+      }
+    }
+    const dbCache = new Map<string, string[] | null>()
+    return (account: string): string[] | null => {
+      const v = inBatch.get(account)
+      if (v != null) return v
+      if (dbCache.has(account)) return dbCache.get(account)!
+      const fetched = this.latestOpenConstraints(account)
+      dbCache.set(account, fetched)
+      return fetched
+    }
   }
 
   private directiveTotalCount(): number {

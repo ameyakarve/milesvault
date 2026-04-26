@@ -20,6 +20,7 @@ import type {
   CloseInput,
   CommodityInput,
   DirectiveInput,
+  DirectiveKind,
   DocumentInput,
   EventInput,
   NoteInput,
@@ -52,6 +53,101 @@ export function scaleDecimal(s: string): { scaled: number; scale: number } {
     throw new Error(`scaled amount out of range for '${s}'`)
   }
   return { scaled: Number(big), scale }
+}
+
+export type ConstraintResolver = (account: string) => string[] | null
+
+export function validateDirective(d: DirectiveInput, resolve: ConstraintResolver): string[] {
+  switch (d.kind) {
+    case 'open':
+      return validateOpenInput(d.input)
+    case 'transaction': {
+      const base = validateInput(d.input)
+      if (base.length > 0) return base
+      return validateTransactionConstraints(d.input, resolve)
+    }
+    case 'balance':
+      return validateBalanceConstraints(d.input, resolve)
+    case 'pad':
+      return validatePadConstraints(d.input, resolve)
+    case 'close':
+    case 'note':
+    case 'document':
+      return validateAccountReference(d.input.account, d.kind, resolve)
+    case 'commodity':
+    case 'price':
+    case 'event':
+      return []
+  }
+}
+
+function validateOpenInput(input: OpenInput): string[] {
+  if (!input.constraint_currencies || input.constraint_currencies.length === 0) {
+    return [`open ${input.account}: must declare at least one currency`]
+  }
+  return []
+}
+
+function validateAccountReference(
+  account: string,
+  kind: DirectiveKind,
+  resolve: ConstraintResolver,
+): string[] {
+  if (resolve(account) == null) {
+    return [`${kind} ${account}: account has no open directive`]
+  }
+  return []
+}
+
+function validateTransactionConstraints(
+  input: TransactionInput,
+  resolve: ConstraintResolver,
+): string[] {
+  const errs: string[] = []
+  for (let i = 0; i < input.postings.length; i++) {
+    const p = input.postings[i]
+    const constraints = resolve(p.account)
+    if (constraints == null) {
+      errs.push(`postings[${i}] ${p.account}: account has no open directive`)
+      continue
+    }
+    if (p.currency != null && !constraints.includes(p.currency)) {
+      errs.push(
+        `postings[${i}] ${p.account}: currency ${p.currency} not in [${constraints.join(',')}]`,
+      )
+    }
+  }
+  return errs
+}
+
+function validateBalanceConstraints(
+  input: BalanceInput,
+  resolve: ConstraintResolver,
+): string[] {
+  const constraints = resolve(input.account)
+  if (constraints == null) {
+    return [`balance ${input.account}: account has no open directive`]
+  }
+  if (!constraints.includes(input.currency)) {
+    return [
+      `balance ${input.account}: currency ${input.currency} not in [${constraints.join(',')}]`,
+    ]
+  }
+  return []
+}
+
+function validatePadConstraints(
+  input: PadInput,
+  resolve: ConstraintResolver,
+): string[] {
+  const errs: string[] = []
+  if (resolve(input.account) == null) {
+    errs.push(`pad ${input.account}: account has no open directive`)
+  }
+  if (resolve(input.account_pad) == null) {
+    errs.push(`pad source ${input.account_pad}: account has no open directive`)
+  }
+  return errs
 }
 
 export function validateInput(input: TransactionInput): string[] {
