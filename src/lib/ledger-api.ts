@@ -9,6 +9,14 @@ import {
   type ReplaceBufferInput,
   type Transaction,
 } from '@/durable/ledger-types'
+import type {
+  TransactionInput,
+  TransactionV2,
+  V2CreateResult,
+  V2DeleteResult,
+  V2ListResult,
+  V2UpdateResult,
+} from '@/durable/ledger-v2-types'
 import { parseQuery } from '@/durable/search-parser'
 
 export const MAX_RAW_TEXT_BYTES = 4096
@@ -53,6 +61,15 @@ export type LedgerClient = {
   remove(id: number): Promise<boolean>
   applyBatch(input: BatchApplyInput): Promise<ApplyBatchResult>
   replaceBuffer(input: ReplaceBufferInput): Promise<ReplaceBufferClientResult>
+  v2_create(input: TransactionInput): Promise<V2CreateResult>
+  v2_get(id: number): Promise<TransactionV2 | null>
+  v2_list(limit?: number, offset?: number): Promise<V2ListResult>
+  v2_update(
+    id: number,
+    expected_updated_at: number,
+    input: TransactionInput,
+  ): Promise<V2UpdateResult>
+  v2_delete(id: number, expected_updated_at: number): Promise<V2DeleteResult>
 }
 
 export class LedgerInputError extends Error {
@@ -158,6 +175,39 @@ export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerCl
       return result
     },
 
+    async v2_create(input) {
+      assertTransactionInputShape(input)
+      return stub.v2_create(input)
+    },
+
+    async v2_get(id) {
+      assertPositiveInt(id, 'id')
+      return stub.v2_get(id)
+    },
+
+    async v2_list(limit = DEFAULT_LIMIT, offset = 0) {
+      const l = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT)
+      const o = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0)
+      return stub.v2_list(l, o)
+    },
+
+    async v2_update(id, expected_updated_at, input) {
+      assertPositiveInt(id, 'id')
+      if (!Number.isInteger(expected_updated_at)) {
+        throw new LedgerInputError(['expected_updated_at must be an integer.'])
+      }
+      assertTransactionInputShape(input)
+      return stub.v2_update(id, expected_updated_at, input)
+    },
+
+    async v2_delete(id, expected_updated_at) {
+      assertPositiveInt(id, 'id')
+      if (!Number.isInteger(expected_updated_at)) {
+        throw new LedgerInputError(['expected_updated_at must be an integer.'])
+      }
+      return stub.v2_delete(id, expected_updated_at)
+    },
+
     async replaceBuffer(input) {
       if (!Array.isArray(input.knownIds)) {
         throw new LedgerInputError(['knownIds must be an array.'])
@@ -212,5 +262,27 @@ function assertRawText(v: unknown, field: string): asserts v is string {
   }
   if (new TextEncoder().encode(v).byteLength > MAX_RAW_TEXT_BYTES) {
     throw new LedgerInputError([`${field} exceeds ${MAX_RAW_TEXT_BYTES} bytes.`])
+  }
+}
+
+function assertTransactionInputShape(v: unknown): asserts v is TransactionInput {
+  if (!v || typeof v !== 'object') {
+    throw new LedgerInputError(['input must be an object.'])
+  }
+  const obj = v as Record<string, unknown>
+  if (typeof obj.date !== 'string') {
+    throw new LedgerInputError(['input.date must be a string.'])
+  }
+  if (!Array.isArray(obj.postings)) {
+    throw new LedgerInputError(['input.postings must be an array.'])
+  }
+  for (const [i, p] of (obj.postings as unknown[]).entries()) {
+    if (!p || typeof p !== 'object') {
+      throw new LedgerInputError([`input.postings[${i}] must be an object.`])
+    }
+    const po = p as Record<string, unknown>
+    if (typeof po.account !== 'string') {
+      throw new LedgerInputError([`input.postings[${i}].account must be a string.`])
+    }
   }
 }

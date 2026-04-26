@@ -1,8 +1,27 @@
 import { DurableObject } from 'cloudflare:workers'
 import { extractTxn, splitEntries, type ExtractedTxn } from '@/lib/beancount/extract'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
+import { SCHEMA_STEPS_V2 } from '@/lib/ledger-core/schema-v2'
 import { ROW_COLS, buildSearchWhere } from '@/lib/ledger-core/queries'
 import { distinctAccountsFromRawTexts } from '@/lib/ledger-core/accounts'
+import {
+  buildTransactionAst,
+  dateFromInt,
+  dateToInt,
+  scaleDecimal,
+  serializeTransaction,
+  validateInput,
+} from '@/lib/beancount/v2-ast'
+import type {
+  Posting as PostingV2,
+  PostingInput,
+  TransactionInput,
+  TransactionV2,
+  V2CreateResult,
+  V2DeleteResult,
+  V2ListResult,
+  V2UpdateResult,
+} from './ledger-v2-types'
 import type {
   TransactionRow,
   BatchApplyInput,
@@ -43,6 +62,14 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         this.sql.exec(sql)
       } catch (e) {
         console.error(`[migrate] step ${label} failed`, { err: String(e) })
+        throw e
+      }
+    }
+    for (const [label, sql] of SCHEMA_STEPS_V2) {
+      try {
+        this.sql.exec(sql)
+      } catch (e) {
+        console.error(`[migrate] v2 step ${label} failed`, { err: String(e) })
         throw e
       }
     }
@@ -457,4 +484,302 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   async importAll(_rows: TransactionRow[]): Promise<{ copied: number }> {
     return { copied: 0 }
   }
+
+  async v2_create(input: TransactionInput): Promise<V2CreateResult> {
+    const prepared = prepareV2Input(input)
+    if (prepared.ok === false) return { ok: false, errors: prepared.errors }
+    const rawText = prepared.rawText
+    const now = Date.now()
+    let txn: TransactionV2 | null = null
+    this.ctx.storage.transactionSync(() => {
+      const row = this.sql
+        .exec<{ id: number }>(
+          `INSERT INTO transactions_v2
+             (date, flag, payee, narration, meta_json, raw_text, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           RETURNING id`,
+          dateToInt(input.date),
+          input.flag ?? null,
+          input.payee ?? '',
+          input.narration ?? '',
+          JSON.stringify(input.meta ?? {}),
+          rawText,
+          now,
+          now,
+        )
+        .toArray()[0]
+      if (!row) return
+      this.insertV2Children(row.id, input)
+      txn = this.readV2Transaction(row.id)
+    })
+    return txn ? { ok: true, transaction: txn } : { ok: false, errors: ['Insert failed.'] }
+  }
+
+  async v2_get(id: number): Promise<TransactionV2 | null> {
+    return this.readV2Transaction(id)
+  }
+
+  async v2_list(limit: number, offset: number): Promise<V2ListResult> {
+    const total =
+      this.sql
+        .exec<{ c: number }>('SELECT COUNT(*) AS c FROM transactions_v2')
+        .toArray()[0]?.c ?? 0
+    const ids = this.sql
+      .exec<{ id: number }>(
+        `SELECT id FROM transactions_v2
+         ORDER BY date DESC, id DESC
+         LIMIT ? OFFSET ?`,
+        limit,
+        offset,
+      )
+      .toArray()
+      .map((r) => r.id)
+    const rows: TransactionV2[] = []
+    for (const id of ids) {
+      const t = this.readV2Transaction(id)
+      if (t) rows.push(t)
+    }
+    return { rows, total, limit, offset }
+  }
+
+  async v2_update(
+    id: number,
+    expected_updated_at: number,
+    input: TransactionInput,
+  ): Promise<V2UpdateResult> {
+    const prepared = prepareV2Input(input)
+    if (prepared.ok === false) {
+      return { ok: false, kind: 'validation', errors: prepared.errors }
+    }
+    const rawText = prepared.rawText
+    let result: V2UpdateResult = { ok: false, kind: 'not_found' }
+    this.ctx.storage.transactionSync(() => {
+      const current = this.sql
+        .exec<{ updated_at: number }>(
+          'SELECT updated_at FROM transactions_v2 WHERE id = ?',
+          id,
+        )
+        .toArray()[0]
+      if (!current) {
+        result = { ok: false, kind: 'not_found' }
+        return
+      }
+      if (current.updated_at !== expected_updated_at) {
+        result = {
+          ok: false,
+          kind: 'conflict',
+          current_updated_at: current.updated_at,
+        }
+        return
+      }
+      const now = Date.now()
+      this.sql.exec(
+        `UPDATE transactions_v2 SET
+           date = ?, flag = ?, payee = ?, narration = ?, meta_json = ?,
+           raw_text = ?, updated_at = max(?, updated_at + 1)
+         WHERE id = ?`,
+        dateToInt(input.date),
+        input.flag ?? null,
+        input.payee ?? '',
+        input.narration ?? '',
+        JSON.stringify(input.meta ?? {}),
+        rawText,
+        now,
+        id,
+      )
+      this.sql.exec('DELETE FROM postings WHERE txn_id = ?', id)
+      this.sql.exec('DELETE FROM txn_tags WHERE txn_id = ?', id)
+      this.sql.exec('DELETE FROM txn_links WHERE txn_id = ?', id)
+      this.insertV2Children(id, input)
+      const txn = this.readV2Transaction(id)
+      result = txn ? { ok: true, transaction: txn } : { ok: false, kind: 'not_found' }
+    })
+    return result
+  }
+
+  async v2_delete(id: number, expected_updated_at: number): Promise<V2DeleteResult> {
+    let result: V2DeleteResult = { ok: false, kind: 'not_found' }
+    this.ctx.storage.transactionSync(() => {
+      const current = this.sql
+        .exec<{ updated_at: number }>(
+          'SELECT updated_at FROM transactions_v2 WHERE id = ?',
+          id,
+        )
+        .toArray()[0]
+      if (!current) {
+        result = { ok: false, kind: 'not_found' }
+        return
+      }
+      if (current.updated_at !== expected_updated_at) {
+        result = {
+          ok: false,
+          kind: 'conflict',
+          current_updated_at: current.updated_at,
+        }
+        return
+      }
+      this.sql.exec('DELETE FROM transactions_v2 WHERE id = ?', id)
+      result = { ok: true }
+    })
+    return result
+  }
+
+  private insertV2Children(txnId: number, input: TransactionInput): void {
+    const dateInt = dateToInt(input.date)
+    for (let i = 0; i < input.postings.length; i++) {
+      const p: PostingInput = input.postings[i]
+      const amt = p.amount != null ? scaleDecimal(p.amount) : null
+      const px = p.price_amount != null ? scaleDecimal(p.price_amount) : null
+      this.sql.exec(
+        `INSERT INTO postings
+           (txn_id, idx, flag, account, amount, amount_scaled, scale,
+            currency, cost_raw, price_at_signs,
+            price_amount, price_amount_scaled, price_scale,
+            price_currency, comment, meta_json, date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        txnId,
+        i,
+        p.flag ?? null,
+        p.account,
+        p.amount ?? null,
+        amt?.scaled ?? null,
+        amt?.scale ?? null,
+        p.currency ?? null,
+        p.cost_raw ?? null,
+        p.price_at_signs ?? 0,
+        p.price_amount ?? null,
+        px?.scaled ?? null,
+        px?.scale ?? null,
+        p.price_currency ?? null,
+        p.comment ?? null,
+        JSON.stringify(p.meta ?? {}),
+        dateInt,
+      )
+    }
+    for (const tag of input.tags ?? []) {
+      this.sql.exec(
+        'INSERT OR IGNORE INTO txn_tags (txn_id, tag, from_stack) VALUES (?, ?, 0)',
+        txnId,
+        tag,
+      )
+    }
+    for (const link of input.links ?? []) {
+      this.sql.exec(
+        'INSERT OR IGNORE INTO txn_links (txn_id, link) VALUES (?, ?)',
+        txnId,
+        link,
+      )
+    }
+  }
+
+  private readV2Transaction(id: number): TransactionV2 | null {
+    const head = this.sql
+      .exec<{
+        id: number
+        date: number
+        flag: string | null
+        payee: string
+        narration: string
+        meta_json: string
+        raw_text: string
+        created_at: number
+        updated_at: number
+      }>(
+        `SELECT id, date, flag, payee, narration, meta_json, raw_text, created_at, updated_at
+         FROM transactions_v2 WHERE id = ?`,
+        id,
+      )
+      .toArray()[0]
+    if (!head) return null
+    const postingRows = this.sql
+      .exec<{
+        idx: number
+        flag: string | null
+        account: string
+        amount: string | null
+        currency: string | null
+        cost_raw: string | null
+        price_at_signs: number
+        price_amount: string | null
+        price_currency: string | null
+        comment: string | null
+        meta_json: string
+      }>(
+        `SELECT idx, flag, account, amount, currency, cost_raw,
+                price_at_signs, price_amount, price_currency, comment, meta_json
+         FROM postings WHERE txn_id = ? ORDER BY idx ASC`,
+        id,
+      )
+      .toArray()
+    const postings: PostingV2[] = postingRows.map((r) => ({
+      account: r.account,
+      flag: r.flag,
+      amount: r.amount,
+      currency: r.currency,
+      cost_raw: r.cost_raw,
+      price_at_signs: (r.price_at_signs === 1 || r.price_at_signs === 2 ? r.price_at_signs : 0) as
+        | 0
+        | 1
+        | 2,
+      price_amount: r.price_amount,
+      price_currency: r.price_currency,
+      comment: r.comment,
+      meta: parseMeta(r.meta_json),
+    }))
+    const tags = this.sql
+      .exec<{ tag: string }>(
+        'SELECT tag FROM txn_tags WHERE txn_id = ? ORDER BY tag ASC',
+        id,
+      )
+      .toArray()
+      .map((r) => r.tag)
+    const links = this.sql
+      .exec<{ link: string }>(
+        'SELECT link FROM txn_links WHERE txn_id = ? ORDER BY link ASC',
+        id,
+      )
+      .toArray()
+      .map((r) => r.link)
+    return {
+      id: head.id,
+      date: dateFromInt(head.date),
+      flag: (head.flag === '*' || head.flag === '!' ? head.flag : null) as '*' | '!' | null,
+      payee: head.payee,
+      narration: head.narration,
+      postings,
+      tags,
+      links,
+      meta: parseMeta(head.meta_json),
+      raw_text: head.raw_text,
+      created_at: head.created_at,
+      updated_at: head.updated_at,
+    }
+  }
+}
+
+function prepareV2Input(
+  input: TransactionInput,
+): { ok: true; rawText: string } | { ok: false; errors: string[] } {
+  const errors = validateInput(input)
+  if (errors.length > 0) return { ok: false, errors }
+  try {
+    return { ok: true, rawText: serializeTransaction(buildTransactionAst(input)) }
+  } catch (e) {
+    return { ok: false, errors: [`serialize failed: ${String(e)}`] }
+  }
+}
+
+function parseMeta(json: string): Record<string, string> {
+  if (json === '{}' || json === '') return {}
+  try {
+    const parsed = JSON.parse(json) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'string') out[k] = v
+      }
+      return out
+    }
+  } catch {}
+  return {}
 }
