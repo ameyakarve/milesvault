@@ -2,15 +2,29 @@
 
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
+import { ArrowUp, Mic, Paperclip } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Op, Snapshot } from './propose'
 import { createMapReader } from '@/lib/ledger-reader/map'
 import { buildEntriesFromBuffer } from '@/lib/ledger-reader/entries'
-import { buildClientTools } from './ai-tools-client'
-import { AiPaneView, type ChatMessage } from './ai-pane-view'
+import { buildClientTools } from './ledger-tools-client'
+import { PaneCap, PaneLabel } from '../ledger/ledger-chrome'
 
-export { AiPaneView } from './ai-pane-view'
-export type { ChatMessage, MessagePart, AiPaneViewProps } from './ai-pane-view'
+const PANE_ROOT_CLS = 'flex-1 bg-scandi-quiet flex flex-col overflow-hidden min-w-0 min-h-0'
+
+type ThinkMessage = { id: string; role: string; parts: MessagePart[] }
+type MessagePart =
+  | { type: 'text'; text: string }
+  | {
+      type: `tool-${string}`
+      toolCallId: string
+      state: string
+      input?: unknown
+      output?: unknown
+    }
+  | { type: string }
+
+type ToolPart = Extract<MessagePart, { type: `tool-${string}` }>
 
 type OnPropose = (ops: readonly Op[]) => { ok: boolean; reason?: string }
 
@@ -23,26 +37,11 @@ type AiPaneProps = {
   onAiBusyChange?: (busy: boolean) => void
 }
 
-const PANE_PLACEHOLDER_CLS =
-  'hidden md:flex w-[360px] shrink-0 border-l border-slate-200 bg-[#F4F6F8] flex-col'
-
 export function AiPane(props: AiPaneProps) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
-  if (!mounted) return <aside className={PANE_PLACEHOLDER_CLS} />
-  if (process.env.STORYBOOK === 'true') {
-    return (
-      <AiPaneView
-        messages={[]}
-        status="idle"
-        busy={false}
-        saving={props.saving ?? false}
-        chatLocked={props.saving ?? false}
-        errorMessage={null}
-        onSubmit={() => {}}
-        onClear={() => {}}
-      />
-    )
+  if (!mounted) {
+    return <div className={PANE_ROOT_CLS} />
   }
   return <AiPaneInner {...props} />
 }
@@ -86,7 +85,7 @@ function AiPaneInner({
       reader,
       propose: (ops) => {
         if (proposeFiredRef.current) {
-          console.warn('[ai-pane] propose dedup guard fired — model called propose twice this turn')
+          console.warn('[think-pane] propose dedup guard fired — model called propose twice this turn')
           return {
             ok: false,
             reason:
@@ -95,7 +94,7 @@ function AiPaneInner({
         }
         const res = onProposeRef.current(ops)
         if (res.ok) proposeFiredRef.current = true
-        else console.warn('[ai-pane] onPropose rejected:', res.reason)
+        else console.warn('[think-pane] onPropose rejected:', res.reason)
         return res
       },
     })
@@ -106,13 +105,13 @@ function AiPaneInner({
     tools,
     onToolCall: async ({ toolCall, addToolOutput }) => {
       console.log(
-        `[ai-pane] onToolCall name=${toolCall.toolName} id=${toolCall.toolCallId}`,
+        `[think-pane] onToolCall name=${toolCall.toolName} id=${toolCall.toolCallId}`,
       )
       const entry = (tools as Record<string, { execute?: (input: unknown) => unknown }>)[
         toolCall.toolName
       ]
       if (!entry?.execute) {
-        console.warn(`[ai-pane] onToolCall: no execute for ${toolCall.toolName}`)
+        console.warn(`[think-pane] onToolCall: no execute for ${toolCall.toolName}`)
         return
       }
       try {
@@ -120,7 +119,7 @@ function AiPaneInner({
         addToolOutput({ toolCallId: toolCall.toolCallId, output })
       } catch (e) {
         console.error(
-          `[ai-pane] onToolCall execute threw for ${toolCall.toolName}:`,
+          `[think-pane] onToolCall execute threw for ${toolCall.toolName}:`,
           e,
         )
         addToolOutput({
@@ -133,17 +132,24 @@ function AiPaneInner({
     },
     onError: (e) => {
       console.error(
-        '[ai-pane] useAgentChat error:',
+        '[think-pane] useAgentChat error:',
         e instanceof Error ? `${e.name}: ${e.message}\n${e.stack}` : String(e),
       )
     },
     onFinish: ({ message, isError, isAbort, isDisconnect, finishReason }) => {
       console.log(
-        `[ai-pane] onFinish msgId=${message?.id} parts=${message?.parts?.length ?? 0} isError=${isError} isAbort=${isAbort} isDisconnect=${isDisconnect} finishReason=${finishReason}`,
+        `[think-pane] onFinish msgId=${message?.id} parts=${message?.parts?.length ?? 0} isError=${isError} isAbort=${isAbort} isDisconnect=${isDisconnect} finishReason=${finishReason}`,
       )
     },
   })
-
+  const [draft, setDraft] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [draft])
   const statusBusy = status === 'streaming' || status === 'submitted'
   const [busy, setBusy] = useState(false)
   useEffect(() => {
@@ -163,35 +169,170 @@ function AiPaneInner({
     onAiBusyChange?.(busy)
   }, [busy, onAiBusyChange])
 
-  useEffect(() => {
-    console.log(`[ai-pane] status=${status} msgs=${messages.length} busy=${busy}`)
-  }, [status, messages.length, busy])
-
-  const onSubmit = (text: string) => {
+  const onSubmit = (e: React.FormEvent | React.KeyboardEvent) => {
+    e.preventDefault()
+    const text = draft.trim()
     if (!text || chatLocked) return
-    console.log(`[ai-pane] sendMessage textLen=${text.length}`)
     proposeFiredRef.current = false
     setBusy(true)
     sendMessage({ text })
-  }
-
-  const onClear = () => {
-    console.log('[ai-pane] clearHistory')
-    proposeFiredRef.current = false
-    setBusy(false)
-    clearHistory()
+    setDraft('')
   }
 
   return (
-    <AiPaneView
-      messages={messages as ChatMessage[]}
-      status={status}
-      busy={busy}
-      saving={saving}
-      chatLocked={chatLocked}
-      errorMessage={error?.message ?? null}
-      onSubmit={onSubmit}
-      onClear={onClear}
-    />
+    <div className={PANE_ROOT_CLS}>
+      <PaneCap className="justify-between gap-2">
+        <PaneLabel>ASSISTANT</PaneLabel>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[10px] text-slate-500 uppercase tracking-[0.08em]">
+            {status}
+          </span>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              proposeFiredRef.current = false
+              setBusy(false)
+              clearHistory()
+            }}
+            className="font-mono text-[10px] text-slate-500 hover:text-navy-700 uppercase tracking-[0.08em] disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            clear
+          </button>
+        </div>
+      </PaneCap>
+
+      {error ? (
+        <div className="mx-3 mt-3 px-2 py-1.5 border border-red-200 bg-red-50 font-mono text-[11px] text-red-700">
+          {error.message}
+        </div>
+      ) : null}
+
+      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3 text-[11px] font-mono">
+        {messages.length === 0 ? (
+          <div className="text-slate-400">
+            ask about your ledger, or describe a transaction to stage…
+          </div>
+        ) : (
+          messages.map((m) => <Turn key={m.id} message={m as ThinkMessage} />)
+        )}
+        {busy ? <BusyIndicator label={status} /> : null}
+      </div>
+
+      <form onSubmit={onSubmit} className="p-2 border-t border-scandi-rule shrink-0 bg-scandi-quiet mt-auto">
+        <div className="bg-white flex items-end px-2 py-1 border border-scandi-rule focus-within:border-scandi-accent transition-colors gap-1">
+          <button
+            type="button"
+            title="attach"
+            disabled
+            className="w-[24px] h-[24px] flex items-center justify-center text-slate-300 rounded-[2px] shrink-0 mb-[2px]"
+          >
+            <Paperclip size={14} strokeWidth={1.5} />
+          </button>
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                onSubmit(e)
+              }
+            }}
+            disabled={chatLocked}
+            rows={1}
+            className="bg-transparent border-none focus:ring-0 focus:outline-none text-[11px] font-mono w-full text-navy-600 placeholder:text-slate-400 disabled:opacity-50 resize-none py-[6px] max-h-[160px] overflow-y-auto leading-relaxed"
+            placeholder={saving ? 'saving…' : 'ask, or describe a transaction to stage…'}
+          />
+          <button
+            type="button"
+            title="dictate"
+            disabled
+            className="w-[24px] h-[24px] flex items-center justify-center text-slate-300 rounded-[2px] shrink-0 mb-[2px]"
+          >
+            <Mic size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            type="submit"
+            disabled={!draft.trim() || chatLocked}
+            title={saving ? 'send (saving)' : 'send'}
+            className="bg-scandi-accent text-white w-[24px] h-[24px] flex items-center justify-center hover:bg-scandi-accent-hover transition-colors shrink-0 ml-1 rounded-[2px] disabled:opacity-40 disabled:cursor-not-allowed mb-[2px]"
+          >
+            <ArrowUp size={14} strokeWidth={1.5} />
+          </button>
+        </div>
+      </form>
+    </div>
   )
+}
+
+function Turn({ message }: { message: ThinkMessage }) {
+  const isUser = message.role === 'user'
+  const visible = message.parts.filter(isVisiblePart)
+  if (visible.length === 0) return null
+  return (
+    <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
+      <div
+        className={`px-3 py-2 max-w-[85%] border ${
+          isUser
+            ? 'bg-scandi-accent border-scandi-accent text-white'
+            : 'bg-white border-scandi-rule text-navy-700'
+        }`}
+      >
+        {visible.map((part, i) => (
+          <PartView key={i} part={part} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function isVisiblePart(part: MessagePart): boolean {
+  if (part.type === 'text') return Boolean((part as { text: string }).text)
+  if (part.type === 'tool-reply' || part.type === 'tool-propose') {
+    const tp = part as ToolPart
+    return Boolean((tp.input as { message?: string } | undefined)?.message)
+  }
+  return false
+}
+
+function BusyIndicator({ label }: { label: string }) {
+  const text = label === 'submitted' ? 'thinking' : 'working'
+  return (
+    <div className="flex items-start">
+      <div className="px-3 py-2 border border-scandi-rule bg-white flex items-center gap-2">
+        <span className="flex gap-1" aria-hidden>
+          <span className="w-1 h-1 rounded-full bg-slate-400 animate-pulse [animation-delay:0ms]" />
+          <span className="w-1 h-1 rounded-full bg-slate-400 animate-pulse [animation-delay:150ms]" />
+          <span className="w-1 h-1 rounded-full bg-slate-400 animate-pulse [animation-delay:300ms]" />
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.08em] text-slate-500">
+          {text}…
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function PartView({ part }: { part: MessagePart }) {
+  if (part.type === 'text') {
+    const text = (part as { text: string }).text
+    if (!text) return null
+    return (
+      <div className="whitespace-pre-wrap text-[11px] leading-relaxed">
+        {text}
+      </div>
+    )
+  }
+  if (part.type === 'tool-reply' || part.type === 'tool-propose') {
+    const tp = part as ToolPart
+    const message = (tp.input as { message?: string } | undefined)?.message
+    if (!message) return null
+    return (
+      <div className="whitespace-pre-wrap text-[11px] leading-relaxed">
+        {message}
+      </div>
+    )
+  }
+  return null
 }

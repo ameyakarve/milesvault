@@ -247,7 +247,9 @@ export function LedgerNewView({ email }: { email: string }) {
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'conflict' | 'error'>('idle')
   const [saveErrorMsg, setSaveErrorMsg] = useState<string | null>(null)
-  const locked = saveStatus === 'saving'
+  const [aiBusy, setAiBusy] = useState(false)
+  const saving = saveStatus === 'saving'
+  const locked = aiBusy || saving
 
   async function onSave() {
     if (locked) return
@@ -308,11 +310,12 @@ export function LedgerNewView({ email }: { email: string }) {
   }
 
   function onAiPropose(ops: readonly Op[]): { ok: boolean; reason?: string } {
-    const result = applyProposal(buffer, snapshots, ops)
-    if (!result.ok) return result
-    editorRef.current?.replaceDoc(result.buffer)
-    setBuffer(result.buffer)
-    return { ok: true }
+    const res = applyProposal(buffer, snapshots, ops)
+    if (res.ok === true) {
+      setBuffer(res.buffer)
+      return { ok: true }
+    }
+    return { ok: false, reason: res.reason }
   }
 
   const totalPages = Math.max(1, Math.ceil(state.total / PAGE_SIZE))
@@ -379,8 +382,9 @@ export function LedgerNewView({ email }: { email: string }) {
           email={email}
           buffer={buffer}
           snapshots={snapshots}
-          saving={locked}
+          saving={saving}
           onPropose={onAiPropose}
+          onAiBusyChange={setAiBusy}
         />
       </div>
       <MobileAiBar />
