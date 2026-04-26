@@ -391,12 +391,23 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async v2_recent_accounts_list(limit: number): Promise<string[]> {
-    return this.sql
+    const recents = this.sql
       .exec<{ account: string }>(
         `SELECT account FROM account_recents
          ORDER BY last_viewed_at DESC
          LIMIT ?`,
         limit,
+      )
+      .toArray()
+      .map((r) => r.account)
+    if (recents.length > 0) return recents
+    return this.sql
+      .exec<{ account: string }>(
+        `SELECT account FROM postings
+         WHERE account != ''
+         GROUP BY account
+         ORDER BY COUNT(*) DESC
+         LIMIT 3`,
       )
       .toArray()
       .map((r) => r.account)
