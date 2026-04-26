@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Posting, TransactionV2 } from '@/durable/ledger-v2-types'
 import { splitCamel } from '@/lib/beancount/account-display'
 import { useRecentAccounts } from './use-accounts'
@@ -87,6 +88,7 @@ function buildLedgerRows(txns: TransactionV2[], account: string): LedgerSummary 
 }
 
 export function HomeChrome() {
+  const router = useRouter()
   const accountsQuery = useRecentAccounts()
   const accountsData = accountsQuery.data
   const [paneOpen, setPaneOpen] = useState(false)
@@ -199,9 +201,8 @@ export function HomeChrome() {
                     key={acc}
                     type="button"
                     onClick={() => {
-                      setAccountOverride(acc)
-                      setTxnOverride(null)
                       void accountsQuery.touch(acc)
+                      router.push(`/ledger-v4?account=${encodeURIComponent(acc)}`)
                     }}
                     className={
                       active
