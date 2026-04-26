@@ -6,6 +6,9 @@ import { ROW_COLS, buildSearchWhere } from '@/lib/ledger-core/queries'
 import { distinctAccountsFromRawTexts } from '@/lib/ledger-core/accounts'
 import {
   buildTransactionAst,
+  dateFromInt,
+  dateToInt,
+  scaleDecimal,
   serializeTransaction,
   validateInput,
 } from '@/lib/beancount/v2-ast'
@@ -495,7 +498,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
              (date, flag, payee, narration, meta_json, raw_text, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            RETURNING id`,
-          input.date,
+          dateToInt(input.date),
           input.flag ?? null,
           input.payee ?? '',
           input.narration ?? '',
@@ -575,7 +578,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
            date = ?, flag = ?, payee = ?, narration = ?, meta_json = ?,
            raw_text = ?, updated_at = max(?, updated_at + 1)
          WHERE id = ?`,
-        input.date,
+        dateToInt(input.date),
         input.flag ?? null,
         input.payee ?? '',
         input.narration ?? '',
@@ -622,26 +625,35 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private insertV2Children(txnId: number, input: TransactionInput): void {
+    const dateInt = dateToInt(input.date)
     for (let i = 0; i < input.postings.length; i++) {
       const p: PostingInput = input.postings[i]
+      const amt = p.amount != null ? scaleDecimal(p.amount) : null
+      const px = p.price_amount != null ? scaleDecimal(p.price_amount) : null
       this.sql.exec(
         `INSERT INTO postings
-           (txn_id, idx, flag, account, amount, currency, cost_raw,
-            price_at_signs, price_amount, price_currency, comment, meta_json, date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (txn_id, idx, flag, account, amount, amount_scaled, scale,
+            currency, cost_raw, price_at_signs,
+            price_amount, price_amount_scaled, price_scale,
+            price_currency, comment, meta_json, date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         txnId,
         i,
         p.flag ?? null,
         p.account,
         p.amount ?? null,
+        amt?.scaled ?? null,
+        amt?.scale ?? null,
         p.currency ?? null,
         p.cost_raw ?? null,
         p.price_at_signs ?? 0,
         p.price_amount ?? null,
+        px?.scaled ?? null,
+        px?.scale ?? null,
         p.price_currency ?? null,
         p.comment ?? null,
         JSON.stringify(p.meta ?? {}),
-        input.date,
+        dateInt,
       )
     }
     for (const tag of input.tags ?? []) {
@@ -664,7 +676,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const head = this.sql
       .exec<{
         id: number
-        date: string
+        date: number
         flag: string | null
         payee: string
         narration: string
@@ -730,7 +742,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       .map((r) => r.link)
     return {
       id: head.id,
-      date: head.date,
+      date: dateFromInt(head.date),
       flag: (head.flag === '*' || head.flag === '!' ? head.flag : null) as '*' | '!' | null,
       payee: head.payee,
       narration: head.narration,

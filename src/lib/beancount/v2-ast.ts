@@ -14,6 +14,27 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const TAG_RE = /^[A-Za-z0-9-_/]+$/
 const LINK_RE = /^[A-Za-z0-9-_/.]+$/
 
+export function dateToInt(ymd: string): number {
+  if (!DATE_RE.test(ymd)) throw new Error(`invalid date '${ymd}'`)
+  return Number(ymd.replace(/-/g, ''))
+}
+
+export function dateFromInt(n: number): string {
+  const s = String(n).padStart(8, '0')
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+}
+
+export function scaleDecimal(s: string): { scaled: number; scale: number } {
+  if (!DECIMAL_RE.test(s)) throw new Error(`invalid decimal '${s}'`)
+  const dot = s.indexOf('.')
+  const scale = dot === -1 ? 0 : s.length - dot - 1
+  const big = BigInt(dot === -1 ? s : s.replace('.', ''))
+  if (big > BigInt(Number.MAX_SAFE_INTEGER) || big < BigInt(-Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`scaled amount out of range for '${s}'`)
+  }
+  return { scaled: Number(big), scale }
+}
+
 export function validateInput(input: TransactionInput): string[] {
   const errs: string[] = []
   if (!DATE_RE.test(input.date)) errs.push(`date must match YYYY-MM-DD: '${input.date}'`)
@@ -58,34 +79,69 @@ export function validateInput(input: TransactionInput): string[] {
   }
 
   if (errs.length === 0) {
-    const totals = new Map<string, number>()
+    type Term = { ccy: string; scaled: bigint; scale: number }
+    const terms: Term[] = []
     let inferred = 0
-    for (const p of input.postings) {
-      if (p.amount == null || p.currency == null) {
-        inferred += 1
-        continue
+    try {
+      for (const p of input.postings) {
+        if (p.amount == null || p.currency == null) {
+          inferred += 1
+          continue
+        }
+        const amt = scaleDecimal(p.amount)
+        const ccy = p.price_currency ?? p.currency
+        if (p.price_amount != null) {
+          const px = scaleDecimal(p.price_amount)
+          if (p.price_at_signs === 2) {
+            const sign = amt.scaled === 0 ? 0n : amt.scaled > 0 ? 1n : -1n
+            terms.push({ ccy, scaled: sign * BigInt(px.scaled), scale: px.scale })
+          } else {
+            terms.push({
+              ccy,
+              scaled: BigInt(amt.scaled) * BigInt(px.scaled),
+              scale: amt.scale + px.scale,
+            })
+          }
+        } else {
+          terms.push({ ccy, scaled: BigInt(amt.scaled), scale: amt.scale })
+        }
       }
-      const ccy = p.price_currency ?? p.currency
-      const amt = Number(p.amount)
-      const eff =
-        p.price_amount != null
-          ? p.price_at_signs === 2
-            ? Number(p.price_amount) * Math.sign(amt)
-            : Number(p.price_amount) * amt
-          : amt
-      totals.set(ccy, (totals.get(ccy) ?? 0) + eff)
+    } catch (e) {
+      errs.push(e instanceof Error ? e.message : String(e))
+      return errs
     }
     if (inferred > 1) {
       errs.push('at most one posting may omit amount/currency (inferred)')
     } else if (inferred === 0) {
-      for (const [ccy, sum] of totals) {
-        if (Math.abs(sum) > 0.005) {
-          errs.push(`postings do not balance for ${ccy}: sum=${sum.toFixed(4)}`)
+      const byCcy = new Map<string, Term[]>()
+      for (const t of terms) {
+        const arr = byCcy.get(t.ccy) ?? []
+        arr.push(t)
+        byCcy.set(t.ccy, arr)
+      }
+      for (const [ccy, ts] of byCcy) {
+        const maxScale = ts.reduce((m, t) => (t.scale > m ? t.scale : m), 0)
+        let sum = 0n
+        for (const t of ts) {
+          sum += t.scaled * 10n ** BigInt(maxScale - t.scale)
+        }
+        if (sum !== 0n) {
+          errs.push(`postings do not balance for ${ccy}: sum=${formatScaled(sum, maxScale)}`)
         }
       }
     }
   }
   return errs
+}
+
+function formatScaled(n: bigint, scale: number): string {
+  if (scale === 0) return n.toString()
+  const neg = n < 0n
+  const abs = neg ? -n : n
+  const s = abs.toString().padStart(scale + 1, '0')
+  const whole = s.slice(0, s.length - scale)
+  const frac = s.slice(s.length - scale)
+  return `${neg ? '-' : ''}${whole}.${frac}`
 }
 
 function metaToValueMap(
