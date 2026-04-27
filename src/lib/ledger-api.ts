@@ -2,10 +2,9 @@ import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { LedgerDO } from '@/durable/ledger-do'
 import type { V2ListResult } from '@/durable/ledger-v2-types'
 export const DEFAULT_LIMIT = 50
-export const MAX_LIMIT = 100
+const MAX_LIMIT = 100
 
 export type LedgerClient = {
-  v2_listAccounts(): Promise<string[]>
   v2_recent_accounts_list(limit?: number): Promise<string[]>
   v2_recent_account_touch(account: string): Promise<void>
   v2_list_by_account(account: string, limit?: number, offset?: number): Promise<V2ListResult>
@@ -28,19 +27,15 @@ export class LedgerBindingError extends Error {
   }
 }
 
-export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerClient {
-  const ns = env.LEDGER_DO as DurableObjectNamespace<LedgerDO> | undefined
+export async function getLedgerClient(email: string): Promise<LedgerClient> {
+  const { env } = await getCloudflareContext({ async: true })
+  const ns = (env as Cloudflare.Env).LEDGER_DO as DurableObjectNamespace<LedgerDO> | undefined
   if (!ns) throw new LedgerBindingError()
   const stub = ns.get(ns.idFromName(email))
 
   return {
-    async v2_listAccounts() {
-      return stub.v2_listAccounts()
-    },
-
     async v2_recent_accounts_list(limit = 10) {
-      const l = clampInt(limit, 1, MAX_LIMIT, 10)
-      return stub.v2_recent_accounts_list(l)
+      return stub.v2_recent_accounts_list(clampInt(limit, 1, MAX_LIMIT, 10))
     },
 
     async v2_recent_account_touch(account) {
@@ -59,11 +54,6 @@ export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerCl
       return stub.v2_list_by_account(account, l, o)
     },
   }
-}
-
-export async function getLedgerClient(email: string): Promise<LedgerClient> {
-  const { env } = await getCloudflareContext({ async: true })
-  return createLedgerClient(env as Cloudflare.Env, email)
 }
 
 function clampInt(n: number, min: number, max: number, fallback: number): number {
