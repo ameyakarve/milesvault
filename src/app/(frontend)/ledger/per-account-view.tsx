@@ -1,12 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import Link from 'next/link'
-import CodeMirror from '@uiw/react-codemirror'
-import { EditorView } from '@codemirror/view'
-import { LRLanguage, LanguageSupport, syntaxHighlighting, HighlightStyle } from '@codemirror/language'
-import { styleTags, tags as t } from '@lezer/highlight'
-import { parser as beancountParser } from 'lezer-beancount'
+import { useMemo } from 'react'
 import type {
   Entry,
   EntryBalance,
@@ -20,76 +14,19 @@ import type {
 } from '@/durable/ledger-types'
 import { shortAccountName } from '@/lib/beancount/account-display'
 import { useAccountEntries } from '../home/use-account-entries'
-import { NavRail } from '../_chrome/nav-rail'
+import { NotebookShell, type Card, type Seg, type SourceLine } from './notebook-shell'
 
-const beancountLang = LRLanguage.define({
-  parser: beancountParser.configure({
-    props: [
-      styleTags({
-        Date: t.literal,
-        TxnFlag: t.operator,
-        String: t.string,
-        Account: t.variableName,
-        Number: t.number,
-        Currency: t.unit,
-      }),
-    ],
-  }),
+const amountFmt = new Intl.NumberFormat('en-IN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 })
 
-const SOURCE_HIGHLIGHT = HighlightStyle.define([
-  { tag: t.literal, color: '#0d9488' },
-  { tag: t.operator, color: '#334155' },
-  { tag: t.string, color: '#334155' },
-  { tag: t.variableName, color: '#334155' },
-  { tag: t.number, color: '#0f172a', fontWeight: '700' },
-  { tag: t.unit, color: '#64748b' },
-])
-
-const SOURCE_THEME = EditorView.theme({
-  '&': {
-    backgroundColor: 'transparent',
-    fontSize: '12.5px',
-    fontFamily: "'JetBrains Mono', monospace",
-  },
-  '.cm-content': {
-    padding: '0',
-    lineHeight: '1.6',
-    fontFamily: "'JetBrains Mono', monospace",
-    caretColor: '#0d9488',
-  },
-  '.cm-line': { padding: '0' },
-  '.cm-gutters': { display: 'none' },
-  '.cm-activeLine': { backgroundColor: 'transparent' },
-  '.cm-activeLineGutter': { backgroundColor: 'transparent' },
-  '.cm-focused': { outline: 'none' },
-})
-
-const SOURCE_EXTENSIONS = [new LanguageSupport(beancountLang), syntaxHighlighting(SOURCE_HIGHLIGHT)]
-
-const GRID_STYLE = { gridTemplateColumns: '24px 100px 1fr 120px 120px 140px' } as const
-
-const EDITOR_SETUP = {
-  lineNumbers: false,
-  foldGutter: false,
-  highlightActiveLine: false,
-  highlightActiveLineGutter: false,
-  highlightSelectionMatches: false,
-} as const
-
-const dateFmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: '2-digit' })
-const amountFmt = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-const currencySymbols: Record<string, string> = { INR: '₹', USD: '$', EUR: '€', GBP: '£', JPY: '¥' }
-function currencyPrefix(code: string | null): string {
-  if (!code) return ''
-  return currencySymbols[code] ?? ''
-}
-
-function formatRowDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  if (!y || !m || !d) return iso
-  return dateFmt.format(new Date(Date.UTC(y, m - 1, d)))
+const currencySymbols: Record<string, string> = {
+  INR: '₹',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
 }
 
 function postingForAccount(txn: EntryTxn, account: string): Posting | null {
@@ -110,14 +47,15 @@ type TxnRow = {
   balance: number
 }
 
-type RenderRow =
-  | TxnRow
+type DirectiveRow =
   | { kind: 'open'; entry: EntryOpen }
   | { kind: 'close'; entry: EntryClose }
   | { kind: 'balance'; entry: EntryBalance }
   | { kind: 'pad'; entry: EntryPad }
   | { kind: 'note'; entry: EntryNote }
   | { kind: 'document'; entry: EntryDocument }
+
+type RenderRow = TxnRow | DirectiveRow
 
 type LedgerSummary = {
   rows: RenderRow[]
@@ -153,34 +91,105 @@ function buildLedgerRows(entries: Entry[], account: string): LedgerSummary {
   return { rows: out.reverse(), dominantCurrency, finalBalance: bal }
 }
 
-function breadcrumbSegments(path: string): string[] {
-  return path.split(':').filter(Boolean)
-}
-
-function Icon({ name, className = '' }: { name: string; className?: string }) {
-  return <span className={`material-symbols-outlined ${className}`}>{name}</span>
-}
-
-function directiveSummary(row: Exclude<RenderRow, TxnRow>): { label: string; detail: string } {
+function directiveLabel(row: DirectiveRow): { label: string; detail: string } {
   switch (row.kind) {
     case 'open':
       return {
-        label: 'Open',
-        detail: row.entry.constraint_currencies.length > 0
-          ? `Currencies: ${row.entry.constraint_currencies.join(', ')}`
-          : '',
+        label: 'open',
+        detail:
+          row.entry.constraint_currencies.length > 0
+            ? row.entry.constraint_currencies.join(', ')
+            : '',
       }
     case 'close':
-      return { label: 'Close', detail: '' }
+      return { label: 'close', detail: '' }
     case 'balance':
-      return { label: 'Balance', detail: `${row.entry.amount} ${row.entry.currency}` }
+      return { label: 'balance', detail: `${row.entry.amount} ${row.entry.currency}` }
     case 'pad':
-      return { label: 'Pad', detail: `from ${row.entry.account_pad}` }
+      return { label: 'pad', detail: `from ${row.entry.account_pad}` }
     case 'note':
-      return { label: 'Note', detail: row.entry.description }
+      return { label: 'note', detail: row.entry.description }
     case 'document':
-      return { label: 'Document', detail: row.entry.filename }
+      return { label: 'document', detail: row.entry.filename }
   }
+}
+
+function txnToCard(row: TxnRow, lineCounter: { n: number }, selectedAccount: string): Card {
+  const headerSegs: Seg[] = [
+    { kind: 'date', text: row.entry.date },
+    { kind: 'ws', text: ' ' },
+    { kind: 'flag', text: row.entry.flag ?? '*' },
+  ]
+  if (row.entry.payee) {
+    headerSegs.push({ kind: 'ws', text: ' ' }, { kind: 'payee', text: `"${row.entry.payee}"` })
+  }
+  if (row.entry.narration) {
+    headerSegs.push(
+      { kind: 'ws', text: ' ' },
+      { kind: 'narration', text: `"${row.entry.narration}"` },
+    )
+  }
+  const header: SourceLine = { lineNo: lineCounter.n++, segs: headerSegs }
+
+  const postings: SourceLine[] = row.entry.postings.map((p) => {
+    const segs: Seg[] = [{ kind: 'account', text: p.account }]
+    if (p.amount) segs.push({ kind: 'ws', text: ' ' }, { kind: 'number', text: p.amount })
+    if (p.currency) segs.push({ kind: 'ws', text: ' ' }, { kind: 'currency', text: p.currency })
+    const line: SourceLine = { lineNo: lineCounter.n++, segs }
+    if (p.account === selectedAccount && p.amount) {
+      const num = parseFloat(p.amount)
+      if (Number.isFinite(num) && num !== 0) {
+        line.delta = {
+          sign: num < 0 ? '−' : '+',
+          value: amountFmt.format(Math.abs(num)),
+          flow: num < 0 ? 'out' : 'in',
+        }
+      }
+    }
+    return line
+  })
+
+  const balanceText = `${row.balance < 0 ? '-' : ''}${amountFmt.format(Math.abs(row.balance))}`
+  return {
+    id: `txn-${row.entry.id}`,
+    lines: [header, ...postings],
+    balance: balanceText,
+  }
+}
+
+function directiveToCard(row: DirectiveRow, lineCounter: { n: number }): Card {
+  const { label, detail } = directiveLabel(row)
+  const segs: Seg[] = [
+    { kind: 'date', text: row.entry.date },
+    { kind: 'ws', text: ' ' },
+    { kind: 'flag', text: label },
+  ]
+  if (detail) segs.push({ kind: 'ws', text: ' ' }, { kind: 'narration', text: detail })
+  return {
+    id: `${row.kind}-${row.entry.id}`,
+    lines: [{ lineNo: lineCounter.n++, segs }],
+    balance: null,
+  }
+}
+
+function rowsToCards(rows: RenderRow[], selectedAccount: string): Card[] {
+  const counter = { n: 1 }
+  const cards: Card[] = []
+  for (const row of rows) {
+    cards.push(
+      row.kind === 'txn'
+        ? txnToCard(row, counter, selectedAccount)
+        : directiveToCard(row, counter),
+    )
+    counter.n++ // gap slot
+  }
+  return cards
+}
+
+function formatBalance(value: number, currency: string | null): string {
+  const prefix = currency ? currencySymbols[currency] ?? '' : ''
+  const sign = value < 0 ? '-' : ''
+  return `${sign}${prefix}${amountFmt.format(Math.abs(value))}`
 }
 
 export function PerAccountView({ account }: { account: string }) {
@@ -192,224 +201,36 @@ export function PerAccountView({ account }: { account: string }) {
         : { rows: [], dominantCurrency: null, finalBalance: 0 },
     [entriesQuery.data, account],
   )
+  const cards = useMemo(() => rowsToCards(ledger.rows, account), [ledger.rows, account])
 
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [sourceEdits, setSourceEdits] = useState<Record<string, string>>({})
+  const breadcrumb = account.split(':').filter(Boolean)
+  const accountTitle = shortAccountName(account)
+  const balance =
+    ledger.rows.length > 0 ? formatBalance(ledger.finalBalance, ledger.dominantCurrency) : '—'
+  const txnCount = ledger.rows.filter((r) => r.kind === 'txn').length
 
-  const toggle = (key: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
+  let body: React.ReactNode
+  if (entriesQuery.status === 'loading') {
+    body = <div className="px-3 py-4 text-[12px] text-slate-400">Loading entries…</div>
+  } else if (entriesQuery.status === 'error') {
+    body = (
+      <div className="px-3 py-4 text-[12px] text-rose-600">
+        Failed to load: {entriesQuery.errorMsg}
+      </div>
+    )
+  } else if (cards.length === 0) {
+    body = <div className="px-3 py-4 text-[12px] text-slate-400">No entries for this account.</div>
   }
 
-  const title = shortAccountName(account)
-  const segments = breadcrumbSegments(account)
-  const balancePrefix = currencyPrefix(ledger.dominantCurrency)
-  const balanceText =
-    ledger.rows.length > 0
-      ? `${ledger.finalBalance < 0 ? '-' : ''}${balancePrefix}${amountFmt.format(Math.abs(ledger.finalBalance))}`
-      : '—'
-
   return (
-    <div className="w-full h-screen flex bg-slate-50 font-sans text-black">
-      <NavRail />
-
-      <main className="flex-1 flex flex-col min-w-0">
-        <div className="h-[56px] bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="text-[13px] flex items-center gap-2">
-              <Link href="/" className="text-slate-500 hover:text-teal-600 transition-colors">
-                Ledger
-              </Link>
-              {segments.slice(0, -1).map((seg, i) => {
-                const prefix = segments.slice(0, i + 1)
-                const href = `/ledger/${prefix.map(encodeURIComponent).join('/')}`
-                return (
-                  <span key={prefix.join(':')} className="flex items-center gap-2">
-                    <span className="text-slate-300">/</span>
-                    <Link href={href} className="text-slate-500 hover:text-teal-600 transition-colors">
-                      {seg}
-                    </Link>
-                  </span>
-                )
-              })}
-              {segments.length > 0 && (
-                <>
-                  <span className="text-slate-300">/</span>
-                  <span className="text-slate-700">{segments[segments.length - 1]}</span>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="p-1.5 hover:bg-slate-100 rounded text-slate-500">
-              <Icon name="search" className="!text-[20px]" />
-            </button>
-            <button className="p-1.5 hover:bg-slate-100 rounded text-slate-500">
-              <Icon name="settings" className="!text-[20px]" />
-            </button>
-          </div>
-        </div>
-
-        <div className="px-6 py-4 border-b border-slate-100 flex flex-col gap-2 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col gap-1">
-              <h1 className="font-bold text-[18px] text-slate-900 leading-none">{title}</h1>
-              <div className="font-mono text-[12px] text-slate-400 leading-none">{account}</div>
-            </div>
-            <div className="font-mono font-bold text-[28px] text-slate-900 leading-none">{balanceText}</div>
-          </div>
-        </div>
-
-        <div className="h-[40px] bg-teal-50 border border-slate-200 px-6 flex items-center justify-between shrink-0 text-teal-700">
-          <div className="text-[12px] text-slate-500">
-            {Object.keys(sourceEdits).length > 0 ? 'Unsaved changes' : 'No unsaved changes'}
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="border border-slate-300 bg-white text-slate-700 text-[13px] font-medium hover:bg-slate-50 px-3 py-1 rounded-sm shadow-sm">Revert</button>
-            <button className="bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-medium px-3 py-1 rounded-sm shadow-sm flex items-center gap-1">
-              <span>Save</span>
-              <span className="text-[11px] bg-teal-700 px-1.5 py-0.5 rounded-sm ml-1.5">⌘S</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto bg-white">
-          <div className="min-w-[800px]">
-            <div
-              className="grid px-6 py-2 bg-slate-50/50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-widest text-slate-500"
-              style={GRID_STYLE}
-            >
-              <div />
-              <div>DATE</div>
-              <div>PAYEE · NARRATION</div>
-              <div className="text-right">DEBIT</div>
-              <div className="text-right">CREDIT</div>
-              <div className="text-right">BALANCE</div>
-            </div>
-
-            {entriesQuery.status === 'loading' && (
-              <div className="px-6 py-6 text-[12px] text-slate-400">Loading entries…</div>
-            )}
-            {entriesQuery.status === 'error' && (
-              <div className="px-6 py-6 text-[12px] text-rose-600">
-                Failed to load: {entriesQuery.errorMsg}
-              </div>
-            )}
-            {entriesQuery.status === 'idle' && ledger.rows.length === 0 && (
-              <div className="px-6 py-6 text-[12px] text-slate-400">
-                No entries for this account.
-              </div>
-            )}
-
-            {ledger.rows.map((row) => {
-              const key = `${row.kind}-${row.entry.id}`
-              if (row.kind !== 'txn') {
-                const { label, detail } = directiveSummary(row)
-                return (
-                  <div
-                    key={key}
-                    className="grid px-6 py-3 items-center border-b border-slate-100 bg-slate-50/40"
-                    style={GRID_STYLE}
-                  >
-                    <div />
-                    <div className="font-mono text-[13px] text-slate-400">{formatRowDate(row.entry.date)}</div>
-                    <div className="text-[13px] truncate col-span-4 grid grid-cols-[auto_1fr] gap-2 items-center">
-                      <span className="text-[10px] uppercase tracking-widest font-bold text-teal-600 px-1.5 py-0.5 bg-teal-50 rounded-sm">
-                        {label}
-                      </span>
-                      <span className="text-slate-600 truncate">{detail}</span>
-                    </div>
-                  </div>
-                )
-              }
-              const isExpanded = expanded.has(key)
-              const debit = row.amount > 0 ? amountFmt.format(row.amount) : null
-              const credit = row.amount < 0 ? amountFmt.format(-row.amount) : null
-              const balanceStr = `${row.balance < 0 ? '-' : ''}${amountFmt.format(Math.abs(row.balance))}`
-              const payee = row.entry.payee || row.entry.narration || row.entry.flag || '—'
-              const narration = row.entry.payee ? row.entry.narration : ''
-              const sourceText = sourceEdits[key] ?? ''
-              return (
-                <div key={key} className={isExpanded ? 'bg-white border-b border-slate-100 shadow-sm' : ''}>
-                  <div
-                    className={`grid px-6 py-3 items-center cursor-pointer group hover:bg-slate-50 ${
-                      isExpanded ? '' : 'border-b border-slate-100'
-                    }`}
-                    style={GRID_STYLE}
-                    onClick={() => toggle(key)}
-                  >
-                    <div className={`leading-none ${isExpanded ? 'text-teal-500' : 'text-slate-400 group-hover:text-slate-600'}`}>
-                      <Icon
-                        name={isExpanded ? 'expand_more' : 'chevron_right'}
-                        className={`!text-[18px] ${isExpanded ? 'rotate-90' : ''}`}
-                      />
-                    </div>
-                    <div className="font-mono text-[13px] text-slate-400">{formatRowDate(row.entry.date)}</div>
-                    <div className="text-[13px] truncate">
-                      <span className="font-bold text-slate-800">{payee}</span>
-                      {narration && <span className="text-slate-500">{' · '}{narration}</span>}
-                    </div>
-                    <div className={`font-mono text-[13px] text-right ${debit ? 'text-slate-900' : 'text-slate-400'}`}>
-                      {debit ?? '—'}
-                    </div>
-                    <div className={`font-mono text-[13px] text-right ${credit ? 'text-teal-600' : 'text-slate-400'}`}>
-                      {credit ?? '—'}
-                    </div>
-                    <div className="font-mono text-[13px] text-right text-slate-600">{balanceStr}</div>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="ml-[56px] mr-6 mb-4 bg-slate-50 border border-slate-200 rounded-sm p-5">
-                      <CodeMirror
-                        value={sourceText}
-                        onChange={(v) => setSourceEdits((prev) => ({ ...prev, [key]: v }))}
-                        theme={SOURCE_THEME}
-                        basicSetup={EDITOR_SETUP}
-                        extensions={SOURCE_EXTENSIONS}
-                      />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-
-            {entriesQuery.data && entriesQuery.data.total > ledger.rows.length && (
-              <div className="py-6 flex justify-center text-slate-400 font-mono text-[11px]">
-                ↓ {entriesQuery.data.total - ledger.rows.length} more
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
-
-      <aside className="w-[360px] bg-slate-50 border-l border-slate-200 flex flex-col shrink-0">
-        <div className="flex-1 p-6 flex items-center justify-center">
-          <div className="w-[80%] h-[120px] border-2 border-dashed border-slate-300 rounded mx-auto flex items-center justify-center text-slate-300 text-[13px]">
-            AI assistant coming soon
-          </div>
-        </div>
-        <div className="p-4 bg-white border-t border-slate-200">
-          <div className="flex items-end bg-white border border-slate-200 rounded p-2 focus-within:ring-1 focus-within:ring-teal-500 focus-within:border-teal-500">
-            <textarea
-              className="w-full bg-transparent border-none focus:ring-0 focus:outline-none resize-none text-[13px] text-slate-700 placeholder-slate-400 p-1"
-              placeholder="Ask AI about this ledger..."
-              rows={1}
-            />
-            <div className="flex items-center gap-1 ml-2 shrink-0">
-              <button className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded leading-none">
-                <Icon name="mic" className="!text-[18px]" />
-              </button>
-              <button className="p-1.5 text-teal-600 hover:text-teal-700 hover:bg-teal-50 rounded leading-none">
-                <Icon name="send" className="!text-[18px]" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </div>
+    <NotebookShell
+      breadcrumb={breadcrumb}
+      accountTitle={accountTitle}
+      accountPath={account}
+      balance={balance}
+      cards={cards}
+      txnCount={txnCount}
+      body={body}
+    />
   )
 }
