@@ -66,7 +66,6 @@ export function serializeJournal(
 export type ParsedJournal = {
   transactions: TransactionInput[]
   directives: DirectiveInput[]
-  unsupportedDirectiveCount: number
   unsupportedDirectiveTypes: string[]
   partialParse: boolean
   expectedDirectiveLineCount: number
@@ -75,7 +74,7 @@ export type ParsedJournal = {
 }
 
 const FORMATTING_NODE_TYPES = new Set(['comment', 'blankline'])
-const DATE_LINE_RE = /^\s*\d{4}-\d{2}-\d{2}(\s|$)/
+const DATE_LINE_RE = /^\s*\d{4}-\d{2}-\d{2}/
 
 function findDateLineNumbers(text: string): number[] {
   const out: number[] = []
@@ -112,7 +111,6 @@ export function parseJournal(text: string): ParsedJournal {
   return {
     transactions,
     directives,
-    unsupportedDirectiveCount: unsupportedTypes.size,
     unsupportedDirectiveTypes: [...unsupportedTypes],
     partialParse,
     expectedDirectiveLineCount: expected,

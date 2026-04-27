@@ -13,6 +13,7 @@ import { styleTags, tags as t } from '@lezer/highlight'
 import { parser as beancountParser } from 'lezer-beancount'
 import { shortAccountName } from '@/lib/beancount/account-display'
 import { parseJournal, serializeJournal } from '@/lib/beancount/ast'
+import { isStrictParseErr, parseJournalStrict } from '@/lib/beancount/parse-strict'
 import {
   directiveTouchesAccountCurrency,
   txnTouchesAccountCurrency,
@@ -143,11 +144,9 @@ export function PerAccountView({ account }: { account: string }) {
     if (saving || !whole || !currency) return
     setSaving(true)
     setError(null)
-    let parsedSlice
-    try {
-      parsedSlice = parseJournal(textRef.current)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+    const parsedSlice = parseJournalStrict(textRef.current)
+    if (isStrictParseErr(parsedSlice)) {
+      setError(parsedSlice.message)
       setSaving(false)
       return
     }
