@@ -66,6 +66,10 @@ async function main() {
   if (fxGutterBg !== 'rgb(224, 227, 229)') errors.push(`gutter bg mismatch: ${fxGutterBg}`)
   if (fxGutterFg !== 'rgb(188, 201, 198)') errors.push(`gutter fg mismatch: ${fxGutterFg}`)
 
+  // Click into the editor first so an active-line gutter element exists
+  await page.click('.cm-content')
+  await page.waitForSelector('.cm-activeLineGutter', { timeout: 4000 })
+
   // Extra computed-style probes
   const probes = await page.evaluate(() => {
     const get = (sel, prop) => {
@@ -79,6 +83,8 @@ async function main() {
     return {
       footerTextTransform: get('footer', 'textTransform'),
       activeLineGutterBg: get('.cm-gutters .cm-activeLineGutter', 'backgroundColor'),
+      activeLineGutterColor: get('.cm-gutters .cm-activeLineGutter', 'color'),
+      activeLineGutterShadow: get('.cm-gutters .cm-activeLineGutter', 'boxShadow'),
       activeLineGutterCount: document.querySelectorAll('.cm-gutters .cm-activeLineGutter').length,
       deltaOutColor: get('.cm-delta-out', 'color'),
       deltaInColor: get('.cm-delta-in', 'color'),
@@ -86,6 +92,7 @@ async function main() {
       pillHeight: get('.cm-balance-pill', 'height'),
       headerBalanceFontSize: balanceEl ? window.getComputedStyle(balanceEl).fontSize : null,
       headerBalanceFontFamily: balanceEl ? window.getComputedStyle(balanceEl).fontFamily : null,
+      editorBg: get('.cm-editor', 'backgroundColor'),
     }
   })
   console.log('probes:', probes)
@@ -107,21 +114,22 @@ async function main() {
     errors.push(`header balance fontSize=${probes.headerBalanceFontSize} (expected 24px / text-2xl)`)
   }
 
-  // Soft-fail GAPs
-  const softFails = []
-  if (probes.footerTextTransform === 'uppercase') {
-    softFails.push(
-      `GAP-2: footer textTransform=uppercase — mock shows lowercase "txns" ; should be 'none'`,
-    )
-  }
+  // GAP-3 hard checks
   if (probes.activeLineGutterCount === 0) {
-    softFails.push(
-      `GAP-3: no .cm-activeLineGutter present (highlightActiveLineGutter disabled) — mock shows teal 2px bar`,
-    )
-  } else if (probes.activeLineGutterBg !== 'rgb(0, 104, 95)') {
-    softFails.push(
-      `GAP-3: activeLineGutter bg=${probes.activeLineGutterBg} (expected rgb(0,104,95) #00685f)`,
-    )
+    errors.push(`active-line gutter missing (.cm-activeLineGutter not present)`)
+  } else {
+    if (probes.activeLineGutterColor !== 'rgb(0, 104, 95)') {
+      errors.push(`active-line gutter color=${probes.activeLineGutterColor} (expected rgb(0,104,95))`)
+    }
+    if (!/(0,\s*104,\s*95)|#00685f/i.test(probes.activeLineGutterShadow || '')) {
+      errors.push(
+        `active-line gutter box-shadow="${probes.activeLineGutterShadow}" missing teal #00685f bar`,
+      )
+    }
+  }
+  // GAP-5: editor surface must NOT paint white (transparent so parent #eceef0 shows)
+  if (probes.editorBg === 'rgb(255, 255, 255)') {
+    errors.push(`editor bg paints white — should be transparent so parent #eceef0 shows through`)
   }
 
   // Syntax tokens — sampled from cm-content
@@ -139,11 +147,6 @@ async function main() {
   console.log('tokens:', tokens)
 
   await browser.close()
-
-  if (softFails.length > 0) {
-    console.warn('SOFT-FAILS (known gaps, logged not gating):')
-    for (const w of softFails) console.warn('  -', w)
-  }
 
   if (errors.length > 0) {
     console.error('PIXEL VERIFY FAILED:')

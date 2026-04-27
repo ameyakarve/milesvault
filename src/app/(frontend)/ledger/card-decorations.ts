@@ -14,8 +14,32 @@ export type CardSpec = {
   startLine: number
   endLine: number
   balance: string | null
+  runningTotal: number | null
   mismatch: boolean
   deltas: DeltaSpec[]
+}
+
+const CURRENCY_META: Record<string, { symbol: string; locale: string }> = {
+  INR: { symbol: '₹', locale: 'en-IN' },
+  USD: { symbol: '$', locale: 'en-US' },
+  EUR: { symbol: '€', locale: 'de-DE' },
+  GBP: { symbol: '£', locale: 'en-GB' },
+}
+
+function formatGrouped(absN: number, currency: string): string {
+  const meta = CURRENCY_META[currency]
+  return new Intl.NumberFormat(meta?.locale ?? 'en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(absN)
+}
+
+export function formatHeaderBalance(n: number, currency: string): string {
+  const meta = CURRENCY_META[currency]
+  const grouped = formatGrouped(Math.abs(n), currency)
+  const sign = n < 0 ? '-' : ''
+  if (meta) return `${sign}${meta.symbol}${grouped}`
+  return `${sign}${grouped} ${currency}`
 }
 
 function postingDelta(
@@ -34,19 +58,15 @@ function postingDelta(
 }
 
 function formatBalance(n: number, currency: string): string {
-  const fixed = n.toFixed(2)
-  const [int, frac] = fixed.split('.')
-  const sign = int!.startsWith('-') ? '-' : ''
-  const digits = sign ? int!.slice(1) : int!
-  const withCommas = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return `${sign}${withCommas}.${frac} ${currency}`
+  const meta = CURRENCY_META[currency]
+  const grouped = formatGrouped(Math.abs(n), currency)
+  const sign = n < 0 ? '-' : ''
+  if (meta) return `${sign}${grouped}`
+  return `${sign}${grouped} ${currency}`
 }
 
-function formatDeltaValue(absN: number): string {
-  const fixed = absN.toFixed(2)
-  const [int, frac] = fixed.split('.')
-  const withCommas = int!.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return `${withCommas}.${frac}`
+function formatDeltaValue(absN: number, currency: string): string {
+  return formatGrouped(absN, currency)
 }
 
 function txnDeltas(
@@ -64,7 +84,7 @@ function txnDeltas(
     out.push({
       line: startLine + 1 + i,
       sign: v < 0 ? '−' : '+',
-      value: formatDeltaValue(Math.abs(v)),
+      value: formatDeltaValue(Math.abs(v), currency),
       flow: v < 0 ? 'out' : 'in',
     })
   }
@@ -88,6 +108,7 @@ export function computeCardSpecs(
       specs.push({
         ...e.range,
         balance: formatBalance(running, currency),
+        runningTotal: running,
         mismatch: false,
         deltas: txnDeltas(tx, account, currency, e.range.startLine),
       })
@@ -99,6 +120,7 @@ export function computeCardSpecs(
         specs.push({
           ...e.range,
           balance: formatBalance(running, currency),
+          runningTotal: running,
           mismatch: false,
           deltas: [],
         })
@@ -111,6 +133,7 @@ export function computeCardSpecs(
         specs.push({
           ...e.range,
           balance: formatBalance(running, currency),
+          runningTotal: running,
           mismatch,
           deltas: [],
         })
@@ -118,11 +141,18 @@ export function computeCardSpecs(
         specs.push({
           ...e.range,
           balance: formatBalance(running, currency),
+          runningTotal: running,
           mismatch: false,
           deltas: [],
         })
       } else {
-        specs.push({ ...e.range, balance: null, mismatch: false, deltas: [] })
+        specs.push({
+          ...e.range,
+          balance: null,
+          runningTotal: null,
+          mismatch: false,
+          deltas: [],
+        })
       }
     }
   }
