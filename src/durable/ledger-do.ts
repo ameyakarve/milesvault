@@ -4,7 +4,6 @@ import {
   buildTransactionAst,
   dateFromInt,
   dateToInt,
-  parseText,
   scaleDecimal,
   serializeDirective,
   serializeTransaction,
@@ -37,25 +36,8 @@ import type {
   V2CreateResult,
   V2DeleteResult,
   V2ListResult,
-  V2ReplaceAllResult,
   V2UpdateResult,
 } from './ledger-v2-types'
-
-// workerd caps SQLITE_LIMIT_COMPOUND_SELECT at 5; split 10 tables across 2 statements.
-const MAX_UPDATED_AT_SQL_A = `SELECT MAX(m) AS m FROM (
-  SELECT MAX(updated_at) AS m FROM transactions_v2
-  UNION ALL SELECT MAX(updated_at) FROM directives_open
-  UNION ALL SELECT MAX(updated_at) FROM directives_close
-  UNION ALL SELECT MAX(updated_at) FROM directives_commodity
-  UNION ALL SELECT MAX(updated_at) FROM directives_balance
-)`
-const MAX_UPDATED_AT_SQL_B = `SELECT MAX(m) AS m FROM (
-  SELECT MAX(updated_at) AS m FROM directives_pad
-  UNION ALL SELECT MAX(updated_at) FROM directives_price
-  UNION ALL SELECT MAX(updated_at) FROM directives_note
-  UNION ALL SELECT MAX(updated_at) FROM directives_document
-  UNION ALL SELECT MAX(updated_at) FROM directives_event
-)`
 
 export class LedgerDO extends DurableObject<CloudflareEnv> {
   private sql: SqlStorage
@@ -451,73 +433,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       if (t) rows.push(t)
     }
     return { rows, total, limit, offset }
-  }
-
-  async v2_max_updated_at(): Promise<number> {
-    return this.maxUpdatedAtSync()
-  }
-
-  async v2_replace_all(
-    buffer: string,
-    expected_max_updated_at: number,
-  ): Promise<V2ReplaceAllResult> {
-    const parsed = parseText(buffer)
-    if (parsed.ok === false) return { ok: false, kind: 'validation', errors: parsed.errors }
-    const directives = parsed.directives
-    const resolve = this.batchResolver(directives)
-    const prepared: { d: DirectiveInput; rawText: string }[] = []
-    for (let i = 0; i < directives.length; i++) {
-      const d = directives[i]
-      const errs = validateDirective(d, resolve)
-      if (errs.length > 0) {
-        return { ok: false, kind: 'validation', errors: errs.map((e) => `directives[${i}]: ${e}`) }
-      }
-      let rawText: string
-      try {
-        rawText = serializeDirective(d)
-      } catch (e) {
-        return {
-          ok: false,
-          kind: 'validation',
-          errors: [`directives[${i}]: serialize failed: ${String(e)}`],
-        }
-      }
-      prepared.push({ d, rawText })
-    }
-    let result: V2ReplaceAllResult = { ok: false, kind: 'conflict', current_max_updated_at: 0 }
-    this.ctx.storage.transactionSync(() => {
-      const current = this.maxUpdatedAtSync()
-      if (current !== expected_max_updated_at) {
-        result = { ok: false, kind: 'conflict', current_max_updated_at: current }
-        return
-      }
-      this.sql.exec('DELETE FROM transactions_v2')
-      this.sql.exec('DELETE FROM directives_open')
-      this.sql.exec('DELETE FROM directives_close')
-      this.sql.exec('DELETE FROM directives_commodity')
-      this.sql.exec('DELETE FROM directives_balance')
-      this.sql.exec('DELETE FROM directives_pad')
-      this.sql.exec('DELETE FROM directives_price')
-      this.sql.exec('DELETE FROM directives_note')
-      this.sql.exec('DELETE FROM directives_document')
-      this.sql.exec('DELETE FROM directives_event')
-      const out: DirectiveV2[] = []
-      const now = Date.now()
-      for (const { d, rawText } of prepared) {
-        const id = this.insertDirective(d, rawText, now, now)
-        if (id == null) continue
-        const dir = this.readDirective(d.kind, id)
-        if (dir) out.push(dir)
-      }
-      result = { ok: true, directives: out, max_updated_at: now }
-    })
-    return result
-  }
-
-  private maxUpdatedAtSync(): number {
-    const a = this.sql.exec<{ m: number | null }>(MAX_UPDATED_AT_SQL_A).toArray()[0]?.m ?? 0
-    const b = this.sql.exec<{ m: number | null }>(MAX_UPDATED_AT_SQL_B).toArray()[0]?.m ?? 0
-    return Math.max(a, b)
   }
 
   private latestOpenConstraints(account: string): string[] | null {
