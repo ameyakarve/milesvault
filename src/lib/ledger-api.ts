@@ -13,12 +13,10 @@ import type {
   V2CreateResult,
   V2DeleteResult,
   V2ListResult,
-  V2ReplaceAllResult,
   V2UpdateResult,
 } from '@/durable/ledger-v2-types'
 export const DEFAULT_LIMIT = 50
 export const MAX_LIMIT = 100
-export const MAX_REPLACE_BUFFER_BYTES = 256 * 1024
 
 export type LedgerClient = {
   v2_create(input: TransactionInput): Promise<V2CreateResult>
@@ -49,8 +47,6 @@ export type LedgerClient = {
   v2_recent_accounts_list(limit?: number): Promise<string[]>
   v2_recent_account_touch(account: string): Promise<void>
   v2_list_by_account(account: string, limit?: number, offset?: number): Promise<V2ListResult>
-  v2_max_updated_at(): Promise<number>
-  v2_replace_all(buffer: string, expected_max_updated_at: number): Promise<V2ReplaceAllResult>
 }
 
 const DIRECTIVE_KINDS: readonly DirectiveKind[] = [
@@ -181,23 +177,6 @@ export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerCl
       const l = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT)
       const o = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0)
       return stub.v2_list_by_account(account, l, o)
-    },
-
-    async v2_max_updated_at() {
-      return stub.v2_max_updated_at()
-    },
-
-    async v2_replace_all(buffer, expected_max_updated_at) {
-      if (typeof buffer !== 'string') {
-        throw new LedgerInputError(['buffer must be a string.'])
-      }
-      if (new TextEncoder().encode(buffer).byteLength > MAX_REPLACE_BUFFER_BYTES) {
-        throw new LedgerInputError([`buffer exceeds ${MAX_REPLACE_BUFFER_BYTES} bytes.`])
-      }
-      if (!Number.isInteger(expected_max_updated_at)) {
-        throw new LedgerInputError(['expected_max_updated_at must be an integer.'])
-      }
-      return stub.v2_replace_all(buffer, expected_max_updated_at)
     },
   }
 }
