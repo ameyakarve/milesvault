@@ -49,21 +49,6 @@ export type TransactionV2 = {
   updated_at: number
 }
 
-export type V2CreateResult =
-  | { ok: true; transaction: TransactionV2 }
-  | { ok: false; errors: string[] }
-
-export type V2UpdateResult =
-  | { ok: true; transaction: TransactionV2 }
-  | { ok: false; kind: 'validation'; errors: string[] }
-  | { ok: false; kind: 'conflict'; current_updated_at: number }
-  | { ok: false; kind: 'not_found' }
-
-export type V2DeleteResult =
-  | { ok: true }
-  | { ok: false; kind: 'conflict'; current_updated_at: number }
-  | { ok: false; kind: 'not_found' }
-
 export type V2ListResult = {
   rows: TransactionV2[]
   total: number
