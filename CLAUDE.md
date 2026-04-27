@@ -12,3 +12,7 @@ Next.js 15 App Router on Cloudflare Workers via `@opennextjs/cloudflare`. Auth i
 - Staging worker: `milesvault-staging` → staging.milesvault.com
 - Deploy: push to `main` → GitHub Actions auto-deploys staging via `pnpm run deploy`. Production deploy is manual (`workflow_dispatch`).
 - Push with `env -u GH_TOKEN git push` (fine-grained PAT lacks repo access; gh keyring token does).
+
+## Working rules
+
+- **Never make architectural changes without explicit authorization.** Do not swap out a library for a hand-written equivalent, replace a chosen editor/framework, restructure data flow, or rip out a non-trivial dependency on your own. If a task that's described in UI/visual terms ("make X pixel perfect", "tweak the design") seems to require an architectural change to land, stop and ask first. The default is to preserve the existing architecture.

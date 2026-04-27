@@ -206,10 +206,11 @@ export function NotebookView() {
     <NotebookShell
       breadcrumb={['Assets', 'Bank', 'Checking']}
       accountTitle="Bank Checking"
-      accountPath="Assets:Bank:Checking"
+      accountPath="Liabilities:CreditCard:HDFC:DinersBlack"
       balance="₹1,32,450.00"
       cards={CARDS}
-      txnCount={CARDS.length}
+      txnCount={12}
+      cursor="Ln 24, Col 8"
       unsaved
     />
   )
