@@ -22,6 +22,92 @@ export type TransactionInput = {
   meta?: Record<string, string> | null
 }
 
+export type OpenInput = {
+  date: string
+  account: string
+  booking_method?: string | null
+  constraint_currencies?: string[]
+  meta?: Record<string, string> | null
+}
+
+export type CloseInput = {
+  date: string
+  account: string
+  meta?: Record<string, string> | null
+}
+
+export type CommodityInput = {
+  date: string
+  currency: string
+  meta?: Record<string, string> | null
+}
+
+export type BalanceInput = {
+  date: string
+  account: string
+  amount: string
+  currency: string
+  meta?: Record<string, string> | null
+}
+
+export type PadInput = {
+  date: string
+  account: string
+  account_pad: string
+  meta?: Record<string, string> | null
+}
+
+export type PriceInput = {
+  date: string
+  commodity: string
+  currency: string
+  amount: string
+  meta?: Record<string, string> | null
+}
+
+export type NoteInput = {
+  date: string
+  account: string
+  description: string
+  meta?: Record<string, string> | null
+}
+
+export type DocumentInput = {
+  date: string
+  account: string
+  filename: string
+  meta?: Record<string, string> | null
+}
+
+export type EventInput = {
+  date: string
+  name: string
+  value: string
+  meta?: Record<string, string> | null
+}
+
+export type DirectiveKind =
+  | 'open'
+  | 'close'
+  | 'commodity'
+  | 'balance'
+  | 'pad'
+  | 'price'
+  | 'note'
+  | 'document'
+  | 'event'
+
+export type DirectiveInput =
+  | ({ kind: 'open' } & OpenInput)
+  | ({ kind: 'close' } & CloseInput)
+  | ({ kind: 'commodity' } & CommodityInput)
+  | ({ kind: 'balance' } & BalanceInput)
+  | ({ kind: 'pad' } & PadInput)
+  | ({ kind: 'price' } & PriceInput)
+  | ({ kind: 'note' } & NoteInput)
+  | ({ kind: 'document' } & DocumentInput)
+  | ({ kind: 'event' } & EventInput)
+
 export type Posting = Required<Pick<PostingInput, 'account'>> & {
   flag: string | null
   amount: string | null

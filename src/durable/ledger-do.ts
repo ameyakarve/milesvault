@@ -3,12 +3,14 @@ import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
   dateToInt,
+  directiveInputHash,
   parseJournal,
   serializeJournal,
   transactionInputHash,
 } from '@/lib/beancount/ast'
 import type {
   AccountEntriesResponse,
+  DirectiveInput,
   Entry,
   EntryBalance,
   EntryClose,
@@ -46,6 +48,18 @@ export type JournalPutError = {
   error: 'parse_error' | 'unsupported_directives'
   message: string
   unsupportedTypes?: string[]
+}
+
+const DIRECTIVE_TABLE: Record<DirectiveInput['kind'], string> = {
+  open: 'directives_open',
+  close: 'directives_close',
+  commodity: 'directives_commodity',
+  balance: 'directives_balance',
+  pad: 'directives_pad',
+  price: 'directives_price',
+  note: 'directives_note',
+  document: 'directives_document',
+  event: 'directives_event',
 }
 
 type EntryRef = { kind: Entry['kind']; id: number; date: number }
@@ -114,18 +128,17 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async journal_get(): Promise<JournalGetResponse> {
-    const ids = this.sql
-      .exec<{ id: number }>(
-        'SELECT id FROM transactions ORDER BY date ASC, id ASC',
-      )
+    const txnIds = this.sql
+      .exec<{ id: number }>('SELECT id FROM transactions ORDER BY date ASC, id ASC')
       .toArray()
       .map((r) => r.id)
-    const inputs: TransactionInput[] = []
-    for (const id of ids) {
+    const transactions: TransactionInput[] = []
+    for (const id of txnIds) {
       const e = this.readTxnEntry(id)
-      if (e) inputs.push(entryTxnToInput(e))
+      if (e) transactions.push(entryTxnToInput(e))
     }
-    return { text: serializeJournal(inputs) }
+    const directives = this.readAllDirectives()
+    return { text: serializeJournal(transactions, directives) }
   }
 
   async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {
@@ -143,57 +156,101 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       return {
         ok: false,
         error: 'unsupported_directives',
-        message: `Only transactions are editable here. Found: ${parsed.unsupportedDirectiveTypes.join(', ')}`,
+        message: `Unsupported directive types: ${parsed.unsupportedDirectiveTypes.join(', ')}`,
         unsupportedTypes: parsed.unsupportedDirectiveTypes,
       }
     }
 
-    const incoming: Array<{ input: TransactionInput; hash: string }> = []
-    for (const input of parsed.transactions) {
-      incoming.push({ input, hash: await transactionInputHash(input) })
-    }
-
-    const oldByHash = new Map<string, number[]>()
-    const oldRows = this.sql
-      .exec<{ id: number; hash: string | null }>(
-        'SELECT id, hash FROM transactions',
-      )
-      .toArray()
-    for (const r of oldRows) {
-      const key = r.hash ?? ''
-      if (!oldByHash.has(key)) oldByHash.set(key, [])
-      oldByHash.get(key)!.push(r.id)
-    }
-
+    let inserted = 0
+    let deleted = 0
     let unchanged = 0
-    const toInsert: Array<{ input: TransactionInput; hash: string }> = []
-    for (const item of incoming) {
-      const ids = oldByHash.get(item.hash)
+    const now = Date.now()
+
+    // Transactions: stored hash diff
+    const incomingTxns: Array<{ input: TransactionInput; hash: string }> = []
+    for (const input of parsed.transactions) {
+      incomingTxns.push({ input, hash: await transactionInputHash(input) })
+    }
+    const oldTxnsByHash = new Map<string, number[]>()
+    for (const r of this.sql
+      .exec<{ id: number; hash: string | null }>('SELECT id, hash FROM transactions')
+      .toArray()) {
+      const key = r.hash ?? ''
+      if (!oldTxnsByHash.has(key)) oldTxnsByHash.set(key, [])
+      oldTxnsByHash.get(key)!.push(r.id)
+    }
+    const txnsToInsert: Array<{ input: TransactionInput; hash: string }> = []
+    for (const item of incomingTxns) {
+      const ids = oldTxnsByHash.get(item.hash)
       if (ids && ids.length > 0) {
         ids.shift()
         unchanged++
       } else {
-        toInsert.push(item)
+        txnsToInsert.push(item)
       }
     }
-    const idsToDelete: number[] = []
-    for (const ids of oldByHash.values()) idsToDelete.push(...ids)
-
-    for (const id of idsToDelete) {
+    const txnIdsToDelete: number[] = []
+    for (const ids of oldTxnsByHash.values()) txnIdsToDelete.push(...ids)
+    for (const id of txnIdsToDelete) {
       this.sql.exec('DELETE FROM transactions WHERE id = ?', id)
     }
-    const now = Date.now()
-    for (const { input, hash } of toInsert) {
-      this.insertTxn(input, hash, now)
+    for (const { input, hash } of txnsToInsert) this.insertTxn(input, hash, now)
+    inserted += txnsToInsert.length
+    deleted += txnIdsToDelete.length
+
+    // Directives: hash on the fly per kind
+    const incomingByKind = new Map<DirectiveInput['kind'], DirectiveInput[]>()
+    for (const d of parsed.directives) {
+      const arr = incomingByKind.get(d.kind) ?? []
+      arr.push(d)
+      incomingByKind.set(d.kind, arr)
+    }
+    const allKinds: DirectiveInput['kind'][] = [
+      'open',
+      'close',
+      'commodity',
+      'balance',
+      'pad',
+      'price',
+      'note',
+      'document',
+      'event',
+    ]
+    for (const kind of allKinds) {
+      const incoming = incomingByKind.get(kind) ?? []
+      const incomingHashes = await Promise.all(
+        incoming.map(async (d) => ({ input: d, hash: await directiveInputHash(d) })),
+      )
+      const existing = this.readDirectivesByKind(kind)
+      const oldByHash = new Map<string, number[]>()
+      for (const e of existing) {
+        const h = await directiveInputHash(e.input)
+        if (!oldByHash.has(h)) oldByHash.set(h, [])
+        oldByHash.get(h)!.push(e.id)
+      }
+      const toInsert: DirectiveInput[] = []
+      for (const item of incomingHashes) {
+        const ids = oldByHash.get(item.hash)
+        if (ids && ids.length > 0) {
+          ids.shift()
+          unchanged++
+        } else {
+          toInsert.push(item.input)
+        }
+      }
+      const idsToDelete: number[] = []
+      for (const ids of oldByHash.values()) idsToDelete.push(...ids)
+      const table = DIRECTIVE_TABLE[kind]
+      for (const id of idsToDelete) {
+        this.sql.exec(`DELETE FROM ${table} WHERE id = ?`, id)
+      }
+      for (const d of toInsert) this.insertDirective(d, now)
+      inserted += toInsert.length
+      deleted += idsToDelete.length
     }
 
     const result = await this.journal_get()
-    return {
-      text: result.text,
-      inserted: toInsert.length,
-      deleted: idsToDelete.length,
-      unchanged,
-    }
+    return { text: result.text, inserted, deleted, unchanged }
   }
 
   async clear(): Promise<{ ok: true }> {
@@ -236,6 +293,334 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         txnId,
         link,
       )
+    }
+  }
+
+  private readAllDirectives(): DirectiveInput[] {
+    const out: DirectiveInput[] = []
+    out.push(...this.readDirectivesByKind('open').map((e) => e.input))
+    out.push(...this.readDirectivesByKind('close').map((e) => e.input))
+    out.push(...this.readDirectivesByKind('commodity').map((e) => e.input))
+    out.push(...this.readDirectivesByKind('balance').map((e) => e.input))
+    out.push(...this.readDirectivesByKind('pad').map((e) => e.input))
+    out.push(...this.readDirectivesByKind('price').map((e) => e.input))
+    out.push(...this.readDirectivesByKind('note').map((e) => e.input))
+    out.push(...this.readDirectivesByKind('document').map((e) => e.input))
+    out.push(...this.readDirectivesByKind('event').map((e) => e.input))
+    return out
+  }
+
+  private readDirectivesByKind(
+    kind: DirectiveInput['kind'],
+  ): Array<{ id: number; input: DirectiveInput }> {
+    switch (kind) {
+      case 'open':
+        return this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            booking_method: string | null
+            constraint_currencies: string
+            meta_json: string
+          }>(
+            'SELECT id, date, account, booking_method, constraint_currencies, meta_json FROM directives_open',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'open',
+              date: dateFromInt(r.date),
+              account: r.account,
+              booking_method: r.booking_method,
+              constraint_currencies: parseStringArray(r.constraint_currencies),
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+      case 'close':
+        return this.sql
+          .exec<{ id: number; date: number; account: string; meta_json: string }>(
+            'SELECT id, date, account, meta_json FROM directives_close',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'close',
+              date: dateFromInt(r.date),
+              account: r.account,
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+      case 'commodity':
+        return this.sql
+          .exec<{ id: number; date: number; currency: string; meta_json: string }>(
+            'SELECT id, date, currency, meta_json FROM directives_commodity',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'commodity',
+              date: dateFromInt(r.date),
+              currency: r.currency,
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+      case 'balance':
+        return this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            amount: string
+            currency: string
+            meta_json: string
+          }>(
+            'SELECT id, date, account, amount, currency, meta_json FROM directives_balance',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'balance',
+              date: dateFromInt(r.date),
+              account: r.account,
+              amount: r.amount,
+              currency: r.currency,
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+      case 'pad':
+        return this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            account_pad: string
+            meta_json: string
+          }>(
+            'SELECT id, date, account, account_pad, meta_json FROM directives_pad',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'pad',
+              date: dateFromInt(r.date),
+              account: r.account,
+              account_pad: r.account_pad,
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+      case 'price':
+        return this.sql
+          .exec<{
+            id: number
+            date: number
+            commodity: string
+            currency: string
+            amount: string
+            meta_json: string
+          }>(
+            'SELECT id, date, commodity, currency, amount, meta_json FROM directives_price',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'price',
+              date: dateFromInt(r.date),
+              commodity: r.commodity,
+              currency: r.currency,
+              amount: r.amount,
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+      case 'note':
+        return this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            description: string
+            meta_json: string
+          }>(
+            'SELECT id, date, account, description, meta_json FROM directives_note',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'note',
+              date: dateFromInt(r.date),
+              account: r.account,
+              description: r.description,
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+      case 'document':
+        return this.sql
+          .exec<{
+            id: number
+            date: number
+            account: string
+            filename: string
+            meta_json: string
+          }>(
+            'SELECT id, date, account, filename, meta_json FROM directives_document',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'document',
+              date: dateFromInt(r.date),
+              account: r.account,
+              filename: r.filename,
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+      case 'event':
+        return this.sql
+          .exec<{ id: number; date: number; name: string; value: string; meta_json: string }>(
+            'SELECT id, date, name, value, meta_json FROM directives_event',
+          )
+          .toArray()
+          .map((r) => ({
+            id: r.id,
+            input: {
+              kind: 'event',
+              date: dateFromInt(r.date),
+              name: r.name,
+              value: r.value,
+              meta: parseMetaOrNull(r.meta_json),
+            },
+          }))
+    }
+  }
+
+  private insertDirective(d: DirectiveInput, now: number): void {
+    const dateInt = dateToInt(d.date)
+    const meta = JSON.stringify(d.meta ?? {})
+    switch (d.kind) {
+      case 'open':
+        this.sql.exec(
+          `INSERT INTO directives_open
+             (date, account, booking_method, constraint_currencies, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          dateInt,
+          d.account,
+          d.booking_method ?? null,
+          JSON.stringify(d.constraint_currencies ?? []),
+          meta,
+          now,
+          now,
+        )
+        return
+      case 'close':
+        this.sql.exec(
+          `INSERT INTO directives_close (date, account, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?)`,
+          dateInt,
+          d.account,
+          meta,
+          now,
+          now,
+        )
+        return
+      case 'commodity':
+        this.sql.exec(
+          `INSERT INTO directives_commodity (date, currency, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?)`,
+          dateInt,
+          d.currency,
+          meta,
+          now,
+          now,
+        )
+        return
+      case 'balance':
+        this.sql.exec(
+          `INSERT INTO directives_balance
+             (date, account, amount, amount_scaled, scale, currency, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          dateInt,
+          d.account,
+          d.amount,
+          0,
+          0,
+          d.currency,
+          meta,
+          now,
+          now,
+        )
+        return
+      case 'pad':
+        this.sql.exec(
+          `INSERT INTO directives_pad (date, account, account_pad, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          dateInt,
+          d.account,
+          d.account_pad,
+          meta,
+          now,
+          now,
+        )
+        return
+      case 'price':
+        this.sql.exec(
+          `INSERT INTO directives_price
+             (date, commodity, currency, amount, amount_scaled, scale, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          dateInt,
+          d.commodity,
+          d.currency,
+          d.amount,
+          0,
+          0,
+          meta,
+          now,
+          now,
+        )
+        return
+      case 'note':
+        this.sql.exec(
+          `INSERT INTO directives_note (date, account, description, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          dateInt,
+          d.account,
+          d.description,
+          meta,
+          now,
+          now,
+        )
+        return
+      case 'document':
+        this.sql.exec(
+          `INSERT INTO directives_document (date, account, filename, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          dateInt,
+          d.account,
+          d.filename,
+          meta,
+          now,
+          now,
+        )
+        return
+      case 'event':
+        this.sql.exec(
+          `INSERT INTO directives_event (date, name, value, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          dateInt,
+          d.name,
+          d.value,
+          meta,
+          now,
+          now,
+        )
+        return
     }
   }
 
@@ -646,6 +1031,11 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       updated_at: row.updated_at,
     }
   }
+}
+
+function parseMetaOrNull(json: string): Record<string, string> | null {
+  const m = parseMeta(json)
+  return Object.keys(m).length > 0 ? m : null
 }
 
 function parseMeta(json: string): Record<string, string> {
