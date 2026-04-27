@@ -72,6 +72,10 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       try {
         this.sql.exec(sql)
       } catch (e) {
+        if (label.startsWith('drop_')) {
+          console.warn(`[migrate] v2 step ${label} skipped (column already absent)`, { err: String(e) })
+          continue
+        }
         console.error(`[migrate] v2 step ${label} failed`, { err: String(e) })
         throw e
       }
@@ -81,22 +85,20 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   async v2_create(input: TransactionInput): Promise<V2CreateResult> {
     const prepared = prepareV2Input(input)
     if (prepared.ok === false) return { ok: false, errors: prepared.errors }
-    const rawText = prepared.rawText
     const now = Date.now()
     let txn: TransactionV2 | null = null
     this.ctx.storage.transactionSync(() => {
       const row = this.sql
         .exec<{ id: number }>(
           `INSERT INTO transactions_v2
-             (date, flag, payee, narration, meta_json, raw_text, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             (date, flag, payee, narration, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            RETURNING id`,
           dateToInt(input.date),
           input.flag ?? null,
           input.payee ?? '',
           input.narration ?? '',
           JSON.stringify(input.meta ?? {}),
-          rawText,
           now,
           now,
         )
@@ -144,7 +146,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     if (prepared.ok === false) {
       return { ok: false, kind: 'validation', errors: prepared.errors }
     }
-    const rawText = prepared.rawText
     let result: V2UpdateResult = { ok: false, kind: 'not_found' }
     this.ctx.storage.transactionSync(() => {
       const current = this.sql
@@ -169,14 +170,13 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       this.sql.exec(
         `UPDATE transactions_v2 SET
            date = ?, flag = ?, payee = ?, narration = ?, meta_json = ?,
-           raw_text = ?, updated_at = max(?, updated_at + 1)
+           updated_at = max(?, updated_at + 1)
          WHERE id = ?`,
         dateToInt(input.date),
         input.flag ?? null,
         input.payee ?? '',
         input.narration ?? '',
         JSON.stringify(input.meta ?? {}),
-        rawText,
         now,
         id,
       )
@@ -220,26 +220,20 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   async v2_directive_create(directives: DirectiveInput[]): Promise<DirectiveCreateResult> {
     if (directives.length === 0) return { ok: false, errors: ['no directives provided'] }
     const resolve = this.batchResolver(directives)
-    const prepared: { d: DirectiveInput; rawText: string }[] = []
+    const prepared: DirectiveInput[] = []
     for (let i = 0; i < directives.length; i++) {
       const d = directives[i]
       const errs = validateDirective(d, resolve)
       if (errs.length > 0) {
         return { ok: false, errors: errs.map((e) => `directives[${i}]: ${e}`) }
       }
-      let rawText: string
-      try {
-        rawText = serializeDirective(d)
-      } catch (e) {
-        return { ok: false, errors: [`directives[${i}]: serialize failed: ${String(e)}`] }
-      }
-      prepared.push({ d, rawText })
+      prepared.push(d)
     }
     const created: DirectiveV2[] = []
     this.ctx.storage.transactionSync(() => {
       const now = Date.now()
-      for (const { d, rawText } of prepared) {
-        const id = this.insertDirective(d, rawText, now, now)
+      for (const d of prepared) {
+        const id = this.insertDirective(d, now, now)
         if (id == null) continue
         const out = this.readDirective(d.kind, id)
         if (out) created.push(out)
@@ -300,12 +294,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const resolve = this.batchResolver([d])
     const errs = validateDirective(d, resolve)
     if (errs.length > 0) return { ok: false, kind: 'validation', errors: errs }
-    let rawText: string
-    try {
-      rawText = serializeDirective(d)
-    } catch (e) {
-      return { ok: false, kind: 'validation', errors: [`serialize failed: ${String(e)}`] }
-    }
     let result: DirectiveUpdateResult = { ok: false, kind: 'not_found' }
     this.ctx.storage.transactionSync(() => {
       const table = directiveTable(kind)
@@ -326,7 +314,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       const now = Date.now()
       const nextUpdated = Math.max(now, current.updated_at + 1)
       this.deleteDirectiveRow(kind, id)
-      const newId = this.insertDirective(d, rawText, nextUpdated, current.created_at, id)
+      const newId = this.insertDirective(d, nextUpdated, current.created_at, id)
       if (newId == null) {
         result = { ok: false, kind: 'not_found' }
         return
@@ -456,9 +444,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       args.push(filter.dateTo)
     }
     for (const tok of filter.freeTokens) {
-      where.push(`(LOWER(t.payee) LIKE ? OR LOWER(t.narration) LIKE ? OR LOWER(t.raw_text) LIKE ?)`)
+      where.push(`(LOWER(t.payee) LIKE ? OR LOWER(t.narration) LIKE ?)`)
       const like = `%${tok.toLowerCase()}%`
-      args.push(like, like, like)
+      args.push(like, like)
     }
     const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
     const totalRow = this.sql
@@ -495,24 +483,14 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     if (parsed.ok === false) return { ok: false, kind: 'validation', errors: parsed.errors }
     const directives = parsed.directives
     const resolve = this.batchResolver(directives)
-    const prepared: { d: DirectiveInput; rawText: string }[] = []
+    const prepared: DirectiveInput[] = []
     for (let i = 0; i < directives.length; i++) {
       const d = directives[i]
       const errs = validateDirective(d, resolve)
       if (errs.length > 0) {
         return { ok: false, kind: 'validation', errors: errs.map((e) => `directives[${i}]: ${e}`) }
       }
-      let rawText: string
-      try {
-        rawText = serializeDirective(d)
-      } catch (e) {
-        return {
-          ok: false,
-          kind: 'validation',
-          errors: [`directives[${i}]: serialize failed: ${String(e)}`],
-        }
-      }
-      prepared.push({ d, rawText })
+      prepared.push(d)
     }
     let result: V2ReplaceAllResult = { ok: false, kind: 'conflict', current_max_updated_at: 0 }
     this.ctx.storage.transactionSync(() => {
@@ -533,8 +511,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       this.sql.exec('DELETE FROM directives_event')
       const out: DirectiveV2[] = []
       const now = Date.now()
-      for (const { d, rawText } of prepared) {
-        const id = this.insertDirective(d, rawText, now, now)
+      for (const d of prepared) {
+        const id = this.insertDirective(d, now, now)
         if (id == null) continue
         const dir = this.readDirective(d.kind, id)
         if (dir) out.push(dir)
@@ -603,23 +581,21 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
 
   private insertDirective(
     d: DirectiveInput,
-    rawText: string,
     updatedAt: number,
     createdAt: number,
     forcedId?: number,
   ): number | null {
     if (d.kind === 'transaction') {
-      const id = this.insertTransactionRow(d.input, rawText, updatedAt, createdAt, forcedId)
+      const id = this.insertTransactionRow(d.input, updatedAt, createdAt, forcedId)
       if (id == null) return null
       this.insertV2Children(id, d.input)
       return id
     }
-    return this.insertNonTxnDirective(d, rawText, updatedAt, createdAt, forcedId)
+    return this.insertNonTxnDirective(d, updatedAt, createdAt, forcedId)
   }
 
   private insertTransactionRow(
     input: TransactionInput,
-    rawText: string,
     updatedAt: number,
     createdAt: number,
     forcedId?: number,
@@ -632,7 +608,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       input.payee ?? '',
       input.narration ?? '',
       JSON.stringify(input.meta ?? {}),
-      rawText,
       createdAt,
       updatedAt,
     ] as const
@@ -640,8 +615,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const r = this.sql
       .exec<{ id: number }>(
         `INSERT INTO transactions_v2
-           (${idCol}date, flag, payee, narration, meta_json, raw_text, created_at, updated_at)
-         VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?)
+           (${idCol}date, flag, payee, narration, meta_json, created_at, updated_at)
+         VALUES (${idVal}?, ?, ?, ?, ?, ?, ?)
          RETURNING id`,
         ...args,
       )
@@ -651,7 +626,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
 
   private insertNonTxnDirective(
     d: Exclude<DirectiveInput, { kind: 'transaction' }>,
-    rawText: string,
     updatedAt: number,
     createdAt: number,
     forcedId?: number,
@@ -661,14 +635,14 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const idCol = forcedId != null ? 'id, ' : ''
     const idVal = forcedId != null ? '?, ' : ''
     const idArgs: SqlStorageValue[] = forcedId != null ? [forcedId] : []
-    const tail: SqlStorageValue[] = [meta, rawText, createdAt, updatedAt]
+    const tail: SqlStorageValue[] = [meta, createdAt, updatedAt]
     switch (d.kind) {
       case 'open': {
         const i = d.input
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_open (${idCol}date, account, booking_method, constraint_currencies, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_open (${idCol}date, account, booking_method, constraint_currencies, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.account,
@@ -683,8 +657,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         const i = d.input
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_close (${idCol}date, account, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_close (${idCol}date, account, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.account,
@@ -697,8 +671,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         const i = d.input
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_commodity (${idCol}date, currency, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_commodity (${idCol}date, currency, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.currency,
@@ -712,8 +686,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         const amt = scaleDecimal(i.amount)
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_balance (${idCol}date, account, amount, amount_scaled, scale, currency, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_balance (${idCol}date, account, amount, amount_scaled, scale, currency, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.account,
@@ -730,8 +704,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         const i = d.input
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_pad (${idCol}date, account, account_pad, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_pad (${idCol}date, account, account_pad, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.account,
@@ -746,8 +720,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         const amt = scaleDecimal(i.amount)
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_price (${idCol}date, commodity, currency, amount, amount_scaled, scale, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_price (${idCol}date, commodity, currency, amount, amount_scaled, scale, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.commodity,
@@ -764,8 +738,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         const i = d.input
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_note (${idCol}date, account, description, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_note (${idCol}date, account, description, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.account,
@@ -779,8 +753,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         const i = d.input
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_document (${idCol}date, account, filename, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_document (${idCol}date, account, filename, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.account,
@@ -794,8 +768,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         const i = d.input
         const row = this.sql
           .exec<{ id: number }>(
-            `INSERT INTO directives_event (${idCol}date, name, value, meta_json, raw_text, created_at, updated_at)
-             VALUES (${idVal}?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+            `INSERT INTO directives_event (${idCol}date, name, value, meta_json, created_at, updated_at)
+             VALUES (${idVal}?, ?, ?, ?, ?, ?) RETURNING id`,
             ...idArgs,
             dateInt,
             i.name,
@@ -832,21 +806,25 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             booking_method: string | null
             constraint_currencies: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_open WHERE id = ?`, id)
+          }>(`SELECT id, date, account, booking_method, constraint_currencies, meta_json, created_at, updated_at FROM directives_open WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const account = r.account
+        const booking_method = r.booking_method
+        const constraint_currencies = parseStringArray(r.constraint_currencies)
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'open',
           id: r.id,
-          date: dateFromInt(r.date),
-          account: r.account,
-          booking_method: r.booking_method,
-          constraint_currencies: parseStringArray(r.constraint_currencies),
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          account,
+          booking_method,
+          constraint_currencies,
+          meta,
+          raw_text: serializeDirective({ kind: 'open', input: { date, account, booking_method, constraint_currencies, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectiveOpen
@@ -858,19 +836,21 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             date: number
             account: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_close WHERE id = ?`, id)
+          }>(`SELECT id, date, account, meta_json, created_at, updated_at FROM directives_close WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const account = r.account
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'close',
           id: r.id,
-          date: dateFromInt(r.date),
-          account: r.account,
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          account,
+          meta,
+          raw_text: serializeDirective({ kind: 'close', input: { date, account, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectiveClose
@@ -882,19 +862,21 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             date: number
             currency: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_commodity WHERE id = ?`, id)
+          }>(`SELECT id, date, currency, meta_json, created_at, updated_at FROM directives_commodity WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const currency = r.currency
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'commodity',
           id: r.id,
-          date: dateFromInt(r.date),
-          currency: r.currency,
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          currency,
+          meta,
+          raw_text: serializeDirective({ kind: 'commodity', input: { date, currency, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectiveCommodity
@@ -908,21 +890,25 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             amount: string
             currency: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_balance WHERE id = ?`, id)
+          }>(`SELECT id, date, account, amount, currency, meta_json, created_at, updated_at FROM directives_balance WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const account = r.account
+        const amount = r.amount
+        const currency = r.currency
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'balance',
           id: r.id,
-          date: dateFromInt(r.date),
-          account: r.account,
-          amount: r.amount,
-          currency: r.currency,
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          account,
+          amount,
+          currency,
+          meta,
+          raw_text: serializeDirective({ kind: 'balance', input: { date, account, amount, currency, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectiveBalance
@@ -935,20 +921,23 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             account: string
             account_pad: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_pad WHERE id = ?`, id)
+          }>(`SELECT id, date, account, account_pad, meta_json, created_at, updated_at FROM directives_pad WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const account = r.account
+        const account_pad = r.account_pad
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'pad',
           id: r.id,
-          date: dateFromInt(r.date),
-          account: r.account,
-          account_pad: r.account_pad,
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          account,
+          account_pad,
+          meta,
+          raw_text: serializeDirective({ kind: 'pad', input: { date, account, account_pad, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectivePad
@@ -962,21 +951,25 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             currency: string
             amount: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_price WHERE id = ?`, id)
+          }>(`SELECT id, date, commodity, currency, amount, meta_json, created_at, updated_at FROM directives_price WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const commodity = r.commodity
+        const currency = r.currency
+        const amount = r.amount
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'price',
           id: r.id,
-          date: dateFromInt(r.date),
-          commodity: r.commodity,
-          currency: r.currency,
-          amount: r.amount,
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          commodity,
+          currency,
+          amount,
+          meta,
+          raw_text: serializeDirective({ kind: 'price', input: { date, commodity, currency, amount, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectivePrice
@@ -989,20 +982,23 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             account: string
             description: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_note WHERE id = ?`, id)
+          }>(`SELECT id, date, account, description, meta_json, created_at, updated_at FROM directives_note WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const account = r.account
+        const description = r.description
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'note',
           id: r.id,
-          date: dateFromInt(r.date),
-          account: r.account,
-          description: r.description,
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          account,
+          description,
+          meta,
+          raw_text: serializeDirective({ kind: 'note', input: { date, account, description, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectiveNote
@@ -1015,20 +1011,23 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             account: string
             filename: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_document WHERE id = ?`, id)
+          }>(`SELECT id, date, account, filename, meta_json, created_at, updated_at FROM directives_document WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const account = r.account
+        const filename = r.filename
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'document',
           id: r.id,
-          date: dateFromInt(r.date),
-          account: r.account,
-          filename: r.filename,
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          account,
+          filename,
+          meta,
+          raw_text: serializeDirective({ kind: 'document', input: { date, account, filename, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectiveDocument
@@ -1041,20 +1040,23 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             name: string
             value: string
             meta_json: string
-            raw_text: string
             created_at: number
             updated_at: number
-          }>(`SELECT * FROM directives_event WHERE id = ?`, id)
+          }>(`SELECT id, date, name, value, meta_json, created_at, updated_at FROM directives_event WHERE id = ?`, id)
           .toArray()[0]
         if (!r) return null
+        const date = dateFromInt(r.date)
+        const name = r.name
+        const value = r.value
+        const meta = parseMeta(r.meta_json)
         return {
           kind: 'event',
           id: r.id,
-          date: dateFromInt(r.date),
-          name: r.name,
-          value: r.value,
-          meta: parseMeta(r.meta_json),
-          raw_text: r.raw_text,
+          date,
+          name,
+          value,
+          meta,
+          raw_text: serializeDirective({ kind: 'event', input: { date, name, value, meta } }),
           created_at: r.created_at,
           updated_at: r.updated_at,
         } satisfies DirectiveEvent
@@ -1121,11 +1123,10 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         payee: string
         narration: string
         meta_json: string
-        raw_text: string
         created_at: number
         updated_at: number
       }>(
-        `SELECT id, date, flag, payee, narration, meta_json, raw_text, created_at, updated_at
+        `SELECT id, date, flag, payee, narration, meta_json, created_at, updated_at
          FROM transactions_v2 WHERE id = ?`,
         id,
       )
@@ -1180,17 +1181,22 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       )
       .toArray()
       .map((r) => r.link)
+    const date = dateFromInt(head.date)
+    const flag = (head.flag === '*' || head.flag === '!' ? head.flag : null) as '*' | '!' | null
+    const payee = head.payee
+    const narration = head.narration
+    const meta = parseMeta(head.meta_json)
     return {
       id: head.id,
-      date: dateFromInt(head.date),
-      flag: (head.flag === '*' || head.flag === '!' ? head.flag : null) as '*' | '!' | null,
-      payee: head.payee,
-      narration: head.narration,
+      date,
+      flag,
+      payee,
+      narration,
       postings,
       tags,
       links,
-      meta: parseMeta(head.meta_json),
-      raw_text: head.raw_text,
+      meta,
+      raw_text: serializeTransaction(buildTransactionAst({ date, flag, payee, narration, postings, tags, links, meta })),
       created_at: head.created_at,
       updated_at: head.updated_at,
     }
@@ -1199,14 +1205,10 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
 
 function prepareV2Input(
   input: TransactionInput,
-): { ok: true; rawText: string } | { ok: false; errors: string[] } {
+): { ok: true } | { ok: false; errors: string[] } {
   const errors = validateInput(input)
   if (errors.length > 0) return { ok: false, errors }
-  try {
-    return { ok: true, rawText: serializeTransaction(buildTransactionAst(input)) }
-  } catch (e) {
-    return { ok: false, errors: [`serialize failed: ${String(e)}`] }
-  }
+  return { ok: true }
 }
 
 function directiveTable(kind: DirectiveKind): string {

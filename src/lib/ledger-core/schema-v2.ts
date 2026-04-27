@@ -8,7 +8,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       payee       TEXT    NOT NULL DEFAULT '',
       narration   TEXT    NOT NULL DEFAULT '',
       meta_json   TEXT    NOT NULL DEFAULT '{}',
-      raw_text    TEXT    NOT NULL,
       created_at  INTEGER NOT NULL,
       updated_at  INTEGER NOT NULL
     )`,
@@ -74,7 +73,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       booking_method        TEXT,
       constraint_currencies TEXT NOT NULL DEFAULT '[]',
       meta_json             TEXT NOT NULL DEFAULT '{}',
-      raw_text              TEXT NOT NULL,
       created_at            INTEGER NOT NULL,
       updated_at            INTEGER NOT NULL
     )`,
@@ -86,7 +84,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       date       INTEGER NOT NULL,
       account    TEXT NOT NULL,
       meta_json  TEXT NOT NULL DEFAULT '{}',
-      raw_text   TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
@@ -98,7 +95,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       date       INTEGER NOT NULL,
       currency   TEXT NOT NULL,
       meta_json  TEXT NOT NULL DEFAULT '{}',
-      raw_text   TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
@@ -114,7 +110,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       scale         INTEGER NOT NULL,
       currency      TEXT NOT NULL,
       meta_json     TEXT NOT NULL DEFAULT '{}',
-      raw_text      TEXT NOT NULL,
       created_at    INTEGER NOT NULL,
       updated_at    INTEGER NOT NULL
     )`,
@@ -127,7 +122,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       account      TEXT NOT NULL,
       account_pad  TEXT NOT NULL,
       meta_json    TEXT NOT NULL DEFAULT '{}',
-      raw_text     TEXT NOT NULL,
       created_at   INTEGER NOT NULL,
       updated_at   INTEGER NOT NULL
     )`,
@@ -143,7 +137,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       amount_scaled INTEGER NOT NULL,
       scale         INTEGER NOT NULL,
       meta_json     TEXT NOT NULL DEFAULT '{}',
-      raw_text      TEXT NOT NULL,
       created_at    INTEGER NOT NULL,
       updated_at    INTEGER NOT NULL
     )`,
@@ -156,7 +149,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       account     TEXT NOT NULL,
       description TEXT NOT NULL,
       meta_json   TEXT NOT NULL DEFAULT '{}',
-      raw_text    TEXT NOT NULL,
       created_at  INTEGER NOT NULL,
       updated_at  INTEGER NOT NULL
     )`,
@@ -169,7 +161,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       account    TEXT NOT NULL,
       filename   TEXT NOT NULL,
       meta_json  TEXT NOT NULL DEFAULT '{}',
-      raw_text   TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
@@ -182,7 +173,6 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
       name       TEXT NOT NULL,
       value      TEXT NOT NULL,
       meta_json  TEXT NOT NULL DEFAULT '{}',
-      raw_text   TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
@@ -234,4 +224,14 @@ export const SCHEMA_STEPS_V2: ReadonlyArray<readonly [label: string, sql: string
     'idx_account_recents_last_viewed',
     'CREATE INDEX IF NOT EXISTS idx_account_recents_last_viewed ON account_recents(last_viewed_at DESC)',
   ],
+  ['drop_raw_text_transactions_v2', 'ALTER TABLE transactions_v2 DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_open', 'ALTER TABLE directives_open DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_close', 'ALTER TABLE directives_close DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_commodity', 'ALTER TABLE directives_commodity DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_balance', 'ALTER TABLE directives_balance DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_pad', 'ALTER TABLE directives_pad DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_price', 'ALTER TABLE directives_price DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_note', 'ALTER TABLE directives_note DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_document', 'ALTER TABLE directives_document DROP COLUMN raw_text'],
+  ['drop_raw_text_directives_event', 'ALTER TABLE directives_event DROP COLUMN raw_text'],
 ]
