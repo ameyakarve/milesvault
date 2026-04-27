@@ -241,7 +241,7 @@ export function PerAccountView({ account }: { account: string }) {
           {error}
         </div>
       )}
-      <div className="flex-1 bg-white rounded-sm shadow-sm border border-[#bcc9c6]/15 overflow-hidden">
+      <div className="flex-1 min-h-0 bg-white rounded-sm shadow-sm border border-[#bcc9c6]/15 overflow-hidden">
         {loaded ? (
           <CodeMirror
             value={text}
@@ -250,6 +250,7 @@ export function PerAccountView({ account }: { account: string }) {
             editable={!saving}
             onChange={(v) => setText(v)}
             height="100%"
+            style={{ height: '100%' }}
           />
         ) : (
           <div className="p-4 text-xs text-slate-500">Loading…</div>
