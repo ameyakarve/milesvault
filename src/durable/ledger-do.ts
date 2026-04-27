@@ -98,13 +98,33 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       .toArray()[0]
     const total = totalRow?.c ?? 0
 
-    const refs = this.sql
+    const cap = limit + offset
+    const refs = this.collectRefs(account, cap).slice(offset, offset + limit)
+
+    const entries: Entry[] = []
+    for (const ref of refs) {
+      const e = this.readEntry(ref)
+      if (e) entries.push(e)
+    }
+    return { entries, total, limit, offset }
+  }
+
+  private collectRefs(account: string, cap: number): EntryRef[] {
+    const txnRefs = this.sql
+      .exec<{ date: number; id: number }>(
+        `SELECT t.date AS date, t.id AS id FROM transactions t
+         WHERE t.id IN (SELECT p.txn_id FROM postings p WHERE p.account = ?)
+         ORDER BY t.date DESC, t.id DESC
+         LIMIT ?`,
+        account,
+        cap,
+      )
+      .toArray()
+      .map((r) => ({ kind: 'txn' as const, id: r.id, date: r.date }))
+
+    const directiveRefs = this.sql
       .exec<{ date: number; kind: string; id: number }>(
         `SELECT date, kind, id FROM (
-           SELECT t.date AS date, 'txn' AS kind, t.id AS id
-             FROM transactions t
-             WHERE t.id IN (SELECT p.txn_id FROM postings p WHERE p.account = ?)
-           UNION ALL
            SELECT date, 'open' AS kind, id FROM directives_open WHERE account = ?
            UNION ALL
            SELECT date, 'close' AS kind, id FROM directives_close WHERE account = ?
@@ -115,31 +135,38 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
              WHERE account = ? OR account_pad = ?
            UNION ALL
            SELECT date, 'note' AS kind, id FROM directives_note WHERE account = ?
-           UNION ALL
-           SELECT date, 'document' AS kind, id FROM directives_document WHERE account = ?
          )
          ORDER BY date DESC, kind ASC, id DESC
-         LIMIT ? OFFSET ?`,
+         LIMIT ?`,
         account,
         account,
         account,
         account,
         account,
         account,
-        account,
-        account,
-        limit,
-        offset,
+        cap,
       )
       .toArray()
       .map((r) => ({ kind: r.kind as Entry['kind'], id: r.id, date: r.date }))
 
-    const entries: Entry[] = []
-    for (const ref of refs) {
-      const e = this.readEntry(ref)
-      if (e) entries.push(e)
-    }
-    return { entries, total, limit, offset }
+    const docRefs = this.sql
+      .exec<{ date: number; id: number }>(
+        `SELECT date, id FROM directives_document WHERE account = ?
+         ORDER BY date DESC, id DESC
+         LIMIT ?`,
+        account,
+        cap,
+      )
+      .toArray()
+      .map((r) => ({ kind: 'document' as const, id: r.id, date: r.date }))
+
+    const merged = [...txnRefs, ...directiveRefs, ...docRefs]
+    merged.sort((a, b) => {
+      if (a.date !== b.date) return b.date - a.date
+      if (a.kind !== b.kind) return a.kind < b.kind ? -1 : 1
+      return b.id - a.id
+    })
+    return merged
   }
 
   private readEntry(ref: EntryRef): Entry | null {
