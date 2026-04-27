@@ -3,10 +3,10 @@
 import { useCallback, useState } from 'react'
 import { useFetch } from './use-fetch'
 
-export function useRecentAccounts(limit = 10) {
+export function useRecentAccounts(limit = 10, enabled = true) {
   const [version, setVersion] = useState(0)
   const query = useFetch<{ accounts: string[] }>(
-    `/api/ledger/accounts/recent?limit=${limit}`,
+    enabled ? `/api/ledger/accounts/recent?limit=${limit}` : null,
     [version],
   )
   const touch = useCallback(async (account: string) => {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import CodeMirror from '@uiw/react-codemirror'
 import { EditorView } from '@codemirror/view'
 import { LRLanguage, LanguageSupport, syntaxHighlighting, HighlightStyle } from '@codemirror/language'
@@ -17,10 +18,9 @@ import type {
   EntryTxn,
   Posting,
 } from '@/durable/ledger-types'
-import { splitCamel } from '@/lib/beancount/account-display'
+import { shortAccountName } from '@/lib/beancount/account-display'
 import { useAccountEntries } from '../home/use-account-entries'
-
-const TOP_LEVELS = new Set(['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'])
+import { NavRail } from '../_chrome/nav-rail'
 
 const beancountLang = LRLanguage.define({
   parser: beancountParser.configure({
@@ -153,14 +153,6 @@ function buildLedgerRows(entries: Entry[], account: string): LedgerSummary {
   return { rows: out.reverse(), dominantCurrency, finalBalance: bal }
 }
 
-function accountTitle(path: string): string {
-  const parts = path.split(':').filter(Boolean)
-  if (parts.length === 0) return path
-  const rest = TOP_LEVELS.has(parts[0]) ? parts.slice(1) : parts
-  const tail = rest.length >= 2 ? rest.slice(-2) : rest
-  return tail.map(splitCamel).join(' ')
-}
-
 function breadcrumbSegments(path: string): string[] {
   return path.split(':').filter(Boolean)
 }
@@ -213,7 +205,7 @@ export function PerAccountView({ account }: { account: string }) {
     })
   }
 
-  const title = accountTitle(account)
+  const title = shortAccountName(account)
   const segments = breadcrumbSegments(account)
   const balancePrefix = currencyPrefix(ledger.dominantCurrency)
   const balanceText =
@@ -223,38 +215,27 @@ export function PerAccountView({ account }: { account: string }) {
 
   return (
     <div className="w-full h-screen flex bg-slate-50 font-sans text-black">
-      <nav className="bg-white border-r border-slate-200 flex flex-col items-center py-4 gap-6 w-[64px] shrink-0">
-        <div className="w-8 h-8 bg-teal-500 flex items-center justify-center rounded-md text-white font-black text-lg">M</div>
-        <div className="flex flex-col gap-4">
-          <button className="p-2 text-slate-400 hover:text-teal-500 transition-colors">
-            <Icon name="dashboard" />
-          </button>
-          <button className="p-2 text-slate-400 hover:text-teal-500 transition-colors">
-            <Icon name="analytics" />
-          </button>
-          <button className="p-2 text-slate-400 hover:text-teal-500 transition-colors">
-            <Icon name="lightbulb" />
-          </button>
-          <button className="p-2 bg-teal-50 text-teal-600 border-r-2 border-teal-500">
-            <Icon name="account_balance" />
-          </button>
-        </div>
-        <div className="mt-auto flex flex-col items-center pb-2">
-          <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-white text-[12px] font-bold">f</div>
-        </div>
-      </nav>
+      <NavRail />
 
       <main className="flex-1 flex flex-col min-w-0">
         <div className="h-[56px] bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-4">
             <div className="text-[13px] flex items-center gap-2">
-              <span className="text-slate-500">Ledger</span>
-              {segments.slice(0, -1).map((seg, i) => (
-                <span key={`${seg}-${i}`} className="flex items-center gap-2">
-                  <span className="text-slate-300">/</span>
-                  <span className="text-slate-500">{seg}</span>
-                </span>
-              ))}
+              <Link href="/" className="text-slate-500 hover:text-teal-600 transition-colors">
+                Ledger
+              </Link>
+              {segments.slice(0, -1).map((seg, i) => {
+                const prefix = segments.slice(0, i + 1)
+                const href = `/ledger/${prefix.map(encodeURIComponent).join('/')}`
+                return (
+                  <span key={prefix.join(':')} className="flex items-center gap-2">
+                    <span className="text-slate-300">/</span>
+                    <Link href={href} className="text-slate-500 hover:text-teal-600 transition-colors">
+                      {seg}
+                    </Link>
+                  </span>
+                )
+              })}
               {segments.length > 0 && (
                 <>
                   <span className="text-slate-300">/</span>
