@@ -3,11 +3,19 @@ import { RangeSetBuilder, StateEffect, StateField, type EditorState } from '@cod
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 import type { ParsedEntry } from '@/lib/beancount/ast'
 
+export type DeltaSpec = {
+  line: number
+  sign: '+' | '−'
+  value: string
+  flow: 'in' | 'out'
+}
+
 export type CardSpec = {
   startLine: number
   endLine: number
   balance: string | null
   mismatch: boolean
+  deltas: DeltaSpec[]
 }
 
 function postingDelta(
@@ -34,6 +42,35 @@ function formatBalance(n: number, currency: string): string {
   return `${sign}${withCommas}.${frac} ${currency}`
 }
 
+function formatDeltaValue(absN: number): string {
+  const fixed = absN.toFixed(2)
+  const [int, frac] = fixed.split('.')
+  const withCommas = int!.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${withCommas}.${frac}`
+}
+
+function txnDeltas(
+  txn: TransactionInput,
+  account: string,
+  currency: string,
+  startLine: number,
+): DeltaSpec[] {
+  const out: DeltaSpec[] = []
+  for (let i = 0; i < txn.postings.length; i++) {
+    const p = txn.postings[i]!
+    if (p.account !== account || p.currency !== currency || p.amount == null) continue
+    const v = Number(p.amount)
+    if (Number.isNaN(v) || v === 0) continue
+    out.push({
+      line: startLine + 1 + i,
+      sign: v < 0 ? '−' : '+',
+      value: formatDeltaValue(Math.abs(v)),
+      flow: v < 0 ? 'out' : 'in',
+    })
+  }
+  return out
+}
+
 export function computeCardSpecs(
   transactions: TransactionInput[],
   directives: DirectiveInput[],
@@ -52,6 +89,7 @@ export function computeCardSpecs(
         ...e.range,
         balance: formatBalance(running, currency),
         mismatch: false,
+        deltas: txnDeltas(tx, account, currency, e.range.startLine),
       })
     } else {
       const d = directives[e.index]
@@ -62,6 +100,7 @@ export function computeCardSpecs(
           ...e.range,
           balance: formatBalance(running, currency),
           mismatch: false,
+          deltas: [],
         })
       } else if (d.kind === 'balance') {
         const expected = Number(d.amount)
@@ -73,15 +112,17 @@ export function computeCardSpecs(
           ...e.range,
           balance: formatBalance(running, currency),
           mismatch,
+          deltas: [],
         })
       } else if (d.kind === 'pad' || d.kind === 'close') {
         specs.push({
           ...e.range,
           balance: formatBalance(running, currency),
           mismatch: false,
+          deltas: [],
         })
       } else {
-        specs.push({ ...e.range, balance: null, mismatch: false })
+        specs.push({ ...e.range, balance: null, mismatch: false, deltas: [] })
       }
     }
   }
@@ -89,6 +130,32 @@ export function computeCardSpecs(
 }
 
 export const setCardSpecs = StateEffect.define<CardSpec[]>()
+
+class DeltaWidget extends WidgetType {
+  constructor(private readonly d: DeltaSpec) {
+    super()
+  }
+  toDOM() {
+    const el = document.createElement('span')
+    el.className = 'cm-delta-inlay'
+    const inner = document.createElement('span')
+    inner.className = this.d.flow === 'out' ? 'cm-delta-out' : 'cm-delta-in'
+    inner.textContent = `${this.d.sign}${this.d.value}`
+    el.appendChild(document.createTextNode('→ '))
+    el.appendChild(inner)
+    return el
+  }
+  eq(other: DeltaWidget) {
+    return (
+      this.d.sign === other.d.sign &&
+      this.d.value === other.d.value &&
+      this.d.flow === other.d.flow
+    )
+  }
+  ignoreEvent() {
+    return true
+  }
+}
 
 class BalancePillWidget extends WidgetType {
   constructor(
@@ -143,6 +210,19 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
         to: from,
         deco: Decoration.line({ class: classes[i]! }),
         order: 0,
+      })
+    }
+    for (const d of spec.deltas) {
+      if (d.line < 1 || d.line > lineCount) continue
+      const lineRef = state.doc.line(d.line)
+      items.push({
+        from: lineRef.to,
+        to: lineRef.to,
+        deco: Decoration.widget({
+          widget: new DeltaWidget(d),
+          side: 1,
+        }),
+        order: 2,
       })
     }
     if (spec.balance != null) {

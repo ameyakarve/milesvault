@@ -61,9 +61,21 @@ const THEME = EditorView.theme({
   },
   '.cm-scroller': { fontFamily: "'JetBrains Mono', monospace" },
   '.cm-content': { padding: '0', caretColor: '#00685f' },
-  '.cm-line': { padding: '0 12px', lineHeight: '28px' },
+  '.cm-line': { padding: '0 12px', lineHeight: '28px', position: 'relative' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
   '.cm-focused': { outline: 'none' },
+  '.cm-delta-inlay': {
+    position: 'absolute',
+    right: '12px',
+    top: '0',
+    fontSize: '10px',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontStyle: 'italic',
+    color: '#94a3b8',
+    pointerEvents: 'none',
+  },
+  '.cm-delta-out': { color: 'rgba(251, 113, 133, 0.7)' },
+  '.cm-delta-in': { color: 'rgba(20, 184, 166, 0.7)' },
   '.cm-gutters': {
     backgroundColor: '#e0e3e5',
     borderRight: '1px solid rgba(226, 232, 240, 0.3)',
@@ -217,6 +229,17 @@ export function PerAccountView({ account }: { account: string }) {
     )
   }, [parsed, account, currency])
 
+  const headerBalance = useMemo(() => {
+    for (let i = cardSpecs.length - 1; i >= 0; i--) {
+      const b = cardSpecs[i]!.balance
+      if (b) return b
+    }
+    return ''
+  }, [cardSpecs])
+
+  const txnCount = isStrictParseErr(parsed) ? 0 : parsed.transactions.length
+  const showCurrencyChrome = currencies.length > 1 || (!!stats && !error)
+
   const editorViewRef = useRef<EditorView | null>(null)
 
   useEffect(() => {
@@ -247,13 +270,13 @@ export function PerAccountView({ account }: { account: string }) {
   )
 
   const body = (
-    <div className="h-full flex flex-col min-h-0 py-4 px-6">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <label className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
-            Currency
-          </label>
-          {currencies.length > 0 ? (
+    <div className="h-full flex flex-col min-h-0">
+      {showCurrencyChrome && (
+        <div className="flex items-center justify-between px-6 pt-3 pb-1">
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+              Currency
+            </label>
             <select
               value={currency ?? ''}
               onChange={(e) => onCurrencyChange(e.target.value)}
@@ -266,25 +289,23 @@ export function PerAccountView({ account }: { account: string }) {
                 </option>
               ))}
             </select>
-          ) : (
-            <span className="text-xs font-mono text-slate-400">none yet</span>
+          </div>
+          {stats && !error && (
+            <span className="text-[10px] text-slate-500 font-mono">
+              saved · +{stats.inserted} −{stats.deleted} ={stats.unchanged}
+            </span>
           )}
         </div>
-        {stats && !error && (
-          <span className="text-[10px] text-slate-500 font-mono">
-            saved · +{stats.inserted} −{stats.deleted} ={stats.unchanged}
-          </span>
-        )}
-      </div>
+      )}
       {error && (
-        <div className="mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
+        <div className="mx-6 mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
           {error}
         </div>
       )}
       {parseFailed && !error && (
         <div
           data-testid="parse-error-banner"
-          className="mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded"
+          className="mx-6 mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded"
         >
           parse error
         </div>
@@ -319,9 +340,9 @@ export function PerAccountView({ account }: { account: string }) {
       breadcrumb={breadcrumb}
       accountTitle={accountTitle}
       accountPath={account}
-      balance=""
+      balance={headerBalance}
       cards={[]}
-      txnCount={0}
+      txnCount={txnCount}
       unsaved={unsaved}
       saving={saving}
       onSave={save}
