@@ -99,7 +99,7 @@ export function HomeChrome() {
                   type="button"
                   onClick={() => {
                     void accountsQuery.touch(acc)
-                    router.push(`/ledger-v4/${acc.split(':').map(encodeURIComponent).join('/')}`)
+                    router.push(`/ledger/${acc.split(':').map(encodeURIComponent).join('/')}`)
                   }}
                   className="w-full px-4 py-2 hover:bg-[#F2F3FF] transition-colors cursor-pointer flex justify-between items-center text-left"
                   title={acc}

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { PerAccountView } from './per-account-view'
 
 const meta: Meta<typeof PerAccountView> = {
-  title: 'Ledger V4 / Per-Account View',
+  title: 'Ledger / Per-Account View',
   component: PerAccountView,
   parameters: {
     layout: 'fullscreen',

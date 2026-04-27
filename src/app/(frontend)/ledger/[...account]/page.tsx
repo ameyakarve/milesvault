@@ -3,14 +3,14 @@ import { redirect } from 'next/navigation'
 import React from 'react'
 import { PerAccountView } from '../per-account-view'
 
-export default async function LedgerV4Page({
+export default async function LedgerPage({
   params,
 }: {
   params: Promise<{ account: string[] }>
 }) {
   const [{ account: segments }, session] = await Promise.all([params, auth()])
   if (!session?.user) {
-    redirect(`/login?callbackUrl=/ledger-v4/${segments.join('/')}`)
+    redirect(`/login?callbackUrl=/ledger/${segments.join('/')}`)
   }
   const account = segments.join(':')
   return <PerAccountView account={account} />
