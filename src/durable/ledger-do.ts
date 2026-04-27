@@ -1,6 +1,12 @@
 import { DurableObject } from 'cloudflare:workers'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
-import { dateFromInt } from '@/lib/beancount/ast'
+import {
+  dateFromInt,
+  dateToInt,
+  parseJournal,
+  serializeJournal,
+  transactionInputHash,
+} from '@/lib/beancount/ast'
 import type {
   AccountEntriesResponse,
   Entry,
@@ -12,7 +18,35 @@ import type {
   EntryPad,
   EntryTxn,
   Posting,
+  PostingInput,
+  TransactionInput,
 } from './ledger-types'
+
+const DATA_TABLES = [
+  'transactions',
+  'postings',
+  'txn_tags',
+  'txn_links',
+  'directives_open',
+  'directives_close',
+  'directives_commodity',
+  'directives_balance',
+  'directives_pad',
+  'directives_price',
+  'directives_note',
+  'directives_document',
+  'directives_event',
+  'account_recents',
+] as const
+
+export type JournalGetResponse = { text: string }
+export type JournalPutResponse = { text: string; inserted: number; deleted: number; unchanged: number }
+export type JournalPutError = {
+  ok: false
+  error: 'parse_error' | 'unsupported_directives'
+  message: string
+  unsupportedTypes?: string[]
+}
 
 type EntryRef = { kind: Entry['kind']; id: number; date: number }
 
@@ -76,6 +110,161 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
        ON CONFLICT(account) DO UPDATE SET last_viewed_at = excluded.last_viewed_at`,
       account,
       Date.now(),
+    )
+  }
+
+  async journal_get(): Promise<JournalGetResponse> {
+    const ids = this.sql
+      .exec<{ id: number }>(
+        'SELECT id FROM transactions ORDER BY date ASC, id ASC',
+      )
+      .toArray()
+      .map((r) => r.id)
+    const inputs: TransactionInput[] = []
+    for (const id of ids) {
+      const e = this.readTxnEntry(id)
+      if (e) inputs.push(entryTxnToInput(e))
+    }
+    return { text: serializeJournal(inputs) }
+  }
+
+  async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {
+    let parsed
+    try {
+      parsed = parseJournal(text)
+    } catch (e) {
+      return {
+        ok: false,
+        error: 'parse_error',
+        message: e instanceof Error ? e.message : String(e),
+      }
+    }
+    if (parsed.unsupportedDirectiveCount > 0) {
+      return {
+        ok: false,
+        error: 'unsupported_directives',
+        message: `Only transactions are editable here. Found: ${parsed.unsupportedDirectiveTypes.join(', ')}`,
+        unsupportedTypes: parsed.unsupportedDirectiveTypes,
+      }
+    }
+
+    const incoming: Array<{ input: TransactionInput; hash: string }> = []
+    for (const input of parsed.transactions) {
+      incoming.push({ input, hash: await transactionInputHash(input) })
+    }
+
+    const oldByHash = new Map<string, number[]>()
+    const oldRows = this.sql
+      .exec<{ id: number; hash: string | null }>(
+        'SELECT id, hash FROM transactions',
+      )
+      .toArray()
+    for (const r of oldRows) {
+      const key = r.hash ?? ''
+      if (!oldByHash.has(key)) oldByHash.set(key, [])
+      oldByHash.get(key)!.push(r.id)
+    }
+
+    let unchanged = 0
+    const toInsert: Array<{ input: TransactionInput; hash: string }> = []
+    for (const item of incoming) {
+      const ids = oldByHash.get(item.hash)
+      if (ids && ids.length > 0) {
+        ids.shift()
+        unchanged++
+      } else {
+        toInsert.push(item)
+      }
+    }
+    const idsToDelete: number[] = []
+    for (const ids of oldByHash.values()) idsToDelete.push(...ids)
+
+    for (const id of idsToDelete) {
+      this.sql.exec('DELETE FROM transactions WHERE id = ?', id)
+    }
+    const now = Date.now()
+    for (const { input, hash } of toInsert) {
+      this.insertTxn(input, hash, now)
+    }
+
+    const result = await this.journal_get()
+    return {
+      text: result.text,
+      inserted: toInsert.length,
+      deleted: idsToDelete.length,
+      unchanged,
+    }
+  }
+
+  async clear(): Promise<{ ok: true }> {
+    for (const t of DATA_TABLES) {
+      this.sql.exec(`DELETE FROM ${t}`)
+    }
+    return { ok: true }
+  }
+
+  private insertTxn(input: TransactionInput, hash: string, now: number): void {
+    const dateInt = dateToInt(input.date)
+    const flag = input.flag ?? null
+    const payee = input.payee ?? ''
+    const narration = input.narration ?? ''
+    const meta = JSON.stringify(input.meta ?? {})
+    const result = this.sql.exec<{ id: number }>(
+      `INSERT INTO transactions (date, flag, payee, narration, meta_json, hash, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      dateInt,
+      flag,
+      payee,
+      narration,
+      meta,
+      hash,
+      now,
+      now,
+    )
+    const txnId = result.toArray()[0]!.id
+    input.postings.forEach((p, idx) => this.insertPosting(txnId, idx, p, dateInt))
+    for (const tag of input.tags ?? []) {
+      this.sql.exec(
+        'INSERT OR IGNORE INTO txn_tags (txn_id, tag, from_stack) VALUES (?, ?, 0)',
+        txnId,
+        tag,
+      )
+    }
+    for (const link of input.links ?? []) {
+      this.sql.exec(
+        'INSERT OR IGNORE INTO txn_links (txn_id, link) VALUES (?, ?)',
+        txnId,
+        link,
+      )
+    }
+  }
+
+  private insertPosting(txnId: number, idx: number, p: PostingInput, dateInt: number): void {
+    this.sql.exec(
+      `INSERT INTO postings (
+        txn_id, idx, flag, account,
+        amount, amount_scaled, scale, currency,
+        cost_raw,
+        price_at_signs, price_amount, price_amount_scaled, price_scale, price_currency,
+        comment, meta_json, date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      txnId,
+      idx,
+      p.flag ?? null,
+      p.account,
+      p.amount ?? null,
+      null,
+      null,
+      p.currency ?? null,
+      p.cost_raw ?? null,
+      p.price_at_signs ?? 0,
+      p.price_amount ?? null,
+      null,
+      null,
+      p.price_currency ?? null,
+      p.comment ?? null,
+      JSON.stringify(p.meta ?? {}),
+      dateInt,
     )
   }
 
@@ -483,4 +672,28 @@ function parseStringArray(json: string): string[] {
     }
   } catch {}
   return []
+}
+
+function entryTxnToInput(e: EntryTxn): TransactionInput {
+  return {
+    date: e.date,
+    flag: e.flag,
+    payee: e.payee || undefined,
+    narration: e.narration || undefined,
+    postings: e.postings.map((p) => ({
+      flag: p.flag,
+      account: p.account,
+      amount: p.amount,
+      currency: p.currency,
+      cost_raw: p.cost_raw,
+      price_at_signs: p.price_at_signs,
+      price_amount: p.price_amount,
+      price_currency: p.price_currency,
+      comment: p.comment,
+      meta: Object.keys(p.meta).length ? p.meta : null,
+    })),
+    tags: e.tags,
+    links: e.links,
+    meta: Object.keys(e.meta).length ? e.meta : null,
+  }
 }
