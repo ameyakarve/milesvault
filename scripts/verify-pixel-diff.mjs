@@ -86,12 +86,12 @@ async function main() {
   const fixtMarks = await snap(FIXTURE_URL, VIEWPORT, '/tmp/fixt-snap.png', async (page) => {
     await page.waitForSelector('.cm-card-solo')
     await page.waitForFunction(
-      () => document.querySelectorAll('.cm-balance-pill').length >= 5,
+      () => document.querySelectorAll('.cm-balance-footer').length >= 5,
     )
     await page.waitForTimeout(300)
     return page.evaluate(() => {
       const card = document.querySelector('.cm-card-solo, .cm-card-top')
-      const pill0 = document.querySelectorAll('.cm-balance-pill')[0]
+      const pill0 = document.querySelectorAll('.cm-balance-footer')[0]
       const card1 = document.querySelectorAll('.cm-card-top, .cm-card-solo')[1]
       const aside = document.querySelector('aside[class*="w-[320px]"]')
       const gutter = document.querySelector('.cm-gutters')

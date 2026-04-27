@@ -55,19 +55,40 @@ body {
   border-bottom-right-radius: 2px;
   padding-bottom: 6px;
 }
-.cm-balance-pill {
+.cm-balance-footer {
   display: flex;
-  justify-content: flex-end;
-  height: 16px;
-  padding-right: 16px;
-  margin-bottom: 6px;
-  font: 10px 'JetBrains Mono', monospace;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #ffffff;
+  border-left: 1px solid rgba(188, 201, 198, 0.15);
+  border-right: 1px solid rgba(188, 201, 198, 0.15);
+  border-bottom: 1px solid rgba(188, 201, 198, 0.15);
+  border-top: 1px solid rgb(226, 232, 240);
+  border-bottom-left-radius: 2px;
+  border-bottom-right-radius: 2px;
+  margin-bottom: 12px;
+  font-family: 'Inter', sans-serif;
+}
+.cm-balance-footer .cm-bal-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: #64748b;
 }
-.cm-balance-pill .cm-bal-label {
-  color: #94a3b8;
-  padding-right: 2px;
+.cm-balance-footer .cm-bal-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: #1e293b;
+  text-align: right;
 }
-.cm-balance-mismatch {
+.cm-balance-footer.cm-balance-mismatch {
+  background: #fff1f2;
+  border-top-color: #fecdd3;
+}
+.cm-balance-footer.cm-balance-mismatch .cm-bal-value {
   color: #be123c;
 }

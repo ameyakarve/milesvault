@@ -42,19 +42,23 @@ async function main() {
       cardMid: document.querySelectorAll('.cm-card-mid').length,
       cardBot: document.querySelectorAll('.cm-card-bot').length,
       cardSolo: document.querySelectorAll('.cm-card-solo').length,
-      pills: document.querySelectorAll('.cm-balance-pill').length,
+      footers: document.querySelectorAll('.cm-balance-footer').length,
       mismatches: document.querySelectorAll('.cm-balance-mismatch').length,
       gutters: document.querySelectorAll('.cm-gutters').length,
       lineNumbers: Array.from(document.querySelectorAll('.cm-lineNumbers .cm-gutterElement')).map(
         (e) => e.textContent,
       ),
       parseBanner: document.querySelectorAll('[data-testid="parse-error-banner"]').length,
-      pillTexts: Array.from(document.querySelectorAll('.cm-balance-pill')).map((e) => e.textContent),
+      footerValues: Array.from(
+        document.querySelectorAll('.cm-balance-footer .cm-bal-value'),
+      ).map((e) => (e.textContent || '').trim()),
       asideExists: !!aside,
       aiHeadingPresent: !!aiHeading,
       deltaInlays: document.querySelectorAll('.cm-delta-inlay').length,
       deltaOuts: document.querySelectorAll('.cm-delta-out').length,
       deltaIns: document.querySelectorAll('.cm-delta-in').length,
+      amountOuts: document.querySelectorAll('.cm-amount-out').length,
+      amountIns: document.querySelectorAll('.cm-amount-in').length,
       saveBtnHasTeal: !!saveBtn && saveBtn.className.includes('bg-teal-600'),
       saveBtnText: saveBtn ? (saveBtn.textContent || '').trim().replace(/\s+/g, ' ') : null,
       headerBalanceText: headerBalanceEl ? (headerBalanceEl.textContent || '').trim() : null,
@@ -65,8 +69,8 @@ async function main() {
   console.log('default story counts:', counts)
 
   // 8 directives total: open, 3 txns, balance, pad, note, close
-  // pills: open(1) + 3 txns(3) + balance(1) + pad(1) + close(1) = 7. note has no pill.
-  if (counts.pills !== 7) errors.push(`expected 7 pills, got ${counts.pills}`)
+  // footers: open(1) + 3 txns(3) + balance(1) + pad(1) + close(1) = 7. note has no footer.
+  if (counts.footers !== 7) errors.push(`expected 7 footers, got ${counts.footers}`)
   if (counts.mismatches !== 0) errors.push(`expected 0 mismatches in default fixture, got ${counts.mismatches}`)
   if (counts.gutters < 1) errors.push(`expected built-in gutter visible`)
   if (counts.parseBanner !== 0) errors.push(`expected no parse banner on default fixture`)
@@ -75,6 +79,8 @@ async function main() {
   if (counts.deltaInlays < 3) errors.push(`expected >=3 .cm-delta-inlay (3-txn fixture), got ${counts.deltaInlays}`)
   if (counts.deltaOuts !== 2) errors.push(`expected 2 .cm-delta-out (Coffee + Groceries), got ${counts.deltaOuts}`)
   if (counts.deltaIns !== 1) errors.push(`expected 1 .cm-delta-in (Refund), got ${counts.deltaIns}`)
+  if (counts.amountOuts !== 2) errors.push(`expected 2 .cm-amount-out marks, got ${counts.amountOuts}`)
+  if (counts.amountIns !== 1) errors.push(`expected 1 .cm-amount-in mark, got ${counts.amountIns}`)
   if (!counts.saveBtnHasTeal) errors.push(`save button missing bg-teal-600 (got "${counts.saveBtnText}")`)
 
   if (!counts.headerBalanceText) {
@@ -101,26 +107,30 @@ async function main() {
     }
   }
 
-  // Verify running balance: open=0, -250, -1750.50, -1250.50, balance check matches, pad displays current, close displays current
-  // open card: 0.00 INR
-  // txn1 (Coffee -250): -250.00 INR
-  // txn2 (Groceries -1500.50): -1750.50 INR
-  // txn3 (Refund +500): -1250.50 INR
-  // balance row asserts -1250.50 INR (matches)
-  // pad: still -1250.50
-  // close: still -1250.50
-  const expectedPills = [
-    'bal 0.00',
-    'bal -250.00',
-    'bal -1,750.50',
-    'bal -1,250.50',
-    'bal -1,250.50',
-    'bal -1,250.50',
-    'bal -1,250.50',
+  // Display order is now reverse-chronological. Each card's footer shows the
+  // running balance after that txn occurred — same value the chronological
+  // pass would produce, just laid out newest → oldest:
+  //   close   (latest):    -1,250.50
+  //   pad:                 -1,250.50
+  //   balance (asserts ok):-1,250.50
+  //   txn3 (Refund +500):  -1,250.50
+  //   txn2 (Groceries):    -1,750.50
+  //   txn1 (Coffee -250):    -250.00
+  //   open (oldest):           0.00
+  const expectedFooters = [
+    '-1,250.50',
+    '-1,250.50',
+    '-1,250.50',
+    '-1,250.50',
+    '-1,750.50',
+    '-250.00',
+    '0.00',
   ]
-  for (let i = 0; i < expectedPills.length; i++) {
-    if (counts.pillTexts[i] !== expectedPills[i]) {
-      errors.push(`pill[${i}]: expected ${JSON.stringify(expectedPills[i])} got ${JSON.stringify(counts.pillTexts[i])}`)
+  for (let i = 0; i < expectedFooters.length; i++) {
+    if (counts.footerValues[i] !== expectedFooters[i]) {
+      errors.push(
+        `footer[${i}]: expected ${JSON.stringify(expectedFooters[i])} got ${JSON.stringify(counts.footerValues[i])}`,
+      )
     }
   }
 
