@@ -1,10 +1,11 @@
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
-import { parseJournal } from './ast'
+import { parseJournal, type ParsedEntry } from './ast'
 
 export type StrictParseOk = {
   ok: true
   transactions: TransactionInput[]
   directives: DirectiveInput[]
+  entries: ParsedEntry[]
 }
 
 export type StrictParseErr = {
@@ -36,5 +37,10 @@ export function parseJournalStrict(text: string): StrictParseResult {
   if (parsed.partialParse) {
     return { ok: false, kind: 'partial_parse', message: 'parse error' }
   }
-  return { ok: true, transactions: parsed.transactions, directives: parsed.directives }
+  return {
+    ok: true,
+    transactions: parsed.transactions,
+    directives: parsed.directives,
+    entries: parsed.entries,
+  }
 }
