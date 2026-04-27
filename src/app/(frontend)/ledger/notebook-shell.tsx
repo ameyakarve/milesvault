@@ -222,20 +222,29 @@ function GutterRow({ line }: { line: SourceLine }) {
   return <span className="pr-2">{line.lineNo}</span>
 }
 
-function EditorPane({ cards, body }: { cards: Card[]; body?: ReactNode }) {
+function EditorPane({
+  cards,
+  body,
+  gutter,
+}: {
+  cards: Card[]
+  body?: ReactNode
+  gutter?: ReactNode
+}) {
   return (
     <div className="flex-1 flex overflow-hidden bg-[#eceef0]">
       <div className="w-10 shrink-0 bg-[#e0e3e5] border-r border-slate-200/30 py-4 font-mono text-[11px] leading-[28px] flex flex-col items-end text-[#bcc9c6]">
-        {cards.map((card, ci) => (
-          <Fragment key={card.id}>
-            {card.lines.map((line) => (
-              <GutterRow key={line.lineNo} line={line} />
-            ))}
-            {ci < cards.length - 1 && (
-              <span className="pr-2 opacity-0">{card.lines[card.lines.length - 1]!.lineNo + 1}</span>
-            )}
-          </Fragment>
-        ))}
+        {gutter ??
+          cards.map((card, ci) => (
+            <Fragment key={card.id}>
+              {card.lines.map((line) => (
+                <GutterRow key={line.lineNo} line={line} />
+              ))}
+              {ci < cards.length - 1 && (
+                <span className="pr-2 opacity-0">{card.lines[card.lines.length - 1]!.lineNo + 1}</span>
+              )}
+            </Fragment>
+          ))}
       </div>
       <div className="flex-1 overflow-y-auto py-4 px-6">
         {body ?? (
@@ -348,7 +357,10 @@ export type NotebookShellProps = {
   cards: Card[]
   txnCount: number
   unsaved?: boolean
+  saving?: boolean
+  onSave?: () => void
   body?: ReactNode
+  gutter?: ReactNode
   cursor?: string
 }
 
@@ -360,7 +372,10 @@ export function NotebookShell({
   cards,
   txnCount,
   unsaved = false,
+  saving = false,
+  onSave,
   body,
+  gutter,
   cursor = 'Ln 1, Col 1',
 }: NotebookShellProps) {
   return (
@@ -401,9 +416,10 @@ export function NotebookShell({
             <button
               type="button"
               className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-1.5 rounded-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] flex items-center gap-2 transition-all duration-200 disabled:opacity-50"
-              disabled={!unsaved}
+              disabled={!unsaved || saving}
+              onClick={onSave}
             >
-              <span>Save ⌘S</span>
+              <span>{saving ? 'Saving…' : 'Save ⌘S'}</span>
             </button>
           </div>
         </header>
@@ -420,7 +436,7 @@ export function NotebookShell({
               </div>
             </section>
 
-            <EditorPane cards={cards} body={body} />
+            <EditorPane cards={cards} body={body} gutter={gutter} />
           </main>
 
           <AiPane />

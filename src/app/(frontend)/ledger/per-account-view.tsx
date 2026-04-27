@@ -1,236 +1,220 @@
 'use client'
 
-import { useMemo } from 'react'
-import type {
-  Entry,
-  EntryBalance,
-  EntryClose,
-  EntryDocument,
-  EntryNote,
-  EntryOpen,
-  EntryPad,
-  EntryTxn,
-  Posting,
-} from '@/durable/ledger-types'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
+import { EditorView, keymap } from '@codemirror/view'
+import {
+  HighlightStyle,
+  LRLanguage,
+  LanguageSupport,
+  syntaxHighlighting,
+} from '@codemirror/language'
+import { styleTags, tags as t } from '@lezer/highlight'
+import { parser as beancountParser } from 'lezer-beancount'
 import { shortAccountName } from '@/lib/beancount/account-display'
-import { useAccountEntries } from '../home/use-account-entries'
-import { NotebookShell, type Card, type Seg, type SourceLine } from './notebook-shell'
+import { NotebookShell } from './notebook-shell'
 
-const amountFmt = new Intl.NumberFormat('en-IN', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
+const beancountLang = LRLanguage.define({
+  parser: beancountParser.configure({
+    props: [
+      styleTags({
+        Date: t.literal,
+        TxnFlag: t.operator,
+        String: t.string,
+        Account: t.variableName,
+        Number: t.number,
+        Currency: t.unit,
+      }),
+    ],
+  }),
 })
 
-const currencySymbols: Record<string, string> = {
-  INR: '₹',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  JPY: '¥',
+const HIGHLIGHT = HighlightStyle.define([
+  { tag: t.literal, color: '#00685f' },
+  { tag: t.operator, color: '#191c1e', fontWeight: '700' },
+  { tag: t.string, color: '#57657a' },
+  { tag: t.variableName, color: '#191c1e' },
+  { tag: t.number, color: '#3d4947', fontWeight: '700' },
+  { tag: t.unit, color: '#515f74' },
+])
+
+const THEME = EditorView.theme({
+  '&': {
+    backgroundColor: 'transparent',
+    fontSize: '13px',
+    fontFamily: "'JetBrains Mono', monospace",
+    height: '100%',
+  },
+  '.cm-scroller': { fontFamily: "'JetBrains Mono', monospace" },
+  '.cm-content': { padding: '0', caretColor: '#00685f' },
+  '.cm-line': { padding: '0 12px', lineHeight: '28px' },
+  '.cm-line:first-child': { paddingTop: '6px' },
+  '.cm-gutters': { display: 'none' },
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '.cm-focused': { outline: 'none' },
+})
+
+const BASIC = {
+  lineNumbers: false,
+  foldGutter: false,
+  highlightActiveLine: false,
+  highlightActiveLineGutter: false,
+  highlightSelectionMatches: false,
+  searchKeymap: false,
+} as const
+
+type JournalGetResponse = { text: string }
+type JournalPutOk = { text: string; inserted: number; deleted: number; unchanged: number }
+type JournalPutErr = {
+  ok: false
+  error: 'parse_error' | 'unsupported_directives'
+  message: string
+  unsupportedTypes?: string[]
 }
+type JournalPutResp = JournalPutOk | JournalPutErr
 
-function postingForAccount(txn: EntryTxn, account: string): Posting | null {
-  return txn.postings.find((p) => p.account === account) ?? null
-}
-
-function postingAmountNumber(p: Posting | null): number {
-  if (!p || p.amount == null) return 0
-  const n = parseFloat(p.amount)
-  return Number.isFinite(n) ? n : 0
-}
-
-type TxnRow = {
-  kind: 'txn'
-  entry: EntryTxn
-  amount: number
-  currency: string | null
-  balance: number
-}
-
-type DirectiveRow =
-  | { kind: 'open'; entry: EntryOpen }
-  | { kind: 'close'; entry: EntryClose }
-  | { kind: 'balance'; entry: EntryBalance }
-  | { kind: 'pad'; entry: EntryPad }
-  | { kind: 'note'; entry: EntryNote }
-  | { kind: 'document'; entry: EntryDocument }
-
-type RenderRow = TxnRow | DirectiveRow
-
-type LedgerSummary = {
-  rows: RenderRow[]
-  dominantCurrency: string | null
-  finalBalance: number
-}
-
-function buildLedgerRows(entries: Entry[], account: string): LedgerSummary {
-  const sorted = [...entries].sort((a, b) => {
-    if (a.date !== b.date) return a.date.localeCompare(b.date)
-    return a.kind.localeCompare(b.kind)
-  })
-  const counts = new Map<string, number>()
-  let bal = 0
-  const out: RenderRow[] = []
-  for (const e of sorted) {
-    if (e.kind === 'txn') {
-      const post = postingForAccount(e, account)
-      const amt = postingAmountNumber(post)
-      bal += amt
-      if (post?.currency) counts.set(post.currency, (counts.get(post.currency) ?? 0) + 1)
-      out.push({ kind: 'txn', entry: e, amount: amt, currency: post?.currency ?? null, balance: bal })
-    } else {
-      out.push({ kind: e.kind, entry: e } as RenderRow)
-    }
-  }
-  let dominantCurrency: string | null = null
-  let max = 0
-  for (const [c, n] of counts) if (n > max) { dominantCurrency = c; max = n }
-  for (const row of out) {
-    if (row.kind === 'txn' && !row.currency) row.currency = dominantCurrency
-  }
-  return { rows: out.reverse(), dominantCurrency, finalBalance: bal }
-}
-
-function directiveLabel(row: DirectiveRow): { label: string; detail: string } {
-  switch (row.kind) {
-    case 'open':
-      return {
-        label: 'open',
-        detail:
-          row.entry.constraint_currencies.length > 0
-            ? row.entry.constraint_currencies.join(', ')
-            : '',
-      }
-    case 'close':
-      return { label: 'close', detail: '' }
-    case 'balance':
-      return { label: 'balance', detail: `${row.entry.amount} ${row.entry.currency}` }
-    case 'pad':
-      return { label: 'pad', detail: `from ${row.entry.account_pad}` }
-    case 'note':
-      return { label: 'note', detail: row.entry.description }
-    case 'document':
-      return { label: 'document', detail: row.entry.filename }
-  }
-}
-
-function txnToCard(row: TxnRow, lineCounter: { n: number }, selectedAccount: string): Card {
-  const headerSegs: Seg[] = [
-    { kind: 'date', text: row.entry.date },
-    { kind: 'ws', text: ' ' },
-    { kind: 'flag', text: row.entry.flag ?? '*' },
-  ]
-  if (row.entry.payee) {
-    headerSegs.push({ kind: 'ws', text: ' ' }, { kind: 'payee', text: `"${row.entry.payee}"` })
-  }
-  if (row.entry.narration) {
-    headerSegs.push(
-      { kind: 'ws', text: ' ' },
-      { kind: 'narration', text: `"${row.entry.narration}"` },
-    )
-  }
-  const header: SourceLine = { lineNo: lineCounter.n++, segs: headerSegs }
-
-  const postings: SourceLine[] = row.entry.postings.map((p) => {
-    const segs: Seg[] = [{ kind: 'account', text: p.account }]
-    if (p.amount) segs.push({ kind: 'ws', text: ' ' }, { kind: 'number', text: p.amount })
-    if (p.currency) segs.push({ kind: 'ws', text: ' ' }, { kind: 'currency', text: p.currency })
-    const line: SourceLine = { lineNo: lineCounter.n++, segs }
-    if (p.account === selectedAccount && p.amount) {
-      const num = parseFloat(p.amount)
-      if (Number.isFinite(num) && num !== 0) {
-        line.delta = {
-          sign: num < 0 ? '−' : '+',
-          value: amountFmt.format(Math.abs(num)),
-          flow: num < 0 ? 'out' : 'in',
-        }
-      }
-    }
-    return line
-  })
-
-  const balanceText = `${row.balance < 0 ? '-' : ''}${amountFmt.format(Math.abs(row.balance))}`
-  return {
-    id: `txn-${row.entry.id}`,
-    lines: [header, ...postings],
-    balance: balanceText,
-  }
-}
-
-function directiveToCard(row: DirectiveRow, lineCounter: { n: number }): Card {
-  const { label, detail } = directiveLabel(row)
-  const segs: Seg[] = [
-    { kind: 'date', text: row.entry.date },
-    { kind: 'ws', text: ' ' },
-    { kind: 'flag', text: label },
-  ]
-  if (detail) segs.push({ kind: 'ws', text: ' ' }, { kind: 'narration', text: detail })
-  return {
-    id: `${row.kind}-${row.entry.id}`,
-    lines: [{ lineNo: lineCounter.n++, segs }],
-    balance: null,
-  }
-}
-
-function rowsToCards(rows: RenderRow[], selectedAccount: string): Card[] {
-  const counter = { n: 1 }
-  const cards: Card[] = []
-  for (const row of rows) {
-    cards.push(
-      row.kind === 'txn'
-        ? txnToCard(row, counter, selectedAccount)
-        : directiveToCard(row, counter),
-    )
-    counter.n++ // gap slot
-  }
-  return cards
-}
-
-function formatBalance(value: number, currency: string | null): string {
-  const prefix = currency ? currencySymbols[currency] ?? '' : ''
-  const sign = value < 0 ? '-' : ''
-  return `${sign}${prefix}${amountFmt.format(Math.abs(value))}`
+function isPutErr(r: JournalPutResp): r is JournalPutErr {
+  return 'ok' in r && r.ok === false
 }
 
 export function PerAccountView({ account }: { account: string }) {
-  const entriesQuery = useAccountEntries(account)
-  const ledger = useMemo<LedgerSummary>(
-    () =>
-      entriesQuery.data
-        ? buildLedgerRows(entriesQuery.data.entries, account)
-        : { rows: [], dominantCurrency: null, finalBalance: 0 },
-    [entriesQuery.data, account],
+  const [loaded, setLoaded] = useState(false)
+  const [savedText, setSavedText] = useState('')
+  const [text, setText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [stats, setStats] = useState<{ inserted: number; deleted: number; unchanged: number } | null>(
+    null,
   )
-  const cards = useMemo(() => rowsToCards(ledger.rows, account), [ledger.rows, account])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/ledger/journal', { credentials: 'include', signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return (await res.json()) as JournalGetResponse
+      })
+      .then((data) => {
+        setSavedText(data.text)
+        setText(data.text)
+        setLoaded(true)
+      })
+      .catch((e: unknown) => {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        setError(e instanceof Error ? e.message : String(e))
+        setLoaded(true)
+      })
+    return () => controller.abort()
+  }, [])
+
+  const textRef = useRef(text)
+  textRef.current = text
+
+  const save = useCallback(async () => {
+    if (saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/ledger/journal', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: textRef.current }),
+      })
+      const data = (await res.json()) as JournalPutResp
+      if (!res.ok || isPutErr(data)) {
+        const msg = isPutErr(data) ? data.message : `HTTP ${res.status}`
+        setError(msg)
+        return
+      }
+      setSavedText(data.text)
+      setText(data.text)
+      setStats({ inserted: data.inserted, deleted: data.deleted, unchanged: data.unchanged })
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }, [saving])
+
+  const unsaved = loaded && text !== savedText
+  const lineCount = useMemo(() => Math.max(1, text.split('\n').length), [text])
+
+  const extensions = useMemo(
+    () => [
+      new LanguageSupport(beancountLang),
+      syntaxHighlighting(HIGHLIGHT),
+      THEME,
+      EditorView.lineWrapping,
+      keymap.of([
+        {
+          key: 'Mod-s',
+          preventDefault: true,
+          run: () => {
+            void save()
+            return true
+          },
+        },
+      ]),
+    ],
+    [save],
+  )
+
+  const body = (
+    <div className="h-full flex flex-col">
+      {error && (
+        <div className="mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
+          {error}
+        </div>
+      )}
+      {stats && !error && (
+        <div className="mb-2 px-3 py-1 text-[10px] text-slate-500 font-mono">
+          saved · +{stats.inserted} −{stats.deleted} ={stats.unchanged}
+        </div>
+      )}
+      <div className="flex-1 bg-white rounded-sm shadow-sm border border-[#bcc9c6]/15 overflow-hidden">
+        {loaded ? (
+          <CodeMirror
+            value={text}
+            extensions={extensions}
+            basicSetup={BASIC}
+            editable={!saving}
+            onChange={(v) => setText(v)}
+            height="100%"
+          />
+        ) : (
+          <div className="p-4 text-xs text-slate-500">Loading…</div>
+        )}
+      </div>
+    </div>
+  )
+
+  const gutter = (
+    <>
+      {Array.from({ length: lineCount }, (_, i) => (
+        <span key={i} className="pr-2">
+          {i + 1}
+        </span>
+      ))}
+    </>
+  )
 
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
-  const balance =
-    ledger.rows.length > 0 ? formatBalance(ledger.finalBalance, ledger.dominantCurrency) : '—'
-  const txnCount = ledger.rows.filter((r) => r.kind === 'txn').length
-
-  let body: React.ReactNode
-  if (entriesQuery.status === 'loading') {
-    body = <div className="px-3 py-4 text-[12px] text-slate-400">Loading entries…</div>
-  } else if (entriesQuery.status === 'error') {
-    body = (
-      <div className="px-3 py-4 text-[12px] text-rose-600">
-        Failed to load: {entriesQuery.errorMsg}
-      </div>
-    )
-  } else if (cards.length === 0) {
-    body = <div className="px-3 py-4 text-[12px] text-slate-400">No entries for this account.</div>
-  }
 
   return (
     <NotebookShell
       breadcrumb={breadcrumb}
       accountTitle={accountTitle}
       accountPath={account}
-      balance={balance}
-      cards={cards}
-      txnCount={txnCount}
+      balance=""
+      cards={[]}
+      txnCount={0}
+      unsaved={unsaved}
+      saving={saving}
+      onSave={save}
       body={body}
+      gutter={gutter}
     />
   )
 }

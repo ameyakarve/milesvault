@@ -1,5 +1,10 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import type { LedgerDO } from '@/durable/ledger-do'
+import type {
+  JournalGetResponse,
+  JournalPutError,
+  JournalPutResponse,
+  LedgerDO,
+} from '@/durable/ledger-do'
 import type { AccountEntriesResponse } from '@/durable/ledger-types'
 export const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
@@ -12,6 +17,9 @@ export type LedgerClient = {
     limit?: number,
     offset?: number,
   ): Promise<AccountEntriesResponse>
+  journal_get(): Promise<JournalGetResponse>
+  journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
+  clear(): Promise<{ ok: true }>
 }
 
 export class LedgerInputError extends Error {
@@ -56,6 +64,21 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       const l = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT)
       const o = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0)
       return stub.list_account_entries(account, l, o)
+    },
+
+    async journal_get() {
+      return stub.journal_get()
+    },
+
+    async journal_put(text) {
+      if (typeof text !== 'string') {
+        throw new LedgerInputError(['text must be a string.'])
+      }
+      return stub.journal_put(text)
+    },
+
+    async clear() {
+      return stub.clear()
     },
   }
 }

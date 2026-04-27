@@ -36,6 +36,15 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     sql: 'CREATE INDEX IF NOT EXISTS idx_transactions_date_id ON transactions(date DESC, id DESC)',
   },
   {
+    label: 'transactions_add_hash',
+    sql: 'ALTER TABLE transactions ADD COLUMN hash TEXT',
+    allowFail: true,
+  },
+  {
+    label: 'idx_transactions_hash',
+    sql: 'CREATE INDEX IF NOT EXISTS idx_transactions_hash ON transactions(hash)',
+  },
+  {
     label: 'postings',
     sql: `CREATE TABLE IF NOT EXISTS postings (
       txn_id              INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
