@@ -1,7 +1,24 @@
 'use client'
 
 import Link from 'next/link'
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useMemo, type ReactNode } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
+import {
+  Decoration,
+  EditorView,
+  ViewPlugin,
+  WidgetType,
+  type DecorationSet,
+  type ViewUpdate,
+} from '@codemirror/view'
+import {
+  HighlightStyle,
+  LRLanguage,
+  LanguageSupport,
+  syntaxHighlighting,
+} from '@codemirror/language'
+import { styleTags, tags as t } from '@lezer/highlight'
+import { parser as beancountParser } from 'lezer-beancount'
 import { NavRail } from '../_chrome/nav-rail'
 
 export type Seg =
@@ -29,50 +46,158 @@ export type Card = {
   balance: string | null
 }
 
-const SEG_CLASS: Record<Seg['kind'], string> = {
-  date: 'text-[#00685f]',
-  flag: 'font-bold text-[#191c1e]',
-  payee: 'text-[#57657a]',
-  narration: 'text-[#515f74]',
-  account: 'text-[#191c1e]',
-  number: 'text-[#3d4947] font-bold',
-  currency: 'text-[#515f74]',
-  ws: '',
+const beancountLang = LRLanguage.define({
+  parser: beancountParser.configure({
+    props: [
+      styleTags({
+        Date: t.literal,
+        TxnFlag: t.operator,
+        String: t.string,
+        Account: t.variableName,
+        Number: t.number,
+        Currency: t.unit,
+      }),
+    ],
+  }),
+})
+
+const SOURCE_HIGHLIGHT = HighlightStyle.define([
+  { tag: t.literal, color: '#00685f' },
+  { tag: t.operator, color: '#191c1e', fontWeight: '700' },
+  { tag: t.string, color: '#57657a' },
+  { tag: t.variableName, color: '#191c1e' },
+  { tag: t.number, color: '#3d4947', fontWeight: '700' },
+  { tag: t.unit, color: '#515f74' },
+])
+
+const SOURCE_THEME = EditorView.theme({
+  '&': {
+    backgroundColor: 'transparent',
+    fontSize: '13px',
+    fontFamily: "'JetBrains Mono', monospace",
+  },
+  '.cm-scroller': { fontFamily: "'JetBrains Mono', monospace" },
+  '.cm-content': {
+    padding: '0',
+    caretColor: '#00685f',
+  },
+  '.cm-line': {
+    padding: '0 12px',
+    lineHeight: '28px',
+    position: 'relative',
+  },
+  '.cm-line:first-child': {
+    paddingTop: '6px',
+  },
+  '.cm-gutters': { display: 'none' },
+  '.cm-activeLine': { backgroundColor: 'transparent' },
+  '.cm-focused': { outline: 'none' },
+  '.cm-delta-inlay': {
+    position: 'absolute',
+    right: '12px',
+    top: '0',
+    fontSize: '10px',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontStyle: 'italic',
+    color: '#94a3b8',
+    pointerEvents: 'none',
+  },
+  '.cm-delta-out': { color: 'rgba(251, 113, 133, 0.7)' },
+  '.cm-delta-in': { color: 'rgba(20, 184, 166, 0.7)' },
+})
+
+const EDITOR_BASIC = {
+  lineNumbers: false,
+  foldGutter: false,
+  highlightActiveLine: false,
+  highlightActiveLineGutter: false,
+  highlightSelectionMatches: false,
+  searchKeymap: false,
+} as const
+
+class DeltaWidget extends WidgetType {
+  constructor(readonly delta: Delta) {
+    super()
+  }
+  eq(other: DeltaWidget) {
+    return (
+      this.delta.sign === other.delta.sign &&
+      this.delta.value === other.delta.value &&
+      this.delta.flow === other.delta.flow
+    )
+  }
+  toDOM() {
+    const el = document.createElement('span')
+    el.className = 'cm-delta-inlay'
+    const colorCls = this.delta.flow === 'out' ? 'cm-delta-out' : 'cm-delta-in'
+    const inner = document.createElement('span')
+    inner.className = colorCls
+    inner.textContent = `${this.delta.sign}${this.delta.value}`
+    el.appendChild(document.createTextNode('→ '))
+    el.appendChild(inner)
+    return el
+  }
+  ignoreEvent() {
+    return true
+  }
 }
 
-function SourceText({ segs }: { segs: Seg[] }) {
-  return (
-    <span className="whitespace-pre">
-      {segs.map((s, i) => (
-        <span key={i} className={SEG_CLASS[s.kind]}>
-          {s.text}
-        </span>
-      ))}
-    </span>
+function buildDeltaDecorations(view: EditorView, deltasByLine: Map<number, Delta>): DecorationSet {
+  const ranges: Array<ReturnType<typeof Decoration.widget>['range'] extends (n: number) => infer R ? R : never> = []
+  for (const [lineNum, delta] of deltasByLine) {
+    if (lineNum < 1 || lineNum > view.state.doc.lines) continue
+    const line = view.state.doc.line(lineNum)
+    ranges.push(Decoration.widget({ widget: new DeltaWidget(delta), side: 1 }).range(line.to))
+  }
+  return Decoration.set(ranges, true)
+}
+
+function deltaPlugin(deltasByLine: Map<number, Delta>) {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet
+      constructor(view: EditorView) {
+        this.decorations = buildDeltaDecorations(view, deltasByLine)
+      }
+      update(u: ViewUpdate) {
+        if (u.docChanged) this.decorations = buildDeltaDecorations(u.view, deltasByLine)
+      }
+    },
+    { decorations: (v) => v.decorations },
   )
 }
 
-function DeltaInlay({ delta }: { delta: Delta }) {
-  const colorCls = delta.flow === 'out' ? 'text-rose-400/70' : 'text-teal-500/70'
-  return (
-    <span className="text-[10px] font-mono italic text-slate-400 ml-6">
-      → <span className={colorCls}>{delta.sign === '−' ? '−' : '+'}{delta.value}</span>
-    </span>
-  )
+function lineToSource(line: SourceLine): string {
+  return line.segs.map((s) => s.text).join('')
 }
 
 function CardBlock({ card }: { card: Card }) {
+  const sourceText = useMemo(() => card.lines.map(lineToSource).join('\n'), [card.lines])
+  const deltas = useMemo(() => {
+    const m = new Map<number, Delta>()
+    card.lines.forEach((l, i) => {
+      if (l.delta) m.set(i + 1, l.delta)
+    })
+    return m
+  }, [card.lines])
+  const extensions = useMemo(
+    () => [
+      new LanguageSupport(beancountLang),
+      syntaxHighlighting(SOURCE_HIGHLIGHT),
+      SOURCE_THEME,
+      deltaPlugin(deltas),
+      EditorView.lineWrapping,
+    ],
+    [deltas],
+  )
   return (
     <div className="flex flex-col bg-white rounded-sm shadow-sm border border-[#bcc9c6]/15">
-      {card.lines.map((line, i) => (
-        <div
-          key={line.lineNo}
-          className={`px-3 leading-[28px] flex justify-between ${i === 0 ? 'pt-1.5' : ''}`}
-        >
-          <SourceText segs={line.segs} />
-          {line.delta && <DeltaInlay delta={line.delta} />}
-        </div>
-      ))}
+      <CodeMirror
+        value={sourceText}
+        extensions={extensions}
+        basicSetup={EDITOR_BASIC}
+        editable
+      />
       {card.balance != null && (
         <div className="h-4 flex items-center justify-end pr-4 mb-1.5">
           <span className="text-[10px] font-mono text-slate-500">
@@ -106,12 +231,13 @@ function EditorPane({ cards, body }: { cards: Card[]; body?: ReactNode }) {
             {card.lines.map((line) => (
               <GutterRow key={line.lineNo} line={line} />
             ))}
-            {card.balance != null && <span className="h-[22px] block" />}
-            {ci < cards.length - 1 && <span className="h-4 block" />}
+            {ci < cards.length - 1 && (
+              <span className="pr-2 opacity-0">{card.lines[card.lines.length - 1]!.lineNo + 1}</span>
+            )}
           </Fragment>
         ))}
       </div>
-      <div className="flex-1 overflow-y-auto py-4 px-6 font-mono text-[13px]">
+      <div className="flex-1 overflow-y-auto py-4 px-6">
         {body ?? (
           <div className="flex flex-col space-y-4">
             {cards.map((card) => (
@@ -132,7 +258,7 @@ const SUGGESTED_PROMPTS: Array<{ icon: string; text: string }> = [
 
 function AiPane() {
   return (
-    <aside className="w-[320px] shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden pb-7">
+    <aside className="w-[320px] shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
         <div className="px-4 py-4 flex items-center gap-2">
           <span className="material-symbols-outlined text-[#0D9488] !text-[16px]">auto_awesome</span>
@@ -191,11 +317,11 @@ function AiPane() {
   )
 }
 
-function StatusBar({ txnCount }: { txnCount: number }) {
+function StatusBar({ txnCount, cursor }: { txnCount: number; cursor: string }) {
   return (
     <footer className="h-[28px] bg-[#f2f4f6] border-t border-slate-200 flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-[#515f74] shrink-0">
       <div className="flex items-center gap-6">
-        <span>Ln 1, Col 1</span>
+        <span>{cursor}</span>
         <span className="text-[#0D9488] font-bold flex items-center gap-1">
           <span className="material-symbols-outlined !text-[12px]">check_circle</span>
           <span>Parsed</span>
@@ -223,6 +349,7 @@ export type NotebookShellProps = {
   txnCount: number
   unsaved?: boolean
   body?: ReactNode
+  cursor?: string
 }
 
 export function NotebookShell({
@@ -234,13 +361,14 @@ export function NotebookShell({
   txnCount,
   unsaved = false,
   body,
+  cursor = 'Ln 1, Col 1',
 }: NotebookShellProps) {
   return (
     <div className="w-full h-screen flex bg-[#f7f9fb] font-sans text-[#191c1e] overflow-hidden">
       <NavRail />
 
-      <main className="flex-1 flex flex-col min-w-0">
-        <div className="h-12 bg-white border-b border-slate-100 px-6 flex items-center justify-between shrink-0">
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-12 bg-white border-b border-slate-100 px-6 flex items-center justify-between shrink-0">
           <div className="text-sm flex items-center gap-2 tracking-tight">
             <Link
               href="/"
@@ -278,24 +406,28 @@ export function NotebookShell({
               <span>Save ⌘S</span>
             </button>
           </div>
+        </header>
+
+        <div className="flex-1 flex min-h-0">
+          <main className="flex-1 flex flex-col min-w-0">
+            <section className="h-16 bg-[#f2f4f6] px-8 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex flex-col">
+                <h1 className="text-lg font-bold text-[#191c1e] leading-tight">{accountTitle}</h1>
+                <span className="font-mono text-[10px] text-[#515f74] tracking-tight">{accountPath}</span>
+              </div>
+              <div className="text-right">
+                <div className="font-mono font-bold text-2xl text-[#191c1e]">{balance}</div>
+              </div>
+            </section>
+
+            <EditorPane cards={cards} body={body} />
+          </main>
+
+          <AiPane />
         </div>
 
-        <section className="h-16 bg-[#f2f4f6] px-8 border-b border-slate-100 flex items-center justify-between shrink-0">
-          <div className="flex flex-col">
-            <h1 className="text-lg font-bold text-[#191c1e] leading-tight">{accountTitle}</h1>
-            <span className="font-mono text-[10px] text-[#515f74] tracking-tight">{accountPath}</span>
-          </div>
-          <div className="text-right">
-            <div className="font-mono font-bold text-2xl text-[#191c1e]">{balance}</div>
-          </div>
-        </section>
-
-        <EditorPane cards={cards} body={body} />
-
-        <StatusBar txnCount={txnCount} />
-      </main>
-
-      <AiPane />
+        <StatusBar txnCount={txnCount} cursor={cursor} />
+      </div>
     </div>
   )
 }
