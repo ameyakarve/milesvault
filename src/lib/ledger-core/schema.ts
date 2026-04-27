@@ -19,16 +19,6 @@ const RAW_TEXT_TABLES = [
 
 export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
   {
-    label: 'rename_transactions_v2',
-    sql: 'ALTER TABLE transactions_v2 RENAME TO transactions',
-    allowFail: true,
-  },
-  {
-    label: 'drop_idx_transactions_v2_date_id',
-    sql: 'DROP INDEX IF EXISTS idx_transactions_v2_date_id',
-  },
-
-  {
     label: 'transactions',
     sql: `CREATE TABLE IF NOT EXISTS transactions (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
