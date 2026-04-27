@@ -243,10 +243,6 @@ export function PerAccountView({ account }: { account: string }) {
                 </>
               )}
             </div>
-            <button className="flex items-center gap-1 bg-white border border-slate-200 rounded h-[32px] px-3 text-[13px] font-medium text-slate-900 hover:bg-slate-50">
-              {title}
-              <Icon name="expand_more" className="!text-[16px] text-slate-500" />
-            </button>
           </div>
           <div className="flex items-center gap-2">
             <button className="p-1.5 hover:bg-slate-100 rounded text-slate-500">
