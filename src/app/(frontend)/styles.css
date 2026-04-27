@@ -55,6 +55,9 @@ body {
   border-bottom-right-radius: 2px;
   padding-bottom: 6px;
 }
+.cm-balance-footer-wrap {
+  padding-bottom: 12px;
+}
 .cm-balance-footer {
   display: flex;
   justify-content: space-between;
@@ -67,7 +70,6 @@ body {
   border-top: 1px solid rgb(226, 232, 240);
   border-bottom-left-radius: 2px;
   border-bottom-right-radius: 2px;
-  margin-bottom: 12px;
   font-family: 'Inter', sans-serif;
 }
 .cm-balance-footer .cm-bal-label {

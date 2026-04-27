@@ -285,15 +285,18 @@ class BalanceFooterWidget extends WidgetType {
   }
   toDOM() {
     const wrap = document.createElement('div')
-    wrap.className = `cm-balance-footer${this.mismatch ? ' cm-balance-mismatch' : ''}`
+    wrap.className = 'cm-balance-footer-wrap'
+    const row = document.createElement('div')
+    row.className = `cm-balance-footer${this.mismatch ? ' cm-balance-mismatch' : ''}`
     const label = document.createElement('span')
     label.className = 'cm-bal-label'
     label.textContent = 'BALANCE'
     const value = document.createElement('span')
     value.className = 'cm-bal-value'
     value.textContent = this.value
-    wrap.appendChild(label)
-    wrap.appendChild(value)
+    row.appendChild(label)
+    row.appendChild(value)
+    wrap.appendChild(row)
     return wrap
   }
   eq(other: BalanceFooterWidget) {
