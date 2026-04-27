@@ -205,25 +205,3 @@ export type DirectiveV2 =
   | DirectiveDocument
   | DirectiveEvent
 
-export type DirectiveCreateResult =
-  | { ok: true; directives: DirectiveV2[] }
-  | { ok: false; errors: string[] }
-
-export type DirectiveUpdateResult =
-  | { ok: true; directive: DirectiveV2 }
-  | { ok: false; kind: 'validation'; errors: string[] }
-  | { ok: false; kind: 'conflict'; current_updated_at: number }
-  | { ok: false; kind: 'not_found' }
-  | { ok: false; kind: 'wrong_kind'; expected: DirectiveKind; actual: DirectiveKind }
-
-export type DirectiveDeleteResult =
-  | { ok: true }
-  | { ok: false; kind: 'conflict'; current_updated_at: number }
-  | { ok: false; kind: 'not_found' }
-
-export type DirectiveListResult = {
-  rows: DirectiveV2[]
-  total: number
-  limit: number
-  offset: number
-}
