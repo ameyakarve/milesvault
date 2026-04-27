@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test'
 
-const STORYBOOK = 'http://localhost:6006'
+const PORT = process.env.STORYBOOK_PORT || '6006'
+const STORYBOOK = `http://localhost:${PORT}`
 
 async function load(page, id) {
   const url = `${STORYBOOK}/iframe.html?id=${id}&viewMode=story`
@@ -23,20 +24,43 @@ async function main() {
   await page.waitForSelector('.cm-content', { timeout: 10000 })
   await page.waitForFunction(() => document.querySelectorAll('.cm-card-top').length > 0 || document.querySelectorAll('.cm-card-solo').length > 0, null, { timeout: 8000 })
 
-  const counts = await page.evaluate(() => ({
-    cardTop: document.querySelectorAll('.cm-card-top').length,
-    cardMid: document.querySelectorAll('.cm-card-mid').length,
-    cardBot: document.querySelectorAll('.cm-card-bot').length,
-    cardSolo: document.querySelectorAll('.cm-card-solo').length,
-    pills: document.querySelectorAll('.cm-balance-pill').length,
-    mismatches: document.querySelectorAll('.cm-balance-mismatch').length,
-    gutters: document.querySelectorAll('.cm-gutters').length,
-    lineNumbers: Array.from(document.querySelectorAll('.cm-lineNumbers .cm-gutterElement')).map(
-      (e) => e.textContent,
-    ),
-    parseBanner: document.querySelectorAll('[data-testid="parse-error-banner"]').length,
-    pillTexts: Array.from(document.querySelectorAll('.cm-balance-pill')).map((e) => e.textContent),
-  }))
+  const counts = await page.evaluate(() => {
+    const findText = (re) => {
+      const all = Array.from(document.querySelectorAll('*'))
+      return all.find((el) => re.test((el.textContent || '').trim()))
+    }
+    const aside = document.querySelector('aside[class*="w-[320px]"]')
+    const aiHeading = aside ? findText(/AI Manuscript Assistant/i) : null
+    const saveBtn = Array.from(document.querySelectorAll('button')).find(
+      (b) => /save/i.test(b.textContent || ''),
+    )
+    const headerBalanceEl = document.querySelector('[class*="text-2xl"]')
+    const footerSpans = Array.from(document.querySelectorAll('footer span'))
+    const txnCountEl = footerSpans.find((s) => /\btxns?\b/i.test(s.textContent || ''))
+    return {
+      cardTop: document.querySelectorAll('.cm-card-top').length,
+      cardMid: document.querySelectorAll('.cm-card-mid').length,
+      cardBot: document.querySelectorAll('.cm-card-bot').length,
+      cardSolo: document.querySelectorAll('.cm-card-solo').length,
+      pills: document.querySelectorAll('.cm-balance-pill').length,
+      mismatches: document.querySelectorAll('.cm-balance-mismatch').length,
+      gutters: document.querySelectorAll('.cm-gutters').length,
+      lineNumbers: Array.from(document.querySelectorAll('.cm-lineNumbers .cm-gutterElement')).map(
+        (e) => e.textContent,
+      ),
+      parseBanner: document.querySelectorAll('[data-testid="parse-error-banner"]').length,
+      pillTexts: Array.from(document.querySelectorAll('.cm-balance-pill')).map((e) => e.textContent),
+      asideExists: !!aside,
+      aiHeadingPresent: !!aiHeading,
+      deltaInlays: document.querySelectorAll('.cm-delta-inlay').length,
+      deltaOuts: document.querySelectorAll('.cm-delta-out').length,
+      deltaIns: document.querySelectorAll('.cm-delta-in').length,
+      saveBtnHasTeal: !!saveBtn && saveBtn.className.includes('bg-teal-600'),
+      saveBtnText: saveBtn ? (saveBtn.textContent || '').trim().replace(/\s+/g, ' ') : null,
+      headerBalanceText: headerBalanceEl ? (headerBalanceEl.textContent || '').trim() : null,
+      txnCountText: txnCountEl ? (txnCountEl.textContent || '').trim() : null,
+    }
+  })
 
   console.log('default story counts:', counts)
 
@@ -46,6 +70,30 @@ async function main() {
   if (counts.mismatches !== 0) errors.push(`expected 0 mismatches in default fixture, got ${counts.mismatches}`)
   if (counts.gutters < 1) errors.push(`expected built-in gutter visible`)
   if (counts.parseBanner !== 0) errors.push(`expected no parse banner on default fixture`)
+  if (!counts.asideExists) errors.push(`expected aside w-[320px] (AI pane) present`)
+  if (!counts.aiHeadingPresent) errors.push(`expected "AI Manuscript Assistant" heading inside aside`)
+  if (counts.deltaInlays < 3) errors.push(`expected >=3 .cm-delta-inlay (3-txn fixture), got ${counts.deltaInlays}`)
+  if (counts.deltaOuts !== 2) errors.push(`expected 2 .cm-delta-out (Coffee + Groceries), got ${counts.deltaOuts}`)
+  if (counts.deltaIns !== 1) errors.push(`expected 1 .cm-delta-in (Refund), got ${counts.deltaIns}`)
+  if (!counts.saveBtnHasTeal) errors.push(`save button missing bg-teal-600 (got "${counts.saveBtnText}")`)
+
+  // Soft-fail GAPs (logged, do not exit nonzero)
+  const softFails = []
+  if (!counts.headerBalanceText) {
+    softFails.push(`GAP-1? header balance element not found ([class*="text-2xl"])`)
+  } else {
+    const startsWithRupee = counts.headerBalanceText.startsWith('₹')
+    if (!startsWithRupee) {
+      softFails.push(
+        `GAP-1: header balance "${counts.headerBalanceText}" does not start with ₹ (mock format ₹1,32,450.00)`,
+      )
+    }
+  }
+  if (counts.txnCountText !== '3 txns') {
+    softFails.push(
+      `txn count textContent="${counts.txnCountText}" (expected exact "3 txns")`,
+    )
+  }
 
   // Verify running balance: open=0, -250, -1750.50, -1250.50, balance check matches, pad displays current, close displays current
   // open card: 0.00 INR
@@ -84,6 +132,11 @@ async function main() {
   if (errCounts.parseBanner !== 1) errors.push(`expected 1 parse banner after typing bad char, got ${errCounts.parseBanner}`)
 
   await browser.close()
+
+  if (softFails.length > 0) {
+    console.warn('SOFT-FAILS (known gaps, logged not gating):')
+    for (const w of softFails) console.warn('  -', w)
+  }
 
   if (errors.length > 0) {
     console.error('VERIFY FAILED:')

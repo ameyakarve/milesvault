@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test'
 
-const STORYBOOK = 'http://localhost:6006'
+const PORT = process.env.STORYBOOK_PORT || '6006'
+const STORYBOOK = `http://localhost:${PORT}`
 
 async function load(page, id) {
   const url = `${STORYBOOK}/iframe.html?id=${id}&viewMode=story`
@@ -65,6 +66,64 @@ async function main() {
   if (fxGutterBg !== 'rgb(224, 227, 229)') errors.push(`gutter bg mismatch: ${fxGutterBg}`)
   if (fxGutterFg !== 'rgb(188, 201, 198)') errors.push(`gutter fg mismatch: ${fxGutterFg}`)
 
+  // Extra computed-style probes
+  const probes = await page.evaluate(() => {
+    const get = (sel, prop) => {
+      const el = document.querySelector(sel)
+      if (!el) return null
+      const cs = window.getComputedStyle(el)
+      return cs[prop]
+    }
+    const findBalance = () => document.querySelector('[class*="text-2xl"]')
+    const balanceEl = findBalance()
+    return {
+      footerTextTransform: get('footer', 'textTransform'),
+      activeLineGutterBg: get('.cm-gutters .cm-activeLineGutter', 'backgroundColor'),
+      activeLineGutterCount: document.querySelectorAll('.cm-gutters .cm-activeLineGutter').length,
+      deltaOutColor: get('.cm-delta-out', 'color'),
+      deltaInColor: get('.cm-delta-in', 'color'),
+      pillPaddingRight: get('.cm-balance-pill', 'paddingRight'),
+      pillHeight: get('.cm-balance-pill', 'height'),
+      headerBalanceFontSize: balanceEl ? window.getComputedStyle(balanceEl).fontSize : null,
+      headerBalanceFontFamily: balanceEl ? window.getComputedStyle(balanceEl).fontFamily : null,
+    }
+  })
+  console.log('probes:', probes)
+
+  // Hard assertions
+  if (!/251.*113.*133/.test(probes.deltaOutColor || '')) {
+    errors.push(`delta-out color mismatch: ${probes.deltaOutColor} (expected rose 251,113,133)`)
+  }
+  if (!/20.*184.*166/.test(probes.deltaInColor || '')) {
+    errors.push(`delta-in color mismatch: ${probes.deltaInColor} (expected teal 20,184,166)`)
+  }
+  if (probes.pillPaddingRight !== '16px') {
+    errors.push(`pill paddingRight=${probes.pillPaddingRight} (expected 16px)`)
+  }
+  if (probes.pillHeight !== '16px') {
+    errors.push(`pill height=${probes.pillHeight} (expected 16px)`)
+  }
+  if (probes.headerBalanceFontSize !== '24px') {
+    errors.push(`header balance fontSize=${probes.headerBalanceFontSize} (expected 24px / text-2xl)`)
+  }
+
+  // Soft-fail GAPs
+  const softFails = []
+  if (probes.footerTextTransform === 'uppercase') {
+    softFails.push(
+      `GAP-2: footer textTransform=uppercase — mock shows lowercase "txns" ; should be 'none'`,
+    )
+  }
+  if (probes.activeLineGutterCount === 0) {
+    softFails.push(
+      `GAP-3: no .cm-activeLineGutter present (highlightActiveLineGutter disabled) — mock shows teal 2px bar`,
+    )
+  } else if (probes.activeLineGutterBg !== 'rgb(0, 104, 95)') {
+    softFails.push(
+      `GAP-3: activeLineGutter bg=${probes.activeLineGutterBg} (expected rgb(0,104,95) #00685f)`,
+    )
+  }
+
   // Syntax tokens — sampled from cm-content
   const tokens = await page.evaluate(() => {
     const get = (sel) => {
@@ -80,6 +139,12 @@ async function main() {
   console.log('tokens:', tokens)
 
   await browser.close()
+
+  if (softFails.length > 0) {
+    console.warn('SOFT-FAILS (known gaps, logged not gating):')
+    for (const w of softFails) console.warn('  -', w)
+  }
+
   if (errors.length > 0) {
     console.error('PIXEL VERIFY FAILED:')
     for (const e of errors) console.error('  -', e)
