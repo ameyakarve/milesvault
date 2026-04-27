@@ -37,6 +37,46 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     }
   }
 
+  async _debug_counts(): Promise<Record<string, number | string>> {
+    const tables = [
+      'transactions',
+      'transactions_v2',
+      'postings',
+      'txn_tags',
+      'txn_links',
+      'directives_open',
+      'directives_close',
+      'directives_balance',
+      'directives_pad',
+      'directives_note',
+      'directives_document',
+      'directives_event',
+      'directives_commodity',
+      'directives_price',
+      'account_recents',
+    ]
+    const out: Record<string, number | string> = {}
+    for (const t of tables) {
+      try {
+        const r = this.sql.exec<{ c: number }>(`SELECT COUNT(*) AS c FROM ${t}`).toArray()[0]
+        out[t] = r?.c ?? 0
+      } catch (e) {
+        out[t] = `err: ${String(e)}`
+      }
+    }
+    try {
+      const sample = this.sql
+        .exec<{ account: string; c: number }>(
+          `SELECT account, COUNT(*) AS c FROM postings GROUP BY account ORDER BY c DESC LIMIT 10`,
+        )
+        .toArray()
+      out._top_posting_accounts = JSON.stringify(sample)
+    } catch (e) {
+      out._top_posting_accounts = `err: ${String(e)}`
+    }
+    return out
+  }
+
   async recent_accounts_list(limit: number): Promise<string[]> {
     const recents = this.sql
       .exec<{ account: string }>(
