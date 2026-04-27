@@ -12,6 +12,7 @@ export type LedgerClient = {
     limit?: number,
     offset?: number,
   ): Promise<AccountEntriesResponse>
+  _debug_counts(): Promise<Record<string, number | string>>
 }
 
 export class LedgerInputError extends Error {
@@ -56,6 +57,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       const l = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT)
       const o = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0)
       return stub.list_account_entries(account, l, o)
+    },
+
+    async _debug_counts() {
+      return stub._debug_counts()
     },
   }
 }
