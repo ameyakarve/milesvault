@@ -68,17 +68,33 @@ export type ParsedJournal = {
   directives: DirectiveInput[]
   unsupportedDirectiveCount: number
   unsupportedDirectiveTypes: string[]
+  partialParse: boolean
+  expectedDirectiveLineCount: number
+  parsedDirectiveCount: number
+  droppedLineNumbers: number[]
 }
 
 const FORMATTING_NODE_TYPES = new Set(['comment', 'blankline'])
+const DATE_LINE_RE = /^\s*\d{4}-\d{2}-\d{2}(\s|$)/
+
+function findDateLineNumbers(text: string): number[] {
+  const out: number[] = []
+  const lines = text.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    if (DATE_LINE_RE.test(lines[i]!)) out.push(i + 1)
+  }
+  return out
+}
 
 export function parseJournal(text: string): ParsedJournal {
   const result = parse(text)
   const transactions: TransactionInput[] = []
   const directives: DirectiveInput[] = []
   const unsupportedTypes = new Set<string>()
+  let parsedDirectiveCount = 0
   for (const node of result.nodes) {
     if (FORMATTING_NODE_TYPES.has(node.type)) continue
+    parsedDirectiveCount++
     if (node.type === 'transaction') {
       transactions.push(transactionToInput(node as BcTransaction))
       continue
@@ -87,11 +103,21 @@ export function parseJournal(text: string): ParsedJournal {
     if (dir) directives.push(dir)
     else unsupportedTypes.add(node.type)
   }
+  const dateLineNumbers = findDateLineNumbers(text)
+  const expected = dateLineNumbers.length
+  const partialParse = expected > parsedDirectiveCount
+  const droppedLineNumbers = partialParse
+    ? dateLineNumbers.slice(parsedDirectiveCount)
+    : []
   return {
     transactions,
     directives,
     unsupportedDirectiveCount: unsupportedTypes.size,
     unsupportedDirectiveTypes: [...unsupportedTypes],
+    partialParse,
+    expectedDirectiveLineCount: expected,
+    parsedDirectiveCount,
+    droppedLineNumbers,
   }
 }
 
