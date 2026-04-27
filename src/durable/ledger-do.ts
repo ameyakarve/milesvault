@@ -49,9 +49,12 @@ export type JournalGetResponse = { text: string }
 export type JournalPutResponse = { text: string; inserted: number; deleted: number; unchanged: number }
 export type JournalPutError = {
   ok: false
-  error: 'parse_error' | 'unsupported_directives'
+  error: 'parse_error' | 'unsupported_directives' | 'partial_parse'
   message: string
   unsupportedTypes?: string[]
+  droppedLineNumbers?: number[]
+  expectedDirectiveLineCount?: number
+  parsedDirectiveCount?: number
 }
 
 const DIRECTIVE_TABLE: Record<DirectiveInput['kind'], string> = {
@@ -236,51 +239,21 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         unsupportedTypes: parsed.unsupportedDirectiveTypes,
       }
     }
-
-    let inserted = 0
-    let deleted = 0
-    let unchanged = 0
-    const now = Date.now()
-
-    // Transactions: stored hash diff
-    const incomingTxns: Array<{ input: TransactionInput; hash: string }> = []
-    for (const input of parsed.transactions) {
-      incomingTxns.push({ input, hash: await transactionInputHash(input) })
-    }
-    const oldTxnsByHash = new Map<string, number[]>()
-    for (const r of this.sql
-      .exec<{ id: number; hash: string | null }>('SELECT id, hash FROM transactions')
-      .toArray()) {
-      const key = r.hash ?? ''
-      if (!oldTxnsByHash.has(key)) oldTxnsByHash.set(key, [])
-      oldTxnsByHash.get(key)!.push(r.id)
-    }
-    const txnsToInsert: Array<{ input: TransactionInput; hash: string }> = []
-    for (const item of incomingTxns) {
-      const ids = oldTxnsByHash.get(item.hash)
-      if (ids && ids.length > 0) {
-        ids.shift()
-        unchanged++
-      } else {
-        txnsToInsert.push(item)
+    if (parsed.partialParse) {
+      const lines = parsed.droppedLineNumbers.join(', ')
+      return {
+        ok: false,
+        error: 'partial_parse',
+        message:
+          `Input had ${parsed.expectedDirectiveLineCount} dated line(s) but only ` +
+          `${parsed.parsedDirectiveCount} parsed. Likely dropped line(s): ${lines}. ` +
+          `Top-level directives must start at column 0 (no leading whitespace).`,
+        droppedLineNumbers: parsed.droppedLineNumbers,
+        expectedDirectiveLineCount: parsed.expectedDirectiveLineCount,
+        parsedDirectiveCount: parsed.parsedDirectiveCount,
       }
     }
-    const txnIdsToDelete: number[] = []
-    for (const ids of oldTxnsByHash.values()) txnIdsToDelete.push(...ids)
-    for (const id of txnIdsToDelete) {
-      this.sql.exec('DELETE FROM transactions WHERE id = ?', id)
-    }
-    for (const { input, hash } of txnsToInsert) this.insertTxn(input, hash, now)
-    inserted += txnsToInsert.length
-    deleted += txnIdsToDelete.length
 
-    // Directives: hash on the fly per kind
-    const incomingByKind = new Map<DirectiveInput['kind'], DirectiveInput[]>()
-    for (const d of parsed.directives) {
-      const arr = incomingByKind.get(d.kind) ?? []
-      arr.push(d)
-      incomingByKind.set(d.kind, arr)
-    }
     const allKinds: DirectiveInput['kind'][] = [
       'open',
       'close',
@@ -292,21 +265,64 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       'document',
       'event',
     ]
+
+    // Pre-compute all hashes (async work must finish before transactionSync)
+    const incomingTxns: Array<{ input: TransactionInput; hash: string }> = []
+    for (const input of parsed.transactions) {
+      incomingTxns.push({ input, hash: await transactionInputHash(input) })
+    }
+    const incomingDirsByKind = new Map<
+      DirectiveInput['kind'],
+      Array<{ input: DirectiveInput; hash: string }>
+    >()
+    for (const kind of allKinds) incomingDirsByKind.set(kind, [])
+    for (const d of parsed.directives) {
+      const hash = await directiveInputHash(d)
+      incomingDirsByKind.get(d.kind)!.push({ input: d, hash })
+    }
+
+    const oldTxnsByHash = new Map<string, number[]>()
+    for (const r of this.sql
+      .exec<{ id: number; hash: string | null }>('SELECT id, hash FROM transactions')
+      .toArray()) {
+      const key = r.hash ?? ''
+      if (!oldTxnsByHash.has(key)) oldTxnsByHash.set(key, [])
+      oldTxnsByHash.get(key)!.push(r.id)
+    }
+    const oldDirsByKindHash = new Map<DirectiveInput['kind'], Map<string, number[]>>()
     for (const kind of allKinds) {
-      const incoming = incomingByKind.get(kind) ?? []
-      const incomingHashes = await Promise.all(
-        incoming.map(async (d) => ({ input: d, hash: await directiveInputHash(d) })),
-      )
-      const existing = this.readDirectivesByKind(kind)
-      const oldByHash = new Map<string, number[]>()
-      for (const e of existing) {
+      const map = new Map<string, number[]>()
+      for (const e of this.readDirectivesByKind(kind)) {
         const h = await directiveInputHash(e.input)
-        if (!oldByHash.has(h)) oldByHash.set(h, [])
-        oldByHash.get(h)!.push(e.id)
+        if (!map.has(h)) map.set(h, [])
+        map.get(h)!.push(e.id)
       }
+      oldDirsByKindHash.set(kind, map)
+    }
+
+    // Compute diff (pure)
+    const txnsToInsert: Array<{ input: TransactionInput; hash: string }> = []
+    let unchanged = 0
+    for (const item of incomingTxns) {
+      const ids = oldTxnsByHash.get(item.hash)
+      if (ids && ids.length > 0) {
+        ids.shift()
+        unchanged++
+      } else {
+        txnsToInsert.push(item)
+      }
+    }
+    const txnIdsToDelete: number[] = []
+    for (const ids of oldTxnsByHash.values()) txnIdsToDelete.push(...ids)
+
+    const dirsToInsertByKind = new Map<DirectiveInput['kind'], DirectiveInput[]>()
+    const dirIdsToDeleteByKind = new Map<DirectiveInput['kind'], number[]>()
+    for (const kind of allKinds) {
+      const incoming = incomingDirsByKind.get(kind)!
+      const oldMap = oldDirsByKindHash.get(kind)!
       const toInsert: DirectiveInput[] = []
-      for (const item of incomingHashes) {
-        const ids = oldByHash.get(item.hash)
+      for (const item of incoming) {
+        const ids = oldMap.get(item.hash)
         if (ids && ids.length > 0) {
           ids.shift()
           unchanged++
@@ -315,15 +331,33 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         }
       }
       const idsToDelete: number[] = []
-      for (const ids of oldByHash.values()) idsToDelete.push(...ids)
-      const table = DIRECTIVE_TABLE[kind]
-      for (const id of idsToDelete) {
-        this.sql.exec(`DELETE FROM ${table} WHERE id = ?`, id)
-      }
-      for (const d of toInsert) this.insertDirective(d, now)
-      inserted += toInsert.length
-      deleted += idsToDelete.length
+      for (const ids of oldMap.values()) idsToDelete.push(...ids)
+      dirsToInsertByKind.set(kind, toInsert)
+      dirIdsToDeleteByKind.set(kind, idsToDelete)
     }
+
+    let inserted = txnsToInsert.length
+    let deleted = txnIdsToDelete.length
+    for (const kind of allKinds) {
+      inserted += dirsToInsertByKind.get(kind)!.length
+      deleted += dirIdsToDeleteByKind.get(kind)!.length
+    }
+
+    // Apply atomically: any throw inside rolls back all writes
+    const now = Date.now()
+    this.ctx.storage.transactionSync(() => {
+      for (const id of txnIdsToDelete) {
+        this.sql.exec('DELETE FROM transactions WHERE id = ?', id)
+      }
+      for (const { input, hash } of txnsToInsert) this.insertTxn(input, hash, now)
+      for (const kind of allKinds) {
+        const table = DIRECTIVE_TABLE[kind]
+        for (const id of dirIdsToDeleteByKind.get(kind)!) {
+          this.sql.exec(`DELETE FROM ${table} WHERE id = ?`, id)
+        }
+        for (const d of dirsToInsertByKind.get(kind)!) this.insertDirective(d, now)
+      }
+    })
 
     const result = await this.journal_get()
     return { text: result.text, inserted, deleted, unchanged }
