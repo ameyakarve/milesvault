@@ -77,22 +77,28 @@ async function main() {
   if (counts.deltaIns !== 1) errors.push(`expected 1 .cm-delta-in (Refund), got ${counts.deltaIns}`)
   if (!counts.saveBtnHasTeal) errors.push(`save button missing bg-teal-600 (got "${counts.saveBtnText}")`)
 
-  // Soft-fail GAPs (logged, do not exit nonzero)
-  const softFails = []
   if (!counts.headerBalanceText) {
-    softFails.push(`GAP-1? header balance element not found ([class*="text-2xl"])`)
-  } else {
-    const startsWithRupee = counts.headerBalanceText.startsWith('₹')
-    if (!startsWithRupee) {
-      softFails.push(
-        `GAP-1: header balance "${counts.headerBalanceText}" does not start with ₹ (mock format ₹1,32,450.00)`,
-      )
-    }
+    errors.push(`header balance element not found ([class*="text-2xl"])`)
+  } else if (!/^-?₹[\d,]+\.\d{2}$/.test(counts.headerBalanceText)) {
+    errors.push(
+      `header balance "${counts.headerBalanceText}" not in expected format (₹1,32,450.00 or -₹1,250.50)`,
+    )
   }
   if (counts.txnCountText !== '3 txns') {
-    softFails.push(
-      `txn count textContent="${counts.txnCountText}" (expected exact "3 txns")`,
-    )
+    errors.push(`txn count textContent="${counts.txnCountText}" (expected exact "3 txns")`)
+  }
+  // Delta texts: no currency suffix, locale-grouped digits
+  const deltaTexts = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.cm-delta-inlay')).map((e) =>
+      (e.textContent || '').replace(/ /g, ' ').trim(),
+    ),
+  )
+  console.log('delta texts:', deltaTexts)
+  const deltaPattern = /^→\s*[+−]\d{1,3}(,\d{2,3})*\.\d{2}$/
+  for (let i = 0; i < deltaTexts.length; i++) {
+    if (!deltaPattern.test(deltaTexts[i])) {
+      errors.push(`delta[${i}] "${deltaTexts[i]}" not in "→ ±X,XXX.XX" format`)
+    }
   }
 
   // Verify running balance: open=0, -250, -1750.50, -1250.50, balance check matches, pad displays current, close displays current
@@ -104,13 +110,13 @@ async function main() {
   // pad: still -1250.50
   // close: still -1250.50
   const expectedPills = [
-    'bal 0.00 INR',
-    'bal -250.00 INR',
-    'bal -1,750.50 INR',
-    'bal -1,250.50 INR',
-    'bal -1,250.50 INR',
-    'bal -1,250.50 INR',
-    'bal -1,250.50 INR',
+    'bal 0.00',
+    'bal -250.00',
+    'bal -1,750.50',
+    'bal -1,250.50',
+    'bal -1,250.50',
+    'bal -1,250.50',
+    'bal -1,250.50',
   ]
   for (let i = 0; i < expectedPills.length; i++) {
     if (counts.pillTexts[i] !== expectedPills[i]) {
@@ -132,11 +138,6 @@ async function main() {
   if (errCounts.parseBanner !== 1) errors.push(`expected 1 parse banner after typing bad char, got ${errCounts.parseBanner}`)
 
   await browser.close()
-
-  if (softFails.length > 0) {
-    console.warn('SOFT-FAILS (known gaps, logged not gating):')
-    for (const w of softFails) console.warn('  -', w)
-  }
 
   if (errors.length > 0) {
     console.error('VERIFY FAILED:')

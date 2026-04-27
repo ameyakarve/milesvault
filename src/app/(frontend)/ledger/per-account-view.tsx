@@ -24,6 +24,7 @@ import { NotebookShell } from './notebook-shell'
 import {
   cardDecorations,
   computeCardSpecs,
+  formatHeaderBalance,
   setCardSpecs,
   type CardSpec,
 } from './card-decorations'
@@ -63,6 +64,11 @@ const THEME = EditorView.theme({
   '.cm-content': { padding: '0', caretColor: '#00685f' },
   '.cm-line': { padding: '0 12px', lineHeight: '28px', position: 'relative' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
+  '.cm-activeLineGutter': {
+    backgroundColor: 'transparent',
+    color: '#00685f',
+    boxShadow: 'inset -2px 0 0 0 #00685f',
+  },
   '.cm-focused': { outline: 'none' },
   '.cm-delta-inlay': {
     position: 'absolute',
@@ -96,7 +102,7 @@ const BASIC = {
   lineNumbers: true,
   foldGutter: false,
   highlightActiveLine: false,
-  highlightActiveLineGutter: false,
+  highlightActiveLineGutter: true,
   highlightSelectionMatches: false,
   searchKeymap: false,
 } as const
@@ -230,12 +236,13 @@ export function PerAccountView({ account }: { account: string }) {
   }, [parsed, account, currency])
 
   const headerBalance = useMemo(() => {
+    if (!currency) return ''
     for (let i = cardSpecs.length - 1; i >= 0; i--) {
-      const b = cardSpecs[i]!.balance
-      if (b) return b
+      const rt = cardSpecs[i]!.runningTotal
+      if (rt != null) return formatHeaderBalance(rt, currency)
     }
     return ''
-  }, [cardSpecs])
+  }, [cardSpecs, currency])
 
   const txnCount = isStrictParseErr(parsed) ? 0 : parsed.transactions.length
   const showCurrencyChrome = currencies.length > 1 || (!!stats && !error)
@@ -316,6 +323,7 @@ export function PerAccountView({ account }: { account: string }) {
             value={text}
             extensions={extensions}
             basicSetup={BASIC}
+            theme="none"
             editable={!saving}
             onChange={(v) => setText(v)}
             onCreateEditor={(view) => {
