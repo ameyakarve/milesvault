@@ -18,7 +18,6 @@ import type {
   Posting,
 } from '@/durable/ledger-types'
 import { splitCamel } from '@/lib/beancount/account-display'
-import { serializeTransactionInput } from '@/lib/beancount/ast'
 import { useAccountEntries } from '../home/use-account-entries'
 
 const TOP_LEVELS = new Set(['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'])
@@ -356,7 +355,7 @@ export function PerAccountView({ account }: { account: string }) {
               const balanceStr = `${row.balance < 0 ? '-' : ''}${amountFmt.format(Math.abs(row.balance))}`
               const payee = row.entry.payee || row.entry.narration || row.entry.flag || '—'
               const narration = row.entry.payee ? row.entry.narration : ''
-              const sourceText = sourceEdits[key] ?? serializeTransactionInput(row.entry)
+              const sourceText = sourceEdits[key] ?? ''
               return (
                 <div key={key} className={isExpanded ? 'bg-white border-b border-slate-100 shadow-sm' : ''}>
                   <div
