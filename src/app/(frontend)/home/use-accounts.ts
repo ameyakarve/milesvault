@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { ledgerClient } from '@/lib/ledger-client-browser'
 import { useFetch } from './use-fetch'
 
 export function useRecentAccounts(limit = 10, enabled = true) {
@@ -10,12 +11,7 @@ export function useRecentAccounts(limit = 10, enabled = true) {
     [version],
   )
   const touch = useCallback(async (account: string) => {
-    await fetch('/api/ledger/accounts/recent', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ account }),
-    })
+    await ledgerClient.recentAccountTouch(account)
     setVersion((v) => v + 1)
   }, [])
   return { ...query, touch }

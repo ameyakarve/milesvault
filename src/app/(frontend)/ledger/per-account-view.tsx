@@ -17,6 +17,7 @@ import {
   directiveTouchesAccountCurrency,
   txnTouchesAccountCurrency,
 } from '@/lib/beancount/scope'
+import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 import { NotebookShell } from './notebook-shell'
 
@@ -69,28 +70,9 @@ const BASIC = {
   searchKeymap: false,
 } as const
 
-type JournalGetResponse = { text: string }
-type CurrenciesResponse = { currencies: string[] }
-type JournalPutOk = { text: string; inserted: number; deleted: number; unchanged: number }
-type JournalPutErr = {
-  ok: false
-  error: 'parse_error' | 'unsupported_directives'
-  message: string
-  unsupportedTypes?: string[]
-}
-type JournalPutResp = JournalPutOk | JournalPutErr
-
-function isPutErr(r: JournalPutResp): r is JournalPutErr {
-  return 'ok' in r && r.ok === false
-}
-
 type Whole = { txns: TransactionInput[]; directives: DirectiveInput[] }
 
-function sliceText(
-  whole: Whole,
-  account: string,
-  currency: string,
-): string {
+function sliceText(whole: Whole, account: string, currency: string): string {
   const txns = whole.txns.filter((tx) => txnTouchesAccountCurrency(tx, account, currency))
   const directives = whole.directives.filter((d) =>
     directiveTouchesAccountCurrency(d, account, currency),
@@ -112,22 +94,14 @@ export function PerAccountView({ account }: { account: string }) {
   >(null)
 
   useEffect(() => {
+    void ledgerClient.recentAccountTouch(account).catch(() => {})
+  }, [account])
+
+  useEffect(() => {
     const controller = new AbortController()
     Promise.all([
-      fetch('/api/ledger/journal', {
-        credentials: 'include',
-        signal: controller.signal,
-      }).then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return (await r.json()) as JournalGetResponse
-      }),
-      fetch(`/api/ledger/accounts/${encodeURIComponent(account)}/currencies`, {
-        credentials: 'include',
-        signal: controller.signal,
-      }).then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return (await r.json()) as CurrenciesResponse
-      }),
+      ledgerClient.getJournal({ signal: controller.signal }),
+      ledgerClient.getAccountCurrencies(account, { signal: controller.signal }),
     ])
       .then(([journal, curResp]) => {
         const parsed = parseJournal(journal.text)
@@ -183,22 +157,14 @@ export function PerAccountView({ account }: { account: string }) {
     const keepDirectives = whole.directives.filter(
       (d) => !directiveTouchesAccountCurrency(d, account, currency),
     )
-    const newWhole: Whole = {
-      txns: [...keepTxns, ...parsedSlice.transactions],
-      directives: [...keepDirectives, ...parsedSlice.directives],
-    }
-    const newWholeText = serializeJournal(newWhole.txns, newWhole.directives)
+    const newWholeText = serializeJournal(
+      [...keepTxns, ...parsedSlice.transactions],
+      [...keepDirectives, ...parsedSlice.directives],
+    )
     try {
-      const res = await fetch('/api/ledger/journal', {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: newWholeText }),
-      })
-      const data = (await res.json()) as JournalPutResp
-      if (!res.ok || isPutErr(data)) {
-        const msg = isPutErr(data) ? data.message : `HTTP ${res.status}`
-        setError(msg)
+      const data = await ledgerClient.putJournal(newWholeText)
+      if (isJournalPutError(data)) {
+        setError(data.message)
         return
       }
       const reparsed = parseJournal(data.text)
@@ -208,14 +174,9 @@ export function PerAccountView({ account }: { account: string }) {
       setSavedSlice(updated)
       setText(updated)
       setStats({ inserted: data.inserted, deleted: data.deleted, unchanged: data.unchanged })
-      const curResp = await fetch(
-        `/api/ledger/accounts/${encodeURIComponent(account)}/currencies`,
-        { credentials: 'include' },
-      )
-      if (curResp.ok) {
-        const cur = (await curResp.json()) as CurrenciesResponse
-        setCurrencies(cur.currencies)
-      }
+      void ledgerClient.recentAccountTouch(account).catch(() => {})
+      const cur = await ledgerClient.getAccountCurrencies(account)
+      setCurrencies(cur.currencies)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
