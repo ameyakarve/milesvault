@@ -1,14 +1,11 @@
 import { DurableObject } from 'cloudflare:workers'
 import { SCHEMA_STEPS_V2 } from '@/lib/ledger-core/schema-v2'
 import {
-  buildTransactionAst,
   dateFromInt,
   dateToInt,
   scaleDecimal,
   serializeDirective,
-  serializeTransaction,
   validateDirective,
-  validateInput,
   type ConstraintResolver,
 } from '@/lib/beancount/v2-ast'
 import type {
@@ -33,10 +30,7 @@ import type {
   PostingInput,
   TransactionInput,
   TransactionV2,
-  V2CreateResult,
-  V2DeleteResult,
   V2ListResult,
-  V2UpdateResult,
 } from './ledger-v2-types'
 
 export class LedgerDO extends DurableObject<CloudflareEnv> {
@@ -57,145 +51,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         throw e
       }
     }
-  }
-
-  async v2_create(input: TransactionInput): Promise<V2CreateResult> {
-    const prepared = prepareV2Input(input)
-    if (prepared.ok === false) return { ok: false, errors: prepared.errors }
-    const rawText = prepared.rawText
-    const now = Date.now()
-    let txn: TransactionV2 | null = null
-    this.ctx.storage.transactionSync(() => {
-      const row = this.sql
-        .exec<{ id: number }>(
-          `INSERT INTO transactions_v2
-             (date, flag, payee, narration, meta_json, raw_text, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           RETURNING id`,
-          dateToInt(input.date),
-          input.flag ?? null,
-          input.payee ?? '',
-          input.narration ?? '',
-          JSON.stringify(input.meta ?? {}),
-          rawText,
-          now,
-          now,
-        )
-        .toArray()[0]
-      if (!row) return
-      this.insertV2Children(row.id, input)
-      txn = this.readV2Transaction(row.id)
-    })
-    return txn ? { ok: true, transaction: txn } : { ok: false, errors: ['Insert failed.'] }
-  }
-
-  async v2_get(id: number): Promise<TransactionV2 | null> {
-    return this.readV2Transaction(id)
-  }
-
-  async v2_list(limit: number, offset: number): Promise<V2ListResult> {
-    const total =
-      this.sql
-        .exec<{ c: number }>('SELECT COUNT(*) AS c FROM transactions_v2')
-        .toArray()[0]?.c ?? 0
-    const ids = this.sql
-      .exec<{ id: number }>(
-        `SELECT id FROM transactions_v2
-         ORDER BY date DESC, id DESC
-         LIMIT ? OFFSET ?`,
-        limit,
-        offset,
-      )
-      .toArray()
-      .map((r) => r.id)
-    const rows: TransactionV2[] = []
-    for (const id of ids) {
-      const t = this.readV2Transaction(id)
-      if (t) rows.push(t)
-    }
-    return { rows, total, limit, offset }
-  }
-
-  async v2_update(
-    id: number,
-    expected_updated_at: number,
-    input: TransactionInput,
-  ): Promise<V2UpdateResult> {
-    const prepared = prepareV2Input(input)
-    if (prepared.ok === false) {
-      return { ok: false, kind: 'validation', errors: prepared.errors }
-    }
-    const rawText = prepared.rawText
-    let result: V2UpdateResult = { ok: false, kind: 'not_found' }
-    this.ctx.storage.transactionSync(() => {
-      const current = this.sql
-        .exec<{ updated_at: number }>(
-          'SELECT updated_at FROM transactions_v2 WHERE id = ?',
-          id,
-        )
-        .toArray()[0]
-      if (!current) {
-        result = { ok: false, kind: 'not_found' }
-        return
-      }
-      if (current.updated_at !== expected_updated_at) {
-        result = {
-          ok: false,
-          kind: 'conflict',
-          current_updated_at: current.updated_at,
-        }
-        return
-      }
-      const now = Date.now()
-      this.sql.exec(
-        `UPDATE transactions_v2 SET
-           date = ?, flag = ?, payee = ?, narration = ?, meta_json = ?,
-           raw_text = ?, updated_at = max(?, updated_at + 1)
-         WHERE id = ?`,
-        dateToInt(input.date),
-        input.flag ?? null,
-        input.payee ?? '',
-        input.narration ?? '',
-        JSON.stringify(input.meta ?? {}),
-        rawText,
-        now,
-        id,
-      )
-      this.sql.exec('DELETE FROM postings WHERE txn_id = ?', id)
-      this.sql.exec('DELETE FROM txn_tags WHERE txn_id = ?', id)
-      this.sql.exec('DELETE FROM txn_links WHERE txn_id = ?', id)
-      this.insertV2Children(id, input)
-      const txn = this.readV2Transaction(id)
-      result = txn ? { ok: true, transaction: txn } : { ok: false, kind: 'not_found' }
-    })
-    return result
-  }
-
-  async v2_delete(id: number, expected_updated_at: number): Promise<V2DeleteResult> {
-    let result: V2DeleteResult = { ok: false, kind: 'not_found' }
-    this.ctx.storage.transactionSync(() => {
-      const current = this.sql
-        .exec<{ updated_at: number }>(
-          'SELECT updated_at FROM transactions_v2 WHERE id = ?',
-          id,
-        )
-        .toArray()[0]
-      if (!current) {
-        result = { ok: false, kind: 'not_found' }
-        return
-      }
-      if (current.updated_at !== expected_updated_at) {
-        result = {
-          ok: false,
-          kind: 'conflict',
-          current_updated_at: current.updated_at,
-        }
-        return
-      }
-      this.sql.exec('DELETE FROM transactions_v2 WHERE id = ?', id)
-      result = { ok: true }
-    })
-    return result
   }
 
   async v2_directive_create(directives: DirectiveInput[]): Promise<DirectiveCreateResult> {
@@ -344,10 +199,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       result = { ok: true }
     })
     return result
-  }
-
-  async v2_account_constraints(account: string): Promise<string[] | null> {
-    return this.latestOpenConstraints(account)
   }
 
   async v2_listAccounts(): Promise<string[]> {
@@ -1079,18 +930,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       created_at: head.created_at,
       updated_at: head.updated_at,
     }
-  }
-}
-
-function prepareV2Input(
-  input: TransactionInput,
-): { ok: true; rawText: string } | { ok: false; errors: string[] } {
-  const errors = validateInput(input)
-  if (errors.length > 0) return { ok: false, errors }
-  try {
-    return { ok: true, rawText: serializeTransaction(buildTransactionAst(input)) }
-  } catch (e) {
-    return { ok: false, errors: [`serialize failed: ${String(e)}`] }
   }
 }
 
