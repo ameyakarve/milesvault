@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export const GET = withLedger(async ({ client, req }) => {
   const url = new URL(req.url)
   const limit = Number(url.searchParams.get('limit') ?? 10)
-  const accounts = await client.v2_recent_accounts_list(limit)
+  const accounts = await client.recent_accounts_list(limit)
   return NextResponse.json({ accounts })
 })
 
@@ -15,6 +15,6 @@ export const POST = withLedger(async ({ client, req }) => {
   if (!body || typeof body.account !== 'string') {
     return NextResponse.json({ errors: ['account required'] }, { status: 400 })
   }
-  await client.v2_recent_account_touch(body.account)
+  await client.recent_account_touch(body.account)
   return NextResponse.json({ ok: true })
 })

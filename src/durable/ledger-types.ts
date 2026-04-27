@@ -34,23 +34,72 @@ export type Posting = Required<Pick<PostingInput, 'account'>> & {
   meta: Record<string, string>
 }
 
-export type TransactionV2 = {
+type EntryBase = {
   id: number
   date: string
+  meta: Record<string, string>
+  created_at: number
+  updated_at: number
+}
+
+export type EntryTxn = EntryBase & {
+  kind: 'txn'
   flag: '*' | '!' | null
   payee: string
   narration: string
   postings: Posting[]
   tags: string[]
   links: string[]
-  meta: Record<string, string>
-  raw_text: string
-  created_at: number
-  updated_at: number
 }
 
-export type V2ListResult = {
-  rows: TransactionV2[]
+export type EntryOpen = EntryBase & {
+  kind: 'open'
+  account: string
+  booking_method: string | null
+  constraint_currencies: string[]
+}
+
+export type EntryClose = EntryBase & {
+  kind: 'close'
+  account: string
+}
+
+export type EntryBalance = EntryBase & {
+  kind: 'balance'
+  account: string
+  amount: string
+  currency: string
+}
+
+export type EntryPad = EntryBase & {
+  kind: 'pad'
+  account: string
+  account_pad: string
+}
+
+export type EntryNote = EntryBase & {
+  kind: 'note'
+  account: string
+  description: string
+}
+
+export type EntryDocument = EntryBase & {
+  kind: 'document'
+  account: string
+  filename: string
+}
+
+export type Entry =
+  | EntryTxn
+  | EntryOpen
+  | EntryClose
+  | EntryBalance
+  | EntryPad
+  | EntryNote
+  | EntryDocument
+
+export type AccountEntriesResponse = {
+  entries: Entry[]
   total: number
   limit: number
   offset: number

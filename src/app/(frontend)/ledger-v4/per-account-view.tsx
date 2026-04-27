@@ -1,16 +1,25 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import CodeMirror from '@uiw/react-codemirror'
 import { EditorView } from '@codemirror/view'
 import { LRLanguage, LanguageSupport, syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { styleTags, tags as t } from '@lezer/highlight'
 import { parser as beancountParser } from 'lezer-beancount'
-import type { Posting, TransactionV2 } from '@/durable/ledger-v2-types'
+import type {
+  Entry,
+  EntryBalance,
+  EntryClose,
+  EntryDocument,
+  EntryNote,
+  EntryOpen,
+  EntryPad,
+  EntryTxn,
+  Posting,
+} from '@/durable/ledger-types'
 import { splitCamel } from '@/lib/beancount/account-display'
-import { serializeTransactionInput } from '@/lib/beancount/v2-ast'
-import { useAccountTransactions } from '../home/use-account-transactions'
+import { serializeTransactionInput } from '@/lib/beancount/ast'
+import { useAccountEntries } from '../home/use-account-entries'
 
 const TOP_LEVELS = new Set(['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'])
 
@@ -84,7 +93,7 @@ function formatRowDate(iso: string): string {
   return dateFmt.format(new Date(Date.UTC(y, m - 1, d)))
 }
 
-function postingForAccount(txn: TransactionV2, account: string): Posting | null {
+function postingForAccount(txn: EntryTxn, account: string): Posting | null {
   return txn.postings.find((p) => p.account === account) ?? null
 }
 
@@ -94,35 +103,55 @@ function postingAmountNumber(p: Posting | null): number {
   return Number.isFinite(n) ? n : 0
 }
 
-type LedgerRow = {
-  txn: TransactionV2
+type TxnRow = {
+  kind: 'txn'
+  entry: EntryTxn
   amount: number
   currency: string | null
   balance: number
 }
 
+type RenderRow =
+  | TxnRow
+  | { kind: 'open'; entry: EntryOpen }
+  | { kind: 'close'; entry: EntryClose }
+  | { kind: 'balance'; entry: EntryBalance }
+  | { kind: 'pad'; entry: EntryPad }
+  | { kind: 'note'; entry: EntryNote }
+  | { kind: 'document'; entry: EntryDocument }
+
 type LedgerSummary = {
-  rows: LedgerRow[]
+  rows: RenderRow[]
   dominantCurrency: string | null
+  finalBalance: number
 }
 
-function buildLedgerRows(txns: TransactionV2[], account: string): LedgerSummary {
-  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date))
+function buildLedgerRows(entries: Entry[], account: string): LedgerSummary {
+  const sorted = [...entries].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date)
+    return a.kind.localeCompare(b.kind)
+  })
   const counts = new Map<string, number>()
   let bal = 0
-  const out: LedgerRow[] = []
-  for (const txn of sorted) {
-    const post = postingForAccount(txn, account)
-    const amt = postingAmountNumber(post)
-    bal += amt
-    if (post?.currency) counts.set(post.currency, (counts.get(post.currency) ?? 0) + 1)
-    out.push({ txn, amount: amt, currency: post?.currency ?? null, balance: bal })
+  const out: RenderRow[] = []
+  for (const e of sorted) {
+    if (e.kind === 'txn') {
+      const post = postingForAccount(e, account)
+      const amt = postingAmountNumber(post)
+      bal += amt
+      if (post?.currency) counts.set(post.currency, (counts.get(post.currency) ?? 0) + 1)
+      out.push({ kind: 'txn', entry: e, amount: amt, currency: post?.currency ?? null, balance: bal })
+    } else {
+      out.push({ kind: e.kind, entry: e } as RenderRow)
+    }
   }
   let dominantCurrency: string | null = null
   let max = 0
   for (const [c, n] of counts) if (n > max) { dominantCurrency = c; max = n }
-  for (const row of out) if (!row.currency) row.currency = dominantCurrency
-  return { rows: out.reverse(), dominantCurrency }
+  for (const row of out) {
+    if (row.kind === 'txn' && !row.currency) row.currency = dominantCurrency
+  }
+  return { rows: out.reverse(), dominantCurrency, finalBalance: bal }
 }
 
 function accountTitle(path: string): string {
@@ -141,38 +170,56 @@ function Icon({ name, className = '' }: { name: string; className?: string }) {
   return <span className={`material-symbols-outlined ${className}`}>{name}</span>
 }
 
-export function PerAccountView() {
-  const params = useSearchParams()
-  const account = params?.get('account') ?? null
+function directiveSummary(row: Exclude<RenderRow, TxnRow>): { label: string; detail: string } {
+  switch (row.kind) {
+    case 'open':
+      return {
+        label: 'Open',
+        detail: row.entry.constraint_currencies.length > 0
+          ? `Currencies: ${row.entry.constraint_currencies.join(', ')}`
+          : '',
+      }
+    case 'close':
+      return { label: 'Close', detail: '' }
+    case 'balance':
+      return { label: 'Balance', detail: `${row.entry.amount} ${row.entry.currency}` }
+    case 'pad':
+      return { label: 'Pad', detail: `from ${row.entry.account_pad}` }
+    case 'note':
+      return { label: 'Note', detail: row.entry.description }
+    case 'document':
+      return { label: 'Document', detail: row.entry.filename }
+  }
+}
 
-  const txnsQuery = useAccountTransactions(account)
+export function PerAccountView({ account }: { account: string }) {
+  const entriesQuery = useAccountEntries(account)
   const ledger = useMemo<LedgerSummary>(
     () =>
-      account && txnsQuery.data
-        ? buildLedgerRows(txnsQuery.data.rows, account)
-        : { rows: [], dominantCurrency: null },
-    [txnsQuery.data, account],
+      entriesQuery.data
+        ? buildLedgerRows(entriesQuery.data.entries, account)
+        : { rows: [], dominantCurrency: null, finalBalance: 0 },
+    [entriesQuery.data, account],
   )
 
-  const [expanded, setExpanded] = useState<Set<number>>(new Set())
-  const [sourceEdits, setSourceEdits] = useState<Record<number, string>>({})
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [sourceEdits, setSourceEdits] = useState<Record<string, string>>({})
 
-  const toggle = (txnId: number) => {
+  const toggle = (key: string) => {
     setExpanded((prev) => {
       const next = new Set(prev)
-      if (next.has(txnId)) next.delete(txnId)
-      else next.add(txnId)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
 
-  const title = account ? accountTitle(account) : '—'
-  const segments = account ? breadcrumbSegments(account) : []
-  const balance = ledger.rows[0]?.balance ?? 0
+  const title = accountTitle(account)
+  const segments = breadcrumbSegments(account)
   const balancePrefix = currencyPrefix(ledger.dominantCurrency)
   const balanceText =
     ledger.rows.length > 0
-      ? `${balance < 0 ? '-' : ''}${balancePrefix}${amountFmt.format(Math.abs(balance))}`
+      ? `${ledger.finalBalance < 0 ? '-' : ''}${balancePrefix}${amountFmt.format(Math.abs(ledger.finalBalance))}`
       : '—'
 
   return (
@@ -235,7 +282,7 @@ export function PerAccountView() {
           <div className="flex items-center justify-between">
             <div className="flex flex-col gap-1">
               <h1 className="font-bold text-[18px] text-slate-900 leading-none">{title}</h1>
-              <div className="font-mono text-[12px] text-slate-400 leading-none">{account ?? 'No account selected'}</div>
+              <div className="font-mono text-[12px] text-slate-400 leading-none">{account}</div>
             </div>
             <div className="font-mono font-bold text-[28px] text-slate-900 leading-none">{balanceText}</div>
           </div>
@@ -268,41 +315,56 @@ export function PerAccountView() {
               <div className="text-right">BALANCE</div>
             </div>
 
-            {!account && (
-              <div className="px-6 py-6 text-[12px] text-slate-400">
-                No account specified. Open this view from a recent-account link.
-              </div>
+            {entriesQuery.status === 'loading' && (
+              <div className="px-6 py-6 text-[12px] text-slate-400">Loading entries…</div>
             )}
-            {account && txnsQuery.status === 'loading' && (
-              <div className="px-6 py-6 text-[12px] text-slate-400">Loading transactions…</div>
-            )}
-            {account && txnsQuery.status === 'error' && (
+            {entriesQuery.status === 'error' && (
               <div className="px-6 py-6 text-[12px] text-rose-600">
-                Failed to load: {txnsQuery.errorMsg}
+                Failed to load: {entriesQuery.errorMsg}
               </div>
             )}
-            {account && txnsQuery.status === 'idle' && ledger.rows.length === 0 && (
+            {entriesQuery.status === 'idle' && ledger.rows.length === 0 && (
               <div className="px-6 py-6 text-[12px] text-slate-400">
-                No transactions for this account.
+                No entries for this account.
               </div>
             )}
 
             {ledger.rows.map((row) => {
-              const isExpanded = expanded.has(row.txn.id)
+              const key = `${row.kind}-${row.entry.id}`
+              if (row.kind !== 'txn') {
+                const { label, detail } = directiveSummary(row)
+                return (
+                  <div
+                    key={key}
+                    className="grid px-6 py-3 items-center border-b border-slate-100 bg-slate-50/40"
+                    style={GRID_STYLE}
+                  >
+                    <div />
+                    <div className="font-mono text-[13px] text-slate-400">{formatRowDate(row.entry.date)}</div>
+                    <div className="text-[13px] truncate col-span-4 grid grid-cols-[auto_1fr] gap-2 items-center">
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-teal-600 px-1.5 py-0.5 bg-teal-50 rounded-sm">
+                        {label}
+                      </span>
+                      <span className="text-slate-600 truncate">{detail}</span>
+                    </div>
+                  </div>
+                )
+              }
+              const isExpanded = expanded.has(key)
               const debit = row.amount > 0 ? amountFmt.format(row.amount) : null
               const credit = row.amount < 0 ? amountFmt.format(-row.amount) : null
               const balanceStr = `${row.balance < 0 ? '-' : ''}${amountFmt.format(Math.abs(row.balance))}`
-              const payee = row.txn.payee || row.txn.narration || row.txn.flag || '—'
-              const narration = row.txn.payee ? row.txn.narration : ''
-              const sourceText = sourceEdits[row.txn.id] ?? serializeTransactionInput(row.txn)
+              const payee = row.entry.payee || row.entry.narration || row.entry.flag || '—'
+              const narration = row.entry.payee ? row.entry.narration : ''
+              const sourceText = sourceEdits[key] ?? serializeTransactionInput(row.entry)
               return (
-                <div key={row.txn.id} className={isExpanded ? 'bg-white border-b border-slate-100 shadow-sm' : ''}>
+                <div key={key} className={isExpanded ? 'bg-white border-b border-slate-100 shadow-sm' : ''}>
                   <div
                     className={`grid px-6 py-3 items-center cursor-pointer group hover:bg-slate-50 ${
                       isExpanded ? '' : 'border-b border-slate-100'
                     }`}
                     style={GRID_STYLE}
-                    onClick={() => toggle(row.txn.id)}
+                    onClick={() => toggle(key)}
                   >
                     <div className={`leading-none ${isExpanded ? 'text-teal-500' : 'text-slate-400 group-hover:text-slate-600'}`}>
                       <Icon
@@ -310,7 +372,7 @@ export function PerAccountView() {
                         className={`!text-[18px] ${isExpanded ? 'rotate-90' : ''}`}
                       />
                     </div>
-                    <div className="font-mono text-[13px] text-slate-400">{formatRowDate(row.txn.date)}</div>
+                    <div className="font-mono text-[13px] text-slate-400">{formatRowDate(row.entry.date)}</div>
                     <div className="text-[13px] truncate">
                       <span className="font-bold text-slate-800">{payee}</span>
                       {narration && <span className="text-slate-500">{' · '}{narration}</span>}
@@ -328,7 +390,7 @@ export function PerAccountView() {
                     <div className="ml-[56px] mr-6 mb-4 bg-slate-50 border border-slate-200 rounded-sm p-5">
                       <CodeMirror
                         value={sourceText}
-                        onChange={(v) => setSourceEdits((prev) => ({ ...prev, [row.txn.id]: v }))}
+                        onChange={(v) => setSourceEdits((prev) => ({ ...prev, [key]: v }))}
                         theme={SOURCE_THEME}
                         basicSetup={EDITOR_SETUP}
                         extensions={SOURCE_EXTENSIONS}
@@ -339,9 +401,9 @@ export function PerAccountView() {
               )
             })}
 
-            {account && txnsQuery.data && txnsQuery.data.total > ledger.rows.length && (
+            {entriesQuery.data && entriesQuery.data.total > ledger.rows.length && (
               <div className="py-6 flex justify-center text-slate-400 font-mono text-[11px]">
-                ↓ {txnsQuery.data.total - ledger.rows.length} more
+                ↓ {entriesQuery.data.total - ledger.rows.length} more
               </div>
             )}
           </div>
