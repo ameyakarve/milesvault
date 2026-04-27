@@ -51,13 +51,17 @@ export function serializeTransactionInput(input: TransactionInput): string {
 export function serializeJournal(
   transactions: TransactionInput[],
   directives: DirectiveInput[] = [],
+  options: { descending?: boolean } = {},
 ): string {
   if (transactions.length === 0 && directives.length === 0) return ''
   const nodes: BcNode[] = [
     ...transactions.map(transactionFromInput),
     ...directives.map(directiveFromInput),
   ]
-  nodes.sort(compareDatedNodes)
+  const cmp = options.descending
+    ? (a: BcNode, b: BcNode) => -compareDatedNodes(a, b)
+    : compareDatedNodes
+  nodes.sort(cmp)
   const result = new ParseResult(nodes)
   const col = result.calculateCurrencyColumn({ minPadding: 2 })
   return result.toFormattedString({ currencyColumn: col }).trim() + '\n'

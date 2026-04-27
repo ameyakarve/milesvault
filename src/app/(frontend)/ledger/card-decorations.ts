@@ -8,6 +8,8 @@ export type DeltaSpec = {
   sign: '+' | '−'
   value: string
   flow: 'in' | 'out'
+  amountRaw: string
+  currencyRaw: string
 }
 
 export type CardSpec = {
@@ -86,6 +88,8 @@ function txnDeltas(
       sign: v < 0 ? '−' : '+',
       value: formatDeltaValue(Math.abs(v), currency),
       flow: v < 0 ? 'out' : 'in',
+      amountRaw: p.amount,
+      currencyRaw: p.currency!,
     })
   }
   return out
@@ -97,7 +101,11 @@ export function computeCardSpecs(
   entries: ParsedEntry[],
   account: string,
   currency: string,
+  options: { descending?: boolean } = {},
 ): CardSpec[] {
+  if (options.descending) {
+    return computeCardSpecsDesc(transactions, directives, entries, account, currency)
+  }
   let running = 0
   const specs: CardSpec[] = []
   for (const e of entries) {
@@ -159,6 +167,87 @@ export function computeCardSpecs(
   return specs
 }
 
+// Descending mode: entries arrive in reverse-chronological display order.
+// Compute the total account balance over ALL transactions (regardless of
+// whether they appear before/after balance directives), then walk top-down
+// decrementing each upcoming delta from that total. The balance shown on
+// each card is the running balance AFTER that txn's effect — same value
+// the chronological pass would produce.
+function computeCardSpecsDesc(
+  transactions: TransactionInput[],
+  directives: DirectiveInput[],
+  entries: ParsedEntry[],
+  account: string,
+  currency: string,
+): CardSpec[] {
+  let accountBalance = 0
+  for (const tx of transactions) accountBalance += postingDelta(tx, account, currency)
+
+  const specs: CardSpec[] = []
+  let upcomingDeltas = 0
+  for (const e of entries) {
+    if (e.kind === 'transaction') {
+      const tx = transactions[e.index]
+      if (!tx) continue
+      const after = accountBalance - upcomingDeltas
+      specs.push({
+        ...e.range,
+        balance: formatBalance(after, currency),
+        runningTotal: after,
+        mismatch: false,
+        deltas: txnDeltas(tx, account, currency, e.range.startLine),
+      })
+      upcomingDeltas += postingDelta(tx, account, currency)
+    } else {
+      const d = directives[e.index]
+      if (!d) continue
+      if (d.kind === 'open') {
+        // Open directive resets running to 0 chronologically; in descending
+        // display it's the bottom-most card with a zero balance.
+        specs.push({
+          ...e.range,
+          balance: formatBalance(0, currency),
+          runningTotal: 0,
+          mismatch: false,
+          deltas: [],
+        })
+      } else if (d.kind === 'balance') {
+        const after = accountBalance - upcomingDeltas
+        const expected = Number(d.amount)
+        const mismatch =
+          d.currency === currency &&
+          !Number.isNaN(expected) &&
+          Math.abs(expected - after) > 0.005
+        specs.push({
+          ...e.range,
+          balance: formatBalance(after, currency),
+          runningTotal: after,
+          mismatch,
+          deltas: [],
+        })
+      } else if (d.kind === 'pad' || d.kind === 'close') {
+        const after = accountBalance - upcomingDeltas
+        specs.push({
+          ...e.range,
+          balance: formatBalance(after, currency),
+          runningTotal: after,
+          mismatch: false,
+          deltas: [],
+        })
+      } else {
+        specs.push({
+          ...e.range,
+          balance: null,
+          runningTotal: null,
+          mismatch: false,
+          deltas: [],
+        })
+      }
+    }
+  }
+  return specs
+}
+
 export const setCardSpecs = StateEffect.define<CardSpec[]>()
 
 class DeltaWidget extends WidgetType {
@@ -187,7 +276,7 @@ class DeltaWidget extends WidgetType {
   }
 }
 
-class BalancePillWidget extends WidgetType {
+class BalanceFooterWidget extends WidgetType {
   constructor(
     private readonly value: string,
     private readonly mismatch: boolean,
@@ -196,24 +285,27 @@ class BalancePillWidget extends WidgetType {
   }
   toDOM() {
     const wrap = document.createElement('div')
-    wrap.className = `cm-balance-pill${this.mismatch ? ' cm-balance-mismatch' : ''}`
-    const inner = document.createElement('span')
+    wrap.className = `cm-balance-footer${this.mismatch ? ' cm-balance-mismatch' : ''}`
     const label = document.createElement('span')
     label.className = 'cm-bal-label'
-    label.textContent = 'bal '
+    label.textContent = 'BALANCE'
     const value = document.createElement('span')
+    value.className = 'cm-bal-value'
     value.textContent = this.value
-    inner.appendChild(label)
-    inner.appendChild(value)
-    wrap.appendChild(inner)
+    wrap.appendChild(label)
+    wrap.appendChild(value)
     return wrap
   }
-  eq(other: BalancePillWidget) {
+  eq(other: BalanceFooterWidget) {
     return other.value === this.value && other.mismatch === this.mismatch
   }
   ignoreEvent() {
     return true
   }
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
@@ -245,6 +337,23 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
     for (const d of spec.deltas) {
       if (d.line < 1 || d.line > lineCount) continue
       const lineRef = state.doc.line(d.line)
+      const lineText = lineRef.text
+      const pattern = new RegExp(
+        `(${escapeRegex(d.amountRaw)})\\s+${escapeRegex(d.currencyRaw)}`,
+      )
+      const m = pattern.exec(lineText)
+      if (m && m.index >= 0) {
+        const amountStart = lineRef.from + m.index
+        const amountEnd = amountStart + d.amountRaw.length
+        items.push({
+          from: amountStart,
+          to: amountEnd,
+          deco: Decoration.mark({
+            class: d.flow === 'out' ? 'cm-amount-out' : 'cm-amount-in',
+          }),
+          order: 3,
+        })
+      }
       items.push({
         from: lineRef.to,
         to: lineRef.to,
@@ -261,7 +370,7 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
         from: lastLine.to,
         to: lastLine.to,
         deco: Decoration.widget({
-          widget: new BalancePillWidget(spec.balance, spec.mismatch),
+          widget: new BalanceFooterWidget(spec.balance, spec.mismatch),
           side: 1,
           block: true,
         }),

@@ -82,6 +82,16 @@ const THEME = EditorView.theme({
   },
   '.cm-delta-out': { color: 'rgba(251, 113, 133, 0.7)' },
   '.cm-delta-in': { color: 'rgba(20, 184, 166, 0.7)' },
+  '.cm-amount-out': {
+    color: 'rgb(225, 29, 72)',
+    fontWeight: '500',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  '.cm-amount-in': {
+    color: 'rgb(15, 118, 110)',
+    fontWeight: '500',
+    fontVariantNumeric: 'tabular-nums',
+  },
   '.cm-gutters': {
     backgroundColor: '#e0e3e5',
     borderRight: '1px solid rgba(226, 232, 240, 0.3)',
@@ -114,7 +124,7 @@ function sliceText(whole: Whole, account: string, currency: string): string {
   const directives = whole.directives.filter((d) =>
     directiveTouchesAccountCurrency(d, account, currency),
   )
-  return serializeJournal(txns, directives)
+  return serializeJournal(txns, directives, { descending: true })
 }
 
 export function PerAccountView({ account }: { account: string }) {
@@ -232,12 +242,13 @@ export function PerAccountView({ account }: { account: string }) {
       parsed.entries,
       account,
       currency,
+      { descending: true },
     )
   }, [parsed, account, currency])
 
   const headerBalance = useMemo(() => {
     if (!currency) return ''
-    for (let i = cardSpecs.length - 1; i >= 0; i--) {
+    for (let i = 0; i < cardSpecs.length; i++) {
       const rt = cardSpecs[i]!.runningTotal
       if (rt != null) return formatHeaderBalance(rt, currency)
     }

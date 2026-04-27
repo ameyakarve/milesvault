@@ -47,21 +47,35 @@ async function main() {
   // Fixture story
   await load(page, 'ledger-per-account-view-fixture--default')
   await page.waitForSelector('.cm-card-solo')
-  await page.waitForSelector('.cm-balance-pill')
-  await page.waitForFunction(() => document.querySelectorAll('.cm-balance-pill').length >= 5)
+  await page.waitForSelector('.cm-balance-footer')
+  await page.waitForFunction(
+    () => document.querySelectorAll('.cm-balance-footer').length >= 5,
+  )
 
   const fxCardBg = await rgbAt(page, '.cm-card-solo', 'bg')
-  const fxBalLabel = await rgbAt(page, '.cm-balance-pill .cm-bal-label', 'color')
-  const fxBalValue = await rgbAt(page, '.cm-balance-pill', 'color')
+  const fxFooterBg = await rgbAt(page, '.cm-balance-footer', 'bg')
+  const fxBalLabel = await rgbAt(page, '.cm-balance-footer .cm-bal-label', 'color')
+  const fxBalValue = await rgbAt(page, '.cm-balance-footer .cm-bal-value', 'color')
   const fxGutterBg = await rgbAt(page, '.cm-gutters', 'bg')
   const fxGutterFg = await rgbAt(page, '.cm-gutters', 'color')
 
-  console.log('fixt  cardBg:', fxCardBg, 'balLabel:', fxBalLabel, 'balValue:', fxBalValue)
+  console.log(
+    'fixt  cardBg:', fxCardBg,
+    'footerBg:', fxFooterBg,
+    'balLabel:', fxBalLabel,
+    'balValue:', fxBalValue,
+  )
   console.log('fixt  gutterBg:', fxGutterBg, 'gutterFg:', fxGutterFg)
 
   if (fxCardBg !== demoCardBg) errors.push(`card bg mismatch: demo=${demoCardBg} fixture=${fxCardBg}`)
-  if (fxBalLabel !== demoBalLabel) errors.push(`bal label mismatch: demo=${demoBalLabel} fixture=${fxBalLabel}`)
-  if (fxBalValue !== demoBalValue) errors.push(`bal value mismatch: demo=${demoBalValue} fixture=${fxBalValue}`)
+  // Footer label = slate-500 (rgb 100,116,139) — darkened from prior slate-400.
+  if (fxBalLabel !== 'rgb(100, 116, 139)') {
+    errors.push(`footer label color=${fxBalLabel} (expected rgb(100, 116, 139))`)
+  }
+  // Footer value = slate-800 (rgb 30,41,59).
+  if (fxBalValue !== 'rgb(30, 41, 59)') {
+    errors.push(`footer value color=${fxBalValue} (expected rgb(30, 41, 59))`)
+  }
   // gutter target colors per plan
   if (fxGutterBg !== 'rgb(224, 227, 229)') errors.push(`gutter bg mismatch: ${fxGutterBg}`)
   if (fxGutterFg !== 'rgb(188, 201, 198)') errors.push(`gutter fg mismatch: ${fxGutterFg}`)
@@ -88,8 +102,16 @@ async function main() {
       activeLineGutterCount: document.querySelectorAll('.cm-gutters .cm-activeLineGutter').length,
       deltaOutColor: get('.cm-delta-out', 'color'),
       deltaInColor: get('.cm-delta-in', 'color'),
-      pillPaddingRight: get('.cm-balance-pill', 'paddingRight'),
-      pillHeight: get('.cm-balance-pill', 'height'),
+      amountOutColor: get('.cm-amount-out', 'color'),
+      amountInColor: get('.cm-amount-in', 'color'),
+      amountOutFontFamily: get('.cm-amount-out', 'fontFamily'),
+      amountOutFontWeight: get('.cm-amount-out', 'fontWeight'),
+      amountOutTabular: get('.cm-amount-out', 'fontVariantNumeric'),
+      footerPadding: get('.cm-balance-footer', 'padding'),
+      footerBorderTop: get('.cm-balance-footer', 'borderTopWidth'),
+      footerLabelTransform: get('.cm-balance-footer .cm-bal-label', 'textTransform'),
+      footerValueFontFamily: get('.cm-balance-footer .cm-bal-value', 'fontFamily'),
+      footerValueFontWeight: get('.cm-balance-footer .cm-bal-value', 'fontWeight'),
       headerBalanceFontSize: balanceEl ? window.getComputedStyle(balanceEl).fontSize : null,
       headerBalanceFontFamily: balanceEl ? window.getComputedStyle(balanceEl).fontFamily : null,
       editorBg: get('.cm-editor', 'backgroundColor'),
@@ -104,11 +126,37 @@ async function main() {
   if (!/20.*184.*166/.test(probes.deltaInColor || '')) {
     errors.push(`delta-in color mismatch: ${probes.deltaInColor} (expected teal 20,184,166)`)
   }
-  if (probes.pillPaddingRight !== '16px') {
-    errors.push(`pill paddingRight=${probes.pillPaddingRight} (expected 16px)`)
+  // Amount marks: rose-600 / teal-700, JetBrains Mono, weight 500, tabular-nums.
+  if (probes.amountOutColor !== 'rgb(225, 29, 72)') {
+    errors.push(`amount-out color=${probes.amountOutColor} (expected rgb(225, 29, 72))`)
   }
-  if (probes.pillHeight !== '16px') {
-    errors.push(`pill height=${probes.pillHeight} (expected 16px)`)
+  if (probes.amountInColor !== 'rgb(15, 118, 110)') {
+    errors.push(`amount-in color=${probes.amountInColor} (expected rgb(15, 118, 110))`)
+  }
+  if (!/JetBrains Mono/.test(probes.amountOutFontFamily || '')) {
+    errors.push(`amount-out fontFamily=${probes.amountOutFontFamily} (expected JetBrains Mono)`)
+  }
+  if (probes.amountOutFontWeight !== '500') {
+    errors.push(`amount-out fontWeight=${probes.amountOutFontWeight} (expected 500)`)
+  }
+  if (!/tabular-nums/.test(probes.amountOutTabular || '')) {
+    errors.push(`amount-out fontVariantNumeric=${probes.amountOutTabular} (expected tabular-nums)`)
+  }
+  // Footer chrome
+  if (probes.footerPadding !== '8px 16px') {
+    errors.push(`footer padding=${probes.footerPadding} (expected 8px 16px)`)
+  }
+  if (probes.footerBorderTop !== '1px') {
+    errors.push(`footer borderTopWidth=${probes.footerBorderTop} (expected 1px)`)
+  }
+  if (probes.footerLabelTransform !== 'uppercase') {
+    errors.push(`footer label textTransform=${probes.footerLabelTransform} (expected uppercase)`)
+  }
+  if (!/JetBrains Mono/.test(probes.footerValueFontFamily || '')) {
+    errors.push(`footer value fontFamily=${probes.footerValueFontFamily} (expected JetBrains Mono)`)
+  }
+  if (probes.footerValueFontWeight !== '500') {
+    errors.push(`footer value fontWeight=${probes.footerValueFontWeight} (expected 500)`)
   }
   if (probes.headerBalanceFontSize !== '24px') {
     errors.push(`header balance fontSize=${probes.headerBalanceFontSize} (expected 24px / text-2xl)`)
