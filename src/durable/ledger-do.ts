@@ -1,6 +1,5 @@
 import { DurableObject } from 'cloudflare:workers'
 import { SCHEMA_STEPS_V2 } from '@/lib/ledger-core/schema-v2'
-import { dateFromInt } from '@/lib/beancount/v2-ast'
 import type {
   Posting as PostingV2,
   TransactionV2,
@@ -174,6 +173,11 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       updated_at: head.updated_at,
     }
   }
+}
+
+function dateFromInt(n: number): string {
+  const s = String(n).padStart(8, '0')
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
 }
 
 function parseMeta(json: string): Record<string, string> {

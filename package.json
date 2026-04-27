@@ -23,7 +23,6 @@
     "@lezer/highlight": "^1.2.3",
     "@opennextjs/cloudflare": "^1.11.0",
     "@uiw/react-codemirror": "^4.25.9",
-    "beancount": "^0.2.5",
     "cross-env": "^7.0.3",
     "lezer-beancount": "^1.1.0",
     "lucide-react": "^1.8.0",
