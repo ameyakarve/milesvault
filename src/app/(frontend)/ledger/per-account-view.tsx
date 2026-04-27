@@ -207,7 +207,7 @@ export function PerAccountView({ account }: { account: string }) {
   )
 
   const body = (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0 py-4 px-6">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <label className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">

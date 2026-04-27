@@ -27,26 +27,14 @@ export function parseJournalStrict(text: string): StrictParseResult {
     return {
       ok: false,
       kind: 'parse_error',
-      message: e instanceof Error ? e.message : String(e),
+      message: 'parse error',
     }
   }
   if (parsed.unsupportedDirectiveTypes.length > 0) {
-    return {
-      ok: false,
-      kind: 'unsupported_directives',
-      message: `Unsupported directive types: ${parsed.unsupportedDirectiveTypes.join(', ')}`,
-    }
+    return { ok: false, kind: 'unsupported_directives', message: 'parse error' }
   }
   if (parsed.partialParse) {
-    const dropped = parsed.droppedLineNumbers.join(', ')
-    return {
-      ok: false,
-      kind: 'partial_parse',
-      message:
-        `Input had ${parsed.expectedDirectiveLineCount} dated line(s) but only ` +
-        `${parsed.parsedDirectiveCount} parsed. Likely dropped line(s): ${dropped}. ` +
-        `Top-level directives must start at column 0 (no leading whitespace).`,
-    }
+    return { ok: false, kind: 'partial_parse', message: 'parse error' }
   }
   return { ok: true, transactions: parsed.transactions, directives: parsed.directives }
 }

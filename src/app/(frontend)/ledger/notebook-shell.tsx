@@ -246,15 +246,17 @@ function EditorPane({
             </Fragment>
           ))}
       </div>
-      <div className="flex-1 overflow-y-auto py-4 px-6">
-        {body ?? (
+      {body ? (
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">{body}</div>
+      ) : (
+        <div className="flex-1 overflow-y-auto py-4 px-6">
           <div className="flex flex-col space-y-4">
             {cards.map((card) => (
               <CardBlock key={card.id} card={card} />
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
