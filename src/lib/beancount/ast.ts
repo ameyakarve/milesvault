@@ -63,9 +63,16 @@ export function serializeJournal(
   return result.toFormattedString({ currencyColumn: col }).trim() + '\n'
 }
 
+export type DirectiveRange = { startLine: number; endLine: number }
+
+export type ParsedEntry =
+  | { kind: 'transaction'; index: number; range: DirectiveRange }
+  | { kind: 'directive'; index: number; range: DirectiveRange }
+
 export type ParsedJournal = {
   transactions: TransactionInput[]
   directives: DirectiveInput[]
+  entries: ParsedEntry[]
   unsupportedDirectiveTypes: string[]
   partialParse: boolean
   expectedDirectiveLineCount: number
@@ -75,6 +82,7 @@ export type ParsedJournal = {
 
 const FORMATTING_NODE_TYPES = new Set(['comment', 'blankline'])
 const DATE_LINE_RE = /^\s*\d{4}-\d{2}-\d{2}/
+const STRICT_DATE_LINE_RE = /^\d{4}-\d{2}-\d{2}/
 
 function findDateLineNumbers(text: string): number[] {
   const out: number[] = []
@@ -85,22 +93,59 @@ function findDateLineNumbers(text: string): number[] {
   return out
 }
 
+function findDirectiveRanges(text: string): DirectiveRange[] {
+  const lines = text.split('\n')
+  const ranges: DirectiveRange[] = []
+  let start = -1
+  let end = -1
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!
+    const isBlank = line.trim().length === 0
+    const isStrictDate = STRICT_DATE_LINE_RE.test(line)
+    if (isStrictDate) {
+      if (start >= 0) ranges.push({ startLine: start + 1, endLine: end + 1 })
+      start = i
+      end = i
+    } else if (isBlank) {
+      if (start >= 0) {
+        ranges.push({ startLine: start + 1, endLine: end + 1 })
+        start = -1
+        end = -1
+      }
+    } else if (start >= 0) {
+      end = i
+    }
+  }
+  if (start >= 0) ranges.push({ startLine: start + 1, endLine: end + 1 })
+  return ranges
+}
+
 export function parseJournal(text: string): ParsedJournal {
   const result = parse(text)
   const transactions: TransactionInput[] = []
   const directives: DirectiveInput[] = []
+  const entries: ParsedEntry[] = []
   const unsupportedTypes = new Set<string>()
   let parsedDirectiveCount = 0
+  const ranges = findDirectiveRanges(text)
   for (const node of result.nodes) {
     if (FORMATTING_NODE_TYPES.has(node.type)) continue
+    const range = ranges[parsedDirectiveCount]
     parsedDirectiveCount++
     if (node.type === 'transaction') {
+      const idx = transactions.length
       transactions.push(transactionToInput(node as BcTransaction))
+      if (range) entries.push({ kind: 'transaction', index: idx, range })
       continue
     }
     const dir = nodeToDirective(node)
-    if (dir) directives.push(dir)
-    else unsupportedTypes.add(node.type)
+    if (dir) {
+      const idx = directives.length
+      directives.push(dir)
+      if (range) entries.push({ kind: 'directive', index: idx, range })
+    } else {
+      unsupportedTypes.add(node.type)
+    }
   }
   const dateLineNumbers = findDateLineNumbers(text)
   const expected = dateLineNumbers.length
@@ -111,6 +156,7 @@ export function parseJournal(text: string): ParsedJournal {
   return {
     transactions,
     directives,
+    entries,
     unsupportedDirectiveTypes: [...unsupportedTypes],
     partialParse,
     expectedDirectiveLineCount: expected,

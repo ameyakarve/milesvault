@@ -222,41 +222,35 @@ function GutterRow({ line }: { line: SourceLine }) {
   return <span className="pr-2">{line.lineNo}</span>
 }
 
-function EditorPane({
-  cards,
-  body,
-  gutter,
-}: {
-  cards: Card[]
-  body?: ReactNode
-  gutter?: ReactNode
-}) {
+function EditorPane({ cards, body }: { cards: Card[]; body?: ReactNode }) {
+  if (body) {
+    return (
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]">
+        {body}
+      </div>
+    )
+  }
   return (
     <div className="flex-1 flex overflow-hidden bg-[#eceef0]">
       <div className="w-10 shrink-0 bg-[#e0e3e5] border-r border-slate-200/30 py-4 font-mono text-[11px] leading-[28px] flex flex-col items-end text-[#bcc9c6]">
-        {gutter ??
-          cards.map((card, ci) => (
-            <Fragment key={card.id}>
-              {card.lines.map((line) => (
-                <GutterRow key={line.lineNo} line={line} />
-              ))}
-              {ci < cards.length - 1 && (
-                <span className="pr-2 opacity-0">{card.lines[card.lines.length - 1]!.lineNo + 1}</span>
-              )}
-            </Fragment>
-          ))}
-      </div>
-      {body ? (
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">{body}</div>
-      ) : (
-        <div className="flex-1 overflow-y-auto py-4 px-6">
-          <div className="flex flex-col space-y-4">
-            {cards.map((card) => (
-              <CardBlock key={card.id} card={card} />
+        {cards.map((card, ci) => (
+          <Fragment key={card.id}>
+            {card.lines.map((line) => (
+              <GutterRow key={line.lineNo} line={line} />
             ))}
-          </div>
+            {ci < cards.length - 1 && (
+              <span className="pr-2 opacity-0">{card.lines[card.lines.length - 1]!.lineNo + 1}</span>
+            )}
+          </Fragment>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto py-4 px-6">
+        <div className="flex flex-col space-y-4">
+          {cards.map((card) => (
+            <CardBlock key={card.id} card={card} />
+          ))}
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -362,7 +356,6 @@ export type NotebookShellProps = {
   saving?: boolean
   onSave?: () => void
   body?: ReactNode
-  gutter?: ReactNode
   cursor?: string
 }
 
@@ -377,7 +370,6 @@ export function NotebookShell({
   saving = false,
   onSave,
   body,
-  gutter,
   cursor = 'Ln 1, Col 1',
 }: NotebookShellProps) {
   return (
@@ -438,7 +430,7 @@ export function NotebookShell({
               </div>
             </section>
 
-            <EditorPane cards={cards} body={body} gutter={gutter} />
+            <EditorPane cards={cards} body={body} />
           </main>
 
           <AiPane />

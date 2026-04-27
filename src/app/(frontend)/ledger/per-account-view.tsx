@@ -21,6 +21,12 @@ import {
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 import { NotebookShell } from './notebook-shell'
+import {
+  cardDecorations,
+  computeCardSpecs,
+  setCardSpecs,
+  type CardSpec,
+} from './card-decorations'
 
 const beancountLang = LRLanguage.define({
   parser: beancountParser.configure({
@@ -55,15 +61,39 @@ const THEME = EditorView.theme({
   },
   '.cm-scroller': { fontFamily: "'JetBrains Mono', monospace" },
   '.cm-content': { padding: '0', caretColor: '#00685f' },
-  '.cm-line': { padding: '0 12px', lineHeight: '28px' },
-  '.cm-line:first-child': { paddingTop: '6px' },
-  '.cm-gutters': { display: 'none' },
+  '.cm-line': { padding: '0 12px', lineHeight: '28px', position: 'relative' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
   '.cm-focused': { outline: 'none' },
+  '.cm-delta-inlay': {
+    position: 'absolute',
+    right: '12px',
+    top: '0',
+    fontSize: '10px',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontStyle: 'italic',
+    color: '#94a3b8',
+    pointerEvents: 'none',
+  },
+  '.cm-delta-out': { color: 'rgba(251, 113, 133, 0.7)' },
+  '.cm-delta-in': { color: 'rgba(20, 184, 166, 0.7)' },
+  '.cm-gutters': {
+    backgroundColor: '#e0e3e5',
+    borderRight: '1px solid rgba(226, 232, 240, 0.3)',
+    color: '#bcc9c6',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: '11px',
+    lineHeight: '28px',
+    padding: '0 8px 0 0',
+  },
+  '.cm-lineNumbers .cm-gutterElement': {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    minWidth: '24px',
+  },
 })
 
 const BASIC = {
-  lineNumbers: false,
+  lineNumbers: true,
   foldGutter: false,
   highlightActiveLine: false,
   highlightActiveLineGutter: false,
@@ -184,7 +214,39 @@ export function PerAccountView({ account }: { account: string }) {
   }, [saving, whole, currency, account])
 
   const unsaved = loaded && text !== savedSlice
-  const lineCount = useMemo(() => Math.max(1, text.split('\n').length), [text])
+
+  const parsed = useMemo(() => parseJournalStrict(text), [text])
+  const parseFailed = isStrictParseErr(parsed)
+
+  const cardSpecs = useMemo<CardSpec[]>(() => {
+    if (!currency || isStrictParseErr(parsed)) return []
+    return computeCardSpecs(
+      parsed.transactions,
+      parsed.directives,
+      parsed.entries,
+      account,
+      currency,
+    )
+  }, [parsed, account, currency])
+
+  const headerBalance = useMemo(() => {
+    for (let i = cardSpecs.length - 1; i >= 0; i--) {
+      const b = cardSpecs[i]!.balance
+      if (b) return b
+    }
+    return ''
+  }, [cardSpecs])
+
+  const txnCount = isStrictParseErr(parsed) ? 0 : parsed.transactions.length
+  const showCurrencyChrome = currencies.length > 1 || (!!stats && !error)
+
+  const editorViewRef = useRef<EditorView | null>(null)
+
+  useEffect(() => {
+    const view = editorViewRef.current
+    if (!view) return
+    view.dispatch({ effects: setCardSpecs.of(cardSpecs) })
+  }, [cardSpecs])
 
   const extensions = useMemo(
     () => [
@@ -192,6 +254,7 @@ export function PerAccountView({ account }: { account: string }) {
       syntaxHighlighting(HIGHLIGHT),
       THEME,
       EditorView.lineWrapping,
+      cardDecorations(),
       keymap.of([
         {
           key: 'Mod-s',
@@ -207,13 +270,13 @@ export function PerAccountView({ account }: { account: string }) {
   )
 
   const body = (
-    <div className="h-full flex flex-col min-h-0 py-4 px-6">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <label className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
-            Currency
-          </label>
-          {currencies.length > 0 ? (
+    <div className="h-full flex flex-col min-h-0">
+      {showCurrencyChrome && (
+        <div className="flex items-center justify-between px-6 pt-3 pb-1">
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+              Currency
+            </label>
             <select
               value={currency ?? ''}
               onChange={(e) => onCurrencyChange(e.target.value)}
@@ -226,22 +289,28 @@ export function PerAccountView({ account }: { account: string }) {
                 </option>
               ))}
             </select>
-          ) : (
-            <span className="text-xs font-mono text-slate-400">none yet</span>
+          </div>
+          {stats && !error && (
+            <span className="text-[10px] text-slate-500 font-mono">
+              saved · +{stats.inserted} −{stats.deleted} ={stats.unchanged}
+            </span>
           )}
         </div>
-        {stats && !error && (
-          <span className="text-[10px] text-slate-500 font-mono">
-            saved · +{stats.inserted} −{stats.deleted} ={stats.unchanged}
-          </span>
-        )}
-      </div>
+      )}
       {error && (
-        <div className="mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
+        <div className="mx-6 mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
           {error}
         </div>
       )}
-      <div className="flex-1 min-h-0 bg-white rounded-sm shadow-sm border border-[#bcc9c6]/15 overflow-hidden">
+      {parseFailed && !error && (
+        <div
+          data-testid="parse-error-banner"
+          className="mx-6 mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded"
+        >
+          parse error
+        </div>
+      )}
+      <div className="flex-1 min-h-0 overflow-hidden">
         {loaded ? (
           <CodeMirror
             value={text}
@@ -249,6 +318,10 @@ export function PerAccountView({ account }: { account: string }) {
             basicSetup={BASIC}
             editable={!saving}
             onChange={(v) => setText(v)}
+            onCreateEditor={(view) => {
+              editorViewRef.current = view
+              view.dispatch({ effects: setCardSpecs.of(cardSpecs) })
+            }}
             height="100%"
             style={{ height: '100%' }}
           />
@@ -259,16 +332,6 @@ export function PerAccountView({ account }: { account: string }) {
     </div>
   )
 
-  const gutter = (
-    <>
-      {Array.from({ length: lineCount }, (_, i) => (
-        <span key={i} className="pr-2">
-          {i + 1}
-        </span>
-      ))}
-    </>
-  )
-
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
 
@@ -277,14 +340,13 @@ export function PerAccountView({ account }: { account: string }) {
       breadcrumb={breadcrumb}
       accountTitle={accountTitle}
       accountPath={account}
-      balance=""
+      balance={headerBalance}
       cards={[]}
-      txnCount={0}
+      txnCount={txnCount}
       unsaved={unsaved}
       saving={saving}
       onSave={save}
       body={body}
-      gutter={gutter}
     />
   )
 }
