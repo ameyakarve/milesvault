@@ -5,7 +5,7 @@ import {
   Transaction as BcTransaction,
   Value,
 } from 'beancount'
-import type { PostingInput, TransactionInput } from '@/durable/ledger-v2-types'
+import type { PostingInput, TransactionInput } from '@/durable/ledger-types'
 
 export function dateFromInt(n: number): string {
   const s = String(n).padStart(8, '0')

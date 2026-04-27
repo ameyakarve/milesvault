@@ -12,4 +12,6 @@ export default meta
 
 type Story = StoryObj<typeof PerAccountView>
 
-export const HdfcDinersBlack: Story = {}
+export const HdfcDinersBlack: Story = {
+  args: { account: 'Liabilities:CreditCard:HDFC:DinersBlack' },
+}
