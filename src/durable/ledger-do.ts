@@ -27,27 +27,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     }
   }
 
-  async v2_listAccounts(): Promise<string[]> {
-    // workerd caps SQLITE_LIMIT_COMPOUND_SELECT at 5; split 8 sources across 2 statements.
-    const queries = [
-      `SELECT account FROM postings WHERE account != ''
-       UNION SELECT account FROM directives_open WHERE account != ''
-       UNION SELECT account FROM directives_close WHERE account != ''
-       UNION SELECT account FROM directives_balance WHERE account != ''
-       UNION SELECT account FROM directives_pad WHERE account != ''`,
-      `SELECT account_pad AS account FROM directives_pad WHERE account_pad != ''
-       UNION SELECT account FROM directives_note WHERE account != ''
-       UNION SELECT account FROM directives_document WHERE account != ''`,
-    ]
-    const set = new Set<string>()
-    for (const q of queries) {
-      for (const r of this.sql.exec<{ account: string }>(q).toArray()) {
-        set.add(r.account)
-      }
-    }
-    return Array.from(set).sort()
-  }
-
   async v2_recent_accounts_list(limit: number): Promise<string[]> {
     const recents = this.sql
       .exec<{ account: string }>(

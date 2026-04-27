@@ -12,16 +12,7 @@ type HandlerCtx<P> = {
 
 type HandlerFn<P> = (ctx: HandlerCtx<P>) => Promise<Response> | Response
 
-export type WithLedgerOptions = {
-  mapInputError?: (e: LedgerInputError) => Response
-  mapBindingError?: (e: LedgerBindingError) => Response
-  onUnknown?: (e: unknown) => Response
-}
-
-export function withLedger<P = Record<string, never>>(
-  handler: HandlerFn<P>,
-  opts: WithLedgerOptions = {},
-) {
+export function withLedger<P = Record<string, never>>(handler: HandlerFn<P>) {
   return async (
     req: NextRequest,
     routeCtx?: { params: Promise<P> },
@@ -34,16 +25,11 @@ export function withLedger<P = Record<string, never>>(
       return await handler({ client, req, params, email: session.user.email })
     } catch (e) {
       if (e instanceof LedgerInputError) {
-        return opts.mapInputError
-          ? opts.mapInputError(e)
-          : NextResponse.json({ errors: e.errors }, { status: 400 })
+        return NextResponse.json({ errors: e.errors }, { status: 400 })
       }
       if (e instanceof LedgerBindingError) {
-        return opts.mapBindingError
-          ? opts.mapBindingError(e)
-          : new NextResponse(e.message, { status: 500 })
+        return new NextResponse(e.message, { status: 500 })
       }
-      if (opts.onUnknown) return opts.onUnknown(e)
       throw e
     }
   }
