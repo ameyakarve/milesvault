@@ -4,8 +4,8 @@ import { withLedger } from '@/lib/ledger-route-handler'
 
 export const dynamic = 'force-dynamic'
 
-export const GET = withLedger<{ account: string[] }>(async ({ client, req, params }) => {
-  const account = params.account.join(':')
+export const GET = withLedger<{ account: string }>(async ({ client, req, params }) => {
+  const account = decodeURIComponent(params.account)
   const url = new URL(req.url)
   const limit = Number(url.searchParams.get('limit') ?? DEFAULT_LIMIT)
   const offset = Number(url.searchParams.get('offset') ?? 0)
