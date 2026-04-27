@@ -12,6 +12,12 @@ import {
 import { styleTags, tags as t } from '@lezer/highlight'
 import { parser as beancountParser } from 'lezer-beancount'
 import { shortAccountName } from '@/lib/beancount/account-display'
+import { parseJournal, serializeJournal } from '@/lib/beancount/ast'
+import {
+  directiveTouchesAccountCurrency,
+  txnTouchesAccountCurrency,
+} from '@/lib/beancount/scope'
+import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 import { NotebookShell } from './notebook-shell'
 
 const beancountLang = LRLanguage.define({
@@ -64,6 +70,7 @@ const BASIC = {
 } as const
 
 type JournalGetResponse = { text: string }
+type CurrenciesResponse = { currencies: string[] }
 type JournalPutOk = { text: string; inserted: number; deleted: number; unchanged: number }
 type JournalPutErr = {
   ok: false
@@ -77,26 +84,61 @@ function isPutErr(r: JournalPutResp): r is JournalPutErr {
   return 'ok' in r && r.ok === false
 }
 
+type Whole = { txns: TransactionInput[]; directives: DirectiveInput[] }
+
+function sliceText(
+  whole: Whole,
+  account: string,
+  currency: string,
+): string {
+  const txns = whole.txns.filter((tx) => txnTouchesAccountCurrency(tx, account, currency))
+  const directives = whole.directives.filter((d) =>
+    directiveTouchesAccountCurrency(d, account, currency),
+  )
+  return serializeJournal(txns, directives)
+}
+
 export function PerAccountView({ account }: { account: string }) {
   const [loaded, setLoaded] = useState(false)
-  const [savedText, setSavedText] = useState('')
+  const [whole, setWhole] = useState<Whole | null>(null)
+  const [currencies, setCurrencies] = useState<string[]>([])
+  const [currency, setCurrency] = useState<string | null>(null)
+  const [savedSlice, setSavedSlice] = useState('')
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [stats, setStats] = useState<{ inserted: number; deleted: number; unchanged: number } | null>(
-    null,
-  )
+  const [stats, setStats] = useState<
+    { inserted: number; deleted: number; unchanged: number } | null
+  >(null)
 
   useEffect(() => {
     const controller = new AbortController()
-    fetch('/api/ledger/journal', { credentials: 'include', signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return (await res.json()) as JournalGetResponse
-      })
-      .then((data) => {
-        setSavedText(data.text)
-        setText(data.text)
+    Promise.all([
+      fetch('/api/ledger/journal', {
+        credentials: 'include',
+        signal: controller.signal,
+      }).then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return (await r.json()) as JournalGetResponse
+      }),
+      fetch(`/api/ledger/accounts/${encodeURIComponent(account)}/currencies`, {
+        credentials: 'include',
+        signal: controller.signal,
+      }).then(async (r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return (await r.json()) as CurrenciesResponse
+      }),
+    ])
+      .then(([journal, curResp]) => {
+        const parsed = parseJournal(journal.text)
+        const w: Whole = { txns: parsed.transactions, directives: parsed.directives }
+        setWhole(w)
+        setCurrencies(curResp.currencies)
+        const cur = curResp.currencies[0] ?? null
+        setCurrency(cur)
+        const initial = cur ? sliceText(w, account, cur) : ''
+        setSavedSlice(initial)
+        setText(initial)
         setLoaded(true)
       })
       .catch((e: unknown) => {
@@ -105,21 +147,53 @@ export function PerAccountView({ account }: { account: string }) {
         setLoaded(true)
       })
     return () => controller.abort()
-  }, [])
+  }, [account])
+
+  const onCurrencyChange = useCallback(
+    (next: string) => {
+      if (!whole) return
+      setCurrency(next)
+      const s = sliceText(whole, account, next)
+      setSavedSlice(s)
+      setText(s)
+      setStats(null)
+      setError(null)
+    },
+    [whole, account],
+  )
 
   const textRef = useRef(text)
   textRef.current = text
 
   const save = useCallback(async () => {
-    if (saving) return
+    if (saving || !whole || !currency) return
     setSaving(true)
     setError(null)
+    let parsedSlice
+    try {
+      parsedSlice = parseJournal(textRef.current)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+      setSaving(false)
+      return
+    }
+    const keepTxns = whole.txns.filter(
+      (tx) => !txnTouchesAccountCurrency(tx, account, currency),
+    )
+    const keepDirectives = whole.directives.filter(
+      (d) => !directiveTouchesAccountCurrency(d, account, currency),
+    )
+    const newWhole: Whole = {
+      txns: [...keepTxns, ...parsedSlice.transactions],
+      directives: [...keepDirectives, ...parsedSlice.directives],
+    }
+    const newWholeText = serializeJournal(newWhole.txns, newWhole.directives)
     try {
       const res = await fetch('/api/ledger/journal', {
         method: 'PUT',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: textRef.current }),
+        body: JSON.stringify({ text: newWholeText }),
       })
       const data = (await res.json()) as JournalPutResp
       if (!res.ok || isPutErr(data)) {
@@ -127,17 +201,29 @@ export function PerAccountView({ account }: { account: string }) {
         setError(msg)
         return
       }
-      setSavedText(data.text)
-      setText(data.text)
+      const reparsed = parseJournal(data.text)
+      const w: Whole = { txns: reparsed.transactions, directives: reparsed.directives }
+      setWhole(w)
+      const updated = sliceText(w, account, currency)
+      setSavedSlice(updated)
+      setText(updated)
       setStats({ inserted: data.inserted, deleted: data.deleted, unchanged: data.unchanged })
+      const curResp = await fetch(
+        `/api/ledger/accounts/${encodeURIComponent(account)}/currencies`,
+        { credentials: 'include' },
+      )
+      if (curResp.ok) {
+        const cur = (await curResp.json()) as CurrenciesResponse
+        setCurrencies(cur.currencies)
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSaving(false)
     }
-  }, [saving])
+  }, [saving, whole, currency, account])
 
-  const unsaved = loaded && text !== savedText
+  const unsaved = loaded && text !== savedSlice
   const lineCount = useMemo(() => Math.max(1, text.split('\n').length), [text])
 
   const extensions = useMemo(
@@ -162,14 +248,37 @@ export function PerAccountView({ account }: { account: string }) {
 
   const body = (
     <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+            Currency
+          </label>
+          {currencies.length > 0 ? (
+            <select
+              value={currency ?? ''}
+              onChange={(e) => onCurrencyChange(e.target.value)}
+              className="text-xs font-mono bg-white border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-[#00685f]"
+              disabled={saving}
+            >
+              {currencies.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs font-mono text-slate-400">none yet</span>
+          )}
+        </div>
+        {stats && !error && (
+          <span className="text-[10px] text-slate-500 font-mono">
+            saved · +{stats.inserted} −{stats.deleted} ={stats.unchanged}
+          </span>
+        )}
+      </div>
       {error && (
         <div className="mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
           {error}
-        </div>
-      )}
-      {stats && !error && (
-        <div className="mb-2 px-3 py-1 text-[10px] text-slate-500 font-mono">
-          saved · +{stats.inserted} −{stats.deleted} ={stats.unchanged}
         </div>
       )}
       <div className="flex-1 bg-white rounded-sm shadow-sm border border-[#bcc9c6]/15 overflow-hidden">

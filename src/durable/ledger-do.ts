@@ -8,6 +8,10 @@ import {
   serializeJournal,
   transactionInputHash,
 } from '@/lib/beancount/ast'
+import {
+  directiveTouchesAccount,
+  directiveTouchesAccountCurrency,
+} from '@/lib/beancount/scope'
 import type {
   AccountEntriesResponse,
   DirectiveInput,
@@ -139,6 +143,78 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     }
     const directives = this.readAllDirectives()
     return { text: serializeJournal(transactions, directives) }
+  }
+
+  async journal_get_for_account(account: string): Promise<JournalGetResponse> {
+    const txnIds = this.sql
+      .exec<{ id: number }>(
+        `SELECT id FROM transactions
+         WHERE id IN (SELECT txn_id FROM postings WHERE account = ?)
+         ORDER BY date ASC, id ASC`,
+        account,
+      )
+      .toArray()
+      .map((r) => r.id)
+    const transactions: TransactionInput[] = []
+    for (const id of txnIds) {
+      const e = this.readTxnEntry(id)
+      if (e) transactions.push(entryTxnToInput(e))
+    }
+    const directives = this.readAllDirectives().filter((d) =>
+      directiveTouchesAccount(d, account),
+    )
+    return { text: serializeJournal(transactions, directives) }
+  }
+
+  async journal_get_for_account_currency(
+    account: string,
+    currency: string,
+  ): Promise<JournalGetResponse> {
+    const txnIds = this.sql
+      .exec<{ id: number }>(
+        `SELECT id FROM transactions
+         WHERE id IN (SELECT txn_id FROM postings WHERE account = ? AND currency = ?)
+         ORDER BY date ASC, id ASC`,
+        account,
+        currency,
+      )
+      .toArray()
+      .map((r) => r.id)
+    const transactions: TransactionInput[] = []
+    for (const id of txnIds) {
+      const e = this.readTxnEntry(id)
+      if (e) transactions.push(entryTxnToInput(e))
+    }
+    const directives = this.readAllDirectives().filter((d) =>
+      directiveTouchesAccountCurrency(d, account, currency),
+    )
+    return { text: serializeJournal(transactions, directives) }
+  }
+
+  async list_account_currencies(account: string): Promise<string[]> {
+    const counts = new Map<string, number>()
+    for (const r of this.sql
+      .exec<{ currency: string; n: number }>(
+        `SELECT currency, COUNT(*) AS n FROM postings
+         WHERE account = ? AND currency IS NOT NULL AND currency != ''
+         GROUP BY currency`,
+        account,
+      )
+      .toArray()) {
+      counts.set(r.currency, (counts.get(r.currency) ?? 0) + r.n)
+    }
+    for (const r of this.sql
+      .exec<{ currency: string; n: number }>(
+        `SELECT currency, COUNT(*) AS n FROM directives_balance
+         WHERE account = ? GROUP BY currency`,
+        account,
+      )
+      .toArray()) {
+      counts.set(r.currency, (counts.get(r.currency) ?? 0) + r.n)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
+      .map(([cur]) => cur)
   }
 
   async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {

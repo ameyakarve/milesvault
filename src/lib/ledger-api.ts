@@ -18,6 +18,12 @@ export type LedgerClient = {
     offset?: number,
   ): Promise<AccountEntriesResponse>
   journal_get(): Promise<JournalGetResponse>
+  journal_get_for_account(account: string): Promise<JournalGetResponse>
+  journal_get_for_account_currency(
+    account: string,
+    currency: string,
+  ): Promise<JournalGetResponse>
+  list_account_currencies(account: string): Promise<string[]>
   journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
   clear(): Promise<{ ok: true }>
 }
@@ -68,6 +74,30 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async journal_get() {
       return stub.journal_get()
+    },
+
+    async journal_get_for_account(account) {
+      if (typeof account !== 'string' || account.length === 0) {
+        throw new LedgerInputError(['account must be a non-empty string.'])
+      }
+      return stub.journal_get_for_account(account)
+    },
+
+    async journal_get_for_account_currency(account, currency) {
+      if (typeof account !== 'string' || account.length === 0) {
+        throw new LedgerInputError(['account must be a non-empty string.'])
+      }
+      if (typeof currency !== 'string' || currency.length === 0) {
+        throw new LedgerInputError(['currency must be a non-empty string.'])
+      }
+      return stub.journal_get_for_account_currency(account, currency)
+    },
+
+    async list_account_currencies(account) {
+      if (typeof account !== 'string' || account.length === 0) {
+        throw new LedgerInputError(['account must be a non-empty string.'])
+      }
+      return stub.list_account_currencies(account)
     },
 
     async journal_put(text) {
