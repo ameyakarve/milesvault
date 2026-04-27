@@ -4,10 +4,10 @@ import {
   dateFromInt,
   dateToInt,
   directiveInputHash,
-  parseJournal,
   serializeJournal,
   transactionInputHash,
 } from '@/lib/beancount/ast'
+import { isStrictParseErr, parseJournalStrict } from '@/lib/beancount/parse-strict'
 import {
   directiveTouchesAccount,
   directiveTouchesAccountCurrency,
@@ -49,12 +49,8 @@ export type JournalGetResponse = { text: string }
 export type JournalPutResponse = { text: string; inserted: number; deleted: number; unchanged: number }
 export type JournalPutError = {
   ok: false
-  error: 'parse_error' | 'unsupported_directives' | 'partial_parse'
+  error: 'parse_error' | 'partial_parse' | 'unsupported_directives'
   message: string
-  unsupportedTypes?: string[]
-  droppedLineNumbers?: number[]
-  expectedDirectiveLineCount?: number
-  parsedDirectiveCount?: number
 }
 
 const DIRECTIVE_TABLE: Record<DirectiveInput['kind'], string> = {
@@ -221,37 +217,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {
-    let parsed
-    try {
-      parsed = parseJournal(text)
-    } catch (e) {
-      return {
-        ok: false,
-        error: 'parse_error',
-        message: e instanceof Error ? e.message : String(e),
-      }
-    }
-    if (parsed.unsupportedDirectiveCount > 0) {
-      return {
-        ok: false,
-        error: 'unsupported_directives',
-        message: `Unsupported directive types: ${parsed.unsupportedDirectiveTypes.join(', ')}`,
-        unsupportedTypes: parsed.unsupportedDirectiveTypes,
-      }
-    }
-    if (parsed.partialParse) {
-      const lines = parsed.droppedLineNumbers.join(', ')
-      return {
-        ok: false,
-        error: 'partial_parse',
-        message:
-          `Input had ${parsed.expectedDirectiveLineCount} dated line(s) but only ` +
-          `${parsed.parsedDirectiveCount} parsed. Likely dropped line(s): ${lines}. ` +
-          `Top-level directives must start at column 0 (no leading whitespace).`,
-        droppedLineNumbers: parsed.droppedLineNumbers,
-        expectedDirectiveLineCount: parsed.expectedDirectiveLineCount,
-        parsedDirectiveCount: parsed.parsedDirectiveCount,
-      }
+    const parsed = parseJournalStrict(text)
+    if (isStrictParseErr(parsed)) {
+      return { ok: false, error: parsed.kind, message: parsed.message }
     }
 
     const allKinds: DirectiveInput['kind'][] = [
