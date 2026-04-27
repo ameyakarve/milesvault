@@ -422,6 +422,38 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     )
   }
 
+  async v2_list_by_account(
+    account: string,
+    limit: number,
+    offset: number,
+  ): Promise<V2ListResult> {
+    const totalRow = this.sql
+      .exec<{ c: number }>(
+        `SELECT COUNT(*) AS c FROM transactions_v2 t
+         WHERE t.id IN (SELECT p.txn_id FROM postings p WHERE p.account = ?)`,
+        account,
+      )
+      .toArray()[0]
+    const total = totalRow?.c ?? 0
+    const ids = this.sql
+      .exec<{ id: number }>(
+        `SELECT t.id FROM transactions_v2 t
+         WHERE t.id IN (SELECT p.txn_id FROM postings p WHERE p.account = ?)
+         ORDER BY t.date DESC, t.id DESC LIMIT ? OFFSET ?`,
+        account,
+        limit,
+        offset,
+      )
+      .toArray()
+      .map((r) => r.id)
+    const rows: TransactionV2[] = []
+    for (const id of ids) {
+      const t = this.readV2Transaction(id)
+      if (t) rows.push(t)
+    }
+    return { rows, total, limit, offset }
+  }
+
   async v2_search(filter: SearchFilter, limit: number, offset: number): Promise<V2ListResult> {
     const where: string[] = []
     const args: SqlStorageValue[] = []
