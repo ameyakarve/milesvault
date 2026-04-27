@@ -269,6 +269,10 @@ export function serializeTransaction(txn: BcTransaction): string {
   return result.toFormattedString({ currencyColumn: col }).trim() + '\n'
 }
 
+export function serializeTransactionInput(input: TransactionInput): string {
+  return serializeTransaction(buildTransactionAst(input))
+}
+
 function valueMapToMeta(
   m: Record<string, Value> | undefined,
 ): Record<string, string> | null {

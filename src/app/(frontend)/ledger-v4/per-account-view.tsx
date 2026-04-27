@@ -9,6 +9,7 @@ import { styleTags, tags as t } from '@lezer/highlight'
 import { parser as beancountParser } from 'lezer-beancount'
 import type { Posting, TransactionV2 } from '@/durable/ledger-v2-types'
 import { splitCamel } from '@/lib/beancount/account-display'
+import { serializeTransactionInput } from '@/lib/beancount/v2-ast'
 import { useAccountTransactions } from '../home/use-account-transactions'
 
 const TOP_LEVELS = new Set(['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses'])
@@ -293,7 +294,7 @@ export function PerAccountView() {
               const balanceStr = `${row.balance < 0 ? '-' : ''}${amountFmt.format(Math.abs(row.balance))}`
               const payee = row.txn.payee || row.txn.narration || row.txn.flag || '—'
               const narration = row.txn.payee ? row.txn.narration : ''
-              const sourceText = sourceEdits[row.txn.id] ?? row.txn.raw_text
+              const sourceText = sourceEdits[row.txn.id] ?? serializeTransactionInput(row.txn)
               return (
                 <div key={row.txn.id} className={isExpanded ? 'bg-white border-b border-slate-100 shadow-sm' : ''}>
                   <div
