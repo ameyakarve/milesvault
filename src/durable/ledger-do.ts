@@ -40,7 +40,6 @@ import type {
   V2ReplaceAllResult,
   V2UpdateResult,
 } from './ledger-v2-types'
-import type { SearchFilter } from './search-parser'
 
 // workerd caps SQLITE_LIMIT_COMPOUND_SELECT at 5; split 10 tables across 2 statements.
 const MAX_UPDATED_AT_SQL_A = `SELECT MAX(m) AS m FROM (
@@ -441,67 +440,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
          WHERE t.id IN (SELECT p.txn_id FROM postings p WHERE p.account = ?)
          ORDER BY t.date DESC, t.id DESC LIMIT ? OFFSET ?`,
         account,
-        limit,
-        offset,
-      )
-      .toArray()
-      .map((r) => r.id)
-    const rows: TransactionV2[] = []
-    for (const id of ids) {
-      const t = this.readV2Transaction(id)
-      if (t) rows.push(t)
-    }
-    return { rows, total, limit, offset }
-  }
-
-  async v2_search(filter: SearchFilter, limit: number, offset: number): Promise<V2ListResult> {
-    const where: string[] = []
-    const args: SqlStorageValue[] = []
-    if (filter.accountTokens.length > 0) {
-      const sub: string[] = []
-      for (const tok of filter.accountTokens) {
-        sub.push(`LOWER(p.account) LIKE ?`)
-        args.push(`%${tok.toLowerCase()}%`)
-      }
-      where.push(
-        `t.id IN (SELECT p.txn_id FROM postings p WHERE ${sub.join(' AND ')})`,
-      )
-    }
-    if (filter.tagTokens.length > 0) {
-      for (const tok of filter.tagTokens) {
-        where.push(`t.id IN (SELECT txn_id FROM txn_tags WHERE LOWER(tag) = ?)`)
-        args.push(tok.toLowerCase())
-      }
-    }
-    if (filter.linkTokens.length > 0) {
-      for (const tok of filter.linkTokens) {
-        where.push(`t.id IN (SELECT txn_id FROM txn_links WHERE LOWER(link) = ?)`)
-        args.push(tok.toLowerCase())
-      }
-    }
-    if (filter.dateFrom != null) {
-      where.push('t.date >= ?')
-      args.push(filter.dateFrom)
-    }
-    if (filter.dateTo != null) {
-      where.push('t.date <= ?')
-      args.push(filter.dateTo)
-    }
-    for (const tok of filter.freeTokens) {
-      where.push(`(LOWER(t.payee) LIKE ? OR LOWER(t.narration) LIKE ? OR LOWER(t.raw_text) LIKE ?)`)
-      const like = `%${tok.toLowerCase()}%`
-      args.push(like, like, like)
-    }
-    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
-    const totalRow = this.sql
-      .exec<{ c: number }>(`SELECT COUNT(*) AS c FROM transactions_v2 t ${whereSql}`, ...args)
-      .toArray()[0]
-    const total = totalRow?.c ?? 0
-    const ids = this.sql
-      .exec<{ id: number }>(
-        `SELECT t.id FROM transactions_v2 t ${whereSql}
-         ORDER BY t.date DESC, t.id DESC LIMIT ? OFFSET ?`,
-        ...args,
         limit,
         offset,
       )
