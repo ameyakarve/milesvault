@@ -51,6 +51,7 @@ export type LedgerClient = {
   v2_listAccounts(): Promise<string[]>
   v2_recent_accounts_list(limit?: number): Promise<string[]>
   v2_recent_account_touch(account: string): Promise<void>
+  v2_list_by_account(account: string, limit?: number, offset?: number): Promise<V2ListResult>
   v2_search(q: string, limit?: number, offset?: number): Promise<V2ListResult>
   v2_max_updated_at(): Promise<number>
   v2_replace_all(buffer: string, expected_max_updated_at: number): Promise<V2ReplaceAllResult>
@@ -175,6 +176,15 @@ export function createLedgerClient(env: Cloudflare.Env, email: string): LedgerCl
         throw new LedgerInputError(['account must be a non-empty string.'])
       }
       return stub.v2_recent_account_touch(account)
+    },
+
+    async v2_list_by_account(account, limit = DEFAULT_LIMIT, offset = 0) {
+      if (typeof account !== 'string' || account.length === 0) {
+        throw new LedgerInputError(['account must be a non-empty string.'])
+      }
+      const l = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT)
+      const o = Math.max(0, Number.isFinite(offset) ? Math.floor(offset) : 0)
+      return stub.v2_list_by_account(account, l, o)
     },
 
     async v2_search(q, limit = DEFAULT_LIMIT, offset = 0) {
