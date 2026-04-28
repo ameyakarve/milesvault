@@ -28,22 +28,6 @@ async function main() {
   const page = await ctx.newPage()
   const errors = []
 
-  // Demo cards (notebook-view) — they live as DOM elements with classes
-  await load(page, 'ledger-notebook-view--default')
-  await page.waitForSelector('.cm-balance-pill, [class*="bal"], .text-slate-500')
-  // The demo uses regular HTML for balance, not the cm-balance-pill class.
-  // For chrome, the static demo uses card div with bg-white border-[#bcc9c6]/15.
-
-  const demoCardBg = await rgbAt(
-    page,
-    '.bg-white.rounded-sm.shadow-sm.border-\\[\\#bcc9c6\\]\\/15',
-    'bg',
-  )
-  const demoBalLabel = await rgbAt(page, '.text-slate-400', 'color')
-  const demoBalValue = await rgbAt(page, '.text-slate-500', 'color')
-
-  console.log('demo  cardBg:', demoCardBg, 'balLabel:', demoBalLabel, 'balValue:', demoBalValue)
-
   // Fixture story
   await load(page, 'ledger-per-account-view-fixture--default')
   await page.waitForSelector('.cm-card-solo')
@@ -67,7 +51,7 @@ async function main() {
   )
   console.log('fixt  gutterBg:', fxGutterBg, 'gutterFg:', fxGutterFg)
 
-  if (fxCardBg !== demoCardBg) errors.push(`card bg mismatch: demo=${demoCardBg} fixture=${fxCardBg}`)
+  if (fxCardBg !== 'rgb(255, 255, 255)') errors.push(`fixture card bg=${fxCardBg} (expected rgb(255, 255, 255))`)
   // Footer label = slate-500 (rgb 100,116,139) — darkened from prior slate-400.
   if (fxBalLabel !== 'rgb(100, 116, 139)') {
     errors.push(`footer label color=${fxBalLabel} (expected rgb(100, 116, 139))`)
