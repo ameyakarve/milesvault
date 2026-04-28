@@ -470,33 +470,40 @@ function LeafChipsRow({
   leafChips: LeafChip[]
   breadcrumb: string[]
 }) {
+  if (leafChips.length === 0) return null
   const baseHref = `/ledger/${breadcrumb.map(encodeURIComponent).join('/')}`
+  const chipClass =
+    'px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] font-mono whitespace-nowrap transition-colors shrink-0'
   return (
     <div className="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between shrink-0">
       <div className="flex items-center gap-2 overflow-x-auto flex-1 mr-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button
-          type="button"
-          className="px-3 py-1 bg-[#00685f] text-white rounded-full text-[11px] font-bold whitespace-nowrap shrink-0"
-        >
-          All
-        </button>
+        {leafChips.length > 1 && (
+          <button
+            type="button"
+            className="px-3 py-1 bg-[#00685f] text-white rounded-full text-[11px] font-bold whitespace-nowrap shrink-0"
+          >
+            All
+          </button>
+        )}
         {leafChips.map((label) => (
           <Link
             key={label}
             href={`${baseHref}/${encodeURIComponent(label)}`}
-            className="px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] font-mono whitespace-nowrap transition-colors shrink-0"
+            className={chipClass}
           >
             {label}
           </Link>
         ))}
       </div>
-      <button
-        type="button"
-        className="flex items-center gap-1 text-[11px] font-bold text-[#00685f] hover:underline whitespace-nowrap shrink-0"
-      >
-        <span>Explore tree</span>
-        <span className="material-symbols-outlined !text-[14px]">arrow_forward</span>
-      </button>
+      {leafChips.length > 1 && (
+        <button
+          type="button"
+          className="flex items-center gap-1 text-[11px] font-bold text-[#00685f] hover:underline whitespace-nowrap shrink-0"
+        >
+          <span>Explore tree</span>
+          <span className="material-symbols-outlined !text-[14px]">arrow_forward</span>
+        </button>
+      )}
     </div>
   )
 }
