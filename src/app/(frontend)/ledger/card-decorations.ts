@@ -16,10 +16,12 @@ export type DeltaSpec = {
 export type CardSpec = {
   startLine: number
   endLine: number
+  date: string
   balance: string | null
   runningTotal: number | null
   mismatch: boolean
   deltas: DeltaSpec[]
+  dayOpening: string | null
 }
 
 const CURRENCY_META: Record<string, { symbol: string; locale: string }> = {
@@ -106,6 +108,45 @@ function txnDeltas(
   return out
 }
 
+function entryDate(
+  e: ParsedEntry,
+  transactions: TransactionInput[],
+  directives: DirectiveInput[],
+): string {
+  if (e.kind === 'transaction') return transactions[e.index]?.date ?? ''
+  return directives[e.index]?.date ?? ''
+}
+
+function computeOpeningByDate(
+  transactions: TransactionInput[],
+  account: string,
+  currency: string,
+): Map<string, number> {
+  const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date))
+  const openings = new Map<string, number>()
+  let running = 0
+  for (const tx of sorted) {
+    if (!openings.has(tx.date)) openings.set(tx.date, running)
+    running += postingDelta(tx, account, currency)
+  }
+  return openings
+}
+
+function annotateDateOpenings(
+  specs: CardSpec[],
+  openingByDate: Map<string, number>,
+  currency: string,
+): void {
+  let prevDate: string | null = null
+  for (const s of specs) {
+    if (s.date && s.date !== prevDate) {
+      const op = openingByDate.get(s.date)
+      s.dayOpening = op != null ? formatBalance(op, currency) : formatBalance(0, currency)
+      prevDate = s.date
+    }
+  }
+}
+
 export function computeCardSpecs(
   transactions: TransactionInput[],
   directives: DirectiveInput[],
@@ -120,16 +161,19 @@ export function computeCardSpecs(
   let running = 0
   const specs: CardSpec[] = []
   for (const e of entries) {
+    const date = entryDate(e, transactions, directives)
     if (e.kind === 'transaction') {
       const tx = transactions[e.index]
       if (!tx) continue
       running += postingDelta(tx, account, currency)
       specs.push({
         ...e.range,
+        date,
         balance: formatBalance(running, currency),
         runningTotal: running,
         mismatch: false,
         deltas: txnDeltas(tx, account, currency, e.range.startLine),
+        dayOpening: null,
       })
     } else {
       const d = directives[e.index]
@@ -138,10 +182,12 @@ export function computeCardSpecs(
         running = 0
         specs.push({
           ...e.range,
+          date,
           balance: formatBalance(running, currency),
           runningTotal: running,
           mismatch: false,
           deltas: [],
+          dayOpening: null,
         })
       } else if (d.kind === 'balance') {
         const expected = Number(d.amount)
@@ -151,30 +197,37 @@ export function computeCardSpecs(
           Math.abs(expected - running) > 0.005
         specs.push({
           ...e.range,
+          date,
           balance: formatBalance(running, currency),
           runningTotal: running,
           mismatch,
           deltas: [],
+          dayOpening: null,
         })
       } else if (d.kind === 'pad' || d.kind === 'close') {
         specs.push({
           ...e.range,
+          date,
           balance: formatBalance(running, currency),
           runningTotal: running,
           mismatch: false,
           deltas: [],
+          dayOpening: null,
         })
       } else {
         specs.push({
           ...e.range,
+          date,
           balance: null,
           runningTotal: null,
           mismatch: false,
           deltas: [],
+          dayOpening: null,
         })
       }
     }
   }
+  annotateDateOpenings(specs, computeOpeningByDate(transactions, account, currency), currency)
   return specs
 }
 
@@ -197,16 +250,19 @@ function computeCardSpecsDesc(
   const specs: CardSpec[] = []
   let upcomingDeltas = 0
   for (const e of entries) {
+    const date = entryDate(e, transactions, directives)
     if (e.kind === 'transaction') {
       const tx = transactions[e.index]
       if (!tx) continue
       const after = accountBalance - upcomingDeltas
       specs.push({
         ...e.range,
+        date,
         balance: formatBalance(after, currency),
         runningTotal: after,
         mismatch: false,
         deltas: txnDeltas(tx, account, currency, e.range.startLine),
+        dayOpening: null,
       })
       upcomingDeltas += postingDelta(tx, account, currency)
     } else {
@@ -217,10 +273,12 @@ function computeCardSpecsDesc(
         // display it's the bottom-most card with a zero balance.
         specs.push({
           ...e.range,
+          date,
           balance: formatBalance(0, currency),
           runningTotal: 0,
           mismatch: false,
           deltas: [],
+          dayOpening: null,
         })
       } else if (d.kind === 'balance') {
         const after = accountBalance - upcomingDeltas
@@ -231,31 +289,38 @@ function computeCardSpecsDesc(
           Math.abs(expected - after) > 0.005
         specs.push({
           ...e.range,
+          date,
           balance: formatBalance(after, currency),
           runningTotal: after,
           mismatch,
           deltas: [],
+          dayOpening: null,
         })
       } else if (d.kind === 'pad' || d.kind === 'close') {
         const after = accountBalance - upcomingDeltas
         specs.push({
           ...e.range,
+          date,
           balance: formatBalance(after, currency),
           runningTotal: after,
           mismatch: false,
           deltas: [],
+          dayOpening: null,
         })
       } else {
         specs.push({
           ...e.range,
+          date,
           balance: null,
           runningTotal: null,
           mismatch: false,
           deltas: [],
+          dayOpening: null,
         })
       }
     }
   }
+  annotateDateOpenings(specs, computeOpeningByDate(transactions, account, currency), currency)
   return specs
 }
 
@@ -281,6 +346,42 @@ class DeltaWidget extends WidgetType {
       this.d.value === other.d.value &&
       this.d.flow === other.d.flow
     )
+  }
+  ignoreEvent() {
+    return true
+  }
+}
+
+class DateHeaderWidget extends WidgetType {
+  constructor(
+    private readonly date: string,
+    private readonly opening: string,
+  ) {
+    super()
+  }
+  toDOM() {
+    const wrap = document.createElement('div')
+    wrap.className = 'cm-date-header-wrap'
+    const row = document.createElement('div')
+    row.className = 'cm-date-header'
+    const label = document.createElement('span')
+    label.className = 'cm-date-header-label'
+    const dateEl = document.createElement('span')
+    dateEl.className = 'cm-date-header-date'
+    dateEl.textContent = this.date
+    const sep = document.createTextNode(' · OPENING BALANCE')
+    label.appendChild(dateEl)
+    label.appendChild(sep)
+    const value = document.createElement('span')
+    value.className = 'cm-date-header-value'
+    value.textContent = this.opening
+    row.appendChild(label)
+    row.appendChild(value)
+    wrap.appendChild(row)
+    return wrap
+  }
+  eq(other: DateHeaderWidget) {
+    return other.date === this.date && other.opening === this.opening
   }
   ignoreEvent() {
     return true
@@ -330,6 +431,19 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
   for (const spec of sorted) {
     const { startLine, endLine } = spec
     if (startLine < 1 || endLine > lineCount || startLine > endLine) continue
+    if (spec.dayOpening != null && spec.date) {
+      const headFrom = state.doc.line(startLine).from
+      items.push({
+        from: headFrom,
+        to: headFrom,
+        deco: Decoration.widget({
+          widget: new DateHeaderWidget(spec.date, spec.dayOpening),
+          side: -1,
+          block: true,
+        }),
+        order: -1,
+      })
+    }
     const classes: string[] =
       startLine === endLine
         ? ['cm-card-solo']
