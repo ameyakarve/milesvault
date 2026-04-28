@@ -591,6 +591,8 @@ export type NotebookShellProps = {
   onSave?: () => void
   onRevert?: () => void
   body?: ReactNode
+  statementBody?: ReactNode
+  defaultViewMode?: 'editor' | 'statement'
   cursor?: string
   currency?: string | null
   leafChips?: LeafChip[]
@@ -609,12 +611,14 @@ export function NotebookShell({
   onSave,
   onRevert,
   body,
+  statementBody,
+  defaultViewMode = 'editor',
   cursor = 'Ln 1, Col 1',
   currency,
   leafChips = [],
   period = 'All time',
 }: NotebookShellProps) {
-  const [viewMode, setViewMode] = useState<'editor' | 'statement'>('editor')
+  const [viewMode, setViewMode] = useState<'editor' | 'statement'>(defaultViewMode)
   return (
     <div className="w-full h-screen flex bg-[#f7f9fb] font-sans text-[#191c1e] overflow-hidden">
       <NavRail />
@@ -637,7 +641,13 @@ export function NotebookShell({
               onSave={onSave}
               onRevert={onRevert}
             />
-            <EditorPane cards={cards} body={body} />
+            {viewMode === 'editor' ? (
+              <EditorPane cards={cards} body={body} />
+            ) : (
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
+                {statementBody}
+              </div>
+            )}
           </main>
           <AiPane />
         </div>

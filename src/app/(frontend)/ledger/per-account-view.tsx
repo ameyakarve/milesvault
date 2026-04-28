@@ -20,6 +20,7 @@ import {
 } from '@/lib/beancount/scope'
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import { NotebookShell } from './notebook-shell'
+import { StatementView, type StatementRowData } from './statement-view'
 import {
   cardDecorations,
   computeCardSpecs,
@@ -156,7 +157,13 @@ function sliceFromWhole(text: string, account: string, currency: string): string
   return serializeJournal(txns, directives, { descending: true })
 }
 
-export function PerAccountView({ account }: { account: string }) {
+export function PerAccountView({
+  account,
+  defaultViewMode,
+}: {
+  account: string
+  defaultViewMode?: 'editor' | 'statement'
+}) {
   const [loaded, setLoaded] = useState(false)
   const [currencies, setCurrencies] = useState<string[]>([])
   const [currency, setCurrency] = useState<string | null>(null)
@@ -298,6 +305,95 @@ export function PerAccountView({ account }: { account: string }) {
     )
   }, [parsed, account, currency])
 
+  const statementRows = useMemo<StatementRowData[]>(() => {
+    if (!currency || isStrictParseErr(parsed)) return []
+    const lines = text.split('\n')
+    const meta = CURRENCY_META[currency]
+    const grouped = (n: number) =>
+      new Intl.NumberFormat(meta?.locale ?? 'en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Math.abs(n))
+    const out: StatementRowData[] = []
+    for (let i = 0; i < parsed.entries.length; i++) {
+      const e = parsed.entries[i]!
+      if (e.kind !== 'transaction') continue
+      const tx = parsed.transactions[e.index]
+      if (!tx) continue
+      const spec = cardSpecs[i]
+      if (!spec) continue
+      let net = 0
+      for (const p of tx.postings) {
+        if (
+          p.account === account ||
+          (p.account?.startsWith(account + ':') ?? false)
+        ) {
+          if (p.currency === currency && p.amount != null) {
+            const v = Number(p.amount)
+            if (Number.isFinite(v)) net += v
+          }
+        }
+      }
+      const debit = net < 0 ? grouped(net) : null
+      const credit = net > 0 ? grouped(net) : null
+      const otherPostings = tx.postings
+        .filter(
+          (p) =>
+            !(p.account === account || (p.account?.startsWith(account + ':') ?? false)),
+        )
+        .map((p) => ({
+          account: p.account,
+          amountSigned:
+            p.amount != null
+              ? `${Number(p.amount) < 0 ? '−' : '+'}${grouped(Number(p.amount))} ${
+                  p.currency ?? ''
+                }`.trim()
+              : '',
+        }))
+      const rawLines = lines.slice(spec.startLine - 1, spec.endLine)
+      const rawText = rawLines.join('\n')
+      out.push({
+        id: `${spec.startLine}-${spec.endLine}`,
+        date: tx.date,
+        payee: tx.payee,
+        narration: tx.narration,
+        tags: tx.tags ?? [],
+        debit,
+        credit,
+        balance: spec.balance ?? '',
+        text: rawText,
+        otherPostings,
+        postedDate: tx.date,
+      })
+    }
+    return out.reverse()
+  }, [parsed, cardSpecs, account, currency, text])
+
+  const statementTotals = useMemo(() => {
+    if (!currency) {
+      return { totalDebit: '', totalCredit: '', netChange: '', netPositive: true }
+    }
+    const meta = CURRENCY_META[currency]
+    const grouped = (n: number) =>
+      new Intl.NumberFormat(meta?.locale ?? 'en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Math.abs(n))
+    let dSum = 0
+    let cSum = 0
+    for (const r of statementRows) {
+      if (r.debit) dSum += Number(r.debit.replace(/,/g, ''))
+      if (r.credit) cSum += Number(r.credit.replace(/,/g, ''))
+    }
+    const net = cSum - dSum
+    return {
+      totalDebit: grouped(dSum),
+      totalCredit: grouped(cSum),
+      netChange: `${net >= 0 ? '+' : '−'}${grouped(net)}`,
+      netPositive: net >= 0,
+    }
+  }, [statementRows, currency])
+
   const headerBalance = useMemo(() => {
     if (!currency) return ''
     for (let i = 0; i < cardSpecs.length; i++) {
@@ -329,6 +425,18 @@ export function PerAccountView({ account }: { account: string }) {
     setText(savedSlice)
     setError(null)
   }, [savedSlice])
+
+  const onSaveRow = useCallback((id: string, newText: string) => {
+    const m = id.match(/^(\d+)-(\d+)$/)
+    if (!m) return
+    const startLine = Number(m[1])
+    const endLine = Number(m[2])
+    const all = textRef.current.split('\n')
+    const before = all.slice(0, startLine - 1)
+    const after = all.slice(endLine)
+    const replaced = newText.split('\n')
+    setText([...before, ...replaced, ...after].join('\n'))
+  }, [])
 
   const txnCount = isStrictParseErr(parsed) ? 0 : parsed.transactions.length
   const showCurrencyChrome = currencies.length > 1 || (!!stats && !error)
@@ -426,6 +534,17 @@ export function PerAccountView({ account }: { account: string }) {
     </div>
   )
 
+  const statementBody = (
+    <StatementView
+      rows={statementRows}
+      totalDebit={statementTotals.totalDebit}
+      totalCredit={statementTotals.totalCredit}
+      netChange={statementTotals.netChange}
+      netPositive={statementTotals.netPositive}
+      onSaveRow={onSaveRow}
+    />
+  )
+
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
 
@@ -444,6 +563,8 @@ export function PerAccountView({ account }: { account: string }) {
       onSave={save}
       onRevert={onRevert}
       body={body}
+      statementBody={statementBody}
+      defaultViewMode={defaultViewMode}
       currency={currency}
       leafChips={children}
     />
