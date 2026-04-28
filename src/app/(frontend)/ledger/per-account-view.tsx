@@ -160,6 +160,7 @@ export function PerAccountView({ account }: { account: string }) {
   const [loaded, setLoaded] = useState(false)
   const [currencies, setCurrencies] = useState<string[]>([])
   const [currency, setCurrency] = useState<string | null>(null)
+  const [children, setChildren] = useState<string[]>([])
   const [savedSlice, setSavedSlice] = useState('')
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
@@ -170,6 +171,21 @@ export function PerAccountView({ account }: { account: string }) {
 
   useEffect(() => {
     void ledgerClient.recentAccountTouch(account).catch(() => {})
+  }, [account])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void (async () => {
+      try {
+        const resp = await ledgerClient.getAccountChildren(account, {
+          signal: controller.signal,
+        })
+        setChildren(resp.children)
+      } catch (e: unknown) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+      }
+    })()
+    return () => controller.abort()
   }, [account])
 
   useEffect(() => {
@@ -309,6 +325,11 @@ export function PerAccountView({ account }: { account: string }) {
     }
   }, [cardSpecs, currency])
 
+  const leafChips = useMemo(
+    () => children.map((label) => ({ label, balance: '' })),
+    [children],
+  )
+
   const onRevert = useCallback(() => {
     setText(savedSlice)
     setError(null)
@@ -429,6 +450,7 @@ export function PerAccountView({ account }: { account: string }) {
       onRevert={onRevert}
       body={body}
       currency={currency}
+      leafChips={leafChips}
     />
   )
 }

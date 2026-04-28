@@ -59,6 +59,15 @@ export const ledgerClient = {
       opts,
     )
   },
+  getAccountChildren(
+    account: string,
+    opts?: FetchOpts,
+  ): Promise<{ children: string[] }> {
+    return getJSON(
+      `/api/ledger/accounts/${encodeURIComponent(account)}/children`,
+      opts,
+    )
+  },
   getAccountEntries(
     account: string,
     limit?: number,

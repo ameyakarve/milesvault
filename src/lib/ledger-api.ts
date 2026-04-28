@@ -24,6 +24,7 @@ export type LedgerClient = {
     currency: string,
   ): Promise<JournalGetResponse>
   list_account_currencies(account: string): Promise<string[]>
+  list_account_children(account: string): Promise<string[]>
   journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
   clear(): Promise<{ ok: true }>
 }
@@ -98,6 +99,13 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
         throw new LedgerInputError(['account must be a non-empty string.'])
       }
       return stub.list_account_currencies(account)
+    },
+
+    async list_account_children(account) {
+      if (typeof account !== 'string' || account.length === 0) {
+        throw new LedgerInputError(['account must be a non-empty string.'])
+      }
+      return stub.list_account_children(account)
     },
 
     async journal_put(text) {
