@@ -155,16 +155,18 @@ async function main() {
     errors.push(`header balance fontSize=${probes.headerBalanceFontSize} (expected 24px / text-2xl)`)
   }
 
-  // GAP-3 hard checks
+  // GAP-3: subtle teal-tinted highlight on the active gutter row.
   if (probes.activeLineGutterCount === 0) {
     errors.push(`active-line gutter missing (.cm-activeLineGutter not present)`)
   } else {
-    if (probes.activeLineGutterColor !== 'rgb(0, 104, 95)') {
-      errors.push(`active-line gutter color=${probes.activeLineGutterColor} (expected rgb(0,104,95))`)
-    }
-    if (!/(0,\s*104,\s*95)|#00685f/i.test(probes.activeLineGutterShadow || '')) {
+    if (probes.activeLineGutterBg !== 'rgba(0, 104, 95, 0.06)') {
       errors.push(
-        `active-line gutter box-shadow="${probes.activeLineGutterShadow}" missing teal #00685f bar`,
+        `active-line gutter bg=${probes.activeLineGutterBg} (expected rgba(0, 104, 95, 0.06))`,
+      )
+    }
+    if (probes.activeLineGutterColor !== 'rgb(71, 85, 105)') {
+      errors.push(
+        `active-line gutter color=${probes.activeLineGutterColor} (expected slate-600 rgb(71,85,105))`,
       )
     }
   }
