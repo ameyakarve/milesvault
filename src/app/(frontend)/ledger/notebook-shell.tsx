@@ -622,9 +622,9 @@ export function NotebookShell({
     <div className="w-full h-screen flex bg-[#f7f9fb] font-sans text-[#191c1e] overflow-hidden">
       <NavRail />
       <div className="flex-1 flex flex-col min-w-0">
-        <BreadcrumbRow breadcrumb={breadcrumb} currency={currency} />
         <div className="flex-1 flex min-h-0">
           <main className="flex-1 flex flex-col min-w-0">
+            <BreadcrumbRow breadcrumb={breadcrumb} currency={currency} />
             <StatsRow
               balance={balance}
               netIn={netIn}
