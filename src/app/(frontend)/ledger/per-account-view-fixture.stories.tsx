@@ -59,7 +59,94 @@ const PREFIX_FIXTURE = `2024-12-01 open ${PREFIX_ACCOUNT} INR
   Expenses:Misc                                     9999.00 INR
 `
 
-type AccountKey = typeof ACCOUNT | typeof PREFIX_ACCOUNT
+// Real-world data: 17 multi-posting txns (4 lines each, 2 of which post to the
+// account) + a balance assertion + open. Stresses card-boundary rendering
+// because each card spans 5 document lines (date + 4 postings).
+const REAL_ACCOUNT = 'Liabilities:CreditCards:HSBC:Cashback:9065'
+const REAL_FIXTURE = `2026-04-25 * "RAZ*SWIGGY"
+  ${REAL_ACCOUNT}       -2.00 INR
+  Expenses:Miscellaneous                            2.00 INR
+2026-04-25 * "Refund from Swiggy"
+  ${REAL_ACCOUNT}        2.00 INR
+  Expenses:Miscellaneous                           -2.00 INR
+2026-04-21 * "NEW SHANTHI UPAHAR"
+  ${REAL_ACCOUNT}      -50.00 INR
+  Expenses:Miscellaneous                           50.00 INR
+  ${REAL_ACCOUNT}        5.00 INR
+  Equity:Void                                      -5.00 INR
+2026-04-19 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}     -105.00 INR
+  Expenses:Miscellaneous                          105.00 INR
+  ${REAL_ACCOUNT}       10.50 INR
+  Equity:Void                                     -10.50 INR
+2026-04-10 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}      -35.00 INR
+  Expenses:Miscellaneous                           35.00 INR
+  ${REAL_ACCOUNT}        3.50 INR
+  Equity:Void                                      -3.50 INR
+2026-04-10 * "AGNAY SRUSTHI LOUKYA VE"
+  ${REAL_ACCOUNT}      -18.00 INR
+  Expenses:Miscellaneous                           18.00 INR
+  ${REAL_ACCOUNT}        1.80 INR
+  Equity:Void                                      -1.80 INR
+2026-04-09 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}     -152.00 INR
+  Expenses:Miscellaneous                          152.00 INR
+  ${REAL_ACCOUNT}       15.20 INR
+  Equity:Void                                     -15.20 INR
+2026-04-07 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}      -35.00 INR
+  Expenses:Miscellaneous                           35.00 INR
+  ${REAL_ACCOUNT}        3.50 INR
+  Equity:Void                                      -3.50 INR
+2026-04-06 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}      -76.00 INR
+  Expenses:Miscellaneous                           76.00 INR
+  ${REAL_ACCOUNT}        7.60 INR
+  Equity:Void                                      -7.60 INR
+2026-04-05 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}      -35.00 INR
+  Expenses:Miscellaneous                           35.00 INR
+  ${REAL_ACCOUNT}        3.50 INR
+  Equity:Void                                      -3.50 INR
+2026-04-05 * "AGNAY SRUSTHI LOUKYA VE"
+  ${REAL_ACCOUNT}      -38.00 INR
+  Expenses:Miscellaneous                           38.00 INR
+  ${REAL_ACCOUNT}        3.80 INR
+  Equity:Void                                      -3.80 INR
+2026-04-03 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}      -35.00 INR
+  Expenses:Miscellaneous                           35.00 INR
+  ${REAL_ACCOUNT}        3.50 INR
+  Equity:Void                                      -3.50 INR
+2026-04-02 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}      -35.00 INR
+  Expenses:Miscellaneous                           35.00 INR
+  ${REAL_ACCOUNT}        3.50 INR
+  Equity:Void                                      -3.50 INR
+2026-04-02 * "ZOMATO LTD"
+  ${REAL_ACCOUNT}    -1558.00 INR
+  Expenses:Miscellaneous                         1558.00 INR
+  ${REAL_ACCOUNT}      155.80 INR
+  Equity:Void                                    -155.80 INR
+2026-04-01 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}      -76.00 INR
+  Expenses:Miscellaneous                           76.00 INR
+  ${REAL_ACCOUNT}        7.60 INR
+  Equity:Void                                      -7.60 INR
+2026-03-31 * "AMBROSIA BRANDS PRIVAT"
+  ${REAL_ACCOUNT}      -35.00 INR
+  Expenses:Miscellaneous                           35.00 INR
+  ${REAL_ACCOUNT}        3.50 INR
+  Equity:Void                                      -3.50 INR
+2023-01-01 balance ${REAL_ACCOUNT} 0.00 INR
+2023-01-01 open ${REAL_ACCOUNT}    INR
+`
+
+type AccountKey =
+  | typeof ACCOUNT
+  | typeof PREFIX_ACCOUNT
+  | typeof REAL_ACCOUNT
 
 function sliceFor(text: string, account: string, currency: string): string {
   const parsed = parseJournal(text)
@@ -151,6 +238,14 @@ export const PrefixScope: StoryObj = {
   render: () => (
     <FetchHarness text={PREFIX_FIXTURE} account={PREFIX_ACCOUNT}>
       <PerAccountView account={PREFIX_ACCOUNT} />
+    </FetchHarness>
+  ),
+}
+
+export const RealData: StoryObj = {
+  render: () => (
+    <FetchHarness text={REAL_FIXTURE} account={REAL_ACCOUNT}>
+      <PerAccountView account={REAL_ACCOUNT} />
     </FetchHarness>
   ),
 }

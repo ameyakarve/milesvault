@@ -1,4 +1,5 @@
 import {
+  BlockType,
   Decoration,
   EditorView,
   RectangleMarker,
@@ -453,34 +454,51 @@ const cardBgLayer = layer({
     const markers: LayerMarker[] = []
     const doc = view.state.doc
     const lineCount = doc.lines
-    // The layer DOM is positioned inside cm-scroller, so marker coordinates are
-    // relative to the scroller's top-left, NOT cm-content. cm-content sits to
-    // the right of the gutter, so we must offset by (contentLeft - scrollerLeft)
-    // to align with the content area where lines and inlay widgets are drawn.
-    // Vertically: line-block.bottom would include trailing block widgets (the
-    // balance footer + its 12px padding-bottom wrap), painting white over the
-    // gap. Use the cm-line DOM rect to end at just the last line's text bottom.
-    const scrollerRect = view.scrollDOM.getBoundingClientRect()
-    const contentRect = view.contentDOM.getBoundingClientRect()
-    const xOffset = contentRect.left - scrollerRect.left
-    const width = contentRect.width
-    function lineEl(pos: number): HTMLElement | null {
-      let n: Node | null = view.domAtPos(pos).node
-      while (n && !(n instanceof HTMLElement && n.classList.contains('cm-line'))) {
-        n = n.parentNode
+    // The layer is drawn inside cm-scroller, so marker coordinates are
+    // scroller-relative. Native BlockInfo.top/height are also scroller-relative
+    // (they're the height-map coordinates the editor uses internally), so they
+    // share the same origin as the layer.
+    //
+    // x/width: align with cm-content (which sits to the right of the gutter).
+    // offsetLeft/offsetWidth on contentDOM are layout-cached and don't force
+    // a reflow.
+    const xOffset = view.contentDOM.offsetLeft
+    const width = view.contentDOM.offsetWidth
+
+    // BlockInfo.type is BlockType for a simple block, or BlockInfo[] for a
+    // compound block (a line plus its attached block widgets). The balance
+    // footer is a Decoration.widget({block:true, side:1}) attached to the
+    // last line of each card, so the line's BlockInfo is compound. We want
+    // just the TEXT child's bottom — the widget's bottom would paint white
+    // over the gap between cards.
+    function textRange(pos: number): { top: number; bottom: number } | null {
+      const block = view.lineBlockAt(pos)
+      if (!block) return null
+      const t = block.type
+      if (Array.isArray(t)) {
+        for (const sub of t) {
+          if (sub.type === BlockType.Text) {
+            return { top: sub.top, bottom: sub.top + sub.height }
+          }
+        }
       }
-      return n as HTMLElement | null
+      return { top: block.top, bottom: block.top + block.height }
     }
+
     for (const spec of specs) {
       const { startLine, endLine } = spec
       if (startLine < 1 || endLine > lineCount || startLine > endLine) continue
-      const startNode = lineEl(doc.line(startLine).from)
-      const endNode = lineEl(doc.line(endLine).from)
-      if (!startNode || !endNode) continue
-      const top = startNode.getBoundingClientRect().top - scrollerRect.top
-      const bottom = endNode.getBoundingClientRect().bottom - scrollerRect.top
+      const startRange = textRange(doc.line(startLine).from)
+      const endRange = textRange(doc.line(endLine).from)
+      if (!startRange || !endRange) continue
       markers.push(
-        new RectangleMarker('cm-card-bg', xOffset, top, width, bottom - top),
+        new RectangleMarker(
+          'cm-card-bg',
+          xOffset,
+          startRange.top,
+          width,
+          endRange.bottom - startRange.top,
+        ),
       )
     }
     return markers
