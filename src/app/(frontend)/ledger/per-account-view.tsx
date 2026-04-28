@@ -19,7 +19,6 @@ import {
   txnTouchesAccountCurrency,
 } from '@/lib/beancount/scope'
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
-import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 import { NotebookShell } from './notebook-shell'
 import {
   cardDecorations,
@@ -121,11 +120,17 @@ const BASIC = {
   searchKeymap: false,
 } as const
 
-type Whole = { txns: TransactionInput[]; directives: DirectiveInput[] }
+function rewriteDescending(text: string): string {
+  const parsed = parseJournal(text)
+  return serializeJournal(parsed.transactions, parsed.directives, { descending: true })
+}
 
-function sliceText(whole: Whole, account: string, currency: string): string {
-  const txns = whole.txns.filter((tx) => txnTouchesAccountCurrency(tx, account, currency))
-  const directives = whole.directives.filter((d) =>
+function sliceFromWhole(text: string, account: string, currency: string): string {
+  const parsed = parseJournal(text)
+  const txns = parsed.transactions.filter((tx) =>
+    txnTouchesAccountCurrency(tx, account, currency),
+  )
+  const directives = parsed.directives.filter((d) =>
     directiveTouchesAccountCurrency(d, account, currency),
   )
   return serializeJournal(txns, directives, { descending: true })
@@ -133,7 +138,6 @@ function sliceText(whole: Whole, account: string, currency: string): string {
 
 export function PerAccountView({ account }: { account: string }) {
   const [loaded, setLoaded] = useState(false)
-  const [whole, setWhole] = useState<Whole | null>(null)
   const [currencies, setCurrencies] = useState<string[]>([])
   const [currency, setCurrency] = useState<string | null>(null)
   const [savedSlice, setSavedSlice] = useState('')
@@ -150,48 +154,57 @@ export function PerAccountView({ account }: { account: string }) {
 
   useEffect(() => {
     const controller = new AbortController()
-    Promise.all([
-      ledgerClient.getJournal({ signal: controller.signal }),
-      ledgerClient.getAccountCurrencies(account, { signal: controller.signal }),
-    ])
-      .then(([journal, curResp]) => {
-        const parsed = parseJournal(journal.text)
-        const w: Whole = { txns: parsed.transactions, directives: parsed.directives }
-        setWhole(w)
+    void (async () => {
+      try {
+        const curResp = await ledgerClient.getAccountCurrencies(account, {
+          signal: controller.signal,
+        })
         setCurrencies(curResp.currencies)
         const cur = curResp.currencies[0] ?? null
         setCurrency(cur)
-        const initial = cur ? sliceText(w, account, cur) : ''
-        setSavedSlice(initial)
-        setText(initial)
+        if (cur) {
+          const slice = await ledgerClient.getJournalForAccount(account, cur, {
+            signal: controller.signal,
+          })
+          const desc = rewriteDescending(slice.text)
+          setSavedSlice(desc)
+          setText(desc)
+        } else {
+          setSavedSlice('')
+          setText('')
+        }
         setLoaded(true)
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         if (e instanceof DOMException && e.name === 'AbortError') return
         setError(e instanceof Error ? e.message : String(e))
         setLoaded(true)
-      })
+      }
+    })()
     return () => controller.abort()
   }, [account])
 
   const onCurrencyChange = useCallback(
-    (next: string) => {
-      if (!whole) return
+    async (next: string) => {
       setCurrency(next)
-      const s = sliceText(whole, account, next)
-      setSavedSlice(s)
-      setText(s)
       setStats(null)
       setError(null)
+      try {
+        const slice = await ledgerClient.getJournalForAccount(account, next)
+        const desc = rewriteDescending(slice.text)
+        setSavedSlice(desc)
+        setText(desc)
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : String(e))
+      }
     },
-    [whole, account],
+    [account],
   )
 
   const textRef = useRef(text)
   textRef.current = text
 
   const save = useCallback(async () => {
-    if (saving || !whole || !currency) return
+    if (saving || !currency) return
     setSaving(true)
     setError(null)
     const parsedSlice = parseJournalStrict(textRef.current)
@@ -200,26 +213,25 @@ export function PerAccountView({ account }: { account: string }) {
       setSaving(false)
       return
     }
-    const keepTxns = whole.txns.filter(
-      (tx) => !txnTouchesAccountCurrency(tx, account, currency),
-    )
-    const keepDirectives = whole.directives.filter(
-      (d) => !directiveTouchesAccountCurrency(d, account, currency),
-    )
-    const newWholeText = serializeJournal(
-      [...keepTxns, ...parsedSlice.transactions],
-      [...keepDirectives, ...parsedSlice.directives],
-    )
     try {
+      const journal = await ledgerClient.getJournal()
+      const whole = parseJournal(journal.text)
+      const keepTxns = whole.transactions.filter(
+        (tx) => !txnTouchesAccountCurrency(tx, account, currency),
+      )
+      const keepDirectives = whole.directives.filter(
+        (d) => !directiveTouchesAccountCurrency(d, account, currency),
+      )
+      const newWholeText = serializeJournal(
+        [...keepTxns, ...parsedSlice.transactions],
+        [...keepDirectives, ...parsedSlice.directives],
+      )
       const data = await ledgerClient.putJournal(newWholeText)
       if (isJournalPutError(data)) {
         setError(data.message)
         return
       }
-      const reparsed = parseJournal(data.text)
-      const w: Whole = { txns: reparsed.transactions, directives: reparsed.directives }
-      setWhole(w)
-      const updated = sliceText(w, account, currency)
+      const updated = sliceFromWhole(data.text, account, currency)
       setSavedSlice(updated)
       setText(updated)
       setStats({ inserted: data.inserted, deleted: data.deleted, unchanged: data.unchanged })
@@ -231,7 +243,7 @@ export function PerAccountView({ account }: { account: string }) {
     } finally {
       setSaving(false)
     }
-  }, [saving, whole, currency, account])
+  }, [saving, currency, account])
 
   const unsaved = loaded && text !== savedSlice
 

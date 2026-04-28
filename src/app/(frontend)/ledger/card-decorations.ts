@@ -2,6 +2,7 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import { RangeSetBuilder, StateEffect, StateField, type EditorState } from '@codemirror/state'
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 import type { ParsedEntry } from '@/lib/beancount/ast'
+import { accountMatchesPrefix } from '@/lib/beancount/scope'
 
 export type DeltaSpec = {
   line: number
@@ -51,7 +52,11 @@ function postingDelta(
 ): number {
   let sum = 0
   for (const p of txn.postings) {
-    if (p.account === account && p.currency === currency && p.amount != null) {
+    if (
+      accountMatchesPrefix(p.account, account) &&
+      p.currency === currency &&
+      p.amount != null
+    ) {
       const v = Number(p.amount)
       if (!Number.isNaN(v)) sum += v
     }
@@ -80,7 +85,13 @@ function txnDeltas(
   const out: DeltaSpec[] = []
   for (let i = 0; i < txn.postings.length; i++) {
     const p = txn.postings[i]!
-    if (p.account !== account || p.currency !== currency || p.amount == null) continue
+    if (
+      !accountMatchesPrefix(p.account, account) ||
+      p.currency !== currency ||
+      p.amount == null
+    ) {
+      continue
+    }
     const v = Number(p.amount)
     if (Number.isNaN(v) || v === 0) continue
     out.push({
