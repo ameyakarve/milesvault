@@ -55,36 +55,6 @@ body {
   border-bottom-right-radius: 2px;
   padding-bottom: 6px;
 }
-.cm-date-header-wrap {
-  padding: 14px 0 6px 0;
-}
-.cm-date-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 0 4px;
-  font-family: 'Inter', sans-serif;
-}
-.cm-date-header .cm-date-header-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #475569;
-}
-.cm-date-header .cm-date-header-date {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 500;
-  color: #0f172a;
-  margin-right: 4px;
-}
-.cm-date-header .cm-date-header-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: #475569;
-}
 .cm-balance-footer-wrap {
   padding-bottom: 12px;
 }
