@@ -242,15 +242,8 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     sql: 'CREATE INDEX IF NOT EXISTS idx_directives_event_date_id ON directives_event(date DESC, id DESC)',
   },
   {
-    label: 'account_recents',
-    sql: `CREATE TABLE IF NOT EXISTS account_recents (
-      account        TEXT    PRIMARY KEY,
-      last_viewed_at INTEGER NOT NULL
-    )`,
-  },
-  {
-    label: 'idx_account_recents_last_viewed',
-    sql: 'CREATE INDEX IF NOT EXISTS idx_account_recents_last_viewed ON account_recents(last_viewed_at DESC)',
+    label: 'drop_account_recents',
+    sql: 'DROP TABLE IF EXISTS account_recents',
   },
   ...RAW_TEXT_TABLES.map((table) => ({
     label: `drop_raw_text_${table}`,

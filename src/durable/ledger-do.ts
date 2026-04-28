@@ -42,7 +42,6 @@ const DATA_TABLES = [
   'directives_note',
   'directives_document',
   'directives_event',
-  'account_recents',
 ] as const
 
 export type JournalGetResponse = { text: string }
@@ -96,38 +95,6 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         throw e
       }
     }
-  }
-
-  async recent_accounts_list(limit: number): Promise<string[]> {
-    const recents = this.sql
-      .exec<{ account: string }>(
-        `SELECT account FROM account_recents
-         ORDER BY last_viewed_at DESC
-         LIMIT ?`,
-        limit,
-      )
-      .toArray()
-      .map((r) => r.account)
-    if (recents.length > 0) return recents
-    return this.sql
-      .exec<{ account: string }>(
-        `SELECT account FROM postings
-         WHERE account != ''
-         GROUP BY account
-         ORDER BY COUNT(*) DESC
-         LIMIT 3`,
-      )
-      .toArray()
-      .map((r) => r.account)
-  }
-
-  async recent_account_touch(account: string): Promise<void> {
-    this.sql.exec(
-      `INSERT INTO account_recents (account, last_viewed_at) VALUES (?, ?)
-       ON CONFLICT(account) DO UPDATE SET last_viewed_at = excluded.last_viewed_at`,
-      account,
-      Date.now(),
-    )
   }
 
   async journal_get(): Promise<JournalGetResponse> {

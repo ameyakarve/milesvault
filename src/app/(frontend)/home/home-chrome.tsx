@@ -17,7 +17,7 @@ export function HomeChrome() {
         <main className="flex-1 flex items-center justify-center p-6">
           <div className="text-center">
             <div className="text-[14px] text-slate-500">
-              Pick an account from Recent Accounts to view its ledger.
+              Pick an account type from the sidebar to view its ledger.
             </div>
           </div>
         </main>

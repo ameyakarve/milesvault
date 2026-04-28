@@ -205,12 +205,6 @@ function makeFetchMock(text: string, account: AccountKey) {
       }
       return body({ children: Array.from(seen).sort() })
     }
-    if (url.includes('/recent') && init?.method === 'POST') {
-      return body({ ok: true })
-    }
-    if (url.includes('/recent')) {
-      return body({ accounts: [account] })
-    }
     if (init?.method === 'PUT') {
       return body({ text, inserted: 0, deleted: 0, unchanged: 0 })
     }
