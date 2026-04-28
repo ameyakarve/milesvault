@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import React, { useEffect, useRef, useState } from 'react'
 import { PerAccountView } from './per-account-view'
+import { NotebookShell } from './notebook-shell'
+import { StatementView, type StatementRowData } from './statement-view'
 import { parseJournal, serializeJournal } from '@/lib/beancount/ast'
 import {
   directiveTouchesAccountCurrency,
@@ -266,5 +268,133 @@ export const RealData: StoryObj = {
     <FetchHarness text={REAL_FIXTURE} account={REAL_ACCOUNT}>
       <PerAccountView account={REAL_ACCOUNT} />
     </FetchHarness>
+  ),
+}
+
+const STATEMENT_ACCOUNT = 'Liabilities:CreditCard:HDFC:DinersBlack'
+
+const STATEMENT_ROWS: StatementRowData[] = [
+  {
+    id: 'r1',
+    date: '2023-11-20',
+    payee: 'Amazon India',
+    narration: 'Cloud Subscription',
+    debit: '1,249.00',
+    credit: null,
+    balance: '1,31,000.00',
+    text: `2023-11-20 * "Amazon India" "Cloud Subscription"\n  ${STATEMENT_ACCOUNT}                       -1,249.00 INR\n  Expenses:Software                                       1,249.00 INR\n`,
+    otherPostings: [{ account: 'Expenses:Software', amountSigned: '+1,249.00 INR' }],
+    postedDate: '2023-11-20',
+  },
+  {
+    id: 'r2',
+    date: '2023-11-21',
+    payee: 'Starbucks Coffee',
+    narration: 'Morning Brew',
+    debit: '450.00',
+    credit: null,
+    balance: '1,30,550.00',
+    text: `2023-11-21 * "Starbucks Coffee" "Morning Brew"\n  ${STATEMENT_ACCOUNT}                         -450.00 INR\n  Expenses:Food:Coffee                                      450.00 INR\n`,
+    otherPostings: [{ account: 'Expenses:Food:Coffee', amountSigned: '+450.00 INR' }],
+    postedDate: '2023-11-21',
+  },
+  {
+    id: 'r3',
+    date: '2023-11-22',
+    payee: 'HDFC Bank',
+    narration: 'Interest Credit',
+    debit: null,
+    credit: '3,450.00',
+    balance: '1,34,000.00',
+    text: `2023-11-22 * "HDFC Bank" "Interest Credit"\n  ${STATEMENT_ACCOUNT}                        3500.00 INR\n  Income:Interest                                       -3,500.00 INR\n`,
+    draftText: `2023-11-22 * "HDFC Bank" "Interest Credit"\n  ${STATEMENT_ACCOUNT}                        3,450.00 INR\n  Income:Interest                                       -3,450.00 INR\n`,
+    otherPostings: [{ account: 'Income:Interest', amountSigned: '−3,450.00 INR' }],
+    postedDate: '2023-11-22',
+    txnHash: 'ab9c1234',
+    reconciled: true,
+  },
+  {
+    id: 'r4',
+    date: '2023-11-23',
+    payee: 'Apple Store',
+    narration: 'App Store Purchase',
+    debit: '199.00',
+    credit: null,
+    balance: '1,33,801.00',
+    text: `2023-11-23 * "Apple Store" "App Store Purchase"\n  ${STATEMENT_ACCOUNT}                         -199.00 INR\n  Expenses:Software                                         199.00 INR\n`,
+    otherPostings: [{ account: 'Expenses:Software', amountSigned: '+199.00 INR' }],
+    postedDate: '2023-11-23',
+  },
+  {
+    id: 'r5',
+    date: '2023-11-24',
+    payee: 'Zomato Limited',
+    narration: 'Dinner Order',
+    debit: '890.00',
+    credit: null,
+    balance: '1,32,911.00',
+    text: `2023-11-24 * "Zomato Limited" "Dinner Order"\n  ${STATEMENT_ACCOUNT}                         -890.00 INR\n  Expenses:Food                                             890.00 INR\n`,
+    otherPostings: [{ account: 'Expenses:Food', amountSigned: '+890.00 INR' }],
+    postedDate: '2023-11-24',
+  },
+  {
+    id: 'r6',
+    date: '2023-11-25',
+    narration: 'Salary Credit',
+    debit: null,
+    credit: '2,80,000.00',
+    balance: '4,12,911.00',
+    text: `2023-11-25 * "Salary Credit"\n  ${STATEMENT_ACCOUNT}                      2,80,000.00 INR\n  Income:Salary                                       -2,80,000.00 INR\n`,
+    otherPostings: [{ account: 'Income:Salary', amountSigned: '−2,80,000.00 INR' }],
+    postedDate: '2023-11-25',
+  },
+  {
+    id: 'r7',
+    date: '2023-11-26',
+    narration: 'BESCOM',
+    debit: '3,420.00',
+    credit: null,
+    balance: '4,09,491.00',
+    text: `2023-11-26 * "BESCOM"\n  ${STATEMENT_ACCOUNT}                       -3,420.00 INR\n  Expenses:Utilities                                      3,420.00 INR\n`,
+    otherPostings: [{ account: 'Expenses:Utilities', amountSigned: '+3,420.00 INR' }],
+    postedDate: '2023-11-26',
+  },
+  {
+    id: 'r8',
+    date: '2023-11-28',
+    narration: 'Swiggy',
+    debit: '1,245.00',
+    credit: null,
+    balance: '4,08,246.00',
+    text: `2023-11-28 * "Swiggy"\n  ${STATEMENT_ACCOUNT}                       -1,245.00 INR\n  Expenses:Food                                           1,245.00 INR\n`,
+    otherPostings: [{ account: 'Expenses:Food', amountSigned: '+1,245.00 INR' }],
+    postedDate: '2023-11-28',
+  },
+]
+
+export const Statement: StoryObj = {
+  render: () => (
+    <NotebookShell
+      breadcrumb={['Liabilities', 'CreditCard', 'HDFC', 'DinersBlack']}
+      accountTitle="DinersBlack"
+      accountPath={STATEMENT_ACCOUNT}
+      balance="₹4,08,246.00"
+      netIn="+₹2,83,450.00"
+      netOut="−₹7,453.00"
+      cards={[]}
+      txnCount={8}
+      currency="INR"
+      defaultViewMode="statement"
+      statementBody={
+        <StatementView
+          rows={STATEMENT_ROWS}
+          totalDebit="7,453.00"
+          totalCredit="2,83,450.00"
+          netChange="+2,75,997.00"
+          netPositive={true}
+          initialExpandedId="r3"
+        />
+      }
+    />
   ),
 }
