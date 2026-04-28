@@ -197,6 +197,48 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     return { text: serializeJournal(transactions, directives) }
   }
 
+  async list_account_children(account: string): Promise<string[]> {
+    const prefixLen = account.length + 1
+    const glob = account + ':*'
+    const deepGlob = account + ':*:*'
+    const rows = this.sql
+      .exec<{ child: string }>(
+        `SELECT DISTINCT
+           CASE
+             WHEN INSTR(SUBSTR(account, ?+1), ':') = 0
+               THEN SUBSTR(account, ?+1)
+             ELSE SUBSTR(account, ?+1, INSTR(SUBSTR(account, ?+1), ':') - 1)
+           END AS child
+         FROM (
+           SELECT account FROM postings           WHERE account GLOB ?
+           UNION ALL
+           SELECT account FROM directives_balance WHERE account GLOB ? AND account NOT GLOB ?
+           UNION ALL
+           SELECT account FROM directives_open    WHERE account GLOB ?
+           UNION ALL
+           SELECT account FROM directives_close   WHERE account GLOB ?
+           UNION ALL
+           SELECT account FROM directives_pad     WHERE account GLOB ?
+           UNION ALL
+           SELECT account FROM directives_note    WHERE account GLOB ?
+         )
+         ORDER BY child`,
+        prefixLen,
+        prefixLen,
+        prefixLen,
+        prefixLen,
+        glob,
+        glob,
+        deepGlob,
+        glob,
+        glob,
+        glob,
+        glob,
+      )
+      .toArray()
+    return rows.map((r) => r.child).filter((s) => s.length > 0)
+  }
+
   async list_account_currencies(account: string): Promise<string[]> {
     const counts = new Map<string, number>()
     const glob = account + ':*'

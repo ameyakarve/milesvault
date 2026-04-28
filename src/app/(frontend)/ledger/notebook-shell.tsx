@@ -492,7 +492,9 @@ function LeafChipsRow({
             className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] whitespace-nowrap transition-colors shrink-0"
           >
             <span className="font-mono">{chip.label}</span>
-            <span className="text-slate-400 font-mono">· {chip.balance}</span>
+            {chip.balance && (
+              <span className="text-slate-400 font-mono">· {chip.balance}</span>
+            )}
           </button>
         ))}
       </div>

@@ -184,6 +184,25 @@ function makeFetchMock(text: string, account: AccountKey) {
     if (url.includes('/currencies')) {
       return body({ currencies: ['INR'] })
     }
+    if (url.includes('/children')) {
+      const parsed = parseJournal(text)
+      const prefix = account + ':'
+      const seen = new Set<string>()
+      for (const tx of parsed.transactions) {
+        for (const p of tx.postings ?? []) {
+          if (p.account?.startsWith(prefix)) {
+            seen.add(p.account.slice(prefix.length).split(':')[0]!)
+          }
+        }
+      }
+      for (const d of parsed.directives) {
+        const acct = (d as { account?: string }).account
+        if (acct && acct.startsWith(prefix)) {
+          seen.add(acct.slice(prefix.length).split(':')[0]!)
+        }
+      }
+      return body({ children: Array.from(seen).sort() })
+    }
     if (url.includes('/recent') && init?.method === 'POST') {
       return body({ ok: true })
     }
