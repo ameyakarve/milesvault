@@ -148,9 +148,12 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const txnIds = this.sql
       .exec<{ id: number }>(
         `SELECT id FROM transactions
-         WHERE id IN (SELECT txn_id FROM postings WHERE account = ?)
+         WHERE id IN (
+           SELECT txn_id FROM postings WHERE account = ? OR account GLOB ?
+         )
          ORDER BY date ASC, id ASC`,
         account,
+        account + ':*',
       )
       .toArray()
       .map((r) => r.id)
@@ -172,9 +175,13 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const txnIds = this.sql
       .exec<{ id: number }>(
         `SELECT id FROM transactions
-         WHERE id IN (SELECT txn_id FROM postings WHERE account = ? AND currency = ?)
+         WHERE id IN (
+           SELECT txn_id FROM postings
+           WHERE (account = ? OR account GLOB ?) AND currency = ?
+         )
          ORDER BY date ASC, id ASC`,
         account,
+        account + ':*',
         currency,
       )
       .toArray()
@@ -192,12 +199,15 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
 
   async list_account_currencies(account: string): Promise<string[]> {
     const counts = new Map<string, number>()
+    const glob = account + ':*'
     for (const r of this.sql
       .exec<{ currency: string; n: number }>(
         `SELECT currency, COUNT(*) AS n FROM postings
-         WHERE account = ? AND currency IS NOT NULL AND currency != ''
+         WHERE (account = ? OR account GLOB ?)
+           AND currency IS NOT NULL AND currency != ''
          GROUP BY currency`,
         account,
+        glob,
       )
       .toArray()) {
       counts.set(r.currency, (counts.get(r.currency) ?? 0) + r.n)
@@ -205,8 +215,10 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     for (const r of this.sql
       .exec<{ currency: string; n: number }>(
         `SELECT currency, COUNT(*) AS n FROM directives_balance
-         WHERE account = ? GROUP BY currency`,
+         WHERE account = ? OR account GLOB ?
+         GROUP BY currency`,
         account,
+        glob,
       )
       .toArray()) {
       counts.set(r.currency, (counts.get(r.currency) ?? 0) + r.n)

@@ -147,6 +147,40 @@ async function main() {
   console.log('typed-bad-text counts:', errCounts)
   if (errCounts.parseBanner !== 1) errors.push(`expected 1 parse banner after typing bad char, got ${errCounts.parseBanner}`)
 
+  // Prefix-scope story: opening :HSBC must include sub-accounts AND exclude
+  // the HSBCBank sibling.
+  await load(page, 'ledger-per-account-view-fixture--prefix-scope')
+  await page.waitForSelector('.cm-content', { timeout: 10000 })
+  await page.waitForFunction(
+    () => document.querySelectorAll('.cm-card-top, .cm-card-solo').length > 0,
+    null,
+    { timeout: 8000 },
+  )
+
+  const prefixCounts = await page.evaluate(() => ({
+    bufferText: (document.querySelector('.cm-content')?.textContent || '').trim(),
+    deltaCount: document.querySelectorAll('.cm-delta-inlay').length,
+  }))
+
+  console.log('prefix story buffer (first 400):', prefixCounts.bufferText.slice(0, 400))
+
+  if (!prefixCounts.bufferText.includes('HSBC:Cashback')) {
+    errors.push(`prefix-scope: missing sub-account HSBC:Cashback in buffer`)
+  }
+  if (!prefixCounts.bufferText.includes('HSBC:Rewards')) {
+    errors.push(`prefix-scope: missing sub-account HSBC:Rewards in buffer`)
+  }
+  if (prefixCounts.bufferText.includes('HSBCBank')) {
+    errors.push(`prefix-scope: sibling HSBCBank leaked into :HSBC view`)
+  }
+  if (prefixCounts.bufferText.includes('9999.00')) {
+    errors.push(`prefix-scope: sibling amount 9999.00 leaked into :HSBC view`)
+  }
+  // 3 in-scope txns (HSBC, HSBC:Cashback, HSBC:Rewards) → 3 delta inlays.
+  if (prefixCounts.deltaCount !== 3) {
+    errors.push(`prefix-scope: expected 3 delta inlays, got ${prefixCounts.deltaCount}`)
+  }
+
   await browser.close()
 
   if (errors.length > 0) {
