@@ -33,27 +33,21 @@ body {
 }
 
 .cm-card-top,
-.cm-card-mid,
-.cm-card-bot,
 .cm-card-solo {
-  background: #ffffff;
-  border-left: 1px solid rgba(188, 201, 198, 0.15);
-  border-right: 1px solid rgba(188, 201, 198, 0.15);
-}
-.cm-card-top,
-.cm-card-solo {
-  border-top: 1px solid rgba(188, 201, 198, 0.15);
-  border-top-left-radius: 2px;
-  border-top-right-radius: 2px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   padding-top: 6px;
 }
 .cm-card-bot,
 .cm-card-solo {
-  border-bottom: 1px solid rgba(188, 201, 198, 0.15);
-  border-bottom-left-radius: 2px;
-  border-bottom-right-radius: 2px;
   padding-bottom: 6px;
+}
+.cm-card-bg-layer {
+  pointer-events: none;
+}
+.cm-card-bg {
+  background: #ffffff;
+  border: 1px solid rgba(188, 201, 198, 0.15);
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 .cm-balance-footer-wrap {
   padding-bottom: 12px;

@@ -30,13 +30,13 @@ async function main() {
 
   // Fixture story
   await load(page, 'ledger-per-account-view-fixture--default')
-  await page.waitForSelector('.cm-card-solo')
+  await page.waitForSelector('.cm-card-bg')
   await page.waitForSelector('.cm-balance-footer')
   await page.waitForFunction(
     () => document.querySelectorAll('.cm-balance-footer').length >= 5,
   )
 
-  const fxCardBg = await rgbAt(page, '.cm-card-solo', 'bg')
+  const fxCardBg = await rgbAt(page, '.cm-card-bg', 'bg')
   const fxFooterBg = await rgbAt(page, '.cm-balance-footer', 'bg')
   const fxBalLabel = await rgbAt(page, '.cm-balance-footer .cm-bal-label', 'color')
   const fxBalValue = await rgbAt(page, '.cm-balance-footer .cm-bal-value', 'color')
@@ -105,12 +105,12 @@ async function main() {
   })
   console.log('probes:', probes)
 
-  // Hard assertions
-  if (!/251.*113.*133/.test(probes.deltaOutColor || '')) {
-    errors.push(`delta-out color mismatch: ${probes.deltaOutColor} (expected rose 251,113,133)`)
+  // Delta inlay typography must match the balance value in everything except color.
+  if (probes.deltaOutColor !== 'rgb(225, 29, 72)') {
+    errors.push(`delta-out color=${probes.deltaOutColor} (expected rgb(225, 29, 72) — same as amount-out)`)
   }
-  if (!/20.*184.*166/.test(probes.deltaInColor || '')) {
-    errors.push(`delta-in color mismatch: ${probes.deltaInColor} (expected teal 20,184,166)`)
+  if (probes.deltaInColor !== 'rgb(15, 118, 110)') {
+    errors.push(`delta-in color=${probes.deltaInColor} (expected rgb(15, 118, 110) — same as amount-in)`)
   }
   // Amount marks: rose-600 / teal-700, JetBrains Mono, weight 500, tabular-nums.
   if (probes.amountOutColor !== 'rgb(225, 29, 72)') {

@@ -1,4 +1,12 @@
-import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view'
+import {
+  Decoration,
+  EditorView,
+  RectangleMarker,
+  WidgetType,
+  layer,
+  type DecorationSet,
+  type LayerMarker,
+} from '@codemirror/view'
 import { RangeSetBuilder, StateEffect, StateField, type EditorState } from '@codemirror/state'
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 import type { ParsedEntry } from '@/lib/beancount/ast'
@@ -271,7 +279,6 @@ class DeltaWidget extends WidgetType {
     const inner = document.createElement('span')
     inner.className = this.d.flow === 'out' ? 'cm-delta-out' : 'cm-delta-in'
     inner.textContent = `${this.d.sign}${this.d.value}`
-    el.appendChild(document.createTextNode('→ '))
     el.appendChild(inner)
     return el
   }
@@ -398,7 +405,20 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
   return builder.finish()
 }
 
-const cardField = StateField.define<DecorationSet>({
+const cardSpecsField = StateField.define<CardSpec[]>({
+  create() {
+    return []
+  },
+  update(specs, tr) {
+    let next = specs
+    for (const e of tr.effects) {
+      if (e.is(setCardSpecs)) next = e.value
+    }
+    return next
+  },
+})
+
+const cardDecorationsField = StateField.define<DecorationSet>({
   create() {
     return Decoration.none
   },
@@ -414,6 +434,59 @@ const cardField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 })
 
+const cardBgLayer = layer({
+  above: false,
+  class: 'cm-card-bg-layer',
+  update(update) {
+    if (update.docChanged || update.viewportChanged || update.geometryChanged) {
+      return true
+    }
+    for (const tr of update.transactions) {
+      for (const e of tr.effects) {
+        if (e.is(setCardSpecs)) return true
+      }
+    }
+    return false
+  },
+  markers(view) {
+    const specs = view.state.field(cardSpecsField, false) ?? []
+    const markers: LayerMarker[] = []
+    const doc = view.state.doc
+    const lineCount = doc.lines
+    // The layer DOM is positioned inside cm-scroller, so marker coordinates are
+    // relative to the scroller's top-left, NOT cm-content. cm-content sits to
+    // the right of the gutter, so we must offset by (contentLeft - scrollerLeft)
+    // to align with the content area where lines and inlay widgets are drawn.
+    // Vertically: line-block.bottom would include trailing block widgets (the
+    // balance footer + its 12px padding-bottom wrap), painting white over the
+    // gap. Use the cm-line DOM rect to end at just the last line's text bottom.
+    const scrollerRect = view.scrollDOM.getBoundingClientRect()
+    const contentRect = view.contentDOM.getBoundingClientRect()
+    const xOffset = contentRect.left - scrollerRect.left
+    const width = contentRect.width
+    function lineEl(pos: number): HTMLElement | null {
+      let n: Node | null = view.domAtPos(pos).node
+      while (n && !(n instanceof HTMLElement && n.classList.contains('cm-line'))) {
+        n = n.parentNode
+      }
+      return n as HTMLElement | null
+    }
+    for (const spec of specs) {
+      const { startLine, endLine } = spec
+      if (startLine < 1 || endLine > lineCount || startLine > endLine) continue
+      const startNode = lineEl(doc.line(startLine).from)
+      const endNode = lineEl(doc.line(endLine).from)
+      if (!startNode || !endNode) continue
+      const top = startNode.getBoundingClientRect().top - scrollerRect.top
+      const bottom = endNode.getBoundingClientRect().bottom - scrollerRect.top
+      markers.push(
+        new RectangleMarker('cm-card-bg', xOffset, top, width, bottom - top),
+      )
+    }
+    return markers
+  },
+})
+
 export function cardDecorations() {
-  return [cardField]
+  return [cardSpecsField, cardDecorationsField, cardBgLayer]
 }
