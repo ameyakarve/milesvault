@@ -198,16 +198,16 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async list_account_children(account: string): Promise<string[]> {
-    const prefixLen = account.length + 1
+    const start = account.length + 2
     const glob = account + ':*'
     const deepGlob = account + ':*:*'
     const rows = this.sql
       .exec<{ child: string }>(
         `SELECT DISTINCT
            CASE
-             WHEN INSTR(SUBSTR(account, ?+1), ':') = 0
-               THEN SUBSTR(account, ?+1)
-             ELSE SUBSTR(account, ?+1, INSTR(SUBSTR(account, ?+1), ':') - 1)
+             WHEN INSTR(SUBSTR(account, ?), ':') = 0
+               THEN SUBSTR(account, ?)
+             ELSE SUBSTR(account, ?, INSTR(SUBSTR(account, ?), ':') - 1)
            END AS child
          FROM (
            SELECT account FROM postings           WHERE account GLOB ?
@@ -223,10 +223,10 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
            SELECT account FROM directives_note    WHERE account GLOB ?
          )
          ORDER BY child`,
-        prefixLen,
-        prefixLen,
-        prefixLen,
-        prefixLen,
+        start,
+        start,
+        start,
+        start,
         glob,
         glob,
         deepGlob,
