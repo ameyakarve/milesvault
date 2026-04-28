@@ -46,10 +46,7 @@ export type Card = {
   balance: string | null
 }
 
-export type LeafChip = {
-  label: string
-  balance: string
-}
+export type LeafChip = string
 
 const beancountLang = LRLanguage.define({
   parser: beancountParser.configure({
@@ -466,35 +463,23 @@ function StatTile({
   )
 }
 
-function LeafChipsRow({
-  leafChips,
-  totalBalance,
-  totalLabel = 'All',
-}: {
-  leafChips: LeafChip[]
-  totalBalance: string
-  totalLabel?: string
-}) {
+function LeafChipsRow({ leafChips }: { leafChips: LeafChip[] }) {
   return (
     <div className="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between shrink-0">
       <div className="flex items-center gap-2 overflow-x-auto flex-1 mr-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button
           type="button"
-          className="flex items-center gap-2 px-3 py-1 bg-[#00685f] text-white rounded-full text-[11px] font-bold whitespace-nowrap shrink-0"
+          className="px-3 py-1 bg-[#00685f] text-white rounded-full text-[11px] font-bold whitespace-nowrap shrink-0"
         >
-          <span>{totalLabel}</span>
-          <span className="opacity-80 font-mono">{totalBalance}</span>
+          All
         </button>
-        {leafChips.map((chip) => (
+        {leafChips.map((label) => (
           <button
-            key={chip.label}
+            key={label}
             type="button"
-            className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] whitespace-nowrap transition-colors shrink-0"
+            className="px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] font-mono whitespace-nowrap transition-colors shrink-0"
           >
-            <span className="font-mono">{chip.label}</span>
-            {chip.balance && (
-              <span className="text-slate-400 font-mono">· {chip.balance}</span>
-            )}
+            {label}
           </button>
         ))}
       </div>
@@ -595,8 +580,6 @@ export type NotebookShellProps = {
   cursor?: string
   currency?: string | null
   leafChips?: LeafChip[]
-  totalBalance?: string
-  totalLabel?: string
   period?: string
 }
 
@@ -615,8 +598,6 @@ export function NotebookShell({
   cursor = 'Ln 1, Col 1',
   currency,
   leafChips = [],
-  totalBalance,
-  totalLabel,
   period = 'All time',
 }: NotebookShellProps) {
   const [viewMode, setViewMode] = useState<'editor' | 'statement'>('editor')
@@ -633,11 +614,7 @@ export function NotebookShell({
               netOut={netOut}
               period={period}
             />
-            <LeafChipsRow
-              leafChips={leafChips}
-              totalBalance={totalBalance ?? balance}
-              totalLabel={totalLabel}
-            />
+            <LeafChipsRow leafChips={leafChips} />
             <SubToolbar
               viewMode={viewMode}
               onViewModeChange={setViewMode}

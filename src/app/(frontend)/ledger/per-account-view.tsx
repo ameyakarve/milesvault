@@ -325,11 +325,6 @@ export function PerAccountView({ account }: { account: string }) {
     }
   }, [cardSpecs, currency])
 
-  const leafChips = useMemo(
-    () => children.map((label) => ({ label, balance: '' })),
-    [children],
-  )
-
   const onRevert = useCallback(() => {
     setText(savedSlice)
     setError(null)
@@ -450,7 +445,7 @@ export function PerAccountView({ account }: { account: string }) {
       onRevert={onRevert}
       body={body}
       currency={currency}
-      leafChips={leafChips}
+      leafChips={children}
     />
   )
 }
