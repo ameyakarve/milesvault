@@ -463,7 +463,14 @@ function StatTile({
   )
 }
 
-function LeafChipsRow({ leafChips }: { leafChips: LeafChip[] }) {
+function LeafChipsRow({
+  leafChips,
+  breadcrumb,
+}: {
+  leafChips: LeafChip[]
+  breadcrumb: string[]
+}) {
+  const baseHref = `/ledger/${breadcrumb.map(encodeURIComponent).join('/')}`
   return (
     <div className="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between shrink-0">
       <div className="flex items-center gap-2 overflow-x-auto flex-1 mr-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -474,13 +481,13 @@ function LeafChipsRow({ leafChips }: { leafChips: LeafChip[] }) {
           All
         </button>
         {leafChips.map((label) => (
-          <button
+          <Link
             key={label}
-            type="button"
+            href={`${baseHref}/${encodeURIComponent(label)}`}
             className="px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] font-mono whitespace-nowrap transition-colors shrink-0"
           >
             {label}
-          </button>
+          </Link>
         ))}
       </div>
       <button
@@ -614,7 +621,7 @@ export function NotebookShell({
               netOut={netOut}
               period={period}
             />
-            <LeafChipsRow leafChips={leafChips} />
+            <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />
             <SubToolbar
               viewMode={viewMode}
               onViewModeChange={setViewMode}
