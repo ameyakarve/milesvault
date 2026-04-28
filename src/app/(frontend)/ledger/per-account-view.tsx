@@ -62,6 +62,8 @@ const THEME = EditorView.theme({
   '.cm-scroller': { fontFamily: "'JetBrains Mono', monospace" },
   '.cm-content': { padding: '0', caretColor: '#00685f' },
   '.cm-line': { padding: '0 12px', lineHeight: '28px', position: 'relative' },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
+    { backgroundColor: 'rgba(0, 104, 95, 0.2)' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
   '.cm-activeLineGutter': {
     backgroundColor: 'transparent',
