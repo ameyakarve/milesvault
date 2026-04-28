@@ -66,9 +66,8 @@ const THEME = EditorView.theme({
     { backgroundColor: 'rgba(0, 104, 95, 0.2)' },
   '.cm-activeLine': { backgroundColor: 'transparent' },
   '.cm-activeLineGutter': {
-    backgroundColor: 'transparent',
-    color: '#00685f',
-    boxShadow: 'inset -2px 0 0 0 #00685f',
+    backgroundColor: 'rgba(0, 104, 95, 0.06)',
+    color: '#475569',
   },
   '.cm-focused': { outline: 'none' },
   '.cm-delta-inlay': {
