@@ -177,10 +177,6 @@ export function PerAccountView({
   >(null)
 
   useEffect(() => {
-    void ledgerClient.recentAccountTouch(account).catch(() => {})
-  }, [account])
-
-  useEffect(() => {
     const controller = new AbortController()
     void (async () => {
       try {
@@ -278,7 +274,6 @@ export function PerAccountView({
       setSavedSlice(updated)
       setText(updated)
       setStats({ inserted: data.inserted, deleted: data.deleted, unchanged: data.unchanged })
-      void ledgerClient.recentAccountTouch(account).catch(() => {})
       const cur = await ledgerClient.getAccountCurrencies(account)
       setCurrencies(cur.currencies)
     } catch (e: unknown) {

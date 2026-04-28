@@ -13,17 +13,6 @@ async function getJSON<T>(url: string, opts?: FetchOpts): Promise<T> {
   return (await res.json()) as T
 }
 
-async function postJSON<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(`POST ${url} → HTTP ${res.status}`)
-  return (await res.json()) as T
-}
-
 async function putJSON<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'PUT',
@@ -82,13 +71,6 @@ export const ledgerClient = {
       `/api/ledger/accounts/${encodeURIComponent(account)}/entries${q}`,
       opts,
     )
-  },
-  recentAccountsList(limit?: number, opts?: FetchOpts): Promise<{ accounts: string[] }> {
-    const q = limit != null ? `?limit=${limit}` : ''
-    return getJSON(`/api/ledger/accounts/recent${q}`, opts)
-  },
-  recentAccountTouch(account: string): Promise<{ ok: true }> {
-    return postJSON('/api/ledger/accounts/recent', { account })
   },
 }
 
