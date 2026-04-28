@@ -96,10 +96,10 @@ const ROW_THEME = EditorView.theme({
     padding: '8px 0',
   },
   '.cm-lineNumbers .cm-gutterElement': {
-    display: 'flex',
-    justifyContent: 'flex-end',
     minWidth: '20px',
-    paddingRight: '8px',
+    padding: '0 8px 0 0',
+    textAlign: 'right',
+    lineHeight: '22px',
   },
 })
 

@@ -361,7 +361,7 @@ export function PerAccountView({
         postedDate: tx.date,
       })
     }
-    return out.reverse()
+    return out
   }, [parsed, cardSpecs, account, currency, text])
 
   const statementTotals = useMemo(() => {
