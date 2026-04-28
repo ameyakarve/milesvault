@@ -317,7 +317,7 @@ export function PerAccountView({ account }: { account: string }) {
             <select
               value={currency ?? ''}
               onChange={(e) => onCurrencyChange(e.target.value)}
-              className="text-xs font-mono bg-white border border-slate-200 rounded px-2 py-1 focus:outline-none focus:border-[#00685f]"
+              className="text-xs font-mono bg-white border border-slate-200 rounded pl-2 pr-7 py-1 focus:outline-none focus:border-[#00685f]"
               disabled={saving}
             >
               {currencies.map((c) => (
