@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Fragment, useMemo, type ReactNode } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import {
   Decoration,
@@ -44,6 +44,11 @@ export type Card = {
   id: string
   lines: SourceLine[]
   balance: string | null
+}
+
+export type LeafChip = {
+  label: string
+  balance: string
 }
 
 const beancountLang = LRLanguage.define({
@@ -266,7 +271,7 @@ function AiPane() {
     <aside className="w-[320px] shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
         <div className="px-4 py-4 flex items-center gap-2">
-          <span className="material-symbols-outlined text-[#0D9488] !text-[16px]">auto_awesome</span>
+          <span className="material-symbols-outlined text-[#00685f] !text-[16px]">auto_awesome</span>
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-900">
             AI Manuscript Assistant
           </h2>
@@ -304,7 +309,7 @@ function AiPane() {
               </button>
               <button
                 type="button"
-                className="p-1.5 text-[#0D9488] hover:text-[#008378]"
+                className="p-1.5 text-[#00685f] hover:text-[#008378]"
                 aria-label="Send"
               >
                 <span
@@ -327,7 +332,7 @@ function StatusBar({ txnCount, cursor }: { txnCount: number; cursor: string }) {
     <footer className="h-[28px] bg-[#f2f4f6] border-t border-slate-200 flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-[#515f74] shrink-0">
       <div className="flex items-center gap-6">
         <span>{cursor}</span>
-        <span className="text-[#0D9488] font-bold flex items-center gap-1">
+        <span className="text-[#00685f] font-bold flex items-center gap-1">
           <span className="material-symbols-outlined !text-[12px]">check_circle</span>
           <span>Parsed</span>
         </span>
@@ -335,7 +340,7 @@ function StatusBar({ txnCount, cursor }: { txnCount: number; cursor: string }) {
       </div>
       <div className="flex items-center gap-4">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-[#0D9488]" />
+          <span className="w-2 h-2 rounded-full bg-[#00685f]" />
           <span>Ready</span>
         </span>
         <span>Beancount v2.3.5</span>
@@ -345,97 +350,304 @@ function StatusBar({ txnCount, cursor }: { txnCount: number; cursor: string }) {
   )
 }
 
+function BreadcrumbRow({
+  breadcrumb,
+  currency,
+}: {
+  breadcrumb: string[]
+  currency: string | null | undefined
+}) {
+  return (
+    <div className="h-[32px] bg-white px-6 flex items-center justify-between border-b border-slate-50 shrink-0">
+      <div className="flex items-center gap-1.5 font-mono text-[11px]">
+        {breadcrumb.map((seg, i) => {
+          const isLast = i === breadcrumb.length - 1
+          const href = `/ledger/${breadcrumb
+            .slice(0, i + 1)
+            .map(encodeURIComponent)
+            .join('/')}`
+          return (
+            <Fragment key={`${seg}-${i}`}>
+              {i > 0 && (
+                <span className="material-symbols-outlined !text-[12px] text-slate-300">
+                  chevron_right
+                </span>
+              )}
+              {isLast ? (
+                <span className="text-slate-800 font-bold">{seg}</span>
+              ) : (
+                <Link
+                  href={href}
+                  className="text-slate-500 hover:text-[#00685f] transition-colors"
+                >
+                  {seg}
+                </Link>
+              )}
+            </Fragment>
+          )
+        })}
+      </div>
+      {currency && (
+        <button
+          type="button"
+          className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center"
+        >
+          {currency}
+          <span className="material-symbols-outlined !text-[14px] ml-0.5">arrow_drop_down</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+function StatsRow({
+  balance,
+  netIn,
+  netOut,
+  period,
+}: {
+  balance: string
+  netIn?: string
+  netOut?: string
+  period: string
+}) {
+  return (
+    <div className="h-[64px] bg-white px-6 flex items-center shrink-0">
+      <div className="flex items-center gap-12 flex-1">
+        <StatTile label="Balance" value={balance} colorClass="text-slate-900" />
+        {netIn && (
+          <StatTile
+            label="Net In"
+            value={netIn}
+            colorClass="text-[#00685f]"
+            divider
+          />
+        )}
+        {netOut && (
+          <StatTile
+            label="Net Out"
+            value={netOut}
+            colorClass="text-rose-600"
+            divider
+          />
+        )}
+      </div>
+      <button
+        type="button"
+        className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center border border-slate-200 px-2 py-1 rounded"
+      >
+        {period}
+        <span className="material-symbols-outlined !text-[14px] ml-1">arrow_drop_down</span>
+      </button>
+    </div>
+  )
+}
+
+function StatTile({
+  label,
+  value,
+  colorClass,
+  divider = false,
+}: {
+  label: string
+  value: string
+  colorClass: string
+  divider?: boolean
+}) {
+  return (
+    <div className={`flex flex-col${divider ? ' border-l border-slate-100 pl-8' : ''}`}>
+      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
+        {label}
+      </span>
+      <span className={`font-mono text-2xl font-bold tracking-tight ${colorClass}`}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
+function LeafChipsRow({
+  leafChips,
+  totalBalance,
+  totalLabel = 'All',
+}: {
+  leafChips: LeafChip[]
+  totalBalance: string
+  totalLabel?: string
+}) {
+  return (
+    <div className="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between shrink-0">
+      <div className="flex items-center gap-2 overflow-x-auto flex-1 mr-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          type="button"
+          className="flex items-center gap-2 px-3 py-1 bg-[#00685f] text-white rounded-full text-[11px] font-bold whitespace-nowrap shrink-0"
+        >
+          <span>{totalLabel}</span>
+          <span className="opacity-80 font-mono">{totalBalance}</span>
+        </button>
+        {leafChips.map((chip) => (
+          <button
+            key={chip.label}
+            type="button"
+            className="flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] whitespace-nowrap transition-colors shrink-0"
+          >
+            <span className="font-mono">{chip.label}</span>
+            <span className="text-slate-400 font-mono">· {chip.balance}</span>
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="flex items-center gap-1 text-[11px] font-bold text-[#00685f] hover:underline whitespace-nowrap shrink-0"
+      >
+        <span>Explore tree</span>
+        <span className="material-symbols-outlined !text-[14px]">arrow_forward</span>
+      </button>
+    </div>
+  )
+}
+
+function SubToolbar({
+  viewMode,
+  onViewModeChange,
+  unsaved,
+  saving,
+  onSave,
+  onRevert,
+}: {
+  viewMode: 'editor' | 'statement'
+  onViewModeChange: (mode: 'editor' | 'statement') => void
+  unsaved: boolean
+  saving: boolean
+  onSave?: () => void
+  onRevert?: () => void
+}) {
+  const tabBase = 'h-full px-2 transition-colors'
+  const tabActive = 'text-slate-900 border-b-2 border-teal-600 font-bold'
+  const tabIdle = 'text-slate-500 hover:text-slate-700'
+  return (
+    <div className="h-[40px] bg-[#eceef0] px-6 flex items-center justify-between border-b border-slate-200 shrink-0">
+      <div className="flex items-center h-full text-[11px] font-medium gap-4">
+        <button
+          type="button"
+          onClick={() => onViewModeChange('statement')}
+          className={`${tabBase} ${viewMode === 'statement' ? tabActive : tabIdle}`}
+        >
+          Statement
+        </button>
+        <button
+          type="button"
+          onClick={() => onViewModeChange('editor')}
+          className={`${tabBase} ${viewMode === 'editor' ? tabActive : tabIdle}`}
+        >
+          Editor
+        </button>
+      </div>
+      {viewMode === 'editor' && (
+        <div className="flex items-center">
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${unsaved ? 'bg-amber-500' : 'bg-transparent'}`}
+            />
+            <span className="text-[11px] font-medium text-slate-500">
+              {unsaved ? 'Unsaved changes' : 'Saved'}
+            </span>
+          </div>
+          <div className="h-4 w-[1px] bg-slate-300 mx-3" />
+          <button
+            type="button"
+            onClick={onRevert}
+            disabled={!unsaved || saving}
+            className="text-[11px] font-medium text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 rounded-sm px-2 py-1 mr-3 transition-colors disabled:opacity-50"
+          >
+            Revert
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!unsaved || saving}
+            className="bg-teal-600 hover:bg-teal-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] px-3 py-1.5 rounded-sm text-[11px] font-medium flex items-center transition-all duration-200 disabled:opacity-50"
+          >
+            <span>{saving ? 'Saving…' : 'Save ⌘S'}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export type NotebookShellProps = {
   breadcrumb: string[]
   accountTitle: string
   accountPath: string
   balance: string
+  netIn?: string
+  netOut?: string
   cards: Card[]
   txnCount: number
   unsaved?: boolean
   saving?: boolean
   onSave?: () => void
+  onRevert?: () => void
   body?: ReactNode
   cursor?: string
+  currency?: string | null
+  leafChips?: LeafChip[]
+  totalBalance?: string
+  totalLabel?: string
+  period?: string
 }
 
 export function NotebookShell({
   breadcrumb,
-  accountTitle,
-  accountPath,
   balance,
+  netIn,
+  netOut,
   cards,
   txnCount,
   unsaved = false,
   saving = false,
   onSave,
+  onRevert,
   body,
   cursor = 'Ln 1, Col 1',
+  currency,
+  leafChips = [],
+  totalBalance,
+  totalLabel,
+  period = 'All time',
 }: NotebookShellProps) {
+  const [viewMode, setViewMode] = useState<'editor' | 'statement'>('editor')
   return (
     <div className="w-full h-screen flex bg-[#f7f9fb] font-sans text-[#191c1e] overflow-hidden">
       <NavRail />
-
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-12 bg-white border-b border-slate-100 px-6 flex items-center justify-between shrink-0">
-          <div className="text-sm flex items-center gap-2 tracking-tight">
-            <Link
-              href="/"
-              className="text-[#515f74] hover:text-[#00685f] transition-colors"
-            >
-              Ledger
-            </Link>
-            {breadcrumb.slice(0, -1).map((seg, i) => (
-              <Fragment key={`${seg}-${i}`}>
-                <span className="text-[#bcc9c6]">/</span>
-                <Link
-                  href={`/ledger/${breadcrumb.slice(0, i + 1).map(encodeURIComponent).join('/')}`}
-                  className="text-[#515f74] hover:text-[#00685f] transition-colors"
-                >
-                  {seg}
-                </Link>
-              </Fragment>
-            ))}
-            {breadcrumb.length > 0 && (
-              <>
-                <span className="text-[#bcc9c6]">/</span>
-                <span className="text-[#191c1e] font-medium">
-                  {breadcrumb[breadcrumb.length - 1]}
-                </span>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            {unsaved && <span className="text-xs text-slate-500">Unsaved Changes</span>}
-            <button
-              type="button"
-              className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium px-3 py-1.5 rounded-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] flex items-center gap-2 transition-all duration-200 disabled:opacity-50"
-              disabled={!unsaved || saving}
-              onClick={onSave}
-            >
-              <span>{saving ? 'Saving…' : 'Save ⌘S'}</span>
-            </button>
-          </div>
-        </header>
-
+        <BreadcrumbRow breadcrumb={breadcrumb} currency={currency} />
         <div className="flex-1 flex min-h-0">
           <main className="flex-1 flex flex-col min-w-0">
-            <section className="h-16 bg-[#f2f4f6] px-8 border-b border-slate-100 flex items-center justify-between shrink-0">
-              <div className="flex flex-col">
-                <h1 className="text-lg font-bold text-[#191c1e] leading-tight">{accountTitle}</h1>
-                <span className="font-mono text-[10px] text-[#515f74] tracking-tight">{accountPath}</span>
-              </div>
-              <div className="text-right">
-                <div className="font-mono font-bold text-2xl text-[#191c1e]">{balance}</div>
-              </div>
-            </section>
-
+            <StatsRow
+              balance={balance}
+              netIn={netIn}
+              netOut={netOut}
+              period={period}
+            />
+            <LeafChipsRow
+              leafChips={leafChips}
+              totalBalance={totalBalance ?? balance}
+              totalLabel={totalLabel}
+            />
+            <SubToolbar
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              unsaved={unsaved}
+              saving={saving}
+              onSave={onSave}
+              onRevert={onRevert}
+            />
             <EditorPane cards={cards} body={body} />
           </main>
-
           <AiPane />
         </div>
-
         <StatusBar txnCount={txnCount} cursor={cursor} />
       </div>
     </div>

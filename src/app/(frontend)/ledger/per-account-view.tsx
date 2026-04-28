@@ -28,6 +28,24 @@ import {
   type CardSpec,
 } from './card-decorations'
 
+const CURRENCY_META: Record<string, { symbol: string; locale: string }> = {
+  INR: { symbol: '₹', locale: 'en-IN' },
+  USD: { symbol: '$', locale: 'en-US' },
+  EUR: { symbol: '€', locale: 'de-DE' },
+  GBP: { symbol: '£', locale: 'en-GB' },
+}
+
+function formatSignedStat(n: number, currency: string, sign: '+' | '−'): string {
+  const meta = CURRENCY_META[currency]
+  const abs = Math.abs(n)
+  const grouped = new Intl.NumberFormat(meta?.locale ?? 'en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(abs)
+  if (meta) return `${sign}${meta.symbol}${grouped}`
+  return `${sign}${grouped} ${currency}`
+}
+
 const beancountLang = LRLanguage.define({
   parser: beancountParser.configure({
     props: [
@@ -273,6 +291,29 @@ export function PerAccountView({ account }: { account: string }) {
     return ''
   }, [cardSpecs, currency])
 
+  const { netIn, netOut } = useMemo(() => {
+    if (!currency) return { netIn: undefined, netOut: undefined }
+    let inSum = 0
+    let outSum = 0
+    for (const spec of cardSpecs) {
+      for (const d of spec.deltas) {
+        const v = Number(d.value.replace(/,/g, ''))
+        if (!Number.isFinite(v)) continue
+        if (d.flow === 'in') inSum += v
+        else outSum += v
+      }
+    }
+    return {
+      netIn: formatSignedStat(inSum, currency, '+'),
+      netOut: formatSignedStat(outSum, currency, '−'),
+    }
+  }, [cardSpecs, currency])
+
+  const onRevert = useCallback(() => {
+    setText(savedSlice)
+    setError(null)
+  }, [savedSlice])
+
   const txnCount = isStrictParseErr(parsed) ? 0 : parsed.transactions.length
   const showCurrencyChrome = currencies.length > 1 || (!!stats && !error)
 
@@ -378,12 +419,16 @@ export function PerAccountView({ account }: { account: string }) {
       accountTitle={accountTitle}
       accountPath={account}
       balance={headerBalance}
+      netIn={netIn}
+      netOut={netOut}
       cards={[]}
       txnCount={txnCount}
       unsaved={unsaved}
       saving={saving}
       onSave={save}
+      onRevert={onRevert}
       body={body}
+      currency={currency}
     />
   )
 }
