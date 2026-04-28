@@ -25,22 +25,16 @@ const probes = await page.evaluate(() => {
   const rect = (el) => (el ? el.getBoundingClientRect() : null)
   const all = (sel) => Array.from(document.querySelectorAll(sel))
 
-  const main = document.querySelector('main')
-  const editorChrome = main?.children
-  const row1 = document.querySelector('header,div')
-  const row1El = document.querySelector('.flex-1.flex.flex-col.min-w-0 > div:first-child') ||
-    document.querySelector('main')?.parentElement?.parentElement?.children[0]?.children[0]
-  // Row 1 by attribute: first child of the flex column shell after NavRail
   const shell = document.querySelector('.flex-1.flex.flex-col.min-w-0')
-  const row1Node = shell?.children[0]
-  const splitNode = shell?.children[1]
+  const splitNode = shell?.children[0]
   const editorCol = splitNode?.querySelector('main')
   const aside = splitNode?.querySelector('aside')
 
-  const row2Node = editorCol?.children[0]
-  const row3Node = editorCol?.children[1]
-  const subToolbar = editorCol?.children[2]
-  const editorBody = editorCol?.children[3]
+  const row1Node = editorCol?.children[0]
+  const row2Node = editorCol?.children[1]
+  const row3Node = editorCol?.children[2]
+  const subToolbar = editorCol?.children[3]
+  const editorBody = editorCol?.children[4]
 
   const statTiles = row2Node ? Array.from(row2Node.querySelectorAll(':scope > div > div')) : []
   const tile = (label) =>
@@ -93,7 +87,10 @@ const probes = await page.evaluate(() => {
       bg: cs(aside)?.backgroundColor,
       borderLeftColor: cs(aside)?.borderLeftColor,
       titleTop: aiTitle ? rect(aiTitle).top : null,
-      row1Bottom: row1Node ? rect(row1Node).bottom : null,
+      paneTop: aside ? rect(aside).top : null,
+      paneLeft: aside ? rect(aside).left : null,
+      row1Right: row1Node ? rect(row1Node).right : null,
+      row1Top: row1Node ? rect(row1Node).top : null,
     },
     stats: {
       balanceColor: cs(balanceVal)?.color,
@@ -147,18 +144,34 @@ expectEq('subToolbar borderBottomWidth', probes.subToolbar.borderBottomWidth, '1
 // slate-200 = rgb(226, 232, 240)
 expectEq('subToolbar borderBottomColor', probes.subToolbar.borderBottomColor, 'rgb(226, 232, 240)')
 
-// AI pane
+// AI pane (v9: spans from y=0 alongside Row 1, not below it)
 expectEq('aiPane width', probes.aiPane.width, 320)
 // slate-50 = rgb(248, 250, 252)
 expectEq('aiPane bg', probes.aiPane.bg, 'rgb(248, 250, 252)')
-// AI title's top must be at-or-below row 1's bottom (no spacer means very close)
-if (probes.aiPane.titleTop == null || probes.aiPane.row1Bottom == null) {
-  fail('aiPane title or row1 bottom not measured')
+// AI pane top must equal Row 1 top (both flush with viewport top of split region)
+if (probes.aiPane.paneTop == null || probes.aiPane.row1Top == null) {
+  fail('aiPane top or row1 top not measured')
+} else if (Math.abs(probes.aiPane.paneTop - probes.aiPane.row1Top) > 1) {
+  fail(
+    `aiPane top=${probes.aiPane.paneTop} differs from row1 top=${probes.aiPane.row1Top} (expected aligned)`,
+  )
+}
+// AI title sits inside its pane, near the top (~16px py-4 padding)
+if (probes.aiPane.titleTop == null || probes.aiPane.paneTop == null) {
+  fail('aiPane title or pane top not measured')
 } else {
-  const gap = probes.aiPane.titleTop - probes.aiPane.row1Bottom
+  const gap = probes.aiPane.titleTop - probes.aiPane.paneTop
   if (gap < 0 || gap > 32) {
-    fail(`aiPane title gap from row1 bottom = ${gap}px (expected within 0..32 — no 180px spacer)`)
+    fail(`aiPane title gap from pane top = ${gap}px (expected within 0..32)`)
   }
+}
+// Row 1 must end at or before AI pane left edge (Row 1 scoped to editor column)
+if (probes.aiPane.row1Right == null || probes.aiPane.paneLeft == null) {
+  fail('row1 right or aiPane left not measured')
+} else if (probes.aiPane.row1Right > probes.aiPane.paneLeft + 1) {
+  fail(
+    `row1 right=${probes.aiPane.row1Right} extends past aiPane left=${probes.aiPane.paneLeft} (expected row1 to stop at editor column edge)`,
+  )
 }
 
 // Stats
