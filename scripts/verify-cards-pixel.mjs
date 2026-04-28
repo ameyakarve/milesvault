@@ -105,8 +105,10 @@ async function main() {
       amountOutColor: get('.cm-amount-out', 'color'),
       amountInColor: get('.cm-amount-in', 'color'),
       amountOutFontFamily: get('.cm-amount-out', 'fontFamily'),
+      amountOutFontSize: get('.cm-amount-out', 'fontSize'),
       amountOutFontWeight: get('.cm-amount-out', 'fontWeight'),
       amountOutTabular: get('.cm-amount-out', 'fontVariantNumeric'),
+      footerValueFontSize: get('.cm-balance-footer .cm-bal-value', 'fontSize'),
       footerPadding: get('.cm-balance-footer', 'padding'),
       footerBorderTop: get('.cm-balance-footer', 'borderTopWidth'),
       footerLabelTransform: get('.cm-balance-footer .cm-bal-label', 'textTransform'),
@@ -138,6 +140,13 @@ async function main() {
   }
   if (probes.amountOutFontWeight !== '500') {
     errors.push(`amount-out fontWeight=${probes.amountOutFontWeight} (expected 500)`)
+  }
+  // Amount marks must match the balance value's font-size so they read as the
+  // same "data text" — user-facing requirement.
+  if (probes.amountOutFontSize !== probes.footerValueFontSize) {
+    errors.push(
+      `amount-out fontSize=${probes.amountOutFontSize} != balance value fontSize=${probes.footerValueFontSize}`,
+    )
   }
   if (!/tabular-nums/.test(probes.amountOutTabular || '')) {
     errors.push(`amount-out fontVariantNumeric=${probes.amountOutTabular} (expected tabular-nums)`)

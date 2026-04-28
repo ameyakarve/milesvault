@@ -84,11 +84,15 @@ const THEME = EditorView.theme({
   '.cm-delta-in': { color: 'rgba(20, 184, 166, 0.7)' },
   '.cm-amount-out': {
     color: 'rgb(225, 29, 72)',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: '12px',
     fontWeight: '500',
     fontVariantNumeric: 'tabular-nums',
   },
   '.cm-amount-in': {
     color: 'rgb(15, 118, 110)',
+    fontFamily: "'JetBrains Mono', monospace",
+    fontSize: '12px',
     fontWeight: '500',
     fontVariantNumeric: 'tabular-nums',
   },
