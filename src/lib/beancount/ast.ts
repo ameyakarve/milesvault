@@ -193,6 +193,10 @@ function compareDatedNodes(a: BcNode, b: BcNode): number {
   const da = (a as { date?: { toString(): string } }).date?.toString() ?? ''
   const db = (b as { date?: { toString(): string } }).date?.toString() ?? ''
   if (da !== db) return da.localeCompare(db)
+  // Within a day: balance assertions sort last (descending display puts them on top).
+  const aw = a.type === 'balance' ? 1 : 0
+  const bw = b.type === 'balance' ? 1 : 0
+  if (aw !== bw) return aw - bw
   return a.type.localeCompare(b.type)
 }
 
