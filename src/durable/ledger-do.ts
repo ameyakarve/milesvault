@@ -200,35 +200,25 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   async list_account_children(account: string): Promise<string[]> {
     const glob = account + ':*'
     const deepGlob = account + ':*:*'
-    const rows = this.sql
-      .exec<{ account: string }>(
-        `SELECT account FROM postings           WHERE account GLOB ?
-         UNION
-         SELECT account FROM directives_balance WHERE account GLOB ? AND account NOT GLOB ?
-         UNION
-         SELECT account FROM directives_open    WHERE account GLOB ?
-         UNION
-         SELECT account FROM directives_close   WHERE account GLOB ?
-         UNION
-         SELECT account FROM directives_pad     WHERE account GLOB ?
-         UNION
-         SELECT account FROM directives_note    WHERE account GLOB ?`,
-        glob,
-        glob,
-        deepGlob,
-        glob,
-        glob,
-        glob,
-        glob,
-      )
-      .toArray()
     const prefix = account + ':'
     const set = new Set<string>()
-    for (const r of rows) {
-      if (!r.account.startsWith(prefix)) continue
-      const head = r.account.slice(prefix.length).split(':')[0]
-      if (head) set.add(head)
+    const collect = (sql: string, ...binds: unknown[]) => {
+      for (const r of this.sql.exec<{ account: string }>(sql, ...binds).toArray()) {
+        if (!r.account.startsWith(prefix)) continue
+        const head = r.account.slice(prefix.length).split(':')[0]
+        if (head) set.add(head)
+      }
     }
+    collect(`SELECT account FROM postings WHERE account GLOB ?`, glob)
+    collect(
+      `SELECT account FROM directives_balance WHERE account GLOB ? AND account NOT GLOB ?`,
+      glob,
+      deepGlob,
+    )
+    collect(`SELECT account FROM directives_open  WHERE account GLOB ?`, glob)
+    collect(`SELECT account FROM directives_close WHERE account GLOB ?`, glob)
+    collect(`SELECT account FROM directives_pad   WHERE account GLOB ?`, glob)
+    collect(`SELECT account FROM directives_note  WHERE account GLOB ?`, glob)
     return [...set].sort()
   }
 
