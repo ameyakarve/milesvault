@@ -100,10 +100,10 @@ async function main() {
     ),
   )
   console.log('delta texts:', deltaTexts)
-  const deltaPattern = /^→\s*[+−]\d{1,3}(,\d{2,3})*\.\d{2}$/
+  const deltaPattern = /^[+−]\d{1,3}(,\d{2,3})*\.\d{2}$/
   for (let i = 0; i < deltaTexts.length; i++) {
     if (!deltaPattern.test(deltaTexts[i])) {
-      errors.push(`delta[${i}] "${deltaTexts[i]}" not in "→ ±X,XXX.XX" format`)
+      errors.push(`delta[${i}] "${deltaTexts[i]}" not in "±X,XXX.XX" format`)
     }
   }
 
