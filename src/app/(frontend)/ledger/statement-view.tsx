@@ -183,7 +183,7 @@ function StatementRow({
   return (
     <div
       onClick={onExpand}
-      className={`flex items-center h-[44px] border-b border-slate-100 ${
+      className={`flex items-center h-[44px] shrink-0 border-b border-slate-100 ${
         odd ? 'bg-[#fafaf8]' : 'bg-white'
       } hover:bg-slate-50 group cursor-pointer`}
     >
@@ -228,8 +228,8 @@ function StatementRowExpanded({
   onAi?: (id: string) => void
 }) {
   return (
-    <div className="flex flex-col border-b border-slate-200 bg-[#00685f]/5">
-      <div onClick={onCollapse} className="flex items-center h-[44px] cursor-pointer">
+    <div className="flex flex-col shrink-0 border-b border-slate-200 bg-[#00685f]/5">
+      <div onClick={onCollapse} className="flex items-center h-[44px] shrink-0 cursor-pointer">
         <div className="w-[24px] flex items-center justify-center text-slate-500">
           <span className="material-symbols-outlined !text-[16px]">expand_more</span>
         </div>
