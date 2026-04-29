@@ -271,7 +271,8 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }>(
         `SELECT account, currency, amount_scaled, scale, date
          FROM postings
-         WHERE date <= ?`,
+         WHERE date <= ? AND amount_scaled IS NOT NULL AND scale IS NOT NULL
+           AND currency IS NOT NULL AND currency != ''`,
         asOfInt,
       )
       .toArray()) {
