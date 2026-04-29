@@ -57,5 +57,5 @@ export function AccountsDirectoryLoader({ initialAsOf }: { initialAsOf: string }
       </div>
     )
   }
-  return <AccountsDirectory rows={rows ?? []} initialAsOf={initialAsOf} />
+  return <AccountsDirectory rows={rows ?? []} />
 }

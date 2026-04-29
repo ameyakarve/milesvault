@@ -79,24 +79,25 @@ function AccountPath({ path }: { path: string }) {
 export type AccountsDirectoryProps = {
   rows: AccountRow[]
   recentPath?: string | null
-  initialAsOf?: string
+}
+
+function isHidden(path: string): boolean {
+  return path === 'Equity:Void' || path.startsWith('Equity:Void:')
 }
 
 export function AccountsDirectory({
   rows,
   recentPath = null,
-  initialAsOf,
 }: AccountsDirectoryProps) {
-  const today = new Date().toISOString().slice(0, 10)
-  const [asOf, setAsOf] = useState<string>(initialAsOf ?? today)
   const [chip, setChip] = useState<'All' | AccountKind>('All')
   const [query, setQuery] = useState('')
 
+  const visibleRows = useMemo(() => rows.filter((r) => !isHidden(r.path)), [rows])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return rows
+    return visibleRows
       .filter((r) => {
-        if (r.lastActivity && r.lastActivity > asOf) return false
         if (chip !== 'All' && classifyKind(r.path) !== chip) return false
         if (q && !r.path.toLowerCase().includes(q)) return false
         return true
@@ -107,12 +108,9 @@ export function AccountsDirectory({
         if (da === db) return a.path.localeCompare(b.path)
         return db.localeCompare(da)
       })
-  }, [rows, asOf, chip, query])
+  }, [visibleRows, chip, query])
 
-  const totalCount = useMemo(
-    () => rows.filter((r) => !r.lastActivity || r.lastActivity <= asOf).length,
-    [rows, asOf],
-  )
+  const totalCount = visibleRows.length
 
   return (
     <div className="flex h-screen overflow-hidden bg-white pb-[28px]">
@@ -131,7 +129,7 @@ export function AccountsDirectory({
         </div>
 
         {/* Toolbar */}
-        <div className="px-6 py-3 flex items-center justify-between bg-slate-50/50 flex-shrink-0">
+        <div className="px-6 py-3 flex items-center bg-slate-50/50 flex-shrink-0">
           <div className="relative w-[600px]">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">
               search
@@ -143,25 +141,6 @@ export function AccountsDirectory({
               placeholder="Search accounts..."
               type="text"
             />
-          </div>
-          <div className="flex items-center space-x-3">
-            <span className="text-[12px] text-slate-500">As of</span>
-            <label className="relative flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-md shadow-sm hover:border-slate-300 transition-colors cursor-pointer">
-              <span className="material-symbols-outlined text-[16px] text-slate-400">
-                calendar_today
-              </span>
-              <span className="font-mono text-[12px] text-slate-700 tabular-nums">{asOf}</span>
-              <span className="material-symbols-outlined text-[18px] text-slate-400">
-                arrow_drop_down
-              </span>
-              <input
-                type="date"
-                value={asOf}
-                onChange={(e) => setAsOf(e.target.value || today)}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                aria-label="As of date"
-              />
-            </label>
           </div>
         </div>
 
