@@ -181,7 +181,7 @@ export function AccountsDirectory({
                 row.path === recentPath &&
                 row.currency === rows.find((r) => r.path === recentPath)?.currency
               const negative = row.balance < 0
-              const href = `/ledger/${row.path.split(':').map(encodeURIComponent).join('/')}`
+              const href = `/ledger/${row.path.split(':').map(encodeURIComponent).join('/')}?ccy=${encodeURIComponent(row.currency)}`
               return (
                 <Link
                   key={`${row.path}|${row.currency}|${idx}`}
