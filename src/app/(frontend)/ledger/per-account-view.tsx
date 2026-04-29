@@ -172,9 +172,6 @@ export function PerAccountView({
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [stats, setStats] = useState<
-    { inserted: number; deleted: number; unchanged: number } | null
-  >(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -225,7 +222,6 @@ export function PerAccountView({
   const onCurrencyChange = useCallback(
     async (next: string) => {
       setCurrency(next)
-      setStats(null)
       setError(null)
       try {
         const slice = await ledgerClient.getJournalForAccount(account, next)
@@ -273,7 +269,6 @@ export function PerAccountView({
       const updated = sliceFromWhole(data.text, account, currency)
       setSavedSlice(updated)
       setText(updated)
-      setStats({ inserted: data.inserted, deleted: data.deleted, unchanged: data.unchanged })
       const cur = await ledgerClient.getAccountCurrencies(account)
       setCurrencies(cur.currencies)
     } catch (e: unknown) {
@@ -434,7 +429,6 @@ export function PerAccountView({
   }, [])
 
   const txnCount = isStrictParseErr(parsed) ? 0 : parsed.transactions.length
-  const showCurrencyChrome = currencies.length > 1 || (!!stats && !error)
 
   const editorViewRef = useRef<EditorView | null>(null)
 
@@ -467,32 +461,6 @@ export function PerAccountView({
 
   const body = (
     <div className="h-full flex flex-col min-h-0">
-      {showCurrencyChrome && (
-        <div className="flex items-center justify-between px-6 pt-3 pb-1">
-          <div className="flex items-center gap-2">
-            <label className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
-              Currency
-            </label>
-            <select
-              value={currency ?? ''}
-              onChange={(e) => onCurrencyChange(e.target.value)}
-              className="text-xs font-mono bg-white border border-slate-200 rounded pl-2 pr-7 py-1 focus:outline-none focus:border-[#00685f]"
-              disabled={saving}
-            >
-              {currencies.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          {stats && !error && (
-            <span className="text-[10px] text-slate-500 font-mono">
-              saved · +{stats.inserted} −{stats.deleted} ={stats.unchanged}
-            </span>
-          )}
-        </div>
-      )}
       {error && (
         <div className="mx-6 mb-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded">
           {error}
@@ -561,6 +529,8 @@ export function PerAccountView({
       statementBody={statementBody}
       defaultViewMode={defaultViewMode}
       currency={currency}
+      currencies={currencies}
+      onCurrencyChange={onCurrencyChange}
       leafChips={children}
     />
   )
