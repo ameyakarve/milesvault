@@ -58,10 +58,8 @@ export function serializeJournal(
     ...transactions.map(transactionFromInput),
     ...directives.map(directiveFromInput),
   ]
-  const cmp = options.descending
-    ? (a: BcNode, b: BcNode) => -compareDatedNodes(a, b)
-    : compareDatedNodes
-  nodes.sort(cmp)
+  const descending = options.descending ?? false
+  nodes.sort((a, b) => compareDatedNodes(a, b, descending))
   const result = new ParseResult(nodes)
   const col = result.calculateCurrencyColumn({ minPadding: 2 })
   return result.toFormattedString({ currencyColumn: col }).trim() + '\n'
@@ -189,13 +187,24 @@ async function canonicalHash(node: BcNode): Promise<string> {
     .join('')
 }
 
-function compareDatedNodes(a: BcNode, b: BcNode): number {
+function intradayWeight(type: string): number {
+  if (type === 'note') return 0
+  if (type === 'balance') return 1
+  return 2
+}
+
+function compareDatedNodes(a: BcNode, b: BcNode, descending: boolean): number {
   const da = (a as { date?: { toString(): string } }).date?.toString() ?? ''
   const db = (b as { date?: { toString(): string } }).date?.toString() ?? ''
-  if (da !== db) return da.localeCompare(db)
-  // Within a day: balance assertions sort last (descending display puts them on top).
-  const aw = a.type === 'balance' ? 1 : 0
-  const bw = b.type === 'balance' ? 1 : 0
+  if (da !== db) {
+    const cmp = da.localeCompare(db)
+    return descending ? -cmp : cmp
+  }
+  // Within a day: note first, then balance, then everything else (transactions
+  // and other directives). Order is fixed regardless of date direction so the
+  // top of any day's block always reads note → balance → rest.
+  const aw = intradayWeight(a.type)
+  const bw = intradayWeight(b.type)
   if (aw !== bw) return aw - bw
   return a.type.localeCompare(b.type)
 }
