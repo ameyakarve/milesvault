@@ -19,6 +19,8 @@ export type StatementOtherPosting = {
 
 export type StatementRowData = {
   id: string
+  startLine: number
+  endLine: number
   date: string
   payee?: string
   narration?: string
@@ -41,7 +43,7 @@ export type StatementViewProps = {
   netChange: string
   netPositive: boolean
   initialExpandedId?: string | null
-  onSaveRow?: (id: string, text: string) => void | Promise<void>
+  onSaveRow?: (row: StatementRowData, text: string) => void | Promise<void>
   onAiRow?: (id: string) => void
 }
 
@@ -224,7 +226,7 @@ function StatementRowExpanded({
 }: {
   row: StatementRowData
   onCollapse: () => void
-  onSave?: (id: string, text: string) => void | Promise<void>
+  onSave?: (row: StatementRowData, text: string) => void | Promise<void>
   onAi?: (id: string) => void
 }) {
   return (
@@ -280,7 +282,7 @@ function StatementRowEditor({
   onAi,
 }: {
   row: StatementRowData
-  onSave?: (id: string, text: string) => void | Promise<void>
+  onSave?: (row: StatementRowData, text: string) => void | Promise<void>
   onAi?: (id: string) => void
 }) {
   const [text, setText] = useState(row.draftText ?? row.text)
@@ -296,7 +298,7 @@ function StatementRowEditor({
     if (!dirty || busy) return
     setBusy(true)
     try {
-      await onSave?.(row.id, text)
+      await onSave?.(row, text)
     } finally {
       setBusy(false)
     }

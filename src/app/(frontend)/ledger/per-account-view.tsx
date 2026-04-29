@@ -295,8 +295,24 @@ export function PerAccountView({
     )
   }, [parsed, account, currency])
 
-  const statementRows = useMemo<StatementRowData[]>(() => {
-    if (!currency || isStrictParseErr(parsed)) return []
+  const { statementRows, statementTotals } = useMemo<{
+    statementRows: StatementRowData[]
+    statementTotals: {
+      totalDebit: string
+      totalCredit: string
+      netChange: string
+      netPositive: boolean
+    }
+  }>(() => {
+    const emptyTotals = {
+      totalDebit: '',
+      totalCredit: '',
+      netChange: '',
+      netPositive: true,
+    }
+    if (!currency || isStrictParseErr(parsed)) {
+      return { statementRows: [], statementTotals: emptyTotals }
+    }
     const lines = text.split('\n')
     const meta = CURRENCY_META[currency]
     const grouped = (n: number) =>
@@ -304,7 +320,9 @@ export function PerAccountView({
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(Math.abs(n))
-    const out: StatementRowData[] = []
+    const rows: StatementRowData[] = []
+    let dSum = 0
+    let cSum = 0
     for (let i = 0; i < parsed.entries.length; i++) {
       const e = parsed.entries[i]!
       if (e.kind !== 'transaction') continue
@@ -324,6 +342,8 @@ export function PerAccountView({
           }
         }
       }
+      if (net < 0) dSum += -net
+      else if (net > 0) cSum += net
       const debit = net < 0 ? grouped(net) : null
       const credit = net > 0 ? grouped(net) : null
       const otherPostings = tx.postings
@@ -342,8 +362,10 @@ export function PerAccountView({
         }))
       const rawLines = lines.slice(spec.startLine - 1, spec.endLine)
       const rawText = rawLines.join('\n')
-      out.push({
+      rows.push({
         id: `${spec.startLine}-${spec.endLine}`,
+        startLine: spec.startLine,
+        endLine: spec.endLine,
         date: tx.date,
         payee: tx.payee,
         narration: tx.narration,
@@ -356,33 +378,17 @@ export function PerAccountView({
         postedDate: tx.date,
       })
     }
-    return out
-  }, [parsed, cardSpecs, account, currency, text])
-
-  const statementTotals = useMemo(() => {
-    if (!currency) {
-      return { totalDebit: '', totalCredit: '', netChange: '', netPositive: true }
-    }
-    const meta = CURRENCY_META[currency]
-    const grouped = (n: number) =>
-      new Intl.NumberFormat(meta?.locale ?? 'en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(Math.abs(n))
-    let dSum = 0
-    let cSum = 0
-    for (const r of statementRows) {
-      if (r.debit) dSum += Number(r.debit.replace(/,/g, ''))
-      if (r.credit) cSum += Number(r.credit.replace(/,/g, ''))
-    }
     const net = cSum - dSum
     return {
-      totalDebit: grouped(dSum),
-      totalCredit: grouped(cSum),
-      netChange: `${net >= 0 ? '+' : '−'}${grouped(net)}`,
-      netPositive: net >= 0,
+      statementRows: rows,
+      statementTotals: {
+        totalDebit: grouped(dSum),
+        totalCredit: grouped(cSum),
+        netChange: `${net >= 0 ? '+' : '−'}${grouped(net)}`,
+        netPositive: net >= 0,
+      },
     }
-  }, [statementRows, currency])
+  }, [parsed, cardSpecs, account, currency, text])
 
   const headerBalance = useMemo(() => {
     if (!currency) return ''
@@ -399,10 +405,8 @@ export function PerAccountView({
     let outSum = 0
     for (const spec of cardSpecs) {
       for (const d of spec.deltas) {
-        const v = Number(d.value.replace(/,/g, ''))
-        if (!Number.isFinite(v)) continue
-        if (d.flow === 'in') inSum += v
-        else outSum += v
+        if (d.flow === 'in') inSum += d.amount
+        else outSum += d.amount
       }
     }
     return {
@@ -416,14 +420,10 @@ export function PerAccountView({
     setError(null)
   }, [savedSlice])
 
-  const onSaveRow = useCallback((id: string, newText: string) => {
-    const m = id.match(/^(\d+)-(\d+)$/)
-    if (!m) return
-    const startLine = Number(m[1])
-    const endLine = Number(m[2])
+  const onSaveRow = useCallback((row: StatementRowData, newText: string) => {
     const all = textRef.current.split('\n')
-    const before = all.slice(0, startLine - 1)
-    const after = all.slice(endLine)
+    const before = all.slice(0, row.startLine - 1)
+    const after = all.slice(row.endLine)
     const replaced = newText.split('\n')
     setText([...before, ...replaced, ...after].join('\n'))
   }, [])
