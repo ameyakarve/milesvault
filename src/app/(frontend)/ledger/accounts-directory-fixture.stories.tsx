@@ -126,7 +126,6 @@ export const Default: StoryObj = {
     <AccountsDirectory
       rows={ROWS}
       recentPath="Liabilities:CreditCard:HSBC:Cashback"
-      initialAsOf="2026-04-29"
     />
   ),
 }
