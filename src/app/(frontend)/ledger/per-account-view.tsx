@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import CodeMirror from '@uiw/react-codemirror'
 import { EditorView, keymap } from '@codemirror/view'
 import {
@@ -163,6 +164,10 @@ export function PerAccountView({
   account: string
   defaultViewMode?: 'editor' | 'statement'
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const ccyParam = searchParams.get('ccy')
   const [loaded, setLoaded] = useState(false)
   const [currencies, setCurrencies] = useState<string[]>([])
   const [currency, setCurrency] = useState<string | null>(null)
@@ -195,7 +200,9 @@ export function PerAccountView({
           signal: controller.signal,
         })
         setCurrencies(curResp.currencies)
-        const cur = curResp.currencies[0] ?? null
+        const preferred =
+          ccyParam && curResp.currencies.includes(ccyParam) ? ccyParam : null
+        const cur = preferred ?? curResp.currencies[0] ?? null
         setCurrency(cur)
         if (cur) {
           const slice = await ledgerClient.getJournalForAccount(account, cur, {
@@ -204,6 +211,11 @@ export function PerAccountView({
           const desc = rewriteDescending(slice.text)
           setSavedSlice(desc)
           setText(desc)
+          if (cur !== ccyParam) {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('ccy', cur)
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+          }
         } else {
           setSavedSlice('')
           setText('')
@@ -216,12 +228,18 @@ export function PerAccountView({
       }
     })()
     return () => controller.abort()
+    // ccyParam intentionally excluded: query-param sync is one-way (user picks
+    // → URL updates); reading the param drives only the initial load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account])
 
   const onCurrencyChange = useCallback(
     async (next: string) => {
       setCurrency(next)
       setError(null)
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('ccy', next)
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
       try {
         const slice = await ledgerClient.getJournalForAccount(account, next)
         const desc = rewriteDescending(slice.text)
@@ -231,7 +249,7 @@ export function PerAccountView({
         setError(e instanceof Error ? e.message : String(e))
       }
     },
-    [account],
+    [account, pathname, router, searchParams],
   )
 
   const textRef = useRef(text)
