@@ -190,3 +190,11 @@ export type AccountEntriesResponse = {
   limit: number
   offset: number
 }
+
+export type AccountSummaryRow = {
+  account: string
+  currency: string
+  balance_scaled: string
+  scale: number
+  last_activity: number
+}

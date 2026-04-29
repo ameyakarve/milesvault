@@ -5,7 +5,7 @@ import type {
   JournalPutResponse,
   LedgerDO,
 } from '@/durable/ledger-do'
-import type { AccountEntriesResponse } from '@/durable/ledger-types'
+import type { AccountEntriesResponse, AccountSummaryRow } from '@/durable/ledger-types'
 export const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
 
@@ -23,6 +23,7 @@ export type LedgerClient = {
   ): Promise<JournalGetResponse>
   list_account_currencies(account: string): Promise<string[]>
   list_account_children(account: string): Promise<string[]>
+  list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
   journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
   clear(): Promise<{ ok: true }>
 }
@@ -93,6 +94,14 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
         throw new LedgerInputError(['account must be a non-empty string.'])
       }
       return stub.list_account_children(account)
+    },
+
+    async list_account_summaries(asOf) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
+        throw new LedgerInputError(['as_of must be YYYY-MM-DD.'])
+      }
+      const asOfInt = Number(asOf.replaceAll('-', ''))
+      return stub.list_account_summaries(asOfInt)
     },
 
     async journal_put(text) {

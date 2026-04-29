@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import React, { useMemo, useState } from 'react'
 import { NavRail } from '../_chrome/nav-rail'
 
@@ -201,9 +202,11 @@ export function AccountsDirectory({
                 row.path === recentPath &&
                 row.currency === rows.find((r) => r.path === recentPath)?.currency
               const negative = row.balance < 0
+              const href = `/ledger/${row.path.split(':').map(encodeURIComponent).join('/')}`
               return (
-                <div
+                <Link
                   key={`${row.path}|${row.currency}|${idx}`}
+                  href={href}
                   className="flex items-center px-6 h-[40px] border-b border-slate-100 hover:bg-slate-50 group cursor-pointer relative"
                 >
                   {isRecent && (
@@ -225,7 +228,7 @@ export function AccountsDirectory({
                   >
                     {formatBalance(row.balance, row.currency)}
                   </div>
-                </div>
+                </Link>
               )
             })}
           </div>
@@ -252,19 +255,19 @@ export function AccountsDirectory({
                 <span className="material-symbols-outlined text-[14px] mr-2 text-slate-300">
                   analytics
                 </span>
-                "Summarize my coffee spending"
+                {`"Summarize my coffee spending"`}
               </button>
               <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
                 <span className="material-symbols-outlined text-[14px] mr-2 text-slate-300">
                   auto_fix
                 </span>
-                "Clean up payee names in this month"
+                {`"Clean up payee names in this month"`}
               </button>
               <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
                 <span className="material-symbols-outlined text-[14px] mr-2 text-slate-300">
                   balance
                 </span>
-                "Find unbalanced transactions"
+                {`"Find unbalanced transactions"`}
               </button>
             </div>
           </div>
