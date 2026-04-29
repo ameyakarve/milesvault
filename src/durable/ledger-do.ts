@@ -14,6 +14,7 @@ import {
 } from '@/lib/beancount/scope'
 import type {
   AccountEntriesResponse,
+  AccountSummaryRow,
   DirectiveInput,
   Entry,
   EntryBalance,
@@ -218,6 +219,95 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     return [...counts.entries()]
       .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
       .map(([cur]) => cur)
+  }
+
+  async list_account_summaries(
+    asOfInt: number,
+  ): Promise<AccountSummaryRow[]> {
+    const map = new Map<
+      string,
+      { account: string; currency: string; sumScaled12: bigint; lastActivity: number }
+    >()
+    const TARGET_SCALE = 12
+    const upsert = (
+      account: string,
+      currency: string,
+      delta: bigint,
+      date: number,
+    ): void => {
+      const key = `${account}|${currency}`
+      const existing = map.get(key)
+      if (existing) {
+        existing.sumScaled12 += delta
+        if (date > existing.lastActivity) existing.lastActivity = date
+        return
+      }
+      map.set(key, { account, currency, sumScaled12: delta, lastActivity: date })
+    }
+    for (const p of this.sql
+      .exec<{
+        account: string
+        currency: string
+        amount_scaled: number
+        scale: number
+        date: number
+      }>(
+        `SELECT account, currency, amount_scaled, scale, date
+         FROM postings
+         WHERE date <= ?
+           AND currency IS NOT NULL AND currency != ''
+           AND amount_scaled IS NOT NULL`,
+        asOfInt,
+      )
+      .toArray()) {
+      const factor = 10n ** BigInt(TARGET_SCALE - p.scale)
+      upsert(p.account, p.currency, BigInt(p.amount_scaled) * factor, p.date)
+    }
+    for (const r of this.sql
+      .exec<{ account: string; currency: string; date: number }>(
+        `SELECT account, currency, date FROM directives_balance
+         WHERE date <= ? AND currency IS NOT NULL AND currency != ''`,
+        asOfInt,
+      )
+      .toArray()) {
+      const key = `${r.account}|${r.currency}`
+      const existing = map.get(key)
+      if (existing) {
+        if (r.date > existing.lastActivity) existing.lastActivity = r.date
+      } else {
+        map.set(key, {
+          account: r.account,
+          currency: r.currency,
+          sumScaled12: 0n,
+          lastActivity: r.date,
+        })
+      }
+    }
+    for (const r of this.sql
+      .exec<{ account: string; constraint_currencies: string; date: number }>(
+        `SELECT account, constraint_currencies, date FROM directives_open
+         WHERE date <= ?`,
+        asOfInt,
+      )
+      .toArray()) {
+      let currencies: string[] = []
+      try {
+        currencies = JSON.parse(r.constraint_currencies) as string[]
+      } catch {}
+      for (const c of currencies) {
+        const key = `${r.account}|${c}`
+        if (!map.has(key)) {
+          map.set(key, { account: r.account, currency: c, sumScaled12: 0n, lastActivity: r.date })
+        }
+      }
+    }
+    return [...map.values()].map((v) => ({
+      account: v.account,
+      currency: v.currency,
+      balance_scaled: v.sumScaled12.toString(),
+      scale: TARGET_SCALE,
+      last_activity: v.lastActivity,
+    }))
   }
 
   async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {
