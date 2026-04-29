@@ -347,13 +347,63 @@ function StatusBar({ txnCount, cursor }: { txnCount: number; cursor: string }) {
   )
 }
 
+function PopoverMenu({
+  options,
+  selected,
+  onSelect,
+  onClose,
+}: {
+  options: string[]
+  selected: string
+  onSelect: (next: string) => void
+  onClose: () => void
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={onClose}
+        className="fixed inset-0 z-40 bg-transparent cursor-default"
+      />
+      <div
+        role="menu"
+        className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded shadow-lg py-1 min-w-[120px]"
+      >
+        {options.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onSelect(opt)
+              onClose()
+            }}
+            className={`w-full text-left px-3 py-1.5 font-mono text-[11px] hover:bg-slate-50 transition-colors ${
+              opt === selected ? 'text-[#00685f] font-bold' : 'text-slate-700'
+            }`}
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
+
 function BreadcrumbRow({
   breadcrumb,
   currency,
+  currencies,
+  onCurrencyChange,
 }: {
   breadcrumb: string[]
   currency: string | null | undefined
+  currencies: string[]
+  onCurrencyChange?: (next: string) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const canOpen = !!onCurrencyChange && currencies.length > 1
   return (
     <div className="h-[32px] bg-white px-6 flex items-center justify-between border-b border-slate-50 shrink-0">
       <div className="flex items-center gap-1.5 font-mono text-[11px]">
@@ -385,13 +435,26 @@ function BreadcrumbRow({
         })}
       </div>
       {currency && (
-        <button
-          type="button"
-          className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center"
-        >
-          {currency}
-          <span className="material-symbols-outlined !text-[14px] ml-0.5">arrow_drop_down</span>
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={canOpen ? () => setOpen((v) => !v) : undefined}
+            aria-haspopup={canOpen ? 'menu' : undefined}
+            aria-expanded={canOpen ? open : undefined}
+            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center"
+          >
+            {currency}
+            <span className="material-symbols-outlined !text-[14px] ml-0.5">arrow_drop_down</span>
+          </button>
+          {open && canOpen && (
+            <PopoverMenu
+              options={currencies}
+              selected={currency}
+              onSelect={onCurrencyChange!}
+              onClose={() => setOpen(false)}
+            />
+          )}
+        </div>
       )}
     </div>
   )
@@ -402,12 +465,18 @@ function StatsRow({
   netIn,
   netOut,
   period,
+  periods,
+  onPeriodChange,
 }: {
   balance: string
   netIn?: string
   netOut?: string
   period: string
+  periods: string[]
+  onPeriodChange?: (next: string) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const canOpen = !!onPeriodChange && periods.length > 1
   return (
     <div className="h-[64px] bg-white px-6 flex items-center shrink-0">
       <div className="flex items-center gap-12 flex-1">
@@ -429,13 +498,26 @@ function StatsRow({
           />
         )}
       </div>
-      <button
-        type="button"
-        className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center border border-slate-200 px-2 py-1 rounded"
-      >
-        {period}
-        <span className="material-symbols-outlined !text-[14px] ml-1">arrow_drop_down</span>
-      </button>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={canOpen ? () => setOpen((v) => !v) : undefined}
+          aria-haspopup={canOpen ? 'menu' : undefined}
+          aria-expanded={canOpen ? open : undefined}
+          className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center border border-slate-200 px-2 py-1 rounded"
+        >
+          {period}
+          <span className="material-symbols-outlined !text-[14px] ml-1">arrow_drop_down</span>
+        </button>
+        {open && canOpen && (
+          <PopoverMenu
+            options={periods}
+            selected={period}
+            onSelect={onPeriodChange!}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </div>
     </div>
   )
 }
@@ -595,8 +677,12 @@ export type NotebookShellProps = {
   defaultViewMode?: 'editor' | 'statement'
   cursor?: string
   currency?: string | null
+  currencies?: string[]
+  onCurrencyChange?: (next: string) => void
   leafChips?: LeafChip[]
   period?: string
+  periods?: string[]
+  onPeriodChange?: (next: string) => void
 }
 
 export function NotebookShell({
@@ -615,8 +701,12 @@ export function NotebookShell({
   defaultViewMode = 'editor',
   cursor = 'Ln 1, Col 1',
   currency,
+  currencies = [],
+  onCurrencyChange,
   leafChips = [],
   period = 'All time',
+  periods = [],
+  onPeriodChange,
 }: NotebookShellProps) {
   const [viewMode, setViewMode] = useState<'editor' | 'statement'>(defaultViewMode)
   return (
@@ -625,12 +715,19 @@ export function NotebookShell({
       <div className="flex-1 flex flex-col min-w-0">
         <div className="flex-1 flex min-h-0">
           <main className="flex-1 flex flex-col min-w-0">
-            <BreadcrumbRow breadcrumb={breadcrumb} currency={currency} />
+            <BreadcrumbRow
+              breadcrumb={breadcrumb}
+              currency={currency}
+              currencies={currencies}
+              onCurrencyChange={onCurrencyChange}
+            />
             <StatsRow
               balance={balance}
               netIn={netIn}
               netOut={netOut}
               period={period}
+              periods={periods}
+              onPeriodChange={onPeriodChange}
             />
             <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />
             <SubToolbar

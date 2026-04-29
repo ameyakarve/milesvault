@@ -161,7 +161,11 @@ function sliceFor(text: string, account: string, currency: string): string {
   return serializeJournal(txns, directives)
 }
 
-function makeFetchMock(text: string, account: AccountKey) {
+function makeFetchMock(
+  text: string,
+  account: AccountKey,
+  currencies: string[] = ['INR'],
+) {
   const encoded = encodeURIComponent(account)
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString()
@@ -184,7 +188,7 @@ function makeFetchMock(text: string, account: AccountKey) {
       return body({ text })
     }
     if (url.includes('/currencies')) {
-      return body({ currencies: ['INR'] })
+      return body({ currencies })
     }
     if (url.includes('/children')) {
       const parsed = parseJournal(text)
@@ -215,22 +219,24 @@ function makeFetchMock(text: string, account: AccountKey) {
 function FetchHarness({
   text,
   account,
+  currencies,
   children,
 }: {
   text: string
   account: AccountKey
+  currencies?: string[]
   children: React.ReactNode
 }) {
   const originalRef = useRef<typeof window.fetch | null>(null)
   const [ready, setReady] = useState(false)
   useEffect(() => {
     originalRef.current = window.fetch
-    window.fetch = makeFetchMock(text, account) as typeof window.fetch
+    window.fetch = makeFetchMock(text, account, currencies) as typeof window.fetch
     setReady(true)
     return () => {
       if (originalRef.current) window.fetch = originalRef.current
     }
-  }, [text, account])
+  }, [text, account, currencies])
   if (!ready) return null
   return <>{children}</>
 }
@@ -261,6 +267,14 @@ export const RealData: StoryObj = {
   render: () => (
     <FetchHarness text={REAL_FIXTURE} account={REAL_ACCOUNT}>
       <PerAccountView account={REAL_ACCOUNT} />
+    </FetchHarness>
+  ),
+}
+
+export const MultiCurrency: StoryObj = {
+  render: () => (
+    <FetchHarness text={FIXTURE} account={ACCOUNT} currencies={['INR', 'USD', 'CNY']}>
+      <PerAccountView account={ACCOUNT} />
     </FetchHarness>
   ),
 }
