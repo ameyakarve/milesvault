@@ -43,8 +43,7 @@ function formatSignedStat(n: number, currency: string, sign: '+' | '−'): strin
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(abs)
-  if (meta) return `${sign}${meta.symbol}${grouped}`
-  return `${sign}${grouped} ${currency}`
+  return `${sign}${grouped}`
 }
 
 const beancountLang = LRLanguage.define({
