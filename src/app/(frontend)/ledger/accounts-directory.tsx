@@ -130,7 +130,7 @@ export function AccountsDirectory({
 
         {/* Toolbar */}
         <div className="px-6 py-3 flex items-center bg-slate-50/50 flex-shrink-0">
-          <div className="relative w-[600px]">
+          <div className="relative w-full">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">
               search
             </span>
