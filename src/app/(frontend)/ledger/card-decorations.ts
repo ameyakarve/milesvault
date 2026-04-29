@@ -48,11 +48,9 @@ function formatGrouped(absN: number, currency: string): string {
 }
 
 export function formatHeaderBalance(n: number, currency: string): string {
-  const meta = CURRENCY_META[currency]
   const grouped = formatGrouped(Math.abs(n), currency)
   const sign = n < 0 ? '-' : ''
-  if (meta) return `${sign}${meta.symbol}${grouped}`
-  return `${sign}${grouped} ${currency}`
+  return `${sign}${grouped}`
 }
 
 function postingDelta(
@@ -75,11 +73,9 @@ function postingDelta(
 }
 
 function formatBalance(n: number, currency: string): string {
-  const meta = CURRENCY_META[currency]
   const grouped = formatGrouped(Math.abs(n), currency)
   const sign = n < 0 ? '-' : ''
-  if (meta) return `${sign}${grouped}`
-  return `${sign}${grouped} ${currency}`
+  return `${sign}${grouped}`
 }
 
 function formatDeltaValue(absN: number, currency: string): string {
