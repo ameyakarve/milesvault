@@ -136,8 +136,8 @@ const BASIC = {
   foldGutter: false,
   highlightActiveLine: false,
   highlightActiveLineGutter: true,
-  highlightSelectionMatches: false,
-  searchKeymap: false,
+  highlightSelectionMatches: true,
+  searchKeymap: true,
 } as const
 
 function rewriteDescending(text: string): string {

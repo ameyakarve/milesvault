@@ -113,8 +113,8 @@ const EDITOR_BASIC = {
   foldGutter: false,
   highlightActiveLine: false,
   highlightActiveLineGutter: false,
-  highlightSelectionMatches: false,
-  searchKeymap: false,
+  highlightSelectionMatches: true,
+  searchKeymap: true,
 } as const
 
 class DeltaWidget extends WidgetType {

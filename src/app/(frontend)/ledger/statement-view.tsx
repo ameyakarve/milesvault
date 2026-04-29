@@ -110,8 +110,8 @@ const ROW_BASIC = {
   foldGutter: false,
   highlightActiveLine: true,
   highlightActiveLineGutter: true,
-  highlightSelectionMatches: false,
-  searchKeymap: false,
+  highlightSelectionMatches: true,
+  searchKeymap: true,
 } as const
 
 export function StatementView({
