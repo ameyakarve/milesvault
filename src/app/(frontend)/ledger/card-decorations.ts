@@ -8,7 +8,7 @@ import {
   type DecorationSet,
   type LayerMarker,
 } from '@codemirror/view'
-import { RangeSetBuilder, StateEffect, StateField, type EditorState } from '@codemirror/state'
+import { StateEffect, StateField, type EditorState } from '@codemirror/state'
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 import type { ParsedEntry } from '@/lib/beancount/ast'
 import { accountMatchesPrefix } from '@/lib/beancount/scope'
@@ -332,7 +332,7 @@ function escapeRegex(s: string): string {
 
 function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
   const lineCount = state.doc.lines
-  type Item = { from: number; to: number; deco: Decoration; order: number }
+  type Item = { from: number; to: number; deco: Decoration }
   const items: Item[] = []
   const sorted = [...specs].sort((a, b) => a.startLine - b.startLine)
   for (const spec of sorted) {
@@ -353,7 +353,6 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
         from,
         to: from,
         deco: Decoration.line({ class: classes[i]! }),
-        order: 0,
       })
     }
     for (const d of spec.deltas) {
@@ -373,7 +372,6 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
           deco: Decoration.mark({
             class: d.flow === 'out' ? 'cm-amount-out' : 'cm-amount-in',
           }),
-          order: 3,
         })
       }
       items.push({
@@ -383,7 +381,6 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
           widget: new DeltaWidget(d),
           side: 1,
         }),
-        order: 2,
       })
     }
     if (spec.balance != null) {
@@ -396,14 +393,13 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
           side: 1,
           block: true,
         }),
-        order: 1,
       })
     }
   }
-  items.sort((a, b) => a.from - b.from || a.order - b.order)
-  const builder = new RangeSetBuilder<Decoration>()
-  for (const it of items) builder.add(it.from, it.to, it.deco)
-  return builder.finish()
+  return Decoration.set(
+    items.map((it) => it.deco.range(it.from, it.to)),
+    true,
+  )
 }
 
 const cardSpecsField = StateField.define<CardSpec[]>({
