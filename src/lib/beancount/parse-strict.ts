@@ -37,6 +37,17 @@ export function parseJournalStrict(text: string): StrictParseResult {
   if (parsed.partialParse) {
     return { ok: false, kind: 'partial_parse', message: 'parse error' }
   }
+  for (const tx of parsed.transactions) {
+    for (const p of tx.postings) {
+      if (p.amount == null || p.amount === '' || p.currency == null || p.currency === '') {
+        return {
+          ok: false,
+          kind: 'parse_error',
+          message: 'every posting must have an explicit amount and currency',
+        }
+      }
+    }
+  }
   return {
     ok: true,
     transactions: parsed.transactions,

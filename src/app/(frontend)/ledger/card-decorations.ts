@@ -17,6 +17,7 @@ export type DeltaSpec = {
   line: number
   sign: '+' | '−'
   value: string
+  amount: number
   flow: 'in' | 'out'
   amountRaw: string
   currencyRaw: string
@@ -107,6 +108,7 @@ function txnDeltas(
       line: startLine + 1 + i,
       sign: v < 0 ? '−' : '+',
       value: formatDeltaValue(Math.abs(v), currency),
+      amount: Math.abs(v),
       flow: v < 0 ? 'out' : 'in',
       amountRaw: p.amount,
       currencyRaw: p.currency!,
@@ -326,10 +328,6 @@ class BalanceFooterWidget extends WidgetType {
   }
 }
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
   const lineCount = state.doc.lines
   type Item = { from: number; to: number; deco: Decoration }
@@ -359,12 +357,10 @@ function buildSet(state: EditorState, specs: CardSpec[]): DecorationSet {
       if (d.line < 1 || d.line > lineCount) continue
       const lineRef = state.doc.line(d.line)
       const lineText = lineRef.text
-      const pattern = new RegExp(
-        `(${escapeRegex(d.amountRaw)})\\s+${escapeRegex(d.currencyRaw)}`,
-      )
-      const m = pattern.exec(lineText)
-      if (m && m.index >= 0) {
-        const amountStart = lineRef.from + m.index
+      const needle = `${d.amountRaw} ${d.currencyRaw}`
+      const idx = lineText.indexOf(needle)
+      if (idx >= 0) {
+        const amountStart = lineRef.from + idx
         const amountEnd = amountStart + d.amountRaw.length
         items.push({
           from: amountStart,

@@ -284,6 +284,8 @@ const STATEMENT_ACCOUNT = 'Liabilities:CreditCard:HDFC:DinersBlack'
 const STATEMENT_ROWS: StatementRowData[] = [
   {
     id: 'r1',
+    startLine: 0,
+    endLine: 0,
     date: '2023-11-20',
     payee: 'Amazon India',
     narration: 'Cloud Subscription',
@@ -296,6 +298,8 @@ const STATEMENT_ROWS: StatementRowData[] = [
   },
   {
     id: 'r2',
+    startLine: 0,
+    endLine: 0,
     date: '2023-11-21',
     payee: 'Starbucks Coffee',
     narration: 'Morning Brew',
@@ -308,6 +312,8 @@ const STATEMENT_ROWS: StatementRowData[] = [
   },
   {
     id: 'r3',
+    startLine: 0,
+    endLine: 0,
     date: '2023-11-22',
     payee: 'HDFC Bank',
     narration: 'Interest Credit',
@@ -323,6 +329,8 @@ const STATEMENT_ROWS: StatementRowData[] = [
   },
   {
     id: 'r4',
+    startLine: 0,
+    endLine: 0,
     date: '2023-11-23',
     payee: 'Apple Store',
     narration: 'App Store Purchase',
@@ -335,6 +343,8 @@ const STATEMENT_ROWS: StatementRowData[] = [
   },
   {
     id: 'r5',
+    startLine: 0,
+    endLine: 0,
     date: '2023-11-24',
     payee: 'Zomato Limited',
     narration: 'Dinner Order',
@@ -347,6 +357,8 @@ const STATEMENT_ROWS: StatementRowData[] = [
   },
   {
     id: 'r6',
+    startLine: 0,
+    endLine: 0,
     date: '2023-11-25',
     narration: 'Salary Credit',
     debit: null,
@@ -358,6 +370,8 @@ const STATEMENT_ROWS: StatementRowData[] = [
   },
   {
     id: 'r7',
+    startLine: 0,
+    endLine: 0,
     date: '2023-11-26',
     narration: 'BESCOM',
     debit: '3,420.00',
@@ -369,6 +383,8 @@ const STATEMENT_ROWS: StatementRowData[] = [
   },
   {
     id: 'r8',
+    startLine: 0,
+    endLine: 0,
     date: '2023-11-28',
     narration: 'Swiggy',
     debit: '1,245.00',

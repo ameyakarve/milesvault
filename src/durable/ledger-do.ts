@@ -67,6 +67,23 @@ const DIRECTIVE_TABLE: Record<DirectiveInput['kind'], string> = {
 
 type EntryRef = { kind: Entry['kind']; id: number; date: number }
 
+// Parse a Beancount decimal string like "1234.56" or "-100" into a fixed-point
+// (scaled, scale) pair. Returns null only on malformed input. The result fits
+// safely in a JS Number for typical financial amounts (max ~9e15 / 10^scale).
+function decimalToScaled(text: string): { scaled: number; scale: number } | null {
+  const trimmed = text.trim()
+  if (!/^-?\d+(\.\d+)?$/.test(trimmed)) return null
+  const negative = trimmed.startsWith('-')
+  const body = negative ? trimmed.slice(1) : trimmed
+  const dot = body.indexOf('.')
+  const intPart = dot === -1 ? body : body.slice(0, dot)
+  const fracPart = dot === -1 ? '' : body.slice(dot + 1)
+  const scale = fracPart.length
+  const digits = intPart + fracPart
+  const mag = Number(digits === '' ? '0' : digits)
+  return { scaled: negative ? -mag : mag, scale }
+}
+
 export class LedgerDO extends DurableObject<CloudflareEnv> {
   private sql: SqlStorage
 
@@ -254,9 +271,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }>(
         `SELECT account, currency, amount_scaled, scale, date
          FROM postings
-         WHERE date <= ?
-           AND currency IS NOT NULL AND currency != ''
-           AND amount_scaled IS NOT NULL`,
+         WHERE date <= ?`,
         asOfInt,
       )
       .toArray()) {
@@ -266,7 +281,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     for (const r of this.sql
       .exec<{ account: string; currency: string; date: number }>(
         `SELECT account, currency, date FROM directives_balance
-         WHERE date <= ? AND currency IS NOT NULL AND currency != ''`,
+         WHERE date <= ?`,
         asOfInt,
       )
       .toArray()) {
@@ -311,6 +326,10 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {
+    // TODO: parseJournalStrict already rejects elided postings (every posting
+    // must carry an explicit amount + currency). Surface a dedicated error
+    // kind ('elided_posting') here so the UI can show a targeted message
+    // instead of the generic 'parse_error'.
     const parsed = parseJournalStrict(text)
     if (isStrictParseErr(parsed)) {
       return { ok: false, error: parsed.kind, message: parsed.message }
@@ -713,7 +732,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
           now,
         )
         return
-      case 'balance':
+      case 'balance': {
+        const bal = decimalToScaled(d.amount)
+        if (!bal) throw new Error(`unparseable balance amount: ${d.amount}`)
         this.sql.exec(
           `INSERT INTO directives_balance
              (date, account, amount, amount_scaled, scale, currency, meta_json, created_at, updated_at)
@@ -721,14 +742,15 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
           dateInt,
           d.account,
           d.amount,
-          0,
-          0,
+          bal.scaled,
+          bal.scale,
           d.currency,
           meta,
           now,
           now,
         )
         return
+      }
       case 'pad':
         this.sql.exec(
           `INSERT INTO directives_pad (date, account, account_pad, meta_json, created_at, updated_at)
@@ -741,7 +763,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
           now,
         )
         return
-      case 'price':
+      case 'price': {
+        const pr = decimalToScaled(d.amount)
+        if (!pr) throw new Error(`unparseable price amount: ${d.amount}`)
         this.sql.exec(
           `INSERT INTO directives_price
              (date, commodity, currency, amount, amount_scaled, scale, meta_json, created_at, updated_at)
@@ -750,13 +774,14 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
           d.commodity,
           d.currency,
           d.amount,
-          0,
-          0,
+          pr.scaled,
+          pr.scale,
           meta,
           now,
           now,
         )
         return
+      }
       case 'note':
         this.sql.exec(
           `INSERT INTO directives_note (date, account, description, meta_json, created_at, updated_at)
@@ -797,6 +822,10 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private insertPosting(txnId: number, idx: number, p: PostingInput, dateInt: number): void {
+    // parseJournalStrict rejects elided postings, so amount/currency are present.
+    const amt = decimalToScaled(p.amount!)
+    if (!amt) throw new Error(`unparseable amount: ${p.amount}`)
+    const price = p.price_amount != null ? decimalToScaled(p.price_amount) : null
     this.sql.exec(
       `INSERT INTO postings (
         txn_id, idx, flag, account,
@@ -809,15 +838,15 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       idx,
       p.flag ?? null,
       p.account,
-      p.amount ?? null,
-      null,
-      null,
-      p.currency ?? null,
+      p.amount!,
+      amt.scaled,
+      amt.scale,
+      p.currency!,
       p.cost_raw ?? null,
       p.price_at_signs ?? 0,
       p.price_amount ?? null,
-      null,
-      null,
+      price ? price.scaled : null,
+      price ? price.scale : null,
       p.price_currency ?? null,
       p.comment ?? null,
       JSON.stringify(p.meta ?? {}),
