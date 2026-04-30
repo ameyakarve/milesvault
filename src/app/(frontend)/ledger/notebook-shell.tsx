@@ -698,7 +698,7 @@ export function NotebookShell({
   onRevert,
   body,
   statementBody,
-  defaultViewMode = 'editor',
+  defaultViewMode = 'statement',
   cursor = 'Ln 1, Col 1',
   currency,
   currencies = [],
