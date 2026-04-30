@@ -2,6 +2,66 @@
 
 Accounts carry a `kind` derived from the first two path segments. The derivation is a pure function from path → kind. Path is beancount-native; kind is MilesVault's typing layer for analytics, UI, and validation.
 
+## Top-level tree
+
+Five fixed roots (beancount mandate). MilesVault is opinionated about the second level — these are the only paths the app expects to see. New users start with this tree; deeper segments are user-chosen and free-form.
+
+```
+Assets
+  Bank:<institution>:<account>          e.g. Assets:Bank:HDFC:Savings
+  Cash                                  physical cash (one or more sub-accounts ok)
+  Investments:<broker>:<vehicle>        e.g. Assets:Investments:Zerodha:Stocks
+  Retirement:<scheme>                   e.g. Assets:Retirement:EPF, Assets:Retirement:NPS
+  Receivable:<name>                     IOUs owed to you
+  Prepaid:<vendor>                      rent paid forward, deposits, etc.
+  DebitCards:*                          see "Cards" section
+  Loaded:Wallets|PrepaidCards|GiftCards|ForexCards:*   see "Cards" section
+  Rewards:Points|Status:*               see "Rewards" section
+
+Liabilities
+  CC:<issuer>:<product>                 e.g. Liabilities:CC:HDFC:Infinia
+  Loan:Mortgage|Auto|Student|Personal:<lender>
+  Payable:<name>                        IOUs you owe
+
+Equity
+  Opening-Balances                      one entry per account at user onboarding
+  Void                                  reserved; do not post to (see plugs below)
+
+Income
+  Salary:<employer>
+  Bonus:<employer>
+  Interest:<source>                     bank, FD, bond
+  Dividend:<source>                     stocks, MFs
+  Gift                                  inbound gifts of cash; non-cash gifts route via Income:Void + #gift-in
+  Void                                  plug — see "System plug accounts"
+
+Expenses
+  Housing                               rent, mortgage interest, utilities, repairs
+  Food                                  groceries, restaurants, coffee, delivery
+  Transport                             fuel, public transit, ride-share, parking, vehicle service
+  Health                                doctor, pharmacy, insurance premiums, gym
+  Shopping                              clothing, electronics, household goods
+  Entertainment                         streaming, events, dining-out (overlap w/ Food is user choice)
+  Personal                              grooming, education, subscriptions, hobbies
+  Financial                             fees, interest paid, taxes, FX markup
+  Travel                                flights, hotels, museums, local transport while abroad
+  Misc                                  small bucket; if a row recurs, give it a real category
+  Void                                  plug — see "System plug accounts"
+```
+
+### Rules of thumb
+
+- **Two-level Expense max in v1.** `Expenses:Food:Coffee` is fine; `Expenses:Food:Restaurant:Italian:Pasta` is not. Drill into payee/narration if you want finer slicing.
+- **Payee in narration, not in path.** Don't create `Expenses:Food:BlueTokai` — log "Blue Tokai" as the payee on the txn.
+- **Institution as the middle segment for Assets/Liabilities.** `Assets:Bank:HDFC:Savings`, `Liabilities:CC:Amex:Plat` — keeps per-institution rollups cheap.
+- **Cashback and refunds are NOT income.** They reduce the originating expense:
+  - Cashback: `#cashback` tag, full outflow + credit-back to the instrument, `Income:Void` plug. See "Cashback and discounts" below.
+  - Refunds: same shape as cashback when traceable to the original txn; otherwise model as a negative posting on the original `Expenses:*` category.
+  - Untraceable rebates (rare): `Expenses:Misc:Rewards` is acceptable; don't invent `Income:Cashback`.
+- **`Misc` stays small.** If a row repeats more than 2–3 months, promote it to a real second-level category.
+- **No `Equity:Earnings` rollup.** Beancount does not auto-roll year-end income to equity, and personal users almost never benefit from manual closing entries. Skip it.
+- **Skip `Assets:Receivable` / `Liabilities:Payable` for v1** unless you actually lend/borrow — most users won't. Don't pre-seed empty stubs.
+
 ## Cards
 
 Six card kinds across two beancount types. "Card" is the UX primitive; the ledger primitive is the account a card draws from or holds value on.
