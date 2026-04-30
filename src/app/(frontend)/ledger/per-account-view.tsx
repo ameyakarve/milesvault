@@ -162,7 +162,7 @@ export function PerAccountView({
   defaultViewMode,
 }: {
   account: string
-  defaultViewMode?: 'editor' | 'statement'
+  defaultViewMode?: 'overview' | 'editor' | 'statement'
 }) {
   const router = useRouter()
   const pathname = usePathname()

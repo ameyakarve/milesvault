@@ -590,6 +590,8 @@ function LeafChipsRow({
   )
 }
 
+export type ViewMode = 'overview' | 'statement' | 'editor'
+
 function SubToolbar({
   viewMode,
   onViewModeChange,
@@ -598,8 +600,8 @@ function SubToolbar({
   onSave,
   onRevert,
 }: {
-  viewMode: 'editor' | 'statement'
-  onViewModeChange: (mode: 'editor' | 'statement') => void
+  viewMode: ViewMode
+  onViewModeChange: (mode: ViewMode) => void
   unsaved: boolean
   saving: boolean
   onSave?: () => void
@@ -611,6 +613,13 @@ function SubToolbar({
   return (
     <div className="h-[40px] bg-[#eceef0] px-6 flex items-center justify-between border-b border-slate-200 shrink-0">
       <div className="flex items-center h-full text-[11px] font-medium gap-4">
+        <button
+          type="button"
+          onClick={() => onViewModeChange('overview')}
+          className={`${tabBase} ${viewMode === 'overview' ? tabActive : tabIdle}`}
+        >
+          Overview
+        </button>
         <button
           type="button"
           onClick={() => onViewModeChange('statement')}
@@ -674,7 +683,7 @@ export type NotebookShellProps = {
   onRevert?: () => void
   body?: ReactNode
   statementBody?: ReactNode
-  defaultViewMode?: 'editor' | 'statement'
+  defaultViewMode?: ViewMode
   cursor?: string
   currency?: string | null
   currencies?: string[]
@@ -708,7 +717,7 @@ export function NotebookShell({
   periods = [],
   onPeriodChange,
 }: NotebookShellProps) {
-  const [viewMode, setViewMode] = useState<'editor' | 'statement'>(defaultViewMode)
+  const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode)
   return (
     <div className="w-full h-screen flex bg-[#f7f9fb] font-sans text-[#191c1e] overflow-hidden">
       <NavRail />
@@ -738,7 +747,9 @@ export function NotebookShell({
               onSave={onSave}
               onRevert={onRevert}
             />
-            {viewMode === 'editor' ? (
+            {viewMode === 'overview' ? (
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]" />
+            ) : viewMode === 'editor' ? (
               <EditorPane cards={cards} body={body} />
             ) : (
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">

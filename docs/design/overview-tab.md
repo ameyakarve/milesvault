@@ -1,6 +1,6 @@
-# Analytics tab — design contract
+# Overview tab — design contract
 
-The analytics tab on the per-account view (`/ledger/<account>?ccy=&tab=analytics`) uses **one layout for every account kind**. The grid, chart primitives, and chrome stay fixed; only the data filling each slot varies by kind.
+The overview tab on the per-account view (`/ledger/<account>?ccy=&tab=overview`) uses **one layout for every account kind**. The grid, chart primitives, and chrome stay fixed; only the data filling each slot varies by kind.
 
 This is a contract, not a sketch. Anything that doesn't fit the contract doesn't ship on this tab.
 
@@ -72,11 +72,11 @@ These are hard rules. Bend them and the tab loses its meaning.
 
 One Stitch mock per kind, all sharing the layout contract above:
 
-- [ ] `analytics-bank` (Bank / Cash)
-- [ ] `analytics-cc` (Liabilities:CC)
-- [ ] `analytics-expense` (Expenses:\*)
-- [ ] `analytics-income` (Income:\*)
-- [ ] `analytics-rewards` (Assets:Rewards:Points)
-- [ ] `analytics-investments` (Assets:Investments / Retirement)
+- [ ] `overview-bank` (Bank / Cash)
+- [ ] `overview-cc` (Liabilities:CC)
+- [ ] `overview-expense` (Expenses:\*)
+- [ ] `overview-income` (Income:\*)
+- [ ] `overview-rewards` (Assets:Rewards:Points)
+- [ ] `overview-investments` (Assets:Investments / Retirement)
 
 Mock the Bank variant first as the layout reference. Mock the CC variant second to prove the slots hold under a kind that needs the line+bar overlay and a cycle-event list.
