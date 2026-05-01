@@ -21,6 +21,7 @@ import {
 } from '@/lib/beancount/scope'
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import { NotebookShell } from './notebook-shell'
+import { OverviewView, BANK_OVERVIEW_SAMPLE } from './overview-view'
 import { StatementView, type StatementRowData } from './statement-view'
 import {
   cardDecorations,
@@ -525,6 +526,8 @@ export function PerAccountView({
     />
   )
 
+  const overviewBody = <OverviewView {...BANK_OVERVIEW_SAMPLE} />
+
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
 
@@ -544,6 +547,7 @@ export function PerAccountView({
       onRevert={onRevert}
       body={body}
       statementBody={statementBody}
+      overviewBody={overviewBody}
       defaultViewMode={defaultViewMode}
       currency={currency}
       currencies={currencies}
