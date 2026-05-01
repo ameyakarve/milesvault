@@ -31,9 +31,77 @@ export type EventRow = {
 export type OverviewViewProps = {
   caption: string
   kpis: OverviewKpi[]
-  trend: { title: string; points: TrendPoint[]; yLabels: string[]; highlightIndex?: number }
+  trend: {
+    title: string
+    currency: string
+    points: TrendPoint[]
+    highlightIndex?: number
+  }
   composition: { title: string; rows: CompositionRow[]; moreCount?: number }
   events: { title: string; rows: EventRow[] }
+}
+
+function niceNum(range: number, round: boolean): number {
+  if (range <= 0) return 1
+  const exp = Math.floor(Math.log10(range))
+  const f = range / 10 ** exp
+  let nf: number
+  if (round) {
+    if (f < 1.5) nf = 1
+    else if (f < 3) nf = 2
+    else if (f < 7) nf = 5
+    else nf = 10
+  } else {
+    if (f <= 1) nf = 1
+    else if (f <= 2) nf = 2
+    else if (f <= 5) nf = 5
+    else nf = 10
+  }
+  return nf * 10 ** exp
+}
+
+function niceTicks(min: number, max: number, n = 5): { lo: number; hi: number; ticks: number[] } {
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
+    const v = Number.isFinite(min) ? min : 0
+    const m = Math.max(Math.abs(v), 1)
+    const lo = v - m
+    const hi = v + m
+    const step = (hi - lo) / (n - 1)
+    const ticks = Array.from({ length: n }, (_, i) => lo + i * step)
+    return { lo, hi, ticks }
+  }
+  const range = niceNum(max - min, false)
+  const step = niceNum(range / (n - 1), true)
+  const lo = Math.floor(min / step) * step
+  const hi = Math.ceil(max / step) * step
+  const ticks: number[] = []
+  for (let v = lo; v <= hi + step / 1000; v += step) ticks.push(v)
+  return { lo, hi, ticks }
+}
+
+function pickUnit(maxAbs: number, currency: string): { divisor: number; suffix: string } {
+  if (currency === 'INR') {
+    if (maxAbs >= 1e7) return { divisor: 1e7, suffix: 'Cr' }
+    if (maxAbs >= 1e5) return { divisor: 1e5, suffix: 'L' }
+    if (maxAbs >= 1e3) return { divisor: 1e3, suffix: 'K' }
+    return { divisor: 1, suffix: '' }
+  }
+  if (maxAbs >= 1e6) return { divisor: 1e6, suffix: 'M' }
+  if (maxAbs >= 1e3) return { divisor: 1e3, suffix: 'K' }
+  return { divisor: 1, suffix: '' }
+}
+
+function formatTickValue(v: number, unit: { divisor: number; suffix: string }): string {
+  if (v === 0) return '0'
+  const scaled = v / unit.divisor
+  const sign = scaled < 0 ? '−' : ''
+  const abs = Math.abs(scaled)
+  let body: string
+  if (unit.suffix === '') body = String(Math.round(abs))
+  else if (abs >= 100) body = String(Math.round(abs))
+  else if (abs >= 10) body = abs.toFixed(0)
+  else body = abs.toFixed(1).replace(/\.0$/, '')
+  return `${sign}${body}${unit.suffix}`
 }
 
 function CardShell({ children, className = '' }: { children: React.ReactNode; className?: string }) {
@@ -79,23 +147,28 @@ function KpiTile({ kpi }: { kpi: OverviewKpi }) {
 
 function TrendChart({
   title,
+  currency,
   points,
-  yLabels,
   highlightIndex,
 }: OverviewViewProps['trend']) {
   const [hover, setHover] = useState<number | null>(highlightIndex ?? null)
+  const hasData = points.length > 0
   const ys = points.map((p) => p.y)
-  const yMin = Math.min(...ys)
-  const yMax = Math.max(...ys)
-  const yRange = yMax - yMin || 1
-  const yPadded = yRange * 0.12
-  const yLo = yMin - yPadded
-  const yHi = yMax + yPadded
+  const dataMin = hasData ? Math.min(...ys) : 0
+  const dataMax = hasData ? Math.max(...ys) : 0
+  const enclosedMin = Math.min(dataMin, 0)
+  const enclosedMax = Math.max(dataMax, 0)
+  const { lo: yLo, hi: yHi, ticks } = niceTicks(enclosedMin, enclosedMax, 5)
+  const maxAbs = Math.max(Math.abs(yLo), Math.abs(yHi), 1)
+  const unit = pickUnit(maxAbs, currency)
+  const yLabels = ticks.map((t) => formatTickValue(t, unit))
   const xAt = (i: number) => (100 * i) / Math.max(points.length - 1, 1)
-  const yAt = (v: number) => 100 - ((v - yLo) / (yHi - yLo)) * 100
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i)},${yAt(p.y)}`).join(' ')
+  const yAt = (v: number) => 100 - ((v - yLo) / (yHi - yLo || 1)) * 100
+  const pathD = hasData
+    ? points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i)},${yAt(p.y)}`).join(' ')
+    : ''
   const xLabels = (() => {
-    if (points.length === 0) return [] as string[]
+    if (!hasData) return [] as string[]
     if (points.length <= 6) return points.map((p) => p.x)
     const out: string[] = []
     for (let i = 0; i < 6; i++) {
@@ -104,73 +177,83 @@ function TrendChart({
     }
     return out
   })()
-  const yLabelsReversed = [...yLabels].reverse()
+  const yLabelsTopDown = [...yLabels].reverse()
   const active = hover ?? -1
   const tooltip =
-    active >= 0 && active < points.length
+    hasData && active >= 0 && active < points.length
       ? { p: points[active]!, x: xAt(active), y: yAt(points[active]!.y) }
       : null
   return (
     <div className="w-[60%] bg-white border border-slate-100 rounded-md p-4 flex flex-col">
-      <div className="text-[13px] font-semibold text-slate-900 mb-6">{title}</div>
-      <div className="flex-1 relative h-48">
-        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-          {yLabels.map((_, i) => (
-            <div key={i} className="border-t border-dotted border-slate-100 w-full" />
+      <div className="text-[13px] font-semibold text-slate-900 mb-4">{title}</div>
+      <div className="relative h-48">
+        <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-[10px] font-mono text-slate-500 pr-1 text-right">
+          {yLabelsTopDown.map((lbl, i) => (
+            <span key={i} className="leading-none">
+              {lbl}
+            </span>
           ))}
         </div>
-        <div className="absolute inset-0 right-[5%] border-l border-b border-slate-100">
-          <svg
-            className="h-full w-full overflow-visible"
-            preserveAspectRatio="none"
-            viewBox="0 0 100 100"
-            onMouseLeave={() => setHover(highlightIndex ?? null)}
-          >
-            <path d={pathD} fill="none" stroke="#00685f" strokeWidth={2} />
-            {tooltip && (
-              <line
-                stroke="#00685f"
-                strokeDasharray="2,2"
-                strokeWidth={1}
-                x1={tooltip.x}
-                x2={tooltip.x}
-                y1={0}
-                y2={100}
-              />
-            )}
-            {points.map((_, i) => (
-              <circle
-                key={i}
-                cx={xAt(i)}
-                cy={yAt(points[i]!.y)}
-                r={3}
-                fill="transparent"
-                onMouseEnter={() => setHover(i)}
-                style={{ cursor: 'pointer' }}
-              />
+        <div className="absolute inset-y-0 right-0 left-10">
+          <div className="absolute inset-0 flex flex-col-reverse justify-between pointer-events-none">
+            {ticks.map((_, i) => (
+              <div key={i} className="border-t border-dotted border-slate-100 w-full" />
             ))}
-          </svg>
-          {tooltip && (
-            <div
-              className="absolute right-0 top-0 translate-x-1/2 -translate-y-full mb-2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-20"
-              style={{ left: `${tooltip.x}%`, right: 'auto' }}
-            >
-              {tooltip.p.label}
-            </div>
-          )}
-        </div>
-        <div className="absolute left-1 inset-y-0 flex flex-col justify-between text-[10px] font-mono text-slate-500">
-          {yLabelsReversed.map((lbl, i) => (
-            <span key={i}>{lbl}</span>
-          ))}
-        </div>
-        <div className="absolute -bottom-6 left-0 right-[5%] flex justify-between text-[10px] font-mono text-slate-500">
-          {xLabels.map((lbl, i) => (
-            <span key={i}>{lbl}</span>
-          ))}
+          </div>
+          <div className="absolute inset-0 border-l border-b border-slate-100">
+            {hasData && (
+              <svg
+                className="h-full w-full overflow-visible"
+                preserveAspectRatio="none"
+                viewBox="0 0 100 100"
+                onMouseLeave={() => setHover(highlightIndex ?? null)}
+              >
+                <path d={pathD} fill="none" stroke="#00685f" strokeWidth={2} />
+                {tooltip && (
+                  <line
+                    stroke="#00685f"
+                    strokeDasharray="2,2"
+                    strokeWidth={1}
+                    x1={tooltip.x}
+                    x2={tooltip.x}
+                    y1={0}
+                    y2={100}
+                  />
+                )}
+                {points.map((_, i) => (
+                  <circle
+                    key={i}
+                    cx={xAt(i)}
+                    cy={yAt(points[i]!.y)}
+                    r={3}
+                    fill="transparent"
+                    onMouseEnter={() => setHover(i)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                ))}
+              </svg>
+            )}
+            {tooltip && (
+              <div
+                className="absolute top-0 -translate-y-full -translate-x-1/2 mb-2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-20"
+                style={{ left: `${tooltip.x}%` }}
+              >
+                {tooltip.p.label}
+              </div>
+            )}
+            {!hasData && (
+              <div className="absolute inset-0 flex items-center justify-center text-[11px] text-slate-400">
+                No data in selected range
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      <div className="mt-8" />
+      <div className="ml-10 mt-2 flex justify-between text-[10px] font-mono text-slate-500">
+        {xLabels.map((lbl, i) => (
+          <span key={i}>{lbl}</span>
+        ))}
+      </div>
     </div>
   )
 }
@@ -283,7 +366,7 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
   ],
   trend: {
     title: 'Balance over time',
-    yLabels: ['1L', '2L', '3L', '4L', '5L'],
+    currency: 'INR',
     highlightIndex: 10,
     points: [
       { x: 'May 25', y: 370110, label: 'May 25 · ₹3,70,110.00' },
