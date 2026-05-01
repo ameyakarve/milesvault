@@ -177,6 +177,7 @@ export function PerAccountView({
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [period, setPeriod] = useState<string>('All time')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -526,7 +527,9 @@ export function PerAccountView({
     />
   )
 
-  const overviewBody = <OverviewView {...BANK_OVERVIEW_SAMPLE} />
+  const overviewBody = (
+    <OverviewView {...BANK_OVERVIEW_SAMPLE} caption={`Overview · ${period}`} />
+  )
 
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
@@ -553,6 +556,11 @@ export function PerAccountView({
       currencies={currencies}
       onCurrencyChange={onCurrencyChange}
       leafChips={children}
+      period={period}
+      periods={PERIOD_OPTIONS}
+      onPeriodChange={setPeriod}
     />
   )
 }
+
+const PERIOD_OPTIONS = ['All time', '12M', 'YTD', '3M', '1M']

@@ -30,14 +30,11 @@ export type EventRow = {
 
 export type OverviewViewProps = {
   caption: string
-  range: '1M' | '3M' | 'YTD' | '12M' | 'All'
   kpis: OverviewKpi[]
   trend: { title: string; points: TrendPoint[]; yLabels: string[]; highlightIndex?: number }
   composition: { title: string; rows: CompositionRow[]; moreCount?: number }
   events: { title: string; rows: EventRow[] }
 }
-
-const RANGES: OverviewViewProps['range'][] = ['1M', '3M', 'YTD', '12M', 'All']
 
 function CardShell({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
@@ -226,41 +223,15 @@ function EventsList({ title, rows }: OverviewViewProps['events']) {
 
 export function OverviewView({
   caption,
-  range,
   kpis,
   trend,
   composition,
   events,
 }: OverviewViewProps) {
-  const [activeRange, setActiveRange] = useState<OverviewViewProps['range']>(range)
   return (
     <div data-overview-root className="flex-1 flex flex-col bg-white overflow-y-auto">
-      <div className="px-6 py-2 flex items-center justify-between border-b border-slate-100 flex-shrink-0 bg-white sticky top-0 z-10">
+      <div className="px-6 py-2 flex items-center border-b border-slate-100 flex-shrink-0 bg-white sticky top-0 z-10">
         <div className="text-[11px] text-slate-500 font-medium">{caption}</div>
-        <div className="flex items-center space-x-4">
-          <div className="flex bg-slate-100 p-0.5 rounded-full">
-            {RANGES.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setActiveRange(r)}
-                className={`px-2 py-0.5 text-[9px] font-bold rounded-full ${
-                  activeRange === r ? 'bg-[#00685f] text-white' : 'text-slate-500'
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center space-x-1.5 opacity-60">
-            <div className="w-6 h-3 bg-slate-200 rounded-full relative">
-              <div className="absolute left-0.5 top-0.5 w-2 h-2 bg-white rounded-full" />
-            </div>
-            <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
-              Δ vs prior period
-            </span>
-          </div>
-        </div>
       </div>
 
       <div className="p-6 space-y-6">
@@ -283,7 +254,6 @@ export function OverviewView({
 
 export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
   caption: 'Overview · 12 months',
-  range: '12M',
   kpis: [
     {
       label: 'Balance',
