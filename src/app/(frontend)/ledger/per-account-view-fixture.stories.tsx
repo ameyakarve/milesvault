@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import React, { useEffect, useRef, useState } from 'react'
 import { PerAccountView } from './per-account-view'
 import { NotebookShell } from './notebook-shell'
+import { OverviewView, BANK_OVERVIEW_SAMPLE } from './overview-view'
 import { StatementView, type StatementRowData } from './statement-view'
 import { parseJournal, serializeJournal } from '@/lib/beancount/ast'
 import {
@@ -395,6 +396,24 @@ const STATEMENT_ROWS: StatementRowData[] = [
     postedDate: '2023-11-28',
   },
 ]
+
+export const Overview: StoryObj = {
+  render: () => (
+    <NotebookShell
+      breadcrumb={['Assets', 'Bank', 'HDFC', 'Savings']}
+      accountTitle="Savings"
+      accountPath="Assets:Bank:HDFC:Savings"
+      balance="₹4,82,550.00"
+      netIn="+₹6,12,440.00"
+      netOut="−₹5,00,000.00"
+      cards={[]}
+      txnCount={42}
+      currency="INR"
+      defaultViewMode="overview"
+      overviewBody={<OverviewView {...BANK_OVERVIEW_SAMPLE} />}
+    />
+  ),
+}
 
 export const Statement: StoryObj = {
   render: () => (

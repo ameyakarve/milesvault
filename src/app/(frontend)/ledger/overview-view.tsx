@@ -32,9 +32,9 @@ export type OverviewViewProps = {
   caption: string
   range: '1M' | '3M' | 'YTD' | '12M' | 'All'
   kpis: OverviewKpi[]
-  trend: { title: string; subtitle: string; points: TrendPoint[]; yLabels: string[]; highlightIndex?: number }
-  composition: { title: string; subtitle: string; rows: CompositionRow[]; moreCount?: number }
-  events: { title: string; subtitle: string; rows: EventRow[] }
+  trend: { title: string; points: TrendPoint[]; yLabels: string[]; highlightIndex?: number }
+  composition: { title: string; rows: CompositionRow[]; moreCount?: number }
+  events: { title: string; rows: EventRow[] }
 }
 
 const RANGES: OverviewViewProps['range'][] = ['1M', '3M', 'YTD', '12M', 'All']
@@ -47,56 +47,46 @@ function CardShell({ children, className = '' }: { children: React.ReactNode; cl
   )
 }
 
-function CardTitleRow({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <h3 className="text-[13px] font-semibold text-slate-900">{title}</h3>
-      <span className="font-mono text-[11px] text-slate-500">{subtitle}</span>
-    </div>
-  )
+function CardTitleRow({ title }: { title: string }) {
+  return <h3 className="text-[13px] font-semibold text-slate-900 mb-4">{title}</h3>
 }
 
 function KpiTile({ kpi }: { kpi: OverviewKpi }) {
   return (
-    <CardShell className="flex-1">
-      <div className="text-[11px] uppercase tracking-wider font-mono text-slate-500 mb-2">
+    <CardShell>
+      <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">
         {kpi.label}
       </div>
-      <div className={`font-mono text-[24px] leading-tight font-bold ${kpi.valueClass ?? 'text-slate-900'}`}>
-        {kpi.value}
-      </div>
-      <div className="mt-2 flex items-center gap-2 min-h-[18px]">
-        {kpi.caption && <span className="text-[11px] text-slate-500">{kpi.caption}</span>}
+      <div className="flex items-baseline space-x-2">
+        <span className={`font-mono text-xl font-bold ${kpi.valueClass ?? 'text-slate-900'}`}>
+          {kpi.value}
+        </span>
         {kpi.chip && (
           <span
-            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-sm ${
-              kpi.chip.tone === 'pos' ? 'bg-[#00685f] text-white' : 'bg-rose-600 text-white'
+            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+              kpi.chip.tone === 'pos'
+                ? 'bg-[#00685f]/10 text-[#00685f]'
+                : 'bg-rose-600/10 text-rose-600'
             }`}
           >
             {kpi.chip.text}
           </span>
         )}
       </div>
+      {kpi.caption && (
+        <div className="text-[10px] text-slate-400 mt-1 italic">{kpi.caption}</div>
+      )}
     </CardShell>
   )
 }
 
 function TrendChart({
   title,
-  subtitle,
   points,
   yLabels,
   highlightIndex,
 }: OverviewViewProps['trend']) {
   const [hover, setHover] = useState<number | null>(highlightIndex ?? null)
-  const W = 720
-  const H = 220
-  const padL = 36
-  const padR = 12
-  const padT = 10
-  const padB = 22
-  const innerW = W - padL - padR
-  const innerH = H - padT - padB
   const ys = points.map((p) => p.y)
   const yMin = Math.min(...ys)
   const yMax = Math.max(...ys)
@@ -104,152 +94,129 @@ function TrendChart({
   const yPadded = yRange * 0.12
   const yLo = yMin - yPadded
   const yHi = yMax + yPadded
-  const xAt = (i: number) => padL + (innerW * i) / Math.max(points.length - 1, 1)
-  const yAt = (v: number) => padT + innerH - ((v - yLo) / (yHi - yLo)) * innerH
-  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(p.y)}`).join(' ')
-  const gridYs = yLabels.map((_, i) => padT + (innerH * i) / (yLabels.length - 1))
-  const xTickEvery = Math.max(1, Math.ceil(points.length / 6))
+  const xAt = (i: number) => (100 * i) / Math.max(points.length - 1, 1)
+  const yAt = (v: number) => 100 - ((v - yLo) / (yHi - yLo)) * 100
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i)},${yAt(p.y)}`).join(' ')
+  const xLabels = ['May 25', 'Jul', 'Sep', 'Nov', 'Jan 26', 'Mar']
+  const yLabelsReversed = [...yLabels].reverse()
   const active = hover ?? -1
   const tooltip =
     active >= 0 && active < points.length
       ? { p: points[active]!, x: xAt(active), y: yAt(points[active]!.y) }
       : null
   return (
-    <CardShell className="flex-1">
-      <CardTitleRow title={title} subtitle={subtitle} />
-      <div className="relative">
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          width="100%"
-          className="block"
-          onMouseLeave={() => setHover(highlightIndex ?? null)}
-        >
-          {gridYs.map((gy, i) => (
-            <line
-              key={`g-${i}`}
-              x1={padL}
-              x2={W - padR}
-              y1={gy}
-              y2={gy}
-              stroke="#e2e8f0"
-              strokeWidth="1"
-              strokeDasharray="2 4"
-            />
+    <div className="w-[60%] bg-white border border-slate-100 rounded-md p-4 flex flex-col">
+      <div className="text-[13px] font-semibold text-slate-900 mb-6">{title}</div>
+      <div className="flex-1 relative h-48">
+        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+          {yLabels.map((_, i) => (
+            <div key={i} className="border-t border-dotted border-slate-100 w-full" />
           ))}
-          {yLabels.map((lbl, i) => (
-            <text
-              key={`yl-${i}`}
-              x={padL - 6}
-              y={gridYs[gridYs.length - 1 - i]! + 3}
-              textAnchor="end"
-              className="fill-slate-500"
-              style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}
-            >
-              {lbl}
-            </text>
-          ))}
-          {points.map((p, i) =>
-            i % xTickEvery === 0 ? (
-              <text
-                key={`xl-${i}`}
-                x={xAt(i)}
-                y={H - 6}
-                textAnchor="middle"
-                className="fill-slate-500"
-                style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}
-              >
-                {p.x}
-              </text>
-            ) : null,
-          )}
-          <path d={path} stroke="#00685f" strokeWidth="2" fill="none" strokeLinejoin="round" />
-          {tooltip && (
-            <line
-              x1={tooltip.x}
-              x2={tooltip.x}
-              y1={padT}
-              y2={padT + innerH}
-              stroke="#00685f"
-              strokeWidth="1"
-              strokeDasharray="3 3"
-              opacity={0.6}
-            />
-          )}
-          {points.map((p, i) => (
-            <circle
-              key={`pt-${i}`}
-              cx={xAt(i)}
-              cy={yAt(p.y)}
-              r={10}
-              fill="transparent"
-              onMouseEnter={() => setHover(i)}
-              style={{ cursor: 'pointer' }}
-            />
-          ))}
-          {tooltip && <circle cx={tooltip.x} cy={tooltip.y} r="3" fill="#00685f" />}
-        </svg>
-        {tooltip && (
-          <div
-            className="absolute pointer-events-none px-2 py-1 bg-white border border-slate-200 rounded-sm shadow-sm font-mono text-[11px] text-slate-900"
-            style={{
-              left: `calc(${(tooltip.x / W) * 100}% + 6px)`,
-              top: `calc(${(tooltip.y / H) * 100}% - 28px)`,
-              transform: tooltip.x > W * 0.7 ? 'translateX(-100%) translateX(-12px)' : undefined,
-              whiteSpace: 'nowrap',
-            }}
+        </div>
+        <div className="absolute inset-0 right-[5%] border-l border-b border-slate-100">
+          <svg
+            className="h-full w-full overflow-visible"
+            preserveAspectRatio="none"
+            viewBox="0 0 100 100"
+            onMouseLeave={() => setHover(highlightIndex ?? null)}
           >
-            {tooltip.p.label}
-          </div>
-        )}
+            <path d={pathD} fill="none" stroke="#00685f" strokeWidth={2} />
+            {tooltip && (
+              <line
+                stroke="#00685f"
+                strokeDasharray="2,2"
+                strokeWidth={1}
+                x1={tooltip.x}
+                x2={tooltip.x}
+                y1={0}
+                y2={100}
+              />
+            )}
+            {points.map((_, i) => (
+              <circle
+                key={i}
+                cx={xAt(i)}
+                cy={yAt(points[i]!.y)}
+                r={3}
+                fill="transparent"
+                onMouseEnter={() => setHover(i)}
+                style={{ cursor: 'pointer' }}
+              />
+            ))}
+          </svg>
+          {tooltip && (
+            <div
+              className="absolute right-0 top-0 translate-x-1/2 -translate-y-full mb-2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-20"
+              style={{ left: `${tooltip.x}%`, right: 'auto' }}
+            >
+              {tooltip.p.label}
+            </div>
+          )}
+        </div>
+        <div className="absolute left-1 inset-y-0 flex flex-col justify-between text-[10px] font-mono text-slate-500">
+          {yLabelsReversed.map((lbl, i) => (
+            <span key={i}>{lbl}</span>
+          ))}
+        </div>
+        <div className="absolute -bottom-6 left-0 right-[5%] flex justify-between text-[10px] font-mono text-slate-500">
+          {xLabels.map((lbl, i) => (
+            <span key={i}>{lbl}</span>
+          ))}
+        </div>
       </div>
-    </CardShell>
+      <div className="mt-8" />
+    </div>
   )
 }
 
-function CompositionList({ title, subtitle, rows, moreCount }: OverviewViewProps['composition']) {
+function CompositionList({ title, rows, moreCount }: OverviewViewProps['composition']) {
   return (
-    <CardShell className="w-[360px] shrink-0">
-      <CardTitleRow title={title} subtitle={subtitle} />
-      <div className="flex flex-col gap-1.5">
+    <CardShell className="w-[40%] shrink-0 flex flex-col">
+      <CardTitleRow title={title} />
+      <div className="flex-1 flex flex-col gap-2">
         {rows.map((row, i) => (
-          <div key={i} className="relative h-[24px] flex items-center px-2">
+          <div key={i} className="relative flex items-center justify-between text-[11px] py-1 px-2 rounded overflow-hidden">
             <div
-              className="absolute left-0 top-0 bottom-0 rounded-sm"
-              style={{ width: `${Math.max(2, Math.round(row.scale * 100))}%`, backgroundColor: 'rgba(0,104,95,0.10)' }}
+              className="absolute inset-0 z-0"
+              style={{ width: `${Math.max(2, Math.round(row.scale * 100))}%`, backgroundColor: 'rgba(0,104,95,0.08)' }}
             />
-            <div className="relative flex-1 font-mono text-[12px] truncate">
-              <span className="text-slate-400">{row.prefix}</span>
-              <span className="text-slate-900 font-bold">{row.leaf}</span>
-            </div>
-            <div className={`relative font-mono text-[12px] tabular-nums pl-3 ${row.amountClass}`}>
+            <span className="relative z-10 truncate pr-4 text-slate-700">
+              {row.prefix}
+              {row.leaf}
+            </span>
+            <span
+              className={`relative z-10 font-mono ${
+                row.amountClass.includes('rose') ? row.amountClass : `${row.amountClass} font-bold`
+              }`}
+            >
               {row.amount}
-            </div>
+            </span>
           </div>
         ))}
         {moreCount != null && moreCount > 0 && (
-          <div className="text-[11px] text-slate-500 mt-1 pl-2">+{moreCount} more →</div>
+          <div className="mt-3 text-[11px] italic text-slate-400 text-right">+{moreCount} more →</div>
         )}
       </div>
     </CardShell>
   )
 }
 
-function EventsList({ title, subtitle, rows }: OverviewViewProps['events']) {
+function EventsList({ title, rows }: OverviewViewProps['events']) {
   return (
     <CardShell>
-      <CardTitleRow title={title} subtitle={subtitle} />
-      <div className="flex flex-col">
+      <CardTitleRow title={title} />
+      <div>
         {rows.map((row, i) => (
           <div
             key={i}
-            className="h-[40px] flex items-center border-t border-slate-100 first:border-t-0 last:border-b last:border-b-slate-100"
+            className={`h-[40px] flex items-center border-b border-slate-100 text-[12px] ${
+              i === 0 ? 'border-t' : ''
+            }`}
           >
-            <div className="w-[100px] font-mono text-[12px] text-slate-500">{row.date}</div>
-            <div className="w-[140px] text-[12px] text-slate-900">{row.payee}</div>
-            <div className="flex-1 text-[12px] text-slate-600 truncate">{row.narration}</div>
-            <div className={`w-[130px] font-mono text-[12px] tabular-nums text-right ${row.amountClass}`}>
-              {row.amount}
-            </div>
+            <div className="w-[100px] font-mono text-slate-500">{row.date}</div>
+            <div className="w-[140px] font-medium text-slate-900 truncate">{row.payee}</div>
+            <div className="flex-1 text-slate-600 truncate">{row.narration}</div>
+            <div className={`w-[130px] text-right font-mono ${row.amountClass}`}>{row.amount}</div>
           </div>
         ))}
       </div>
@@ -267,45 +234,49 @@ export function OverviewView({
 }: OverviewViewProps) {
   const [activeRange, setActiveRange] = useState<OverviewViewProps['range']>(range)
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[11px] text-slate-500">{caption}</span>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
+    <div data-overview-root className="flex-1 flex flex-col bg-white overflow-y-auto">
+      <div className="px-6 py-2 flex items-center justify-between border-b border-slate-100 flex-shrink-0 bg-white sticky top-0 z-10">
+        <div className="text-[11px] text-slate-500 font-medium">{caption}</div>
+        <div className="flex items-center space-x-4">
+          <div className="flex bg-slate-100 p-0.5 rounded-full">
             {RANGES.map((r) => (
               <button
                 key={r}
                 type="button"
                 onClick={() => setActiveRange(r)}
-                className={`px-2 py-0.5 text-[11px] font-mono rounded-sm transition-colors ${
-                  activeRange === r
-                    ? 'bg-[#00685f] text-white'
-                    : 'text-slate-600 hover:bg-slate-100'
+                className={`px-2 py-0.5 text-[9px] font-bold rounded-full ${
+                  activeRange === r ? 'bg-[#00685f] text-white' : 'text-slate-500'
                 }`}
               >
                 {r}
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer">
-            <input type="checkbox" className="h-3 w-3 accent-[#00685f]" defaultChecked={false} />
-            <span>Δ vs prior period</span>
-          </label>
+          <div className="flex items-center space-x-1.5 opacity-60">
+            <div className="w-6 h-3 bg-slate-200 rounded-full relative">
+              <div className="absolute left-0.5 top-0.5 w-2 h-2 bg-white rounded-full" />
+            </div>
+            <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+              Δ vs prior period
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="flex gap-4">
-        {kpis.map((k, i) => (
-          <KpiTile key={i} kpi={k} />
-        ))}
-      </div>
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-3 gap-6">
+          {kpis.map((k, i) => (
+            <KpiTile key={i} kpi={k} />
+          ))}
+        </div>
 
-      <div className="flex gap-4">
-        <TrendChart {...trend} />
-        <CompositionList {...composition} />
-      </div>
+        <div className="flex space-x-6">
+          <TrendChart {...trend} />
+          <CompositionList {...composition} />
+        </div>
 
-      <EventsList {...events} />
+        <EventsList {...events} />
+      </div>
     </div>
   )
 }
@@ -333,7 +304,6 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
   ],
   trend: {
     title: 'Balance over time',
-    subtitle: '12 months · monthly close',
     yLabels: ['1L', '2L', '3L', '4L', '5L'],
     highlightIndex: 10,
     points: [
@@ -353,7 +323,6 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
   },
   composition: {
     title: 'Top counter-accounts',
-    subtitle: '12 months · by absolute flow',
     moreCount: 12,
     rows: [
       {
@@ -402,7 +371,6 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
   },
   events: {
     title: 'Notable events',
-    subtitle: 'outliers, large flows, recurring credits',
     rows: [
       {
         date: '2026-04-30',
