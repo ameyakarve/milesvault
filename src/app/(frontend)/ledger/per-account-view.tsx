@@ -21,7 +21,8 @@ import {
 } from '@/lib/beancount/scope'
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import { NotebookShell } from './notebook-shell'
-import { OverviewView, BANK_OVERVIEW_SAMPLE } from './overview-view'
+import { OverviewView } from './overview-view'
+import { deriveOverview, type Period } from './overview-derive'
 import { StatementView, type StatementRowData } from './statement-view'
 import {
   cardDecorations,
@@ -177,7 +178,7 @@ export function PerAccountView({
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [period, setPeriod] = useState<string>('All time')
+  const [period, setPeriod] = useState<Period>('All time')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -527,8 +528,23 @@ export function PerAccountView({
     />
   )
 
-  const overviewBody = (
-    <OverviewView {...BANK_OVERVIEW_SAMPLE} caption={`Overview · ${period}`} />
+  const overviewProps = useMemo(() => {
+    if (!currency || isStrictParseErr(parsed)) return null
+    return deriveOverview({
+      cardSpecs,
+      transactions: parsed.transactions,
+      entries: parsed.entries,
+      account,
+      currency,
+      period,
+      caption: `Overview · ${period}`,
+    })
+  }, [cardSpecs, parsed, account, currency, period])
+
+  const overviewBody = overviewProps ? (
+    <OverviewView {...overviewProps} />
+  ) : (
+    <div className="p-6 text-xs text-slate-500">Loading…</div>
   )
 
   const breadcrumb = account.split(':').filter(Boolean)
@@ -558,9 +574,9 @@ export function PerAccountView({
       leafChips={children}
       period={period}
       periods={PERIOD_OPTIONS}
-      onPeriodChange={setPeriod}
+      onPeriodChange={(next) => setPeriod(next as Period)}
     />
   )
 }
 
-const PERIOD_OPTIONS = ['All time', '12M', 'YTD', '3M', '1M']
+const PERIOD_OPTIONS: Period[] = ['All time', '12M', 'YTD', '3M', '1M']

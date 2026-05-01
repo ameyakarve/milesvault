@@ -94,7 +94,16 @@ function TrendChart({
   const xAt = (i: number) => (100 * i) / Math.max(points.length - 1, 1)
   const yAt = (v: number) => 100 - ((v - yLo) / (yHi - yLo)) * 100
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i)},${yAt(p.y)}`).join(' ')
-  const xLabels = ['May 25', 'Jul', 'Sep', 'Nov', 'Jan 26', 'Mar']
+  const xLabels = (() => {
+    if (points.length === 0) return [] as string[]
+    if (points.length <= 6) return points.map((p) => p.x)
+    const out: string[] = []
+    for (let i = 0; i < 6; i++) {
+      const idx = Math.round(((points.length - 1) * i) / 5)
+      out.push(points[idx]!.x)
+    }
+    return out
+  })()
   const yLabelsReversed = [...yLabels].reverse()
   const active = hover ?? -1
   const tooltip =
