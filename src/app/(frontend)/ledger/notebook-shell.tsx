@@ -683,6 +683,7 @@ export type NotebookShellProps = {
   onRevert?: () => void
   body?: ReactNode
   statementBody?: ReactNode
+  overviewBody?: ReactNode
   defaultViewMode?: ViewMode
   cursor?: string
   currency?: string | null
@@ -707,6 +708,7 @@ export function NotebookShell({
   onRevert,
   body,
   statementBody,
+  overviewBody,
   defaultViewMode = 'statement',
   cursor = 'Ln 1, Col 1',
   currency,
@@ -748,7 +750,9 @@ export function NotebookShell({
               onRevert={onRevert}
             />
             {viewMode === 'overview' ? (
-              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]" />
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]">
+                {overviewBody}
+              </div>
             ) : viewMode === 'editor' ? (
               <EditorPane cards={cards} body={body} />
             ) : (
