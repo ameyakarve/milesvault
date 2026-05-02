@@ -36,20 +36,6 @@ function fmtUnsignedWithSymbol(n: number, currency: string): string {
   return `${sign}${fmtSymbol(currency)}${fmtAmount(n, currency)}`
 }
 
-function fmtTick(n: number, currency: string): string {
-  const sign = n < 0 ? '-' : ''
-  const v = Math.abs(n)
-  if (currency === 'INR') {
-    if (v >= 1e7) return `${sign}${(v / 1e7).toFixed(v >= 1e8 ? 0 : 1)}Cr`
-    if (v >= 1e5) return `${sign}${Math.round(v / 1e5)}L`
-    if (v >= 1e3) return `${sign}${Math.round(v / 1e3)}K`
-    return `${sign}${Math.round(v)}`
-  }
-  if (v >= 1e6) return `${sign}${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`
-  if (v >= 1e3) return `${sign}${Math.round(v / 1e3)}K`
-  return `${sign}${Math.round(v)}`
-}
-
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function ymKey(d: Date): string {
@@ -153,9 +139,9 @@ function buildTrend(
   windowStart: Date,
   windowEnd: Date,
   currency: string,
-): { points: TrendPoint[]; yLabels: string[]; highlightIndex: number } {
+): { points: TrendPoint[]; highlightIndex: number } {
   if (facts.length === 0) {
-    return { points: [], yLabels: ['0'], highlightIndex: -1 }
+    return { points: [], highlightIndex: -1 }
   }
   const lastByMonth = new Map<string, { date: Date; runningAfter: number }>()
   for (const f of facts) {
@@ -179,17 +165,6 @@ function buildTrend(
     if (date.getTime() < startMonth.getTime()) continue
     months.push({ date, balance: lastSeen })
   }
-  const ys = months.map((m) => m.balance)
-  const yMin = ys.length ? Math.min(...ys) : 0
-  const yMax = ys.length ? Math.max(...ys) : 0
-  const yRange = Math.max(yMax - yMin, 1)
-  const yPad = yRange * 0.12
-  const yLo = yMin - yPad
-  const yHi = yMax + yPad
-  const yLabels: string[] = []
-  for (let i = 0; i < 5; i++) {
-    yLabels.push(fmtTick(yLo + ((yHi - yLo) * i) / 4, currency))
-  }
   const points: TrendPoint[] = months.map((m) => {
     const monthAbbr = MONTH_ABBR[m.date.getUTCMonth()]!
     const yr = String(m.date.getUTCFullYear()).slice(-2)
@@ -201,7 +176,7 @@ function buildTrend(
     }
   })
   const highlightIndex = points.length - 1
-  return { points, yLabels, highlightIndex }
+  return { points, highlightIndex }
 }
 
 function leafOf(account: string): { prefix: string; leaf: string } {
@@ -277,7 +252,7 @@ export function deriveOverview(args: {
         { label: `Net change · ${period}`, value: fmtSigned(0, currency) },
         { label: 'Activity', value: '0', caption: 'transactions' },
       ],
-      trend: { title: 'Balance over time', points: [], yLabels: ['0'], highlightIndex: -1 },
+      trend: { title: 'Balance over time', currency, points: [], highlightIndex: -1 },
       composition: { title: 'Top counter-accounts', rows: [], moreCount: 0 },
       events: { title: 'Notable events', rows: [] },
     }
@@ -321,7 +296,7 @@ export function deriveOverview(args: {
         caption: `${fmtSigned(netIn, currency)} in · ${fmtSigned(netOut, currency)} out`,
       },
     ],
-    trend: { title: 'Balance over time', ...trend },
+    trend: { title: 'Balance over time', currency, ...trend },
     composition: { title: 'Top counter-accounts', rows: composition.rows, moreCount: composition.moreCount },
     events: { title: 'Notable events', rows: events },
   }
