@@ -1,7 +1,6 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Button } from '@cloudflare/kumo/components/button'
 import {
   House,
   Books,
@@ -14,9 +13,9 @@ type NavItem = { href: string; label: string; icon: React.ElementType }
 
 const TOP: NavItem[] = [
   { href: '/kumo/home', label: 'Home', icon: House },
-  { href: '/kumo/ledger', label: 'Accounts', icon: Books },
   { href: '/kumo/insights', label: 'Insights', icon: ChartLineUp },
   { href: '/kumo/ideas', label: 'Ideas', icon: Lightbulb },
+  { href: '/kumo/ledger', label: 'Accounts', icon: Books },
 ]
 
 const BOTTOM: NavItem[] = [{ href: '/kumo/settings', label: 'Settings', icon: GearSix }]
@@ -29,27 +28,28 @@ export function KumoNavRail() {
     const Icon = item.icon
     const active = pathname === item.href || pathname.startsWith(item.href + '/')
     return (
-      <Button
+      <button
         key={item.href}
         type="button"
-        variant={active ? 'primary' : 'ghost'}
-        shape="square"
-        size="sm"
-        icon={<Icon size={18} weight={active ? 'fill' : 'regular'} />}
+        onClick={() => router.push(item.href)}
         aria-label={item.label}
         title={item.label}
-        onClick={() => router.push(item.href)}
-      />
+        className={`p-2 cursor-pointer transition-all ${
+          active ? 'text-teal-500' : 'text-slate-400 hover:text-teal-500'
+        }`}
+      >
+        <Icon size={24} weight="regular" />
+      </button>
     )
   }
 
   return (
-    <nav className="flex h-screen w-[56px] flex-shrink-0 flex-col items-center gap-2 border-r border-kumo-line bg-kumo-base py-3">
-      <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-md bg-kumo-brand text-base font-black text-white">
+    <nav className="bg-white border-r border-slate-200 flex flex-col items-center py-4 gap-6 w-[48px] h-screen shrink-0">
+      <div className="w-8 h-8 bg-teal-500 flex items-center justify-center rounded-[6px] text-white font-black text-lg">
         M
       </div>
-      <div className="flex flex-col gap-1">{TOP.map(renderItem)}</div>
-      <div className="mt-auto flex flex-col gap-1">{BOTTOM.map(renderItem)}</div>
+      <div className="flex flex-col gap-4">{TOP.map(renderItem)}</div>
+      <div className="mt-auto flex flex-col gap-4 items-center">{BOTTOM.map(renderItem)}</div>
     </nav>
   )
 }
