@@ -60,10 +60,3 @@ node_modules/
 # local verification scripts
 .sb-check.mjs
 .sb-shot.mjs
-
-# Observable Framework dashboards build output (built during deploy)
-/public/dashboards
-/dashboards/.observablehq
-/dashboards/src/.observablehq
-/dashboards/node_modules
-/dashboards/pnpm-lock.yaml
