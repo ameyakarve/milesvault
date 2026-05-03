@@ -24,6 +24,7 @@ import { resolveDashboard } from '@/lib/ledger-core/taxonomy'
 import { NotebookShell } from './notebook-shell'
 import { OverviewView } from './overview-view'
 import { deriveOverview, type Period } from './overview-derive'
+import { getDashboardComponent } from './dashboards/registry'
 import { StatementView, type StatementRowData } from './statement-view'
 import {
   cardDecorations,
@@ -542,24 +543,20 @@ export function PerAccountView({
     })
   }, [cardSpecs, parsed, account, currency, period])
 
-  // Experimental Observable Framework dashboards. Opt in per visit with
-  // `?dashboard=1`; falls back to the React OverviewView so live URLs are
-  // unaffected. The taxonomy maps account → dashboard slug; if the account has
-  // no binding we keep the React view regardless of the flag.
+  // Per-account-type dashboards rendered with Observable Plot inside the
+  // React tree. The taxonomy maps account → dashboard slug; the registry maps
+  // slug → component. Accounts without a binding (or whose binding has no
+  // registered component yet) fall through to the legacy OverviewView so we
+  // never regress.
   const dashboardSlug = useMemo(() => resolveDashboard(account)?.slug ?? null, [account])
-  const dashboardEnabled = searchParams.get('dashboard') === '1'
-  const overviewBody =
-    dashboardEnabled && dashboardSlug && currency ? (
-      <iframe
-        title={`${dashboardSlug} dashboard`}
-        src={`/dashboards/${dashboardSlug}.html?account=${encodeURIComponent(account)}&currency=${encodeURIComponent(currency)}`}
-        className="block h-full w-full border-0"
-      />
-    ) : overviewProps ? (
-      <OverviewView {...overviewProps} />
-    ) : (
-      <div className="p-6 text-xs text-slate-500">Loading…</div>
-    )
+  const DashboardComponent = dashboardSlug ? getDashboardComponent(dashboardSlug) : null
+  const overviewBody = !overviewProps ? (
+    <div className="p-6 text-xs text-slate-500">Loading…</div>
+  ) : DashboardComponent ? (
+    <DashboardComponent {...overviewProps} />
+  ) : (
+    <OverviewView {...overviewProps} />
+  )
 
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
