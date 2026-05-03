@@ -27,7 +27,11 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       marginRight: 16,
       marginBottom: 28,
       style: { background: 'transparent', fontFamily: 'inherit', fontSize: '10px' },
-      x: { type: 'point', label: null, tickSize: 0 },
+      // Pin the domain to the data order. Without this, Plot's point scale
+      // sorts unique values ascending — which on raw month-abbrev strings
+      // (`Dec`, `Jan 26`, `Feb`, `Mar`) collapses to alphabetical and
+      // scrambles the time axis.
+      x: { type: 'point', label: null, tickSize: 0, domain: trend.points.map((p) => p.x) },
       y: { grid: true, label: null, tickFormat: 's', nice: true },
       marks: [
         Plot.ruleY([0], { stroke: '#cbd5e1' }),
