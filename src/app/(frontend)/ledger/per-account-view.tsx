@@ -20,6 +20,7 @@ import {
   txnTouchesAccountCurrency,
 } from '@/lib/beancount/scope'
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
+import { resolveDashboard } from '@/lib/ledger-core/taxonomy'
 import { NotebookShell } from './notebook-shell'
 import { OverviewView } from './overview-view'
 import { deriveOverview, type Period } from './overview-derive'
@@ -541,11 +542,24 @@ export function PerAccountView({
     })
   }, [cardSpecs, parsed, account, currency, period])
 
-  const overviewBody = overviewProps ? (
-    <OverviewView {...overviewProps} />
-  ) : (
-    <div className="p-6 text-xs text-slate-500">Loading…</div>
-  )
+  // Experimental Observable Framework dashboards. Opt in per visit with
+  // `?dashboard=1`; falls back to the React OverviewView so live URLs are
+  // unaffected. The taxonomy maps account → dashboard slug; if the account has
+  // no binding we keep the React view regardless of the flag.
+  const dashboardSlug = useMemo(() => resolveDashboard(account)?.slug ?? null, [account])
+  const dashboardEnabled = searchParams.get('dashboard') === '1'
+  const overviewBody =
+    dashboardEnabled && dashboardSlug && currency ? (
+      <iframe
+        title={`${dashboardSlug} dashboard`}
+        src={`/dashboards/${dashboardSlug}.html?account=${encodeURIComponent(account)}&currency=${encodeURIComponent(currency)}`}
+        className="block h-full w-full border-0"
+      />
+    ) : overviewProps ? (
+      <OverviewView {...overviewProps} />
+    ) : (
+      <div className="p-6 text-xs text-slate-500">Loading…</div>
+    )
 
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
