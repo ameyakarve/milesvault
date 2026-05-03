@@ -183,8 +183,9 @@ export function KumoAccountsDirectory({ initialAsOf }: { initialAsOf: string }) 
         <div className="px-6 py-3 flex items-center bg-slate-50/50 flex-shrink-0">
           <div className="relative w-full">
             <MagnifyingGlass
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              size={18}
+              weight="bold"
+              className="absolute left-3 top-1/2 -translate-y-1/2 block text-slate-400"
             />
             <input
               value={query}
