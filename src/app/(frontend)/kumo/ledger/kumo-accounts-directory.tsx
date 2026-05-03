@@ -181,16 +181,14 @@ export function KumoAccountsDirectory({ initialAsOf }: { initialAsOf: string }) 
 
         {/* Toolbar */}
         <div className="px-6 py-3 flex items-center bg-slate-50/50 flex-shrink-0">
-          <div className="relative w-full">
-            <MagnifyingGlass
-              size={18}
-              weight="bold"
-              className="absolute left-3 top-1/2 -translate-y-1/2 block text-slate-400"
-            />
+          <div className="flex w-full items-center bg-white border border-slate-200 rounded-md focus-within:border-teal-600/50 transition-colors">
+            <span className="pl-3 pr-2 text-slate-400 flex-shrink-0">
+              <MagnifyingGlass size={16} weight="regular" />
+            </span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-1.5 text-[13px] bg-white border border-slate-200 rounded-md focus:border-teal-600/50 focus:ring-0 placeholder:text-slate-400 outline-none"
+              className="flex-1 bg-transparent py-1.5 pr-3 text-[13px] placeholder:text-slate-400 outline-none border-0 focus:ring-0"
               placeholder="Search accounts..."
               type="text"
             />
