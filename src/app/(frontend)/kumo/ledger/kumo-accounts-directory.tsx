@@ -3,9 +3,16 @@
 import Link from 'next/link'
 import React, { useEffect, useMemo, useState } from 'react'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
-import { Button } from '@cloudflare/kumo/components/button'
-import { InputGroup } from '@cloudflare/kumo/components/input-group'
-import { MagnifyingGlass } from '@phosphor-icons/react/dist/ssr'
+import {
+  MagnifyingGlass,
+  Sparkle,
+  ChartBar,
+  MagicWand,
+  Scales,
+  Microphone,
+  PaperPlaneTilt,
+} from '@phosphor-icons/react/dist/ssr'
+import { KumoStatusBar } from '../_chrome/kumo-status-bar'
 
 type AccountKind = 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'
 
@@ -84,16 +91,16 @@ function AccountPath({ path }: { path: string }) {
   return (
     <>
       {segs.length > 0 && (
-        <span className="text-kumo-subtle">
+        <span className="text-slate-400 font-normal">
           {segs.map((s, i) => (
             <React.Fragment key={i}>
               {s}
-              <span>:</span>
+              <span className="text-slate-400">:</span>
             </React.Fragment>
           ))}
         </span>
       )}
-      <span className="font-semibold text-kumo-default">{leaf}</span>
+      <span className="text-slate-900 font-semibold">{leaf}</span>
     </>
   )
 }
@@ -152,102 +159,161 @@ export function KumoAccountsDirectory({ initialAsOf }: { initialAsOf: string }) 
 
   if (error) {
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-sm text-kumo-danger">
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-rose-600">
         Failed to load accounts: {error}
       </div>
     )
   }
 
   return (
-    <main className="flex flex-1 flex-col bg-kumo-base">
-      <div className="flex h-8 items-center border-b border-kumo-line px-6">
-        <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-kumo-default">
-          Accounts
-        </span>
-      </div>
-
-      <div className="border-b border-kumo-line px-6 py-6">
-        <h1 className="mb-1 text-3xl font-semibold tracking-tight text-kumo-default">
-          Accounts
-        </h1>
-        <p className="text-sm text-kumo-subtle">{totalCount} accounts</p>
-      </div>
-
-      <div className="border-b border-kumo-line px-6 py-3">
-        <InputGroup className="w-full">
-          <InputGroup.Addon>
-            <MagnifyingGlass size={16} />
-          </InputGroup.Addon>
-          <InputGroup.Input
-            placeholder="Search accounts…"
-            value={query}
-            onChange={(e) => setQuery((e.target as HTMLInputElement).value)}
-            aria-label="Search accounts"
-          />
-        </InputGroup>
-      </div>
-
-      <div className="flex h-11 items-center gap-2 border-b border-kumo-line bg-kumo-elevated px-6">
-        {CHIPS.map((c) => (
-          <Button
-            key={c}
-            type="button"
-            variant={chip === c ? 'primary' : 'secondary'}
-            size="xs"
-            onClick={() => setChip(c)}
-          >
-            {c}
-          </Button>
-        ))}
-      </div>
-
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex h-8 flex-shrink-0 items-center whitespace-nowrap border-b border-kumo-line bg-kumo-base px-6 font-mono text-[10px] font-bold uppercase tracking-widest text-kumo-subtle">
-          <div className="flex-1 pr-4">Account</div>
-          <div className="ml-4 w-[120px] text-right">Last Activity</div>
-          <div className="ml-4 w-[60px] text-right">CCY</div>
-          <div className="ml-2 w-[140px] text-right">Balance</div>
+    <>
+      <main className="flex-1 flex flex-col min-w-0 bg-white">
+        {/* Context row */}
+        <div className="h-[32px] bg-white px-6 flex items-center border-b border-slate-50 flex-shrink-0">
+          <span className="font-mono text-[11px] text-slate-800 font-bold">Accounts</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          {rows == null ? (
-            <div className="p-6 text-xs text-kumo-subtle">Loading…</div>
-          ) : (
-            filtered.map((row, idx) => {
-              const negative = row.balance < 0
-              const href = `/kumo/ledger/${row.path
-                .split(':')
-                .map(encodeURIComponent)
-                .join('/')}?ccy=${encodeURIComponent(row.currency)}`
-              return (
-                <Link
-                  key={`${row.path}|${row.currency}|${idx}`}
-                  href={href}
-                  className="group flex h-10 items-center border-b border-kumo-line px-6 hover:bg-kumo-tint"
-                >
-                  <div className="flex-1 truncate pr-4 font-mono text-xs">
-                    <AccountPath path={row.path} />
-                  </div>
-                  <div className="ml-4 w-[120px] text-right font-mono text-xs tabular-nums text-kumo-subtle">
-                    {row.lastActivity ?? '—'}
-                  </div>
-                  <div className="ml-4 w-[60px] text-right font-mono text-[11px] tabular-nums text-kumo-subtle">
-                    {row.currency}
-                  </div>
-                  <div
-                    className={`ml-2 w-[140px] text-right font-mono text-[13px] tabular-nums ${
-                      negative ? 'text-kumo-danger' : 'text-kumo-default'
-                    }`}
+        {/* Page header */}
+        <div className="px-6 py-6 border-b border-slate-100 flex-shrink-0">
+          <h1 className="text-3xl font-bold text-[#191c1e] tracking-tight mb-1">Accounts</h1>
+          <p className="text-sm text-slate-500">{totalCount} accounts</p>
+        </div>
+
+        {/* Toolbar */}
+        <div className="px-6 py-3 flex items-center bg-slate-50/50 flex-shrink-0">
+          <div className="relative w-full">
+            <MagnifyingGlass
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-1.5 text-[13px] bg-white border border-slate-200 rounded-md focus:border-teal-600/50 focus:ring-0 placeholder:text-slate-400 outline-none"
+              placeholder="Search accounts..."
+              type="text"
+            />
+          </div>
+        </div>
+
+        {/* Chip row */}
+        <div className="px-6 h-[44px] bg-[#f2f4f6] flex items-center gap-[8px] border-b border-slate-200 flex-shrink-0">
+          {CHIPS.map((c) => {
+            const active = chip === c
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setChip(c)}
+                className={`px-3 py-1 rounded-full text-[11px] font-mono shadow-sm border transition-colors ${
+                  active
+                    ? 'bg-[#00685f] text-white border-[#00685f]'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {c}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex items-center px-6 h-[32px] bg-white border-b border-slate-200 text-[10px] uppercase tracking-widest text-slate-400 font-mono font-bold sticky top-0 z-10 flex-shrink-0 whitespace-nowrap">
+            <div className="flex-1 pr-4">Account</div>
+            <div className="w-[120px] text-right ml-4">Last Activity</div>
+            <div className="w-[60px] text-right ml-4">CCY</div>
+            <div className="w-[140px] text-right ml-2">Balance</div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {rows == null ? (
+              <div className="p-6 text-xs text-slate-400">Loading…</div>
+            ) : (
+              filtered.map((row, idx) => {
+                const negative = row.balance < 0
+                const href = `/kumo/ledger/${row.path
+                  .split(':')
+                  .map(encodeURIComponent)
+                  .join('/')}?ccy=${encodeURIComponent(row.currency)}`
+                return (
+                  <Link
+                    key={`${row.path}|${row.currency}|${idx}`}
+                    href={href}
+                    className="flex items-center px-6 h-[40px] border-b border-slate-100 hover:bg-slate-50 group cursor-pointer relative"
                   >
-                    {formatBalance(row.balance, row.currency)}
-                  </div>
-                </Link>
-              )
-            })
-          )}
+                    <div className="flex-1 pr-4 font-mono text-[12px] truncate">
+                      <AccountPath path={row.path} />
+                    </div>
+                    <div className="w-[120px] font-mono text-[12px] text-slate-600 text-right tabular-nums ml-4">
+                      {row.lastActivity ?? '—'}
+                    </div>
+                    <div className="w-[60px] font-mono text-[11px] text-slate-500 text-right tabular-nums ml-4">
+                      {row.currency}
+                    </div>
+                    <div
+                      className={`w-[140px] font-mono text-[13px] text-right tabular-nums ml-2 ${
+                        negative ? 'text-rose-600' : 'text-slate-900'
+                      }`}
+                    >
+                      {formatBalance(row.balance, row.currency)}
+                    </div>
+                  </Link>
+                )
+              })
+            )}
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+
+      {/* Right AI sidebar */}
+      <aside className="w-[320px] bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden pb-7">
+        <div className="px-4 py-4 flex items-center space-x-2">
+          <Sparkle size={16} className="text-[#00685f]" weight="fill" />
+          <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-900">
+            AI Manuscript Assistant
+          </h2>
+        </div>
+        <div className="flex-1 flex flex-col justify-center px-6 text-center">
+          <div className="mb-6">
+            <p className="text-xs text-slate-500 leading-relaxed mb-4">
+              Ask AI about your account structure...
+            </p>
+            <div className="flex flex-col space-y-2">
+              <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
+                <ChartBar size={14} className="mr-2 text-slate-300" />
+                {`"Summarize my coffee spending"`}
+              </button>
+              <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
+                <MagicWand size={14} className="mr-2 text-slate-300" />
+                {`"Clean up payee names in this month"`}
+              </button>
+              <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
+                <Scales size={14} className="mr-2 text-slate-300" />
+                {`"Find unbalanced transactions"`}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="p-4 bg-white border-t border-slate-200">
+          <div className="relative bg-slate-50 rounded border border-slate-200 focus-within:border-[#00685f]/50 transition-colors">
+            <textarea
+              className="w-full bg-transparent border-none rounded p-3 h-24 resize-none text-[13px] text-slate-700 placeholder:text-slate-400 focus:ring-0 outline-none"
+              placeholder="Ask AI about this ledger..."
+            />
+            <div className="absolute bottom-2 right-2 flex items-center space-x-1">
+              <button className="p-1.5 text-slate-400 hover:text-slate-600">
+                <Microphone size={20} />
+              </button>
+              <button className="p-1.5 text-[#00685f]">
+                <PaperPlaneTilt size={20} weight="fill" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <KumoStatusBar count={totalCount} />
+    </>
   )
 }
-

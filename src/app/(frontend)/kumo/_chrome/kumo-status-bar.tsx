@@ -1,26 +1,24 @@
-import { CheckCircle, Circle } from '@phosphor-icons/react/dist/ssr'
+import { CheckCircle } from '@phosphor-icons/react/dist/ssr'
 
-// Slim status footer used across kumo routes. Mirrors the legacy chrome's
-// bottom rail but uses Kumo tokens + Phosphor icons.
 export function KumoStatusBar({
   primary = 'Ready',
-  secondary,
+  count,
 }: {
   primary?: string
-  secondary?: string
+  count?: number
 }) {
   return (
-    <footer className="flex h-7 flex-shrink-0 items-center justify-between border-t border-kumo-line bg-kumo-elevated px-4 font-mono text-[10px] uppercase tracking-wider text-kumo-subtle">
-      <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1 text-kumo-brand">
+    <footer className="fixed bottom-0 left-[48px] right-0 h-[28px] z-40 bg-[#f2f4f6] border-t border-slate-200 flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-slate-500">
+      <div className="flex items-center space-x-6">
+        {count != null && <span>{count} accounts</span>}
+        <span className="text-[#00685f] font-bold flex items-center space-x-1">
           <CheckCircle size={12} weight="fill" />
-          <span className="font-bold">Parsed</span>
+          <span>Parsed</span>
         </span>
-        {secondary && <span>{secondary}</span>}
       </div>
-      <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1">
-          <Circle size={8} weight="fill" className="text-kumo-brand" />
+      <div className="flex items-center space-x-4">
+        <span className="flex items-center space-x-1">
+          <span className="w-2 h-2 rounded-full bg-[#00685f]" />
           <span>{primary}</span>
         </span>
         <span>Beancount v2.3.5</span>

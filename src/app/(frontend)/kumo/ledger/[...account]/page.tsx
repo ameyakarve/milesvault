@@ -22,12 +22,10 @@ export default async function KumoLedgerAccountPage({
   const account = segments.join(':')
 
   return (
-    <div className="flex h-screen overflow-hidden bg-kumo-recessed">
+    <div className="flex h-screen overflow-hidden bg-white pb-[28px]">
       <KumoNavRail />
-      <div className="flex flex-1 flex-col">
-        <KumoPerAccountView account={account} initialCurrency={ccy ?? null} />
-        <KumoStatusBar secondary={account} />
-      </div>
+      <KumoPerAccountView account={account} initialCurrency={ccy ?? null} />
+      <KumoStatusBar />
     </div>
   )
 }
