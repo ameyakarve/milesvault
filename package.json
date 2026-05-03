@@ -5,8 +5,10 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "build:dashboards": "cd dashboards && pnpm install --ignore-workspace --prefer-offline && pnpm build",
+    "prebuild": "pnpm build:dashboards",
     "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build",
-    "deploy": "opennextjs-cloudflare build --env=$CLOUDFLARE_ENV && node scripts/inject-do.mjs && opennextjs-cloudflare deploy --env=$CLOUDFLARE_ENV",
+    "deploy": "pnpm build:dashboards && opennextjs-cloudflare build --env=$CLOUDFLARE_ENV && node scripts/inject-do.mjs && opennextjs-cloudflare deploy --env=$CLOUDFLARE_ENV",
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "devsafe": "rm -rf .next && rm -rf .open-next && cross-env NODE_OPTIONS=--no-deprecation next dev",
     "generate:types": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
