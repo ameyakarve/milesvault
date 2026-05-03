@@ -1,7 +1,6 @@
 import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
 import { KumoNavRail } from '../_chrome/kumo-nav-rail'
-import { KumoStatusBar } from '../_chrome/kumo-status-bar'
 import { KumoAccountsDirectory } from './kumo-accounts-directory'
 
 export default async function KumoLedgerIndex() {
@@ -10,10 +9,9 @@ export default async function KumoLedgerIndex() {
   const today = new Date().toISOString().slice(0, 10)
 
   return (
-    <div className="flex h-screen overflow-hidden bg-kumo-recessed">
+    <div className="flex h-screen overflow-hidden bg-white pb-[28px]">
       <KumoNavRail />
       <KumoAccountsDirectory initialAsOf={today} />
-      <KumoStatusBar />
     </div>
   )
 }
