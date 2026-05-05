@@ -1,19 +1,23 @@
 /* Remap Kumo's semantic tokens to MilesVault palette.
- * Kumo's standalone CSS reads `--color-kumo-*` (Tailwind v4 naming),
- * so we override those exact names — not `--kumo-*` — at body scope.
+ * Kumo's standalone.css defines `--color-kumo-*` at `:root,[data-theme=kumo]`
+ * with the same specificity as our override. Next.js may inject this file
+ * BEFORE the manual <link> to standalone.css in <head>, so we use !important
+ * to guarantee our values win regardless of load order.
  */
 .kumo-root,
 [data-theme='kumo'] {
-  --color-kumo-brand: #00685f;
-  --color-kumo-brand-hover: #00554d;
-  --color-kumo-brand-active: #003d36;
-  --color-kumo-base: #ffffff;
-  --color-kumo-elevated: #fbfcfd;
-  --color-kumo-recessed: #f1f5f9;
-  --color-kumo-tint: #f4f6f9;
-  --color-kumo-line: #e2e8f0;
-  --color-kumo-hairline: rgba(15, 23, 42, 0.08);
-  --color-kumo-default: #1e293b;
-  --color-kumo-muted: #64748b;
-  --color-kumo-subtle: #94a3b8;
+  --color-kumo-brand: #00685f !important;
+  --color-kumo-brand-hover: #00554d !important;
+  --color-kumo-base: #ffffff !important;
+  --color-kumo-elevated: #fbfcfd !important;
+  --color-kumo-recessed: #f1f5f9 !important;
+  --color-kumo-tint: #f4f6f9 !important;
+  --color-kumo-line: #e2e8f0 !important;
+  --color-kumo-hairline: rgba(15, 23, 42, 0.08) !important;
+  --color-kumo-focus: #00685f !important;
+
+  --text-color-kumo-default: #1e293b !important;
+  --text-color-kumo-subtle: #64748b !important;
+  --text-color-kumo-brand: #00685f !important;
+  --text-color-kumo-link: #00685f !important;
 }
