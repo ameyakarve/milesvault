@@ -20,6 +20,7 @@ import {
 import { styleTags, tags as t } from '@lezer/highlight'
 import { parser as beancountParser } from 'lezer-beancount'
 import { NavRail } from '../_chrome/nav-rail'
+import { StatTile } from './stat-tile'
 
 export type Seg =
   | { kind: 'date'; text: string }
@@ -478,69 +479,38 @@ function StatsRow({
   const [open, setOpen] = useState(false)
   const canOpen = !!onPeriodChange && periods.length > 1
   return (
-    <div className="h-[64px] bg-white px-6 flex items-center shrink-0">
-      <div className="flex items-center gap-12 flex-1">
-        <StatTile label="Balance" value={balance} colorClass="text-slate-900" />
-        {netIn && (
-          <StatTile
-            label="Net In"
-            value={netIn}
-            colorClass="text-[#00685f]"
-            divider
-          />
-        )}
-        {netOut && (
-          <StatTile
-            label="Net Out"
-            value={netOut}
-            colorClass="text-rose-600"
-            divider
-          />
-        )}
+    <div className="bg-white px-6 py-4 shrink-0">
+      <div className="flex items-start gap-4">
+        <div className="grid flex-1 grid-cols-3 gap-4">
+          <StatTile label="Balance" value={balance} />
+          {netIn && (
+            <StatTile label="Net In" value={netIn} valueClass="text-[#00685f]" />
+          )}
+          {netOut && (
+            <StatTile label="Net Out" value={netOut} valueClass="text-rose-600" />
+          )}
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={canOpen ? () => setOpen((v) => !v) : undefined}
+            aria-haspopup={canOpen ? 'menu' : undefined}
+            aria-expanded={canOpen ? open : undefined}
+            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center border border-slate-200 px-2 py-1 rounded"
+          >
+            {period}
+            <span className="material-symbols-outlined !text-[14px] ml-1">arrow_drop_down</span>
+          </button>
+          {open && canOpen && (
+            <PopoverMenu
+              options={periods}
+              selected={period}
+              onSelect={onPeriodChange!}
+              onClose={() => setOpen(false)}
+            />
+          )}
+        </div>
       </div>
-      <div className="relative">
-        <button
-          type="button"
-          onClick={canOpen ? () => setOpen((v) => !v) : undefined}
-          aria-haspopup={canOpen ? 'menu' : undefined}
-          aria-expanded={canOpen ? open : undefined}
-          className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center border border-slate-200 px-2 py-1 rounded"
-        >
-          {period}
-          <span className="material-symbols-outlined !text-[14px] ml-1">arrow_drop_down</span>
-        </button>
-        {open && canOpen && (
-          <PopoverMenu
-            options={periods}
-            selected={period}
-            onSelect={onPeriodChange!}
-            onClose={() => setOpen(false)}
-          />
-        )}
-      </div>
-    </div>
-  )
-}
-
-function StatTile({
-  label,
-  value,
-  colorClass,
-  divider = false,
-}: {
-  label: string
-  value: string
-  colorClass: string
-  divider?: boolean
-}) {
-  return (
-    <div className={`flex flex-col${divider ? ' border-l border-slate-100 pl-8' : ''}`}>
-      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">
-        {label}
-      </span>
-      <span className={`font-mono text-2xl font-bold tracking-tight ${colorClass}`}>
-        {value}
-      </span>
     </div>
   )
 }

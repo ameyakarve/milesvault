@@ -4,6 +4,7 @@ import { useCallback } from 'react'
 import * as Plot from '@observablehq/plot'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
+import { StatTile } from '../stat-tile'
 
 // Bank-overview dashboard. Bound by the taxonomy at Assets:Bank, which means
 // every Assets:Bank:* account renders this layout in the Overview tab.
@@ -125,26 +126,16 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       </div>
 
       <div className="p-6 space-y-6">
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-3 gap-4">
           {kpis.map((k, i) => (
-            <div
+            <StatTile
               key={i}
-              className="flex flex-col bg-white border border-slate-200 rounded-md p-4"
-            >
-              <span className="text-[11px] uppercase tracking-wide text-slate-500">
-                {k.label}
-              </span>
-              <span
-                className={`mt-1 font-semibold text-[20px] tabular-nums ${
-                  k.valueClass ?? 'text-slate-900'
-                }`}
-              >
-                {k.value}
-              </span>
-              {k.caption && (
-                <span className="mt-1 text-[11px] text-slate-500">{k.caption}</span>
-              )}
-            </div>
+              label={k.label}
+              value={k.value}
+              valueClass={k.valueClass}
+              chip={k.chip}
+              caption={k.caption}
+            />
           ))}
         </div>
 
