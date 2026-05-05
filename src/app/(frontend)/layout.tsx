@@ -1,5 +1,6 @@
 import React from 'react'
 import './styles.css'
+import './kumo/theme-overrides.css'
 
 export const metadata = {
   description: 'MilesVault — personal finance ledger',
@@ -20,8 +21,15 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
         />
+        <link rel="stylesheet" href="/kumo/standalone.css" />
       </head>
-      <body className="bg-[#FBFCFD]">{children}</body>
+      <body
+        data-mode="light"
+        data-theme="kumo"
+        className="kumo-root bg-[#FBFCFD]"
+      >
+        {children}
+      </body>
     </html>
   )
 }

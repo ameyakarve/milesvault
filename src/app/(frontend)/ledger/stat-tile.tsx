@@ -1,4 +1,5 @@
 import React from 'react'
+import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 
 export type StatTileChip = { text: string; tone: 'pos' | 'neg' }
 
@@ -12,7 +13,7 @@ export type StatTileProps = {
 
 export function StatTile({ label, value, valueClass, chip, caption }: StatTileProps) {
   return (
-    <div className="bg-white border border-slate-100 rounded-md p-4">
+    <LayerCard className="rounded-md p-4">
       <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">
         {label}
       </div>
@@ -35,6 +36,6 @@ export function StatTile({ label, value, valueClass, chip, caption }: StatTilePr
       {caption && (
         <div className="text-[10px] text-slate-400 mt-1 italic">{caption}</div>
       )}
-    </div>
+    </LayerCard>
   )
 }
