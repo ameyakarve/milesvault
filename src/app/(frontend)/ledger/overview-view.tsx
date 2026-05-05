@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { StatTile } from './stat-tile'
 
 export type OverviewKpi = {
   label: string
@@ -118,30 +119,13 @@ function CardTitleRow({ title }: { title: string }) {
 
 function KpiTile({ kpi }: { kpi: OverviewKpi }) {
   return (
-    <CardShell>
-      <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">
-        {kpi.label}
-      </div>
-      <div className="flex items-baseline space-x-2">
-        <span className={`font-mono text-xl font-bold ${kpi.valueClass ?? 'text-slate-900'}`}>
-          {kpi.value}
-        </span>
-        {kpi.chip && (
-          <span
-            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-              kpi.chip.tone === 'pos'
-                ? 'bg-[#00685f]/10 text-[#00685f]'
-                : 'bg-rose-600/10 text-rose-600'
-            }`}
-          >
-            {kpi.chip.text}
-          </span>
-        )}
-      </div>
-      {kpi.caption && (
-        <div className="text-[10px] text-slate-400 mt-1 italic">{kpi.caption}</div>
-      )}
-    </CardShell>
+    <StatTile
+      label={kpi.label}
+      value={kpi.value}
+      valueClass={kpi.valueClass}
+      chip={kpi.chip}
+      caption={kpi.caption}
+    />
   )
 }
 
