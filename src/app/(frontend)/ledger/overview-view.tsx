@@ -117,18 +117,6 @@ function CardTitleRow({ title }: { title: string }) {
   return <h3 className="text-[13px] font-semibold text-slate-900 mb-4">{title}</h3>
 }
 
-function KpiTile({ kpi }: { kpi: OverviewKpi }) {
-  return (
-    <StatTile
-      label={kpi.label}
-      value={kpi.value}
-      valueClass={kpi.valueClass}
-      chip={kpi.chip}
-      caption={kpi.caption}
-    />
-  )
-}
-
 function TrendChart({
   title,
   currency,
@@ -299,7 +287,6 @@ function EventsList({ title, rows }: OverviewViewProps['events']) {
 
 export function OverviewView({
   caption,
-  kpis,
   trend,
   composition,
   events,
@@ -311,12 +298,6 @@ export function OverviewView({
       </div>
 
       <div className="p-6 space-y-6">
-        <div className="grid grid-cols-3 gap-6">
-          {kpis.map((k, i) => (
-            <KpiTile key={i} kpi={k} />
-          ))}
-        </div>
-
         <div className="flex space-x-6">
           <TrendChart {...trend} />
           <CompositionList {...composition} />

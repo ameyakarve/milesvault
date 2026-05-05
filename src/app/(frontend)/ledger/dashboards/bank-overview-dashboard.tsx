@@ -4,7 +4,6 @@ import { useCallback } from 'react'
 import * as Plot from '@observablehq/plot'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
-import { StatTile } from '../stat-tile'
 
 // Bank-overview dashboard. Bound by the taxonomy at Assets:Bank, which means
 // every Assets:Bank:* account renders this layout in the Overview tab.
@@ -13,7 +12,7 @@ import { StatTile } from '../stat-tile'
 // OverviewView — the upstream `deriveOverview()` derivation is reused, only
 // the chart rendering swaps to Observable Plot.
 export function BankOverviewDashboard(props: OverviewViewProps) {
-  const { caption, kpis, trend, composition, events } = props
+  const { caption, trend, composition, events } = props
 
   const renderTrend = useCallback(() => {
     if (trend.points.length === 0) {
@@ -126,19 +125,6 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       </div>
 
       <div className="p-6 space-y-6">
-        <div className="grid grid-cols-3 gap-4">
-          {kpis.map((k, i) => (
-            <StatTile
-              key={i}
-              label={k.label}
-              value={k.value}
-              valueClass={k.valueClass}
-              chip={k.chip}
-              caption={k.caption}
-            />
-          ))}
-        </div>
-
         <div className="flex flex-col bg-white border border-slate-200 rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">{trend.title}</div>
           <PlotChart render={renderTrend} className="w-full" />
