@@ -397,16 +397,24 @@ function BreadcrumbRow({
   currency,
   currencies,
   onCurrencyChange,
+  period,
+  periods,
+  onPeriodChange,
 }: {
   breadcrumb: string[]
   currency: string | null | undefined
   currencies: string[]
   onCurrencyChange?: (next: string) => void
+  period: string
+  periods: string[]
+  onPeriodChange?: (next: string) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const canOpen = !!onCurrencyChange && currencies.length > 1
+  const [currencyOpen, setCurrencyOpen] = useState(false)
+  const [periodOpen, setPeriodOpen] = useState(false)
+  const canOpenCurrency = !!onCurrencyChange && currencies.length > 1
+  const canOpenPeriod = !!onPeriodChange && periods.length > 1
   return (
-    <div className="h-[32px] bg-white px-6 flex items-center justify-between border-b border-slate-50 shrink-0">
+    <div className="h-10 bg-white px-6 flex items-center justify-between border-b border-slate-50 shrink-0">
       <div className="flex items-center gap-1.5 font-mono text-[11px]">
         {breadcrumb.map((seg, i) => {
           const isLast = i === breadcrumb.length - 1
@@ -435,28 +443,57 @@ function BreadcrumbRow({
           )
         })}
       </div>
-      {currency && (
+      <div className="flex items-center gap-3">
         <div className="relative">
           <button
             type="button"
-            onClick={canOpen ? () => setOpen((v) => !v) : undefined}
-            aria-haspopup={canOpen ? 'menu' : undefined}
-            aria-expanded={canOpen ? open : undefined}
-            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center"
+            onClick={canOpenPeriod ? () => setPeriodOpen((v) => !v) : undefined}
+            aria-haspopup={canOpenPeriod ? 'menu' : undefined}
+            aria-expanded={canOpenPeriod ? periodOpen : undefined}
+            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1 rounded-full transition-colors"
           >
-            {currency}
-            <span className="material-symbols-outlined !text-[14px] ml-0.5">arrow_drop_down</span>
+            <span className="material-symbols-outlined !text-[14px] text-slate-400">
+              schedule
+            </span>
+            {period}
+            <span className="material-symbols-outlined !text-[14px] -mr-1">
+              arrow_drop_down
+            </span>
           </button>
-          {open && canOpen && (
+          {periodOpen && canOpenPeriod && (
             <PopoverMenu
-              options={currencies}
-              selected={currency}
-              onSelect={onCurrencyChange!}
-              onClose={() => setOpen(false)}
+              options={periods}
+              selected={period}
+              onSelect={onPeriodChange!}
+              onClose={() => setPeriodOpen(false)}
             />
           )}
         </div>
-      )}
+        {currency && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={canOpenCurrency ? () => setCurrencyOpen((v) => !v) : undefined}
+              aria-haspopup={canOpenCurrency ? 'menu' : undefined}
+              aria-expanded={canOpenCurrency ? currencyOpen : undefined}
+              className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center"
+            >
+              {currency}
+              <span className="material-symbols-outlined !text-[14px] ml-0.5">
+                arrow_drop_down
+              </span>
+            </button>
+            {currencyOpen && canOpenCurrency && (
+              <PopoverMenu
+                options={currencies}
+                selected={currency}
+                onSelect={onCurrencyChange!}
+                onClose={() => setCurrencyOpen(false)}
+              />
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -465,52 +502,19 @@ function StatsRow({
   balance,
   netIn,
   netOut,
-  period,
-  periods,
-  onPeriodChange,
 }: {
   balance: string
   netIn?: string
   netOut?: string
-  period: string
-  periods: string[]
-  onPeriodChange?: (next: string) => void
 }) {
-  const [open, setOpen] = useState(false)
-  const canOpen = !!onPeriodChange && periods.length > 1
   return (
     <div className="bg-white px-6 py-4 shrink-0">
-      <div className="flex items-start gap-4">
-        <div className="grid flex-1 grid-cols-3 gap-4">
-          <StatTile label="Balance" value={balance} />
-          {netIn && (
-            <StatTile label="Net In" value={netIn} valueClass="text-[#00685f]" />
-          )}
-          {netOut && (
-            <StatTile label="Net Out" value={netOut} valueClass="text-rose-600" />
-          )}
-        </div>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={canOpen ? () => setOpen((v) => !v) : undefined}
-            aria-haspopup={canOpen ? 'menu' : undefined}
-            aria-expanded={canOpen ? open : undefined}
-            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1 rounded-full transition-colors"
-          >
-            <span className="material-symbols-outlined !text-[14px] text-slate-400">schedule</span>
-            {period}
-            <span className="material-symbols-outlined !text-[14px] -mr-1">arrow_drop_down</span>
-          </button>
-          {open && canOpen && (
-            <PopoverMenu
-              options={periods}
-              selected={period}
-              onSelect={onPeriodChange!}
-              onClose={() => setOpen(false)}
-            />
-          )}
-        </div>
+      <div className="grid grid-cols-3 gap-4">
+        <StatTile label="Balance" value={balance} />
+        {netIn && <StatTile label="Net In" value={netIn} valueClass="text-[#00685f]" />}
+        {netOut && (
+          <StatTile label="Net Out" value={netOut} valueClass="text-rose-600" />
+        )}
       </div>
     </div>
   )
@@ -702,15 +706,11 @@ export function NotebookShell({
               currency={currency}
               currencies={currencies}
               onCurrencyChange={onCurrencyChange}
-            />
-            <StatsRow
-              balance={balance}
-              netIn={netIn}
-              netOut={netOut}
               period={period}
               periods={periods}
               onPeriodChange={onPeriodChange}
             />
+            <StatsRow balance={balance} netIn={netIn} netOut={netOut} />
             <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />
             <SubToolbar
               viewMode={viewMode}
