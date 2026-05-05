@@ -496,10 +496,11 @@ function StatsRow({
             onClick={canOpen ? () => setOpen((v) => !v) : undefined}
             aria-haspopup={canOpen ? 'menu' : undefined}
             aria-expanded={canOpen ? open : undefined}
-            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center border border-slate-200 px-2 py-1 rounded"
+            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1 rounded-full transition-colors"
           >
+            <span className="material-symbols-outlined !text-[14px] text-slate-400">schedule</span>
             {period}
-            <span className="material-symbols-outlined !text-[14px] ml-1">arrow_drop_down</span>
+            <span className="material-symbols-outlined !text-[14px] -mr-1">arrow_drop_down</span>
           </button>
           {open && canOpen && (
             <PopoverMenu
