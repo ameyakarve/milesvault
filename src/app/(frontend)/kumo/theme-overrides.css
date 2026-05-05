@@ -1,18 +1,19 @@
 /* Remap Kumo's semantic tokens to MilesVault palette.
- * Kumo defines tokens via light-dark() in theme-kumo.css; we override the
- * brand and surface ramps here, scoped to the .kumo-root subtree.
+ * Kumo's standalone CSS reads `--color-kumo-*` (Tailwind v4 naming),
+ * so we override those exact names — not `--kumo-*` — at body scope.
  */
-.kumo-root {
-  --kumo-brand: #00685f;
-  --kumo-brand-hover: #00554d;
-  --kumo-brand-active: #003d36;
-  --kumo-base: #ffffff;
-  --kumo-elevated: #fbfcfd;
-  --kumo-recessed: #f1f5f9;
-  --kumo-tint: #f4f6f9;
-  --kumo-line: #e2e8f0;
-  --kumo-hairline: rgba(15, 23, 42, 0.08);
-  --kumo-default: #1e293b;
-  --kumo-muted: #64748b;
-  --kumo-subtle: #94a3b8;
+.kumo-root,
+[data-theme='kumo'] {
+  --color-kumo-brand: #00685f;
+  --color-kumo-brand-hover: #00554d;
+  --color-kumo-brand-active: #003d36;
+  --color-kumo-base: #ffffff;
+  --color-kumo-elevated: #fbfcfd;
+  --color-kumo-recessed: #f1f5f9;
+  --color-kumo-tint: #f4f6f9;
+  --color-kumo-line: #e2e8f0;
+  --color-kumo-hairline: rgba(15, 23, 42, 0.08);
+  --color-kumo-default: #1e293b;
+  --color-kumo-muted: #64748b;
+  --color-kumo-subtle: #94a3b8;
 }
