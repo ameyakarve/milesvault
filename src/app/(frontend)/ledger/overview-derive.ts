@@ -218,6 +218,116 @@ function buildComposition(
   return { rows, moreCount }
 }
 
+// Monthly net: per month, sum of signed posting deltas on the account. For
+// liability accounts (credit cards), the dashboard negates this so positive
+// bars read as "debt grew this month". Returns one point per month in the
+// window with a human-readable total label.
+function buildMonthlyNet(
+  facts: TxnFact[],
+  windowStart: Date,
+  windowEnd: Date,
+  currency: string,
+): { points: TrendPoint[]; totalLabel: string } {
+  if (facts.length === 0) {
+    return { points: [], totalLabel: fmtSigned(0, currency) }
+  }
+  const sumByMonth = new Map<string, number>()
+  let total = 0
+  for (const f of facts) {
+    if (f.date.getTime() < windowStart.getTime()) continue
+    if (f.date.getTime() > windowEnd.getTime()) continue
+    const k = ymKey(f.date)
+    sumByMonth.set(k, (sumByMonth.get(k) ?? 0) + f.net)
+    total += f.net
+  }
+  const points: TrendPoint[] = []
+  let cursor = startOfMonth(windowStart)
+  const endMonth = startOfMonth(windowEnd)
+  while (cursor.getTime() <= endMonth.getTime()) {
+    const k = ymKey(cursor)
+    const monthAbbr = MONTH_ABBR[cursor.getUTCMonth()]!
+    const yr = String(cursor.getUTCFullYear()).slice(-2)
+    const x = cursor.getUTCMonth() === 0 ? `${monthAbbr} ${yr}` : monthAbbr
+    const y = sumByMonth.get(k) ?? 0
+    points.push({
+      x,
+      y,
+      label: `${monthAbbr} ${yr} · ${fmtSigned(y, currency)}`,
+    })
+    cursor = addMonths(cursor, 1)
+  }
+  return { points, totalLabel: fmtSigned(total, currency) }
+}
+
+// Category breakdown: for each charge transaction (net < 0 on the CC =
+// balance grew worse), sum the Expenses:* counter-postings grouped by their
+// root category (Expenses:Root). Returns top 6 with relative scale.
+function buildCategoryBreakdown(
+  facts: TxnFact[],
+  currency: string,
+): { rows: CompositionRow[]; moreCount: number } {
+  const totals = new Map<string, number>()
+  for (const f of facts) {
+    if (f.net >= 0) continue
+    for (const cp of f.counterparties) {
+      if (!cp.account.startsWith('Expenses:')) continue
+      const parts = cp.account.split(':')
+      const rootCat = parts.length >= 2 ? `${parts[0]}:${parts[1]}` : cp.account
+      totals.set(rootCat, (totals.get(rootCat) ?? 0) + cp.amount)
+    }
+  }
+  const sorted = [...totals.entries()]
+    .map(([account, amount]) => ({ account, amount, abs: Math.abs(amount) }))
+    .sort((a, b) => b.abs - a.abs)
+  const top = sorted.slice(0, 6)
+  const moreCount = Math.max(0, sorted.length - top.length)
+  const maxAbs = top[0]?.abs ?? 1
+  const rows: CompositionRow[] = top.map(({ account, amount, abs }) => {
+    const { prefix, leaf } = leafOf(account)
+    return {
+      prefix,
+      leaf,
+      amount: `${fmtSymbol(currency)}${fmtAmount(amount, currency)}`,
+      amountClass: 'text-slate-900',
+      scale: Math.max(0.04, abs / Math.max(maxAbs, 1)),
+    }
+  })
+  return { rows, moreCount }
+}
+
+// Paid-from: for each payment transaction (net > 0 on the CC = balance grew
+// better), sum the Assets:* counter-postings grouped by full account path.
+// Returns top 4 with relative scale.
+function buildPaidFrom(
+  facts: TxnFact[],
+  currency: string,
+): { rows: CompositionRow[] } {
+  const totals = new Map<string, number>()
+  for (const f of facts) {
+    if (f.net <= 0) continue
+    for (const cp of f.counterparties) {
+      if (!cp.account.startsWith('Assets:')) continue
+      totals.set(cp.account, (totals.get(cp.account) ?? 0) + cp.amount)
+    }
+  }
+  const sorted = [...totals.entries()]
+    .map(([account, amount]) => ({ account, amount, abs: Math.abs(amount) }))
+    .sort((a, b) => b.abs - a.abs)
+    .slice(0, 4)
+  const maxAbs = sorted[0]?.abs ?? 1
+  const rows: CompositionRow[] = sorted.map(({ account, amount, abs }) => {
+    const { prefix, leaf } = leafOf(account)
+    return {
+      prefix,
+      leaf,
+      amount: `${fmtSymbol(currency)}${fmtAmount(amount, currency)}`,
+      amountClass: 'text-slate-900',
+      scale: Math.max(0.06, abs / Math.max(maxAbs, 1)),
+    }
+  })
+  return { rows }
+}
+
 function buildEvents(facts: TxnFact[], currency: string): EventRow[] {
   const ranked = [...facts]
     .filter((f) => f.abs > 0)
@@ -275,6 +385,9 @@ export function deriveOverview(args: {
   const trend = buildTrend(facts, start, now, currency)
   const composition = buildComposition(inWindow, currency)
   const events = buildEvents(inWindow, currency)
+  const monthlyNet = buildMonthlyNet(facts, start, now, currency)
+  const categoryBreakdown = buildCategoryBreakdown(inWindow, currency)
+  const paidFrom = buildPaidFrom(inWindow, currency)
   return {
     kpis: [
       {
@@ -296,5 +409,8 @@ export function deriveOverview(args: {
     trend: { title: 'Balance over time', currency, ...trend },
     composition: { title: 'Top counter-accounts', rows: composition.rows, moreCount: composition.moreCount },
     events: { title: 'Notable events', rows: events },
+    monthlyNet: { points: monthlyNet.points, totalLabel: monthlyNet.totalLabel, currency },
+    categoryBreakdown: { rows: categoryBreakdown.rows, moreCount: categoryBreakdown.moreCount },
+    paidFrom: { rows: paidFrom.rows },
   }
 }

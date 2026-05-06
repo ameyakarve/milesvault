@@ -1,179 +1,91 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import * as Plot from '@observablehq/plot'
 import { LayerCard } from '@cloudflare/kumo/components/layer-card'
-import type { OverviewViewProps } from '../overview-view'
+import type { OverviewViewProps, CompositionRow } from '../overview-view'
 import { PlotChart } from './plot-chart'
+import { CURRENCY_SYMBOL, compactAmount } from './format'
 
-const CURRENCY_SYMBOL: Record<string, string> = {
-  INR: '₹',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-}
+const ROSE = '#e11d48'
+const TEAL = '#00685f'
 
-function compactAmount(n: number, currency: string): string {
-  const a = Math.abs(n)
-  const sign = n < 0 ? '-' : ''
-  if (currency === 'INR') {
-    if (a >= 1e7) return `${sign}${(a / 1e7).toFixed(a >= 1e8 ? 0 : 1).replace(/\.0$/, '')}Cr`
-    if (a >= 1e5) return `${sign}${(a / 1e5).toFixed(a >= 1e6 ? 0 : 1).replace(/\.0$/, '')}L`
-    if (a >= 1e3) return `${sign}${Math.round(a / 1e3)}k`
-    return `${sign}${a}`
-  }
-  if (a >= 1e9) return `${sign}${(a / 1e9).toFixed(a >= 1e10 ? 0 : 1).replace(/\.0$/, '')}B`
-  if (a >= 1e6) return `${sign}${(a / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '')}M`
-  if (a >= 1e3) return `${sign}${Math.round(a / 1e3)}k`
-  return `${sign}${a}`
-}
-
-// Credit-card dashboard. Bound by the taxonomy at Liabilities:CreditCards, which means
-// every Liabilities:CreditCards:* account renders this layout in the Overview tab.
+// Credit-card dashboard. Bound by the taxonomy at Liabilities:CreditCards;
+// every Liabilities:CreditCards:* account renders this layout.
 //
-// Liability accounts carry credit-normal balances, so the raw runningTotal is
-// negative as charges accrue. The trend chart negates the values for display
-// so the line reads as "amount owed" climbing upward — the conventional
-// statement view.
+// Beancount Liabilities are credit-normal: charges are negative postings on
+// the CC account (balance grows worse), payments are positive postings
+// (balance grows better). The "net spend" trend negates so positive bars
+// read as "added to debt this month" — the conventional billing view.
 export function CreditCardDashboard(props: OverviewViewProps) {
-  const { trend, composition, events } = props
-  const symbol = CURRENCY_SYMBOL[trend.currency] ?? ''
+  const { events, monthlyNet, categoryBreakdown, paidFrom } = props
+  const currency = monthlyNet?.currency ?? 'INR'
+  const symbol = CURRENCY_SYMBOL[currency] ?? ''
 
-  const owedPoints = useMemo(
-    () => trend.points.map((p) => ({ ...p, y: -p.y })),
-    [trend.points],
-  )
-
-  const renderTrend = useCallback(() => {
-    if (owedPoints.length === 0) {
+  const renderNetTrend = useCallback(() => {
+    const points = (monthlyNet?.points ?? []).map((p) => ({
+      ...p,
+      // Negate for display: charge = +, payment-heavy month = -.
+      yDisplay: -p.y,
+    }))
+    if (points.length === 0) {
       const empty = document.createElement('div')
       empty.className = 'p-6 text-[11px] text-slate-400 text-center'
-      empty.textContent = 'No data in selected range'
+      empty.textContent = 'No activity in selected range'
       return empty
     }
     return Plot.plot({
-      height: 260,
+      height: 240,
       marginLeft: 76,
       marginRight: 24,
       marginBottom: 32,
       style: { background: 'transparent', fontFamily: 'inherit', fontSize: '11px' },
-      x: { type: 'point', label: null, tickSize: 0, domain: owedPoints.map((p) => p.x) },
+      x: { type: 'band', label: null, tickSize: 0, domain: points.map((p) => p.x), padding: 0.25 },
       y: {
         grid: true,
         label: null,
         nice: true,
-        tickFormat: (d: number) => `${symbol}${compactAmount(d, trend.currency)}`,
+        tickFormat: (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${symbol}${compactAmount(Math.abs(d), currency)}`,
       },
       marks: [
-        Plot.ruleY([0], { stroke: '#cbd5e1' }),
-        Plot.areaY(owedPoints, {
+        Plot.ruleY([0], { stroke: '#94a3b8', strokeWidth: 1 }),
+        Plot.barY(points, {
           x: 'x',
-          y: 'y',
-          curve: 'monotone-x',
-          fill: '#e11d48',
-          fillOpacity: 0.14,
-        }),
-        Plot.lineY(owedPoints, {
-          x: 'x',
-          y: 'y',
-          curve: 'monotone-x',
-          stroke: '#e11d48',
-          strokeWidth: 2.5,
-        }),
-        Plot.dot(owedPoints, {
-          x: 'x',
-          y: 'y',
-          fill: '#e11d48',
-          stroke: 'white',
-          strokeWidth: 1.5,
-          r: 3.5,
-        }),
-        Plot.tip(owedPoints, Plot.pointerX({ x: 'x', y: 'y', title: 'label' })),
-      ],
-    })
-  }, [owedPoints, trend.currency, symbol])
-
-  const renderComposition = useCallback(() => {
-    if (composition.rows.length === 0) {
-      const empty = document.createElement('div')
-      empty.className = 'p-6 text-[11px] text-slate-400'
-      empty.textContent = 'No counter-account activity'
-      return empty
-    }
-    // For a CC, positive raw amounts on counter-accounts are charges that
-    // flowed out to Expenses; negative raw amounts are payments that flowed in
-    // from Bank. Color reflects that semantic — rose for charges, teal for
-    // payments — even though the underlying scale value is the same shape as
-    // the bank dashboard.
-    const data = composition.rows.map((r) => ({
-      account: `${r.prefix}${r.leaf}`,
-      value: (r.amountClass.includes('rose') ? -1 : 1) * r.scale * 100,
-      label: r.amount,
-    }))
-    // For long bars the outside-the-bar slot collides with the y-axis
-    // labels. Render those labels inside the bar tip (toward zero) with
-    // white text so the bar fill is the contrast surface.
-    const INSIDE_THRESHOLD = 50
-    const insidePositives = data.filter((d) => d.value >= INSIDE_THRESHOLD)
-    const insideNegatives = data.filter((d) => d.value <= -INSIDE_THRESHOLD)
-    const outsidePositives = data.filter((d) => d.value >= 0 && d.value < INSIDE_THRESHOLD)
-    const outsideNegatives = data.filter((d) => d.value < 0 && d.value > -INSIDE_THRESHOLD)
-    return Plot.plot({
-      height: Math.max(220, data.length * 40),
-      marginLeft: 220,
-      marginRight: 130,
-      marginTop: 16,
-      marginBottom: 16,
-      style: { background: 'transparent', fontFamily: 'inherit', fontSize: '11px' },
-      x: { axis: null, domain: [-110, 110] },
-      y: { label: null, domain: data.map((d) => d.account), tickSize: 0 },
-      marks: [
-        Plot.ruleX([0], { stroke: '#cbd5e1', strokeWidth: 1 }),
-        Plot.barX(data, {
-          x: 'value',
-          y: 'account',
-          fill: (d) => (d.value < 0 ? '#00685f' : '#e11d48'),
+          y: 'yDisplay',
+          fill: (d) => (d.yDisplay >= 0 ? ROSE : TEAL),
           fillOpacity: 0.92,
         }),
-        Plot.text(outsidePositives, {
-          x: 'value',
-          y: 'account',
-          text: 'label',
-          textAnchor: 'start',
-          dx: 6,
-          fill: '#0f172a',
-          fontWeight: 500,
-        }),
-        Plot.text(outsideNegatives, {
-          x: 'value',
-          y: 'account',
-          text: 'label',
-          textAnchor: 'end',
-          dx: -6,
-          fill: '#0f172a',
-          fontWeight: 500,
-        }),
-        Plot.text(insidePositives, {
-          x: 'value',
-          y: 'account',
-          text: 'label',
-          textAnchor: 'end',
-          dx: -6,
-          fill: 'white',
-          fontWeight: 600,
-        }),
-        Plot.text(insideNegatives, {
-          x: 'value',
-          y: 'account',
-          text: 'label',
-          textAnchor: 'start',
-          dx: 6,
-          fill: 'white',
-          fontWeight: 600,
-        }),
+        Plot.tip(points, Plot.pointerX({ x: 'x', y: 'yDisplay', title: 'label' })),
       ],
     })
-  }, [composition.rows])
+  }, [monthlyNet, symbol, currency])
+
+  const renderCategories = useCallback(() => {
+    const rows = categoryBreakdown?.rows ?? []
+    if (rows.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'p-6 text-[11px] text-slate-400'
+      empty.textContent = 'No charges in selected range'
+      return empty
+    }
+    return renderHorizontalBars(rows, ROSE, /* showLabelInside */ true)
+  }, [categoryBreakdown])
+
+  const renderPaidFrom = useCallback(() => {
+    const rows = paidFrom?.rows ?? []
+    if (rows.length === 0) return null
+    return renderHorizontalBars(rows, TEAL, /* showLabelInside */ true)
+  }, [paidFrom])
+
+  // Negate totalLabel for display so it reads as "amount added to debt"
+  // rather than the raw signed posting sum.
+  const headlineTotal = (() => {
+    const raw = monthlyNet?.totalLabel ?? ''
+    if (!raw) return ''
+    if (raw.startsWith('+')) return '−' + raw.slice(1)
+    if (raw.startsWith('−')) return '+' + raw.slice(1)
+    return raw
+  })()
 
   return (
     <div
@@ -183,24 +95,38 @@ export function CreditCardDashboard(props: OverviewViewProps) {
     >
       <div className="p-6 space-y-6">
         <LayerCard className="flex flex-col rounded-md p-4">
-          <div className="text-[12px] font-medium text-slate-700 mb-3">Amount owed over time</div>
-          <PlotChart render={renderTrend} className="w-full" />
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="text-[12px] font-medium text-slate-700">Monthly net spend</div>
+            {headlineTotal && (
+              <div className="text-[11px] text-slate-500">
+                <span
+                  className={`font-mono tabular-nums font-semibold ${
+                    headlineTotal.startsWith('+') ? 'text-rose-600' : 'text-[#00685f]'
+                  }`}
+                >
+                  {headlineTotal}
+                </span>{' '}
+                <span className="text-slate-400">net over period</span>
+              </div>
+            )}
+          </div>
+          <PlotChart render={renderNetTrend} className="w-full" />
         </LayerCard>
 
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-[12px] font-medium text-slate-700">Top spend categories</div>
-            {composition.moreCount != null && composition.moreCount > 0 && (
+            <div className="text-[12px] font-medium text-slate-700">Where this card spent</div>
+            {categoryBreakdown && categoryBreakdown.moreCount > 0 && (
               <div className="text-[11px] italic text-slate-400">
-                +{composition.moreCount} more
+                +{categoryBreakdown.moreCount} more
               </div>
             )}
           </div>
-          <PlotChart render={renderComposition} className="w-full" />
+          <PlotChart render={renderCategories} className="w-full" />
         </LayerCard>
 
         <LayerCard className="flex flex-col rounded-md p-4">
-          <div className="text-[12px] font-medium text-slate-700 mb-3">Notable charges</div>
+          <div className="text-[12px] font-medium text-slate-700 mb-3">Recent charges</div>
           {events.rows.length === 0 ? (
             <div className="py-3 text-[11px] text-slate-400">No notable charges</div>
           ) : (
@@ -226,14 +152,80 @@ export function CreditCardDashboard(props: OverviewViewProps) {
                   <div
                     className={`w-[140px] shrink-0 text-right font-mono tabular-nums ${row.amountClass}`}
                   >
-                    {row.amount}
+                    {/* Drop the leading '+' on charge amounts — on a CC view they read as income otherwise. */}
+                    {row.amount.startsWith('+') ? row.amount.slice(1) : row.amount}
                   </div>
                 </div>
               ))}
             </div>
           )}
         </LayerCard>
+
+        {paidFrom && paidFrom.rows.length > 0 && (
+          <LayerCard className="flex flex-col rounded-md p-4">
+            <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
+            <PlotChart render={renderPaidFrom} className="w-full" />
+          </LayerCard>
+        )}
       </div>
     </div>
   )
+}
+
+// Horizontal bar chart for category breakdown / paid-from. Bars 0 → |scale|,
+// leaf-prominent y-axis labels (the prefix is muted in the plot tooltip; the
+// y-axis just shows the leaf). Long bars get inside-white labels; short bars
+// get outside-slate.
+function renderHorizontalBars(
+  rows: CompositionRow[],
+  color: string,
+  _showLabelInside: boolean,
+) {
+  const data = rows.map((r) => ({
+    leaf: r.leaf,
+    prefix: r.prefix,
+    full: `${r.prefix}${r.leaf}`,
+    value: Math.max(r.scale, 0.04) * 100,
+    label: r.amount,
+  }))
+  const INSIDE_THRESHOLD = 50
+  const inside = data.filter((d) => d.value >= INSIDE_THRESHOLD)
+  const outside = data.filter((d) => d.value < INSIDE_THRESHOLD)
+  return Plot.plot({
+    height: Math.max(180, data.length * 40),
+    marginLeft: 130,
+    marginRight: 130,
+    marginTop: 12,
+    marginBottom: 12,
+    style: { background: 'transparent', fontFamily: 'inherit', fontSize: '11px' },
+    x: { axis: null, domain: [0, 110] },
+    y: { label: null, domain: data.map((d) => d.leaf), tickSize: 0 },
+    marks: [
+      Plot.ruleX([0], { stroke: '#cbd5e1', strokeWidth: 1 }),
+      Plot.barX(data, {
+        x: 'value',
+        y: 'leaf',
+        fill: color,
+        fillOpacity: 0.92,
+      }),
+      Plot.text(outside, {
+        x: 'value',
+        y: 'leaf',
+        text: 'label',
+        textAnchor: 'start',
+        dx: 6,
+        fill: '#0f172a',
+        fontWeight: 500,
+      }),
+      Plot.text(inside, {
+        x: 'value',
+        y: 'leaf',
+        text: 'label',
+        textAnchor: 'end',
+        dx: -6,
+        fill: 'white',
+        fontWeight: 600,
+      }),
+    ],
+  })
 }

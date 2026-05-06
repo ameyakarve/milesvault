@@ -40,6 +40,12 @@ export type OverviewViewProps = {
   }
   composition: { title: string; rows: CompositionRow[]; moreCount?: number }
   events: { title: string; rows: EventRow[] }
+  // Optional dashboard-specific derivations. Populated by deriveOverview()
+  // unconditionally (cheap to compute); dashboards consume only what they
+  // need. Currently used by credit-card; may be reused by income/spending.
+  monthlyNet?: { points: TrendPoint[]; totalLabel: string; currency: string }
+  categoryBreakdown?: { rows: CompositionRow[]; moreCount: number }
+  paidFrom?: { rows: CompositionRow[] }
 }
 
 function niceNum(range: number, round: boolean): number {
