@@ -77,15 +77,48 @@ const SAMPLE: OverviewViewProps = {
       { x: 'Apr', y: 5_900, label: 'Apr 26 · ₹5,900.00' },
     ],
   },
-  categoryBreakdown: {
-    moreCount: 3,
-    rows: [
-      { prefix: 'Expenses:', leaf: 'Travel', amount: '₹68,400.00', amountClass: 'text-slate-900', scale: 1.0, value: 68400 },
-      { prefix: 'Expenses:', leaf: 'Food', amount: '₹42,800.00', amountClass: 'text-slate-900', scale: 0.625, value: 42800 },
-      { prefix: 'Expenses:', leaf: 'Shopping', amount: '₹36,200.00', amountClass: 'text-slate-900', scale: 0.53, value: 36200 },
-      { prefix: 'Expenses:', leaf: 'Entertainment', amount: '₹18,600.00', amountClass: 'text-slate-900', scale: 0.272, value: 18600 },
-      { prefix: 'Expenses:', leaf: 'Personal', amount: '₹9,800.00', amountClass: 'text-slate-900', scale: 0.143, value: 9800 },
-      { prefix: 'Expenses:', leaf: 'Transport', amount: '₹4,200.00', amountClass: 'text-slate-900', scale: 0.061, value: 4200 },
+  categoryTreemap: {
+    name: 'Expenses',
+    children: [
+      {
+        name: 'Travel',
+        children: [
+          { name: 'Flights', value: 48200, amount: '₹48,200.00' },
+          { name: 'Hotels', value: 14800, amount: '₹14,800.00' },
+          { name: 'Visas', value: 5400, amount: '₹5,400.00' },
+        ],
+      },
+      {
+        name: 'Food',
+        children: [
+          { name: 'Restaurants', value: 26200, amount: '₹26,200.00' },
+          { name: 'Groceries', value: 11400, amount: '₹11,400.00' },
+          { name: 'Coffee', value: 5200, amount: '₹5,200.00' },
+        ],
+      },
+      {
+        name: 'Shopping',
+        children: [
+          { name: 'Electronics', value: 24900, amount: '₹24,900.00' },
+          { name: 'Apparel', value: 8400, amount: '₹8,400.00' },
+          { name: 'Home', value: 2900, amount: '₹2,900.00' },
+        ],
+      },
+      {
+        name: 'Entertainment',
+        children: [
+          { name: 'Concerts', value: 9800, amount: '₹9,800.00' },
+          { name: 'Streaming', value: 4900, amount: '₹4,900.00' },
+          { name: 'Books', value: 3900, amount: '₹3,900.00' },
+        ],
+      },
+      {
+        name: 'Transport',
+        children: [
+          { name: 'Cabs', value: 2400, amount: '₹2,400.00' },
+          { name: 'Fuel', value: 1800, amount: '₹1,800.00' },
+        ],
+      },
     ],
   },
   paidFrom: {

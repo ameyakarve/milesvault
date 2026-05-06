@@ -400,31 +400,44 @@ function buildEvents(facts: TxnFact[], currency: string): EventRow[] {
   }))
 }
 
-// Two-level hierarchy for the Expenses dashboard treemap. For an account
-// bound to Expenses (or any sub-tree of it), walk every charge's
-// boundPostings (which are all under the bound prefix), group by the
-// next-deeper account level (the "category"), and within each group list
-// individual leaf accounts. Returns up to 8 groups × 8 leaves to keep the
-// SVG legible. Refunds (negative boundPostings on a debit-normal Expenses
-// account) are skipped.
+// Two-level hierarchy of expense spend.
+//
+// For an Expenses-bound view (account starts with 'Expenses'): walk each
+// transaction's boundPostings (all under the bound prefix), group at one
+// level deeper than the bound, list leaves within. Refunds (negative
+// boundPostings on a debit-normal Expenses account) are skipped.
+//
+// For any other bound view (e.g. a credit card): walk counterparties,
+// filter to Expenses:*, group by depth=2 (e.g. 'Expenses:Travel'), list
+// the full leaf accounts within. On a debit-normal Expenses leg the
+// counterparty amount is positive when the user spent money.
 function buildCategoryTreemap(
   facts: TxnFact[],
   account: string,
   currency: string,
 ): TreemapNode | undefined {
-  if (!accountMatchesPrefix(account, 'Expenses')) return undefined
+  const boundIsExpenses = accountMatchesPrefix(account, 'Expenses')
 
   const leafTotals = new Map<string, number>()
-  for (const f of facts) {
-    for (const p of f.boundPostings) {
-      if (p.amount <= 0) continue
-      leafTotals.set(p.account, (leafTotals.get(p.account) ?? 0) + p.amount)
+  if (boundIsExpenses) {
+    for (const f of facts) {
+      for (const p of f.boundPostings) {
+        if (p.amount <= 0) continue
+        leafTotals.set(p.account, (leafTotals.get(p.account) ?? 0) + p.amount)
+      }
+    }
+  } else {
+    for (const f of facts) {
+      for (const cp of f.counterparties) {
+        if (!cp.account.startsWith('Expenses:')) continue
+        if (cp.amount <= 0) continue
+        leafTotals.set(cp.account, (leafTotals.get(cp.account) ?? 0) + cp.amount)
+      }
     }
   }
   if (leafTotals.size === 0) return undefined
 
-  const baseDepth = account.split(':').length
-  const groupDepth = baseDepth + 1
+  const groupDepth = boundIsExpenses ? account.split(':').length + 1 : 2
 
   const groups = new Map<string, { account: string; amount: number }[]>()
   for (const [acct, amt] of leafTotals) {
@@ -445,8 +458,10 @@ function buildCategoryTreemap(
     .sort((a, b) => b.total - a.total)
     .slice(0, 8)
 
+  const rootName = boundIsExpenses ? (account.split(':').pop() ?? account) : 'Expenses'
+
   return {
-    name: account.split(':').pop() ?? account,
+    name: rootName,
     children: groupNodes.map(({ groupKey, leaves }) => ({
       name: groupKey.split(':').pop() ?? groupKey,
       children: leaves
