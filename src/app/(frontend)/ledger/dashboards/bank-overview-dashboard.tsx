@@ -2,11 +2,12 @@
 
 import { useCallback } from 'react'
 import * as Plot from '@observablehq/plot'
-import { LayerCard } from '@cloudflare/kumo/components/layer-card'
+import { Text } from '@mantine/core'
+import { AreaChart } from '@mantine/charts'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
 import { Masonry } from './masonry'
-import { StatTile } from '../stat-tile'
+import { DashCard, StatCard } from './cards'
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   INR: '₹',
@@ -32,67 +33,15 @@ function compactAmount(n: number, currency: string): string {
 
 // Bank-overview dashboard. Bound by the taxonomy at Assets:Bank, which means
 // every Assets:Bank:* account renders this layout in the Overview tab.
-//
-// Takes the same OverviewViewProps shape that powers the legacy hand-rolled
-// OverviewView — the upstream `deriveOverview()` derivation is reused, only
-// the chart rendering swaps to Observable Plot.
 export function BankOverviewDashboard(props: OverviewViewProps) {
   const { trend, composition, events, headerStats } = props
   const symbol = CURRENCY_SYMBOL[trend.currency] ?? ''
+  const trendData = trend.points.map((p) => ({ month: p.x, balance: p.y }))
+  const trendValueFormatter = (v: number) => `${symbol}${compactAmount(v, trend.currency)}`
 
-  const renderTrend = useCallback(() => {
-    if (trend.points.length === 0) {
-      const empty = document.createElement('div')
-      empty.className = 'p-6 text-[11px] text-slate-400 text-center'
-      empty.textContent = 'No data in selected range'
-      return empty
-    }
-    return Plot.plot({
-      height: 260,
-      marginLeft: 76,
-      marginRight: 24,
-      marginBottom: 32,
-      style: { background: 'transparent', fontFamily: 'inherit', fontSize: '11px' },
-      // Pin the domain to the data order. Without this, Plot's point scale
-      // sorts unique values ascending — which on raw month-abbrev strings
-      // (`Dec`, `Jan 26`, `Feb`, `Mar`) collapses to alphabetical and
-      // scrambles the time axis.
-      x: { type: 'point', label: null, tickSize: 0, domain: trend.points.map((p) => p.x) },
-      y: {
-        grid: true,
-        label: null,
-        nice: true,
-        tickFormat: (d: number) => `${symbol}${compactAmount(d, trend.currency)}`,
-      },
-      marks: [
-        Plot.ruleY([0], { stroke: '#cbd5e1' }),
-        Plot.areaY(trend.points, {
-          x: 'x',
-          y: 'y',
-          curve: 'monotone-x',
-          fill: '#00685f',
-          fillOpacity: 0.18,
-        }),
-        Plot.lineY(trend.points, {
-          x: 'x',
-          y: 'y',
-          curve: 'monotone-x',
-          stroke: '#00685f',
-          strokeWidth: 2.5,
-        }),
-        Plot.dot(trend.points, {
-          x: 'x',
-          y: 'y',
-          fill: '#00685f',
-          stroke: 'white',
-          strokeWidth: 1.5,
-          r: 3.5,
-        }),
-        Plot.tip(trend.points, Plot.pointerX({ x: 'x', y: 'y', title: 'label' })),
-      ],
-    })
-  }, [trend.points, trend.currency, symbol])
-
+  // The composition chart stays on Plot — Mantine's BarChart has no inline
+  // data-label support, and the diverging positive/negative bars with
+  // value labels alongside are central to the panel's readability.
   const renderComposition = useCallback(() => {
     if (composition.rows.length === 0) {
       const empty = document.createElement('div')
@@ -156,35 +105,49 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
       <Masonry className="p-6">
-        {headerStats && <StatTile label="Balance" value={headerStats.balance} />}
+        {headerStats && <StatCard label="Balance" value={headerStats.balance} />}
         {headerStats?.netIn && (
-          <StatTile label="Net In" value={headerStats.netIn} valueClass="text-[#00685f]" />
+          <StatCard label="Net In" value={headerStats.netIn} valueColor="#00685f" />
         )}
         {headerStats?.netOut && (
-          <StatTile label="Net Out" value={headerStats.netOut} valueClass="text-rose-600" />
+          <StatCard label="Net Out" value={headerStats.netOut} valueColor="#e11d48" />
         )}
 
-        <LayerCard className="flex flex-col rounded-md p-4">
-          <div className="text-[12px] font-medium text-slate-700 mb-3">{trend.title}</div>
-          <PlotChart render={renderTrend} className="w-full" />
-        </LayerCard>
+        <DashCard title={trend.title}>
+          {trendData.length === 0 ? (
+            <Text size="xs" c="dimmed" ta="center" py="md">No data in selected range</Text>
+          ) : (
+            <AreaChart
+              h={260}
+              data={trendData}
+              dataKey="month"
+              series={[{ name: 'balance', label: 'Balance', color: '#00685f' }]}
+              curveType="monotone"
+              withDots
+              dotProps={{ r: 3.5, stroke: 'white', strokeWidth: 1.5 }}
+              fillOpacity={0.18}
+              valueFormatter={trendValueFormatter}
+              tickLine="none"
+              gridAxis="y"
+              withLegend={false}
+            />
+          )}
+        </DashCard>
 
-        <LayerCard className="flex flex-col rounded-md p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-[12px] font-medium text-slate-700">{composition.title}</div>
-            {composition.moreCount != null && composition.moreCount > 0 && (
-              <div className="text-[11px] italic text-slate-400">
-                +{composition.moreCount} more
-              </div>
-            )}
-          </div>
+        <DashCard
+          title={composition.title}
+          right={
+            composition.moreCount != null && composition.moreCount > 0 ? (
+              <Text size="xs" fs="italic" c="dimmed">+{composition.moreCount} more</Text>
+            ) : null
+          }
+        >
           <PlotChart render={renderComposition} className="w-full" />
-        </LayerCard>
+        </DashCard>
 
-        <LayerCard className="flex flex-col rounded-md p-4">
-          <div className="text-[12px] font-medium text-slate-700 mb-3">{events.title}</div>
+        <DashCard title={events.title}>
           {events.rows.length === 0 ? (
-            <div className="py-3 text-[11px] text-slate-400">No notable events</div>
+            <Text size="xs" c="dimmed" py="xs">No notable events</Text>
           ) : (
             <div>
               {events.rows.map((row, i) => (
@@ -201,16 +164,14 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
                     {row.payee}
                   </div>
                   <div className="flex-1 text-slate-600 truncate">{row.narration}</div>
-                  <div
-                    className={`w-[140px] shrink-0 text-right font-mono tabular-nums ${row.amountClass}`}
-                  >
+                  <div className={`w-[140px] shrink-0 text-right font-mono tabular-nums ${row.amountClass}`}>
                     {row.amount}
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </LayerCard>
+        </DashCard>
       </Masonry>
     </div>
   )

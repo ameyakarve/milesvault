@@ -24,6 +24,9 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.0",
     "@lezer/highlight": "^1.2.3",
+    "@mantine/charts": "^9.1.1",
+    "@mantine/core": "^9.1.1",
+    "@mantine/hooks": "^9.1.1",
     "@observablehq/plot": "^0.6.17",
     "@opennextjs/cloudflare": "^1.11.0",
     "@phosphor-icons/react": "^2.1.10",
@@ -37,7 +40,8 @@
     "next": "15.4.11",
     "next-auth": "5.0.0-beta.31",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
