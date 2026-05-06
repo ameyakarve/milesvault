@@ -172,6 +172,44 @@ const SAMPLE: OverviewViewProps = {
       { prefix: 'Liabilities:CreditCards:', leaf: 'ICICI:Amazon:7812', amount: '₹19,800.00', amountClass: 'text-slate-900', scale: 0.202, value: 19800 },
     ],
   },
+  spendCalendar: {
+    currency: 'INR',
+    days: buildSampleCalendar(),
+  },
+}
+
+// Generate a deterministic 365-day daily-spend series with weekend bias and a
+// few "big day" spikes so the heatmap renders something visually rich.
+function buildSampleCalendar(): { date: string; amount: number; label: string }[] {
+  const days: { date: string; amount: number; label: string }[] = []
+  const end = new Date(Date.UTC(2026, 3, 28))
+  const start = new Date(end)
+  start.setUTCDate(start.getUTCDate() - 364)
+  let seed = 1
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4_294_967_296
+    return seed / 4_294_967_296
+  }
+  const cursor = new Date(start)
+  while (cursor.getTime() <= end.getTime()) {
+    const dow = cursor.getUTCDay()
+    const isWeekend = dow === 0 || dow === 6
+    const r = rand()
+    let amount = 0
+    if (r > 0.35) {
+      const base = isWeekend ? 1500 : 700
+      amount = Math.round(base + r * (isWeekend ? 8000 : 3500))
+    }
+    if (r > 0.96) amount += 25_000 + Math.round(rand() * 15_000)
+    const ymd = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`
+    const label =
+      amount > 0
+        ? `${ymd} · ₹${amount.toLocaleString('en-IN')}`
+        : `${ymd} · no charges`
+    days.push({ date: ymd, amount, label })
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+  return days
 }
 
 export const Default: StoryObj = {

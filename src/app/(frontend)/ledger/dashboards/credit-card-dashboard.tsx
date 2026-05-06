@@ -8,6 +8,7 @@ import { PlotChart } from './plot-chart'
 import { Treemap } from './treemap'
 import { Donut, DONUT_PALETTE } from './donut'
 import { Sankey } from './sankey'
+import { SpendHeatmap } from './spend-heatmap'
 import { Masonry } from './masonry'
 import { CURRENCY_SYMBOL, compactAmount } from './format'
 
@@ -21,7 +22,8 @@ const ROSE = '#e11d48'
 // (balance grows better). The "net spend" trend negates so positive bars
 // read as "added to debt this month" — the conventional billing view.
 export function CreditCardDashboard(props: OverviewViewProps) {
-  const { events, monthlyNet, categoryTreemap, cardSankey, paidFrom, cardsUsed } = props
+  const { events, monthlyNet, categoryTreemap, cardSankey, paidFrom, cardsUsed, spendCalendar } =
+    props
   const currency = monthlyNet?.currency ?? 'INR'
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
 
@@ -89,6 +91,13 @@ export function CreditCardDashboard(props: OverviewViewProps) {
           </div>
           <PlotChart render={renderNetTrend} className="w-full" />
         </LayerCard>
+
+        {spendCalendar && spendCalendar.days.length > 0 && (
+          <LayerCard className="flex flex-col rounded-md p-4">
+            <div className="text-[12px] font-medium text-slate-700 mb-3">Spend calendar</div>
+            <SpendHeatmap days={spendCalendar.days} currency={spendCalendar.currency} />
+          </LayerCard>
+        )}
 
         {cardsUsed && cardsUsed.rows.length > 0 && (
           <LayerCard className="flex flex-col rounded-md p-4">
