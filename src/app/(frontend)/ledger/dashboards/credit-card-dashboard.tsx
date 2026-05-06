@@ -101,7 +101,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
               )}
             </div>
             {categoryBreakdown && categoryBreakdown.rows.length > 0 ? (
-              <Donut rows={categoryBreakdown.rows} palette={ROSE_PALETTE} />
+              <Donut rows={categoryBreakdown.rows} palette={DONUT_PALETTE} />
             ) : (
               <div className="p-6 text-[11px] text-slate-400">No charges in selected range</div>
             )}
@@ -110,7 +110,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
           {paidFrom && paidFrom.rows.length > 0 && (
             <LayerCard className="flex flex-col rounded-md p-4">
               <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
-              <Donut rows={paidFrom.rows} palette={TEAL_PALETTE} />
+              <Donut rows={paidFrom.rows} palette={DONUT_PALETTE} />
             </LayerCard>
           )}
         </div>
@@ -156,10 +156,18 @@ export function CreditCardDashboard(props: OverviewViewProps) {
   )
 }
 
-// Sequential palettes for the donut slices. Largest slice (first row) gets
-// the deepest shade; remaining slices step lighter.
-const ROSE_PALETTE = ['#be123c', '#e11d48', '#f43f5e', '#fb7185', '#fda4af', '#fecdd3']
-const TEAL_PALETTE = ['#00685f', '#0f766e', '#14b8a6', '#5eead4', '#99f6e4', '#ccfbf1']
+// Categorical palette for donut slices — Tableau-style, Tailwind-aligned.
+// Ordered so adjacent slices have high contrast.
+const DONUT_PALETTE = [
+  '#3b82f6', // blue-500
+  '#f59e0b', // amber-500
+  '#10b981', // emerald-500
+  '#8b5cf6', // violet-500
+  '#ef4444', // red-500
+  '#14b8a6', // teal-500
+  '#f97316', // orange-500
+  '#ec4899', // pink-500
+]
 
 function Donut({ rows, palette }: { rows: CompositionRow[]; palette: string[] }) {
   const total = rows.reduce((acc, r) => acc + (r.value ?? 0), 0)
