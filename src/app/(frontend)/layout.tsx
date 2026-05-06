@@ -1,6 +1,9 @@
 import React from 'react'
+import { MantineProvider, ColorSchemeScript, mantineHtmlProps } from '@mantine/core'
 import './styles.css'
 import './theme-overrides.css'
+import '@mantine/core/styles.css'
+import '@mantine/charts/styles.css'
 
 export const metadata = {
   description: 'MilesVault — personal finance ledger',
@@ -11,8 +14,9 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
   const { children } = props
 
   return (
-    <html lang="en">
+    <html lang="en" {...mantineHtmlProps}>
       <head>
+        <ColorSchemeScript />
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
@@ -28,7 +32,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
         data-theme="kumo"
         className="kumo-root bg-[#FBFCFD]"
       >
-        {children}
+        <MantineProvider>{children}</MantineProvider>
       </body>
     </html>
   )

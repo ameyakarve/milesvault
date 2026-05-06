@@ -1,16 +1,14 @@
 'use client'
 
-import { useCallback } from 'react'
-import * as Plot from '@observablehq/plot'
-import { LayerCard } from '@cloudflare/kumo/components/layer-card'
-import type { OverviewViewProps } from '../overview-view'
-import { PlotChart } from './plot-chart'
+import { Text } from '@mantine/core'
+import { LineChart, DonutChart } from '@mantine/charts'
+import type { OverviewViewProps, CompositionRow } from '../overview-view'
 import { Treemap } from './treemap'
-import { Donut, DONUT_PALETTE } from './donut'
+import { DONUT_PALETTE } from './donut'
 import { Sankey } from './sankey'
 import { SpendHeatmap } from './spend-heatmap'
 import { Masonry } from './masonry'
-import { StatTile } from '../stat-tile'
+import { DashCard, StatCard } from './cards'
 import { CURRENCY_SYMBOL, compactAmount } from './format'
 
 const ROSE = '#e11d48'
@@ -36,48 +34,9 @@ export function CreditCardDashboard(props: OverviewViewProps) {
   const currency = monthlyNet?.currency ?? 'INR'
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
 
-  const renderNetTrend = useCallback(() => {
-    const points = monthlyNet?.points ?? []
-    if (points.length === 0) {
-      const empty = document.createElement('div')
-      empty.className = 'p-6 text-[11px] text-slate-400 text-center'
-      empty.textContent = 'No activity in selected range'
-      return empty
-    }
-    return Plot.plot({
-      height: 240,
-      marginLeft: 76,
-      marginRight: 24,
-      marginBottom: 32,
-      style: { background: 'transparent', fontFamily: 'inherit', fontSize: '11px' },
-      x: { type: 'band', label: null, tickSize: 0, domain: points.map((p) => p.x), padding: 0.25 },
-      y: {
-        grid: true,
-        label: null,
-        nice: true,
-        tickFormat: (d: number) => `${symbol}${compactAmount(d, currency)}`,
-      },
-      marks: [
-        Plot.line(points, {
-          x: 'x',
-          y: 'y',
-          stroke: '#94a3b8',
-          strokeWidth: 1.5,
-        }),
-        Plot.dot(points, {
-          x: 'x',
-          y: 'y',
-          fill: ROSE,
-          stroke: 'white',
-          strokeWidth: 1.5,
-          r: 4,
-        }),
-        Plot.tip(points, Plot.pointerX({ x: 'x', y: 'y', title: 'label' })),
-      ],
-    })
-  }, [monthlyNet, symbol, currency])
-
-  const headlineTotal = monthlyNet?.totalLabel ?? ''
+  const trendData =
+    monthlyNet?.points.map((p) => ({ month: p.x, amount: p.y })) ?? []
+  const trendValueFormatter = (v: number) => `${symbol}${compactAmount(v, currency)}`
 
   return (
     <div
@@ -86,68 +45,76 @@ export function CreditCardDashboard(props: OverviewViewProps) {
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
       <Masonry className="p-6">
-        {headerStats && <StatTile label="Balance" value={headerStats.balance} />}
+        {headerStats && <StatCard label="Balance" value={headerStats.balance} />}
         {headerStats?.netIn && (
-          <StatTile label="Net In" value={headerStats.netIn} valueClass="text-[#00685f]" />
+          <StatCard label="Net In" value={headerStats.netIn} valueColor="#00685f" />
         )}
         {headerStats?.netOut && (
-          <StatTile label="Net Out" value={headerStats.netOut} valueClass="text-rose-600" />
+          <StatCard label="Net Out" value={headerStats.netOut} valueColor="#e11d48" />
         )}
 
-        <LayerCard className="flex flex-col rounded-md p-4">
-          <div className="flex items-baseline justify-between mb-3">
-            <div className="text-[12px] font-medium text-slate-700">Monthly spend</div>
-            {headlineTotal && (
-              <div className="text-[11px] text-slate-500">
-                <span className="font-mono tabular-nums font-semibold text-slate-900">
-                  {headlineTotal}
-                </span>{' '}
-                <span className="text-slate-400">spent over period</span>
-              </div>
-            )}
-          </div>
-          <PlotChart render={renderNetTrend} className="w-full" />
-        </LayerCard>
+        <DashCard title="Monthly spend" right={monthlyNet?.totalLabel ? (
+          <Text size="xs" c="dimmed">
+            <span className="font-mono tabular-nums font-semibold text-slate-900">
+              {monthlyNet.totalLabel}
+            </span>{' '}
+            <span className="text-slate-400">spent over period</span>
+          </Text>
+        ) : null}>
+          {trendData.length === 0 ? (
+            <Text size="xs" c="dimmed" ta="center" py="md">
+              No activity in selected range
+            </Text>
+          ) : (
+            <LineChart
+              h={240}
+              data={trendData}
+              dataKey="month"
+              series={[{ name: 'amount', label: 'Spend', color: ROSE }]}
+              curveType="linear"
+              withDots
+              dotProps={{ r: 4, stroke: 'white', strokeWidth: 1.5 }}
+              valueFormatter={trendValueFormatter}
+              tickLine="none"
+              gridAxis="y"
+              withLegend={false}
+            />
+          )}
+        </DashCard>
 
         {spendCalendar && spendCalendar.days.length > 0 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
-            <div className="text-[12px] font-medium text-slate-700 mb-3">Spend calendar</div>
+          <DashCard title="Spend calendar">
             <SpendHeatmap days={spendCalendar.days} currency={spendCalendar.currency} />
-          </LayerCard>
+          </DashCard>
         )}
 
         {cardsUsed && cardsUsed.rows.length > 0 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
-            <div className="text-[12px] font-medium text-slate-700 mb-3">Cards used</div>
-            <Donut rows={cardsUsed.rows} palette={DONUT_PALETTE} />
-          </LayerCard>
+          <DashCard title="Cards used">
+            <DonutWithLegend rows={cardsUsed.rows} />
+          </DashCard>
         )}
 
         {categoryTreemap && (categoryTreemap.children?.length ?? 0) > 0 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
-            <div className="text-[12px] font-medium text-slate-700 mb-3">Spend by category</div>
+          <DashCard title="Spend by category">
             <Treemap root={categoryTreemap} />
-          </LayerCard>
+          </DashCard>
         )}
 
         {paidFrom && paidFrom.rows.length > 0 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
-            <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
-            <Donut rows={paidFrom.rows} palette={DONUT_PALETTE} />
-          </LayerCard>
+          <DashCard title="Paid from">
+            <DonutWithLegend rows={paidFrom.rows} />
+          </DashCard>
         )}
 
         {cardSankey && cardSankey.links.length > 0 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
-            <div className="text-[12px] font-medium text-slate-700 mb-3">Money flow</div>
+          <DashCard title="Money flow">
             <Sankey data={cardSankey} />
-          </LayerCard>
+          </DashCard>
         )}
 
-        <LayerCard className="flex flex-col rounded-md p-4">
-          <div className="text-[12px] font-medium text-slate-700 mb-3">Recent charges</div>
+        <DashCard title="Recent charges">
           {events.rows.length === 0 ? (
-            <div className="py-3 text-[11px] text-slate-400">No notable charges</div>
+            <Text size="xs" c="dimmed" py="xs">No notable charges</Text>
           ) : (
             <div>
               {events.rows.map((row, i) => (
@@ -178,8 +145,40 @@ export function CreditCardDashboard(props: OverviewViewProps) {
               ))}
             </div>
           )}
-        </LayerCard>
+        </DashCard>
       </Masonry>
+    </div>
+  )
+}
+
+function DonutWithLegend({ rows }: { rows: CompositionRow[] }) {
+  const total = rows.reduce((acc, r) => acc + (r.value ?? 0), 0)
+  if (total <= 0) return null
+  const data = rows.map((r, i) => ({
+    name: r.leaf,
+    value: r.value ?? 0,
+    color: DONUT_PALETTE[i % DONUT_PALETTE.length]!,
+  }))
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <DonutChart
+        data={data}
+        size={160}
+        thickness={28}
+        withLabels={false}
+        withTooltip
+      />
+      <div className="w-full flex flex-col gap-1.5 text-[12px] min-w-0">
+        {data.map((d, i) => (
+          <div key={i} className="flex items-center gap-2 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: d.color }} />
+            <span className="flex-1 truncate text-slate-700">{d.name}</span>
+            <span className={`font-mono tabular-nums shrink-0 ${rows[i]!.amountClass}`}>
+              {rows[i]!.amount}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
