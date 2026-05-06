@@ -31,7 +31,6 @@ export type EventRow = {
 }
 
 export type OverviewViewProps = {
-  caption: string
   kpis: OverviewKpi[]
   trend: {
     title: string
@@ -282,32 +281,23 @@ function EventsList({ title, rows }: OverviewViewProps['events']) {
   )
 }
 
-export function OverviewView({
-  caption,
-  trend,
-  composition,
-  events,
-}: OverviewViewProps) {
+export function OverviewView({ trend, composition, events }: OverviewViewProps) {
   return (
-    <div data-overview-root className="flex-1 flex flex-col bg-white overflow-y-auto">
-      <div className="px-6 py-2 flex items-center border-b border-slate-100 flex-shrink-0 bg-white sticky top-0 z-10">
-        <div className="text-[11px] text-slate-500 font-medium">{caption}</div>
+    <div
+      data-overview-root
+      className="flex-1 flex flex-col bg-white overflow-y-auto p-6 space-y-6"
+    >
+      <div className="flex space-x-6">
+        <TrendChart {...trend} />
+        <CompositionList {...composition} />
       </div>
 
-      <div className="p-6 space-y-6">
-        <div className="flex space-x-6">
-          <TrendChart {...trend} />
-          <CompositionList {...composition} />
-        </div>
-
-        <EventsList {...events} />
-      </div>
+      <EventsList {...events} />
     </div>
   )
 }
 
 export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
-  caption: 'Overview · 12 months',
   kpis: [
     {
       label: 'Balance',

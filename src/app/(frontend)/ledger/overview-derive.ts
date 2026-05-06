@@ -240,13 +240,11 @@ export function deriveOverview(args: {
   account: string
   currency: string
   period: Period
-  caption: string
 }): OverviewViewProps {
-  const { cardSpecs, transactions, entries, account, currency, period, caption } = args
+  const { cardSpecs, transactions, entries, account, currency, period } = args
   const facts = txnFacts(transactions, cardSpecs, entries, account, currency)
   if (facts.length === 0) {
     return {
-      caption,
       kpis: [
         { label: 'Balance', value: `${fmtSymbol(currency)}0.00`, caption: 'no activity' },
         { label: `Net change · ${period}`, value: fmtSigned(0, currency) },
@@ -278,7 +276,6 @@ export function deriveOverview(args: {
   const composition = buildComposition(inWindow, currency)
   const events = buildEvents(inWindow, currency)
   return {
-    caption,
     kpis: [
       {
         label: 'Balance',
