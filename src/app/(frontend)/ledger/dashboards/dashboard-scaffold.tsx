@@ -5,6 +5,7 @@ import * as Plot from '@observablehq/plot'
 import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
+import { Masonry } from './masonry'
 import { CURRENCY_SYMBOL, compactAmount } from './format'
 
 // Palettes carry semantic meaning: an "asset" dashboard reads in brand teal
@@ -142,7 +143,7 @@ export function DashboardScaffold(
       data-dashboard-slug={config.slug}
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
-      <div className="p-6 space-y-6">
+      <Masonry className="p-6">
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">{config.trendTitle}</div>
           <PlotChart render={renderTrend} className="w-full" />
@@ -201,7 +202,7 @@ export function DashboardScaffold(
             </div>
           )}
         </LayerCard>
-      </div>
+      </Masonry>
     </div>
   )
 }

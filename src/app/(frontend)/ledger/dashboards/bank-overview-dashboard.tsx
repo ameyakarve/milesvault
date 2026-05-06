@@ -5,6 +5,7 @@ import * as Plot from '@observablehq/plot'
 import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
+import { Masonry } from './masonry'
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   INR: '₹',
@@ -153,7 +154,7 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       data-dashboard-slug="bank-overview"
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
-      <div className="p-6 space-y-6">
+      <Masonry className="p-6">
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">{trend.title}</div>
           <PlotChart render={renderTrend} className="w-full" />
@@ -201,7 +202,7 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
             </div>
           )}
         </LayerCard>
-      </div>
+      </Masonry>
     </div>
   )
 }
