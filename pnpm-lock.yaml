@@ -41,6 +41,9 @@ importers:
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
+      d3-hierarchy:
+        specifier: ^3.1.2
+        version: 3.1.2
       lezer-beancount:
         specifier: ^1.1.0
         version: 1.1.0(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@lezer/lr@1.4.8)
@@ -75,6 +78,9 @@ importers:
       '@tailwindcss/forms':
         specifier: ^0.5.11
         version: 0.5.11(tailwindcss@3.4.19(tsx@4.21.0)(yaml@2.8.3))
+      '@types/d3-hierarchy':
+        specifier: ^3.1.7
+        version: 3.1.7
       '@types/node':
         specifier: 22.19.9
         version: 22.19.9
@@ -2021,6 +2027,9 @@ packages:
 
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
+
+  '@types/d3-hierarchy@3.1.7':
+    resolution: {integrity: sha512-tJFtNoYBtRtkNysX1Xq4sxtjK8YgoWUNpIiUee0/jHGRwqvzYxkq0hGVbbOGSz+JgFxxRu4K8nb3YpG3CMARtg==}
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
@@ -7095,6 +7104,8 @@ snapshots:
     dependencies:
       '@types/deep-eql': 4.0.2
       assertion-error: 2.0.1
+
+  '@types/d3-hierarchy@3.1.7': {}
 
   '@types/deep-eql@4.0.2': {}
 
