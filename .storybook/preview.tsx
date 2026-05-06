@@ -2,7 +2,7 @@ import type { Preview } from '@storybook/nextjs-vite'
 import React from 'react'
 
 import '@/app/(frontend)/styles.css'
-import '@/app/(frontend)/kumo/theme-overrides.css'
+import '@/app/(frontend)/theme-overrides.css'
 
 const preview: Preview = {
   parameters: {

@@ -1,7 +1,7 @@
 import { auth } from '@/auth'
 import { redirect } from 'next/navigation'
-import React from 'react'
-import { AccountsDirectoryLoader } from './accounts-directory-loader'
+import { NavRail } from '../_chrome/nav-rail'
+import { AccountsDirectory } from './accounts-directory'
 
 export default async function LedgerIndexPage() {
   const session = await auth()
@@ -9,5 +9,11 @@ export default async function LedgerIndexPage() {
     redirect('/login?callbackUrl=/ledger')
   }
   const today = new Date().toISOString().slice(0, 10)
-  return <AccountsDirectoryLoader initialAsOf={today} />
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-white pb-[28px]">
+      <NavRail />
+      <AccountsDirectory initialAsOf={today} />
+    </div>
+  )
 }
