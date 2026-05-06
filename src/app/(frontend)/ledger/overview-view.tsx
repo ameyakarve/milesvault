@@ -35,6 +35,7 @@ export type TreemapNode = {
   value?: number
   children?: TreemapNode[]
   amount?: string
+  color?: string
 }
 
 export type SankeyDatum = {
