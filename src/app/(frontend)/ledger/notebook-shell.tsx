@@ -258,73 +258,6 @@ function EditorPane({ cards, body }: { cards: Card[]; body?: ReactNode }) {
   )
 }
 
-const SUGGESTED_PROMPTS: Array<{ icon: string; text: string }> = [
-  { icon: 'analytics', text: '"Summarize my coffee spending"' },
-  { icon: 'auto_fix', text: '"Clean up payee names in this month"' },
-  { icon: 'balance', text: '"Find unbalanced transactions"' },
-]
-
-function AiPane() {
-  return (
-    <aside className="w-[320px] shrink-0 bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden">
-      <div className="flex-1 flex flex-col min-h-0 bg-slate-50">
-        <div className="px-4 py-4 flex items-center gap-2">
-          <span className="material-symbols-outlined text-[#00685f] !text-[16px]">auto_awesome</span>
-          <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-900">
-            AI Manuscript Assistant
-          </h2>
-        </div>
-        <div className="flex-1 flex flex-col justify-center px-6 text-center">
-          <div className="mb-6">
-            <p className="text-xs text-[#515f74] leading-relaxed mb-4">
-              Ask AI to balance a transaction, summarize spending, or rewrite narrations.
-            </p>
-            <div className="flex flex-col space-y-2">
-              {SUGGESTED_PROMPTS.map((p) => (
-                <button
-                  key={p.text}
-                  type="button"
-                  className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-[#3d4947] hover:border-[#00685f] transition-colors text-left flex items-center"
-                >
-                  <span className="material-symbols-outlined !text-[14px] mr-2 text-[#bcc9c6]">
-                    {p.icon}
-                  </span>
-                  {p.text}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="p-4 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.02)]">
-          <div className="relative bg-slate-50 rounded border border-slate-200 focus-within:border-[#00685f]/50 transition-colors">
-            <textarea
-              placeholder="Ask AI about this ledger..."
-              className="w-full bg-transparent border-none rounded p-3 h-24 resize-none text-[13px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-0"
-            />
-            <div className="absolute bottom-2 right-2 flex items-center gap-1">
-              <button type="button" className="p-1.5 text-slate-400 hover:text-slate-600">
-                <span className="material-symbols-outlined !text-[20px]">mic</span>
-              </button>
-              <button
-                type="button"
-                className="p-1.5 text-[#00685f] hover:text-[#008378]"
-                aria-label="Send"
-              >
-                <span
-                  className="material-symbols-outlined !text-[20px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  send
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </aside>
-  )
-}
-
 function StatusBar({ txnCount, cursor }: { txnCount: number; cursor: string }) {
   return (
     <footer className="h-[28px] bg-[#f2f4f6] border-t border-slate-200 flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-[#515f74] shrink-0">
@@ -714,7 +647,6 @@ export function NotebookShell({
               periods={periods}
               onPeriodChange={onPeriodChange}
             />
-            <StatsRow balance={balance} netIn={netIn} netOut={netOut} />
             <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />
             <SubToolbar
               viewMode={viewMode}
@@ -726,6 +658,7 @@ export function NotebookShell({
             />
             {viewMode === 'overview' ? (
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]">
+                <StatsRow balance={balance} netIn={netIn} netOut={netOut} />
                 {overviewBody}
               </div>
             ) : viewMode === 'editor' ? (
@@ -736,7 +669,6 @@ export function NotebookShell({
               </div>
             )}
           </main>
-          <AiPane />
         </div>
         <StatusBar txnCount={txnCount} cursor={cursor} />
       </div>
