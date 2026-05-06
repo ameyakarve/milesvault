@@ -31,6 +31,13 @@ export type EventRow = {
   amountClass: string
 }
 
+export type TreemapNode = {
+  name: string
+  value?: number
+  children?: TreemapNode[]
+  amount?: string
+}
+
 export type OverviewViewProps = {
   kpis: OverviewKpi[]
   trend: {
@@ -48,6 +55,7 @@ export type OverviewViewProps = {
   categoryBreakdown?: { rows: CompositionRow[]; moreCount: number }
   paidFrom?: { rows: CompositionRow[] }
   cardsUsed?: { rows: CompositionRow[] }
+  categoryTreemap?: TreemapNode
 }
 
 function niceNum(range: number, round: boolean): number {

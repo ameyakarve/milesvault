@@ -1,7 +1,13 @@
 import type { TransactionInput } from '@/durable/ledger-types'
 import { accountMatchesPrefix } from '@/lib/beancount/scope'
 import type { CardSpec } from './card-decorations'
-import type { OverviewViewProps, TrendPoint, CompositionRow, EventRow } from './overview-view'
+import type {
+  OverviewViewProps,
+  TrendPoint,
+  CompositionRow,
+  EventRow,
+  TreemapNode,
+} from './overview-view'
 
 export type Period = 'All time' | '12M' | 'YTD' | '3M' | '1M'
 
@@ -394,6 +400,71 @@ function buildEvents(facts: TxnFact[], currency: string): EventRow[] {
   }))
 }
 
+// Two-level hierarchy for the Expenses dashboard treemap. For an account
+// bound to Expenses (or any sub-tree of it), walk every charge's
+// boundPostings (which are all under the bound prefix), group by the
+// next-deeper account level (the "category"), and within each group list
+// individual leaf accounts. Returns up to 8 groups × 8 leaves to keep the
+// SVG legible. Refunds (negative boundPostings on a debit-normal Expenses
+// account) are skipped.
+function buildCategoryTreemap(
+  facts: TxnFact[],
+  account: string,
+  currency: string,
+): TreemapNode | undefined {
+  if (!accountMatchesPrefix(account, 'Expenses')) return undefined
+
+  const leafTotals = new Map<string, number>()
+  for (const f of facts) {
+    for (const p of f.boundPostings) {
+      if (p.amount <= 0) continue
+      leafTotals.set(p.account, (leafTotals.get(p.account) ?? 0) + p.amount)
+    }
+  }
+  if (leafTotals.size === 0) return undefined
+
+  const baseDepth = account.split(':').length
+  const groupDepth = baseDepth + 1
+
+  const groups = new Map<string, { account: string; amount: number }[]>()
+  for (const [acct, amt] of leafTotals) {
+    const parts = acct.split(':')
+    if (parts.length < groupDepth) continue
+    const groupKey = parts.slice(0, groupDepth).join(':')
+    if (!groups.has(groupKey)) groups.set(groupKey, [])
+    groups.get(groupKey)!.push({ account: acct, amount: amt })
+  }
+  if (groups.size === 0) return undefined
+
+  const groupNodes = [...groups.entries()]
+    .map(([groupKey, leaves]) => ({
+      groupKey,
+      leaves,
+      total: leaves.reduce((s, x) => s + x.amount, 0),
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 8)
+
+  return {
+    name: account.split(':').pop() ?? account,
+    children: groupNodes.map(({ groupKey, leaves }) => ({
+      name: groupKey.split(':').pop() ?? groupKey,
+      children: leaves
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 8)
+        .map(({ account: leafAcct, amount }) => {
+          const tail = leafAcct.split(':').slice(groupDepth).join(':')
+          const leafName = tail || (leafAcct.split(':').pop() ?? leafAcct)
+          return {
+            name: leafName,
+            value: amount,
+            amount: `${fmtSymbol(currency)}${fmtAmount(amount, currency)}`,
+          }
+        }),
+    })),
+  }
+}
+
 export function deriveOverview(args: {
   cardSpecs: CardSpec[]
   transactions: TransactionInput[]
@@ -440,6 +511,7 @@ export function deriveOverview(args: {
   const categoryBreakdown = buildCategoryBreakdown(inWindow, currency)
   const paidFrom = buildPaidFrom(inWindow, currency)
   const cardsUsed = buildCardsUsed(inWindow, account, currency)
+  const categoryTreemap = buildCategoryTreemap(inWindow, account, currency)
   return {
     kpis: [
       {
@@ -465,5 +537,6 @@ export function deriveOverview(args: {
     categoryBreakdown: { rows: categoryBreakdown.rows, moreCount: categoryBreakdown.moreCount },
     paidFrom: { rows: paidFrom.rows },
     cardsUsed: { rows: cardsUsed.rows },
+    categoryTreemap,
   }
 }
