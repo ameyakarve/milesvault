@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 import { StatTile } from './stat-tile'
 
 export type OverviewKpi = {
@@ -106,11 +107,7 @@ function formatTickValue(v: number, unit: { divisor: number; suffix: string }): 
 }
 
 function CardShell({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`bg-white border border-slate-100 rounded-md p-4 ${className}`}>
-      {children}
-    </div>
-  )
+  return <LayerCard className={`rounded-md p-4 ${className}`}>{children}</LayerCard>
 }
 
 function CardTitleRow({ title }: { title: string }) {
@@ -156,7 +153,7 @@ function TrendChart({
       ? { p: points[active]!, x: xAt(active), y: yAt(points[active]!.y) }
       : null
   return (
-    <div className="w-[60%] bg-white border border-slate-100 rounded-md p-4 flex flex-col">
+    <LayerCard className="w-[60%] rounded-md p-4 flex flex-col">
       <div className="text-[13px] font-semibold text-slate-900 mb-4">{title}</div>
       <div className="relative h-48">
         <div className="absolute left-0 top-0 bottom-0 w-10 flex flex-col justify-between text-[10px] font-mono text-slate-500 pr-1 text-right">
@@ -226,7 +223,7 @@ function TrendChart({
           <span key={i}>{lbl}</span>
         ))}
       </div>
-    </div>
+    </LayerCard>
   )
 }
 
