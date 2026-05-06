@@ -9,7 +9,6 @@ import { DashCard } from './cards'
 import { CURRENCY_SYMBOL, colorizeTreemap, compactAmount } from './format'
 import {
   ActivityCard,
-  DayOfWeekCard,
   MoneyFlowCard,
   StatementSummaryCard,
   TopMerchantsCard,
@@ -23,7 +22,6 @@ import {
 // (balance grows better).
 export function CreditCardDashboard(props: OverviewViewProps) {
   const {
-    events,
     monthlyNet,
     categoryTreemap,
     paidFrom,
@@ -31,7 +29,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
     spendCalendar,
     headerStats,
     topMerchants,
-    dayOfWeek,
+    recentCharges,
   } = props
   const currency = monthlyNet?.currency ?? 'INR'
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
@@ -49,7 +47,11 @@ export function CreditCardDashboard(props: OverviewViewProps) {
             <StatementSummaryCard balance={headerStats.balance} monthlyNet={monthlyNet} />
           )}
 
-          <ActivityCard events={events} spendCalendar={spendCalendar} currency={currency} />
+          <ActivityCard
+            recentCharges={recentCharges}
+            spendCalendar={spendCalendar}
+            currency={currency}
+          />
 
           <TopMerchantsCard topMerchants={topMerchants} />
 
@@ -67,9 +69,8 @@ export function CreditCardDashboard(props: OverviewViewProps) {
             paidFrom={paidFrom}
             cardsUsed={cardsUsed}
             categoryTreemap={categoryTreemap}
+            currency={currency}
           />
-
-          <DayOfWeekCard dayOfWeek={dayOfWeek} />
 
           {spendCalendar && spendCalendar.days.length > 0 && (
             <DashCard title="Spend calendar">

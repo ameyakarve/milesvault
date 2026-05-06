@@ -10,37 +10,46 @@ const meta: Meta = {
 }
 export default meta
 
-// Liability accounts have credit-normal balances. The raw posting deltas are
-// negative for charges and positive for payments. The dashboard negates for
-// display so positive bars read as "added to debt."
+// Liability accounts have credit-normal balances; charges are negative
+// postings on the CC and payments are positive. The Recent charges card
+// only consumes outflows, formatted as positive amounts (the negative sign
+// is implicit in "charges").
 const SAMPLE: OverviewViewProps = {
   kpis: [],
   trend: { title: '', currency: 'INR', points: [] },
   composition: { title: '', rows: [] },
-  events: {
-    title: 'Recent charges',
+  events: { title: 'Recent charges', rows: [] },
+  recentCharges: {
     rows: [
       {
         date: '2026-04-28',
         payee: 'Cathay Pacific',
         narration: 'BLR → HKG return',
-        amount: '+₹48,200.00',
+        amount: '₹48,200.00',
         amountValue: 48200,
         amountClass: 'text-slate-900',
       },
       {
-        date: '2026-04-22',
-        payee: 'HDFC Savings',
-        narration: 'April statement payment',
-        amount: '−₹60,000.00',
-        amountValue: -60000,
-        amountClass: 'text-rose-600',
+        date: '2026-04-25',
+        payee: 'Swiggy',
+        narration: 'Pad thai dinner',
+        amount: '₹1,180.00',
+        amountValue: 1180,
+        amountClass: 'text-slate-900',
+      },
+      {
+        date: '2026-04-23',
+        payee: 'Uber',
+        narration: 'Airport drop',
+        amount: '₹350.00',
+        amountValue: 350,
+        amountClass: 'text-slate-900',
       },
       {
         date: '2026-04-18',
         payee: 'Apple India',
         narration: 'AirPods Pro',
-        amount: '+₹24,900.00',
+        amount: '₹24,900.00',
         amountValue: 24900,
         amountClass: 'text-slate-900',
       },
@@ -48,17 +57,9 @@ const SAMPLE: OverviewViewProps = {
         date: '2026-04-12',
         payee: 'Toit Brewpub',
         narration: 'Birthday dinner',
-        amount: '+₹8,400.00',
+        amount: '₹8,400.00',
         amountValue: 8400,
         amountClass: 'text-slate-900',
-      },
-      {
-        date: '2026-03-31',
-        payee: 'HDFC Savings',
-        narration: 'March statement payment',
-        amount: '−₹60,000.00',
-        amountValue: -60000,
-        amountClass: 'text-rose-600',
       },
     ],
   },
@@ -198,10 +199,6 @@ const SAMPLE: OverviewViewProps = {
       { payee: 'Indigo Airlines', amount: 4800, share: 0.099, count: 1 },
       { payee: 'Uber', amount: 3100, share: 0.064, count: 12 },
     ],
-  },
-  dayOfWeek: {
-    currency: 'INR',
-    totals: [12400, 9800, 11200, 10500, 18700, 32100, 24900],
   },
 }
 
