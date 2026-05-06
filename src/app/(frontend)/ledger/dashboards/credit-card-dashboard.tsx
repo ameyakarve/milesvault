@@ -23,11 +23,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
 
   const renderNetTrend = useCallback(() => {
-    const points = (monthlyNet?.points ?? []).map((p) => ({
-      ...p,
-      // Negate for display: charge = +, payment-heavy month = -.
-      yDisplay: -p.y,
-    }))
+    const points = monthlyNet?.points ?? []
     if (points.length === 0) {
       const empty = document.createElement('div')
       empty.className = 'p-6 text-[11px] text-slate-400 text-center'
@@ -45,25 +41,24 @@ export function CreditCardDashboard(props: OverviewViewProps) {
         grid: true,
         label: null,
         nice: true,
-        tickFormat: (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${symbol}${compactAmount(Math.abs(d), currency)}`,
+        tickFormat: (d: number) => `${symbol}${compactAmount(d, currency)}`,
       },
       marks: [
-        Plot.ruleY([0], { stroke: '#94a3b8', strokeWidth: 1 }),
         Plot.line(points, {
           x: 'x',
-          y: 'yDisplay',
+          y: 'y',
           stroke: '#94a3b8',
           strokeWidth: 1.5,
         }),
         Plot.dot(points, {
           x: 'x',
-          y: 'yDisplay',
-          fill: (d) => (d.yDisplay >= 0 ? ROSE : TEAL),
+          y: 'y',
+          fill: ROSE,
           stroke: 'white',
           strokeWidth: 1.5,
           r: 4,
         }),
-        Plot.tip(points, Plot.pointerX({ x: 'x', y: 'yDisplay', title: 'label' })),
+        Plot.tip(points, Plot.pointerX({ x: 'x', y: 'y', title: 'label' })),
       ],
     })
   }, [monthlyNet, symbol, currency])
@@ -85,15 +80,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
     return renderHorizontalBars(rows, TEAL, /* showLabelInside */ true)
   }, [paidFrom])
 
-  // Negate totalLabel for display so it reads as "amount added to debt"
-  // rather than the raw signed posting sum.
-  const headlineTotal = (() => {
-    const raw = monthlyNet?.totalLabel ?? ''
-    if (!raw) return ''
-    if (raw.startsWith('+')) return '−' + raw.slice(1)
-    if (raw.startsWith('−')) return '+' + raw.slice(1)
-    return raw
-  })()
+  const headlineTotal = monthlyNet?.totalLabel ?? ''
 
   return (
     <div
@@ -104,17 +91,13 @@ export function CreditCardDashboard(props: OverviewViewProps) {
       <div className="p-6 space-y-6">
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="flex items-baseline justify-between mb-3">
-            <div className="text-[12px] font-medium text-slate-700">Monthly net spend</div>
+            <div className="text-[12px] font-medium text-slate-700">Monthly spend</div>
             {headlineTotal && (
               <div className="text-[11px] text-slate-500">
-                <span
-                  className={`font-mono tabular-nums font-semibold ${
-                    headlineTotal.startsWith('+') ? 'text-rose-600' : 'text-[#00685f]'
-                  }`}
-                >
+                <span className="font-mono tabular-nums font-semibold text-slate-900">
                   {headlineTotal}
                 </span>{' '}
-                <span className="text-slate-400">net over period</span>
+                <span className="text-slate-400">spent over period</span>
               </div>
             )}
           </div>
