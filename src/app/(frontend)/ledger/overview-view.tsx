@@ -27,6 +27,7 @@ export type EventRow = {
   payee: string
   narration: string
   amount: string
+  amountValue?: number
   amountClass: string
 }
 
@@ -428,6 +429,7 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
         payee: 'Employer',
         narration: 'April salary',
         amount: '+₹50,000.00',
+        amountValue: 50000,
         amountClass: 'text-slate-900',
       },
       {
@@ -435,6 +437,7 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
         payee: 'HDFC Infinia',
         narration: 'Card autopay',
         amount: '−₹38,420.00',
+        amountValue: -38420,
         amountClass: 'text-rose-600',
       },
       {
@@ -442,6 +445,7 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
         payee: 'Landlord',
         narration: 'April rent',
         amount: '−₹15,000.00',
+        amountValue: -15000,
         amountClass: 'text-rose-600',
       },
       {
@@ -449,6 +453,7 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
         payee: 'Employer',
         narration: 'March salary',
         amount: '+₹50,000.00',
+        amountValue: 50000,
         amountClass: 'text-slate-900',
       },
       {
@@ -456,6 +461,7 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
         payee: 'IRCTC',
         narration: 'Goa flights',
         amount: '−₹22,800.00',
+        amountValue: -22800,
         amountClass: 'text-rose-600',
       },
     ],

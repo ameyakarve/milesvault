@@ -25,6 +25,7 @@ const SAMPLE: OverviewViewProps = {
         payee: 'Cathay Pacific',
         narration: 'BLR → HKG return',
         amount: '+₹48,200.00',
+        amountValue: 48200,
         amountClass: 'text-slate-900',
       },
       {
@@ -32,6 +33,7 @@ const SAMPLE: OverviewViewProps = {
         payee: 'HDFC Savings',
         narration: 'April statement payment',
         amount: '−₹60,000.00',
+        amountValue: -60000,
         amountClass: 'text-rose-600',
       },
       {
@@ -39,6 +41,7 @@ const SAMPLE: OverviewViewProps = {
         payee: 'Apple India',
         narration: 'AirPods Pro',
         amount: '+₹24,900.00',
+        amountValue: 24900,
         amountClass: 'text-slate-900',
       },
       {
@@ -46,6 +49,7 @@ const SAMPLE: OverviewViewProps = {
         payee: 'Toit Brewpub',
         narration: 'Birthday dinner',
         amount: '+₹8,400.00',
+        amountValue: 8400,
         amountClass: 'text-slate-900',
       },
       {
@@ -53,6 +57,7 @@ const SAMPLE: OverviewViewProps = {
         payee: 'HDFC Savings',
         narration: 'March statement payment',
         amount: '−₹60,000.00',
+        amountValue: -60000,
         amountClass: 'text-rose-600',
       },
     ],

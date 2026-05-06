@@ -1,9 +1,9 @@
 'use client'
 
-import { Card, Group, Stack, Text } from '@mantine/core'
+import { Card, Group, Stack, Text, Tooltip } from '@mantine/core'
 import { Sparkline } from '@mantine/charts'
 import type { CompositionRow, EventRow, TreemapNode, TrendPoint } from '../overview-view'
-import { TREEMAP_PALETTE } from './format'
+import { CURRENCY_SYMBOL, TREEMAP_PALETTE, compactAmount } from './format'
 
 // Statement summary: hero card. Owed-now + sparkline of monthly spend +
 // period total. Replaces 3 stat tiles + the standalone monthly-spend line
@@ -100,7 +100,7 @@ export function MoneyFlowCard({
       <Text size="xs" fw={500} c="dark.4" mb="sm">
         Money flow
       </Text>
-      <Group align="stretch" gap="md" wrap="nowrap" style={{ minHeight: 280 }}>
+      <Group align="stretch" gap="lg" wrap="nowrap" style={{ minHeight: 360 }}>
         {columns.map((col) => (
           <StackColumn key={col.title} title={col.title} segments={col.segs} />
         ))}
@@ -118,28 +118,46 @@ function StackColumn({
 }) {
   const sum = segments.reduce((s, x) => s + x.value, 0) || 1
   return (
-    <Stack gap={6} className="flex-1 min-w-0">
+    <Stack gap={8} className="flex-1 min-w-0">
       <Text size="9px" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.1em' }}>
         {title}
       </Text>
-      <div className="flex flex-col rounded overflow-hidden flex-1">
+      <div className="flex flex-col rounded-md overflow-hidden flex-1 gap-[2px]">
         {segments.map((seg) => {
           const pct = (seg.value / sum) * 100
           return (
-            <div
+            <Tooltip
               key={seg.label}
-              className="flex flex-col justify-center px-2 text-[10px] text-white overflow-hidden"
-              style={{ background: seg.color, height: `${pct}%`, minHeight: 24 }}
-              title={`${seg.label} · ${seg.amount}`}
+              label={
+                <span>
+                  <strong>{seg.label}</strong> · {seg.amount} · {pct.toFixed(1)}%
+                </span>
+              }
+              withArrow
+              openDelay={200}
+              position="right"
             >
-              <span className="truncate font-medium">{seg.label}</span>
-              <span className="truncate font-mono opacity-90">{seg.amount}</span>
-            </div>
+              <div
+                className="flex flex-col justify-center px-3 py-1 text-[11px] text-white overflow-hidden cursor-default transition-opacity hover:opacity-90"
+                style={{ background: seg.color, height: `${pct}%`, minHeight: 32 }}
+              >
+                <span className="truncate font-medium leading-tight">{seg.label}</span>
+                <span className="truncate font-mono text-[10px] opacity-90 leading-tight">
+                  {seg.amount}
+                </span>
+              </div>
+            </Tooltip>
           )
         })}
       </div>
     </Stack>
   )
+}
+
+function formatCompactSigned(value: number, currency: string): string {
+  const symbol = CURRENCY_SYMBOL[currency] ?? ''
+  const sign = value < 0 ? '−' : ''
+  return `${sign}${symbol}${compactAmount(Math.abs(value), currency)}`
 }
 
 // Activity: 30-day daily-intensity sparkline pinned to the top of the
@@ -148,9 +166,11 @@ function StackColumn({
 export function ActivityCard({
   events,
   spendCalendar,
+  currency = 'INR',
 }: {
   events: { rows: EventRow[] }
   spendCalendar?: { days: { date: string; amount: number }[] }
+  currency?: string
 }) {
   const last30 = (spendCalendar?.days ?? []).slice(-30).map((d) => d.amount)
   const last30Total = last30.reduce((s, n) => s + n, 0)
@@ -184,31 +204,41 @@ export function ActivityCard({
         </Text>
       ) : (
         <div>
-          {events.rows.map((row, i) => (
-            <div
-              key={i}
-              className={`h-[44px] flex items-center px-2 text-[12px] ${
-                i === 0 ? 'bg-slate-50/70 rounded' : ''
-              } ${i < events.rows.length - 1 ? 'border-b border-slate-100' : ''}`}
-            >
-              <div className="w-[96px] shrink-0 font-mono text-[11px] text-slate-500">
-                {row.date}
-              </div>
+          {events.rows.map((row, i) => {
+            const display =
+              row.amountValue != null
+                ? formatCompactSigned(row.amountValue, currency)
+                : row.amount.startsWith('+')
+                  ? row.amount.slice(1)
+                  : row.amount
+            return (
               <div
-                className={`shrink-0 truncate mr-4 min-w-[120px] max-w-[200px] ${
-                  i === 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-900'
-                }`}
+                key={i}
+                className={`h-[44px] flex items-center px-2 text-[12px] gap-3 ${
+                  i === 0 ? 'bg-slate-50/70 rounded' : ''
+                } ${i < events.rows.length - 1 ? 'border-b border-slate-100' : ''}`}
               >
-                {row.payee}
+                <div className="w-[80px] shrink-0 font-mono text-[11px] text-slate-500">
+                  {row.date}
+                </div>
+                <div
+                  className={`shrink-0 truncate min-w-0 max-w-[160px] ${
+                    i === 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-900'
+                  }`}
+                >
+                  {row.payee}
+                </div>
+                <div className="flex-1 text-slate-600 truncate min-w-0">{row.narration}</div>
+                <Tooltip label={row.amount} withArrow openDelay={300}>
+                  <div
+                    className={`shrink-0 text-right font-mono tabular-nums ${row.amountClass}`}
+                  >
+                    {display}
+                  </div>
+                </Tooltip>
               </div>
-              <div className="flex-1 text-slate-600 truncate">{row.narration}</div>
-              <div
-                className={`w-[140px] shrink-0 text-right font-mono tabular-nums ${row.amountClass}`}
-              >
-                {row.amount.startsWith('+') ? row.amount.slice(1) : row.amount}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </Card>

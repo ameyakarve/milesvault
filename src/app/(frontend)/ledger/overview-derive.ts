@@ -397,6 +397,7 @@ function buildEvents(facts: TxnFact[], currency: string): EventRow[] {
     payee: f.payee || '—',
     narration: f.narration || '',
     amount: fmtSigned(f.net, currency),
+    amountValue: f.net,
     amountClass: f.net < 0 ? 'text-rose-600' : 'text-slate-900',
   }))
 }

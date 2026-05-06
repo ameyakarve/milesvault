@@ -41,7 +41,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
             <StatementSummaryCard balance={headerStats.balance} monthlyNet={monthlyNet} />
           )}
 
-          <ActivityCard events={events} spendCalendar={spendCalendar} />
+          <ActivityCard events={events} spendCalendar={spendCalendar} currency={currency} />
 
           {categoryTreemap && (categoryTreemap.children?.length ?? 0) > 0 && (
             <DashCard title="Spend by category">
