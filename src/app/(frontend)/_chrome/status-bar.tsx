@@ -1,6 +1,6 @@
 import { CheckCircle } from '@phosphor-icons/react/dist/ssr'
 
-export function KumoStatusBar({
+export function StatusBar({
   primary = 'Ready',
   count,
 }: {

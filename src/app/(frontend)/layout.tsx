@@ -1,6 +1,6 @@
 import React from 'react'
 import './styles.css'
-import './kumo/theme-overrides.css'
+import './theme-overrides.css'
 
 export const metadata = {
   description: 'MilesVault — personal finance ledger',

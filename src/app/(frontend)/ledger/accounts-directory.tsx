@@ -1,12 +1,22 @@
 'use client'
 
 import Link from 'next/link'
-import React, { useMemo, useState } from 'react'
-import { NavRail } from '../_chrome/nav-rail'
+import React, { useEffect, useMemo, useState } from 'react'
+import type { AccountSummaryRow } from '@/durable/ledger-types'
+import {
+  MagnifyingGlass,
+  Sparkle,
+  ChartBar,
+  MagicWand,
+  Scales,
+  Microphone,
+  PaperPlaneTilt,
+} from '@phosphor-icons/react/dist/ssr'
+import { StatusBar } from '../_chrome/status-bar'
 
-export type AccountKind = 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'
+type AccountKind = 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'
 
-export type AccountRow = {
+type AccountRow = {
   path: string
   currency: string
   balance: number
@@ -56,6 +66,25 @@ function classifyKind(path: string): AccountKind | null {
   return null
 }
 
+function dateFromInt(n: number): string {
+  const s = String(n).padStart(8, '0')
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
+}
+
+function balanceFromScaled(balanceScaled: string, scale: number): number {
+  const negative = balanceScaled.startsWith('-')
+  const raw = negative ? balanceScaled.slice(1) : balanceScaled
+  const padded = raw.padStart(scale + 1, '0')
+  const intPart = padded.slice(0, padded.length - scale) || '0'
+  const fracPart = padded.slice(padded.length - scale)
+  const numeric = Number(`${intPart}.${fracPart}`)
+  return negative ? -numeric : numeric
+}
+
+function isHidden(path: string): boolean {
+  return path === 'Equity:Void' || path.startsWith('Equity:Void:')
+}
+
 function AccountPath({ path }: { path: string }) {
   const segs = path.split(':')
   const leaf = segs.pop() ?? ''
@@ -76,27 +105,43 @@ function AccountPath({ path }: { path: string }) {
   )
 }
 
-export type AccountsDirectoryProps = {
-  rows: AccountRow[]
-  recentPath?: string | null
-}
-
-function isHidden(path: string): boolean {
-  return path === 'Equity:Void' || path.startsWith('Equity:Void:')
-}
-
-export function AccountsDirectory({
-  rows,
-  recentPath = null,
-}: AccountsDirectoryProps) {
+export function AccountsDirectory({ initialAsOf }: { initialAsOf: string }) {
+  const [rows, setRows] = useState<AccountRow[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [chip, setChip] = useState<'All' | AccountKind>('All')
   const [query, setQuery] = useState('')
 
-  const visibleRows = useMemo(() => rows.filter((r) => !isHidden(r.path)), [rows])
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/ledger/accounts?as_of=${encodeURIComponent(initialAsOf)}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`accounts: ${r.status}`)
+        return r.json() as Promise<{ rows: AccountSummaryRow[] }>
+      })
+      .then((data) => {
+        if (cancelled) return
+        setRows(
+          data.rows.map((r) => ({
+            path: r.account,
+            currency: r.currency,
+            balance: balanceFromScaled(r.balance_scaled, r.scale),
+            lastActivity: r.last_activity ? dateFromInt(r.last_activity) : null,
+          })),
+        )
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setError(e.message)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [initialAsOf])
+
+  const visible = useMemo(() => (rows ?? []).filter((r) => !isHidden(r.path)), [rows])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return visibleRows
+    return visible
       .filter((r) => {
         if (chip !== 'All' && classifyKind(r.path) !== chip) return false
         if (q && !r.path.toLowerCase().includes(q)) return false
@@ -108,14 +153,20 @@ export function AccountsDirectory({
         if (da === db) return a.path.localeCompare(b.path)
         return db.localeCompare(da)
       })
-  }, [visibleRows, chip, query])
+  }, [visible, chip, query])
 
-  const totalCount = visibleRows.length
+  const totalCount = visible.length
+
+  if (error) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-rose-600">
+        Failed to load accounts: {error}
+      </div>
+    )
+  }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white pb-[28px]">
-      <NavRail />
-
+    <>
       <main className="flex-1 flex flex-col min-w-0 bg-white">
         {/* Context row */}
         <div className="h-[32px] bg-white px-6 flex items-center border-b border-slate-50 flex-shrink-0">
@@ -130,14 +181,14 @@ export function AccountsDirectory({
 
         {/* Toolbar */}
         <div className="px-6 py-3 flex items-center bg-slate-50/50 flex-shrink-0">
-          <div className="relative w-full">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">
-              search
+          <div className="flex w-full items-center bg-white border border-slate-200 rounded-md focus-within:border-teal-600/50 transition-colors">
+            <span className="pl-3 pr-2 text-slate-400 flex-shrink-0">
+              <MagnifyingGlass size={16} weight="regular" />
             </span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-1.5 text-[13px] bg-white border border-slate-200 rounded-md focus:border-teal-600/50 focus:ring-0 placeholder:text-slate-400 outline-none"
+              className="flex-1 bg-transparent py-1.5 pr-3 text-[13px] placeholder:text-slate-400 outline-none border-0 focus:ring-0"
               placeholder="Search accounts..."
               type="text"
             />
@@ -175,41 +226,41 @@ export function AccountsDirectory({
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {filtered.map((row, idx) => {
-              const isRecent =
-                recentPath != null &&
-                row.path === recentPath &&
-                row.currency === rows.find((r) => r.path === recentPath)?.currency
-              const negative = row.balance < 0
-              const href = `/ledger/${row.path.split(':').map(encodeURIComponent).join('/')}?ccy=${encodeURIComponent(row.currency)}`
-              return (
-                <Link
-                  key={`${row.path}|${row.currency}|${idx}`}
-                  href={href}
-                  className="flex items-center px-6 h-[40px] border-b border-slate-100 hover:bg-slate-50 group cursor-pointer relative"
-                >
-                  {isRecent && (
-                    <span className="absolute left-2 w-1.5 h-1.5 rounded-full bg-teal-500" />
-                  )}
-                  <div className="flex-1 pr-4 font-mono text-[12px] truncate">
-                    <AccountPath path={row.path} />
-                  </div>
-                  <div className="w-[120px] font-mono text-[12px] text-slate-600 text-right tabular-nums ml-4">
-                    {row.lastActivity ?? '—'}
-                  </div>
-                  <div className="w-[60px] font-mono text-[11px] text-slate-500 text-right tabular-nums ml-4">
-                    {row.currency}
-                  </div>
-                  <div
-                    className={`w-[140px] font-mono text-[13px] text-right tabular-nums ml-2 ${
-                      negative ? 'text-rose-600' : 'text-slate-900'
-                    }`}
+            {rows == null ? (
+              <div className="p-6 text-xs text-slate-400">Loading…</div>
+            ) : (
+              filtered.map((row, idx) => {
+                const negative = row.balance < 0
+                const href = `/ledger/${row.path
+                  .split(':')
+                  .map(encodeURIComponent)
+                  .join('/')}?ccy=${encodeURIComponent(row.currency)}`
+                return (
+                  <Link
+                    key={`${row.path}|${row.currency}|${idx}`}
+                    href={href}
+                    className="flex items-center px-6 h-[40px] border-b border-slate-100 hover:bg-slate-50 group cursor-pointer relative"
                   >
-                    {formatBalance(row.balance, row.currency)}
-                  </div>
-                </Link>
-              )
-            })}
+                    <div className="flex-1 pr-4 font-mono text-[12px] truncate">
+                      <AccountPath path={row.path} />
+                    </div>
+                    <div className="w-[120px] font-mono text-[12px] text-slate-600 text-right tabular-nums ml-4">
+                      {row.lastActivity ?? '—'}
+                    </div>
+                    <div className="w-[60px] font-mono text-[11px] text-slate-500 text-right tabular-nums ml-4">
+                      {row.currency}
+                    </div>
+                    <div
+                      className={`w-[140px] font-mono text-[13px] text-right tabular-nums ml-2 ${
+                        negative ? 'text-rose-600' : 'text-slate-900'
+                      }`}
+                    >
+                      {formatBalance(row.balance, row.currency)}
+                    </div>
+                  </Link>
+                )
+              })
+            )}
           </div>
         </div>
       </main>
@@ -217,9 +268,7 @@ export function AccountsDirectory({
       {/* Right AI sidebar */}
       <aside className="w-[320px] bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden pb-7">
         <div className="px-4 py-4 flex items-center space-x-2">
-          <span className="material-symbols-outlined text-[16px] text-[#00685f]">
-            auto_awesome
-          </span>
+          <Sparkle size={16} className="text-[#00685f]" weight="fill" />
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-900">
             AI Manuscript Assistant
           </h2>
@@ -231,21 +280,15 @@ export function AccountsDirectory({
             </p>
             <div className="flex flex-col space-y-2">
               <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
-                <span className="material-symbols-outlined text-[14px] mr-2 text-slate-300">
-                  analytics
-                </span>
+                <ChartBar size={14} className="mr-2 text-slate-300" />
                 {`"Summarize my coffee spending"`}
               </button>
               <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
-                <span className="material-symbols-outlined text-[14px] mr-2 text-slate-300">
-                  auto_fix
-                </span>
+                <MagicWand size={14} className="mr-2 text-slate-300" />
                 {`"Clean up payee names in this month"`}
               </button>
               <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
-                <span className="material-symbols-outlined text-[14px] mr-2 text-slate-300">
-                  balance
-                </span>
+                <Scales size={14} className="mr-2 text-slate-300" />
                 {`"Find unbalanced transactions"`}
               </button>
             </div>
@@ -259,38 +302,17 @@ export function AccountsDirectory({
             />
             <div className="absolute bottom-2 right-2 flex items-center space-x-1">
               <button className="p-1.5 text-slate-400 hover:text-slate-600">
-                <span className="material-symbols-outlined text-[20px]">mic</span>
+                <Microphone size={20} />
               </button>
               <button className="p-1.5 text-[#00685f]">
-                <span
-                  className="material-symbols-outlined text-[20px]"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  send
-                </span>
+                <PaperPlaneTilt size={20} weight="fill" />
               </button>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Status bar */}
-      <footer className="fixed bottom-0 left-[48px] right-0 h-[28px] z-40 bg-[#f2f4f6] border-t border-slate-200 flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-slate-500">
-        <div className="flex items-center space-x-6">
-          <span>{totalCount} accounts</span>
-          <span className="text-[#00685f] font-bold flex items-center space-x-1">
-            <span className="material-symbols-outlined text-[12px]">check_circle</span>
-            <span>Parsed</span>
-          </span>
-        </div>
-        <div className="flex items-center space-x-4">
-          <span className="flex items-center space-x-1">
-            <span className="w-2 h-2 rounded-full bg-[#00685f]" />
-            <span>Ready</span>
-          </span>
-          <span>Beancount v2.3.5</span>
-        </div>
-      </footer>
-    </div>
+      <StatusBar count={totalCount} />
+    </>
   )
 }
