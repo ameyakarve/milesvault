@@ -51,7 +51,7 @@ Per-card metadata: statement day, due day, anniversary month, milestone rules (a
 
 > *"HDFC Infinia this quarter: 6.8% realized. SmartBuy category: 14.2%. Rest: 3.3%. If grocery ₹18k had gone to Magnus: +₹720."*
 
-Compute actual return from paired `Liabilities:CC:*` / `Assets:Rewards:*` postings divided by spend. Per card, per category, per month. No tool can do this because no other tool has both data in the same row. Small.
+Compute actual return from paired `Liabilities:CreditCards:*` / `Assets:Rewards:*` postings divided by spend. Per card, per category, per month. No tool can do this because no other tool has both data in the same row. Small.
 
 #### A3. Natural-language ledger assistant — **P1**
 
@@ -143,7 +143,7 @@ Per-lot expiry tracking using beancount's natural lot model. Rules: `+3y from ea
 
 #### E3. Household / add-on card model — **P2**
 
-Sub-accounts under primary CC (`Liabilities:CC:HDFC:Infinia:AddOn:Spouse`). Rolls up to primary for milestones, breaks out for family reimbursement views. Small.
+Sub-accounts under primary CC (`Liabilities:CreditCards:HDFC:Infinia:AddOn:Spouse`). Rolls up to primary for milestones, breaks out for family reimbursement views. Small.
 
 ---
 

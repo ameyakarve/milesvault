@@ -127,7 +127,7 @@ export const Default: StoryObj = {
     <NotebookShell
       breadcrumb={['Liabilities', 'CC', 'HDFC', 'Infinia']}
       accountTitle="Infinia"
-      accountPath="Liabilities:CC:HDFC:Infinia"
+      accountPath="Liabilities:CreditCards:HDFC:Infinia"
       balance="−₹1,24,800.00"
       netIn="+₹1,80,000.00"
       netOut="−₹2,18,400.00"

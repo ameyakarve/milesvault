@@ -19,7 +19,7 @@ Assets
   Rewards:Points|Status:*               see "Rewards" section
 
 Liabilities
-  CC:<issuer>:<product>                 e.g. Liabilities:CC:HDFC:Infinia
+  CreditCards:<issuer>:<product>        e.g. Liabilities:CreditCards:HDFC:Infinia
   Loan:Mortgage|Auto|Student|Personal:<lender>
   Payable:<name>                        IOUs you owe
 
@@ -53,7 +53,7 @@ Expenses
 
 - **Two-level Expense max in v1.** `Expenses:Food:Coffee` is fine; `Expenses:Food:Restaurant:Italian:Pasta` is not. Drill into payee/narration if you want finer slicing.
 - **Payee in narration, not in path.** Don't create `Expenses:Food:BlueTokai` — log "Blue Tokai" as the payee on the txn.
-- **Institution as the middle segment for Assets/Liabilities.** `Assets:Bank:HDFC:Savings`, `Liabilities:CC:Amex:Plat` — keeps per-institution rollups cheap.
+- **Institution as the middle segment for Assets/Liabilities.** `Assets:Bank:HDFC:Savings`, `Liabilities:CreditCards:Amex:Plat` — keeps per-institution rollups cheap.
 - **Cashback and refunds are NOT income.** They reduce the originating expense:
   - Cashback: `#cashback` tag, full outflow + credit-back to the instrument, `Income:Void` plug. See "Cashback and discounts" below.
   - Refunds: same shape as cashback when traceable to the original txn; otherwise model as a negative posting on the original `Expenses:*` category.
@@ -68,7 +68,7 @@ Six card kinds across two beancount types. "Card" is the UX primitive; the ledge
 
 | kind | beancount type | path prefix | has balance? | constraint commodities |
 |---|---|---|---|---|
-| `credit-card` | Liabilities | `Liabilities:CC:*` | yes (owed) | single fiat |
+| `credit-card` | Liabilities | `Liabilities:CreditCards:*` | yes (owed) | single fiat |
 | `debit-card` | Assets | `Assets:DebitCards:*` | always 0 (zero-sum) | single fiat |
 | `wallet` | Assets | `Assets:Loaded:Wallets:*` | yes | single fiat |
 | `prepaid-card` | Assets | `Assets:Loaded:PrepaidCards:*` | yes | single fiat |
@@ -87,7 +87,7 @@ Six card kinds across two beancount types. "Card" is the UX primitive; the ledge
 ### Credit card — standard two-posting
 ```beancount
 2026-04-16 * "Blue Tokai" "morning coffee"
-  Liabilities:CC:HDFC:Infinia  -220.00 INR
+  Liabilities:CreditCards:HDFC:Infinia  -220.00 INR
   Expenses:Food:Coffee                    220.00 INR
 ```
 
@@ -237,7 +237,7 @@ Transferability is a property of the commodity, not the account.
 Points earned alongside a spend:
 ```beancount
 2026-04-16 * "BA" "LHR-BOM flight" #reward-accrual
-  Liabilities:CC:HDFC:Infinia  -50000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia  -50000.00 INR
   Expenses:Travel:Flights                50000.00 INR
   Assets:Rewards:Points:Avios              500.00 AVIOS
   Income:Void                             -500.00 AVIOS
@@ -246,7 +246,7 @@ Points earned alongside a spend:
 Status earned from a stay:
 ```beancount
 2026-04-16 * "Marriott" "Mumbai stay" #reward-accrual
-  Liabilities:CC:HDFC:Infinia  -15000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia  -15000.00 INR
   Expenses:Travel:Hotels                 15000.00 INR
   Assets:Rewards:Status:Marriott             3.00 MAR-NIGHTS
   Income:Void                               -3.00 MAR-NIGHTS
@@ -267,7 +267,7 @@ Award flight (points + cash for taxes):
 ```beancount
 2026-06-01 * "BA" "award flight"
   Assets:Rewards:Points:Avios           -20000.00 AVIOS
-  Liabilities:CC:HDFC:Infinia   -2500.00 INR
+  Liabilities:CreditCards:HDFC:Infinia   -2500.00 INR
   Expenses:Travel:Flights                20000.00 AVIOS
   Expenses:Travel:Flights                 2500.00 INR
 ```
@@ -310,7 +310,7 @@ Money never left for the discounted portion. One posting on the instrument.
 
 ```beancount
 2026-04-16 * "Zomato" "dinner ₹1000 — ₹150 promo" #discount
-  Liabilities:CC:HDFC:Infinia   -850.00 INR
+  Liabilities:CreditCards:HDFC:Infinia   -850.00 INR
   Expenses:Food:Restaurant               1000.00 INR
   Income:Void                            -150.00 INR
 ```
@@ -322,9 +322,9 @@ Cashback is a real inflow. The instrument appears twice when the cashback lands 
 Same-card cashback (10% HDFC offer on Zomato):
 ```beancount
 2026-04-16 * "Zomato" "dinner, 10% HDFC offer" #cashback
-  Liabilities:CC:HDFC:Infinia  -1000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia  -1000.00 INR
   Expenses:Food:Restaurant               1000.00 INR
-  Liabilities:CC:HDFC:Infinia    100.00 INR
+  Liabilities:CreditCards:HDFC:Infinia    100.00 INR
   Income:Void                            -100.00 INR
 ```
 
@@ -340,7 +340,7 @@ Same-wallet cashback (Paytm 5% on a ride):
 Cross-instrument cashback (Amazon via Infinia, cashback to Amazon Pay):
 ```beancount
 2026-04-16 * "Amazon" "headphones + ₹150 AmazonPay cashback" #cashback
-  Liabilities:CC:HDFC:Infinia  -3000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia  -3000.00 INR
   Expenses:Shopping:Electronics          3000.00 INR
   Assets:Loaded:Wallets:AmazonPay         150.00 INR
   Income:Void                            -150.00 INR
@@ -350,7 +350,7 @@ Bill payment with app cashback (CRED pays into CRED wallet):
 ```beancount
 2026-04-10 * "CRED" "HDFC bill + ₹25 CRED cashback" #cashback
   Assets:Bank:HDFC:Savings              -10000.00 INR
-  Liabilities:CC:HDFC:Infinia   10000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia   10000.00 INR
   Assets:Loaded:Wallets:CRED                 25.00 INR
   Income:Void                               -25.00 INR
 ```
@@ -360,7 +360,7 @@ Bill payment with app cashback (CRED pays into CRED wallet):
 When cashback is credited later as a statement event rather than per-txn:
 ```beancount
 2026-04-30 * "HDFC" "Infinia April statement cashback" #cashback
-  Liabilities:CC:HDFC:Infinia    250.00 INR
+  Liabilities:CreditCards:HDFC:Infinia    250.00 INR
   Income:Void                            -250.00 INR
 ```
 
@@ -378,7 +378,7 @@ Single plug pair for everything non-cash; distinguish semantics via tags.
 ## Path-to-kind resolver
 
 ```
-Liabilities:CC:*    → credit-card
+Liabilities:CreditCards:*    → credit-card
 Assets:DebitCards:*          → debit-card
 Assets:Loaded:Wallets:*      → wallet
 Assets:Loaded:PrepaidCards:* → prepaid-card
@@ -388,6 +388,6 @@ Assets:Rewards:Points:*      → loyalty-points
 Assets:Rewards:Status:*      → status-progress
 ```
 
-Unmatched paths are rejected at account creation. Typos like `Liabilities:Credit-Cards:*` or `Assets:Loaded:Wallet:*` (singular) fail loudly.
+Unmatched paths are rejected at account creation. Typos like `Liabilities:CreditCards:*` (the old abbreviated form) or `Assets:Loaded:Wallet:*` (singular) fail loudly.
 
 Constraints and validation rules for reward kinds: TBD.

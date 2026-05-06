@@ -347,7 +347,7 @@ export const BANK_OVERVIEW_SAMPLE: OverviewViewProps = {
         scale: 1.0,
       },
       {
-        prefix: 'Liabilities:CC:HDFC:',
+        prefix: 'Liabilities:CreditCards:HDFC:',
         leaf: 'Infinia',
         amount: '−₹2,40,000.00',
         amountClass: 'text-rose-600',

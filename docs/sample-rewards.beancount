@@ -8,28 +8,28 @@
 
 ;; Airline miles earned alongside a flight spend
 2026-04-02 * "BA" "LHR-BOM flight" #reward-accrual
-  Liabilities:CC:HDFC:Infinia         -50000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia         -50000.00 INR
   Expenses:Travel:Flights              50000.00 INR
   Assets:Rewards:Points:Avios            500.00 AVIOS
   Income:Void                           -500.00 AVIOS
 
 ;; Bank transferable points on a generic spend (HDFC SmartBuy)
 2026-04-03 * "Amazon" "laptop purchase" #reward-accrual
-  Liabilities:CC:HDFC:Infinia         -80000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia         -80000.00 INR
   Expenses:Shopping:Electronics        80000.00 INR
   Assets:Rewards:Points:SmartBuy       2400.00 SMARTBUY
   Income:Void                         -2400.00 SMARTBUY
 
 ;; Card-locked points (SBI-RP, issuer-catalog only)
 2026-04-04 * "BigBasket" "weekly groceries" #reward-accrual
-  Liabilities:CC:SBI:Elite             -3500.00 INR
+  Liabilities:CreditCards:SBI:Elite             -3500.00 INR
   Expenses:Groceries                    3500.00 INR
   Assets:Rewards:Points:SBI               35.00 SBI-RP
   Income:Void                            -35.00 SBI-RP
 
 ;; Hotel points earned from a stay
 2026-04-05 * "Marriott" "Bengaluru stay" #reward-accrual
-  Liabilities:CC:HDFC:Infinia         -15000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia         -15000.00 INR
   Expenses:Travel:Hotels               15000.00 INR
   Assets:Rewards:Points:Marriott        7500.00 MARRIOTT
   Income:Void                          -7500.00 MARRIOTT
@@ -41,7 +41,7 @@
 
 ;; Airline tier points on a paid ticket
 2026-04-06 * "Singapore Airlines" "BOM-SIN business" #reward-accrual
-  Liabilities:CC:HDFC:Infinia         -95000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia         -95000.00 INR
   Expenses:Travel:Flights              95000.00 INR
   Assets:Rewards:Points:Krisflyer      12000.00 KRISFLYER
   Income:Void                         -12000.00 KRISFLYER
@@ -69,7 +69,7 @@
 ;; Award flight: points + cash for taxes
 2026-06-01 * "BA" "award flight LHR-BOM"
   Assets:Rewards:Points:Avios         -20000.00 AVIOS
-  Liabilities:CC:HDFC:Infinia          -2500.00 INR
+  Liabilities:CreditCards:HDFC:Infinia          -2500.00 INR
   Expenses:Travel:Flights              20000.00 AVIOS
   Expenses:Travel:Flights               2500.00 INR
 
@@ -86,7 +86,7 @@
 ;; Cash-equivalent cashback redemption (points → statement credit)
 2026-05-12 * "HDFC Infinia" "points → statement credit"
   Assets:Rewards:Points:SmartBuy       -5000.00 SMARTBUY
-  Liabilities:CC:HDFC:Infinia           1250.00 INR @@ 5000.00 SMARTBUY
+  Liabilities:CreditCards:HDFC:Infinia           1250.00 INR @@ 5000.00 SMARTBUY
 
 ;; ========================================================================
 ;; EXPIRY / RESET — Expenses:Void with #reward-expiry tag
@@ -108,7 +108,7 @@
 
 ;; Promo discount at checkout
 2026-04-16 * "Zomato" "dinner ₹1000 — ₹150 promo" #discount
-  Liabilities:CC:HDFC:Infinia            -850.00 INR
+  Liabilities:CreditCards:HDFC:Infinia            -850.00 INR
   Expenses:Food:Restaurant              1000.00 INR
   Income:Void                           -150.00 INR
 
@@ -118,9 +118,9 @@
 
 ;; Same-card cashback (10% HDFC offer)
 2026-04-16 * "Zomato" "dinner, 10% HDFC offer" #cashback
-  Liabilities:CC:HDFC:Infinia          -1000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia          -1000.00 INR
   Expenses:Food:Restaurant              1000.00 INR
-  Liabilities:CC:HDFC:Infinia            100.00 INR
+  Liabilities:CreditCards:HDFC:Infinia            100.00 INR
   Income:Void                           -100.00 INR
 
 ;; Same-wallet cashback (Paytm 5%)
@@ -132,7 +132,7 @@
 
 ;; Cross-instrument cashback (Amazon via Infinia, cashback to Amazon Pay)
 2026-04-16 * "Amazon" "headphones + ₹150 AmazonPay cashback" #cashback
-  Liabilities:CC:HDFC:Infinia          -3000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia          -3000.00 INR
   Expenses:Shopping:Electronics         3000.00 INR
   Assets:Loaded:Wallets:AmazonPay        150.00 INR
   Income:Void                           -150.00 INR
@@ -140,11 +140,11 @@
 ;; Bill payment with app cashback (CRED pays into CRED wallet)
 2026-04-10 * "CRED" "HDFC bill + ₹25 CRED cashback" #cashback
   Assets:Bank:HDFC:Savings            -10000.00 INR
-  Liabilities:CC:HDFC:Infinia          10000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia          10000.00 INR
   Assets:Loaded:Wallets:CRED              25.00 INR
   Income:Void                            -25.00 INR
 
 ;; Statement-level cashback (standalone)
 2026-04-30 * "HDFC" "Infinia April statement cashback" #cashback
-  Liabilities:CC:HDFC:Infinia            250.00 INR
+  Liabilities:CreditCards:HDFC:Infinia            250.00 INR
   Income:Void                           -250.00 INR

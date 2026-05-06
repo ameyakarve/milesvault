@@ -28,8 +28,8 @@ function compactAmount(n: number, currency: string): string {
   return `${sign}${a}`
 }
 
-// Credit-card dashboard. Bound by the taxonomy at Liabilities:CC, which means
-// every Liabilities:CC:* account renders this layout in the Overview tab.
+// Credit-card dashboard. Bound by the taxonomy at Liabilities:CreditCards, which means
+// every Liabilities:CreditCards:* account renders this layout in the Overview tab.
 //
 // Liability accounts carry credit-normal balances, so the raw runningTotal is
 // negative as charges accrue. The trend chart negates the values for display

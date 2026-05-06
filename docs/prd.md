@@ -33,7 +33,7 @@ A small glossary that every flow in this PRD depends on.
 2. **Step 1 — Primary currency.** Curated picker (USD, EUR, INR, GBP, JPY, SGD, AED, CAD, AUD) plus a "type a custom code" affordance. Creates a single global commodity if one doesn't exist, otherwise selects the user's default.
 3. **Step 2 — Seed accounts.** A checkbox list of common paths prefilled and selected by default:
    - `Assets:Checking`
-   - `Liabilities:CC`
+   - `Liabilities:CreditCards`
    - `Income:Salary`
    - `Expenses:Food`
    - `Expenses:Rent`
@@ -41,7 +41,7 @@ A small glossary that every flow in this PRD depends on.
    - `Equity:Opening-Balances`
 
    Each row is renameable inline. The user can uncheck any or all.
-4. **Step 3 — Optional specificity.** "Got a specific bank or card? We'll nest those accounts for you." One text field; on submit, adds e.g. `Assets:Checking:Chase` and `Liabilities:CC:Amex`.
+4. **Step 3 — Optional specificity.** "Got a specific bank or card? We'll nest those accounts for you." One text field; on submit, adds e.g. `Assets:Checking:Chase` and `Liabilities:CreditCards:Amex`.
 5. Land on Home with an empty feed and a single ghost card: *"Tell me your first transaction. Try 'coffee $5 at Blue Bottle on amex'."* Composer is focused.
 6. First accepted card auto-commits (silent, with a toast: "Saved to ledger.") to give immediate reinforcement. Subsequent drafts use the normal staging flow.
 
@@ -71,7 +71,7 @@ A small glossary that every flow in this PRD depends on.
 2. Scribe streams a reply into the feed. The reply is not prose — it's a card:
    ```
    2026-04-16 * "Blue Bottle" "coffee"
-     Liabilities:CC:Amex    -5.50 USD
+     Liabilities:CreditCards:Amex    -5.50 USD
      Expenses:Food:Coffee            5.50 USD
    ```
    Syntax highlighted. Validity strip "Balances: 0.00 USD ✓" appears the moment the card is parseable.
