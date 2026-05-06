@@ -7,6 +7,7 @@ import type {
   CompositionRow,
   EventRow,
   TreemapNode,
+  SankeyDatum,
 } from './overview-view'
 
 export type Period = 'All time' | '12M' | 'YTD' | '3M' | '1M'
@@ -480,6 +481,95 @@ function buildCategoryTreemap(
   }
 }
 
+// Sankey for the CC view: payment-source accounts → the card → top-level
+// expense categories. Per fact:
+//   payment (net > 0): sum each Assets:* counterparty (negated, so the
+//     value is positive) and emit a source-side link.
+//   charge (net < 0): sum each Expenses:* counterparty (already positive
+//     on a debit-normal Expenses leg) grouped by depth-2 root category
+//     (e.g. 'Expenses:Travel') and emit a category-side link.
+// Top 6 sources and top 6 categories are kept; the rest collapse into a
+// single 'Other' node on each side. Returns undefined when either side is
+// empty (the diagram needs both sources and categories to be useful).
+function buildCardSankey(
+  facts: TxnFact[],
+  account: string,
+  currency: string,
+): SankeyDatum | undefined {
+  if (accountMatchesPrefix(account, 'Expenses')) return undefined
+
+  const sourceTotals = new Map<string, number>()
+  const categoryTotals = new Map<string, number>()
+  for (const f of facts) {
+    if (f.net > 0) {
+      for (const cp of f.counterparties) {
+        if (!cp.account.startsWith('Assets:')) continue
+        if (cp.amount >= 0) continue
+        const v = -cp.amount
+        sourceTotals.set(cp.account, (sourceTotals.get(cp.account) ?? 0) + v)
+      }
+    } else if (f.net < 0) {
+      for (const cp of f.counterparties) {
+        if (!cp.account.startsWith('Expenses:')) continue
+        if (cp.amount <= 0) continue
+        const parts = cp.account.split(':')
+        const rootCat = parts.length >= 2 ? `${parts[0]}:${parts[1]}` : cp.account
+        categoryTotals.set(rootCat, (categoryTotals.get(rootCat) ?? 0) + cp.amount)
+      }
+    }
+  }
+  if (sourceTotals.size === 0 || categoryTotals.size === 0) return undefined
+
+  const collapseTopN = (
+    totals: Map<string, number>,
+    topN: number,
+    leafFn: (key: string) => string,
+  ): { name: string; value: number }[] => {
+    const sorted = [...totals.entries()]
+      .map(([key, value]) => ({ name: leafFn(key), value }))
+      .sort((a, b) => b.value - a.value)
+    const top = sorted.slice(0, topN)
+    const rest = sorted.slice(topN)
+    if (rest.length > 0) {
+      const otherTotal = rest.reduce((s, x) => s + x.value, 0)
+      top.push({ name: 'Other', value: otherTotal })
+    }
+    return top
+  }
+
+  const sources = collapseTopN(sourceTotals, 6, (acct) => {
+    const parts = acct.split(':')
+    return parts.length <= 2 ? acct : parts.slice(-2).join(':')
+  })
+  const categories = collapseTopN(categoryTotals, 6, (acct) => acct.split(':').pop() ?? acct)
+
+  const cardLabel = account.split(':').pop() ?? account
+  const nodes: SankeyDatum['nodes'] = [
+    ...sources.map((s) => ({ name: s.name, side: 'source' as const })),
+    { name: cardLabel, side: 'card' as const },
+    ...categories.map((c) => ({ name: c.name, side: 'category' as const })),
+  ]
+  const cardIdx = sources.length
+  const links: SankeyDatum['links'] = []
+  sources.forEach((s, i) => {
+    links.push({
+      source: i,
+      target: cardIdx,
+      value: s.value,
+      amount: `${fmtSymbol(currency)}${fmtAmount(s.value, currency)}`,
+    })
+  })
+  categories.forEach((c, i) => {
+    links.push({
+      source: cardIdx,
+      target: cardIdx + 1 + i,
+      value: c.value,
+      amount: `${fmtSymbol(currency)}${fmtAmount(c.value, currency)}`,
+    })
+  })
+  return { nodes, links }
+}
+
 export function deriveOverview(args: {
   cardSpecs: CardSpec[]
   transactions: TransactionInput[]
@@ -527,6 +617,7 @@ export function deriveOverview(args: {
   const paidFrom = buildPaidFrom(inWindow, currency)
   const cardsUsed = buildCardsUsed(inWindow, account, currency)
   const categoryTreemap = buildCategoryTreemap(inWindow, account, currency)
+  const cardSankey = buildCardSankey(inWindow, account, currency)
   return {
     kpis: [
       {
@@ -553,5 +644,6 @@ export function deriveOverview(args: {
     paidFrom: { rows: paidFrom.rows },
     cardsUsed: { rows: cardsUsed.rows },
     categoryTreemap,
+    cardSankey,
   }
 }

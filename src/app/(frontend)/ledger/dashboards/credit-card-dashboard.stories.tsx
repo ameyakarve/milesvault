@@ -121,6 +121,29 @@ const SAMPLE: OverviewViewProps = {
       },
     ],
   },
+  cardSankey: {
+    nodes: [
+      { name: 'HDFC:Savings', side: 'source' },
+      { name: 'ICICI:Salary', side: 'source' },
+      { name: 'Other', side: 'source' },
+      { name: 'Infinia', side: 'card' },
+      { name: 'Travel', side: 'category' },
+      { name: 'Food', side: 'category' },
+      { name: 'Shopping', side: 'category' },
+      { name: 'Entertainment', side: 'category' },
+      { name: 'Transport', side: 'category' },
+    ],
+    links: [
+      { source: 0, target: 3, value: 120000, amount: '₹1,20,000.00' },
+      { source: 1, target: 3, value: 60000, amount: '₹60,000.00' },
+      { source: 2, target: 3, value: 18000, amount: '₹18,000.00' },
+      { source: 3, target: 4, value: 68400, amount: '₹68,400.00' },
+      { source: 3, target: 5, value: 42800, amount: '₹42,800.00' },
+      { source: 3, target: 6, value: 36200, amount: '₹36,200.00' },
+      { source: 3, target: 7, value: 18600, amount: '₹18,600.00' },
+      { source: 3, target: 8, value: 4200, amount: '₹4,200.00' },
+    ],
+  },
   paidFrom: {
     rows: [
       { prefix: 'Assets:Bank:HDFC:', leaf: 'Savings', amount: '₹1,20,000.00', amountClass: 'text-slate-900', scale: 1.0, value: 120000 },
