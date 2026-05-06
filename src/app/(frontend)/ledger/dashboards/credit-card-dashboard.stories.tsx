@@ -57,25 +57,24 @@ const SAMPLE: OverviewViewProps = {
       },
     ],
   },
-  // Monthly net = sum of signed posting deltas on the CC. Raw values are
-  // negative for charge-heavy months and positive for payment-heavy months;
-  // the dashboard negates so positive bars read as "added to debt."
+  // Monthly spend = sum of charges per month (payments excluded). Always
+  // positive; the chart never crosses zero.
   monthlyNet: {
     currency: 'INR',
-    totalLabel: '−₹1,24,800.00',
+    totalLabel: '₹1,80,200.00',
     points: [
-      { x: 'May 25', y: -42_100, label: 'May 25 · +₹42,100.00' },
-      { x: 'Jun', y: -14_300, label: 'Jun 25 · +₹14,300.00' },
-      { x: 'Jul', y: 17_500, label: 'Jul 25 · −₹17,500.00' },
-      { x: 'Aug', y: -32_300, label: 'Aug 25 · +₹32,300.00' },
-      { x: 'Sep', y: 2_700, label: 'Sep 25 · −₹2,700.00' },
-      { x: 'Oct', y: -13_900, label: 'Oct 25 · +₹13,900.00' },
-      { x: 'Nov', y: -11_700, label: 'Nov 25 · +₹11,700.00' },
-      { x: 'Dec', y: -18_200, label: 'Dec 25 · +₹18,200.00' },
-      { x: 'Jan 26', y: 13_600, label: 'Jan 26 · −₹13,600.00' },
-      { x: 'Feb', y: -7_700, label: 'Feb 26 · +₹7,700.00' },
-      { x: 'Mar', y: -12_500, label: 'Mar 26 · +₹12,500.00' },
-      { x: 'Apr', y: -5_900, label: 'Apr 26 · +₹5,900.00' },
+      { x: 'May 25', y: 42_100, label: 'May 25 · ₹42,100.00' },
+      { x: 'Jun', y: 14_300, label: 'Jun 25 · ₹14,300.00' },
+      { x: 'Jul', y: 8_900, label: 'Jul 25 · ₹8,900.00' },
+      { x: 'Aug', y: 32_300, label: 'Aug 25 · ₹32,300.00' },
+      { x: 'Sep', y: 11_400, label: 'Sep 25 · ₹11,400.00' },
+      { x: 'Oct', y: 13_900, label: 'Oct 25 · ₹13,900.00' },
+      { x: 'Nov', y: 11_700, label: 'Nov 25 · ₹11,700.00' },
+      { x: 'Dec', y: 18_200, label: 'Dec 25 · ₹18,200.00' },
+      { x: 'Jan 26', y: 9_800, label: 'Jan 26 · ₹9,800.00' },
+      { x: 'Feb', y: 7_700, label: 'Feb 26 · ₹7,700.00' },
+      { x: 'Mar', y: 12_500, label: 'Mar 26 · ₹12,500.00' },
+      { x: 'Apr', y: 5_900, label: 'Apr 26 · ₹5,900.00' },
     ],
   },
   categoryBreakdown: {

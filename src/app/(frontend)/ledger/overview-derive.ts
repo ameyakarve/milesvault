@@ -218,10 +218,11 @@ function buildComposition(
   return { rows, moreCount }
 }
 
-// Monthly net: per month, sum of signed posting deltas on the account. For
-// liability accounts (credit cards), the dashboard negates this so positive
-// bars read as "debt grew this month". Returns one point per month in the
-// window with a human-readable total label.
+// Monthly spend: per month, sum of charges (negative postings on the CC).
+// Payments are excluded — they belong on the "Paid from" card. Values are
+// returned as positive numbers (the spend amount) so the chart never crosses
+// zero. Returns one point per month in the window with a human-readable
+// total label.
 function buildMonthlyNet(
   facts: TxnFact[],
   windowStart: Date,
@@ -229,16 +230,18 @@ function buildMonthlyNet(
   currency: string,
 ): { points: TrendPoint[]; totalLabel: string } {
   if (facts.length === 0) {
-    return { points: [], totalLabel: fmtSigned(0, currency) }
+    return { points: [], totalLabel: `${fmtSymbol(currency)}${fmtAmount(0, currency)}` }
   }
   const sumByMonth = new Map<string, number>()
   let total = 0
   for (const f of facts) {
     if (f.date.getTime() < windowStart.getTime()) continue
     if (f.date.getTime() > windowEnd.getTime()) continue
+    if (f.net >= 0) continue
     const k = ymKey(f.date)
-    sumByMonth.set(k, (sumByMonth.get(k) ?? 0) + f.net)
-    total += f.net
+    const spend = -f.net
+    sumByMonth.set(k, (sumByMonth.get(k) ?? 0) + spend)
+    total += spend
   }
   const points: TrendPoint[] = []
   let cursor = startOfMonth(windowStart)
@@ -252,11 +255,11 @@ function buildMonthlyNet(
     points.push({
       x,
       y,
-      label: `${monthAbbr} ${yr} · ${fmtSigned(y, currency)}`,
+      label: `${monthAbbr} ${yr} · ${fmtSymbol(currency)}${fmtAmount(y, currency)}`,
     })
     cursor = addMonths(cursor, 1)
   }
-  return { points, totalLabel: fmtSigned(total, currency) }
+  return { points, totalLabel: `${fmtSymbol(currency)}${fmtAmount(total, currency)}` }
 }
 
 // Category breakdown: for each charge transaction (net < 0 on the CC =
