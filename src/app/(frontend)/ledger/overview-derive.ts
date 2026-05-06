@@ -293,6 +293,7 @@ function buildCategoryBreakdown(
       amount: `${fmtSymbol(currency)}${fmtAmount(amount, currency)}`,
       amountClass: 'text-slate-900',
       scale: Math.max(0.04, abs / Math.max(maxAbs, 1)),
+      value: abs,
     }
   })
   return { rows, moreCount }
@@ -326,6 +327,7 @@ function buildPaidFrom(
       amount: `${fmtSymbol(currency)}${fmtAmount(amount, currency)}`,
       amountClass: 'text-slate-900',
       scale: Math.max(0.06, abs / Math.max(maxAbs, 1)),
+      value: abs,
     }
   })
   return { rows }

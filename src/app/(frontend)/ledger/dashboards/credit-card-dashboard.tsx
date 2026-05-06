@@ -8,7 +8,6 @@ import { PlotChart } from './plot-chart'
 import { CURRENCY_SYMBOL, compactAmount } from './format'
 
 const ROSE = '#e11d48'
-const TEAL = '#00685f'
 
 // Credit-card dashboard. Bound by the taxonomy at Liabilities:CreditCards;
 // every Liabilities:CreditCards:* account renders this layout.
@@ -63,23 +62,6 @@ export function CreditCardDashboard(props: OverviewViewProps) {
     })
   }, [monthlyNet, symbol, currency])
 
-  const renderCategories = useCallback(() => {
-    const rows = categoryBreakdown?.rows ?? []
-    if (rows.length === 0) {
-      const empty = document.createElement('div')
-      empty.className = 'p-6 text-[11px] text-slate-400'
-      empty.textContent = 'No charges in selected range'
-      return empty
-    }
-    return renderHorizontalBars(rows, ROSE, /* showLabelInside */ true)
-  }, [categoryBreakdown])
-
-  const renderPaidFrom = useCallback(() => {
-    const rows = paidFrom?.rows ?? []
-    if (rows.length === 0) return null
-    return renderHorizontalBars(rows, TEAL, /* showLabelInside */ true)
-  }, [paidFrom])
-
   const headlineTotal = monthlyNet?.totalLabel ?? ''
 
   return (
@@ -118,13 +100,17 @@ export function CreditCardDashboard(props: OverviewViewProps) {
                 </div>
               )}
             </div>
-            <PlotChart render={renderCategories} className="w-full" />
+            {categoryBreakdown && categoryBreakdown.rows.length > 0 ? (
+              <Donut rows={categoryBreakdown.rows} palette={ROSE_PALETTE} />
+            ) : (
+              <div className="p-6 text-[11px] text-slate-400">No charges in selected range</div>
+            )}
           </LayerCard>
 
           {paidFrom && paidFrom.rows.length > 0 && (
             <LayerCard className="flex flex-col rounded-md p-4">
               <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
-              <PlotChart render={renderPaidFrom} className="w-full" />
+              <Donut rows={paidFrom.rows} palette={TEAL_PALETTE} />
             </LayerCard>
           )}
         </div>
@@ -170,60 +156,90 @@ export function CreditCardDashboard(props: OverviewViewProps) {
   )
 }
 
-// Horizontal bar chart for category breakdown / paid-from. Bars 0 → |scale|,
-// leaf-prominent y-axis labels (the prefix is muted in the plot tooltip; the
-// y-axis just shows the leaf). Long bars get inside-white labels; short bars
-// get outside-slate.
-function renderHorizontalBars(
-  rows: CompositionRow[],
-  color: string,
-  _showLabelInside: boolean,
-) {
-  const data = rows.map((r) => ({
-    leaf: r.leaf,
-    prefix: r.prefix,
-    full: `${r.prefix}${r.leaf}`,
-    value: Math.max(r.scale, 0.04) * 100,
-    label: r.amount,
-  }))
-  const INSIDE_THRESHOLD = 50
-  const inside = data.filter((d) => d.value >= INSIDE_THRESHOLD)
-  const outside = data.filter((d) => d.value < INSIDE_THRESHOLD)
-  return Plot.plot({
-    height: Math.max(180, data.length * 40),
-    marginLeft: 130,
-    marginRight: 130,
-    marginTop: 12,
-    marginBottom: 12,
-    style: { background: 'transparent', fontFamily: 'inherit', fontSize: '11px' },
-    x: { axis: null, domain: [0, 110] },
-    y: { label: null, domain: data.map((d) => d.leaf), tickSize: 0 },
-    marks: [
-      Plot.ruleX([0], { stroke: '#cbd5e1', strokeWidth: 1 }),
-      Plot.barX(data, {
-        x: 'value',
-        y: 'leaf',
-        fill: color,
-        fillOpacity: 0.92,
-      }),
-      Plot.text(outside, {
-        x: 'value',
-        y: 'leaf',
-        text: 'label',
-        textAnchor: 'start',
-        dx: 6,
-        fill: '#0f172a',
-        fontWeight: 500,
-      }),
-      Plot.text(inside, {
-        x: 'value',
-        y: 'leaf',
-        text: 'label',
-        textAnchor: 'end',
-        dx: -6,
-        fill: 'white',
-        fontWeight: 600,
-      }),
-    ],
+// Sequential palettes for the donut slices. Largest slice (first row) gets
+// the deepest shade; remaining slices step lighter.
+const ROSE_PALETTE = ['#be123c', '#e11d48', '#f43f5e', '#fb7185', '#fda4af', '#fecdd3']
+const TEAL_PALETTE = ['#00685f', '#0f766e', '#14b8a6', '#5eead4', '#99f6e4', '#ccfbf1']
+
+function Donut({ rows, palette }: { rows: CompositionRow[]; palette: string[] }) {
+  const total = rows.reduce((acc, r) => acc + (r.value ?? 0), 0)
+  if (total <= 0) return null
+  const size = 160
+  const cx = size / 2
+  const cy = size / 2
+  const outer = 70
+  const inner = 42
+  let angle = -Math.PI / 2
+  const segments = rows.map((row, i) => {
+    const fraction = (row.value ?? 0) / total
+    const start = angle
+    const end = angle + fraction * 2 * Math.PI
+    angle = end
+    return {
+      row,
+      color: palette[i % palette.length]!,
+      path:
+        rows.length === 1
+          ? fullAnnulus(cx, cy, inner, outer)
+          : describeArc(cx, cy, inner, outer, start, end),
+      fraction,
+    }
   })
+  return (
+    <div className="flex items-center gap-6">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+        {segments.map((seg, i) => (
+          <path
+            key={i}
+            d={seg.path}
+            fill={seg.color}
+            fillRule={rows.length === 1 ? 'evenodd' : undefined}
+            stroke="white"
+            strokeWidth={1.5}
+          />
+        ))}
+      </svg>
+      <div className="flex-1 flex flex-col gap-1.5 text-[12px] min-w-0">
+        {segments.map((seg, i) => (
+          <div key={i} className="flex items-center gap-2 min-w-0">
+            <span
+              className="w-2.5 h-2.5 rounded-sm shrink-0"
+              style={{ background: seg.color }}
+            />
+            <span className="flex-1 truncate text-slate-700">{seg.row.leaf}</span>
+            <span className={`font-mono tabular-nums shrink-0 ${seg.row.amountClass}`}>
+              {seg.row.amount}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function describeArc(
+  cx: number,
+  cy: number,
+  ri: number,
+  ro: number,
+  a0: number,
+  a1: number,
+): string {
+  const x0 = cx + ro * Math.cos(a0)
+  const y0 = cy + ro * Math.sin(a0)
+  const x1 = cx + ro * Math.cos(a1)
+  const y1 = cy + ro * Math.sin(a1)
+  const x2 = cx + ri * Math.cos(a1)
+  const y2 = cy + ri * Math.sin(a1)
+  const x3 = cx + ri * Math.cos(a0)
+  const y3 = cy + ri * Math.sin(a0)
+  const large = a1 - a0 > Math.PI ? 1 : 0
+  return `M ${x0} ${y0} A ${ro} ${ro} 0 ${large} 1 ${x1} ${y1} L ${x2} ${y2} A ${ri} ${ri} 0 ${large} 0 ${x3} ${y3} Z`
+}
+
+function fullAnnulus(cx: number, cy: number, ri: number, ro: number): string {
+  return (
+    `M ${cx + ro} ${cy} A ${ro} ${ro} 0 1 1 ${cx - ro} ${cy} A ${ro} ${ro} 0 1 1 ${cx + ro} ${cy} Z` +
+    `M ${cx + ri} ${cy} A ${ri} ${ri} 0 1 0 ${cx - ri} ${cy} A ${ri} ${ri} 0 1 0 ${cx + ri} ${cy} Z`
+  )
 }
