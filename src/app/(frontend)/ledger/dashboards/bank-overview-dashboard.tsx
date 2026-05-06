@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react'
 import * as Plot from '@observablehq/plot'
+import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
 
@@ -125,12 +126,12 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       </div>
 
       <div className="p-6 space-y-6">
-        <div className="flex flex-col bg-white border border-slate-200 rounded-md p-4">
+        <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">{trend.title}</div>
           <PlotChart render={renderTrend} className="w-full" />
-        </div>
+        </LayerCard>
 
-        <div className="flex flex-col bg-white border border-slate-200 rounded-md p-4">
+        <LayerCard className="flex flex-col rounded-md p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-[12px] font-medium text-slate-700">{composition.title}</div>
             {composition.moreCount != null && composition.moreCount > 0 && (
@@ -140,9 +141,9 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
             )}
           </div>
           <PlotChart render={renderComposition} className="w-full" />
-        </div>
+        </LayerCard>
 
-        <div className="flex flex-col bg-white border border-slate-200 rounded-md p-4">
+        <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">{events.title}</div>
           {events.rows.length === 0 ? (
             <div className="py-3 text-[11px] text-slate-400">No notable events</div>
@@ -169,7 +170,7 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
               ))}
             </div>
           )}
-        </div>
+        </LayerCard>
       </div>
     </div>
   )
