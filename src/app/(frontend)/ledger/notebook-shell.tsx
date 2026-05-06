@@ -416,6 +416,12 @@ function BreadcrumbRow({
   return (
     <div className="h-10 bg-white px-6 flex items-center justify-between border-b border-slate-50 shrink-0">
       <div className="flex items-center gap-1.5 font-mono text-[11px]">
+        <Link
+          href="/ledger"
+          className="text-slate-500 hover:text-[#00685f] transition-colors"
+        >
+          Accounts
+        </Link>
         {breadcrumb.map((seg, i) => {
           const isLast = i === breadcrumb.length - 1
           const href = `/ledger/${breadcrumb
@@ -424,11 +430,9 @@ function BreadcrumbRow({
             .join('/')}`
           return (
             <Fragment key={`${seg}-${i}`}>
-              {i > 0 && (
-                <span className="material-symbols-outlined !text-[12px] text-slate-300">
-                  chevron_right
-                </span>
-              )}
+              <span className="material-symbols-outlined !text-[12px] text-slate-300">
+                chevron_right
+              </span>
               {isLast ? (
                 <span className="text-slate-800 font-bold">{seg}</span>
               ) : (
