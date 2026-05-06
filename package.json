@@ -6,7 +6,6 @@
   "type": "module",
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build",
-    "kumo:sync": "node scripts/sync-kumo-css.mjs",
     "deploy": "opennextjs-cloudflare build --env=$CLOUDFLARE_ENV && node scripts/inject-do.mjs && opennextjs-cloudflare deploy --env=$CLOUDFLARE_ENV",
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "devsafe": "rm -rf .next && rm -rf .open-next && cross-env NODE_OPTIONS=--no-deprecation next dev",
@@ -19,7 +18,6 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
-    "@cloudflare/kumo": "^2.0.2",
     "@codemirror/language": "^6.12.3",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.0",
