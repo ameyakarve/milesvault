@@ -149,6 +149,104 @@ function formatCompactSigned(value: number, currency: string): string {
   return `${sign}${symbol}${compactAmount(Math.abs(value), currency)}`
 }
 
+function formatCompact(value: number, currency: string): string {
+  const symbol = CURRENCY_SYMBOL[currency] ?? ''
+  return `${symbol}${compactAmount(value, currency)}`
+}
+
+// Top merchants by spend across the period. Excludes payments/refunds —
+// just "where did money go". Bar shows share-of-leader, not share-of-total,
+// so the #1 row always fills the bar.
+export function TopMerchantsCard({
+  topMerchants,
+}: {
+  topMerchants?: {
+    currency: string
+    rows: { payee: string; amount: number; share: number; count: number }[]
+  }
+}) {
+  if (!topMerchants || topMerchants.rows.length === 0) return null
+  const { currency, rows } = topMerchants
+  return (
+    <DashCard title="Top merchants">
+      <Stack gap={10}>
+        {rows.map((r) => (
+          <div key={r.payee} className="flex items-center gap-3 text-[12px]">
+            <div className="w-[140px] shrink-0 truncate font-medium text-slate-900">
+              {r.payee}
+            </div>
+            <div className="flex-1 h-[6px] bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${Math.max(r.share * 100, 4)}%`,
+                  background: 'linear-gradient(90deg, #0f766e 0%, #14b8a6 100%)',
+                }}
+              />
+            </div>
+            <div className="w-[64px] shrink-0 text-right font-mono tabular-nums text-slate-700">
+              {formatCompact(r.amount, currency)}
+            </div>
+            <div className="w-[32px] shrink-0 text-right font-mono text-[10px] text-slate-400">
+              ×{r.count}
+            </div>
+          </div>
+        ))}
+      </Stack>
+    </DashCard>
+  )
+}
+
+const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+// Day-of-week heatmap: 7 vertical bars, height = total spend on that DoW
+// across the period. Useful for spotting weekday/weekend patterns.
+export function DayOfWeekCard({
+  dayOfWeek,
+}: {
+  dayOfWeek?: { currency: string; totals: number[] }
+}) {
+  if (!dayOfWeek || dayOfWeek.totals.every((t) => t === 0)) return null
+  const { currency, totals } = dayOfWeek
+  const max = Math.max(...totals) || 1
+  return (
+    <DashCard title="Day of week">
+      <div className="flex gap-2 h-[140px]">
+        {totals.map((value, i) => {
+          const pct = (value / max) * 100
+          const label = `${DOW_LABELS[i]} · ${formatCompact(value, currency)}`
+          return (
+            <div
+              key={DOW_LABELS[i]}
+              className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0"
+            >
+              <div className="text-[10px] font-mono text-slate-400 leading-none">
+                {value > 0 ? compactAmount(value, currency) : ''}
+              </div>
+              <Tooltip label={label} withArrow openDelay={150} position="top">
+                <div
+                  className="w-full rounded-t"
+                  style={{
+                    height: `${pct}%`,
+                    minHeight: value > 0 ? 6 : 1,
+                    background:
+                      value > 0
+                        ? 'linear-gradient(180deg, #0f766e 0%, #115e59 100%)'
+                        : '#e2e8f0',
+                  }}
+                />
+              </Tooltip>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400 leading-none">
+                {DOW_LABELS[i]}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </DashCard>
+  )
+}
+
 // Activity: 30-day daily-intensity sparkline pinned to the top of the
 // recent-charges list. Combines what used to be Spend Calendar's "rough
 // pulse" with the event log so there's one card for "what happened lately."

@@ -7,7 +7,13 @@ import { SpendHeatmap } from './spend-heatmap'
 import { Masonry } from './masonry'
 import { DashCard } from './cards'
 import { CURRENCY_SYMBOL, colorizeTreemap, compactAmount } from './format'
-import { ActivityCard, MoneyFlowCard, StatementSummaryCard } from './cc-cards'
+import {
+  ActivityCard,
+  DayOfWeekCard,
+  MoneyFlowCard,
+  StatementSummaryCard,
+  TopMerchantsCard,
+} from './cc-cards'
 
 // Credit-card dashboard. Bound by the taxonomy at Liabilities:CreditCards;
 // every Liabilities:CreditCards:* account renders this layout.
@@ -24,6 +30,8 @@ export function CreditCardDashboard(props: OverviewViewProps) {
     cardsUsed,
     spendCalendar,
     headerStats,
+    topMerchants,
+    dayOfWeek,
   } = props
   const currency = monthlyNet?.currency ?? 'INR'
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
@@ -43,6 +51,8 @@ export function CreditCardDashboard(props: OverviewViewProps) {
 
           <ActivityCard events={events} spendCalendar={spendCalendar} currency={currency} />
 
+          <TopMerchantsCard topMerchants={topMerchants} />
+
           {categoryTreemap && (categoryTreemap.children?.length ?? 0) > 0 && (
             <DashCard title="Spend by category">
               <Treemap
@@ -58,6 +68,8 @@ export function CreditCardDashboard(props: OverviewViewProps) {
             cardsUsed={cardsUsed}
             categoryTreemap={categoryTreemap}
           />
+
+          <DayOfWeekCard dayOfWeek={dayOfWeek} />
 
           {spendCalendar && spendCalendar.days.length > 0 && (
             <DashCard title="Spend calendar">
