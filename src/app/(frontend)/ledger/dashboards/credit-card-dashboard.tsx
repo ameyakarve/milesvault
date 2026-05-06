@@ -88,7 +88,13 @@ export function CreditCardDashboard(props: OverviewViewProps) {
 
         <div
           className={`grid gap-6 items-start ${
-            paidFrom && paidFrom.rows.length > 0 ? 'grid-cols-2' : 'grid-cols-1'
+            (cardsUsed && cardsUsed.rows.length > 0 ? 1 : 0) +
+              (paidFrom && paidFrom.rows.length > 0 ? 1 : 0) ===
+            2
+              ? 'grid-cols-3'
+              : (cardsUsed && cardsUsed.rows.length > 0) || (paidFrom && paidFrom.rows.length > 0)
+                ? 'grid-cols-2'
+                : 'grid-cols-1'
           }`}
         >
           <LayerCard className="flex flex-col rounded-md p-4">
@@ -107,6 +113,13 @@ export function CreditCardDashboard(props: OverviewViewProps) {
             )}
           </LayerCard>
 
+          {cardsUsed && cardsUsed.rows.length > 0 && (
+            <LayerCard className="flex flex-col rounded-md p-4">
+              <div className="text-[12px] font-medium text-slate-700 mb-3">Cards used</div>
+              <Donut rows={cardsUsed.rows} palette={DONUT_PALETTE} />
+            </LayerCard>
+          )}
+
           {paidFrom && paidFrom.rows.length > 0 && (
             <LayerCard className="flex flex-col rounded-md p-4">
               <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
@@ -114,15 +127,6 @@ export function CreditCardDashboard(props: OverviewViewProps) {
             </LayerCard>
           )}
         </div>
-
-        {cardsUsed && cardsUsed.rows.length > 1 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
-            <div className="text-[12px] font-medium text-slate-700 mb-3">Cards used</div>
-            <div className="max-w-[480px]">
-              <Donut rows={cardsUsed.rows} palette={DONUT_PALETTE} />
-            </div>
-          </LayerCard>
-        )}
 
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">Recent charges</div>
@@ -203,7 +207,7 @@ function Donut({ rows, palette }: { rows: CompositionRow[]; palette: string[] })
     }
   })
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex flex-col items-center gap-4">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
         {segments.map((seg, i) => (
           <path
@@ -216,7 +220,7 @@ function Donut({ rows, palette }: { rows: CompositionRow[]; palette: string[] })
           />
         ))}
       </svg>
-      <div className="flex-1 flex flex-col gap-1.5 text-[12px] min-w-0">
+      <div className="w-full flex flex-col gap-1.5 text-[12px] min-w-0">
         {segments.map((seg, i) => (
           <div key={i} className="flex items-center gap-2 min-w-0">
             <span

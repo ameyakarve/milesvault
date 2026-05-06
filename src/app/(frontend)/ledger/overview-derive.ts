@@ -355,7 +355,7 @@ function buildCardsUsed(
       totals.set(p.account, (totals.get(p.account) ?? 0) + Math.abs(p.amount))
     }
   }
-  if (totals.size <= 1) return { rows: [] }
+  if (totals.size === 0) return { rows: [] }
   const sorted = [...totals.entries()]
     .map(([account, amount]) => ({ account, amount }))
     .sort((a, b) => b.amount - a.amount)
