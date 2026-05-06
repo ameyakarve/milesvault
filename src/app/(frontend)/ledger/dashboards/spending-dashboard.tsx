@@ -3,7 +3,7 @@
 import { Treemap } from '@mantine/charts'
 import type { OverviewViewProps } from '../overview-view'
 import { DashboardScaffold, type DashboardConfig } from './dashboard-scaffold'
-import { CURRENCY_SYMBOL, compactAmount } from './format'
+import { CURRENCY_SYMBOL, colorizeTreemap, compactAmount } from './format'
 
 const CONFIG: DashboardConfig = {
   slug: 'spending',
@@ -27,7 +27,7 @@ export function SpendingDashboard(props: OverviewViewProps) {
           title: 'Spend by category',
           body: (
             <Treemap
-              data={categoryTreemap.children ?? []}
+              data={colorizeTreemap(categoryTreemap).children ?? []}
               height={480}
               valueFormatter={(v) => `${symbol}${compactAmount(v, currency)}`}
             />

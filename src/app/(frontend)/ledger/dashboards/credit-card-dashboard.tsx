@@ -8,7 +8,7 @@ import { Sankey } from './sankey'
 import { SpendHeatmap } from './spend-heatmap'
 import { Masonry } from './masonry'
 import { DashCard, StatCard } from './cards'
-import { CURRENCY_SYMBOL, compactAmount } from './format'
+import { CURRENCY_SYMBOL, colorizeTreemap, compactAmount } from './format'
 
 const ROSE = '#e11d48'
 
@@ -97,7 +97,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
         {categoryTreemap && (categoryTreemap.children?.length ?? 0) > 0 && (
           <DashCard title="Spend by category">
             <Treemap
-              data={categoryTreemap.children ?? []}
+              data={colorizeTreemap(categoryTreemap).children ?? []}
               height={480}
               valueFormatter={trendValueFormatter}
             />
