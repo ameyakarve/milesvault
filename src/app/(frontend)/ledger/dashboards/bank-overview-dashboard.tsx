@@ -6,6 +6,7 @@ import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
 import { Masonry } from './masonry'
+import { StatTile } from '../stat-tile'
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   INR: '₹',
@@ -36,7 +37,7 @@ function compactAmount(n: number, currency: string): string {
 // OverviewView — the upstream `deriveOverview()` derivation is reused, only
 // the chart rendering swaps to Observable Plot.
 export function BankOverviewDashboard(props: OverviewViewProps) {
-  const { trend, composition, events } = props
+  const { trend, composition, events, headerStats } = props
   const symbol = CURRENCY_SYMBOL[trend.currency] ?? ''
 
   const renderTrend = useCallback(() => {
@@ -155,6 +156,14 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
       <Masonry className="p-6">
+        {headerStats && <StatTile label="Balance" value={headerStats.balance} />}
+        {headerStats?.netIn && (
+          <StatTile label="Net In" value={headerStats.netIn} valueClass="text-[#00685f]" />
+        )}
+        {headerStats?.netOut && (
+          <StatTile label="Net Out" value={headerStats.netOut} valueClass="text-rose-600" />
+        )}
+
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">{trend.title}</div>
           <PlotChart render={renderTrend} className="w-full" />

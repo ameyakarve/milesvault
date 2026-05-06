@@ -532,7 +532,7 @@ export function PerAccountView({
 
   const overviewProps = useMemo(() => {
     if (!currency || isStrictParseErr(parsed)) return null
-    return deriveOverview({
+    const derived = deriveOverview({
       cardSpecs,
       transactions: parsed.transactions,
       entries: parsed.entries,
@@ -540,7 +540,11 @@ export function PerAccountView({
       currency,
       period,
     })
-  }, [cardSpecs, parsed, account, currency, period])
+    return {
+      ...derived,
+      headerStats: { balance: headerBalance, netIn, netOut },
+    }
+  }, [cardSpecs, parsed, account, currency, period, headerBalance, netIn, netOut])
 
   // Per-account-type dashboards rendered with Observable Plot inside the
   // React tree. The taxonomy maps account → dashboard slug; the registry maps
@@ -565,9 +569,6 @@ export function PerAccountView({
       breadcrumb={breadcrumb}
       accountTitle={accountTitle}
       accountPath={account}
-      balance={headerBalance}
-      netIn={netIn}
-      netOut={netOut}
       cards={[]}
       txnCount={txnCount}
       unsaved={unsaved}

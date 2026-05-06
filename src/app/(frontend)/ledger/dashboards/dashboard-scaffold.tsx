@@ -6,6 +6,7 @@ import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
 import { Masonry } from './masonry'
+import { StatTile } from '../stat-tile'
 import { CURRENCY_SYMBOL, compactAmount } from './format'
 
 // Palettes carry semantic meaning: an "asset" dashboard reads in brand teal
@@ -54,7 +55,7 @@ export function DashboardScaffold(
     midCard?: { title: string; body: ReactNode } | null
   },
 ) {
-  const { trend, composition, events, config, midCard } = props
+  const { trend, composition, events, config, midCard, headerStats } = props
   const palette = PALETTES[config.palette]
   const symbol = CURRENCY_SYMBOL[trend.currency] ?? ''
 
@@ -144,6 +145,14 @@ export function DashboardScaffold(
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
       <Masonry className="p-6">
+        {headerStats && <StatTile label="Balance" value={headerStats.balance} />}
+        {headerStats?.netIn && (
+          <StatTile label="Net In" value={headerStats.netIn} valueClass="text-[#00685f]" />
+        )}
+        {headerStats?.netOut && (
+          <StatTile label="Net Out" value={headerStats.netOut} valueClass="text-rose-600" />
+        )}
+
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">{config.trendTitle}</div>
           <PlotChart render={renderTrend} className="w-full" />
