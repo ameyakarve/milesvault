@@ -47,6 +47,7 @@ export type OverviewViewProps = {
   monthlyNet?: { points: TrendPoint[]; totalLabel: string; currency: string }
   categoryBreakdown?: { rows: CompositionRow[]; moreCount: number }
   paidFrom?: { rows: CompositionRow[] }
+  cardsUsed?: { rows: CompositionRow[] }
 }
 
 function niceNum(range: number, round: boolean): number {
