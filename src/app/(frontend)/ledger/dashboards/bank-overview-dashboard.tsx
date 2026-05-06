@@ -6,6 +6,28 @@ import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
 
+const CURRENCY_SYMBOL: Record<string, string> = {
+  INR: '₹',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+}
+
+function compactAmount(n: number, currency: string): string {
+  const a = Math.abs(n)
+  const sign = n < 0 ? '-' : ''
+  if (currency === 'INR') {
+    if (a >= 1e7) return `${sign}${(a / 1e7).toFixed(a >= 1e8 ? 0 : 1).replace(/\.0$/, '')}Cr`
+    if (a >= 1e5) return `${sign}${(a / 1e5).toFixed(a >= 1e6 ? 0 : 1).replace(/\.0$/, '')}L`
+    if (a >= 1e3) return `${sign}${Math.round(a / 1e3)}k`
+    return `${sign}${a}`
+  }
+  if (a >= 1e9) return `${sign}${(a / 1e9).toFixed(a >= 1e10 ? 0 : 1).replace(/\.0$/, '')}B`
+  if (a >= 1e6) return `${sign}${(a / 1e6).toFixed(a >= 1e7 ? 0 : 1).replace(/\.0$/, '')}M`
+  if (a >= 1e3) return `${sign}${Math.round(a / 1e3)}k`
+  return `${sign}${a}`
+}
+
 // Bank-overview dashboard. Bound by the taxonomy at Assets:Bank, which means
 // every Assets:Bank:* account renders this layout in the Overview tab.
 //
@@ -14,6 +36,7 @@ import { PlotChart } from './plot-chart'
 // the chart rendering swaps to Observable Plot.
 export function BankOverviewDashboard(props: OverviewViewProps) {
   const { trend, composition, events } = props
+  const symbol = CURRENCY_SYMBOL[trend.currency] ?? ''
 
   const renderTrend = useCallback(() => {
     if (trend.points.length === 0) {
@@ -23,17 +46,22 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       return empty
     }
     return Plot.plot({
-      height: 220,
-      marginLeft: 64,
-      marginRight: 16,
-      marginBottom: 28,
-      style: { background: 'transparent', fontFamily: 'inherit', fontSize: '10px' },
+      height: 260,
+      marginLeft: 76,
+      marginRight: 24,
+      marginBottom: 32,
+      style: { background: 'transparent', fontFamily: 'inherit', fontSize: '11px' },
       // Pin the domain to the data order. Without this, Plot's point scale
       // sorts unique values ascending — which on raw month-abbrev strings
       // (`Dec`, `Jan 26`, `Feb`, `Mar`) collapses to alphabetical and
       // scrambles the time axis.
       x: { type: 'point', label: null, tickSize: 0, domain: trend.points.map((p) => p.x) },
-      y: { grid: true, label: null, tickFormat: 's', nice: true },
+      y: {
+        grid: true,
+        label: null,
+        nice: true,
+        tickFormat: (d: number) => `${symbol}${compactAmount(d, trend.currency)}`,
+      },
       marks: [
         Plot.ruleY([0], { stroke: '#cbd5e1' }),
         Plot.areaY(trend.points, {
@@ -41,25 +69,27 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
           y: 'y',
           curve: 'monotone-x',
           fill: '#00685f',
-          fillOpacity: 0.08,
+          fillOpacity: 0.18,
         }),
         Plot.lineY(trend.points, {
           x: 'x',
           y: 'y',
           curve: 'monotone-x',
           stroke: '#00685f',
-          strokeWidth: 1.75,
+          strokeWidth: 2.5,
         }),
         Plot.dot(trend.points, {
           x: 'x',
           y: 'y',
           fill: '#00685f',
-          r: 2,
+          stroke: 'white',
+          strokeWidth: 1.5,
+          r: 3.5,
         }),
         Plot.tip(trend.points, Plot.pointerX({ x: 'x', y: 'y', title: 'label' })),
       ],
     })
-  }, [trend.points])
+  }, [trend.points, trend.currency, symbol])
 
   const renderComposition = useCallback(() => {
     if (composition.rows.length === 0) {
@@ -79,37 +109,39 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
     const positives = data.filter((d) => d.value >= 0)
     const negatives = data.filter((d) => d.value < 0)
     return Plot.plot({
-      height: Math.max(160, data.length * 28),
-      marginLeft: 200,
-      marginRight: 80,
-      marginTop: 8,
-      marginBottom: 8,
+      height: Math.max(220, data.length * 40),
+      marginLeft: 220,
+      marginRight: 110,
+      marginTop: 16,
+      marginBottom: 16,
       style: { background: 'transparent', fontFamily: 'inherit', fontSize: '11px' },
       x: { axis: null, domain: [-110, 110] },
       y: { label: null, domain: data.map((d) => d.account), tickSize: 0 },
       marks: [
-        Plot.ruleX([0], { stroke: '#e2e8f0' }),
+        Plot.ruleX([0], { stroke: '#cbd5e1', strokeWidth: 1 }),
         Plot.barX(data, {
           x: 'value',
           y: 'account',
           fill: (d) => (d.value < 0 ? '#e11d48' : '#00685f'),
-          fillOpacity: 0.85,
+          fillOpacity: 0.92,
         }),
         Plot.text(positives, {
-          x: () => 110,
-          y: 'account',
-          text: 'label',
-          textAnchor: 'end',
-          dx: -4,
-          fill: '#0f172a',
-        }),
-        Plot.text(negatives, {
-          x: () => -110,
+          x: 'value',
           y: 'account',
           text: 'label',
           textAnchor: 'start',
-          dx: 4,
-          fill: '#e11d48',
+          dx: 6,
+          fill: '#0f172a',
+          fontWeight: 500,
+        }),
+        Plot.text(negatives, {
+          x: 'value',
+          y: 'account',
+          text: 'label',
+          textAnchor: 'end',
+          dx: -6,
+          fill: '#0f172a',
+          fontWeight: 500,
         }),
       ],
     })
@@ -148,17 +180,19 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
               {events.rows.map((row, i) => (
                 <div
                   key={i}
-                  className={`h-[40px] flex items-center border-b border-slate-100 text-[12px] ${
-                    i === 0 ? 'border-t' : ''
-                  }`}
+                  className={`h-[44px] flex items-center px-2 text-[12px] ${
+                    i === 0 ? 'bg-slate-50/70 rounded' : ''
+                  } ${i < events.rows.length - 1 ? 'border-b border-slate-100' : ''}`}
                 >
-                  <div className="w-[100px] font-mono text-slate-500">{row.date}</div>
-                  <div className="w-[140px] font-medium text-slate-900 truncate">
+                  <div className="w-[96px] shrink-0 font-mono text-[11px] text-slate-500">
+                    {row.date}
+                  </div>
+                  <div className={`shrink-0 truncate mr-4 min-w-[120px] max-w-[200px] ${i === 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-900'}`}>
                     {row.payee}
                   </div>
                   <div className="flex-1 text-slate-600 truncate">{row.narration}</div>
                   <div
-                    className={`w-[130px] text-right font-mono tabular-nums ${row.amountClass}`}
+                    className={`w-[140px] shrink-0 text-right font-mono tabular-nums ${row.amountClass}`}
                   >
                     {row.amount}
                   </div>
