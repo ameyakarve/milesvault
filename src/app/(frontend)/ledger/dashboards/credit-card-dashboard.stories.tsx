@@ -126,7 +126,9 @@ const SAMPLE: OverviewViewProps = {
       { name: 'HDFC:Savings', side: 'source' },
       { name: 'ICICI:Salary', side: 'source' },
       { name: 'Other', side: 'source' },
-      { name: 'Infinia', side: 'card' },
+      { name: 'HSBC:Cashback:9065', side: 'card' },
+      { name: 'HDFC:Infinia:4421', side: 'card' },
+      { name: 'ICICI:Amazon:7812', side: 'card' },
       { name: 'Travel', side: 'category' },
       { name: 'Food', side: 'category' },
       { name: 'Shopping', side: 'category' },
@@ -134,14 +136,27 @@ const SAMPLE: OverviewViewProps = {
       { name: 'Transport', side: 'category' },
     ],
     links: [
-      { source: 0, target: 3, value: 120000, amount: '₹1,20,000.00' },
-      { source: 1, target: 3, value: 60000, amount: '₹60,000.00' },
-      { source: 2, target: 3, value: 18000, amount: '₹18,000.00' },
-      { source: 3, target: 4, value: 68400, amount: '₹68,400.00' },
-      { source: 3, target: 5, value: 42800, amount: '₹42,800.00' },
-      { source: 3, target: 6, value: 36200, amount: '₹36,200.00' },
-      { source: 3, target: 7, value: 18600, amount: '₹18,600.00' },
-      { source: 3, target: 8, value: 4200, amount: '₹4,200.00' },
+      { source: 0, target: 3, value: 65000, amount: '₹65,000.00' },
+      { source: 0, target: 4, value: 40000, amount: '₹40,000.00' },
+      { source: 0, target: 5, value: 15000, amount: '₹15,000.00' },
+      { source: 1, target: 3, value: 25000, amount: '₹25,000.00' },
+      { source: 1, target: 4, value: 25000, amount: '₹25,000.00' },
+      { source: 1, target: 5, value: 10000, amount: '₹10,000.00' },
+      { source: 2, target: 3, value: 8000, amount: '₹8,000.00' },
+      { source: 2, target: 4, value: 5000, amount: '₹5,000.00' },
+      { source: 2, target: 5, value: 5000, amount: '₹5,000.00' },
+      { source: 3, target: 6, value: 40000, amount: '₹40,000.00' },
+      { source: 3, target: 7, value: 30000, amount: '₹30,000.00' },
+      { source: 3, target: 8, value: 20000, amount: '₹20,000.00' },
+      { source: 3, target: 9, value: 8200, amount: '₹8,200.00' },
+      { source: 4, target: 6, value: 25000, amount: '₹25,000.00' },
+      { source: 4, target: 7, value: 12000, amount: '₹12,000.00' },
+      { source: 4, target: 8, value: 12000, amount: '₹12,000.00' },
+      { source: 4, target: 9, value: 8000, amount: '₹8,000.00' },
+      { source: 4, target: 10, value: 5400, amount: '₹5,400.00' },
+      { source: 5, target: 6, value: 3000, amount: '₹3,000.00' },
+      { source: 5, target: 8, value: 12000, amount: '₹12,000.00' },
+      { source: 5, target: 10, value: 4800, amount: '₹4,800.00' },
     ],
   },
   paidFrom: {
@@ -162,9 +177,9 @@ const SAMPLE: OverviewViewProps = {
 export const Default: StoryObj = {
   render: () => (
     <NotebookShell
-      breadcrumb={['Liabilities', 'CreditCards', 'HDFC', 'Infinia']}
-      accountTitle="Infinia"
-      accountPath="Liabilities:CreditCards:HDFC:Infinia"
+      breadcrumb={['Liabilities', 'CreditCards']}
+      accountTitle="CreditCards"
+      accountPath="Liabilities:CreditCards"
       balance="−₹1,24,800.00"
       netIn="+₹1,80,000.00"
       netOut="−₹2,18,400.00"
