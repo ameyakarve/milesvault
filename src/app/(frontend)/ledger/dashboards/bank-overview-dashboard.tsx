@@ -2,7 +2,7 @@
 
 import { useCallback } from 'react'
 import * as Plot from '@observablehq/plot'
-import { Text } from '@mantine/core'
+import { Container, Text } from '@mantine/core'
 import { AreaChart } from '@mantine/charts'
 import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
@@ -104,7 +104,8 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       data-dashboard-slug="bank-overview"
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
-      <Masonry className="p-6">
+      <Container fluid p="lg" w="100%">
+        <Masonry>
         {headerStats && <StatCard label="Balance" value={headerStats.balance} />}
         {headerStats?.netIn && (
           <StatCard label="Net In" value={headerStats.netIn} valueColor="#00685f" />
@@ -172,7 +173,8 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
             </div>
           )}
         </DashCard>
-      </Masonry>
+        </Masonry>
+      </Container>
     </div>
   )
 }

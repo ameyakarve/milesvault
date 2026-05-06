@@ -1,6 +1,6 @@
 'use client'
 
-import { Text } from '@mantine/core'
+import { Container, Text } from '@mantine/core'
 import { LineChart, DonutChart } from '@mantine/charts'
 import type { OverviewViewProps, CompositionRow } from '../overview-view'
 import { Treemap } from './treemap'
@@ -44,7 +44,8 @@ export function CreditCardDashboard(props: OverviewViewProps) {
       data-dashboard-slug="credit-card"
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
-      <Masonry className="p-6">
+      <Container fluid p="lg" w="100%">
+        <Masonry>
         {headerStats && <StatCard label="Balance" value={headerStats.balance} />}
         {headerStats?.netIn && (
           <StatCard label="Net In" value={headerStats.netIn} valueColor="#00685f" />
@@ -146,7 +147,8 @@ export function CreditCardDashboard(props: OverviewViewProps) {
             </div>
           )}
         </DashCard>
-      </Masonry>
+        </Masonry>
+      </Container>
     </div>
   )
 }
