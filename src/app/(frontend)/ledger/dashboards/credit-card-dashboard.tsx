@@ -10,6 +10,7 @@ import { Donut, DONUT_PALETTE } from './donut'
 import { Sankey } from './sankey'
 import { SpendHeatmap } from './spend-heatmap'
 import { Masonry } from './masonry'
+import { StatTile } from '../stat-tile'
 import { CURRENCY_SYMBOL, compactAmount } from './format'
 
 const ROSE = '#e11d48'
@@ -22,8 +23,16 @@ const ROSE = '#e11d48'
 // (balance grows better). The "net spend" trend negates so positive bars
 // read as "added to debt this month" — the conventional billing view.
 export function CreditCardDashboard(props: OverviewViewProps) {
-  const { events, monthlyNet, categoryTreemap, cardSankey, paidFrom, cardsUsed, spendCalendar } =
-    props
+  const {
+    events,
+    monthlyNet,
+    categoryTreemap,
+    cardSankey,
+    paidFrom,
+    cardsUsed,
+    spendCalendar,
+    headerStats,
+  } = props
   const currency = monthlyNet?.currency ?? 'INR'
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
 
@@ -77,6 +86,14 @@ export function CreditCardDashboard(props: OverviewViewProps) {
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
       <Masonry className="p-6">
+        {headerStats && <StatTile label="Balance" value={headerStats.balance} />}
+        {headerStats?.netIn && (
+          <StatTile label="Net In" value={headerStats.netIn} valueClass="text-[#00685f]" />
+        )}
+        {headerStats?.netOut && (
+          <StatTile label="Net Out" value={headerStats.netOut} valueClass="text-rose-600" />
+        )}
+
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="flex items-baseline justify-between mb-3">
             <div className="text-[12px] font-medium text-slate-700">Monthly spend</div>

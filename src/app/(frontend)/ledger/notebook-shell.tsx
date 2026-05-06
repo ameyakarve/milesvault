@@ -20,7 +20,6 @@ import {
 import { styleTags, tags as t } from '@lezer/highlight'
 import { parser as beancountParser } from 'lezer-beancount'
 import { NavRail } from '../_chrome/nav-rail'
-import { StatTile } from './stat-tile'
 
 export type Seg =
   | { kind: 'date'; text: string }
@@ -435,27 +434,6 @@ function BreadcrumbRow({
   )
 }
 
-function StatsRow({
-  balance,
-  netIn,
-  netOut,
-}: {
-  balance: string
-  netIn?: string
-  netOut?: string
-}) {
-  return (
-    <div className="bg-white px-6 py-4 shrink-0">
-      <div className="grid grid-cols-3 gap-4">
-        <StatTile label="Balance" value={balance} />
-        {netIn && <StatTile label="Net In" value={netIn} valueClass="text-[#00685f]" />}
-        {netOut && (
-          <StatTile label="Net Out" value={netOut} valueClass="text-rose-600" />
-        )}
-      </div>
-    </div>
-  )
-}
 
 function LeafChipsRow({
   leafChips,
@@ -584,9 +562,6 @@ export type NotebookShellProps = {
   breadcrumb: string[]
   accountTitle: string
   accountPath: string
-  balance: string
-  netIn?: string
-  netOut?: string
   cards: Card[]
   txnCount: number
   unsaved?: boolean
@@ -609,9 +584,6 @@ export type NotebookShellProps = {
 
 export function NotebookShell({
   breadcrumb,
-  balance,
-  netIn,
-  netOut,
   cards,
   txnCount,
   unsaved = false,
@@ -658,7 +630,6 @@ export function NotebookShell({
             />
             {viewMode === 'overview' ? (
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]">
-                <StatsRow balance={balance} netIn={netIn} netOut={netOut} />
                 {overviewBody}
               </div>
             ) : viewMode === 'editor' ? (

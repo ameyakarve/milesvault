@@ -66,6 +66,13 @@ export type OverviewViewProps = {
     currency: string
     days: { date: string; amount: number; label: string }[]
   }
+  // Pre-formatted header tiles. Rendered as the first cards of the dashboard
+  // masonry; the parent shell no longer renders a separate stats row.
+  headerStats?: {
+    balance: string
+    netIn?: string
+    netOut?: string
+  }
 }
 
 function niceNum(range: number, round: boolean): number {

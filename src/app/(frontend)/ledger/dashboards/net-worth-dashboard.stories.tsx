@@ -49,6 +49,7 @@ const SAMPLE: OverviewViewProps = {
       { date: '2026-01-31', payee: 'Employer', narration: 'January salary', amount: '+₹1,50,000.00', amountClass: 'text-slate-900' },
     ],
   },
+  headerStats: { balance: '₹21,25,000.00' },
 }
 
 export const Default: StoryObj = {
@@ -57,7 +58,6 @@ export const Default: StoryObj = {
       breadcrumb={['Assets']}
       accountTitle="Assets"
       accountPath="Assets"
-      balance="₹21,25,000.00"
       cards={[]}
       txnCount={246}
       currency="INR"

@@ -176,6 +176,11 @@ const SAMPLE: OverviewViewProps = {
     currency: 'INR',
     days: buildSampleCalendar(),
   },
+  headerStats: {
+    balance: '−₹1,24,800.00',
+    netIn: '+₹1,80,000.00',
+    netOut: '−₹2,18,400.00',
+  },
 }
 
 // Generate a deterministic 365-day daily-spend series with weekend bias and a
@@ -218,9 +223,6 @@ export const Default: StoryObj = {
       breadcrumb={['Liabilities', 'CreditCards']}
       accountTitle="CreditCards"
       accountPath="Liabilities:CreditCards"
-      balance="−₹1,24,800.00"
-      netIn="+₹1,80,000.00"
-      netOut="−₹2,18,400.00"
       cards={[]}
       txnCount={28}
       currency="INR"
