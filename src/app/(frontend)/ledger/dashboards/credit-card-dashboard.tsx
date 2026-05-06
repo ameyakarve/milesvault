@@ -49,11 +49,19 @@ export function CreditCardDashboard(props: OverviewViewProps) {
       },
       marks: [
         Plot.ruleY([0], { stroke: '#94a3b8', strokeWidth: 1 }),
-        Plot.barY(points, {
+        Plot.line(points, {
+          x: 'x',
+          y: 'yDisplay',
+          stroke: '#94a3b8',
+          strokeWidth: 1.5,
+        }),
+        Plot.dot(points, {
           x: 'x',
           y: 'yDisplay',
           fill: (d) => (d.yDisplay >= 0 ? ROSE : TEAL),
-          fillOpacity: 0.92,
+          stroke: 'white',
+          strokeWidth: 1.5,
+          r: 4,
         }),
         Plot.tip(points, Plot.pointerX({ x: 'x', y: 'yDisplay', title: 'label' })),
       ],
@@ -113,17 +121,30 @@ export function CreditCardDashboard(props: OverviewViewProps) {
           <PlotChart render={renderNetTrend} className="w-full" />
         </LayerCard>
 
-        <LayerCard className="flex flex-col rounded-md p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-[12px] font-medium text-slate-700">Where this card spent</div>
-            {categoryBreakdown && categoryBreakdown.moreCount > 0 && (
-              <div className="text-[11px] italic text-slate-400">
-                +{categoryBreakdown.moreCount} more
-              </div>
-            )}
-          </div>
-          <PlotChart render={renderCategories} className="w-full" />
-        </LayerCard>
+        <div
+          className={`grid gap-6 items-start ${
+            paidFrom && paidFrom.rows.length > 0 ? 'grid-cols-2' : 'grid-cols-1'
+          }`}
+        >
+          <LayerCard className="flex flex-col rounded-md p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[12px] font-medium text-slate-700">Where this card spent</div>
+              {categoryBreakdown && categoryBreakdown.moreCount > 0 && (
+                <div className="text-[11px] italic text-slate-400">
+                  +{categoryBreakdown.moreCount} more
+                </div>
+              )}
+            </div>
+            <PlotChart render={renderCategories} className="w-full" />
+          </LayerCard>
+
+          {paidFrom && paidFrom.rows.length > 0 && (
+            <LayerCard className="flex flex-col rounded-md p-4">
+              <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
+              <PlotChart render={renderPaidFrom} className="w-full" />
+            </LayerCard>
+          )}
+        </div>
 
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">Recent charges</div>
@@ -161,12 +182,6 @@ export function CreditCardDashboard(props: OverviewViewProps) {
           )}
         </LayerCard>
 
-        {paidFrom && paidFrom.rows.length > 0 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
-            <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
-            <PlotChart render={renderPaidFrom} className="w-full" />
-          </LayerCard>
-        )}
       </div>
     </div>
   )
