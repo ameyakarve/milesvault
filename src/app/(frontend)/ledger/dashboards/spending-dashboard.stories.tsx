@@ -3,7 +3,7 @@ import React from 'react'
 import { NotebookShell } from '../notebook-shell'
 import { SpendingDashboard } from './spending-dashboard'
 import type { OverviewViewProps } from '../overview-view'
-import type { TreemapNode } from './treemap'
+import type { TreemapNode } from '../overview-view'
 
 const meta: Meta = { title: 'Ledger / Spending Dashboard', parameters: { layout: 'fullscreen', nextjs: { appDirectory: true } } }
 export default meta
