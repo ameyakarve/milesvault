@@ -38,6 +38,11 @@ export type TreemapNode = {
   amount?: string
 }
 
+export type SankeyDatum = {
+  nodes: { name: string; side: 'source' | 'card' | 'category' }[]
+  links: { source: number; target: number; value: number; amount: string }[]
+}
+
 export type OverviewViewProps = {
   kpis: OverviewKpi[]
   trend: {
@@ -56,6 +61,7 @@ export type OverviewViewProps = {
   paidFrom?: { rows: CompositionRow[] }
   cardsUsed?: { rows: CompositionRow[] }
   categoryTreemap?: TreemapNode
+  cardSankey?: SankeyDatum
 }
 
 function niceNum(range: number, round: boolean): number {

@@ -7,6 +7,7 @@ import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
 import { Treemap } from './treemap'
 import { Donut, DONUT_PALETTE } from './donut'
+import { Sankey } from './sankey'
 import { CURRENCY_SYMBOL, compactAmount } from './format'
 
 const ROSE = '#e11d48'
@@ -19,7 +20,7 @@ const ROSE = '#e11d48'
 // (balance grows better). The "net spend" trend negates so positive bars
 // read as "added to debt this month" — the conventional billing view.
 export function CreditCardDashboard(props: OverviewViewProps) {
-  const { events, monthlyNet, categoryTreemap, paidFrom, cardsUsed } = props
+  const { events, monthlyNet, categoryTreemap, cardSankey, paidFrom, cardsUsed } = props
   const currency = monthlyNet?.currency ?? 'INR'
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
 
@@ -92,6 +93,13 @@ export function CreditCardDashboard(props: OverviewViewProps) {
           <LayerCard className="flex flex-col rounded-md p-4">
             <div className="text-[12px] font-medium text-slate-700 mb-3">Spend by category</div>
             <Treemap root={categoryTreemap} />
+          </LayerCard>
+        )}
+
+        {cardSankey && cardSankey.links.length > 0 && (
+          <LayerCard className="flex flex-col rounded-md p-4">
+            <div className="text-[12px] font-medium text-slate-700 mb-3">Money flow</div>
+            <Sankey data={cardSankey} />
           </LayerCard>
         )}
 
