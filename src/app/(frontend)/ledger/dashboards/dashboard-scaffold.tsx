@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, type ReactNode } from 'react'
 import * as Plot from '@observablehq/plot'
 import { LayerCard } from '@cloudflare/kumo/components/layer-card'
 import type { OverviewViewProps } from '../overview-view'
@@ -45,8 +45,15 @@ export type DashboardConfig = {
   negateBalance: boolean
 }
 
-export function DashboardScaffold(props: OverviewViewProps & { config: DashboardConfig }) {
-  const { trend, composition, events, config } = props
+export function DashboardScaffold(
+  props: OverviewViewProps & {
+    config: DashboardConfig
+    // Optional dashboard-specific card rendered between trend and composition
+    // (e.g. category treemap on the Expenses dashboard).
+    midCard?: { title: string; body: ReactNode } | null
+  },
+) {
+  const { trend, composition, events, config, midCard } = props
   const palette = PALETTES[config.palette]
   const symbol = CURRENCY_SYMBOL[trend.currency] ?? ''
 
@@ -140,6 +147,13 @@ export function DashboardScaffold(props: OverviewViewProps & { config: Dashboard
           <div className="text-[12px] font-medium text-slate-700 mb-3">{config.trendTitle}</div>
           <PlotChart render={renderTrend} className="w-full" />
         </LayerCard>
+
+        {midCard && (
+          <LayerCard className="flex flex-col rounded-md p-4">
+            <div className="text-[12px] font-medium text-slate-700 mb-3">{midCard.title}</div>
+            {midCard.body}
+          </LayerCard>
+        )}
 
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="flex items-center justify-between mb-3">

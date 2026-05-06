@@ -3,9 +3,62 @@ import React from 'react'
 import { NotebookShell } from '../notebook-shell'
 import { SpendingDashboard } from './spending-dashboard'
 import type { OverviewViewProps } from '../overview-view'
+import type { TreemapNode } from './treemap'
 
 const meta: Meta = { title: 'Ledger / Spending Dashboard', parameters: { layout: 'fullscreen', nextjs: { appDirectory: true } } }
 export default meta
+
+const CATEGORY_TREEMAP: TreemapNode = {
+  name: 'Expenses',
+  children: [
+    {
+      name: 'Travel',
+      children: [
+        { name: 'Flights', value: 124000, amount: '₹1,24,000' },
+        { name: 'Hotels', value: 62000, amount: '₹62,000' },
+        { name: 'Rentals', value: 22800, amount: '₹22,800' },
+        { name: 'Visas', value: 8400, amount: '₹8,400' },
+      ],
+    },
+    {
+      name: 'Food',
+      children: [
+        { name: 'Restaurants', value: 86200, amount: '₹86,200' },
+        { name: 'Groceries', value: 41600, amount: '₹41,600' },
+        { name: 'Coffee', value: 9800, amount: '₹9,800' },
+      ],
+    },
+    {
+      name: 'Shopping',
+      children: [
+        { name: 'Electronics', value: 128900, amount: '₹1,28,900' },
+        { name: 'Home', value: 38700, amount: '₹38,700' },
+        { name: 'Clothing', value: 14500, amount: '₹14,500' },
+      ],
+    },
+    {
+      name: 'Entertainment',
+      children: [
+        { name: 'Concerts', value: 18600, amount: '₹18,600' },
+        { name: 'Streaming', value: 4800, amount: '₹4,800' },
+      ],
+    },
+    {
+      name: 'Transport',
+      children: [
+        { name: 'Fuel', value: 12400, amount: '₹12,400' },
+        { name: 'Cabs', value: 9100, amount: '₹9,100' },
+      ],
+    },
+    {
+      name: 'Personal',
+      children: [
+        { name: 'Health', value: 7200, amount: '₹7,200' },
+        { name: 'Books', value: 3400, amount: '₹3,400' },
+      ],
+    },
+  ],
+}
 
 const SAMPLE: OverviewViewProps = {
   kpis: [],
@@ -60,7 +113,7 @@ export const Default: StoryObj = {
       txnCount={184}
       currency="INR"
       defaultViewMode="overview"
-      overviewBody={<SpendingDashboard {...SAMPLE} />}
+      overviewBody={<SpendingDashboard {...SAMPLE} categoryTreemap={CATEGORY_TREEMAP} />}
     />
   ),
 }

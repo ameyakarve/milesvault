@@ -2,6 +2,7 @@
 
 import type { OverviewViewProps } from '../overview-view'
 import { DashboardScaffold, type DashboardConfig } from './dashboard-scaffold'
+import { Treemap, type TreemapNode } from './treemap'
 
 const CONFIG: DashboardConfig = {
   slug: 'spending',
@@ -15,6 +16,13 @@ const CONFIG: DashboardConfig = {
   negateBalance: false,
 }
 
-export function SpendingDashboard(props: OverviewViewProps) {
-  return <DashboardScaffold {...props} config={CONFIG} />
+export function SpendingDashboard(
+  props: OverviewViewProps & { categoryTreemap?: TreemapNode },
+) {
+  const { categoryTreemap, ...rest } = props
+  const midCard =
+    categoryTreemap && (categoryTreemap.children?.length ?? 0) > 0
+      ? { title: 'Spend by category', body: <Treemap root={categoryTreemap} /> }
+      : null
+  return <DashboardScaffold {...rest} config={CONFIG} midCard={midCard} />
 }
