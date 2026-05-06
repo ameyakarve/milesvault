@@ -1,8 +1,9 @@
 'use client'
 
-import { Card, Group, Stack, Text, Tooltip } from '@mantine/core'
+import { Group, Stack, Text, Tooltip } from '@mantine/core'
 import { Sparkline } from '@mantine/charts'
 import type { CompositionRow, EventRow, TreemapNode, TrendPoint } from '../overview-view'
+import { CardEyebrow, DashCard, HeroValue } from './cards'
 import { CURRENCY_SYMBOL, TREEMAP_PALETTE, compactAmount } from './format'
 
 // Statement summary: hero card. Owed-now + sparkline of monthly spend +
@@ -17,16 +18,9 @@ export function StatementSummaryCard({
 }) {
   const sparkData = monthlyNet?.points.map((p) => p.y) ?? []
   return (
-    <Card withBorder radius="md" p="lg">
+    <DashCard eyebrow="Owed now">
       <Stack gap="md">
-        <Stack gap={4}>
-          <Text size="9px" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.1em' }}>
-            Owed now
-          </Text>
-          <Text fw={700} ff="monospace" size="28px" lh={1}>
-            {balance}
-          </Text>
-        </Stack>
+        <HeroValue>{balance}</HeroValue>
         {sparkData.length > 1 && (
           <Sparkline
             data={sparkData}
@@ -48,7 +42,7 @@ export function StatementSummaryCard({
           </Group>
         )}
       </Stack>
-    </Card>
+    </DashCard>
   )
 }
 
@@ -96,16 +90,13 @@ export function MoneyFlowCard({
   if (columns.length < 2) return null
 
   return (
-    <Card withBorder radius="md" p="md">
-      <Text size="xs" fw={500} c="dark.4" mb="sm">
-        Money flow
-      </Text>
+    <DashCard title="Money flow">
       <Group align="stretch" gap="lg" wrap="nowrap" style={{ minHeight: 360 }}>
         {columns.map((col) => (
           <StackColumn key={col.title} title={col.title} segments={col.segs} />
         ))}
       </Group>
-    </Card>
+    </DashCard>
   )
 }
 
@@ -119,9 +110,7 @@ function StackColumn({
   const sum = segments.reduce((s, x) => s + x.value, 0) || 1
   return (
     <Stack gap={8} className="flex-1 min-w-0">
-      <Text size="9px" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.1em' }}>
-        {title}
-      </Text>
+      <CardEyebrow>{title}</CardEyebrow>
       <div className="flex flex-col rounded-md overflow-hidden flex-1 gap-[2px]">
         {segments.map((seg) => {
           const pct = (seg.value / sum) * 100
@@ -176,17 +165,10 @@ export function ActivityCard({
   const last30Total = last30.reduce((s, n) => s + n, 0)
   const showSpark = last30.length >= 7 && last30Total > 0
   return (
-    <Card withBorder radius="md" p="md">
-      <Group justify="space-between" align="center" mb="sm">
-        <Text size="xs" fw={500} c="dark.4">
-          Recent charges
-        </Text>
-        {showSpark && (
-          <Text size="9px" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.1em' }}>
-            Last 30 days
-          </Text>
-        )}
-      </Group>
+    <DashCard
+      title="Recent charges"
+      right={showSpark ? <CardEyebrow>Last 30 days</CardEyebrow> : undefined}
+    >
       {showSpark && (
         <Sparkline
           data={last30}
@@ -241,6 +223,6 @@ export function ActivityCard({
           })}
         </div>
       )}
-    </Card>
+    </DashCard>
   )
 }
