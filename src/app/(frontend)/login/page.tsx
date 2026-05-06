@@ -1,6 +1,5 @@
 import { signIn } from '@/auth'
-import { LayerCard } from '@cloudflare/kumo/components/layer-card'
-import { Button } from '@cloudflare/kumo/components/button'
+import { Button, Paper, Stack, Text, Title } from '@mantine/core'
 
 export default async function LoginPage(props: {
   searchParams: Promise<{ callbackUrl?: string }>
@@ -8,15 +7,17 @@ export default async function LoginPage(props: {
   const { callbackUrl } = await props.searchParams
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-kumo-recessed px-4">
-      <LayerCard className="w-full max-w-[380px] rounded-xl p-8">
-        <div className="space-y-6">
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold tracking-tight text-kumo-default">
+    <main className="flex min-h-screen items-center justify-center px-4">
+      <Paper withBorder radius="md" p="xl" w="100%" maw={380}>
+        <Stack gap="lg">
+          <Stack gap={4}>
+            <Title order={1} size="h3">
               MilesVault
-            </h1>
-            <p className="text-sm text-kumo-subtle">Sign in to continue</p>
-          </div>
+            </Title>
+            <Text c="dimmed" size="sm">
+              Sign in to continue
+            </Text>
+          </Stack>
           <form
             action={async () => {
               'use server'
@@ -25,10 +26,10 @@ export default async function LoginPage(props: {
           >
             <Button
               type="submit"
-              variant="secondary"
-              size="lg"
-              className="w-full justify-center"
-              icon={
+              variant="default"
+              size="md"
+              fullWidth
+              leftSection={
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -52,8 +53,8 @@ export default async function LoginPage(props: {
               Continue with Google
             </Button>
           </form>
-        </div>
-      </LayerCard>
+        </Stack>
+      </Paper>
     </main>
   )
 }
