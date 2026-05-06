@@ -75,7 +75,7 @@ export const TAXONOMY: ReadonlyArray<TaxonomyNode> = [
     kind: 'Liabilities',
     children: [
       {
-        prefix: 'Liabilities:CC',
+        prefix: 'Liabilities:CreditCards',
         label: 'Credit cards',
         kind: 'Liabilities',
         dashboard: { slug: 'credit-card' },

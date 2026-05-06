@@ -34,7 +34,7 @@ const SAMPLE: OverviewViewProps = {
     rows: [
       { prefix: 'Income:Salary:', leaf: 'Employer', amount: '−₹17,40,000.00', amountClass: 'text-rose-600', scale: 1.0 },
       { prefix: 'Expenses:', leaf: 'Housing', amount: '+₹4,80,000.00', amountClass: 'text-slate-900', scale: 0.276 },
-      { prefix: 'Liabilities:CC:HDFC:', leaf: 'Infinia', amount: '−₹2,40,000.00', amountClass: 'text-rose-600', scale: 0.138 },
+      { prefix: 'Liabilities:CreditCards:HDFC:', leaf: 'Infinia', amount: '−₹2,40,000.00', amountClass: 'text-rose-600', scale: 0.138 },
       { prefix: 'Expenses:', leaf: 'Travel', amount: '+₹1,64,000.00', amountClass: 'text-slate-900', scale: 0.094 },
       { prefix: 'Income:', leaf: 'Dividend', amount: '−₹48,400.00', amountClass: 'text-rose-600', scale: 0.028 },
     ],

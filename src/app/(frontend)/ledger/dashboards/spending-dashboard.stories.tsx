@@ -33,8 +33,8 @@ const SAMPLE: OverviewViewProps = {
     moreCount: 0,
     rows: [
       { prefix: 'Assets:Bank:HDFC:', leaf: 'Savings', amount: '−₹4,82,400.00', amountClass: 'text-rose-600', scale: 1.0 },
-      { prefix: 'Liabilities:CC:HDFC:', leaf: 'Infinia', amount: '−₹1,80,200.00', amountClass: 'text-rose-600', scale: 0.37 },
-      { prefix: 'Liabilities:CC:Amex:', leaf: 'Platinum', amount: '−₹62,200.00', amountClass: 'text-rose-600', scale: 0.13 },
+      { prefix: 'Liabilities:CreditCards:HDFC:', leaf: 'Infinia', amount: '−₹1,80,200.00', amountClass: 'text-rose-600', scale: 0.37 },
+      { prefix: 'Liabilities:CreditCards:Amex:', leaf: 'Platinum', amount: '−₹62,200.00', amountClass: 'text-rose-600', scale: 0.13 },
     ],
   },
   events: {

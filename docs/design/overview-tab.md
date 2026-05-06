@@ -39,7 +39,7 @@ Same four slots, different data per account kind.
 | Kind | A — KPIs | B — Trend | C — Composition | D — Notable events |
 |---|---|---|---|---|
 | `Assets:Bank` / `Cash` | balance · MoM Δ · avg monthly net | balance line | top counter-accounts | salary credits, large debits |
-| `Liabilities:CC` | owed · utilization % · avg cycle spend | balance line + monthly-spend bars | top expense categories | statement closes, due dates, interest paid |
+| `Liabilities:CreditCards` | owed · utilization % · avg cycle spend | balance line + monthly-spend bars | top expense categories | statement closes, due dates, interest paid |
 | `Expenses:*` | YTD · MoM · avg/month | monthly bars | top payees / sub-categories | first-time payees, outliers |
 | `Income:*` | YTD · MoM · sources count | monthly bars | source mix | bonuses, raises |
 | `Assets:Rewards:Points` | balance · accrued YTD · expiring soon | balance line + accrual bars | top earning sources | redemptions, expiries |
@@ -73,7 +73,7 @@ These are hard rules. Bend them and the tab loses its meaning.
 One Stitch mock per kind, all sharing the layout contract above:
 
 - [ ] `overview-bank` (Bank / Cash)
-- [ ] `overview-cc` (Liabilities:CC)
+- [ ] `overview-cc` (Liabilities:CreditCards)
 - [ ] `overview-expense` (Expenses:\*)
 - [ ] `overview-income` (Income:\*)
 - [ ] `overview-rewards` (Assets:Rewards:Points)
