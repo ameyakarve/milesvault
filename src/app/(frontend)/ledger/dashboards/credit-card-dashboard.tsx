@@ -87,7 +87,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
         </LayerCard>
 
         <div
-          className={`grid gap-6 items-start ${
+          className={`grid gap-6 items-stretch ${
             (cardsUsed && cardsUsed.rows.length > 0 ? 1 : 0) +
               (paidFrom && paidFrom.rows.length > 0 ? 1 : 0) ===
             2
