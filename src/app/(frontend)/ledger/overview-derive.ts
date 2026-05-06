@@ -168,7 +168,9 @@ function buildTrend(
   const points: TrendPoint[] = months.map((m) => {
     const monthAbbr = MONTH_ABBR[m.date.getUTCMonth()]!
     const yr = String(m.date.getUTCFullYear()).slice(-2)
-    const x = m.date.getUTCMonth() === 0 ? `${monthAbbr} ${yr}` : monthAbbr
+    // Always include year so windows that straddle two of the same month
+    // (e.g. Apr 25 + Apr 26 in a 12-month window) don't collide on x.
+    const x = `${monthAbbr} ${yr}`
     return {
       x,
       y: m.balance,
@@ -250,7 +252,7 @@ function buildMonthlyNet(
     const k = ymKey(cursor)
     const monthAbbr = MONTH_ABBR[cursor.getUTCMonth()]!
     const yr = String(cursor.getUTCFullYear()).slice(-2)
-    const x = cursor.getUTCMonth() === 0 ? `${monthAbbr} ${yr}` : monthAbbr
+    const x = `${monthAbbr} ${yr}`
     const y = sumByMonth.get(k) ?? 0
     points.push({
       x,
