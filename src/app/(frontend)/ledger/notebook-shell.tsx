@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
+import { Button, ScrollArea } from '@mantine/core'
 import CodeMirror from '@uiw/react-codemirror'
 import {
   Decoration,
@@ -444,37 +445,38 @@ function LeafChipsRow({
 }) {
   if (leafChips.length === 0) return null
   const baseHref = `/ledger/${breadcrumb.map(encodeURIComponent).join('/')}`
-  const chipClass =
-    'px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] font-mono whitespace-nowrap transition-colors shrink-0'
   return (
     <div className="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between shrink-0">
-      <div className="flex items-center gap-2 overflow-x-auto flex-1 mr-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {leafChips.length > 1 && (
-          <button
-            type="button"
-            className="px-3 py-1 bg-[#00685f] text-white rounded-full text-[11px] font-bold whitespace-nowrap shrink-0"
-          >
-            All
-          </button>
-        )}
-        {leafChips.map((label) => (
-          <Link
-            key={label}
-            href={`${baseHref}/${encodeURIComponent(label)}`}
-            className={chipClass}
-          >
-            {label}
-          </Link>
-        ))}
-      </div>
+      <ScrollArea type="never" scrollbars="x" className="flex-1 mr-4">
+        <div className="flex items-center gap-2">
+          {leafChips.length > 1 && (
+            <Button size="compact-xs" radius="xl" variant="filled" color="#00685f">
+              All
+            </Button>
+          )}
+          {leafChips.map((label) => (
+            <Button
+              key={label}
+              component={Link}
+              href={`${baseHref}/${encodeURIComponent(label)}`}
+              size="compact-xs"
+              radius="xl"
+              variant="default"
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </ScrollArea>
       {leafChips.length > 1 && (
-        <button
-          type="button"
-          className="flex items-center gap-1 text-[11px] font-bold text-[#00685f] hover:underline whitespace-nowrap shrink-0"
+        <Button
+          size="compact-xs"
+          variant="subtle"
+          color="#00685f"
+          rightSection={<span className="material-symbols-outlined !text-[14px]">arrow_forward</span>}
         >
-          <span>Explore tree</span>
-          <span className="material-symbols-outlined !text-[14px]">arrow_forward</span>
-        </button>
+          Explore tree
+        </Button>
       )}
     </div>
   )
