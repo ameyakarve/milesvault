@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { OverviewViewProps } from '../overview-view'
 import { BankOverviewDashboard } from './bank-overview-dashboard'
+import { CreditCardDashboard } from './credit-card-dashboard'
 
 // Registry mapping dashboard slugs (as bound by the taxonomy) to React
 // components. Each component takes the same OverviewViewProps shape produced
@@ -12,6 +13,7 @@ export type DashboardComponent = ComponentType<OverviewViewProps>
 
 export const DASHBOARD_REGISTRY: Record<string, DashboardComponent> = {
   'bank-overview': BankOverviewDashboard,
+  'credit-card': CreditCardDashboard,
 }
 
 export function getDashboardComponent(slug: string): DashboardComponent | null {
