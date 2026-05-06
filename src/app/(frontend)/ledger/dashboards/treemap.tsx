@@ -1,10 +1,8 @@
 'use client'
 
-import * as Plot from '@observablehq/plot'
 import { hierarchy, treemap as d3Treemap } from 'd3-hierarchy'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TreemapNode } from '../overview-view'
-import { PlotChart } from './plot-chart'
 
 export type { TreemapNode }
 
@@ -24,16 +22,15 @@ type LeafDatum = {
   y1: number
   x2: number
   y2: number
-  cx: number
-  cy: number
   group: string
   leaf: string
   amount: string
+  value: number
+  pct: number
   color: string
-  tooltip: string
 }
 
-type GroupDatum = { name: string; color: string; total: number; amount: string }
+type GroupDatum = { name: string; color: string }
 
 type Props = {
   root: TreemapNode
@@ -41,14 +38,15 @@ type Props = {
   palette?: string[]
 }
 
-// Two-level squarified treemap. Layout via d3-hierarchy; render via
-// Plot.rect + Plot.text + Plot.tip so the visual matches the rest of the
-// dashboards and we get hover tooltips for free. Group identity is encoded
-// only by color + a legend strip below — no header bands, which avoids the
-// padding/alignment mismatch with the leaf rectangles.
-export function Treemap({ root, height = 460, palette = DEFAULT_PALETTE }: Props) {
+// Two-level squarified treemap. Layout via d3-hierarchy; rendering is
+// hand-rolled SVG so we get pixel-accurate hover (Plot.tip pairs with
+// Plot.pointer's Euclidean nearest-point search, which flickers as the
+// cursor crosses rectangle boundaries — we want "is the cursor inside this
+// rect?", not "which center is nearest").
+export function Treemap({ root, height = 480, palette = DEFAULT_PALETTE }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(720)
+  const [hover, setHover] = useState<{ leaf: LeafDatum; x: number; y: number } | null>(null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -66,119 +64,141 @@ export function Treemap({ root, height = 460, palette = DEFAULT_PALETTE }: Props
       .sum((d) => (d.children && d.children.length ? 0 : (d.value ?? 0)))
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
     const w = Math.max(120, width)
-    d3Treemap<TreemapNode>()
-      .size([w, height])
-      .paddingInner(3)
-      .paddingOuter(0)
-      .round(true)(h)
+    d3Treemap<TreemapNode>().size([w, height]).paddingInner(3).paddingOuter(0).round(true)(h)
     const groupNodes = h.children ?? []
     const groupColor = new Map<string, string>()
     groupNodes.forEach((g, i) => groupColor.set(g.data.name, palette[i % palette.length]!))
+    const total = groupNodes.reduce((s, g) => s + (g.value ?? 0), 0) || 1
     const lvs: LeafDatum[] = []
     for (const g of groupNodes) {
       const color = groupColor.get(g.data.name) ?? palette[0]!
       for (const leaf of g.children ?? []) {
         const r = leaf as unknown as { x0: number; y0: number; x1: number; y1: number }
-        const x1 = r.x0
-        const y1 = r.y0
-        const x2 = r.x1
-        const y2 = r.y1
+        const v = leaf.value ?? 0
         lvs.push({
-          x1,
-          y1,
-          x2,
-          y2,
-          cx: (x1 + x2) / 2,
-          cy: (y1 + y2) / 2,
+          x1: r.x0,
+          y1: r.y0,
+          x2: r.x1,
+          y2: r.y1,
           group: g.data.name,
           leaf: leaf.data.name,
           amount: leaf.data.amount ?? '',
+          value: v,
+          pct: (v / total) * 100,
           color,
-          tooltip: `${g.data.name} · ${leaf.data.name}${leaf.data.amount ? `\n${leaf.data.amount}` : ''}`,
         })
       }
     }
-    const grpSummary: GroupDatum[] = groupNodes.map((g) => ({
+    const grp: GroupDatum[] = groupNodes.map((g) => ({
       name: g.data.name,
       color: groupColor.get(g.data.name)!,
-      total: g.value ?? 0,
-      amount: '',
     }))
-    return { leaves: lvs, groups: grpSummary }
+    return { leaves: lvs, groups: grp }
   }, [root, width, height, palette])
 
-  const render = useCallback(() => {
-    if (leaves.length === 0) {
-      const empty = document.createElement('div')
-      empty.className = 'p-6 text-[11px] text-slate-400'
-      empty.textContent = 'No spending in selected range'
-      return empty
-    }
-    const labelLeaves = leaves.filter((l) => l.x2 - l.x1 >= 64 && l.y2 - l.y1 >= 28)
-    const amountLeaves = leaves.filter((l) => l.x2 - l.x1 >= 80 && l.y2 - l.y1 >= 46)
-    return Plot.plot({
-      width,
-      height,
-      margin: 0,
-      style: { background: 'transparent', fontFamily: 'inherit' },
-      x: { axis: null, domain: [0, Math.max(width, 120)] },
-      // Reverse so d3-treemap's y=0 (top of layout) maps to top of SVG.
-      y: { axis: null, domain: [height, 0] },
-      marks: [
-        Plot.rect(leaves, {
-          x1: 'x1',
-          x2: 'x2',
-          y1: 'y1',
-          y2: 'y2',
-          fill: 'color',
-          fillOpacity: 0.88,
-          stroke: 'white',
-          strokeWidth: 2,
-        }),
-        Plot.text(labelLeaves, {
-          x: (d: LeafDatum) => d.x1 + 8,
-          y: (d: LeafDatum) => d.y1 + 6,
-          text: 'leaf',
-          textAnchor: 'start',
-          // dy after the y-domain reverse pulls baseline downward in screen space.
-          dy: 12,
-          fill: 'white',
-          fontSize: 12,
-          fontWeight: 700,
-          stroke: 'rgba(0, 0, 0, 0.35)',
-          strokeWidth: 3,
-          paintOrder: 'stroke fill',
-        } as Plot.TextOptions),
-        Plot.text(amountLeaves, {
-          x: (d: LeafDatum) => d.x1 + 8,
-          y: (d: LeafDatum) => d.y1 + 22,
-          text: 'amount',
-          textAnchor: 'start',
-          dy: 12,
-          fill: 'white',
-          fillOpacity: 0.92,
-          fontSize: 10.5,
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          stroke: 'rgba(0, 0, 0, 0.3)',
-          strokeWidth: 2.5,
-          paintOrder: 'stroke fill',
-        } as Plot.TextOptions),
-        Plot.tip(
-          leaves,
-          Plot.pointer({
-            x: 'cx',
-            y: 'cy',
-            title: 'tooltip',
-          }),
-        ),
-      ],
-    })
-  }, [leaves, width, height])
+  const handleMove = (e: React.MouseEvent, leaf: LeafDatum) => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setHover({ leaf, x: e.clientX - rect.left, y: e.clientY - rect.top })
+  }
 
   return (
     <div className="w-full">
-      <div ref={containerRef} className="w-full">
-        <PlotChart render={render} className="w-full" />
+      <div ref={containerRef} className="relative w-full">
+        <svg
+          width="100%"
+          height={height}
+          viewBox={`0 0 ${Math.max(width, 120)} ${height}`}
+          preserveAspectRatio="none"
+          className="block"
+          onMouseLeave={() => setHover(null)}
+        >
+          {leaves.map((l, i) => {
+            const lw = l.x2 - l.x1
+            const lh = l.y2 - l.y1
+            const showLeaf = lw >= 60 && lh >= 28
+            const showAmt = lw >= 92 && lh >= 50
+            const showPct = lw >= 60 && lh >= 70
+            const pctStr =
+              l.pct < 1 ? `${l.pct.toFixed(1)}%` : `${Math.round(l.pct)}%`
+            return (
+              <g
+                key={i}
+                onMouseEnter={(e) => handleMove(e, l)}
+                onMouseMove={(e) => handleMove(e, l)}
+              >
+                <rect
+                  x={l.x1}
+                  y={l.y1}
+                  width={lw}
+                  height={lh}
+                  fill={l.color}
+                  fillOpacity={hover?.leaf === l ? 1 : 0.9}
+                  stroke="white"
+                  strokeWidth={2}
+                />
+                {showLeaf && (
+                  <text
+                    x={l.x1 + 10}
+                    y={l.y1 + 22}
+                    fill="white"
+                    fontSize={14}
+                    fontWeight={700}
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {l.leaf}
+                  </text>
+                )}
+                {showAmt && (
+                  <text
+                    x={l.x1 + 10}
+                    y={l.y1 + 42}
+                    fill="white"
+                    fontSize={12}
+                    fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {l.amount}
+                  </text>
+                )}
+                {showPct && (
+                  <text
+                    x={l.x1 + 10}
+                    y={l.y1 + 60}
+                    fill="white"
+                    fillOpacity={0.85}
+                    fontSize={11}
+                    fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    {pctStr}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+        {hover && (
+          <div
+            className="absolute z-10 pointer-events-none rounded-md bg-white border border-slate-200 shadow-md px-3 py-2 text-[12px] whitespace-nowrap"
+            style={{
+              left: Math.min(hover.x + 12, (containerRef.current?.clientWidth ?? 0) - 220),
+              top: Math.max(hover.y - 56, 4),
+            }}
+          >
+            <div className="font-semibold text-slate-900">
+              {hover.leaf.group} <span className="text-slate-300">›</span> {hover.leaf.leaf}
+            </div>
+            <div className="mt-0.5 font-mono tabular-nums text-slate-700">
+              {hover.leaf.amount}
+              <span className="ml-2 text-slate-400">
+                {hover.leaf.pct < 1
+                  ? `${hover.leaf.pct.toFixed(1)}%`
+                  : `${Math.round(hover.leaf.pct)}%`}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-[11px] text-slate-600">
         {groups.map((g) => (
