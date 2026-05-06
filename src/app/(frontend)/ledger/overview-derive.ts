@@ -386,6 +386,44 @@ function buildCardsUsed(
   return { rows }
 }
 
+// Top merchants by spend in window. "Spend" = total absolute net for txns
+// where flow === 'out' (charges on a CC, debits on a bank). Payments and
+// refunds are excluded so the leaderboard reads as "where did money go".
+function buildTopMerchants(
+  facts: TxnFact[],
+): { rows: { payee: string; amount: number; share: number; count: number }[] } {
+  const totals = new Map<string, { amount: number; count: number }>()
+  for (const f of facts) {
+    if (f.flow !== 'out') continue
+    const key = f.payee || '—'
+    const cur = totals.get(key) ?? { amount: 0, count: 0 }
+    cur.amount += f.abs
+    cur.count += 1
+    totals.set(key, cur)
+  }
+  const sorted = [...totals.entries()]
+    .map(([payee, v]) => ({ payee, amount: v.amount, count: v.count }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 8)
+  const max = sorted[0]?.amount ?? 1
+  return {
+    rows: sorted.map((r) => ({ ...r, share: r.amount / max })),
+  }
+}
+
+// Day-of-week breakdown: 7 buckets, Mon..Sun, summed absolute spend
+// (charges only) across the window. Used for the day-of-week heatmap card.
+function buildDayOfWeek(facts: TxnFact[]): { totals: number[] } {
+  const totals = [0, 0, 0, 0, 0, 0, 0]
+  for (const f of facts) {
+    if (f.flow !== 'out') continue
+    // JS getUTCDay: 0 = Sunday. Shift to Mon=0..Sun=6.
+    const dow = (f.date.getUTCDay() + 6) % 7
+    totals[dow]! += f.abs
+  }
+  return { totals }
+}
+
 function buildEvents(facts: TxnFact[], currency: string): EventRow[] {
   const ranked = [...facts]
     .filter((f) => f.abs > 0)
@@ -741,6 +779,8 @@ export function deriveOverview(args: {
   const categoryTreemap = buildCategoryTreemap(inWindow, account, currency)
   const cardSankey = buildCardSankey(inWindow, account, currency)
   const spendCalendar = buildSpendCalendar(facts, start, now, currency)
+  const topMerchants = buildTopMerchants(inWindow)
+  const dayOfWeek = buildDayOfWeek(inWindow)
   return {
     kpis: [
       {
@@ -769,5 +809,7 @@ export function deriveOverview(args: {
     categoryTreemap,
     cardSankey,
     spendCalendar: { currency, days: spendCalendar.days },
+    topMerchants: { currency, rows: topMerchants.rows },
+    dayOfWeek: { currency, totals: dayOfWeek.totals },
   }
 }

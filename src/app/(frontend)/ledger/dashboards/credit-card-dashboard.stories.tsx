@@ -186,6 +186,23 @@ const SAMPLE: OverviewViewProps = {
     netIn: '+₹1,80,000.00',
     netOut: '−₹2,18,400.00',
   },
+  topMerchants: {
+    currency: 'INR',
+    rows: [
+      { payee: 'Cathay Pacific', amount: 48200, share: 1.0, count: 1 },
+      { payee: 'Apple India', amount: 24900, share: 0.516, count: 2 },
+      { payee: 'Swiggy', amount: 18600, share: 0.386, count: 14 },
+      { payee: 'Toit Brewpub', amount: 12200, share: 0.253, count: 3 },
+      { payee: 'BookMyShow', amount: 8400, share: 0.174, count: 5 },
+      { payee: 'Zomato', amount: 6200, share: 0.129, count: 9 },
+      { payee: 'Indigo Airlines', amount: 4800, share: 0.099, count: 1 },
+      { payee: 'Uber', amount: 3100, share: 0.064, count: 12 },
+    ],
+  },
+  dayOfWeek: {
+    currency: 'INR',
+    totals: [12400, 9800, 11200, 10500, 18700, 32100, 24900],
+  },
 }
 
 // Generate a deterministic 365-day daily-spend series with weekend bias and a
