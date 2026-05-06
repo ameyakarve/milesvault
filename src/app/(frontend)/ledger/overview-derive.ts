@@ -411,17 +411,23 @@ function buildTopMerchants(
   }
 }
 
-// Day-of-week breakdown: 7 buckets, Mon..Sun, summed absolute spend
-// (charges only) across the window. Used for the day-of-week heatmap card.
-function buildDayOfWeek(facts: TxnFact[]): { totals: number[] } {
-  const totals = [0, 0, 0, 0, 0, 0, 0]
-  for (const f of facts) {
-    if (f.flow !== 'out') continue
-    // JS getUTCDay: 0 = Sunday. Shift to Mon=0..Sun=6.
-    const dow = (f.date.getUTCDay() + 6) % 7
-    totals[dow]! += f.abs
-  }
-  return { totals }
+// Recent charges: charges only (flow === 'out'), most-recent-first, top 5.
+// Payments and refunds are excluded so the list reads as "what did I just
+// spend on" rather than mixing in autopays. Distinct from `buildEvents`
+// (top-by-amount across all flows) which still feeds bank "Notable events".
+function buildRecentCharges(facts: TxnFact[], currency: string): EventRow[] {
+  const ranked = [...facts]
+    .filter((f) => f.flow === 'out')
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .slice(0, 5)
+  return ranked.map((f) => ({
+    date: f.ymd,
+    payee: f.payee || '—',
+    narration: f.narration || '',
+    amount: fmtUnsignedWithSymbol(f.abs, currency),
+    amountValue: f.abs,
+    amountClass: 'text-slate-900',
+  }))
 }
 
 function buildEvents(facts: TxnFact[], currency: string): EventRow[] {
@@ -780,7 +786,7 @@ export function deriveOverview(args: {
   const cardSankey = buildCardSankey(inWindow, account, currency)
   const spendCalendar = buildSpendCalendar(facts, start, now, currency)
   const topMerchants = buildTopMerchants(inWindow)
-  const dayOfWeek = buildDayOfWeek(inWindow)
+  const recentCharges = buildRecentCharges(inWindow, currency)
   return {
     kpis: [
       {
@@ -810,6 +816,6 @@ export function deriveOverview(args: {
     cardSankey,
     spendCalendar: { currency, days: spendCalendar.days },
     topMerchants: { currency, rows: topMerchants.rows },
-    dayOfWeek: { currency, totals: dayOfWeek.totals },
+    recentCharges: { rows: recentCharges },
   }
 }

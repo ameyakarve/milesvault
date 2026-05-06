@@ -6,17 +6,19 @@ import { Card, Group, Text } from '@mantine/core'
 // ---------------------------------------------------------------------------
 // Card style primitives.
 //
-// Every dashboard card on every dashboard renders through DashCard. The
-// chassis is fixed: withBorder, radius="md", p="md", flex column. Cards
-// pick one of two header conventions:
+// Every dashboard card renders through DashCard. The chassis is fixed:
+// withBorder, radius="md", p="md", flex column. Top-level card headers all
+// use the same `title` convention (12px regular, sentence case) so cards
+// read as a uniform set:
 //
-//   <DashCard title="Money flow">           — 12px regular header
-//   <DashCard eyebrow="Owed now">           — 9px uppercase eyebrow,
-//                                              for hero/stat-style cards
+//   <DashCard title="Money flow">
+//   <DashCard title="Total spend">
 //
-// Section labels *inside* a card use <CardEyebrow> so the eyebrow style
-// is the one place to adjust. Hero numbers use <HeroValue> (28px mono,
-// bold). Anything else is per-card.
+// Section labels *inside* a card use <CardEyebrow> (9px uppercase, dimmed,
+// letter-spaced) so the eyebrow style is the one place to adjust. The
+// `eyebrow` prop on DashCard exists only for one-off stat tiles built via
+// <StatCard> — prefer `title` for new cards. Hero numbers use <HeroValue>
+// (28px mono, bold).
 // ---------------------------------------------------------------------------
 
 export function DashCard({

@@ -43,6 +43,25 @@ function paintBranch(node: TreemapNode, color: string): TreemapNode {
   }
 }
 
+const CURRENCY_LOCALE: Record<string, string> = {
+  INR: 'en-IN',
+  USD: 'en-US',
+  EUR: 'de-DE',
+  GBP: 'en-GB',
+}
+
+// Full-precision currency string with locale-correct grouping and the
+// currency symbol prefixed. Negative values get an ASCII '-' prefix.
+export function formatAmount(n: number, currency: string): string {
+  const symbol = CURRENCY_SYMBOL[currency] ?? ''
+  const locale = CURRENCY_LOCALE[currency] ?? 'en-US'
+  const body = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Math.abs(n))
+  return `${n < 0 ? '-' : ''}${symbol}${body}`
+}
+
 // Compact short-form for axis tick labels. Indian locales get L (lakh) and Cr
 // (crore) suffixes; everything else falls back to k/M/B SI suffixes.
 export function compactAmount(n: number, currency: string): string {

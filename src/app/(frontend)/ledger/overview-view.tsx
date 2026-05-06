@@ -71,11 +71,9 @@ export type OverviewViewProps = {
     currency: string
     rows: { payee: string; amount: number; share: number; count: number }[]
   }
-  dayOfWeek?: {
-    currency: string
-    // 7 entries, Mon..Sun. Total absolute spend (charges only, not payments).
-    totals: number[]
-  }
+  // Recent charges: outflows only, most-recent-first. Distinct from `events`
+  // (top-by-amount mixed flows) which is consumed by bank-style dashboards.
+  recentCharges?: { rows: EventRow[] }
   // Pre-formatted header tiles. Rendered as the first cards of the dashboard
   // masonry; the parent shell no longer renders a separate stats row.
   headerStats?: {
