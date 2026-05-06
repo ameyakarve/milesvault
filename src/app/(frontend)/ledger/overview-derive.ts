@@ -481,16 +481,19 @@ function buildCategoryTreemap(
   }
 }
 
-// Sankey for the CC view: payment-source accounts → the card → top-level
-// expense categories. Per fact:
-//   payment (net > 0): sum each Assets:* counterparty (negated, so the
-//     value is positive) and emit a source-side link.
-//   charge (net < 0): sum each Expenses:* counterparty (already positive
-//     on a debit-normal Expenses leg) grouped by depth-2 root category
-//     (e.g. 'Expenses:Travel') and emit a category-side link.
-// Top 6 sources and top 6 categories are kept; the rest collapse into a
-// single 'Other' node on each side. Returns undefined when either side is
-// empty (the diagram needs both sources and categories to be useful).
+// Sankey for the CC view: payment-source accounts → individual card
+// accounts → top-level expense categories. The middle column splits one
+// node per CC account so a parent-bound view (e.g. Liabilities:CreditCards
+// or Liabilities:CreditCards:HDFC) shows each card distinctly. Top 9
+// middle / 6 source / 6 category nodes survive; the rest fold into an
+// 'Other ...' bucket on their side. Returns undefined when either the
+// source or category side is empty.
+//
+// Per fact, counterparties are attributed to bound postings on the same
+// side: when a single charge txn touches both HDFC:Infinia and
+// ICICI:Amazon, each Expenses counterparty is split between them in
+// proportion to each card's share of the txn's signed bound total. In the
+// common case of one bound posting per side this is just full attribution.
 function buildCardSankey(
   facts: TxnFact[],
   account: string,
@@ -498,75 +501,155 @@ function buildCardSankey(
 ): SankeyDatum | undefined {
   if (accountMatchesPrefix(account, 'Expenses')) return undefined
 
+  const sourceLinks = new Map<string, number>() // "srcAcct||midAcct"
+  const categoryLinks = new Map<string, number>() // "midAcct||catRoot"
   const sourceTotals = new Map<string, number>()
   const categoryTotals = new Map<string, number>()
+  const middleTotals = new Map<string, number>()
+
   for (const f of facts) {
-    if (f.net > 0) {
+    let totalIn = 0
+    let totalOut = 0
+    for (const bp of f.boundPostings) {
+      if (bp.amount > 0) totalIn += bp.amount
+      else if (bp.amount < 0) totalOut += -bp.amount
+    }
+    if (totalIn > 0) {
       for (const cp of f.counterparties) {
         if (!cp.account.startsWith('Assets:')) continue
         if (cp.amount >= 0) continue
-        const v = -cp.amount
-        sourceTotals.set(cp.account, (sourceTotals.get(cp.account) ?? 0) + v)
+        const cpVal = -cp.amount
+        for (const bp of f.boundPostings) {
+          if (bp.amount <= 0) continue
+          const portion = (bp.amount / totalIn) * cpVal
+          if (portion <= 0) continue
+          const k = `${cp.account}||${bp.account}`
+          sourceLinks.set(k, (sourceLinks.get(k) ?? 0) + portion)
+          sourceTotals.set(cp.account, (sourceTotals.get(cp.account) ?? 0) + portion)
+          middleTotals.set(bp.account, (middleTotals.get(bp.account) ?? 0) + portion)
+        }
       }
-    } else if (f.net < 0) {
+    }
+    if (totalOut > 0) {
       for (const cp of f.counterparties) {
         if (!cp.account.startsWith('Expenses:')) continue
         if (cp.amount <= 0) continue
         const parts = cp.account.split(':')
         const rootCat = parts.length >= 2 ? `${parts[0]}:${parts[1]}` : cp.account
-        categoryTotals.set(rootCat, (categoryTotals.get(rootCat) ?? 0) + cp.amount)
+        for (const bp of f.boundPostings) {
+          if (bp.amount >= 0) continue
+          const portion = (-bp.amount / totalOut) * cp.amount
+          if (portion <= 0) continue
+          const k = `${bp.account}||${rootCat}`
+          categoryLinks.set(k, (categoryLinks.get(k) ?? 0) + portion)
+          categoryTotals.set(rootCat, (categoryTotals.get(rootCat) ?? 0) + portion)
+          middleTotals.set(bp.account, (middleTotals.get(bp.account) ?? 0) + portion)
+        }
       }
     }
   }
   if (sourceTotals.size === 0 || categoryTotals.size === 0) return undefined
+  if (middleTotals.size === 0) return undefined
 
+  // Pick top-N keys; leftover keys map to a single 'other' label.
   const collapseTopN = (
     totals: Map<string, number>,
     topN: number,
-    leafFn: (key: string) => string,
-  ): { name: string; value: number }[] => {
-    const sorted = [...totals.entries()]
-      .map(([key, value]) => ({ name: leafFn(key), value }))
-      .sort((a, b) => b.value - a.value)
+    label: (k: string) => string,
+    otherLabel: string,
+  ): { resolved: Map<string, string>; orderedNames: string[] } => {
+    const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1])
     const top = sorted.slice(0, topN)
     const rest = sorted.slice(topN)
-    if (rest.length > 0) {
-      const otherTotal = rest.reduce((s, x) => s + x.value, 0)
-      top.push({ name: 'Other', value: otherTotal })
+    const resolved = new Map<string, string>()
+    for (const [k] of top) resolved.set(k, label(k))
+    for (const [k] of rest) resolved.set(k, otherLabel)
+    const seen = new Set<string>()
+    const orderedNames: string[] = []
+    for (const [k] of top) {
+      const n = resolved.get(k)!
+      if (!seen.has(n)) {
+        seen.add(n)
+        orderedNames.push(n)
+      }
     }
-    return top
+    if (rest.length > 0) orderedNames.push(otherLabel)
+    return { resolved, orderedNames }
   }
 
-  const sources = collapseTopN(sourceTotals, 6, (acct) => {
+  const srcLabel = (acct: string) => {
     const parts = acct.split(':')
     return parts.length <= 2 ? acct : parts.slice(-2).join(':')
-  })
-  const categories = collapseTopN(categoryTotals, 6, (acct) => acct.split(':').pop() ?? acct)
+  }
+  const midLabel = (acct: string) => {
+    if (acct.startsWith(`${account}:`)) return acct.slice(account.length + 1)
+    return acct.split(':').pop() ?? acct
+  }
+  const catLabel = (acct: string) => acct.split(':').pop() ?? acct
 
-  const cardLabel = account.split(':').pop() ?? account
-  const nodes: SankeyDatum['nodes'] = [
-    ...sources.map((s) => ({ name: s.name, side: 'source' as const })),
-    { name: cardLabel, side: 'card' as const },
-    ...categories.map((c) => ({ name: c.name, side: 'category' as const })),
-  ]
-  const cardIdx = sources.length
+  const sources = collapseTopN(sourceTotals, 6, srcLabel, 'Other')
+  const middles = collapseTopN(middleTotals, 9, midLabel, 'Other cards')
+  const categories = collapseTopN(categoryTotals, 6, catLabel, 'Other')
+
+  const nodes: SankeyDatum['nodes'] = []
+  const sIdx = new Map<string, number>()
+  const mIdx = new Map<string, number>()
+  const cIdx = new Map<string, number>()
+  for (const name of sources.orderedNames) {
+    sIdx.set(name, nodes.length)
+    nodes.push({ name, side: 'source' })
+  }
+  for (const name of middles.orderedNames) {
+    mIdx.set(name, nodes.length)
+    nodes.push({ name, side: 'card' })
+  }
+  for (const name of categories.orderedNames) {
+    cIdx.set(name, nodes.length)
+    nodes.push({ name, side: 'category' })
+  }
+
+  const aggSrc = new Map<string, number>()
+  for (const [k, v] of sourceLinks) {
+    const [s, m] = k.split('||') as [string, string]
+    const sn = sources.resolved.get(s) ?? 'Other'
+    const mn = middles.resolved.get(m) ?? 'Other cards'
+    const key = `${sn}||${mn}`
+    aggSrc.set(key, (aggSrc.get(key) ?? 0) + v)
+  }
+  const aggCat = new Map<string, number>()
+  for (const [k, v] of categoryLinks) {
+    const [m, c] = k.split('||') as [string, string]
+    const mn = middles.resolved.get(m) ?? 'Other cards'
+    const cn = categories.resolved.get(c) ?? 'Other'
+    const key = `${mn}||${cn}`
+    aggCat.set(key, (aggCat.get(key) ?? 0) + v)
+  }
+
   const links: SankeyDatum['links'] = []
-  sources.forEach((s, i) => {
+  for (const [k, v] of aggSrc) {
+    const [sn, mn] = k.split('||') as [string, string]
+    const s = sIdx.get(sn)
+    const m = mIdx.get(mn)
+    if (s == null || m == null) continue
     links.push({
-      source: i,
-      target: cardIdx,
-      value: s.value,
-      amount: `${fmtSymbol(currency)}${fmtAmount(s.value, currency)}`,
+      source: s,
+      target: m,
+      value: v,
+      amount: `${fmtSymbol(currency)}${fmtAmount(v, currency)}`,
     })
-  })
-  categories.forEach((c, i) => {
+  }
+  for (const [k, v] of aggCat) {
+    const [mn, cn] = k.split('||') as [string, string]
+    const m = mIdx.get(mn)
+    const c = cIdx.get(cn)
+    if (m == null || c == null) continue
     links.push({
-      source: cardIdx,
-      target: cardIdx + 1 + i,
-      value: c.value,
-      amount: `${fmtSymbol(currency)}${fmtAmount(c.value, currency)}`,
+      source: m,
+      target: c,
+      value: v,
+      amount: `${fmtSymbol(currency)}${fmtAmount(v, currency)}`,
     })
-  })
+  }
   return { nodes, links }
 }
 
