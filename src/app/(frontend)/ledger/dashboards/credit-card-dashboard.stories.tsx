@@ -94,6 +94,13 @@ const SAMPLE: OverviewViewProps = {
       { prefix: 'Assets:Bank:ICICI:', leaf: 'Salary', amount: '₹60,000.00', amountClass: 'text-slate-900', scale: 0.5, value: 60000 },
     ],
   },
+  cardsUsed: {
+    rows: [
+      { prefix: 'Liabilities:CreditCards:', leaf: 'HSBC:Cashback:9065', amount: '₹98,200.00', amountClass: 'text-slate-900', scale: 1.0, value: 98200 },
+      { prefix: 'Liabilities:CreditCards:', leaf: 'HDFC:Infinia:4421', amount: '₹62,400.00', amountClass: 'text-slate-900', scale: 0.635, value: 62400 },
+      { prefix: 'Liabilities:CreditCards:', leaf: 'ICICI:Amazon:7812', amount: '₹19,800.00', amountClass: 'text-slate-900', scale: 0.202, value: 19800 },
+    ],
+  },
 }
 
 export const Default: StoryObj = {

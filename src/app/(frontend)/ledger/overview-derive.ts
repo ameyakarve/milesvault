@@ -85,6 +85,7 @@ type TxnFact = {
   abs: number
   flow: 'in' | 'out' | 'flat'
   counterparties: { account: string; amount: number }[]
+  boundPostings: { account: string; amount: number }[]
   runningAfter: number
 }
 
@@ -107,12 +108,14 @@ function txnFacts(
     if (!date) continue
     let net = 0
     const counterparties: { account: string; amount: number }[] = []
+    const boundPostings: { account: string; amount: number }[] = []
     for (const p of tx.postings) {
       if (p.amount == null || p.currency !== currency) continue
       const v = Number(p.amount)
       if (!Number.isFinite(v)) continue
       if (accountMatchesPrefix(p.account, account)) {
         net += v
+        boundPostings.push({ account: p.account, amount: v })
       } else {
         counterparties.push({ account: p.account, amount: v })
       }
@@ -127,6 +130,7 @@ function txnFacts(
       abs: Math.abs(net),
       flow,
       counterparties,
+      boundPostings,
       runningAfter: spec.runningTotal ?? 0,
     })
   }
@@ -335,6 +339,46 @@ function buildPaidFrom(
   return { rows }
 }
 
+// Cards-used: at parent CC views (e.g. Liabilities:CreditCards or
+// Liabilities:CreditCards:HSBC), split charge volume by the specific
+// child CC account. Returns empty rows when only one CC is present so
+// leaf views suppress the card.
+function buildCardsUsed(
+  facts: TxnFact[],
+  boundPrefix: string,
+  currency: string,
+): { rows: CompositionRow[] } {
+  const totals = new Map<string, number>()
+  for (const f of facts) {
+    for (const p of f.boundPostings) {
+      if (p.amount >= 0) continue
+      totals.set(p.account, (totals.get(p.account) ?? 0) + Math.abs(p.amount))
+    }
+  }
+  if (totals.size <= 1) return { rows: [] }
+  const sorted = [...totals.entries()]
+    .map(([account, amount]) => ({ account, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 6)
+  const maxAbs = sorted[0]?.amount ?? 1
+  const rows: CompositionRow[] = sorted.map(({ account, amount }) => {
+    // Display the sub-path relative to the bound prefix as the leaf so
+    // legends read e.g. "HSBC:Cashback:9065" rather than just "9065".
+    const sub = account.startsWith(`${boundPrefix}:`)
+      ? account.slice(boundPrefix.length + 1)
+      : account
+    return {
+      prefix: account.startsWith(`${boundPrefix}:`) ? `${boundPrefix}:` : '',
+      leaf: sub,
+      amount: `${fmtSymbol(currency)}${fmtAmount(amount, currency)}`,
+      amountClass: 'text-slate-900',
+      scale: Math.max(0.04, amount / Math.max(maxAbs, 1)),
+      value: amount,
+    }
+  })
+  return { rows }
+}
+
 function buildEvents(facts: TxnFact[], currency: string): EventRow[] {
   const ranked = [...facts]
     .filter((f) => f.abs > 0)
@@ -395,6 +439,7 @@ export function deriveOverview(args: {
   const monthlyNet = buildMonthlyNet(facts, start, now, currency)
   const categoryBreakdown = buildCategoryBreakdown(inWindow, currency)
   const paidFrom = buildPaidFrom(inWindow, currency)
+  const cardsUsed = buildCardsUsed(inWindow, account, currency)
   return {
     kpis: [
       {
@@ -419,5 +464,6 @@ export function deriveOverview(args: {
     monthlyNet: { points: monthlyNet.points, totalLabel: monthlyNet.totalLabel, currency },
     categoryBreakdown: { rows: categoryBreakdown.rows, moreCount: categoryBreakdown.moreCount },
     paidFrom: { rows: paidFrom.rows },
+    cardsUsed: { rows: cardsUsed.rows },
   }
 }

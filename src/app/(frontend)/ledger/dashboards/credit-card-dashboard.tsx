@@ -17,7 +17,7 @@ const ROSE = '#e11d48'
 // (balance grows better). The "net spend" trend negates so positive bars
 // read as "added to debt this month" — the conventional billing view.
 export function CreditCardDashboard(props: OverviewViewProps) {
-  const { events, monthlyNet, categoryBreakdown, paidFrom } = props
+  const { events, monthlyNet, categoryBreakdown, paidFrom, cardsUsed } = props
   const currency = monthlyNet?.currency ?? 'INR'
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
 
@@ -93,7 +93,7 @@ export function CreditCardDashboard(props: OverviewViewProps) {
         >
           <LayerCard className="flex flex-col rounded-md p-4">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-[12px] font-medium text-slate-700">Where this card spent</div>
+              <div className="text-[12px] font-medium text-slate-700">Spend by category</div>
               {categoryBreakdown && categoryBreakdown.moreCount > 0 && (
                 <div className="text-[11px] italic text-slate-400">
                   +{categoryBreakdown.moreCount} more
@@ -114,6 +114,15 @@ export function CreditCardDashboard(props: OverviewViewProps) {
             </LayerCard>
           )}
         </div>
+
+        {cardsUsed && cardsUsed.rows.length > 1 && (
+          <LayerCard className="flex flex-col rounded-md p-4">
+            <div className="text-[12px] font-medium text-slate-700 mb-3">Cards used</div>
+            <div className="max-w-[480px]">
+              <Donut rows={cardsUsed.rows} palette={DONUT_PALETTE} />
+            </div>
+          </LayerCard>
+        )}
 
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">Recent charges</div>
