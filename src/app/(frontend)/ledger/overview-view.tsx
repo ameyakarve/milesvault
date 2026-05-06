@@ -67,6 +67,15 @@ export type OverviewViewProps = {
     currency: string
     days: { date: string; amount: number; label: string }[]
   }
+  topMerchants?: {
+    currency: string
+    rows: { payee: string; amount: number; share: number; count: number }[]
+  }
+  dayOfWeek?: {
+    currency: string
+    // 7 entries, Mon..Sun. Total absolute spend (charges only, not payments).
+    totals: number[]
+  }
   // Pre-formatted header tiles. Rendered as the first cards of the dashboard
   // masonry; the parent shell no longer renders a separate stats row.
   headerStats?: {
