@@ -13,7 +13,7 @@ import { PlotChart } from './plot-chart'
 // OverviewView — the upstream `deriveOverview()` derivation is reused, only
 // the chart rendering swaps to Observable Plot.
 export function BankOverviewDashboard(props: OverviewViewProps) {
-  const { caption, trend, composition, events } = props
+  const { trend, composition, events } = props
 
   const renderTrend = useCallback(() => {
     if (trend.points.length === 0) {
@@ -121,10 +121,6 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
       data-dashboard-slug="bank-overview"
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
-      <div className="px-6 py-2 flex items-center border-b border-slate-100 flex-shrink-0 bg-white sticky top-0 z-10">
-        <div className="text-[11px] text-slate-500 font-medium">{caption}</div>
-      </div>
-
       <div className="p-6 space-y-6">
         <LayerCard className="flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">{trend.title}</div>

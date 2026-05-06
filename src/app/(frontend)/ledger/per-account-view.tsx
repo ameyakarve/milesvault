@@ -539,7 +539,6 @@ export function PerAccountView({
       account,
       currency,
       period,
-      caption: `Overview · ${period}`,
     })
   }, [cardSpecs, parsed, account, currency, period])
 
