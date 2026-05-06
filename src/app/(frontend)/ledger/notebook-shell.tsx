@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import { Button, ScrollArea } from '@mantine/core'
+import { Button } from '@mantine/core'
 import CodeMirror from '@uiw/react-codemirror'
 import {
   Decoration,
@@ -447,7 +447,7 @@ function LeafChipsRow({
   const baseHref = `/ledger/${breadcrumb.map(encodeURIComponent).join('/')}`
   return (
     <div className="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between shrink-0">
-      <ScrollArea type="never" scrollbars="x" className="flex-1 mr-4">
+      <div className="flex-1 mr-4 overflow-x-auto">
         <div className="flex items-center gap-2">
           {leafChips.length > 1 && (
             <Button size="compact-xs" radius="xl" variant="filled" color="#00685f">
@@ -467,7 +467,7 @@ function LeafChipsRow({
             </Button>
           ))}
         </div>
-      </ScrollArea>
+      </div>
       {leafChips.length > 1 && (
         <Button
           size="compact-xs"
