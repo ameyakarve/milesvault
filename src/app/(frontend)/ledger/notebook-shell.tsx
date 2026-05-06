@@ -684,7 +684,7 @@ export function NotebookShell({
   body,
   statementBody,
   overviewBody,
-  defaultViewMode = 'statement',
+  defaultViewMode = 'overview',
   cursor = 'Ln 1, Col 1',
   currency,
   currencies = [],
