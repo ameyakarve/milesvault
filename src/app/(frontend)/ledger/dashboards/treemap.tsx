@@ -2,13 +2,9 @@
 
 import { hierarchy, treemap as d3Treemap } from 'd3-hierarchy'
 import { useMemo } from 'react'
+import type { TreemapNode } from '../overview-view'
 
-export type TreemapNode = {
-  name: string
-  value?: number
-  children?: TreemapNode[]
-  amount?: string
-}
+export type { TreemapNode }
 
 type Props = {
   root: TreemapNode
