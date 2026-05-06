@@ -73,8 +73,8 @@ export function CreditCardDashboard(props: OverviewViewProps) {
       data-dashboard-slug="credit-card"
       className="flex-1 flex flex-col bg-white overflow-y-auto"
     >
-      <div className="p-6 space-y-6">
-        <LayerCard className="flex flex-col rounded-md p-4">
+      <div className="p-6 grid grid-cols-3 gap-6 items-start">
+        <LayerCard className="col-span-1 flex flex-col rounded-md p-4">
           <div className="flex items-baseline justify-between mb-3">
             <div className="text-[12px] font-medium text-slate-700">Monthly spend</div>
             {headlineTotal && (
@@ -89,43 +89,35 @@ export function CreditCardDashboard(props: OverviewViewProps) {
           <PlotChart render={renderNetTrend} className="w-full" />
         </LayerCard>
 
+        {cardsUsed && cardsUsed.rows.length > 0 && (
+          <LayerCard className="col-span-1 flex flex-col rounded-md p-4">
+            <div className="text-[12px] font-medium text-slate-700 mb-3">Cards used</div>
+            <Donut rows={cardsUsed.rows} palette={DONUT_PALETTE} />
+          </LayerCard>
+        )}
+
         {categoryTreemap && (categoryTreemap.children?.length ?? 0) > 0 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
+          <LayerCard className="col-span-1 flex flex-col rounded-md p-4">
             <div className="text-[12px] font-medium text-slate-700 mb-3">Spend by category</div>
             <Treemap root={categoryTreemap} />
           </LayerCard>
         )}
 
+        {paidFrom && paidFrom.rows.length > 0 && (
+          <LayerCard className="col-span-1 flex flex-col rounded-md p-4">
+            <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
+            <Donut rows={paidFrom.rows} palette={DONUT_PALETTE} />
+          </LayerCard>
+        )}
+
         {cardSankey && cardSankey.links.length > 0 && (
-          <LayerCard className="flex flex-col rounded-md p-4">
+          <LayerCard className="col-span-1 flex flex-col rounded-md p-4">
             <div className="text-[12px] font-medium text-slate-700 mb-3">Money flow</div>
             <Sankey data={cardSankey} />
           </LayerCard>
         )}
 
-        <div
-          className={`grid gap-6 items-stretch ${
-            cardsUsed && cardsUsed.rows.length > 0 && paidFrom && paidFrom.rows.length > 0
-              ? 'grid-cols-2'
-              : 'grid-cols-1'
-          }`}
-        >
-          {cardsUsed && cardsUsed.rows.length > 0 && (
-            <LayerCard className="flex flex-col rounded-md p-4">
-              <div className="text-[12px] font-medium text-slate-700 mb-3">Cards used</div>
-              <Donut rows={cardsUsed.rows} palette={DONUT_PALETTE} />
-            </LayerCard>
-          )}
-
-          {paidFrom && paidFrom.rows.length > 0 && (
-            <LayerCard className="flex flex-col rounded-md p-4">
-              <div className="text-[12px] font-medium text-slate-700 mb-3">Paid from</div>
-              <Donut rows={paidFrom.rows} palette={DONUT_PALETTE} />
-            </LayerCard>
-          )}
-        </div>
-
-        <LayerCard className="flex flex-col rounded-md p-4">
+        <LayerCard className="col-span-1 flex flex-col rounded-md p-4">
           <div className="text-[12px] font-medium text-slate-700 mb-3">Recent charges</div>
           {events.rows.length === 0 ? (
             <div className="py-3 text-[11px] text-slate-400">No notable charges</div>
