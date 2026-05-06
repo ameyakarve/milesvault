@@ -8,6 +8,7 @@ import {
   transactionInputHash,
 } from '@/lib/beancount/ast'
 import { isStrictParseErr, parseJournalStrict } from '@/lib/beancount/parse-strict'
+import { validateAccountCurrencies } from '@/lib/beancount/validate-currency'
 import {
   directiveTouchesAccount,
   directiveTouchesAccountCurrency,
@@ -49,7 +50,7 @@ export type JournalGetResponse = { text: string }
 export type JournalPutResponse = { text: string; inserted: number; deleted: number; unchanged: number }
 export type JournalPutError = {
   ok: false
-  error: 'parse_error' | 'partial_parse' | 'unsupported_directives'
+  error: 'parse_error' | 'partial_parse' | 'unsupported_directives' | 'currency_lock'
   message: string
 }
 
@@ -334,6 +335,15 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const parsed = parseJournalStrict(text)
     if (isStrictParseErr(parsed)) {
       return { ok: false, error: parsed.kind, message: parsed.message }
+    }
+
+    const issues = validateAccountCurrencies(parsed.transactions, parsed.directives)
+    if (issues.length > 0) {
+      return {
+        ok: false,
+        error: 'currency_lock',
+        message: issues.map((i) => i.message).join('; '),
+      }
     }
 
     const allKinds: DirectiveInput['kind'][] = [
