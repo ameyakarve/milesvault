@@ -62,6 +62,10 @@ export type OverviewViewProps = {
   cardsUsed?: { rows: CompositionRow[] }
   categoryTreemap?: TreemapNode
   cardSankey?: SankeyDatum
+  spendCalendar?: {
+    currency: string
+    days: { date: string; amount: number; label: string }[]
+  }
 }
 
 function niceNum(range: number, round: boolean): number {

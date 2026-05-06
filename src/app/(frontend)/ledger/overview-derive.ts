@@ -653,6 +653,44 @@ function buildCardSankey(
   return { nodes, links }
 }
 
+// Per-day spend totals for the GitHub-style heatmap. Charges only (negative
+// `net` on a credit-normal liability, or any outflow elsewhere); payments
+// excluded. Returns one entry for every day in the window — including zero
+// days — so the calendar grid stays continuous.
+function buildSpendCalendar(
+  facts: TxnFact[],
+  windowStart: Date,
+  windowEnd: Date,
+  currency: string,
+): { days: { date: string; amount: number; label: string }[] } {
+  const sumByDay = new Map<string, number>()
+  for (const f of facts) {
+    if (f.date.getTime() < windowStart.getTime()) continue
+    if (f.date.getTime() > windowEnd.getTime()) continue
+    if (f.net >= 0) continue
+    const spend = -f.net
+    sumByDay.set(f.ymd, (sumByDay.get(f.ymd) ?? 0) + spend)
+  }
+  const days: { date: string; amount: number; label: string }[] = []
+  const cursor = new Date(
+    Date.UTC(windowStart.getUTCFullYear(), windowStart.getUTCMonth(), windowStart.getUTCDate()),
+  )
+  const end = new Date(
+    Date.UTC(windowEnd.getUTCFullYear(), windowEnd.getUTCMonth(), windowEnd.getUTCDate()),
+  )
+  while (cursor.getTime() <= end.getTime()) {
+    const ymd = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`
+    const amount = sumByDay.get(ymd) ?? 0
+    const label =
+      amount > 0
+        ? `${ymd} · ${fmtSymbol(currency)}${fmtAmount(amount, currency)}`
+        : `${ymd} · no charges`
+    days.push({ date: ymd, amount, label })
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+  return { days }
+}
+
 export function deriveOverview(args: {
   cardSpecs: CardSpec[]
   transactions: TransactionInput[]
@@ -701,6 +739,7 @@ export function deriveOverview(args: {
   const cardsUsed = buildCardsUsed(inWindow, account, currency)
   const categoryTreemap = buildCategoryTreemap(inWindow, account, currency)
   const cardSankey = buildCardSankey(inWindow, account, currency)
+  const spendCalendar = buildSpendCalendar(facts, start, now, currency)
   return {
     kpis: [
       {
@@ -728,5 +767,6 @@ export function deriveOverview(args: {
     cardsUsed: { rows: cardsUsed.rows },
     categoryTreemap,
     cardSankey,
+    spendCalendar: { currency, days: spendCalendar.days },
   }
 }
