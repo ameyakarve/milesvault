@@ -80,18 +80,18 @@ const SAMPLE: OverviewViewProps = {
   categoryBreakdown: {
     moreCount: 3,
     rows: [
-      { prefix: 'Expenses:', leaf: 'Travel', amount: '₹68,400.00', amountClass: 'text-slate-900', scale: 1.0 },
-      { prefix: 'Expenses:', leaf: 'Food', amount: '₹42,800.00', amountClass: 'text-slate-900', scale: 0.625 },
-      { prefix: 'Expenses:', leaf: 'Shopping', amount: '₹36,200.00', amountClass: 'text-slate-900', scale: 0.53 },
-      { prefix: 'Expenses:', leaf: 'Entertainment', amount: '₹18,600.00', amountClass: 'text-slate-900', scale: 0.272 },
-      { prefix: 'Expenses:', leaf: 'Personal', amount: '₹9,800.00', amountClass: 'text-slate-900', scale: 0.143 },
-      { prefix: 'Expenses:', leaf: 'Transport', amount: '₹4,200.00', amountClass: 'text-slate-900', scale: 0.061 },
+      { prefix: 'Expenses:', leaf: 'Travel', amount: '₹68,400.00', amountClass: 'text-slate-900', scale: 1.0, value: 68400 },
+      { prefix: 'Expenses:', leaf: 'Food', amount: '₹42,800.00', amountClass: 'text-slate-900', scale: 0.625, value: 42800 },
+      { prefix: 'Expenses:', leaf: 'Shopping', amount: '₹36,200.00', amountClass: 'text-slate-900', scale: 0.53, value: 36200 },
+      { prefix: 'Expenses:', leaf: 'Entertainment', amount: '₹18,600.00', amountClass: 'text-slate-900', scale: 0.272, value: 18600 },
+      { prefix: 'Expenses:', leaf: 'Personal', amount: '₹9,800.00', amountClass: 'text-slate-900', scale: 0.143, value: 9800 },
+      { prefix: 'Expenses:', leaf: 'Transport', amount: '₹4,200.00', amountClass: 'text-slate-900', scale: 0.061, value: 4200 },
     ],
   },
   paidFrom: {
     rows: [
-      { prefix: 'Assets:Bank:HDFC:', leaf: 'Savings', amount: '₹1,20,000.00', amountClass: 'text-slate-900', scale: 1.0 },
-      { prefix: 'Assets:Bank:ICICI:', leaf: 'Salary', amount: '₹60,000.00', amountClass: 'text-slate-900', scale: 0.5 },
+      { prefix: 'Assets:Bank:HDFC:', leaf: 'Savings', amount: '₹1,20,000.00', amountClass: 'text-slate-900', scale: 1.0, value: 120000 },
+      { prefix: 'Assets:Bank:ICICI:', leaf: 'Salary', amount: '₹60,000.00', amountClass: 'text-slate-900', scale: 0.5, value: 60000 },
     ],
   },
 }

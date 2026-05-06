@@ -20,6 +20,7 @@ export type CompositionRow = {
   amount: string
   amountClass: string
   scale: number
+  value?: number
 }
 
 export type EventRow = {
