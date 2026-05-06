@@ -1,9 +1,8 @@
 'use client'
 
 import { Container, Text } from '@mantine/core'
-import { LineChart, DonutChart } from '@mantine/charts'
+import { LineChart, DonutChart, Treemap } from '@mantine/charts'
 import type { OverviewViewProps, CompositionRow } from '../overview-view'
-import { Treemap } from './treemap'
 import { DONUT_PALETTE } from './donut'
 import { Sankey } from './sankey'
 import { SpendHeatmap } from './spend-heatmap'
@@ -97,7 +96,11 @@ export function CreditCardDashboard(props: OverviewViewProps) {
 
         {categoryTreemap && (categoryTreemap.children?.length ?? 0) > 0 && (
           <DashCard title="Spend by category">
-            <Treemap root={categoryTreemap} />
+            <Treemap
+              data={categoryTreemap.children ?? []}
+              height={480}
+              valueFormatter={trendValueFormatter}
+            />
           </DashCard>
         )}
 
