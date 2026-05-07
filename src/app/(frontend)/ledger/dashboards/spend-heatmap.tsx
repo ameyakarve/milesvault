@@ -27,33 +27,37 @@ export function SpendHeatmap({ days, currency }: Props) {
   const startDate = days[0]!.date
   const endDate = days[days.length - 1]!.date
 
-  // Compact dimensions tuned for a single-column masonry slot. Math:
-  // 53 weeks × (rectSize + gap) + weekdaysLabelsWidth ≈ total width.
-  // 53 × 6 + 22 = 340, which sits inside a ~360px column with a hair of
-  // breathing room. Bump rectSize back toward 10 if the layout widens.
+  // Mantine's Heatmap renders a fixed-width SVG sized by `rectSize` and gap.
+  // We pick proportional internals (fontSize < rectSize + gap so labels
+  // don't overlap rows) and then scale the SVG to fill its container with
+  // `width: 100%`. The viewBox preserves aspect ratio, so the grid grows /
+  // shrinks with the masonry column instead of leaving a void to the right.
+  // Natural width ≈ 18 + 53×12 = 654px; aspect ≈ 654:104.
   return (
-    <Heatmap
-      data={data}
-      startDate={startDate}
-      endDate={endDate}
-      withMonthLabels
-      withWeekdayLabels
-      weekdayLabels={['S', 'M', 'T', 'W', 'T', 'F', 'S']}
-      firstDayOfWeek={0}
-      rectSize={5}
-      gap={1}
-      rectRadius={1}
-      weekdaysLabelsWidth={22}
-      monthsLabelsHeight={18}
-      fontSize={10}
-      withTooltip
-      withOutsideDates={false}
-      colors={['#f1f5f9', '#bdf0e6', '#5cc4b3', '#0f766e', '#0a4f4a']}
-      getTooltipLabel={({ date, value }) =>
-        value && value > 0
-          ? `${date} · ${symbol}${compactAmount(value, currency)}`
-          : `${date} · no charges`
-      }
-    />
+    <div className="[&>svg]:!w-full [&>svg]:!h-auto [&>svg]:max-w-full">
+      <Heatmap
+        data={data}
+        startDate={startDate}
+        endDate={endDate}
+        withMonthLabels
+        withWeekdayLabels
+        weekdayLabels={['S', 'M', 'T', 'W', 'T', 'F', 'S']}
+        firstDayOfWeek={0}
+        rectSize={10}
+        gap={2}
+        rectRadius={2}
+        weekdaysLabelsWidth={18}
+        monthsLabelsHeight={14}
+        fontSize={9}
+        withTooltip
+        withOutsideDates={false}
+        colors={['#f1f5f9', '#bdf0e6', '#5cc4b3', '#0f766e', '#0a4f4a']}
+        getTooltipLabel={({ date, value }) =>
+          value && value > 0
+            ? `${date} · ${symbol}${compactAmount(value, currency)}`
+            : `${date} · no charges`
+        }
+      />
+    </div>
   )
 }
