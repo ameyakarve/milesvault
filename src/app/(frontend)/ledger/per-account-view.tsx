@@ -31,7 +31,6 @@ import { StatementView, type StatementRowData } from './statement-view'
 import {
   cardDecorations,
   computeCardSpecs,
-  formatHeaderBalance,
   setCardSpecs,
   type CardSpec,
 } from './card-decorations'
@@ -41,16 +40,6 @@ const CURRENCY_META: Record<string, { symbol: string; locale: string }> = {
   USD: { symbol: '$', locale: 'en-US' },
   EUR: { symbol: '€', locale: 'de-DE' },
   GBP: { symbol: '£', locale: 'en-GB' },
-}
-
-function formatSignedStat(n: number, currency: string, sign: '+' | '−'): string {
-  const meta = CURRENCY_META[currency]
-  const abs = Math.abs(n)
-  const grouped = new Intl.NumberFormat(meta?.locale ?? 'en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(abs)
-  return `${sign}${grouped}`
 }
 
 const beancountLang = LRLanguage.define({
@@ -430,31 +419,6 @@ export function PerAccountView({ account }: { account: string }) {
     }
   }, [parsed, cardSpecs, account, currency, text])
 
-  const headerBalance = useMemo(() => {
-    if (!currency) return ''
-    for (let i = 0; i < cardSpecs.length; i++) {
-      const rt = cardSpecs[i]!.runningTotal
-      if (rt != null) return formatHeaderBalance(rt, currency)
-    }
-    return ''
-  }, [cardSpecs, currency])
-
-  const { netIn, netOut } = useMemo(() => {
-    if (!currency) return { netIn: undefined, netOut: undefined }
-    let inSum = 0
-    let outSum = 0
-    for (const spec of cardSpecs) {
-      for (const d of spec.deltas) {
-        if (d.flow === 'in') inSum += d.amount
-        else outSum += d.amount
-      }
-    }
-    return {
-      netIn: formatSignedStat(inSum, currency, '+'),
-      netOut: formatSignedStat(outSum, currency, '−'),
-    }
-  }, [cardSpecs, currency])
-
   const onRevert = useCallback(() => {
     setText(savedSlice)
     setError(null)
@@ -550,7 +514,7 @@ export function PerAccountView({ account }: { account: string }) {
 
   const overviewProps = useMemo(() => {
     if (!currency || isStrictParseErr(parsed)) return null
-    const derived = deriveOverview({
+    return deriveOverview({
       cardSpecs,
       transactions: parsed.transactions,
       entries: parsed.entries,
@@ -558,11 +522,7 @@ export function PerAccountView({ account }: { account: string }) {
       currency,
       period,
     })
-    return {
-      ...derived,
-      headerStats: { balance: headerBalance, netIn, netOut },
-    }
-  }, [cardSpecs, parsed, account, currency, period, headerBalance, netIn, netOut])
+  }, [cardSpecs, parsed, account, currency, period])
 
   // Per-account-type dashboards rendered with Observable Plot inside the
   // React tree. The taxonomy maps account → dashboard slug; the registry maps

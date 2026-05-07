@@ -61,6 +61,17 @@ function fmtUnsignedWithSymbol(n: number, currency: string): string {
   return `${sign}${fmtSymbol(currency)}${fmtAmount(n, currency)}`
 }
 
+// Header-tile formatters — match the per-account-view style (no currency
+// symbol, just grouped digits with an explicit sign prefix).
+function fmtHeaderAmount(n: number, currency: string): string {
+  const sign = n < 0 ? '-' : ''
+  return `${sign}${fmtAmount(n, currency)}`
+}
+
+function fmtSignedAmount(n: number, currency: string, sign: '+' | '−'): string {
+  return `${sign}${fmtAmount(n, currency)}`
+}
+
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function ymKey(d: Date): string {
@@ -85,33 +96,41 @@ function addMonths(d: Date, n: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1))
 }
 
-function presetStart(now: Date, preset: PeriodPreset, earliest: Date): Date {
+// 1970-01-01 UTC. Used as the synthetic floor for the "All time" preset so the
+// range spans every fact regardless of how far back the data goes.
+const EPOCH_START = new Date(Date.UTC(1970, 0, 1))
+
+function todayUTC(): Date {
+  const d = new Date()
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+}
+
+function presetStart(today: Date, preset: PeriodPreset): Date {
   switch (preset) {
     case '1M':
-      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, now.getUTCDate()))
+      return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, today.getUTCDate()))
     case '3M':
-      return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, now.getUTCDate()))
+      return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 3, today.getUTCDate()))
     case 'YTD':
-      return new Date(Date.UTC(now.getUTCFullYear(), 0, 1))
+      return new Date(Date.UTC(today.getUTCFullYear(), 0, 1))
     case '12M':
-      return new Date(Date.UTC(now.getUTCFullYear() - 1, now.getUTCMonth(), now.getUTCDate()))
+      return new Date(Date.UTC(today.getUTCFullYear() - 1, today.getUTCMonth(), today.getUTCDate()))
     case 'All time':
     default:
-      return earliest
+      return EPOCH_START
   }
 }
 
-function resolveRange(
-  period: Period,
-  earliest: Date,
-  latest: Date,
-): { start: Date; end: Date } {
+// Resolves a Period to a concrete [start, end] window. Presets always end at
+// `today`; "All time" starts at the epoch. Custom periods use the user-picked
+// dates verbatim, falling back to the same defaults if either side is missing.
+function resolveRange(period: Period, today: Date): { start: Date; end: Date } {
   if (period.kind === 'custom') {
-    const start = parseYMD(period.start) ?? earliest
-    const end = parseYMD(period.end) ?? latest
+    const start = parseYMD(period.start) ?? EPOCH_START
+    const end = parseYMD(period.end) ?? today
     return { start, end }
   }
-  return { start: presetStart(latest, period.preset, earliest), end: latest }
+  return { start: presetStart(today, period.preset), end: today }
 }
 
 type TxnFact = {
@@ -747,17 +766,17 @@ function buildCardSankey(
 
 // Per-day spend totals for the GitHub-style heatmap. Charges only (negative
 // `net` on a credit-normal liability, or any outflow elsewhere); payments
-// excluded. Always emits exactly one year of days ending at `windowEnd`,
-// regardless of the period filter — days without spend stay blank in the
-// heatmap so the grid always reads as a full year.
+// excluded. Always emits exactly one year of days ending at `anchor`,
+// regardless of the period's start — days without spend stay blank so the
+// grid always reads as a full year. `anchor` is the period's end (today for
+// presets, user-picked end for custom).
 function buildSpendCalendar(
   facts: TxnFact[],
-  _windowStart: Date,
-  windowEnd: Date,
+  anchor: Date,
   currency: string,
 ): { days: { date: string; amount: number; label: string }[] } {
   const end = new Date(
-    Date.UTC(windowEnd.getUTCFullYear(), windowEnd.getUTCMonth(), windowEnd.getUTCDate()),
+    Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate()),
   )
   const start = new Date(
     Date.UTC(end.getUTCFullYear() - 1, end.getUTCMonth(), end.getUTCDate() + 1),
@@ -808,11 +827,10 @@ export function deriveOverview(args: {
       events: { title: 'Notable events', rows: [] },
     }
   }
-  const earliest = facts[0]!.date
-  const latest = facts[facts.length - 1]!.date
-  const { start, end: now } = resolveRange(period, earliest, latest)
+  const today = todayUTC()
+  const { start, end: windowEnd } = resolveRange(period, today)
   const inWindow = facts.filter(
-    (f) => f.date.getTime() >= start.getTime() && f.date.getTime() <= now.getTime(),
+    (f) => f.date.getTime() >= start.getTime() && f.date.getTime() <= windowEnd.getTime(),
   )
   const balance = facts[facts.length - 1]!.runningAfter
   const balanceBefore = (() => {
@@ -826,20 +844,30 @@ export function deriveOverview(args: {
     if (f.flow === 'in') netIn += f.net
     else if (f.flow === 'out') netOut += f.net
   }
-  const trend = buildTrend(facts, start, now, currency)
+  const trend = buildTrend(facts, start, windowEnd, currency)
   const composition = buildComposition(inWindow, currency)
   const events = buildEvents(inWindow, currency)
-  const monthlyNet = buildMonthlyNet(facts, start, now, currency)
+  const monthlyNet = buildMonthlyNet(facts, start, windowEnd, currency)
   const categoryBreakdown = buildCategoryBreakdown(inWindow, currency)
   const paidFrom = buildPaidFrom(inWindow, currency)
   const cardsUsed = buildCardsUsed(inWindow, account, currency)
   const categoryTreemap = buildCategoryTreemap(inWindow, account, currency)
   const cardSankey = buildCardSankey(inWindow, account, currency)
-  const spendCalendar = buildSpendCalendar(facts, start, now, currency)
+  const spendCalendar = buildSpendCalendar(facts, windowEnd, currency)
   const topMerchants = buildTopMerchants(inWindow)
   const recentCharges = buildRecentCharges(inWindow, currency)
   const allTxnRows = buildAllTransactions(inWindow, currency)
+  // Header tiles. Balance is the running total at the latest fact (always
+  // current, period-independent). Net In / Net Out reflect the picked period
+  // so the tiles agree with the picker. Format mirrors the per-account-view
+  // shape (no currency symbol) to preserve visual continuity.
+  const headerStats: OverviewViewProps['headerStats'] = {
+    balance: fmtHeaderAmount(balance, currency),
+    netIn: netIn !== 0 ? fmtSignedAmount(netIn, currency, '+') : undefined,
+    netOut: netOut !== 0 ? fmtSignedAmount(netOut, currency, '−') : undefined,
+  }
   return {
+    headerStats,
     kpis: [
       {
         label: 'Balance',
