@@ -560,7 +560,7 @@ function LeafChipsRow({
   )
 }
 
-export type ViewMode = 'overview' | 'statement' | 'editor'
+export type ViewMode = 'overview' | 'editor'
 
 function SubToolbar({
   viewMode,
@@ -589,13 +589,6 @@ function SubToolbar({
           className={`${tabBase} ${viewMode === 'overview' ? tabActive : tabIdle}`}
         >
           Overview
-        </button>
-        <button
-          type="button"
-          onClick={() => onViewModeChange('statement')}
-          className={`${tabBase} ${viewMode === 'statement' ? tabActive : tabIdle}`}
-        >
-          Statement
         </button>
         <button
           type="button"
@@ -649,8 +642,12 @@ export type NotebookShellProps = {
   onSave?: () => void
   onRevert?: () => void
   body?: ReactNode
-  statementBody?: ReactNode
   overviewBody?: ReactNode
+  // When set, replaces the tabbed Overview/Editor area with a full-canvas
+  // detail view. The SubToolbar tabs are hidden; instead a header with a
+  // "← Back" button is rendered above the body. Used for URL-driven drill
+  // downs (e.g. /ledger/<account>/transactions).
+  expandedView?: { title: string; onBack: () => void; body: ReactNode }
   defaultViewMode?: ViewMode
   cursor?: string
   currency?: string | null
@@ -670,8 +667,8 @@ export function NotebookShell({
   onSave,
   onRevert,
   body,
-  statementBody,
   overviewBody,
+  expandedView,
   defaultViewMode = 'overview',
   cursor = 'Ln 1, Col 1',
   currency,
@@ -697,29 +694,64 @@ export function NotebookShell({
               onPeriodChange={onPeriodChange}
             />
             <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />
-            <SubToolbar
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              unsaved={unsaved}
-              saving={saving}
-              onSave={onSave}
-              onRevert={onRevert}
-            />
-            {viewMode === 'overview' ? (
-              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]">
-                {overviewBody}
-              </div>
-            ) : viewMode === 'editor' ? (
-              <EditorPane cards={cards} body={body} />
+            {expandedView ? (
+              <>
+                <ExpandedViewHeader
+                  title={expandedView.title}
+                  onBack={expandedView.onBack}
+                />
+                <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
+                  {expandedView.body}
+                </div>
+              </>
             ) : (
-              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
-                {statementBody}
-              </div>
+              <>
+                <SubToolbar
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  unsaved={unsaved}
+                  saving={saving}
+                  onSave={onSave}
+                  onRevert={onRevert}
+                />
+                {viewMode === 'overview' ? (
+                  <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]">
+                    {overviewBody}
+                  </div>
+                ) : (
+                  <EditorPane cards={cards} body={body} />
+                )}
+              </>
             )}
           </main>
         </div>
         <StatusBar txnCount={txnCount} cursor={cursor} />
       </div>
+    </div>
+  )
+}
+
+function ExpandedViewHeader({
+  title,
+  onBack,
+}: {
+  title: string
+  onBack: () => void
+}) {
+  return (
+    <div className="h-[40px] bg-[#eceef0] px-6 flex items-center gap-3 border-b border-slate-200 shrink-0">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-[#00685f] transition-colors"
+      >
+        <span className="material-symbols-outlined !text-[16px]">
+          arrow_back
+        </span>
+        Back
+      </button>
+      <div className="h-4 w-[1px] bg-slate-300" />
+      <span className="text-[11px] font-bold text-slate-900">{title}</span>
     </div>
   )
 }
