@@ -375,7 +375,7 @@ function PeriodPicker({
           />
           <div
             role="dialog"
-            className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded shadow-lg flex"
+            className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded shadow-lg flex"
           >
             <ul className="flex flex-col py-2 border-r border-slate-100 min-w-[110px]">
               {PERIOD_PRESETS.map((p) => {
