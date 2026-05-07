@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
 } from 'react'
 
@@ -20,14 +21,34 @@ type Props = {
 
 type Position = { left: number; top: number; width: number }
 
-// Greedy 3-column masonry. Each child is placed in whichever column currently
-// has the lowest cumulative bottom edge — same algorithm Pinterest uses.
+// Marker wrapper used to opt into a multi-column span. Renders its children
+// transparently when used outside Masonry; inside Masonry, the wrapper is
+// stripped during placement and only the inner element is rendered.
+export function MasonryItem({ children }: { span?: number; children: ReactNode }) {
+  return <>{children}</>
+}
+
+// Greedy multi-column masonry with optional column spans. Each item is placed
+// at the leftmost window of `span` adjacent columns whose tallest bottom edge
+// is lowest — extends the Pinterest single-column algorithm to wide bricks.
 // Re-measures on container resize and on each item's intrinsic resize (charts
 // load lazily so initial heights are 0 until their first paint).
 export function Masonry({ children, columns = 3, gap = 24, className }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const itemRefs = useRef<Array<HTMLDivElement | null>>([])
-  const items = Children.toArray(children).filter(isValidElement)
+  const items = Children.toArray(children)
+    .filter(isValidElement)
+    .map((child) => {
+      if ((child as ReactElement).type === MasonryItem) {
+        const props = (child as ReactElement<{ span?: number; children: ReactNode }>).props
+        const rawSpan = props.span ?? 1
+        const span = Math.max(1, Math.min(columns, Math.floor(rawSpan)))
+        const inner = Children.toArray(props.children).filter(isValidElement)[0] ?? null
+        return { span, node: inner }
+      }
+      return { span: 1, node: child as ReactElement }
+    })
+    .filter((it): it is { span: number; node: ReactElement } => it.node != null)
 
   itemRefs.current = itemRefs.current.slice(0, items.length)
   while (itemRefs.current.length < items.length) itemRefs.current.push(null)
@@ -68,12 +89,26 @@ export function Masonry({ children, columns = 3, gap = 24, className }: Props) {
   const positions: Position[] = []
   const colBottoms = new Array(columns).fill(0)
   for (let i = 0; i < items.length; i++) {
-    let minCol = 0
-    for (let c = 1; c < columns; c++) if (colBottoms[c] < colBottoms[minCol]) minCol = c
-    const top = colBottoms[minCol] === 0 ? 0 : colBottoms[minCol] + gap
-    const left = minCol * (colWidth + gap)
-    positions.push({ left, top, width: colWidth })
-    colBottoms[minCol] = top + (heights[i] ?? 0)
+    const span = items[i]!.span
+    // Scan every contiguous window of `span` columns; pick the leftmost one
+    // whose tallest bottom is smallest. Ties resolve left because the strict
+    // `<` keeps the first-seen window.
+    let bestCol = 0
+    let bestMaxBottom = Infinity
+    for (let c = 0; c <= columns - span; c++) {
+      let maxBottom = 0
+      for (let k = 0; k < span; k++) maxBottom = Math.max(maxBottom, colBottoms[c + k])
+      if (maxBottom < bestMaxBottom) {
+        bestMaxBottom = maxBottom
+        bestCol = c
+      }
+    }
+    const top = bestMaxBottom === 0 ? 0 : bestMaxBottom + gap
+    const left = bestCol * (colWidth + gap)
+    const width = span * colWidth + (span - 1) * gap
+    positions.push({ left, top, width })
+    const newBottom = top + (heights[i] ?? 0)
+    for (let k = 0; k < span; k++) colBottoms[bestCol + k] = newBottom
   }
   const containerHeight = Math.max(0, ...colBottoms)
   const ready = containerWidth > 0
@@ -88,7 +123,7 @@ export function Masonry({ children, columns = 3, gap = 24, className }: Props) {
         height: ready ? containerHeight : undefined,
       }}
     >
-      {items.map((child, i) => {
+      {items.map((it, i) => {
         const pos = positions[i]
         return (
           <div
@@ -106,7 +141,7 @@ export function Masonry({ children, columns = 3, gap = 24, className }: Props) {
               transition: 'left 200ms ease, top 200ms ease, width 200ms ease',
             }}
           >
-            {child}
+            {it.node}
           </div>
         )
       })}
