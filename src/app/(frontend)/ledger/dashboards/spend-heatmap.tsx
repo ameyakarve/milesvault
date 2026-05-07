@@ -23,7 +23,17 @@ export function SpendHeatmap({ days, currency }: Props) {
   const symbol = CURRENCY_SYMBOL[currency] ?? ''
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
-  const data = useMemo(() => {
+  // Mantine maps value/max linearly to the color ramp, so a handful of big
+  // spend days flatten everything else into the palest bucket. Feed log1p to
+  // the heatmap so typical days land in mid-range colors; keep the original
+  // amount on a side map for the tooltip.
+  const colorData = useMemo(() => {
+    const out: Record<string, number> = {}
+    for (const d of days) out[d.date] = d.amount > 0 ? Math.log1p(d.amount) : 0
+    return out
+  }, [days])
+
+  const originals = useMemo(() => {
     const out: Record<string, number> = {}
     for (const d of days) out[d.date] = d.amount
     return out
@@ -94,7 +104,7 @@ export function SpendHeatmap({ days, currency }: Props) {
         className="flex-1 min-w-0 overflow-x-scroll pb-1 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400"
       >
         <Heatmap
-          data={data}
+          data={colorData}
           startDate={startDate}
           endDate={endDate}
           withMonthLabels
@@ -107,12 +117,13 @@ export function SpendHeatmap({ days, currency }: Props) {
           fontSize={10}
           withTooltip
           withOutsideDates={false}
-          colors={['#f1f5f9', '#bdf0e6', '#5cc4b3', '#0f766e', '#0a4f4a']}
-          getTooltipLabel={({ date, value }) =>
-            value && value > 0
-              ? `${date} · ${symbol}${compactAmount(value, currency)}`
+          colors={['#f1f5f9', '#7fd9c5', '#34b8a3', '#0f766e', '#0a4f4a']}
+          getTooltipLabel={({ date }) => {
+            const amount = originals[date] ?? 0
+            return amount > 0
+              ? `${date} · ${symbol}${compactAmount(amount, currency)}`
               : `${date} · no charges`
-          }
+          }}
         />
       </div>
 
