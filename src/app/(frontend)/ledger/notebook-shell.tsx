@@ -536,7 +536,7 @@ function LeafChipsRow({
             <Button
               key={label}
               component={Link}
-              href={`${baseHref}/${encodeURIComponent(label)}`}
+              href={`${baseHref}.${encodeURIComponent(label)}`}
               size="compact-xs"
               radius="xl"
               variant="default"
