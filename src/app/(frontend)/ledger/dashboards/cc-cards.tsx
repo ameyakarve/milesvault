@@ -17,6 +17,7 @@ export function StatementSummaryCard({
   monthlyNet?: { points: TrendPoint[]; totalLabel: string; currency: string }
 }) {
   const sparkData = monthlyNet?.points.map((p) => p.y) ?? []
+  const sparkPoints = monthlyNet?.points ?? []
   const hasTotal = !!monthlyNet?.totalLabel
   const hero = hasTotal ? monthlyNet!.totalLabel : balance
   // Strip leading minus on the secondary so "owed now" doesn't read as a
@@ -27,14 +28,24 @@ export function StatementSummaryCard({
       <Stack gap="md">
         <HeroValue>{hero}</HeroValue>
         {sparkData.length > 1 && (
-          <Sparkline
-            data={sparkData}
-            h={60}
-            curveType="monotone"
-            color="#e11d48"
-            fillOpacity={0.18}
-            strokeWidth={2}
-          />
+          <Stack gap={2}>
+            <Sparkline
+              data={sparkData}
+              h={60}
+              curveType="monotone"
+              color="#e11d48"
+              fillOpacity={0.18}
+              strokeWidth={2}
+            />
+            <Group justify="space-between" gap={0}>
+              <Text size="10px" ff="monospace" c="dimmed">
+                {sparkPoints[0]!.label}
+              </Text>
+              <Text size="10px" ff="monospace" c="dimmed">
+                {sparkPoints[sparkPoints.length - 1]!.label}
+              </Text>
+            </Group>
+          </Stack>
         )}
         {hasTotal && (
           <Group gap={6} wrap="nowrap">
@@ -162,6 +173,14 @@ function formatCompact(value: number, currency: string): string {
   return `${symbol}${compactAmount(value, currency)}`
 }
 
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function formatShortDate(iso: string): string {
+  const [, m, d] = iso.split('-')
+  const monthIdx = Math.max(0, Math.min(11, parseInt(m!, 10) - 1))
+  return `${SHORT_MONTHS[monthIdx]} ${parseInt(d!, 10)}`
+}
+
 // Top merchants by spend across the period. Excludes payments/refunds —
 // just "where did money go". Bar shows share-of-leader, not share-of-total,
 // so the #1 row always fills the bar.
@@ -232,7 +251,8 @@ export function ActivityCard({
   currency?: string
 }) {
   const rows = recentCharges?.rows ?? []
-  const last30 = (spendCalendar?.days ?? []).slice(-30).map((d) => d.amount)
+  const last30Days = (spendCalendar?.days ?? []).slice(-30)
+  const last30 = last30Days.map((d) => d.amount)
   const last30Total = last30.reduce((s, n) => s + n, 0)
   const showSpark = last30.length >= 7 && last30Total > 0
   return (
@@ -241,15 +261,24 @@ export function ActivityCard({
       right={showSpark ? <CardEyebrow>Last 30 days</CardEyebrow> : undefined}
     >
       {showSpark && (
-        <Sparkline
-          data={last30}
-          h={36}
-          curveType="linear"
-          color="#0f766e"
-          fillOpacity={0.22}
-          strokeWidth={1.5}
-          mb="sm"
-        />
+        <Stack gap={2} mb="sm">
+          <Sparkline
+            data={last30}
+            h={36}
+            curveType="linear"
+            color="#0f766e"
+            fillOpacity={0.22}
+            strokeWidth={1.5}
+          />
+          <Group justify="space-between" gap={0}>
+            <Text size="10px" ff="monospace" c="dimmed">
+              {formatShortDate(last30Days[0]!.date)}
+            </Text>
+            <Text size="10px" ff="monospace" c="dimmed">
+              {formatShortDate(last30Days[last30Days.length - 1]!.date)}
+            </Text>
+          </Group>
+        </Stack>
       )}
       {rows.length === 0 ? (
         <Text size="xs" c="dimmed" py="xs">
