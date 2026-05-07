@@ -231,10 +231,9 @@ export function AccountsDirectory({ initialAsOf }: { initialAsOf: string }) {
             ) : (
               filtered.map((row, idx) => {
                 const negative = row.balance < 0
-                const href = `/ledger/${row.path
-                  .split(':')
-                  .map(encodeURIComponent)
-                  .join('/')}?ccy=${encodeURIComponent(row.currency)}`
+                const href = `/ledger/${encodeURIComponent(
+                  row.path.replaceAll(':', '.'),
+                )}?ccy=${encodeURIComponent(row.currency)}`
                 return (
                   <Link
                     key={`${row.path}|${row.currency}|${idx}`}

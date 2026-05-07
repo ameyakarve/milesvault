@@ -25,6 +25,7 @@ import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import { resolveDashboard } from '@/lib/ledger-core/taxonomy'
 import { NotebookShell } from './notebook-shell'
 import { OverviewView } from './overview-view'
+import { TransactionsModal } from './transactions-modal'
 import { DEFAULT_PERIOD, deriveOverview, type Period } from './overview-derive'
 import { getDashboardComponent } from './dashboards/registry'
 import { StatementView, type StatementRowData } from './statement-view'
@@ -588,27 +589,33 @@ export function PerAccountView({
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
 
+  const txnsRows = overviewProps?.transactions?.rows ?? []
+  const txnsCurrency = overviewProps?.transactions?.currency ?? currency ?? 'INR'
+
   return (
-    <NotebookShell
-      breadcrumb={breadcrumb}
-      accountTitle={accountTitle}
-      accountPath={account}
-      cards={[]}
-      txnCount={txnCount}
-      unsaved={unsaved}
-      saving={saving}
-      onSave={save}
-      onRevert={onRevert}
-      body={body}
-      statementBody={statementBody}
-      overviewBody={overviewBody}
-      defaultViewMode={defaultViewMode}
-      currency={currency}
-      currencies={currencies}
-      onCurrencyChange={onCurrencyChange}
-      leafChips={children}
-      period={period}
-      onPeriodChange={setPeriod}
-    />
+    <>
+      <NotebookShell
+        breadcrumb={breadcrumb}
+        accountTitle={accountTitle}
+        accountPath={account}
+        cards={[]}
+        txnCount={txnCount}
+        unsaved={unsaved}
+        saving={saving}
+        onSave={save}
+        onRevert={onRevert}
+        body={body}
+        statementBody={statementBody}
+        overviewBody={overviewBody}
+        defaultViewMode={defaultViewMode}
+        currency={currency}
+        currencies={currencies}
+        onCurrencyChange={onCurrencyChange}
+        leafChips={children}
+        period={period}
+        onPeriodChange={setPeriod}
+      />
+      <TransactionsModal rows={txnsRows} currency={txnsCurrency} />
+    </>
   )
 }

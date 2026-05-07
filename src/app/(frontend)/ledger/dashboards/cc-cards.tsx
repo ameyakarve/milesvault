@@ -2,6 +2,8 @@
 
 import { Group, Stack, Text, Tooltip } from '@mantine/core'
 import { Sparkline } from '@mantine/charts'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import type { CompositionRow, EventRow, TreemapNode, TrendPoint } from '../overview-view'
 import { CardEyebrow, DashCard, HeroValue } from './cards'
 import { CURRENCY_SYMBOL, TREEMAP_PALETTE, compactAmount, formatAmount } from './format'
@@ -255,11 +257,30 @@ export function ActivityCard({
   const last30 = last30Days.map((d) => d.amount)
   const last30Total = last30.reduce((s, n) => s + n, 0)
   const showSpark = last30.length >= 7 && last30Total > 0
+  const pathname = usePathname()
+  // Strip a trailing /transactions so refreshing on the modal URL still
+  // composes a sane parent-relative href.
+  const basePath = pathname.endsWith('/transactions')
+    ? pathname.slice(0, -'/transactions'.length)
+    : pathname
+  const viewAllHref = `${basePath}/transactions`
+  const headerRight =
+    rows.length > 0 ? (
+      <Group gap="xs" wrap="nowrap">
+        {showSpark && <CardEyebrow>Last 30 days</CardEyebrow>}
+        <Link
+          href={viewAllHref}
+          scroll={false}
+          className="text-[11px] font-medium text-[#00685f] hover:text-[#004d47] hover:underline"
+        >
+          View all →
+        </Link>
+      </Group>
+    ) : showSpark ? (
+      <CardEyebrow>Last 30 days</CardEyebrow>
+    ) : undefined
   return (
-    <DashCard
-      title="Recent charges"
-      right={showSpark ? <CardEyebrow>Last 30 days</CardEyebrow> : undefined}
-    >
+    <DashCard title="Recent charges" right={headerRight}>
       {showSpark && (
         <Stack gap={2} mb="sm">
           <Sparkline
