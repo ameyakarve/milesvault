@@ -266,18 +266,13 @@ export function ActivityCard({
   const viewAllHref = `${basePath}/transactions`
   const headerRight =
     rows.length > 0 ? (
-      <Group gap="xs" wrap="nowrap">
-        {showSpark && <CardEyebrow>Last 30 days</CardEyebrow>}
-        <Link
-          href={viewAllHref}
-          scroll={false}
-          className="text-[11px] font-medium text-[#00685f] hover:text-[#004d47] hover:underline"
-        >
-          View all →
-        </Link>
-      </Group>
-    ) : showSpark ? (
-      <CardEyebrow>Last 30 days</CardEyebrow>
+      <Link
+        href={viewAllHref}
+        scroll={false}
+        className="text-[11px] font-medium text-[#00685f] hover:text-[#004d47] hover:underline"
+      >
+        View all →
+      </Link>
     ) : undefined
   return (
     <DashCard title="Recent charges" right={headerRight}>
