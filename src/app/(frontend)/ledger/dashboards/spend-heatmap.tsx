@@ -27,6 +27,10 @@ export function SpendHeatmap({ days, currency }: Props) {
   const startDate = days[0]!.date
   const endDate = days[days.length - 1]!.date
 
+  // Compact dimensions tuned for a single-column masonry slot. Math:
+  // 53 weeks × (rectSize + gap) + weekdaysLabelsWidth ≈ total width.
+  // 53 × 6 + 22 = 340, which sits inside a ~360px column with a hair of
+  // breathing room. Bump rectSize back toward 10 if the layout widens.
   return (
     <Heatmap
       data={data}
@@ -36,6 +40,12 @@ export function SpendHeatmap({ days, currency }: Props) {
       withWeekdayLabels
       weekdayLabels={['S', 'M', 'T', 'W', 'T', 'F', 'S']}
       firstDayOfWeek={0}
+      rectSize={5}
+      gap={1}
+      rectRadius={1}
+      weekdaysLabelsWidth={22}
+      monthsLabelsHeight={18}
+      fontSize={10}
       withTooltip
       withOutsideDates={false}
       colors={['#f1f5f9', '#bdf0e6', '#5cc4b3', '#0f766e', '#0a4f4a']}
