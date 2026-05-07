@@ -307,7 +307,13 @@ function buildMonthlyNet(
     total += spend
   }
   const points: TrendPoint[] = []
-  let cursor = startOfMonth(windowStart)
+  // Clamp the iteration start to the first fact's month — otherwise "All time"
+  // (windowStart = epoch) emits hundreds of zero months before the account
+  // even existed, and the sparkline collapses into a stub at the right edge.
+  const firstFactMonth = startOfMonth(facts[0]!.date)
+  const startMonth = startOfMonth(windowStart)
+  let cursor =
+    startMonth.getTime() < firstFactMonth.getTime() ? firstFactMonth : startMonth
   const endMonth = startOfMonth(windowEnd)
   while (cursor.getTime() <= endMonth.getTime()) {
     const k = ymKey(cursor)
