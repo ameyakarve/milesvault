@@ -4,7 +4,7 @@ import { Container } from '@mantine/core'
 import { Treemap } from '@mantine/charts'
 import type { OverviewViewProps } from '../overview-view'
 import { SpendHeatmap } from './spend-heatmap'
-import { Masonry } from './masonry'
+import { Masonry, MasonryItem } from './masonry'
 import { DashCard } from './cards'
 import { CURRENCY_SYMBOL, colorizeTreemap, compactAmount } from './format'
 import {
@@ -73,9 +73,11 @@ export function CreditCardDashboard(props: OverviewViewProps) {
           />
 
           {spendCalendar && spendCalendar.days.length > 0 && (
-            <DashCard title="Spend calendar">
-              <SpendHeatmap days={spendCalendar.days} currency={spendCalendar.currency} />
-            </DashCard>
+            <MasonryItem span={2}>
+              <DashCard title="Spend calendar">
+                <SpendHeatmap days={spendCalendar.days} currency={spendCalendar.currency} />
+              </DashCard>
+            </MasonryItem>
           )}
         </Masonry>
       </Container>
