@@ -92,7 +92,7 @@ export function DashboardScaffold(
     <div
       data-overview-root
       data-dashboard-slug={config.slug}
-      className="flex-1 flex flex-col bg-white overflow-y-auto"
+      className="flex-1 flex flex-col bg-[#f7f9fb] overflow-y-auto"
     >
       <Container fluid p="lg" w="100%">
         <Masonry>
