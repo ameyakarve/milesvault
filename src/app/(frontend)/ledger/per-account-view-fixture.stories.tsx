@@ -421,17 +421,20 @@ export const Statement: StoryObj = {
       cards={[]}
       txnCount={8}
       currency="INR"
-      defaultViewMode="statement"
-      statementBody={
-        <StatementView
-          rows={STATEMENT_ROWS}
-          totalDebit="7,453.00"
-          totalCredit="2,83,450.00"
-          netChange="+2,75,997.00"
-          netPositive={true}
-          initialExpandedId="r3"
-        />
-      }
+      expandedView={{
+        title: 'Transactions',
+        onBack: () => {},
+        body: (
+          <StatementView
+            rows={STATEMENT_ROWS}
+            totalDebit="7,453.00"
+            totalCredit="2,83,450.00"
+            netChange="+2,75,997.00"
+            netPositive={true}
+            initialExpandedId="r3"
+          />
+        ),
+      }}
     />
   ),
 }

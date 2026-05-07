@@ -25,7 +25,6 @@ import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import { resolveDashboard } from '@/lib/ledger-core/taxonomy'
 import { NotebookShell } from './notebook-shell'
 import { OverviewView } from './overview-view'
-import { TransactionsModal } from './transactions-modal'
 import { DEFAULT_PERIOD, deriveOverview, type Period } from './overview-derive'
 import { getDashboardComponent } from './dashboards/registry'
 import { StatementView, type StatementRowData } from './statement-view'
@@ -169,7 +168,7 @@ export function PerAccountView({
   defaultViewMode,
 }: {
   account: string
-  defaultViewMode?: 'overview' | 'editor' | 'statement'
+  defaultViewMode?: 'overview' | 'editor'
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -589,33 +588,41 @@ export function PerAccountView({
   const breadcrumb = account.split(':').filter(Boolean)
   const accountTitle = shortAccountName(account)
 
-  const txnsRows = overviewProps?.transactions?.rows ?? []
-  const txnsCurrency = overviewProps?.transactions?.currency ?? currency ?? 'INR'
+  const TRANSACTIONS_SUFFIX = '/transactions'
+  const isTransactionsRoute = pathname.endsWith(TRANSACTIONS_SUFFIX)
+  const expandedView = isTransactionsRoute
+    ? {
+        title: 'Transactions',
+        onBack: () => {
+          const parent = pathname.slice(0, -TRANSACTIONS_SUFFIX.length)
+          const qs = searchParams.toString()
+          router.push(qs ? `${parent}?${qs}` : parent)
+        },
+        body: statementBody,
+      }
+    : undefined
 
   return (
-    <>
-      <NotebookShell
-        breadcrumb={breadcrumb}
-        accountTitle={accountTitle}
-        accountPath={account}
-        cards={[]}
-        txnCount={txnCount}
-        unsaved={unsaved}
-        saving={saving}
-        onSave={save}
-        onRevert={onRevert}
-        body={body}
-        statementBody={statementBody}
-        overviewBody={overviewBody}
-        defaultViewMode={defaultViewMode}
-        currency={currency}
-        currencies={currencies}
-        onCurrencyChange={onCurrencyChange}
-        leafChips={children}
-        period={period}
-        onPeriodChange={setPeriod}
-      />
-      <TransactionsModal rows={txnsRows} currency={txnsCurrency} />
-    </>
+    <NotebookShell
+      breadcrumb={breadcrumb}
+      accountTitle={accountTitle}
+      accountPath={account}
+      cards={[]}
+      txnCount={txnCount}
+      unsaved={unsaved}
+      saving={saving}
+      onSave={save}
+      onRevert={onRevert}
+      body={body}
+      overviewBody={overviewBody}
+      expandedView={expandedView}
+      defaultViewMode={defaultViewMode}
+      currency={currency}
+      currencies={currencies}
+      onCurrencyChange={onCurrencyChange}
+      leafChips={children}
+      period={period}
+      onPeriodChange={setPeriod}
+    />
   )
 }
