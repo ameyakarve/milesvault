@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import { Button, Popover } from '@mantine/core'
+import { Button } from '@mantine/core'
 import { DatePicker } from '@mantine/dates'
 import {
   PERIOD_PRESETS,
@@ -364,59 +364,63 @@ function PeriodPicker({
   )
   if (!enabled) return trigger
   return (
-    <Popover
-      opened={opened}
-      onChange={setOpened}
-      position="bottom-end"
-      shadow="md"
-      withArrow={false}
-      trapFocus
-    >
-      <Popover.Target>{trigger}</Popover.Target>
-      <Popover.Dropdown p={0}>
-        <div className="flex">
-          <ul className="flex flex-col py-2 border-r border-slate-100 min-w-[110px]">
-            {PERIOD_PRESETS.map((p) => {
-              const selected = period.kind === 'preset' && period.preset === p
-              return (
-                <li key={p}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onPeriodChange?.({ kind: 'preset', preset: p as PeriodPreset })
-                      setRange([null, null])
-                      setOpened(false)
-                    }}
-                    className={`w-full text-left font-mono text-[11px] px-4 py-1.5 transition-colors ${
-                      selected
-                        ? 'bg-[#00685f] text-white'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-[#00685f]'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          <div className="p-2">
-            <DatePicker
-              type="range"
-              value={range}
-              onChange={(next) => {
-                setRange(next)
-                if (next[0] && next[1]) {
-                  onPeriodChange?.({ kind: 'custom', start: next[0], end: next[1] })
-                  setOpened(false)
-                }
-              }}
-              numberOfColumns={2}
-              size="xs"
-            />
+    <div className="relative">
+      {trigger}
+      {opened && (
+        <>
+          <button
+            type="button"
+            aria-label="Close period picker"
+            onClick={() => setOpened(false)}
+            className="fixed inset-0 z-40 bg-transparent cursor-default"
+          />
+          <div
+            role="dialog"
+            className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded shadow-lg flex"
+          >
+            <ul className="flex flex-col py-2 border-r border-slate-100 min-w-[110px]">
+              {PERIOD_PRESETS.map((p) => {
+                const selected = period.kind === 'preset' && period.preset === p
+                return (
+                  <li key={p}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onPeriodChange?.({ kind: 'preset', preset: p as PeriodPreset })
+                        setRange([null, null])
+                        setOpened(false)
+                      }}
+                      className={`w-full text-left font-mono text-[11px] px-4 py-1.5 transition-colors ${
+                        selected
+                          ? 'bg-[#00685f] text-white'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-[#00685f]'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+            <div className="p-2">
+              <DatePicker
+                type="range"
+                value={range}
+                onChange={(next) => {
+                  setRange(next)
+                  if (next[0] && next[1]) {
+                    onPeriodChange?.({ kind: 'custom', start: next[0], end: next[1] })
+                    setOpened(false)
+                  }
+                }}
+                numberOfColumns={2}
+                size="xs"
+              />
+            </div>
           </div>
-        </div>
-      </Popover.Dropdown>
-    </Popover>
+        </>
+      )}
+    </div>
   )
 }
 
