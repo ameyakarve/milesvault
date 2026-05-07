@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import { Button } from '@mantine/core'
 import { DatePicker } from '@mantine/dates'
 import {
   PERIOD_PRESETS,
@@ -426,13 +425,100 @@ function PeriodPicker({
 
 function BreadcrumbRow({
   breadcrumb,
+  leafChips,
+}: {
+  breadcrumb: string[]
+  leafChips: LeafChip[]
+}) {
+  const [childrenOpen, setChildrenOpen] = useState(false)
+  const baseHref = `/ledger/${encodeURIComponent(breadcrumb.join('.'))}`
+  const hasChildren = leafChips.length > 0
+  return (
+    <div className="h-10 bg-white px-6 flex items-center justify-between border-b border-slate-100 shrink-0">
+      <div className="flex items-center gap-1.5 font-mono text-[11px] min-w-0">
+        <Link
+          href="/ledger"
+          className="text-slate-500 hover:text-[#00685f] transition-colors shrink-0"
+        >
+          Accounts
+        </Link>
+        {breadcrumb.map((seg, i) => {
+          const isLast = i === breadcrumb.length - 1
+          const href = `/ledger/${encodeURIComponent(
+            breadcrumb.slice(0, i + 1).join('.'),
+          )}`
+          return (
+            <Fragment key={`${seg}-${i}`}>
+              <span className="material-symbols-outlined !text-[12px] text-slate-300 shrink-0">
+                chevron_right
+              </span>
+              {isLast ? (
+                <div className="relative flex items-center">
+                  <span className="text-slate-800 font-bold truncate">{seg}</span>
+                  {hasChildren && (
+                    <button
+                      type="button"
+                      onClick={() => setChildrenOpen((v) => !v)}
+                      aria-haspopup="menu"
+                      aria-expanded={childrenOpen}
+                      aria-label="Browse child accounts"
+                      className="ml-0.5 -mr-1 text-slate-400 hover:text-[#00685f] transition-colors flex items-center"
+                    >
+                      <span className="material-symbols-outlined !text-[16px]">
+                        arrow_drop_down
+                      </span>
+                    </button>
+                  )}
+                  {childrenOpen && hasChildren && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Close children menu"
+                        onClick={() => setChildrenOpen(false)}
+                        className="fixed inset-0 z-40 bg-transparent cursor-default"
+                      />
+                      <div
+                        role="menu"
+                        className="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded shadow-lg py-1 min-w-[160px] max-h-[320px] overflow-y-auto"
+                      >
+                        {leafChips.map((label) => (
+                          <Link
+                            key={label}
+                            href={`${baseHref}.${encodeURIComponent(label)}`}
+                            onClick={() => setChildrenOpen(false)}
+                            className="block font-mono text-[11px] text-slate-600 hover:text-[#00685f] hover:bg-slate-50 px-3 py-1.5 transition-colors"
+                          >
+                            {label}
+                          </Link>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href={href}
+                  className="text-slate-500 hover:text-[#00685f] transition-colors shrink-0"
+                >
+                  {seg}
+                </Link>
+              )}
+            </Fragment>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+
+function FilterRow({
   currency,
   currencies,
   onCurrencyChange,
   period,
   onPeriodChange,
 }: {
-  breadcrumb: string[]
   currency: string | null | undefined
   currencies: string[]
   onCurrencyChange?: (next: string) => void
@@ -444,117 +530,40 @@ function BreadcrumbRow({
   const canOpenCurrency = !!onCurrencyChange && currencies.length > 1
   const canOpenPeriod = !!onPeriodChange
   return (
-    <div className="h-10 bg-white px-6 flex items-center justify-between border-b border-slate-50 shrink-0">
-      <div className="flex items-center gap-1.5 font-mono text-[11px]">
-        <Link
-          href="/ledger"
-          className="text-slate-500 hover:text-[#00685f] transition-colors"
-        >
-          Accounts
-        </Link>
-        {breadcrumb.map((seg, i) => {
-          const isLast = i === breadcrumb.length - 1
-          const href = `/ledger/${encodeURIComponent(
-            breadcrumb.slice(0, i + 1).join('.'),
-          )}`
-          return (
-            <Fragment key={`${seg}-${i}`}>
-              <span className="material-symbols-outlined !text-[12px] text-slate-300">
-                chevron_right
-              </span>
-              {isLast ? (
-                <span className="text-slate-800 font-bold">{seg}</span>
-              ) : (
-                <Link
-                  href={href}
-                  className="text-slate-500 hover:text-[#00685f] transition-colors"
-                >
-                  {seg}
-                </Link>
-              )}
-            </Fragment>
-          )
-        })}
-      </div>
-      <div className="flex items-center gap-3">
-        <PeriodPicker
-          period={period}
-          onPeriodChange={onPeriodChange}
-          opened={periodOpen}
-          setOpened={setPeriodOpen}
-          enabled={canOpenPeriod}
-        />
-        {currency && canOpenCurrency && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setCurrencyOpen((v) => !v)}
-              aria-haspopup="menu"
-              aria-expanded={currencyOpen}
-              className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center"
-            >
-              {currency}
-              <span className="material-symbols-outlined !text-[14px] ml-0.5">
-                arrow_drop_down
-              </span>
-            </button>
-            {currencyOpen && (
-              <PopoverMenu
-                options={currencies}
-                selected={currency}
-                onSelect={onCurrencyChange!}
-                onClose={() => setCurrencyOpen(false)}
-              />
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-
-function LeafChipsRow({
-  leafChips,
-  breadcrumb,
-}: {
-  leafChips: LeafChip[]
-  breadcrumb: string[]
-}) {
-  if (leafChips.length === 0) return null
-  const baseHref = `/ledger/${encodeURIComponent(breadcrumb.join('.'))}`
-  return (
-    <div className="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between shrink-0">
-      <div className="flex-1 mr-4 overflow-x-auto">
-        <div className="flex items-center gap-2">
-          {leafChips.length > 1 && (
-            <Button size="compact-xs" radius="xl" variant="filled" color="#00685f">
-              All
-            </Button>
+    <div className="h-10 bg-[#f7f9fb] px-6 flex items-center gap-2 border-b border-slate-100 shrink-0">
+      <PeriodPicker
+        period={period}
+        onPeriodChange={onPeriodChange}
+        opened={periodOpen}
+        setOpened={setPeriodOpen}
+        enabled={canOpenPeriod}
+      />
+      {currency && canOpenCurrency && (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setCurrencyOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={currencyOpen}
+            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1 rounded-full transition-colors"
+          >
+            <span className="material-symbols-outlined !text-[14px] text-slate-400">
+              payments
+            </span>
+            {currency}
+            <span className="material-symbols-outlined !text-[14px] -mr-1">
+              arrow_drop_down
+            </span>
+          </button>
+          {currencyOpen && (
+            <PopoverMenu
+              options={currencies}
+              selected={currency}
+              onSelect={onCurrencyChange!}
+              onClose={() => setCurrencyOpen(false)}
+            />
           )}
-          {leafChips.map((label) => (
-            <Button
-              key={label}
-              component={Link}
-              href={`${baseHref}.${encodeURIComponent(label)}`}
-              size="compact-xs"
-              radius="xl"
-              variant="default"
-            >
-              {label}
-            </Button>
-          ))}
         </div>
-      </div>
-      {leafChips.length > 1 && (
-        <Button
-          size="compact-xs"
-          variant="subtle"
-          color="#00685f"
-          rightSection={<span className="material-symbols-outlined !text-[14px]">arrow_forward</span>}
-        >
-          Explore tree
-        </Button>
       )}
     </div>
   )
@@ -614,15 +623,14 @@ export function NotebookShell({
       <div className="flex-1 flex flex-col min-w-0">
         <div className="flex-1 flex min-h-0">
           <main className="flex-1 flex flex-col min-w-0">
-            <BreadcrumbRow
-              breadcrumb={breadcrumb}
+            <BreadcrumbRow breadcrumb={breadcrumb} leafChips={leafChips} />
+            <FilterRow
               currency={currency}
               currencies={currencies}
               onCurrencyChange={onCurrencyChange}
               period={period}
               onPeriodChange={onPeriodChange}
             />
-            <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />
             {expandedView ? (
               <>
                 <ExpandedViewHeader
