@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react'
 import { Paper } from '@mantine/core'
+import { RecentTransactionsCard } from './dashboards/recent-transactions-card'
 
 export type OverviewKpi = {
   label: string
@@ -329,7 +330,8 @@ function EventsList({ title, rows }: OverviewViewProps['events']) {
   )
 }
 
-export function OverviewView({ trend, composition, events }: OverviewViewProps) {
+export function OverviewView({ trend, composition, events, transactions }: OverviewViewProps) {
+  const recentRows = transactions?.rows.slice(0, 5) ?? []
   return (
     <div
       data-overview-root
@@ -339,6 +341,11 @@ export function OverviewView({ trend, composition, events }: OverviewViewProps) 
         <TrendChart {...trend} />
         <CompositionList {...composition} />
       </div>
+
+      <RecentTransactionsCard
+        rows={recentRows}
+        currency={transactions?.currency ?? trend.currency}
+      />
 
       <EventsList {...events} />
     </div>

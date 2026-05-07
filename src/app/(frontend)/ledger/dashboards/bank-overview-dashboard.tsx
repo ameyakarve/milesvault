@@ -8,6 +8,7 @@ import type { OverviewViewProps } from '../overview-view'
 import { PlotChart } from './plot-chart'
 import { Masonry } from './masonry'
 import { DashCard, StatCard } from './cards'
+import { RecentTransactionsCard } from './recent-transactions-card'
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   INR: '₹',
@@ -34,7 +35,8 @@ function compactAmount(n: number, currency: string): string {
 // Bank-overview dashboard. Bound by the taxonomy at Assets:Bank, which means
 // every Assets:Bank:* account renders this layout in the Overview tab.
 export function BankOverviewDashboard(props: OverviewViewProps) {
-  const { trend, composition, events, headerStats } = props
+  const { trend, composition, events, headerStats, transactions } = props
+  const recentRows = transactions?.rows.slice(0, 5) ?? []
   const symbol = CURRENCY_SYMBOL[trend.currency] ?? ''
   const trendData = trend.points.map((p) => ({ month: p.x, balance: p.y }))
   const trendValueFormatter = (v: number) => `${symbol}${compactAmount(v, trend.currency)}`
@@ -145,6 +147,11 @@ export function BankOverviewDashboard(props: OverviewViewProps) {
         >
           <PlotChart render={renderComposition} className="w-full" />
         </DashCard>
+
+        <RecentTransactionsCard
+          rows={recentRows}
+          currency={transactions?.currency ?? trend.currency}
+        />
 
         <DashCard title={events.title}>
           {events.rows.length === 0 ? (

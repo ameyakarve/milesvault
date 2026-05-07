@@ -3,15 +3,7 @@
 import Link from 'next/link'
 import React, { useEffect, useMemo, useState } from 'react'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
-import {
-  MagnifyingGlass,
-  Sparkle,
-  ChartBar,
-  MagicWand,
-  Scales,
-  Microphone,
-  PaperPlaneTilt,
-} from '@phosphor-icons/react/dist/ssr'
+import { MagnifyingGlass } from '@phosphor-icons/react/dist/ssr'
 import { StatusBar } from '../_chrome/status-bar'
 
 type AccountKind = 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'
@@ -263,53 +255,6 @@ export function AccountsDirectory({ initialAsOf }: { initialAsOf: string }) {
           </div>
         </div>
       </main>
-
-      {/* Right AI sidebar */}
-      <aside className="w-[320px] bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden pb-7">
-        <div className="px-4 py-4 flex items-center space-x-2">
-          <Sparkle size={16} className="text-[#00685f]" weight="fill" />
-          <h2 className="text-[11px] font-bold uppercase tracking-widest text-slate-900">
-            AI Manuscript Assistant
-          </h2>
-        </div>
-        <div className="flex-1 flex flex-col justify-center px-6 text-center">
-          <div className="mb-6">
-            <p className="text-xs text-slate-500 leading-relaxed mb-4">
-              Ask AI about your account structure...
-            </p>
-            <div className="flex flex-col space-y-2">
-              <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
-                <ChartBar size={14} className="mr-2 text-slate-300" />
-                {`"Summarize my coffee spending"`}
-              </button>
-              <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
-                <MagicWand size={14} className="mr-2 text-slate-300" />
-                {`"Clean up payee names in this month"`}
-              </button>
-              <button className="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-slate-600 hover:border-[#00685f] transition-colors text-left flex items-center">
-                <Scales size={14} className="mr-2 text-slate-300" />
-                {`"Find unbalanced transactions"`}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="p-4 bg-white border-t border-slate-200">
-          <div className="relative bg-slate-50 rounded border border-slate-200 focus-within:border-[#00685f]/50 transition-colors">
-            <textarea
-              className="w-full bg-transparent border-none rounded p-3 h-24 resize-none text-[13px] text-slate-700 placeholder:text-slate-400 focus:ring-0 outline-none"
-              placeholder="Ask AI about this ledger..."
-            />
-            <div className="absolute bottom-2 right-2 flex items-center space-x-1">
-              <button className="p-1.5 text-slate-400 hover:text-slate-600">
-                <Microphone size={20} />
-              </button>
-              <button className="p-1.5 text-[#00685f]">
-                <PaperPlaneTilt size={20} weight="fill" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </aside>
 
       <StatusBar count={totalCount} />
     </>
