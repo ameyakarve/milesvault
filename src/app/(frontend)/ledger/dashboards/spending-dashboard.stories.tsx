@@ -112,7 +112,6 @@ export const Default: StoryObj = {
       cards={[]}
       txnCount={184}
       currency="INR"
-      defaultViewMode="overview"
       overviewBody={<SpendingDashboard {...SAMPLE} categoryTreemap={CATEGORY_TREEMAP} />}
     />
   ),

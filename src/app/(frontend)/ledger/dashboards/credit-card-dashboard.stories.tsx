@@ -245,7 +245,6 @@ export const Default: StoryObj = {
       cards={[]}
       txnCount={28}
       currency="INR"
-      defaultViewMode="overview"
       overviewBody={<CreditCardDashboard {...SAMPLE} />}
     />
   ),

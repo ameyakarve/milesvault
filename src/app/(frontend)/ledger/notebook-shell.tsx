@@ -560,18 +560,113 @@ function LeafChipsRow({
   )
 }
 
-export type ViewMode = 'overview' | 'editor'
+type ExpandedTab = 'statement' | 'editor'
 
-function SubToolbar({
-  viewMode,
-  onViewModeChange,
+export type NotebookShellProps = {
+  breadcrumb: string[]
+  accountTitle: string
+  accountPath: string
+  cards: Card[]
+  txnCount: number
+  unsaved?: boolean
+  saving?: boolean
+  onSave?: () => void
+  onRevert?: () => void
+  body?: ReactNode
+  overviewBody?: ReactNode
+  // When set, swaps in an expanded view in place of the dashboard. The
+  // header has a back button and Statement / Editor tabs; clicking Editor
+  // surfaces the existing `body` + `cards` editor pane and the save/revert
+  // controls. Used for URL-driven drill downs (e.g. /ledger/<account>/transactions).
+  expandedView?: { onBack: () => void; statementBody: ReactNode }
+  cursor?: string
+  currency?: string | null
+  currencies?: string[]
+  onCurrencyChange?: (next: string) => void
+  leafChips?: LeafChip[]
+  period?: Period
+  onPeriodChange?: (next: Period) => void
+}
+
+export function NotebookShell({
+  breadcrumb,
+  cards,
+  txnCount,
+  unsaved = false,
+  saving = false,
+  onSave,
+  onRevert,
+  body,
+  overviewBody,
+  expandedView,
+  cursor = 'Ln 1, Col 1',
+  currency,
+  currencies = [],
+  onCurrencyChange,
+  leafChips = [],
+  period = { kind: 'preset', preset: 'All time' },
+  onPeriodChange,
+}: NotebookShellProps) {
+  const [expandedTab, setExpandedTab] = useState<ExpandedTab>('statement')
+  return (
+    <div className="w-full h-screen flex bg-[#f7f9fb] font-sans text-[#191c1e] overflow-hidden">
+      <NavRail />
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex min-h-0">
+          <main className="flex-1 flex flex-col min-w-0">
+            <BreadcrumbRow
+              breadcrumb={breadcrumb}
+              currency={currency}
+              currencies={currencies}
+              onCurrencyChange={onCurrencyChange}
+              period={period}
+              onPeriodChange={onPeriodChange}
+            />
+            <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />
+            {expandedView ? (
+              <>
+                <ExpandedViewHeader
+                  onBack={expandedView.onBack}
+                  tab={expandedTab}
+                  onTabChange={setExpandedTab}
+                  unsaved={unsaved}
+                  saving={saving}
+                  onSave={onSave}
+                  onRevert={onRevert}
+                />
+                {expandedTab === 'statement' ? (
+                  <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
+                    {expandedView.statementBody}
+                  </div>
+                ) : (
+                  <EditorPane cards={cards} body={body} />
+                )}
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]">
+                {overviewBody}
+              </div>
+            )}
+          </main>
+        </div>
+        <StatusBar txnCount={txnCount} cursor={cursor} />
+      </div>
+    </div>
+  )
+}
+
+function ExpandedViewHeader({
+  onBack,
+  tab,
+  onTabChange,
   unsaved,
   saving,
   onSave,
   onRevert,
 }: {
-  viewMode: ViewMode
-  onViewModeChange: (mode: ViewMode) => void
+  onBack: () => void
+  tab: ExpandedTab
+  onTabChange: (next: ExpandedTab) => void
   unsaved: boolean
   saving: boolean
   onSave?: () => void
@@ -582,23 +677,32 @@ function SubToolbar({
   const tabIdle = 'text-slate-500 hover:text-slate-700'
   return (
     <div className="h-[40px] bg-[#eceef0] px-6 flex items-center justify-between border-b border-slate-200 shrink-0">
-      <div className="flex items-center h-full text-[11px] font-medium gap-4">
+      <div className="flex items-center h-full gap-4 text-[11px] font-medium">
         <button
           type="button"
-          onClick={() => onViewModeChange('overview')}
-          className={`${tabBase} ${viewMode === 'overview' ? tabActive : tabIdle}`}
+          onClick={onBack}
+          className="flex items-center gap-1 text-slate-600 hover:text-[#00685f] transition-colors"
         >
-          Overview
+          <span className="material-symbols-outlined !text-[16px]">arrow_back</span>
+          Back
+        </button>
+        <div className="h-4 w-[1px] bg-slate-300" />
+        <button
+          type="button"
+          onClick={() => onTabChange('statement')}
+          className={`${tabBase} ${tab === 'statement' ? tabActive : tabIdle}`}
+        >
+          Statement
         </button>
         <button
           type="button"
-          onClick={() => onViewModeChange('editor')}
-          className={`${tabBase} ${viewMode === 'editor' ? tabActive : tabIdle}`}
+          onClick={() => onTabChange('editor')}
+          className={`${tabBase} ${tab === 'editor' ? tabActive : tabIdle}`}
         >
           Editor
         </button>
       </div>
-      {viewMode === 'editor' && (
+      {tab === 'editor' && (
         <div className="flex items-center">
           <div className="flex items-center gap-1.5">
             <span
@@ -627,131 +731,6 @@ function SubToolbar({
           </button>
         </div>
       )}
-    </div>
-  )
-}
-
-export type NotebookShellProps = {
-  breadcrumb: string[]
-  accountTitle: string
-  accountPath: string
-  cards: Card[]
-  txnCount: number
-  unsaved?: boolean
-  saving?: boolean
-  onSave?: () => void
-  onRevert?: () => void
-  body?: ReactNode
-  overviewBody?: ReactNode
-  // When set, replaces the tabbed Overview/Editor area with a full-canvas
-  // detail view. The SubToolbar tabs are hidden; instead a header with a
-  // "← Back" button is rendered above the body. Used for URL-driven drill
-  // downs (e.g. /ledger/<account>/transactions).
-  expandedView?: { title: string; onBack: () => void; body: ReactNode }
-  defaultViewMode?: ViewMode
-  cursor?: string
-  currency?: string | null
-  currencies?: string[]
-  onCurrencyChange?: (next: string) => void
-  leafChips?: LeafChip[]
-  period?: Period
-  onPeriodChange?: (next: Period) => void
-}
-
-export function NotebookShell({
-  breadcrumb,
-  cards,
-  txnCount,
-  unsaved = false,
-  saving = false,
-  onSave,
-  onRevert,
-  body,
-  overviewBody,
-  expandedView,
-  defaultViewMode = 'overview',
-  cursor = 'Ln 1, Col 1',
-  currency,
-  currencies = [],
-  onCurrencyChange,
-  leafChips = [],
-  period = { kind: 'preset', preset: 'All time' },
-  onPeriodChange,
-}: NotebookShellProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode)
-  return (
-    <div className="w-full h-screen flex bg-[#f7f9fb] font-sans text-[#191c1e] overflow-hidden">
-      <NavRail />
-      <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex-1 flex min-h-0">
-          <main className="flex-1 flex flex-col min-w-0">
-            <BreadcrumbRow
-              breadcrumb={breadcrumb}
-              currency={currency}
-              currencies={currencies}
-              onCurrencyChange={onCurrencyChange}
-              period={period}
-              onPeriodChange={onPeriodChange}
-            />
-            <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />
-            {expandedView ? (
-              <>
-                <ExpandedViewHeader
-                  title={expandedView.title}
-                  onBack={expandedView.onBack}
-                />
-                <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
-                  {expandedView.body}
-                </div>
-              </>
-            ) : (
-              <>
-                <SubToolbar
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
-                  unsaved={unsaved}
-                  saving={saving}
-                  onSave={onSave}
-                  onRevert={onRevert}
-                />
-                {viewMode === 'overview' ? (
-                  <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#eceef0]">
-                    {overviewBody}
-                  </div>
-                ) : (
-                  <EditorPane cards={cards} body={body} />
-                )}
-              </>
-            )}
-          </main>
-        </div>
-        <StatusBar txnCount={txnCount} cursor={cursor} />
-      </div>
-    </div>
-  )
-}
-
-function ExpandedViewHeader({
-  title,
-  onBack,
-}: {
-  title: string
-  onBack: () => void
-}) {
-  return (
-    <div className="h-[40px] bg-[#eceef0] px-6 flex items-center gap-3 border-b border-slate-200 shrink-0">
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-[#00685f] transition-colors"
-      >
-        <span className="material-symbols-outlined !text-[16px]">
-          arrow_back
-        </span>
-        Back
-      </button>
-      <div className="h-4 w-[1px] bg-slate-300" />
-      <span className="text-[11px] font-bold text-slate-900">{title}</span>
     </div>
   )
 }

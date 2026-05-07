@@ -61,7 +61,6 @@ export const Default: StoryObj = {
       cards={[]}
       txnCount={64}
       currency="INR"
-      defaultViewMode="overview"
       overviewBody={<IncomeDashboard {...SAMPLE} />}
     />
   ),

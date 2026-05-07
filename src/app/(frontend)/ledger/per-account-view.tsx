@@ -163,13 +163,7 @@ function sliceFromWhole(text: string, account: string, currency: string): string
   return serializeJournal(txns, directives, { descending: true })
 }
 
-export function PerAccountView({
-  account,
-  defaultViewMode,
-}: {
-  account: string
-  defaultViewMode?: 'overview' | 'editor'
-}) {
+export function PerAccountView({ account }: { account: string }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -592,13 +586,12 @@ export function PerAccountView({
   const isTransactionsRoute = pathname.endsWith(TRANSACTIONS_SUFFIX)
   const expandedView = isTransactionsRoute
     ? {
-        title: 'Transactions',
         onBack: () => {
           const parent = pathname.slice(0, -TRANSACTIONS_SUFFIX.length)
           const qs = searchParams.toString()
           router.push(qs ? `${parent}?${qs}` : parent)
         },
-        body: statementBody,
+        statementBody,
       }
     : undefined
 
@@ -616,7 +609,6 @@ export function PerAccountView({
       body={body}
       overviewBody={overviewBody}
       expandedView={expandedView}
-      defaultViewMode={defaultViewMode}
       currency={currency}
       currencies={currencies}
       onCurrencyChange={onCurrencyChange}

@@ -406,7 +406,6 @@ export const Overview: StoryObj = {
       cards={[]}
       txnCount={42}
       currency="INR"
-      defaultViewMode="overview"
       overviewBody={<OverviewView {...BANK_OVERVIEW_SAMPLE} />}
     />
   ),
@@ -422,9 +421,8 @@ export const Statement: StoryObj = {
       txnCount={8}
       currency="INR"
       expandedView={{
-        title: 'Transactions',
         onBack: () => {},
-        body: (
+        statementBody: (
           <StatementView
             rows={STATEMENT_ROWS}
             totalDebit="7,453.00"
