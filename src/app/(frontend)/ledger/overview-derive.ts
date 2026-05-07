@@ -747,29 +747,31 @@ function buildCardSankey(
 
 // Per-day spend totals for the GitHub-style heatmap. Charges only (negative
 // `net` on a credit-normal liability, or any outflow elsewhere); payments
-// excluded. Returns one entry for every day in the window — including zero
-// days — so the calendar grid stays continuous.
+// excluded. Always emits exactly one year of days ending at `windowEnd`,
+// regardless of the period filter — days without spend stay blank in the
+// heatmap so the grid always reads as a full year.
 function buildSpendCalendar(
   facts: TxnFact[],
-  windowStart: Date,
+  _windowStart: Date,
   windowEnd: Date,
   currency: string,
 ): { days: { date: string; amount: number; label: string }[] } {
+  const end = new Date(
+    Date.UTC(windowEnd.getUTCFullYear(), windowEnd.getUTCMonth(), windowEnd.getUTCDate()),
+  )
+  const start = new Date(
+    Date.UTC(end.getUTCFullYear() - 1, end.getUTCMonth(), end.getUTCDate() + 1),
+  )
   const sumByDay = new Map<string, number>()
   for (const f of facts) {
-    if (f.date.getTime() < windowStart.getTime()) continue
-    if (f.date.getTime() > windowEnd.getTime()) continue
+    if (f.date.getTime() < start.getTime()) continue
+    if (f.date.getTime() > end.getTime()) continue
     if (f.net >= 0) continue
     const spend = -f.net
     sumByDay.set(f.ymd, (sumByDay.get(f.ymd) ?? 0) + spend)
   }
   const days: { date: string; amount: number; label: string }[] = []
-  const cursor = new Date(
-    Date.UTC(windowStart.getUTCFullYear(), windowStart.getUTCMonth(), windowStart.getUTCDate()),
-  )
-  const end = new Date(
-    Date.UTC(windowEnd.getUTCFullYear(), windowEnd.getUTCMonth(), windowEnd.getUTCDate()),
-  )
+  const cursor = new Date(start)
   while (cursor.getTime() <= end.getTime()) {
     const ymd = `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, '0')}-${String(cursor.getUTCDate()).padStart(2, '0')}`
     const amount = sumByDay.get(ymd) ?? 0

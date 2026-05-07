@@ -34,6 +34,8 @@ export function SpendHeatmap({ days, currency }: Props) {
       endDate={endDate}
       withMonthLabels
       withWeekdayLabels
+      weekdayLabels={['S', 'M', 'T', 'W', 'T', 'F', 'S']}
+      firstDayOfWeek={0}
       withTooltip
       withOutsideDates={false}
       colors={['#f1f5f9', '#bdf0e6', '#5cc4b3', '#0f766e', '#0a4f4a']}
