@@ -434,7 +434,7 @@ function BreadcrumbRow({
   const baseHref = `/ledger/${encodeURIComponent(breadcrumb.join('.'))}`
   const hasChildren = leafChips.length > 0
   return (
-    <div className="h-10 bg-white px-6 flex items-center justify-between border-b border-slate-100 shrink-0">
+    <div className="h-10 bg-[#f7f9fb] px-6 flex items-center justify-between border-b border-slate-100 shrink-0">
       <div className="flex items-center gap-1.5 font-mono text-[11px] min-w-0">
         <Link
           href="/ledger"

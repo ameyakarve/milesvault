@@ -39,21 +39,13 @@ export function CreditCardDashboard(props: OverviewViewProps) {
     <div
       data-overview-root
       data-dashboard-slug="credit-card"
-      className="flex-1 flex flex-col bg-white overflow-y-auto"
+      className="flex-1 flex flex-col bg-[#f7f9fb] overflow-y-auto"
     >
       <Container fluid p="lg" w="100%">
         <Masonry>
           {headerStats && (
             <StatementSummaryCard balance={headerStats.balance} monthlyNet={monthlyNet} />
           )}
-
-          <ActivityCard
-            recentCharges={recentCharges}
-            spendCalendar={spendCalendar}
-            currency={currency}
-          />
-
-          <TopMerchantsCard topMerchants={topMerchants} />
 
           {categoryTreemap && (categoryTreemap.children?.length ?? 0) > 0 && (
             <DashCard title="Spend by category">
@@ -64,6 +56,14 @@ export function CreditCardDashboard(props: OverviewViewProps) {
               />
             </DashCard>
           )}
+
+          <ActivityCard
+            recentCharges={recentCharges}
+            spendCalendar={spendCalendar}
+            currency={currency}
+          />
+
+          <TopMerchantsCard topMerchants={topMerchants} />
 
           <MoneyFlowCard
             paidFrom={paidFrom}
