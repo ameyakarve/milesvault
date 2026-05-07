@@ -1,6 +1,12 @@
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 
-// Per-account currency lock validator. Policy:
+// Per-account currency lock validator. Scope: only balance-bearing accounts
+// (Assets, Liabilities, Equity). Flow accounts (Income, Expenses) legitimately
+// mix currencies — e.g. a USD purchase on an INR card posts USD to the
+// expense account and the `@@` annotation reconciles to INR on the liability
+// side — so we never lock or auto-open them.
+//
+// Policy for in-scope accounts:
 // - Every account that participates in a posting must have an `open` directive.
 // - That open must declare exactly one constraint currency.
 // - Every posting on the account must use that currency.
@@ -9,6 +15,13 @@ import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 // The validator is pure. Callers decide what to do with each issue kind:
 // the DO rejects on any issue; the client auto-inserts opens for
 // `missing_open` and rejects everything else.
+
+const BALANCE_BEARING_TOPS = new Set(['Assets', 'Liabilities', 'Equity'])
+
+function isBalanceBearing(account: string): boolean {
+  const top = account.split(':', 1)[0]!
+  return BALANCE_BEARING_TOPS.has(top)
+}
 
 export type CurrencyIssue =
   | {
@@ -65,6 +78,7 @@ export function validateAccountCurrencies(
   const conflictingMissingAccounts = new Set<string>()
 
   for (const [account, info] of opens) {
+    if (!isBalanceBearing(account)) continue
     if (info.currencies.length !== 1 && !reportedMultiCurrencyOpens.has(account)) {
       reportedMultiCurrencyOpens.add(account)
       issues.push({
@@ -82,6 +96,7 @@ export function validateAccountCurrencies(
   for (const txn of transactions) {
     for (const p of txn.postings) {
       if (!p.currency) continue
+      if (!isBalanceBearing(p.account)) continue
       const open = opens.get(p.account)
       const close = closes.get(p.account)
 
