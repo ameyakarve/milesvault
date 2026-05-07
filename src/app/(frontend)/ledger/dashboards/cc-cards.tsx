@@ -2,11 +2,10 @@
 
 import { Group, Stack, Text, Tooltip } from '@mantine/core'
 import { Sparkline } from '@mantine/charts'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 import type { CompositionRow, EventRow, TreemapNode, TrendPoint } from '../overview-view'
 import { CardEyebrow, DashCard, HeroValue } from './cards'
 import { CURRENCY_SYMBOL, TREEMAP_PALETTE, compactAmount, formatAmount } from './format'
+import { RecentTransactionsCard } from './recent-transactions-card'
 
 // Statement summary: hero card. Period spend is the headline number; the
 // sparkline shows the monthly trend; balance owed is the secondary line.
@@ -240,9 +239,9 @@ export function TopMerchantsCard({
 }
 
 // Activity: 30-day daily-intensity sparkline pinned to the top of the
-// recent-charges list. Combines what used to be Spend Calendar's "rough
-// pulse" with a charges-only event log so there's one card for "what did
-// I just spend on lately."
+// recent-charges list. Composes <RecentTransactionsCard> with a CC-specific
+// sparkline header and unsigned amount display (the column is uniformly
+// outflows on a credit card).
 export function ActivityCard({
   recentCharges,
   spendCalendar,
@@ -257,88 +256,34 @@ export function ActivityCard({
   const last30 = last30Days.map((d) => d.amount)
   const last30Total = last30.reduce((s, n) => s + n, 0)
   const showSpark = last30.length >= 7 && last30Total > 0
-  const pathname = usePathname()
-  // Strip a trailing /transactions so refreshing on the modal URL still
-  // composes a sane parent-relative href.
-  const basePath = pathname.endsWith('/transactions')
-    ? pathname.slice(0, -'/transactions'.length)
-    : pathname
-  const viewAllHref = `${basePath}/transactions`
-  const headerRight =
-    rows.length > 0 ? (
-      <Link
-        href={viewAllHref}
-        scroll={false}
-        className="text-[11px] font-medium text-[#00685f] hover:text-[#004d47] hover:underline"
-      >
-        View all →
-      </Link>
-    ) : undefined
-  return (
-    <DashCard title="Recent charges" right={headerRight}>
-      {showSpark && (
-        <Stack gap={2} mb="sm">
-          <Sparkline
-            data={last30}
-            h={36}
-            curveType="linear"
-            color="#0f766e"
-            fillOpacity={0.22}
-            strokeWidth={1.5}
-          />
-          <Group justify="space-between" gap={0}>
-            <Text size="10px" ff="monospace" c="dimmed">
-              {formatShortDate(last30Days[0]!.date)}
-            </Text>
-            <Text size="10px" ff="monospace" c="dimmed">
-              {formatShortDate(last30Days[last30Days.length - 1]!.date)}
-            </Text>
-          </Group>
-        </Stack>
-      )}
-      {rows.length === 0 ? (
-        <Text size="xs" c="dimmed" py="xs">
-          No charges in this period
+  const sparkHeader = showSpark ? (
+    <Stack gap={2} mb="sm">
+      <Sparkline
+        data={last30}
+        h={36}
+        curveType="linear"
+        color="#0f766e"
+        fillOpacity={0.22}
+        strokeWidth={1.5}
+      />
+      <Group justify="space-between" gap={0}>
+        <Text size="10px" ff="monospace" c="dimmed">
+          {formatShortDate(last30Days[0]!.date)}
         </Text>
-      ) : (
-        <div>
-          {rows.map((row, i) => {
-            const display =
-              row.amountValue != null
-                ? `${CURRENCY_SYMBOL[currency] ?? ''}${compactAmount(row.amountValue, currency)}`
-                : row.amount.startsWith('+')
-                  ? row.amount.slice(1)
-                  : row.amount
-            return (
-              <div
-                key={i}
-                className={`h-[44px] flex items-center px-2 text-[12px] gap-3 ${
-                  i === 0 ? 'bg-slate-50/70 rounded' : ''
-                } ${i < rows.length - 1 ? 'border-b border-slate-100' : ''}`}
-              >
-                <div className="w-[80px] shrink-0 font-mono text-[11px] text-slate-500">
-                  {row.date}
-                </div>
-                <div
-                  className={`shrink-0 truncate min-w-0 max-w-[160px] ${
-                    i === 0 ? 'font-semibold text-slate-900' : 'font-medium text-slate-900'
-                  }`}
-                >
-                  {row.payee}
-                </div>
-                <div className="flex-1 text-slate-600 truncate min-w-0">{row.narration}</div>
-                <Tooltip label={row.amount} withArrow openDelay={300}>
-                  <div
-                    className={`shrink-0 text-right font-mono tabular-nums ${row.amountClass}`}
-                  >
-                    {display}
-                  </div>
-                </Tooltip>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </DashCard>
+        <Text size="10px" ff="monospace" c="dimmed">
+          {formatShortDate(last30Days[last30Days.length - 1]!.date)}
+        </Text>
+      </Group>
+    </Stack>
+  ) : null
+  return (
+    <RecentTransactionsCard
+      title="Recent charges"
+      emptyText="No charges in this period"
+      rows={rows}
+      currency={currency}
+      headerSlot={sparkHeader}
+      signed={false}
+    />
   )
 }

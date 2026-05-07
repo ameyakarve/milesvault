@@ -9,6 +9,7 @@ import { PlotChart } from './plot-chart'
 import { Masonry } from './masonry'
 import { DashCard, StatCard } from './cards'
 import { CURRENCY_SYMBOL, compactAmount } from './format'
+import { RecentTransactionsCard } from './recent-transactions-card'
 
 // Palettes carry semantic meaning: an "asset" dashboard reads in brand teal
 // (positive flow / things-you-own); a "liability" dashboard reads in rose
@@ -54,7 +55,8 @@ export function DashboardScaffold(
     midCard?: { title: string; body: ReactNode } | null
   },
 ) {
-  const { trend, composition, events, config, midCard, headerStats } = props
+  const { trend, composition, events, config, midCard, headerStats, transactions } = props
+  const recentRows = transactions?.rows.slice(0, 5) ?? []
   const palette = PALETTES[config.palette]
   const symbol = CURRENCY_SYMBOL[trend.currency] ?? ''
 
@@ -137,6 +139,11 @@ export function DashboardScaffold(
         >
           <PlotChart render={renderComposition} className="w-full" />
         </DashCard>
+
+        <RecentTransactionsCard
+          rows={recentRows}
+          currency={transactions?.currency ?? trend.currency}
+        />
 
         <DashCard title={config.eventsTitle}>
           {events.rows.length === 0 ? (
