@@ -15,7 +15,7 @@ const buildId =
 // runtime conditional `module.exports = require('./cjs/...')` defeats the
 // lexer). Force the CJS build of @mantine/* — its files use `react.Activity`
 // runtime property access, which webpack resolves fine.
-const mantineCjs = (pkg: string) =>
+const mantineCjs = (pkg) =>
   path.resolve(__dirname, `node_modules/@mantine/${pkg}/cjs/index.cjs`)
 
 /** @type {import('next').NextConfig} */
@@ -26,7 +26,7 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_ID: buildId,
   },
   generateBuildId: async () => buildId,
-  webpack: (webpackConfig: any, { webpack }: { webpack: any }) => {
+  webpack: (webpackConfig, { webpack }) => {
     webpackConfig.resolve.extensionAlias = {
       '.cjs': ['.cts', '.cjs'],
       '.js': ['.ts', '.tsx', '.js', '.jsx'],
