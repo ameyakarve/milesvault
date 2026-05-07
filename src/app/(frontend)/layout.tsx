@@ -3,6 +3,7 @@ import { MantineProvider, ColorSchemeScript, mantineHtmlProps } from '@mantine/c
 import './styles.css'
 import '@mantine/core/styles.css'
 import '@mantine/charts/styles.css'
+import '@mantine/dates/styles.css'
 
 export const metadata = {
   description: 'MilesVault — personal finance ledger',
