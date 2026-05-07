@@ -2,7 +2,14 @@
 
 import Link from 'next/link'
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
-import { Button } from '@mantine/core'
+import { Button, Popover } from '@mantine/core'
+import { DatePicker } from '@mantine/dates'
+import {
+  PERIOD_PRESETS,
+  periodLabel,
+  type Period,
+  type PeriodPreset,
+} from './overview-derive'
 import CodeMirror from '@uiw/react-codemirror'
 import {
   Decoration,
@@ -325,27 +332,113 @@ function PopoverMenu({
   )
 }
 
+function PeriodPicker({
+  period,
+  onPeriodChange,
+  opened,
+  setOpened,
+  enabled,
+}: {
+  period: Period
+  onPeriodChange?: (next: Period) => void
+  opened: boolean
+  setOpened: (v: boolean) => void
+  enabled: boolean
+}) {
+  const initialRange: [string | null, string | null] =
+    period.kind === 'custom' ? [period.start, period.end] : [null, null]
+  const [range, setRange] = useState<[string | null, string | null]>(initialRange)
+  const label = periodLabel(period)
+  const trigger = (
+    <button
+      type="button"
+      onClick={enabled ? () => setOpened(!opened) : undefined}
+      aria-haspopup={enabled ? 'dialog' : undefined}
+      aria-expanded={enabled ? opened : undefined}
+      className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1 rounded-full transition-colors"
+    >
+      <span className="material-symbols-outlined !text-[14px] text-slate-400">schedule</span>
+      {label}
+      <span className="material-symbols-outlined !text-[14px] -mr-1">arrow_drop_down</span>
+    </button>
+  )
+  if (!enabled) return trigger
+  return (
+    <Popover
+      opened={opened}
+      onChange={setOpened}
+      position="bottom-end"
+      shadow="md"
+      withArrow={false}
+      trapFocus
+    >
+      <Popover.Target>{trigger}</Popover.Target>
+      <Popover.Dropdown p={0}>
+        <div className="flex">
+          <ul className="flex flex-col py-2 border-r border-slate-100 min-w-[110px]">
+            {PERIOD_PRESETS.map((p) => {
+              const selected = period.kind === 'preset' && period.preset === p
+              return (
+                <li key={p}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onPeriodChange?.({ kind: 'preset', preset: p as PeriodPreset })
+                      setRange([null, null])
+                      setOpened(false)
+                    }}
+                    className={`w-full text-left font-mono text-[11px] px-4 py-1.5 transition-colors ${
+                      selected
+                        ? 'bg-[#00685f] text-white'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-[#00685f]'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="p-2">
+            <DatePicker
+              type="range"
+              value={range}
+              onChange={(next) => {
+                setRange(next)
+                if (next[0] && next[1]) {
+                  onPeriodChange?.({ kind: 'custom', start: next[0], end: next[1] })
+                  setOpened(false)
+                }
+              }}
+              numberOfColumns={2}
+              size="xs"
+            />
+          </div>
+        </div>
+      </Popover.Dropdown>
+    </Popover>
+  )
+}
+
 function BreadcrumbRow({
   breadcrumb,
   currency,
   currencies,
   onCurrencyChange,
   period,
-  periods,
   onPeriodChange,
 }: {
   breadcrumb: string[]
   currency: string | null | undefined
   currencies: string[]
   onCurrencyChange?: (next: string) => void
-  period: string
-  periods: string[]
-  onPeriodChange?: (next: string) => void
+  period: Period
+  onPeriodChange?: (next: Period) => void
 }) {
   const [currencyOpen, setCurrencyOpen] = useState(false)
   const [periodOpen, setPeriodOpen] = useState(false)
   const canOpenCurrency = !!onCurrencyChange && currencies.length > 1
-  const canOpenPeriod = !!onPeriodChange && periods.length > 1
+  const canOpenPeriod = !!onPeriodChange
   return (
     <div className="h-10 bg-white px-6 flex items-center justify-between border-b border-slate-50 shrink-0">
       <div className="flex items-center gap-1.5 font-mono text-[11px]">
@@ -381,31 +474,13 @@ function BreadcrumbRow({
         })}
       </div>
       <div className="flex items-center gap-3">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={canOpenPeriod ? () => setPeriodOpen((v) => !v) : undefined}
-            aria-haspopup={canOpenPeriod ? 'menu' : undefined}
-            aria-expanded={canOpenPeriod ? periodOpen : undefined}
-            className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center gap-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-3 py-1 rounded-full transition-colors"
-          >
-            <span className="material-symbols-outlined !text-[14px] text-slate-400">
-              schedule
-            </span>
-            {period}
-            <span className="material-symbols-outlined !text-[14px] -mr-1">
-              arrow_drop_down
-            </span>
-          </button>
-          {periodOpen && canOpenPeriod && (
-            <PopoverMenu
-              options={periods}
-              selected={period}
-              onSelect={onPeriodChange!}
-              onClose={() => setPeriodOpen(false)}
-            />
-          )}
-        </div>
+        <PeriodPicker
+          period={period}
+          onPeriodChange={onPeriodChange}
+          opened={periodOpen}
+          setOpened={setPeriodOpen}
+          enabled={canOpenPeriod}
+        />
         {currency &&
           (canOpenCurrency ? (
             <div className="relative">
@@ -582,9 +657,8 @@ export type NotebookShellProps = {
   currencies?: string[]
   onCurrencyChange?: (next: string) => void
   leafChips?: LeafChip[]
-  period?: string
-  periods?: string[]
-  onPeriodChange?: (next: string) => void
+  period?: Period
+  onPeriodChange?: (next: Period) => void
 }
 
 export function NotebookShell({
@@ -604,8 +678,7 @@ export function NotebookShell({
   currencies = [],
   onCurrencyChange,
   leafChips = [],
-  period = 'All time',
-  periods = [],
+  period = { kind: 'preset', preset: 'All time' },
   onPeriodChange,
 }: NotebookShellProps) {
   const [viewMode, setViewMode] = useState<ViewMode>(defaultViewMode)
@@ -621,7 +694,6 @@ export function NotebookShell({
               currencies={currencies}
               onCurrencyChange={onCurrencyChange}
               period={period}
-              periods={periods}
               onPeriodChange={onPeriodChange}
             />
             <LeafChipsRow leafChips={leafChips} breadcrumb={breadcrumb} />

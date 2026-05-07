@@ -10,7 +10,25 @@ import type {
   SankeyDatum,
 } from './overview-view'
 
-export type Period = 'All time' | '12M' | 'YTD' | '3M' | '1M'
+export type PeriodPreset = 'All time' | '12M' | 'YTD' | '3M' | '1M'
+export type Period =
+  | { kind: 'preset'; preset: PeriodPreset }
+  | { kind: 'custom'; start: string; end: string } // YYYY-MM-DD inclusive
+
+export const PERIOD_PRESETS: PeriodPreset[] = ['All time', '12M', 'YTD', '3M', '1M']
+export const DEFAULT_PERIOD: Period = { kind: 'preset', preset: 'All time' }
+
+export function periodLabel(p: Period): string {
+  if (p.kind === 'preset') return p.preset
+  const s = parseYMD(p.start)
+  const e = parseYMD(p.end)
+  if (!s || !e) return 'Custom'
+  const sameYear = s.getUTCFullYear() === e.getUTCFullYear()
+  const fmt = (d: Date) =>
+    `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}${sameYear ? '' : `, ${d.getUTCFullYear()}`}`
+  const yearSuffix = sameYear ? `, ${e.getUTCFullYear()}` : ''
+  return `${fmt(s)} – ${fmt(e)}${yearSuffix}`
+}
 
 const CURRENCY_META: Record<string, { symbol: string; locale: string }> = {
   INR: { symbol: '₹', locale: 'en-IN' },
@@ -67,8 +85,8 @@ function addMonths(d: Date, n: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1))
 }
 
-function periodStart(now: Date, period: Period, earliest: Date): Date {
-  switch (period) {
+function presetStart(now: Date, preset: PeriodPreset, earliest: Date): Date {
+  switch (preset) {
     case '1M':
       return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, now.getUTCDate()))
     case '3M':
@@ -81,6 +99,19 @@ function periodStart(now: Date, period: Period, earliest: Date): Date {
     default:
       return earliest
   }
+}
+
+function resolveRange(
+  period: Period,
+  earliest: Date,
+  latest: Date,
+): { start: Date; end: Date } {
+  if (period.kind === 'custom') {
+    const start = parseYMD(period.start) ?? earliest
+    const end = parseYMD(period.end) ?? latest
+    return { start, end }
+  }
+  return { start: presetStart(latest, period.preset, earliest), end: latest }
 }
 
 type TxnFact = {
@@ -745,12 +776,13 @@ export function deriveOverview(args: {
   period: Period
 }): OverviewViewProps {
   const { cardSpecs, transactions, entries, account, currency, period } = args
+  const periodCaption = periodLabel(period)
   const facts = txnFacts(transactions, cardSpecs, entries, account, currency)
   if (facts.length === 0) {
     return {
       kpis: [
         { label: 'Balance', value: `${fmtSymbol(currency)}0.00`, caption: 'no activity' },
-        { label: `Net change · ${period}`, value: fmtSigned(0, currency) },
+        { label: `Net change · ${periodCaption}`, value: fmtSigned(0, currency) },
         { label: 'Activity', value: '0', caption: 'transactions' },
       ],
       trend: { title: 'Balance over time', currency, points: [], highlightIndex: -1 },
@@ -760,9 +792,10 @@ export function deriveOverview(args: {
   }
   const earliest = facts[0]!.date
   const latest = facts[facts.length - 1]!.date
-  const now = latest
-  const start = periodStart(now, period, earliest)
-  const inWindow = facts.filter((f) => f.date.getTime() >= start.getTime())
+  const { start, end: now } = resolveRange(period, earliest, latest)
+  const inWindow = facts.filter(
+    (f) => f.date.getTime() >= start.getTime() && f.date.getTime() <= now.getTime(),
+  )
   const balance = facts[facts.length - 1]!.runningAfter
   const balanceBefore = (() => {
     const prior = facts.filter((f) => f.date.getTime() < start.getTime())
@@ -795,7 +828,7 @@ export function deriveOverview(args: {
         caption: `as of ${facts[facts.length - 1]!.ymd}`,
       },
       {
-        label: `Net change · ${period}`,
+        label: `Net change · ${periodCaption}`,
         value: fmtSigned(netChange, currency),
         valueClass: netChange < 0 ? 'text-rose-600' : 'text-[#00685f]',
       },

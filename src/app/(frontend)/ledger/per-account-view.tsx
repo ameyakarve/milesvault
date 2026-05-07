@@ -25,7 +25,7 @@ import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import { resolveDashboard } from '@/lib/ledger-core/taxonomy'
 import { NotebookShell } from './notebook-shell'
 import { OverviewView } from './overview-view'
-import { deriveOverview, type Period } from './overview-derive'
+import { DEFAULT_PERIOD, deriveOverview, type Period } from './overview-derive'
 import { getDashboardComponent } from './dashboards/registry'
 import { StatementView, type StatementRowData } from './statement-view'
 import {
@@ -182,7 +182,7 @@ export function PerAccountView({
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [period, setPeriod] = useState<Period>('All time')
+  const [period, setPeriod] = useState<Period>(DEFAULT_PERIOD)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -608,10 +608,7 @@ export function PerAccountView({
       onCurrencyChange={onCurrencyChange}
       leafChips={children}
       period={period}
-      periods={PERIOD_OPTIONS}
-      onPeriodChange={(next) => setPeriod(next as Period)}
+      onPeriodChange={setPeriod}
     />
   )
 }
-
-const PERIOD_OPTIONS: Period[] = ['All time', '12M', 'YTD', '3M', '1M']
