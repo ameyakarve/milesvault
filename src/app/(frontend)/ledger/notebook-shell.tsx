@@ -406,30 +406,33 @@ function BreadcrumbRow({
             />
           )}
         </div>
-        {currency && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={canOpenCurrency ? () => setCurrencyOpen((v) => !v) : undefined}
-              aria-haspopup={canOpenCurrency ? 'menu' : undefined}
-              aria-expanded={canOpenCurrency ? currencyOpen : undefined}
-              className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center"
-            >
-              {currency}
-              <span className="material-symbols-outlined !text-[14px] ml-0.5">
-                arrow_drop_down
-              </span>
-            </button>
-            {currencyOpen && canOpenCurrency && (
-              <PopoverMenu
-                options={currencies}
-                selected={currency}
-                onSelect={onCurrencyChange!}
-                onClose={() => setCurrencyOpen(false)}
-              />
-            )}
-          </div>
-        )}
+        {currency &&
+          (canOpenCurrency ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setCurrencyOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={currencyOpen}
+                className="font-mono text-[11px] text-slate-600 hover:text-[#00685f] flex items-center"
+              >
+                {currency}
+                <span className="material-symbols-outlined !text-[14px] ml-0.5">
+                  arrow_drop_down
+                </span>
+              </button>
+              {currencyOpen && (
+                <PopoverMenu
+                  options={currencies}
+                  selected={currency}
+                  onSelect={onCurrencyChange!}
+                  onClose={() => setCurrencyOpen(false)}
+                />
+              )}
+            </div>
+          ) : (
+            <span className="font-mono text-[11px] text-slate-600">{currency}</span>
+          ))}
       </div>
     </div>
   )
