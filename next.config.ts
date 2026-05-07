@@ -37,6 +37,7 @@ const nextConfig = {
       ...webpackConfig.resolve.alias,
       '@mantine/core$': mantineCjs('core'),
       '@mantine/charts$': mantineCjs('charts'),
+      '@mantine/dates$': mantineCjs('dates'),
       '@mantine/hooks$': mantineCjs('hooks'),
     }
 
