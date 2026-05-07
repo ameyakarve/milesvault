@@ -454,10 +454,9 @@ function BreadcrumbRow({
         </Link>
         {breadcrumb.map((seg, i) => {
           const isLast = i === breadcrumb.length - 1
-          const href = `/ledger/${breadcrumb
-            .slice(0, i + 1)
-            .map(encodeURIComponent)
-            .join('/')}`
+          const href = `/ledger/${encodeURIComponent(
+            breadcrumb.slice(0, i + 1).join('.'),
+          )}`
           return (
             <Fragment key={`${seg}-${i}`}>
               <span className="material-symbols-outlined !text-[12px] text-slate-300">
@@ -523,7 +522,7 @@ function LeafChipsRow({
   breadcrumb: string[]
 }) {
   if (leafChips.length === 0) return null
-  const baseHref = `/ledger/${breadcrumb.map(encodeURIComponent).join('/')}`
+  const baseHref = `/ledger/${encodeURIComponent(breadcrumb.join('.'))}`
   return (
     <div className="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between shrink-0">
       <div className="flex-1 mr-4 overflow-x-auto">

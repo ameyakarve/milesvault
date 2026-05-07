@@ -461,6 +461,22 @@ function buildRecentCharges(facts: TxnFact[], currency: string): EventRow[] {
   }))
 }
 
+// All transactions in the period, most-recent-first. Inflows and outflows
+// both included; signed amounts. Powers the "view all" modal that expands
+// from ActivityCard.
+function buildAllTransactions(facts: TxnFact[], currency: string): EventRow[] {
+  return [...facts]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .map((f) => ({
+      date: f.ymd,
+      payee: f.payee || '—',
+      narration: f.narration || '',
+      amount: fmtSigned(f.net, currency),
+      amountValue: f.net,
+      amountClass: f.net < 0 ? 'text-rose-600' : 'text-[#00685f]',
+    }))
+}
+
 function buildEvents(facts: TxnFact[], currency: string): EventRow[] {
   const ranked = [...facts]
     .filter((f) => f.abs > 0)
@@ -820,6 +836,7 @@ export function deriveOverview(args: {
   const spendCalendar = buildSpendCalendar(facts, start, now, currency)
   const topMerchants = buildTopMerchants(inWindow)
   const recentCharges = buildRecentCharges(inWindow, currency)
+  const allTxnRows = buildAllTransactions(inWindow, currency)
   return {
     kpis: [
       {
@@ -850,5 +867,6 @@ export function deriveOverview(args: {
     spendCalendar: { currency, days: spendCalendar.days },
     topMerchants: { currency, rows: topMerchants.rows },
     recentCharges: { rows: recentCharges },
+    transactions: { rows: allTxnRows, currency },
   }
 }

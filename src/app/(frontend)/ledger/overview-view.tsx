@@ -74,6 +74,9 @@ export type OverviewViewProps = {
   // Recent charges: outflows only, most-recent-first. Distinct from `events`
   // (top-by-amount mixed flows) which is consumed by bank-style dashboards.
   recentCharges?: { rows: EventRow[] }
+  // All transactions in the period, signed, most-recent-first. Powers the
+  // "view all" modal that expands from the recent-charges card.
+  transactions?: { rows: EventRow[]; currency: string }
   // Pre-formatted header tiles. Rendered as the first cards of the dashboard
   // masonry; the parent shell no longer renders a separate stats row.
   headerStats?: {
