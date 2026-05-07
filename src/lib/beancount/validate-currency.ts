@@ -1,10 +1,12 @@
 import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 
-// Per-account currency lock validator. Scope: only balance-bearing accounts
-// (Assets, Liabilities, Equity). Flow accounts (Income, Expenses) legitimately
-// mix currencies — e.g. a USD purchase on an INR card posts USD to the
-// expense account and the `@@` annotation reconciles to INR on the liability
-// side — so we never lock or auto-open them.
+// Per-account currency lock validator. Scope: only Assets and Liabilities,
+// which represent real positions in real currencies. Income/Expenses
+// legitimately mix currencies (a USD purchase on an INR card posts USD to
+// the expense account, with `@@` reconciling to INR on the liability side).
+// Equity is also excluded: accounts like Equity:Conversions and Equity:Void
+// are aggregation buckets that routinely receive multi-currency postings
+// (rewards points, conversion residuals, opening balances).
 //
 // Policy for in-scope accounts:
 // - Every account that participates in a posting must have an `open` directive.
@@ -16,11 +18,11 @@ import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 // the DO rejects on any issue; the client auto-inserts opens for
 // `missing_open` and rejects everything else.
 
-const BALANCE_BEARING_TOPS = new Set(['Assets', 'Liabilities', 'Equity'])
+const LOCKED_TOPS = new Set(['Assets', 'Liabilities'])
 
-function isBalanceBearing(account: string): boolean {
+function isLocked(account: string): boolean {
   const top = account.split(':', 1)[0]!
-  return BALANCE_BEARING_TOPS.has(top)
+  return LOCKED_TOPS.has(top)
 }
 
 export type CurrencyIssue =
@@ -78,7 +80,7 @@ export function validateAccountCurrencies(
   const conflictingMissingAccounts = new Set<string>()
 
   for (const [account, info] of opens) {
-    if (!isBalanceBearing(account)) continue
+    if (!isLocked(account)) continue
     if (info.currencies.length !== 1 && !reportedMultiCurrencyOpens.has(account)) {
       reportedMultiCurrencyOpens.add(account)
       issues.push({
@@ -96,7 +98,7 @@ export function validateAccountCurrencies(
   for (const txn of transactions) {
     for (const p of txn.postings) {
       if (!p.currency) continue
-      if (!isBalanceBearing(p.account)) continue
+      if (!isLocked(p.account)) continue
       const open = opens.get(p.account)
       const close = closes.get(p.account)
 
