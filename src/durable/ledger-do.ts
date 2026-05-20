@@ -1,4 +1,8 @@
-import { DurableObject } from 'cloudflare:workers'
+import { Think } from '@cloudflare/think'
+import { createWorkersAI } from 'workers-ai-provider'
+import { tool, type ToolSet } from 'ai'
+import { z } from 'zod'
+import { buildSystemPrompt } from './agent-prompt'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -85,29 +89,66 @@ function decimalToScaled(text: string): { scaled: number; scale: number } | null
   return { scaled: negative ? -mag : mag, scale }
 }
 
-export class LedgerDO extends DurableObject<CloudflareEnv> {
-  private sql: SqlStorage
+const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
 
-  constructor(state: DurableObjectState, env: CloudflareEnv) {
+export class LedgerDO extends Think {
+  private db: SqlStorage
+
+  constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
-    this.sql = state.storage.sql
+    this.db = state.storage.sql
     this.migrate()
+  }
+
+  getModel() {
+    const workersai = createWorkersAI({ binding: this.env.AI })
+    return workersai(MODEL_ID)
+  }
+
+  getSystemPrompt(): string {
+    // Synchronous per the Think API. Build from the cached snapshot — Think
+    // calls this on every turn, so we recompute fresh each time.
+    const snapshot = this.ledger_snapshot_sync()
+    return buildSystemPrompt(snapshot)
+  }
+
+  getTools(): ToolSet {
+    return {
+      sql_query: tool({
+        description:
+          'Run a read-only SQL query against the ledger SQLite. Engine-enforced read-only; use parameters; LIMIT aggressively.',
+        inputSchema: z.object({
+          sql: z.string().describe('SELECT or WITH statement only.'),
+          params: z
+            .array(z.union([z.string(), z.number(), z.null()]))
+            .optional()
+            .describe('Positional parameters bound to ? placeholders.'),
+        }),
+        execute: async ({ sql, params }) => {
+          try {
+            return await this.query_sql(sql, params ?? [])
+          } catch (e) {
+            return { error: e instanceof Error ? e.message : String(e) }
+          }
+        },
+      }),
+    }
   }
 
   private migrate(): void {
     const v2Exists =
-      (this.sql
+      (this.db
         .exec<{ n: number }>(
           "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='transactions_v2'",
         )
         .toArray()[0]?.n ?? 0) > 0
     if (v2Exists) {
-      this.sql.exec('DROP TABLE IF EXISTS transactions')
-      this.sql.exec('ALTER TABLE transactions_v2 RENAME TO transactions')
+      this.db.exec('DROP TABLE IF EXISTS transactions')
+      this.db.exec('ALTER TABLE transactions_v2 RENAME TO transactions')
     }
     for (const step of SCHEMA_STEPS) {
       try {
-        this.sql.exec(step.sql)
+        this.db.exec(step.sql)
       } catch (e) {
         if (step.allowFail) continue
         console.error(`[migrate] step ${step.label} failed`, { err: String(e) })
@@ -117,7 +158,11 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async journal_get(): Promise<JournalGetResponse> {
-    const txnIds = this.sql
+    return this.journal_get_sync()
+  }
+
+  journal_get_sync(): JournalGetResponse {
+    const txnIds = this.db
       .exec<{ id: number }>('SELECT id FROM transactions ORDER BY date ASC, id ASC')
       .toArray()
       .map((r) => r.id)
@@ -131,7 +176,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   async journal_get_for_account(account: string): Promise<JournalGetResponse> {
-    const txnIds = this.sql
+    const txnIds = this.db
       .exec<{ id: number }>(
         `SELECT id FROM transactions
          WHERE id IN (
@@ -158,7 +203,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     account: string,
     currency: string,
   ): Promise<JournalGetResponse> {
-    const txnIds = this.sql
+    const txnIds = this.db
       .exec<{ id: number }>(
         `SELECT id FROM transactions
          WHERE id IN (
@@ -189,7 +234,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const prefix = account + ':'
     const set = new Set<string>()
     const collect = (sql: string, ...binds: unknown[]) => {
-      for (const r of this.sql.exec<{ account: string }>(sql, ...binds).toArray()) {
+      for (const r of this.db.exec<{ account: string }>(sql, ...binds).toArray()) {
         if (!r.account.startsWith(prefix)) continue
         const head = r.account.slice(prefix.length).split(':')[0]
         if (head) set.add(head)
@@ -211,7 +256,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   async list_account_currencies(account: string): Promise<string[]> {
     const counts = new Map<string, number>()
     const glob = account + ':*'
-    for (const r of this.sql
+    for (const r of this.db
       .exec<{ currency: string; n: number }>(
         `SELECT currency, COUNT(*) AS n FROM postings
          WHERE (account = ? OR account GLOB ?)
@@ -223,7 +268,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       .toArray()) {
       counts.set(r.currency, (counts.get(r.currency) ?? 0) + r.n)
     }
-    for (const r of this.sql
+    for (const r of this.db
       .exec<{ currency: string; n: number }>(
         `SELECT currency, COUNT(*) AS n FROM directives_balance
          WHERE account = ? OR account GLOB ?
@@ -262,7 +307,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       }
       map.set(key, { account, currency, sumScaled12: delta, lastActivity: date })
     }
-    for (const p of this.sql
+    for (const p of this.db
       .exec<{
         account: string
         currency: string
@@ -280,7 +325,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       const factor = 10n ** BigInt(TARGET_SCALE - p.scale)
       upsert(p.account, p.currency, BigInt(p.amount_scaled) * factor, p.date)
     }
-    for (const r of this.sql
+    for (const r of this.db
       .exec<{ account: string; currency: string; date: number }>(
         `SELECT account, currency, date FROM directives_balance
          WHERE date <= ?`,
@@ -300,7 +345,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         })
       }
     }
-    for (const r of this.sql
+    for (const r of this.db
       .exec<{ account: string; constraint_currencies: string; date: number }>(
         `SELECT account, constraint_currencies, date FROM directives_open
          WHERE date <= ?`,
@@ -374,7 +419,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     }
 
     const oldTxnsByHash = new Map<string, number[]>()
-    for (const r of this.sql
+    for (const r of this.db
       .exec<{ id: number; hash: string | null }>('SELECT id, hash FROM transactions')
       .toArray()) {
       const key = r.hash ?? ''
@@ -439,13 +484,13 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const now = Date.now()
     this.ctx.storage.transactionSync(() => {
       for (const id of txnIdsToDelete) {
-        this.sql.exec('DELETE FROM transactions WHERE id = ?', id)
+        this.db.exec('DELETE FROM transactions WHERE id = ?', id)
       }
       for (const { input, hash } of txnsToInsert) this.insertTxn(input, hash, now)
       for (const kind of allKinds) {
         const table = DIRECTIVE_TABLE[kind]
         for (const id of dirIdsToDeleteByKind.get(kind)!) {
-          this.sql.exec(`DELETE FROM ${table} WHERE id = ?`, id)
+          this.db.exec(`DELETE FROM ${table} WHERE id = ?`, id)
         }
         for (const d of dirsToInsertByKind.get(kind)!) this.insertDirective(d, now)
       }
@@ -457,7 +502,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
 
   async clear(): Promise<{ ok: true }> {
     for (const t of DATA_TABLES) {
-      this.sql.exec(`DELETE FROM ${t}`)
+      this.db.exec(`DELETE FROM ${t}`)
     }
     return { ok: true }
   }
@@ -475,9 +520,9 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     truncated: boolean
   }> {
     const MAX_ROWS = 1000
-    this.sql.exec('PRAGMA query_only = 1')
+    this.db.exec('PRAGMA query_only = 1')
     try {
-      const cursor = this.sql.exec(sql, ...params)
+      const cursor = this.db.exec(sql, ...params)
       const rows: Array<Record<string, unknown>> = []
       let truncated = false
       for (const row of cursor) {
@@ -490,7 +535,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       const columns = cursor.columnNames as string[]
       return { columns, rows, truncated }
     } finally {
-      this.sql.exec('PRAGMA query_only = 0')
+      this.db.exec('PRAGMA query_only = 0')
     }
   }
 
@@ -501,7 +546,16 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     row_counts: Record<string, number>
     sample_txns: string
   }> {
-    const accounts = this.sql
+    return this.ledger_snapshot_sync()
+  }
+
+  ledger_snapshot_sync(): {
+    today: number
+    accounts: Array<{ account: string; currencies: string[]; open_date: number; close_date: number | null }>
+    row_counts: Record<string, number>
+    sample_txns: string
+  } {
+    const accounts = this.db
       .exec<{ account: string; constraint_currencies: string; date: number }>(
         `SELECT o.account, o.constraint_currencies, o.date
          FROM directives_open o
@@ -509,7 +563,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       )
       .toArray()
     const closes = new Map<string, number>()
-    for (const r of this.sql
+    for (const r of this.db
       .exec<{ account: string; date: number }>(
         `SELECT account, date FROM directives_close`,
       )
@@ -534,13 +588,13 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
 
     const counts: Record<string, number> = {}
     for (const t of DATA_TABLES) {
-      const r = this.sql
+      const r = this.db
         .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM ${t}`)
         .toArray()[0]
       counts[t] = r?.n ?? 0
     }
 
-    const sampleResult = await this.journal_get()
+    const sampleResult = this.journal_get_sync()
     // Take the last ~5 entries from the journal text as a style sample. The
     // journal is rendered newest-first, so just grab the head N non-empty
     // lines worth.
@@ -564,7 +618,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const payee = input.payee ?? ''
     const narration = input.narration ?? ''
     const meta = JSON.stringify(input.meta ?? {})
-    const result = this.sql.exec<{ id: number }>(
+    const result = this.db.exec<{ id: number }>(
       `INSERT INTO transactions (date, flag, payee, narration, meta_json, hash, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       dateInt,
@@ -579,14 +633,14 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const txnId = result.toArray()[0]!.id
     input.postings.forEach((p, idx) => this.insertPosting(txnId, idx, p, dateInt))
     for (const tag of input.tags ?? []) {
-      this.sql.exec(
+      this.db.exec(
         'INSERT OR IGNORE INTO txn_tags (txn_id, tag, from_stack) VALUES (?, ?, 0)',
         txnId,
         tag,
       )
     }
     for (const link of input.links ?? []) {
-      this.sql.exec(
+      this.db.exec(
         'INSERT OR IGNORE INTO txn_links (txn_id, link) VALUES (?, ?)',
         txnId,
         link,
@@ -613,7 +667,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   ): Array<{ id: number; input: DirectiveInput }> {
     switch (kind) {
       case 'open':
-        return this.sql
+        return this.db
           .exec<{
             id: number
             date: number
@@ -637,7 +691,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             },
           }))
       case 'close':
-        return this.sql
+        return this.db
           .exec<{ id: number; date: number; account: string; meta_json: string }>(
             'SELECT id, date, account, meta_json FROM directives_close',
           )
@@ -652,7 +706,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             },
           }))
       case 'commodity':
-        return this.sql
+        return this.db
           .exec<{ id: number; date: number; currency: string; meta_json: string }>(
             'SELECT id, date, currency, meta_json FROM directives_commodity',
           )
@@ -667,7 +721,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             },
           }))
       case 'balance':
-        return this.sql
+        return this.db
           .exec<{
             id: number
             date: number
@@ -691,7 +745,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             },
           }))
       case 'pad':
-        return this.sql
+        return this.db
           .exec<{
             id: number
             date: number
@@ -713,7 +767,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             },
           }))
       case 'price':
-        return this.sql
+        return this.db
           .exec<{
             id: number
             date: number
@@ -737,7 +791,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             },
           }))
       case 'note':
-        return this.sql
+        return this.db
           .exec<{
             id: number
             date: number
@@ -759,7 +813,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             },
           }))
       case 'document':
-        return this.sql
+        return this.db
           .exec<{
             id: number
             date: number
@@ -781,7 +835,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
             },
           }))
       case 'event':
-        return this.sql
+        return this.db
           .exec<{ id: number; date: number; name: string; value: string; meta_json: string }>(
             'SELECT id, date, name, value, meta_json FROM directives_event',
           )
@@ -804,7 +858,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const meta = JSON.stringify(d.meta ?? {})
     switch (d.kind) {
       case 'open':
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_open
              (date, account, booking_method, constraint_currencies, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -818,7 +872,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         )
         return
       case 'close':
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_close (date, account, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?)`,
           dateInt,
@@ -829,7 +883,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         )
         return
       case 'commodity':
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_commodity (date, currency, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?)`,
           dateInt,
@@ -842,7 +896,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       case 'balance': {
         const bal = decimalToScaled(d.amount)
         if (!bal) throw new Error(`unparseable balance amount: ${d.amount}`)
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_balance
              (date, account, amount, amount_scaled, scale, currency, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -859,7 +913,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         return
       }
       case 'pad':
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_pad (date, account, account_pad, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
           dateInt,
@@ -873,7 +927,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       case 'price': {
         const pr = decimalToScaled(d.amount)
         if (!pr) throw new Error(`unparseable price amount: ${d.amount}`)
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_price
              (date, commodity, currency, amount, amount_scaled, scale, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -890,7 +944,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         return
       }
       case 'note':
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_note (date, account, description, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
           dateInt,
@@ -902,7 +956,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         )
         return
       case 'document':
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_document (date, account, filename, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
           dateInt,
@@ -914,7 +968,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
         )
         return
       case 'event':
-        this.sql.exec(
+        this.db.exec(
           `INSERT INTO directives_event (date, name, value, meta_json, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
           dateInt,
@@ -933,7 +987,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     const amt = decimalToScaled(p.amount!)
     if (!amt) throw new Error(`unparseable amount: ${p.amount}`)
     const price = p.price_amount != null ? decimalToScaled(p.price_amount) : null
-    this.sql.exec(
+    this.db.exec(
       `INSERT INTO postings (
         txn_id, idx, flag, account,
         amount, amount_scaled, scale, currency,
@@ -966,7 +1020,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     limit: number,
     offset: number,
   ): Promise<AccountEntriesResponse> {
-    const totalRow = this.sql
+    const totalRow = this.db
       .exec<{ c: number }>(
         `SELECT
           (SELECT COUNT(*) FROM transactions t
@@ -1002,7 +1056,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private collectRefs(account: string, cap: number): EntryRef[] {
-    const txnRefs = this.sql
+    const txnRefs = this.db
       .exec<{ date: number; id: number }>(
         `SELECT t.date AS date, t.id AS id FROM transactions t
          WHERE t.id IN (SELECT p.txn_id FROM postings p WHERE p.account = ?)
@@ -1014,7 +1068,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       .toArray()
       .map((r) => ({ kind: 'txn' as const, id: r.id, date: r.date }))
 
-    const directiveRefs = this.sql
+    const directiveRefs = this.db
       .exec<{ date: number; kind: string; id: number }>(
         `SELECT date, kind, id FROM (
            SELECT date, 'open' AS kind, id FROM directives_open WHERE account = ?
@@ -1041,7 +1095,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       .toArray()
       .map((r) => ({ kind: r.kind as Entry['kind'], id: r.id, date: r.date }))
 
-    const docRefs = this.sql
+    const docRefs = this.db
       .exec<{ date: number; id: number }>(
         `SELECT date, id FROM directives_document WHERE account = ?
          ORDER BY date DESC, id DESC
@@ -1081,7 +1135,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private readTxnEntry(id: number): EntryTxn | null {
-    const head = this.sql
+    const head = this.db
       .exec<{
         id: number
         date: number
@@ -1098,7 +1152,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       )
       .toArray()[0]
     if (!head) return null
-    const postingRows = this.sql
+    const postingRows = this.db
       .exec<{
         idx: number
         flag: string | null
@@ -1133,14 +1187,14 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
       comment: r.comment,
       meta: parseMeta(r.meta_json),
     }))
-    const tags = this.sql
+    const tags = this.db
       .exec<{ tag: string }>(
         'SELECT tag FROM txn_tags WHERE txn_id = ? ORDER BY tag ASC',
         id,
       )
       .toArray()
       .map((r) => r.tag)
-    const links = this.sql
+    const links = this.db
       .exec<{ link: string }>(
         'SELECT link FROM txn_links WHERE txn_id = ? ORDER BY link ASC',
         id,
@@ -1164,7 +1218,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private readOpenEntry(id: number): EntryOpen | null {
-    const row = this.sql
+    const row = this.db
       .exec<{
         id: number
         date: number
@@ -1196,7 +1250,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private readCloseEntry(id: number): EntryClose | null {
-    const row = this.sql
+    const row = this.db
       .exec<{
         id: number
         date: number
@@ -1223,7 +1277,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private readBalanceEntry(id: number): EntryBalance | null {
-    const row = this.sql
+    const row = this.db
       .exec<{
         id: number
         date: number
@@ -1254,7 +1308,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private readPadEntry(id: number): EntryPad | null {
-    const row = this.sql
+    const row = this.db
       .exec<{
         id: number
         date: number
@@ -1283,7 +1337,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private readNoteEntry(id: number): EntryNote | null {
-    const row = this.sql
+    const row = this.db
       .exec<{
         id: number
         date: number
@@ -1312,7 +1366,7 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
   }
 
   private readDocumentEntry(id: number): EntryDocument | null {
-    const row = this.sql
+    const row = this.db
       .exec<{
         id: number
         date: number
