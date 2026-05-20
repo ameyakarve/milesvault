@@ -3,11 +3,13 @@
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useRef, useState, useEffect } from 'react'
-import { Sparkle, ArrowUp } from '@phosphor-icons/react'
+import { Sparkle, ArrowUp, Trash } from '@phosphor-icons/react'
 
 export function ChatShell() {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
-  const { messages, sendMessage, status, error } = useAgentChat({ agent })
+  const { messages, sendMessage, status, error, clearHistory } = useAgentChat({
+    agent,
+  })
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -28,7 +30,19 @@ export function ChatShell() {
 
   return (
     <>
-      <section className="flex flex-1 flex-col overflow-hidden">
+      <section className="relative flex flex-1 flex-col overflow-hidden">
+        {!empty && (
+          <button
+            type="button"
+            onClick={clearHistory}
+            disabled={busy}
+            className="absolute right-6 top-4 z-10 inline-flex items-center gap-1.5 rounded-[8px] border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
+            aria-label="Clear chat"
+          >
+            <Trash size={14} weight="regular" />
+            Clear
+          </button>
+        )}
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-8">
           {empty ? (
             <div className="flex h-full items-center justify-center">
