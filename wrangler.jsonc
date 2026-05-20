@@ -29,7 +29,14 @@
         "name": "LEDGER_DO",
         "class_name": "LedgerDO",
       },
+      {
+        "name": "AGENT_DO",
+        "class_name": "AgentDO",
+      },
     ],
+  },
+  "ai": {
+    "binding": "AI",
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["VaultAgent"] },
@@ -39,6 +46,7 @@
     { "tag": "v5", "new_sqlite_classes": ["ThinkAgent"] },
     { "tag": "v6", "deleted_classes": ["ChatAgent"] },
     { "tag": "v7", "deleted_classes": ["ThinkAgent"] },
+    { "tag": "v8", "new_sqlite_classes": ["AgentDO"] },
   ],
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
@@ -74,7 +82,14 @@
             "name": "LEDGER_DO",
             "class_name": "LedgerDO",
           },
+          {
+            "name": "AGENT_DO",
+            "class_name": "AgentDO",
+          },
         ],
+      },
+      "ai": {
+        "binding": "AI",
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
@@ -82,6 +97,7 @@
         { "tag": "v3", "new_sqlite_classes": ["ThinkAgent"] },
         { "tag": "v4", "deleted_classes": ["ChatAgent"] },
         { "tag": "v5", "deleted_classes": ["ThinkAgent"] },
+        { "tag": "v6", "new_sqlite_classes": ["AgentDO"] },
       ],
       "services": [{ "binding": "PROD", "service": "milesvault" }],
       "r2_buckets": [
