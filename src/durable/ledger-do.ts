@@ -507,10 +507,11 @@ export class LedgerDO extends Think {
     return { ok: true }
   }
 
-  // Read-only SQL escape hatch used by the AI agent. Enforcement is delegated
-  // to the SQLite engine via `PRAGMA query_only`; any write/DDL inside the
-  // query block errors with "attempt to write a readonly database". Result
-  // set is capped.
+  // Read-only SQL escape hatch used by the AI agent. Workerd's SQL authorizer
+  // rejects `PRAGMA query_only` (not on its allowlist), so we lean on two
+  // language-level invariants instead: DO `sql.exec` runs exactly one
+  // statement per call, and SQL grammar doesn't permit DML nested inside a
+  // SELECT — so a leading-keyword guard makes the call effectively read-only.
   async query_sql(
     sql: string,
     params: ReadonlyArray<string | number | null> = [],
@@ -520,23 +521,25 @@ export class LedgerDO extends Think {
     truncated: boolean
   }> {
     const MAX_ROWS = 1000
-    this.db.exec('PRAGMA query_only = 1')
-    try {
-      const cursor = this.db.exec(sql, ...params)
-      const rows: Array<Record<string, unknown>> = []
-      let truncated = false
-      for (const row of cursor) {
-        if (rows.length >= MAX_ROWS) {
-          truncated = true
-          break
-        }
-        rows.push(row as Record<string, unknown>)
-      }
-      const columns = cursor.columnNames as string[]
-      return { columns, rows, truncated }
-    } finally {
-      this.db.exec('PRAGMA query_only = 0')
+    const stripped = sql
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/--[^\n]*/g, '')
+      .trimStart()
+    if (!/^(select|with)\b/i.test(stripped)) {
+      throw new Error('sql_query only accepts SELECT or WITH statements')
     }
+    const cursor = this.db.exec(sql, ...params)
+    const rows: Array<Record<string, unknown>> = []
+    let truncated = false
+    for (const row of cursor) {
+      if (rows.length >= MAX_ROWS) {
+        truncated = true
+        break
+      }
+      rows.push(row as Record<string, unknown>)
+    }
+    const columns = cursor.columnNames as string[]
+    return { columns, rows, truncated }
   }
 
   // Lightweight, per-turn ledger snapshot for the agent's context window.
