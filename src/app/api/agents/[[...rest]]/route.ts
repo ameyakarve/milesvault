@@ -5,6 +5,13 @@ import type { LedgerDO } from '@/durable/ledger-do'
 
 export const dynamic = 'force-dynamic'
 
+// Inline equivalent of `getAgentByName` from the `agents` package. We avoid
+// importing from `agents` so that `cloudflare:workers` / `cloudflare:email`
+// don't enter the Next.js server bundle.
+type NamedAgentStub = DurableObjectStub<LedgerDO> & {
+  setName: (name: string, props?: unknown) => Promise<void>
+}
+
 async function handle(req: NextRequest): Promise<Response> {
   const session = await auth()
   if (!session?.user?.email) {
@@ -16,14 +23,9 @@ async function handle(req: NextRequest): Promise<Response> {
     | undefined
   if (!ns) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
 
-  // Lazy-import so Next's build-time page-data collection (Node ESM loader)
-  // doesn't evaluate `cloudflare:workers` / `cloudflare:email` schemes that
-  // the `agents` package imports at the top level.
-  const { getAgentByName } = await import('agents')
-  const stub = await getAgentByName(
-    ns as unknown as Parameters<typeof getAgentByName>[0],
-    session.user.email,
-  )
+  const id = ns.idFromName(session.user.email)
+  const stub = ns.get(id) as NamedAgentStub
+  await stub.setName(session.user.email)
   return stub.fetch(req as unknown as Request)
 }
 
