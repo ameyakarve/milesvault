@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import { getAgentByName } from 'agents'
 import { auth } from '@/auth'
 import type { LedgerDO } from '@/durable/ledger-do'
 
@@ -17,6 +16,10 @@ async function handle(req: NextRequest): Promise<Response> {
     | undefined
   if (!ns) return new NextResponse('LEDGER_DO binding missing', { status: 500 })
 
+  // Lazy-import so Next's build-time page-data collection (Node ESM loader)
+  // doesn't evaluate `cloudflare:workers` / `cloudflare:email` schemes that
+  // the `agents` package imports at the top level.
+  const { getAgentByName } = await import('agents')
   const stub = await getAgentByName(
     ns as unknown as Parameters<typeof getAgentByName>[0],
     session.user.email,
