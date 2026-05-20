@@ -13,6 +13,7 @@ if (current.includes(marker)) {
 const appended = `${current}
 ${marker}
 export { LedgerDO } from "../src/durable/ledger-do.ts"
+export { AgentDO } from "../src/durable/agent-do.ts"
 `
 
 await writeFile(workerPath, appended)
