@@ -20,7 +20,13 @@ const mantineCjs = (pkg) =>
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['jose', 'pg-cloudflare'],
+  serverExternalPackages: [
+    'jose',
+    'pg-cloudflare',
+    'agents',
+    '@cloudflare/think',
+    '@cloudflare/ai-chat',
+  ],
   productionBrowserSourceMaps: process.env.CLOUDFLARE_ENV === 'staging',
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,
@@ -47,6 +53,20 @@ const nextConfig = {
         contextRegExp: /beancount/,
       }),
     )
+
+    // The `agents` package transitively imports `cloudflare:workers` and
+    // `cloudflare:email`. Webpack can't bundle those — leave them external
+    // so workerd resolves them at runtime.
+    const externals = Array.isArray(webpackConfig.externals)
+      ? webpackConfig.externals
+      : [webpackConfig.externals].filter(Boolean)
+    externals.push(({ request }, callback) => {
+      if (request && request.startsWith('cloudflare:')) {
+        return callback(null, 'commonjs ' + request)
+      }
+      callback()
+    })
+    webpackConfig.externals = externals
 
     return webpackConfig
   },
