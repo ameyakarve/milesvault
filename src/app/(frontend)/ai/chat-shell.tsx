@@ -1,32 +1,15 @@
 'use client'
 
-import { useChat } from '@ai-sdk/react'
-import { DefaultChatTransport } from 'ai'
-import { useEffect, useRef, useState } from 'react'
+import { useAgent } from 'agents/react'
+import { useAgentChat } from '@cloudflare/ai-chat/react'
+import { useRef, useState, useEffect } from 'react'
 import { Sparkle, ArrowUp } from '@phosphor-icons/react'
 
 export function ChatShell() {
-  const { messages, sendMessage, status, error, setMessages } = useChat({
-    transport: new DefaultChatTransport({ api: '/api/agents/main' }),
-  })
+  const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
+  const { messages, sendMessage, status, error } = useAgentChat({ agent })
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    void fetch('/api/agents/main')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { messages?: Array<{ role: string; parts: unknown }> } | null) => {
-        if (!data?.messages?.length) return
-        setMessages(
-          data.messages.map((m, i) => ({
-            id: `loaded-${i}`,
-            role: m.role as 'user' | 'assistant' | 'system',
-            parts: m.parts as never,
-          })),
-        )
-      })
-      .catch(() => {})
-  }, [setMessages])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -112,7 +95,6 @@ export function ChatShell() {
 
 type Part =
   | { type: 'text'; text: string }
-  | { type: `tool-${string}`; toolName?: string; state?: string; input?: unknown; output?: unknown }
   | { type: string; [k: string]: unknown }
 
 function MessageRow({ role, parts }: { role: string; parts: unknown }) {
@@ -127,9 +109,7 @@ function MessageRow({ role, parts }: { role: string; parts: unknown }) {
       )}
       <div
         className={`max-w-[80%] rounded-[12px] px-4 py-3 text-sm leading-6 ${
-          isUser
-            ? 'bg-teal-500 text-white'
-            : 'bg-slate-50 text-slate-900'
+          isUser ? 'bg-teal-500 text-white' : 'bg-slate-50 text-slate-900'
         }`}
       >
         {list.map((p, i) => {
