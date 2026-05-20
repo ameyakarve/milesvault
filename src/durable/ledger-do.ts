@@ -462,6 +462,102 @@ export class LedgerDO extends DurableObject<CloudflareEnv> {
     return { ok: true }
   }
 
+  // Read-only SQL escape hatch used by the AI agent. Enforcement is delegated
+  // to the SQLite engine via `PRAGMA query_only`; any write/DDL inside the
+  // query block errors with "attempt to write a readonly database". Result
+  // set is capped.
+  async query_sql(
+    sql: string,
+    params: ReadonlyArray<string | number | null> = [],
+  ): Promise<{
+    columns: string[]
+    rows: Array<Record<string, unknown>>
+    truncated: boolean
+  }> {
+    const MAX_ROWS = 1000
+    this.sql.exec('PRAGMA query_only = 1')
+    try {
+      const cursor = this.sql.exec(sql, ...params)
+      const rows: Array<Record<string, unknown>> = []
+      let truncated = false
+      for (const row of cursor) {
+        if (rows.length >= MAX_ROWS) {
+          truncated = true
+          break
+        }
+        rows.push(row as Record<string, unknown>)
+      }
+      const columns = cursor.columnNames as string[]
+      return { columns, rows, truncated }
+    } finally {
+      this.sql.exec('PRAGMA query_only = 0')
+    }
+  }
+
+  // Lightweight, per-turn ledger snapshot for the agent's context window.
+  async ledger_snapshot(): Promise<{
+    today: number
+    accounts: Array<{ account: string; currencies: string[]; open_date: number; close_date: number | null }>
+    row_counts: Record<string, number>
+    sample_txns: string
+  }> {
+    const accounts = this.sql
+      .exec<{ account: string; constraint_currencies: string; date: number }>(
+        `SELECT o.account, o.constraint_currencies, o.date
+         FROM directives_open o
+         ORDER BY o.account`,
+      )
+      .toArray()
+    const closes = new Map<string, number>()
+    for (const r of this.sql
+      .exec<{ account: string; date: number }>(
+        `SELECT account, date FROM directives_close`,
+      )
+      .toArray()) {
+      closes.set(r.account, r.date)
+    }
+    const accountList = accounts.map((r) => {
+      let currencies: string[] = []
+      try {
+        const parsed = JSON.parse(r.constraint_currencies)
+        if (Array.isArray(parsed)) currencies = parsed.map(String)
+      } catch {
+        // ignore malformed metadata
+      }
+      return {
+        account: r.account,
+        currencies,
+        open_date: r.date,
+        close_date: closes.get(r.account) ?? null,
+      }
+    })
+
+    const counts: Record<string, number> = {}
+    for (const t of DATA_TABLES) {
+      const r = this.sql
+        .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM ${t}`)
+        .toArray()[0]
+      counts[t] = r?.n ?? 0
+    }
+
+    const sampleResult = await this.journal_get()
+    // Take the last ~5 entries from the journal text as a style sample. The
+    // journal is rendered newest-first, so just grab the head N non-empty
+    // lines worth.
+    const sample_txns = sampleResult.text
+      .split(/\n{2,}/)
+      .slice(0, 5)
+      .join('\n\n')
+
+    const now = new Date()
+    const yyyy = now.getUTCFullYear().toString().padStart(4, '0')
+    const mm = (now.getUTCMonth() + 1).toString().padStart(2, '0')
+    const dd = now.getUTCDate().toString().padStart(2, '0')
+    const today = dateToInt(`${yyyy}-${mm}-${dd}`)
+
+    return { today, accounts: accountList, row_counts: counts, sample_txns }
+  }
+
   private insertTxn(input: TransactionInput, hash: string, now: number): void {
     const dateInt = dateToInt(input.date)
     const flag = input.flag ?? null
