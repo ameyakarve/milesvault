@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { auth } from '@/auth'
-import type { Extractor } from '@/durable/extractor'
+import { extractFromR2 } from '@/durable/extractor'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,11 +52,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     customMetadata: { email, filename: file.name },
   })
 
-  const extractor = cfEnv.EXTRACTOR as unknown as Service<Extractor> | undefined
-  if (!extractor) {
-    return new NextResponse('EXTRACTOR binding missing', { status: 500 })
-  }
-  const extracted = await extractor.extractFromR2(r2Key)
+  const extracted = await extractFromR2(cfEnv, r2Key)
   if (extracted.ok === false) {
     return NextResponse.json(
       { error: extracted.error, message: extracted.message },
