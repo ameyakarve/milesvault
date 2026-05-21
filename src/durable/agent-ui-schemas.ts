@@ -157,6 +157,51 @@ export const proposeJournalEditResultSchema = z.object({
 })
 export type ProposeJournalEditResult = z.infer<typeof proposeJournalEditResultSchema>
 
+export const extractStatementRowsSchema = z.object({
+  account_hint: z
+    .string()
+    .optional()
+    .describe(
+      'Full Beancount account the rows belong to, e.g. "Assets:Bank:Chase:Checking". Pick the most specific account from the existing chart; omit if genuinely unknown.',
+    ),
+  currency: z.string().describe('ISO 4217 code, e.g. "USD"'),
+  source_filename: z
+    .string()
+    .optional()
+    .describe('Original filename of the statement, for display in the preview card.'),
+  statement_period: z
+    .string()
+    .optional()
+    .describe('Free-form period string, e.g. "Mar 1 – Mar 31, 2026".'),
+  rows: z
+    .array(
+      z.object({
+        date: z.string().describe('YYYY-MM-DD posting date'),
+        description: z
+          .string()
+          .describe('Raw payee/memo string from the statement, before any cleanup.'),
+        amount: z
+          .number()
+          .describe(
+            'Signed amount in the statement currency. Positive = money in (credit/deposit on a checking statement, payment on a credit-card statement). Negative = money out (debit/charge).',
+          ),
+        balance: z
+          .number()
+          .optional()
+          .describe('Running balance after this row, if the statement provides one.'),
+        type: z
+          .string()
+          .optional()
+          .describe('Statement-provided category/type label, e.g. "ACH", "POS", "INT".'),
+      }),
+    )
+    .min(1)
+    .describe(
+      'Normalized rows extracted from the statement. Keep one row per posting; do NOT collapse duplicates or aggregate by category. Preserve the statement order.',
+    ),
+})
+export type ExtractStatementRowsProps = z.infer<typeof extractStatementRowsSchema>
+
 export const ocrDocumentSchema = z.object({
   r2_key: z
     .string()
@@ -186,6 +231,7 @@ export const GEN_UI_TOOLS = {
   show_donut_chart: donutChartSchema,
   show_heatmap: heatmapSchema,
   show_account_card: accountCardSchema,
+  extract_statement_rows: extractStatementRowsSchema,
   propose_journal_edit: proposeJournalEditResultSchema,
 } as const
 
