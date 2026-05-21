@@ -719,6 +719,32 @@ export class LedgerDO extends Think {
     }
   }
 
+  async record_attachment(opts: {
+    r2_key: string
+    sha256: string
+    filename: string
+    mime: string
+    size: number
+  }): Promise<{ ok: true; uploaded_at: number }> {
+    const now = Date.now()
+    this.db.exec(
+      `INSERT INTO agent_attachments (r2_key, sha256, filename, mime, size, uploaded_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(r2_key) DO UPDATE SET
+         sha256 = excluded.sha256,
+         filename = excluded.filename,
+         mime = excluded.mime,
+         size = excluded.size`,
+      opts.r2_key,
+      opts.sha256,
+      opts.filename,
+      opts.mime,
+      opts.size,
+      now,
+    )
+    return { ok: true, uploaded_at: now }
+  }
+
   async commit_journal_edit(opts: {
     proposal_id: string
     edited_text?: string

@@ -261,4 +261,15 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
       status          TEXT    NOT NULL DEFAULT 'pending'
     )`,
   },
+  {
+    label: 'agent_attachments',
+    sql: `CREATE TABLE IF NOT EXISTS agent_attachments (
+      r2_key      TEXT    PRIMARY KEY,
+      sha256      TEXT    NOT NULL,
+      filename    TEXT    NOT NULL,
+      mime        TEXT    NOT NULL,
+      size        INTEGER NOT NULL,
+      uploaded_at INTEGER NOT NULL
+    )`,
+  },
 ]

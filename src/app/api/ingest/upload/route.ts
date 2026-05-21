@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { auth } from '@/auth'
+import { getLedgerClient } from '@/lib/ledger-api'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,17 +42,27 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!r2) {
     return new NextResponse('R2 binding missing', { status: 500 })
   }
+  const contentType = file.type || 'application/octet-stream'
   await r2.put(r2Key, bytes, {
     httpMetadata: {
-      contentType: file.type || 'application/octet-stream',
+      contentType,
       contentDisposition: `attachment; filename="${file.name.replace(/"/g, '')}"`,
     },
     customMetadata: { email, filename: file.name },
   })
 
+  const ledger = await getLedgerClient(email)
+  await ledger.record_attachment({
+    r2_key: r2Key,
+    sha256,
+    filename: file.name,
+    mime: contentType,
+    size: file.size,
+  })
+
   return NextResponse.json({
     r2_key: r2Key,
-    content_type: file.type || 'application/octet-stream',
+    content_type: contentType,
     size: file.size,
     filename: file.name,
   })
