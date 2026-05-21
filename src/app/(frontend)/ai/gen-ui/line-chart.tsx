@@ -1,10 +1,10 @@
 'use client'
 
-import { BarChart } from '@mantine/charts'
-import type { StackedBarProps } from '@/durable/agent-ui-schemas'
+import { LineChart } from '@mantine/charts'
+import type { LineChartProps } from '@/durable/agent-ui-schemas'
 import { makeFormatter, pickColor } from './colors'
 
-export function StackedBar({ input }: { input: StackedBarProps }) {
+export function LineChartRenderer({ input }: { input: LineChartProps }) {
   const series = input.series.map((s, i) => ({
     name: s.key,
     label: s.label ?? s.key,
@@ -19,17 +19,18 @@ export function StackedBar({ input }: { input: StackedBarProps }) {
           {input.title}
         </div>
       )}
-      <BarChart
+      <LineChart
         h={280}
         data={input.data as Array<Record<string, string | number>>}
         dataKey={input.x_key}
-        type="stacked"
         series={series}
-        withLegend
+        curveType={input.curve_type ?? 'monotone'}
+        withLegend={series.length > 1}
         legendProps={{ verticalAlign: 'bottom', height: 32 }}
         valueFormatter={format}
         tickLine="y"
         gridAxis="y"
+        withDots={false}
       />
     </div>
   )

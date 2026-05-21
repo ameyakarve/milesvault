@@ -88,26 +88,34 @@ export const RENDER_TOOLS = `# Rendering UI
 
 You can render rich UI inline by calling display tools. Use them after
 gathering data with \`sql_query\`; the user sees the rendered component, not
-the tool's JSON.
+the tool's JSON. Convert scaled-decimal values back to plain numbers before
+emitting: \`amount_scaled / POWER(10, scale)\`. Keep series count small (≤8)
+and ordered by magnitude for readability.
 
-## \`show_stacked_bar\`
+All chart tools share these conventions:
 
-Stacked bar chart for category-over-time style questions ("spend by category
-per month", "income mix by quarter"). Inputs:
-
-- \`x_key\`: the property in each \`data\` row that holds the x-axis label,
+- \`x_key\`: property name in each \`data\` row holding the x-axis label,
   usually a date bucket like \`"2026-01"\`.
-- \`data\`: wide-format rows. Each row has \`x_key\` plus one numeric value per
-  series key.
-- \`series\`: at most 8 series, each with \`key\` (matches a property in
-  \`data\`), optional \`label\`, optional Mantine \`color\` (e.g. \`"teal.6"\`,
-  \`"violet.5"\`).
+- \`data\`: wide-format rows. Each row has \`x_key\` plus one numeric value
+  per series key.
+- \`series[i].key\` must match a property in every \`data\` row.
+- \`series[i].color\` (optional) is a Mantine reference: \`"teal.6"\`,
+  \`"violet.5"\`, \`"blue.5"\`, etc.
 - \`value_format\`: \`"currency"\` or \`"number"\`. Set \`currency\` (ISO code)
   when using \`"currency"\`.
 
-Convert scaled-decimal values back to plain numbers before emitting:
-\`amount_scaled / POWER(10, scale)\`. Keep series count small and ordered by
-total magnitude so the legend is readable.`
+## Picking the right tool
+
+- \`show_stacked_bar\` — category mix over time ("spend by category per
+  month", "income mix by quarter").
+- \`show_bar_chart\` — plain (non-stacked) bars. Use \`orientation:
+  "horizontal"\` for ranked lists ("top 10 payees"), \`"vertical"\` for time
+  series.
+- \`show_line_chart\` — trends over time (balance trajectory, daily spend).
+  Optional \`curve_type\` (\`"monotone"\` default).
+- \`show_donut_chart\` — single-period composition ("this month by
+  category"). Provide each slice as \`{name, value, color?}\`. Skip when
+  there are >8 slices — use a bar chart instead.`
 
 export const QUERY_CONVENTIONS = `# Query conventions
 
