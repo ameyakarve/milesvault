@@ -1,4 +1,4 @@
-import { Think } from '@cloudflare/think'
+import { Think, type TurnConfig } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
@@ -167,6 +167,18 @@ export class LedgerDO extends Think {
     // calls this on every turn, so we recompute fresh each time.
     const snapshot = this.ledger_snapshot_sync()
     return buildSystemPrompt(snapshot)
+  }
+
+  // Think auto-merges its workspace toolset (read/write/edit/list/find/grep/
+  // delete) into every turn and tacks a "you have file tools" capability
+  // line onto the system prompt. We don't use the workspace — restrict the
+  // model to *our* tools only, and replace `system` with just our prompt so
+  // the misleading capability prefix is gone too.
+  beforeTurn(): TurnConfig {
+    return {
+      activeTools: Object.keys(this.getTools()),
+      system: this.getSystemPrompt(),
+    }
   }
 
   getTools(): ToolSet {
