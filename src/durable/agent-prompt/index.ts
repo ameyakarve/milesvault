@@ -210,10 +210,27 @@ r2_key=\\\`agent/…\\\`]\` block in their message), follow this flow:
 4. Sign convention: positive = money INTO the statement account
    (deposit on checking, payment on a credit card), negative = money
    OUT (debit/charge). This is the sign the user sees.
-5. The user reviews the StatementRows preview card. After they
-   confirm, the next step (dedup against the existing ledger, then a
-   propose_journal_edit) lands in the next slice — for now, just show
-   the rows and stop.`
+5. The user reviews the StatementRows card. It already diff-marks
+   rows whose (date, |amount|) match an existing txn on the same
+   account — those start unchecked. The user adjusts selection and
+   clicks "Commit N selection"; you'll then see a chat message
+   listing only the selected rows.
+6. \`commit_ingest({ account, currency, source_filename?, rows })\` —
+   call this on the selected rows. For each row pick a sensible
+   \`counterparty\` Beancount account (Expenses:* for charges,
+   Income:* for deposits, Liabilities:* for credit-card payments,
+   Assets:* for transfers) based on the description and the user's
+   existing chart of accounts. Reuse account names the user already
+   has; only invent a new one if nothing fits, and tell the user
+   what you opened.
+7. \`commit_ingest\` returns a DiffCard via the same flow as
+   \`propose_journal_edit\`. The user reviews and approves before
+   anything lands. Do NOT call \`commit_journal_edit\` until they
+   explicitly approve.
+8. Sign convention reminder: positive = INTO the statement account.
+   \`commit_ingest\` handles the double-entry — you only pass the
+   statement-side amount; the server emits the matching counterparty
+   posting with the opposite sign.`
 
 export function buildSystemPrompt(snapshot: {
   today: number

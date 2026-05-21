@@ -6,6 +6,7 @@ import { buildSystemPrompt } from './agent-prompt'
 import {
   accountCardSchema,
   barChartSchema,
+  commitIngestSchema,
   commitJournalEditSchema,
   donutChartSchema,
   extractStatementRowsSchema,
@@ -148,6 +149,18 @@ function decimalToScaled(text: string): { scaled: number; scale: number } | null
 
 const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
 
+function escapeBeancountString(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+function formatPosting(account: string, amount: number, currency: string): string {
+  const padCol = 50
+  const amountStr = amount.toFixed(2)
+  const prefix = `  ${account}`
+  const gap = Math.max(2, padCol - prefix.length - amountStr.length)
+  return `${prefix}${' '.repeat(gap)}${amountStr} ${currency}`
+}
+
 export class LedgerDO extends Think {
   private db: SqlStorage
 
@@ -247,6 +260,18 @@ export class LedgerDO extends Think {
           'Render a preview table of normalized statement rows extracted from an OCR\'d document. Call this AFTER ocr_document — you produce the rows yourself by reading the markdown and normalizing each posting into {date, description, amount, balance?, type?}. Pick the most specific `account_hint` from the existing chart of accounts (look at sql_query results if unsure). Do NOT collapse duplicates, do NOT aggregate, do NOT commit anything — this is a review step before the user approves.',
         inputSchema: extractStatementRowsSchema,
         execute: async (input) => input,
+      }),
+      commit_ingest: tool({
+        description:
+          'Turn the user-selected statement rows into a balanced Beancount proposal. Call this when the user clicks "Commit N selection" in the StatementRows card (you\'ll see a chat message listing the selected rows). Pick a `counterparty` Beancount account for each row based on its description and the existing chart of accounts; you may ask the user first if a row\'s category is genuinely ambiguous. The server builds the Beancount text, runs the same diff/validate path as propose_journal_edit, and returns a proposal_id + DiffCard. The user reviews and approves before commit.',
+        inputSchema: commitIngestSchema,
+        execute: async (input) =>
+          this.commit_ingest({
+            account: input.account,
+            currency: input.currency,
+            source_filename: input.source_filename,
+            rows: input.rows,
+          }),
       }),
       commit_journal_edit: tool({
         description:
@@ -607,6 +632,41 @@ export class LedgerDO extends Think {
         unchanged: diff.unchanged,
       },
     }
+  }
+
+  async commit_ingest(opts: {
+    account: string
+    currency: string
+    source_filename?: string
+    rows: ReadonlyArray<{
+      date: string
+      amount: number
+      payee: string
+      narration?: string
+      counterparty: string
+      tags?: ReadonlyArray<string>
+    }>
+  }): Promise<ProposeJournalEditResponse> {
+    const ccy = opts.currency
+    const blocks: string[] = []
+    for (const r of opts.rows) {
+      const tagSuffix = r.tags && r.tags.length > 0
+        ? ' ' + r.tags.map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')
+        : ''
+      const narrationField = r.narration ? ` "${escapeBeancountString(r.narration)}"` : ''
+      const header = `${r.date} * "${escapeBeancountString(r.payee)}"${narrationField}${tagSuffix}`
+      const acctSide = formatPosting(opts.account, r.amount, ccy)
+      const otherSide = formatPosting(r.counterparty, -r.amount, ccy)
+      blocks.push(`${header}\n${acctSide}\n${otherSide}`)
+    }
+    const proposed_text = blocks.join('\n\n')
+    const instruction = opts.source_filename
+      ? `Ingest ${opts.rows.length} txns from ${opts.source_filename} into ${opts.account}`
+      : `Ingest ${opts.rows.length} txns into ${opts.account}`
+    return this.propose_journal_edit({
+      instruction,
+      proposed_text,
+    })
   }
 
   async ocr_document(r2Key: string): Promise<
