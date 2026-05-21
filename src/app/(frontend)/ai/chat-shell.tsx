@@ -3,16 +3,14 @@
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useRef, useState, useEffect } from 'react'
-import { Sparkle, ArrowUp, Trash, Paperclip, X } from '@phosphor-icons/react'
+import { Sparkle, ArrowUp, Trash } from '@phosphor-icons/react'
 import { isGenUiTool, renderGenUi } from './gen-ui'
 import { ChatActionsContext } from './chat-actions'
-
-type UploadedFile = {
-  r2_key: string
-  filename: string
-  content_type: string
-  size: number
-}
+import {
+  AttachmentsCard,
+  type AttachmentsCardHandle,
+  type UploadedFile,
+} from './attachments-card'
 
 export function ChatShell() {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
@@ -20,23 +18,32 @@ export function ChatShell() {
     agent,
   })
   const [input, setInput] = useState('')
-  const [attachments, setAttachments] = useState<UploadedFile[]>([])
-  const [uploading, setUploading] = useState(false)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [hasReady, setHasReady] = useState(false)
+  const attachmentsRef = useRef<AttachmentsCardHandle>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages.length, status])
 
+  // Poll the card after each render so the send button reflects readiness
+  // without lifting the entire local-file state into the shell.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setHasReady(attachmentsRef.current?.hasReady() ?? false)
+    }, 200)
+    return () => clearInterval(id)
+  }, [])
+
   const busy = status === 'submitted' || status === 'streaming'
 
   function submit() {
+    if (busy) return
     const text = input.trim()
-    if (busy || uploading) return
-    if (!text && attachments.length === 0) return
-    const attachmentBlock = attachments
+    const ready: UploadedFile[] =
+      attachmentsRef.current?.consume() ?? []
+    if (!text && ready.length === 0) return
+    const attachmentBlock = ready
       .map(
         (a) =>
           `[Attached: ${a.filename} (r2_key=\`${a.r2_key}\`, type=${a.content_type}, size=${a.size})]`,
@@ -48,38 +55,8 @@ export function ChatShell() {
         : `${attachmentBlock}\n\nPlease ingest this.`
       : text
     setInput('')
-    setAttachments([])
+    setHasReady(false)
     void sendMessage({ text: body })
-  }
-
-  async function onPickFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const files = event.target.files
-    if (!files || files.length === 0) return
-    setUploadError(null)
-    setUploading(true)
-    try {
-      const next: UploadedFile[] = []
-      for (const f of Array.from(files)) {
-        const fd = new FormData()
-        fd.append('file', f)
-        const res = await fetch('/api/ingest/upload', {
-          method: 'POST',
-          body: fd,
-        })
-        if (!res.ok) {
-          const msg = await res.text().catch(() => res.statusText)
-          throw new Error(msg || `upload failed (${res.status})`)
-        }
-        const body = (await res.json()) as UploadedFile
-        next.push(body)
-      }
-      setAttachments((prev) => [...prev, ...next])
-    } catch (e) {
-      setUploadError(e instanceof Error ? e.message : 'upload failed')
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
   }
 
   const empty = messages.length === 0
@@ -135,55 +112,8 @@ export function ChatShell() {
 
       <footer className="border-t border-slate-200 px-6 py-6">
         <div className="mx-auto w-full max-w-3xl">
-          {(attachments.length > 0 || uploadError || uploading) && (
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              {attachments.map((a) => (
-                <span
-                  key={a.r2_key}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700"
-                >
-                  <Paperclip size={12} weight="regular" />
-                  <span className="max-w-[200px] truncate">{a.filename}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAttachments((prev) =>
-                        prev.filter((x) => x.r2_key !== a.r2_key),
-                      )
-                    }
-                    className="text-slate-400 hover:text-slate-700"
-                    aria-label="Remove attachment"
-                  >
-                    <X size={12} weight="bold" />
-                  </button>
-                </span>
-              ))}
-              {uploading && (
-                <span className="text-[11px] text-slate-500">Uploading…</span>
-              )}
-              {uploadError && (
-                <span className="text-[11px] text-rose-600">{uploadError}</span>
-              )}
-            </div>
-          )}
+          <AttachmentsCard ref={attachmentsRef} disabled={busy} />
           <div className="flex items-end gap-3 rounded-[12px] border border-slate-200 bg-white px-4 py-3 focus-within:border-teal-500">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={busy || uploading}
-              className="shrink-0 rounded-[8px] border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-900 disabled:opacity-40"
-              aria-label="Attach file"
-            >
-              <Paperclip size={18} weight="regular" />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept=".pdf,.csv,.ofx,.qif,.png,.jpg,.jpeg,.webp,.txt,application/pdf,text/csv,image/*"
-              className="hidden"
-              onChange={onPickFile}
-            />
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -200,11 +130,7 @@ export function ChatShell() {
             <button
               type="button"
               onClick={submit}
-              disabled={
-                busy ||
-                uploading ||
-                (!input.trim() && attachments.length === 0)
-              }
+              disabled={busy || (!input.trim() && !hasReady)}
               className="shrink-0 rounded-[8px] bg-teal-500 p-2 text-white transition disabled:opacity-40"
               aria-label="Send"
             >
