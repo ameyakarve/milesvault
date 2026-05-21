@@ -211,6 +211,53 @@ export const ocrDocumentSchema = z.object({
 })
 export type OcrDocumentProps = z.infer<typeof ocrDocumentSchema>
 
+export const commitIngestSchema = z.object({
+  account: z
+    .string()
+    .describe(
+      'Full Beancount account the statement belongs to, e.g. "Assets:Bank:Chase:Checking" or "Liabilities:CreditCard:HSBC:Cashback".',
+    ),
+  currency: z.string().describe('ISO 4217 code matching the statement, e.g. "USD"'),
+  source_filename: z
+    .string()
+    .optional()
+    .describe('Original statement filename, used in the proposal instruction.'),
+  rows: z
+    .array(
+      z.object({
+        date: z.string().describe('YYYY-MM-DD posting date'),
+        amount: z
+          .number()
+          .describe(
+            'Signed amount in `currency`, using the same sign convention as extract_statement_rows: positive = money into `account`, negative = money out.',
+          ),
+        payee: z
+          .string()
+          .describe('Cleaned-up payee/merchant string for the txn header, e.g. "Starbucks".'),
+        narration: z
+          .string()
+          .optional()
+          .describe(
+            'Free-form narration in the txn header — usually the raw description if it adds detail beyond the payee, otherwise omit.',
+          ),
+        counterparty: z
+          .string()
+          .describe(
+            'Other-side Beancount account, e.g. "Expenses:Food:Coffee", "Income:Salary", "Liabilities:CreditCard:Chase". Must exist in the chart of accounts. Categorize based on the description; ask the user if unsure for a row.',
+          ),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe('Optional #tags to apply to the txn header.'),
+      }),
+    )
+    .min(1)
+    .describe(
+      'Rows the user selected in the StatementRows card. Pick a `counterparty` for each based on its description and the existing chart of accounts.',
+    ),
+})
+export type CommitIngestProps = z.infer<typeof commitIngestSchema>
+
 export const commitJournalEditSchema = z.object({
   proposal_id: z
     .string()

@@ -156,17 +156,25 @@ export function StatementRows({ input }: { input: ExtractStatementRowsProps }) {
       })
       .filter((x): x is string => x !== null)
 
-    const header = account
-      ? `Commit these ${selectedCount} rows as transactions in \`${account}\` (${input.currency}):`
-      : `Commit these ${selectedCount} rows as transactions (${input.currency}). Pick the appropriate ledger account based on context:`
+    const accountLine = account
+      ? `account: \`${account}\` (${input.currency})`
+      : `account: pick the right one from the chart for this statement (${input.currency})`
+    const filenameLine = input.source_filename
+      ? `source: ${input.source_filename}`
+      : ''
 
     const body = [
-      header,
+      `Commit these ${selectedCount} selected rows via \`commit_ingest\`.`,
+      accountLine,
+      filenameLine,
       '',
+      'rows:',
       ...lines,
       '',
-      'Use propose_journal_edit. Each row becomes a balanced transaction; pick a reasonable counterparty (Expenses:* / Income:* / Liabilities:*) from the chart of accounts based on the description. Use the user\'s prevailing date/payee/narration style from the recent journal sample.',
-    ].join('\n')
+      'Pick a sensible counterparty per row (Expenses:* / Income:* / Liabilities:* / Assets:*) from the existing chart of accounts. Pass the rows to commit_ingest with the same signs shown above.',
+    ]
+      .filter((x) => x !== '')
+      .join('\n')
 
     void sendMessage({ text: body })
   }
