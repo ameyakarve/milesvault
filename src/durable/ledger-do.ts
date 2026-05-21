@@ -3,7 +3,12 @@ import { createWorkersAI } from 'workers-ai-provider'
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
 import { buildSystemPrompt } from './agent-prompt'
-import { stackedBarSchema } from './agent-ui-schemas'
+import {
+  barChartSchema,
+  donutChartSchema,
+  lineChartSchema,
+  stackedBarSchema,
+} from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -135,8 +140,26 @@ export class LedgerDO extends Think {
       }),
       show_stacked_bar: tool({
         description:
-          'Render a stacked bar chart for the user. Use after gathering data with sql_query. Pick a small, readable set of series (≤8). Numeric values use the ledger\'s scaled-decimal convention divided back to a plain number.',
+          'Render a stacked bar chart for category-over-time style questions. Use after gathering data with sql_query. Pick a small set of series (≤8) and convert scaled-decimal values to plain numbers (amount_scaled / POWER(10, scale)).',
         inputSchema: stackedBarSchema,
+        execute: async (input) => input,
+      }),
+      show_bar_chart: tool({
+        description:
+          'Render a plain (non-stacked) bar chart. Use orientation="horizontal" for ranked lists like "top payees", "vertical" for time series. Same data shape as show_stacked_bar.',
+        inputSchema: barChartSchema,
+        execute: async (input) => input,
+      }),
+      show_line_chart: tool({
+        description:
+          'Render a line chart for trends over time (balance over months, daily spend). Wide-format data: each row has x_key plus one numeric value per series.',
+        inputSchema: lineChartSchema,
+        execute: async (input) => input,
+      }),
+      show_donut_chart: tool({
+        description:
+          'Render a donut chart for a single-period composition ("this month by category"). Provide each slice as {name, value, color?}.',
+        inputSchema: donutChartSchema,
         execute: async (input) => input,
       }),
     }
