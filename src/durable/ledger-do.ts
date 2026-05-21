@@ -3,6 +3,7 @@ import { createWorkersAI } from 'workers-ai-provider'
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
 import { buildSystemPrompt } from './agent-prompt'
+import { stackedBarSchema } from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -131,6 +132,12 @@ export class LedgerDO extends Think {
             return { error: e instanceof Error ? e.message : String(e) }
           }
         },
+      }),
+      show_stacked_bar: tool({
+        description:
+          'Render a stacked bar chart for the user. Use after gathering data with sql_query. Pick a small, readable set of series (≤8). Numeric values use the ledger\'s scaled-decimal convention divided back to a plain number.',
+        inputSchema: stackedBarSchema,
+        execute: async (input) => input,
       }),
     }
   }

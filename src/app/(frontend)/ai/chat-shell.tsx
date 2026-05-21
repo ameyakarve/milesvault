@@ -4,6 +4,7 @@ import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useRef, useState, useEffect } from 'react'
 import { Sparkle, ArrowUp, Trash } from '@phosphor-icons/react'
+import { isGenUiTool, renderGenUi } from './gen-ui'
 
 export function ChatShell() {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
@@ -114,6 +115,9 @@ type Part =
 function MessageRow({ role, parts }: { role: string; parts: unknown }) {
   const list = Array.isArray(parts) ? (parts as Part[]) : []
   const isUser = role === 'user'
+  const hasGenUi = list.some(
+    (p) => p.type.startsWith('tool-') && isGenUiTool(p.type),
+  )
   return (
     <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
@@ -122,7 +126,7 @@ function MessageRow({ role, parts }: { role: string; parts: unknown }) {
         </div>
       )}
       <div
-        className={`max-w-[80%] rounded-[12px] px-4 py-3 text-sm leading-6 ${
+        className={`${hasGenUi ? 'w-full max-w-2xl' : 'max-w-[80%]'} rounded-[12px] px-4 py-3 text-sm leading-6 ${
           isUser ? 'bg-teal-500 text-white' : 'bg-slate-50 text-slate-900'
         }`}
       >
@@ -140,6 +144,16 @@ function MessageRow({ role, parts }: { role: string; parts: unknown }) {
               state?: string
               input?: unknown
               output?: unknown
+            }
+            if (isGenUiTool(tp.type) && tp.input) {
+              const rendered = renderGenUi(tp.type, tp.input)
+              if (rendered) {
+                return (
+                  <div key={i} className="my-2">
+                    {rendered}
+                  </div>
+                )
+              }
             }
             return (
               <details

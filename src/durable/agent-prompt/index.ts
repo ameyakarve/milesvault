@@ -84,6 +84,31 @@ This document only covers the **semantics** the schema itself can't express.
 - **\`meta_json\`** columns hold per-row metadata as a JSON blob. Use SQLite's
   \`json_extract(meta_json, '$.key')\` when needed.`
 
+export const RENDER_TOOLS = `# Rendering UI
+
+You can render rich UI inline by calling display tools. Use them after
+gathering data with \`sql_query\`; the user sees the rendered component, not
+the tool's JSON.
+
+## \`show_stacked_bar\`
+
+Stacked bar chart for category-over-time style questions ("spend by category
+per month", "income mix by quarter"). Inputs:
+
+- \`x_key\`: the property in each \`data\` row that holds the x-axis label,
+  usually a date bucket like \`"2026-01"\`.
+- \`data\`: wide-format rows. Each row has \`x_key\` plus one numeric value per
+  series key.
+- \`series\`: at most 8 series, each with \`key\` (matches a property in
+  \`data\`), optional \`label\`, optional Mantine \`color\` (e.g. \`"teal.6"\`,
+  \`"violet.5"\`).
+- \`value_format\`: \`"currency"\` or \`"number"\`. Set \`currency\` (ISO code)
+  when using \`"currency"\`.
+
+Convert scaled-decimal values back to plain numbers before emitting:
+\`amount_scaled / POWER(10, scale)\`. Keep series count small and ordered by
+total magnitude so the legend is readable.`
+
 export const QUERY_CONVENTIONS = `# Query conventions
 
 You have a \`sql_query(sql, params?)\` tool. It runs read-only SQL against the
@@ -142,6 +167,7 @@ ${snapshot.sample_txns || '(empty)'}
     BEANCOUNT_PRIMER,
     SCHEMA_MAPPING,
     QUERY_CONVENTIONS,
+    RENDER_TOOLS,
     snapshotBlock,
   ].join('\n\n---\n\n')
 }
