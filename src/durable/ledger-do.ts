@@ -10,6 +10,7 @@ import {
   donutChartSchema,
   heatmapSchema,
   lineChartSchema,
+  ocrDocumentSchema,
   proposeJournalEditSchema,
   stackedBarSchema,
 } from './agent-ui-schemas'
@@ -233,6 +234,12 @@ export class LedgerDO extends Think {
             proposed_text: input.proposed_text,
             target_txn_ids: input.target_txn_ids,
           }),
+      }),
+      ocr_document: tool({
+        description:
+          'Convert an uploaded statement (PDF / CSV / OFX / QIF / image) to markdown. The user attaches the file via the chat UI which returns an `r2_key`; pass that key here and you get the document\'s text content as markdown. First step of any ingest flow — call this before trying to extract rows.',
+        inputSchema: ocrDocumentSchema,
+        execute: async (input) => this.ocr_document(input.r2_key),
       }),
       commit_journal_edit: tool({
         description:
@@ -592,6 +599,56 @@ export class LedgerDO extends Think {
         delete: diff.deleted,
         unchanged: diff.unchanged,
       },
+    }
+  }
+
+  async ocr_document(r2Key: string): Promise<
+    | {
+        ok: true
+        r2_key: string
+        filename: string
+        mime_type: string
+        markdown: string
+        tokens: number
+        truncated: boolean
+      }
+    | { ok: false; error: string; message: string }
+  > {
+    const r2 = (this.env as Cloudflare.Env).R2
+    if (!r2) {
+      return { ok: false, error: 'binding_missing', message: 'R2 binding missing' }
+    }
+    const obj = await r2.get(r2Key)
+    if (!obj) {
+      return {
+        ok: false,
+        error: 'not_found',
+        message: `No object at key ${r2Key}`,
+      }
+    }
+    const filename = obj.customMetadata?.filename ?? r2Key.split('/').pop() ?? r2Key
+    const mimeType = obj.httpMetadata?.contentType ?? 'application/octet-stream'
+    const blob = await obj.blob()
+
+    const ai = (this.env as Cloudflare.Env).AI
+    if (!ai) {
+      return { ok: false, error: 'binding_missing', message: 'AI binding missing' }
+    }
+    const conv = await ai.toMarkdown({ name: filename, blob })
+    if (conv.format === 'error') {
+      return { ok: false, error: 'conversion_failed', message: conv.error }
+    }
+    const MAX_CHARS = 30_000
+    const truncated = conv.data.length > MAX_CHARS
+    const markdown = truncated ? conv.data.slice(0, MAX_CHARS) : conv.data
+    return {
+      ok: true,
+      r2_key: r2Key,
+      filename,
+      mime_type: mimeType,
+      markdown,
+      tokens: conv.tokens,
+      truncated,
     }
   }
 

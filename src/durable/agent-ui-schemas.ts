@@ -157,6 +157,15 @@ export const proposeJournalEditResultSchema = z.object({
 })
 export type ProposeJournalEditResult = z.infer<typeof proposeJournalEditResultSchema>
 
+export const ocrDocumentSchema = z.object({
+  r2_key: z
+    .string()
+    .describe(
+      'R2 object key returned by the upload endpoint (looks like agent/<userhash>/<sha256>).',
+    ),
+})
+export type OcrDocumentProps = z.infer<typeof ocrDocumentSchema>
+
 export const commitJournalEditSchema = z.object({
   proposal_id: z
     .string()
