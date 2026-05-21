@@ -4,6 +4,7 @@ import type {
   JournalPutError,
   JournalPutResponse,
   LedgerDO,
+  PreviewJournalPutResponse,
 } from '@/durable/ledger-do'
 import type { AccountEntriesResponse, AccountSummaryRow } from '@/durable/ledger-types'
 export const DEFAULT_LIMIT = 50
@@ -25,6 +26,9 @@ export type LedgerClient = {
   list_account_children(account: string): Promise<string[]>
   list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
   journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
+  preview_journal_put(
+    text: string,
+  ): Promise<PreviewJournalPutResponse | JournalPutError>
   clear(): Promise<{ ok: true }>
 }
 
@@ -109,6 +113,13 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
         throw new LedgerInputError(['text must be a string.'])
       }
       return stub.journal_put(text)
+    },
+
+    async preview_journal_put(text) {
+      if (typeof text !== 'string') {
+        throw new LedgerInputError(['text must be a string.'])
+      }
+      return stub.preview_journal_put(text)
     },
 
     async clear() {
