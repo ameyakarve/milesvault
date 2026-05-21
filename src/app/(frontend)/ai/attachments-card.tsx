@@ -22,6 +22,8 @@ export type UploadedFile = {
   filename: string
   content_type: string
   size: number
+  markdown: string
+  tokens: number
 }
 
 export type AttachmentsCardHandle = {
@@ -104,44 +106,23 @@ async function detectPdfEncryption(bytes: Uint8Array): Promise<DetectResult> {
   }
 }
 
-type ExtractResult =
-  | { ok: true; text: string }
+type DecryptResult =
+  | { ok: true; bytes: Uint8Array }
   | { ok: false; error: string }
 
-async function extractPdfMarkdown(
+async function decryptPdf(
   bytes: Uint8Array,
   password: string,
-): Promise<ExtractResult> {
+): Promise<DecryptResult> {
   try {
     const pdfjs = await loadPdfjs()
     const doc = await pdfjs.getDocument({
       data: bytes,
       password,
     }).promise
-    const parts: string[] = []
-    for (let p = 1; p <= doc.numPages; p++) {
-      const page = await doc.getPage(p)
-      const content = await page.getTextContent()
-      const lines: string[] = []
-      let currentLine: string[] = []
-      let lastY: number | null = null
-      for (const item of content.items as Array<{
-        str: string
-        transform: number[]
-      }>) {
-        const y = item.transform[5] ?? 0
-        if (lastY != null && Math.abs(y - lastY) > 1) {
-          lines.push(currentLine.join(' ').trim())
-          currentLine = []
-        }
-        currentLine.push(item.str)
-        lastY = y
-      }
-      if (currentLine.length > 0) lines.push(currentLine.join(' ').trim())
-      parts.push(`## Page ${p}\n\n${lines.filter(Boolean).join('\n')}`)
-    }
+    const out = await doc.saveDocument()
     await doc.destroy()
-    return { ok: true, text: parts.join('\n\n') }
+    return { ok: true, bytes: out }
   } catch (e: unknown) {
     const name = (e as { name?: string } | null)?.name
     if (name === 'PasswordException') {
@@ -277,9 +258,9 @@ export const AttachmentsCard = forwardRef<AttachmentsCardHandle, Props>(
         if (!password) return
         updateFile(id, { status: { kind: 'decrypting' } })
         const bytes = new Uint8Array(await current.file.arrayBuffer())
-        const extracted = await extractPdfMarkdown(bytes, password)
-        if (extracted.ok === false) {
-          const errMsg = extracted.error
+        const decrypted = await decryptPdf(bytes, password)
+        if (decrypted.ok === false) {
+          const errMsg = decrypted.error
           if (errMsg === 'wrong-password') {
             updateFile(id, {
               status: { kind: 'needs-password' },
@@ -293,13 +274,10 @@ export const AttachmentsCard = forwardRef<AttachmentsCardHandle, Props>(
           return
         }
         updateFile(id, { status: { kind: 'uploading' } })
-        const mdName = current.file.name.replace(/\.pdf$/i, '') + '.md'
-        const blob = new Blob([extracted.text], { type: 'text/markdown' })
+        const blob = new Blob([decrypted.bytes], { type: 'application/pdf' })
         try {
-          const uploaded = await uploadToR2(blob, mdName)
+          const uploaded = await uploadToR2(blob, current.file.name)
           updateFile(id, {
-            displayName: mdName,
-            displayMime: 'text/markdown',
             displaySize: blob.size,
             passwordInput: '',
             status: { kind: 'uploaded', uploaded },

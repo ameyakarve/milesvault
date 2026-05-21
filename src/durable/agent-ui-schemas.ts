@@ -202,15 +202,6 @@ export const extractStatementRowsSchema = z.object({
 })
 export type ExtractStatementRowsProps = z.infer<typeof extractStatementRowsSchema>
 
-export const ocrDocumentSchema = z.object({
-  r2_key: z
-    .string()
-    .describe(
-      'R2 object key returned by the upload endpoint (looks like agent/<userhash>/<sha256>).',
-    ),
-})
-export type OcrDocumentProps = z.infer<typeof ocrDocumentSchema>
-
 export const commitIngestSchema = z.object({
   account: z
     .string()

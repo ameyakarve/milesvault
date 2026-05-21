@@ -46,9 +46,9 @@ export function ChatShell() {
     const attachmentBlock = ready
       .map(
         (a) =>
-          `[Attached: ${a.filename} (r2_key=\`${a.r2_key}\`, type=${a.content_type}, size=${a.size})]`,
+          `[Attached: ${a.filename} (r2_key=\`${a.r2_key}\`, type=${a.content_type}, size=${a.size}, tokens=${a.tokens})]\n\n\`\`\`markdown\n${a.markdown}\n\`\`\``,
       )
-      .join('\n')
+      .join('\n\n')
     const body = attachmentBlock
       ? text
         ? `${attachmentBlock}\n\n${text}`

@@ -272,4 +272,8 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
       uploaded_at INTEGER NOT NULL
     )`,
   },
+  {
+    label: 'drop_agent_attachments',
+    sql: 'DROP TABLE IF EXISTS agent_attachments',
+  },
 ]
