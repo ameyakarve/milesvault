@@ -100,6 +100,10 @@
         "ALLOWED_EMAILS": "ameya.karve@gmail.com,amogh.karve@gmail.com,tushar.sadhwani000@gmail.com",
         "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
       },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+      },
     },
   },
 }
