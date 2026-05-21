@@ -48,9 +48,6 @@
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
   },
-  "services": [
-    { "binding": "EXTRACTOR", "service": "milesvault", "entrypoint": "Extractor" },
-  ],
   "r2_buckets": [
     {
       "binding": "R2",
@@ -91,7 +88,6 @@
       ],
       "services": [
         { "binding": "PROD", "service": "milesvault" },
-        { "binding": "EXTRACTOR", "service": "milesvault-staging", "entrypoint": "Extractor" },
       ],
       "r2_buckets": [
         {
