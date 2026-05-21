@@ -70,6 +70,27 @@ export const donutChartSchema = z.object({
 })
 export type DonutChartProps = z.infer<typeof donutChartSchema>
 
+export const heatmapSchema = z.object({
+  title: z.string().optional(),
+  currency: z.string().describe('ISO 4217 code, e.g. "USD"'),
+  days: z
+    .array(
+      z.object({
+        date: z.string().describe('YYYY-MM-DD'),
+        amount: z
+          .number()
+          .describe(
+            'Total spend on this date as a positive plain number (sum of outflows; convert from scaled-decimal first)',
+          ),
+      }),
+    )
+    .min(1)
+    .describe(
+      'One row per calendar day in the requested range. Include zero-spend days too so the grid is continuous; the renderer color-scales by magnitude.',
+    ),
+})
+export type HeatmapProps = z.infer<typeof heatmapSchema>
+
 export const accountCardSchema = z.object({
   account: z
     .string()
@@ -107,6 +128,7 @@ export const GEN_UI_TOOLS = {
   show_bar_chart: barChartSchema,
   show_line_chart: lineChartSchema,
   show_donut_chart: donutChartSchema,
+  show_heatmap: heatmapSchema,
   show_account_card: accountCardSchema,
 } as const
 
