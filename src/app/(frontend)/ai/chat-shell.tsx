@@ -5,6 +5,7 @@ import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { useRef, useState, useEffect } from 'react'
 import { Sparkle, ArrowUp, Trash } from '@phosphor-icons/react'
 import { isGenUiTool, renderGenUi } from './gen-ui'
+import { ChatActionsContext } from './chat-actions'
 
 export function ChatShell() {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
@@ -30,7 +31,7 @@ export function ChatShell() {
   const empty = messages.length === 0
 
   return (
-    <>
+    <ChatActionsContext.Provider value={{ sendMessage, busy }}>
       <section className="relative flex flex-1 flex-col overflow-hidden">
         {!empty && (
           <button
@@ -104,7 +105,7 @@ export function ChatShell() {
           </button>
         </div>
       </footer>
-    </>
+    </ChatActionsContext.Provider>
   )
 }
 
@@ -150,10 +151,10 @@ function MessageRow({ role, parts }: { role: string; parts: unknown }) {
             }
             if (
               isGenUiTool(tp.type) &&
-              tp.input &&
               tp.state === 'output-available'
             ) {
-              const rendered = renderGenUi(tp.type, tp.input)
+              const payload = tp.output ?? tp.input
+              const rendered = renderGenUi(tp.type, payload)
               if (rendered) {
                 return (
                   <div key={i} className="my-2">
