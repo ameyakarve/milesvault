@@ -116,7 +116,10 @@ function MessageRow({ role, parts }: { role: string; parts: unknown }) {
   const list = Array.isArray(parts) ? (parts as Part[]) : []
   const isUser = role === 'user'
   const hasGenUi = list.some(
-    (p) => p.type.startsWith('tool-') && isGenUiTool(p.type),
+    (p) =>
+      p.type.startsWith('tool-') &&
+      isGenUiTool(p.type) &&
+      (p as { state?: string }).state === 'output-available',
   )
   return (
     <div className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -145,7 +148,11 @@ function MessageRow({ role, parts }: { role: string; parts: unknown }) {
               input?: unknown
               output?: unknown
             }
-            if (isGenUiTool(tp.type) && tp.input) {
+            if (
+              isGenUiTool(tp.type) &&
+              tp.input &&
+              tp.state === 'output-available'
+            ) {
               const rendered = renderGenUi(tp.type, tp.input)
               if (rendered) {
                 return (
