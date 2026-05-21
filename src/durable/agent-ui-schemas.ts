@@ -70,11 +70,44 @@ export const donutChartSchema = z.object({
 })
 export type DonutChartProps = z.infer<typeof donutChartSchema>
 
+export const accountCardSchema = z.object({
+  account: z
+    .string()
+    .describe('Full Beancount account path, e.g. "Assets:Bank:Chase:Checking"'),
+  currency: z.string().describe('ISO 4217 code, e.g. "USD"'),
+  balance: z.number().describe('Current balance as a plain number'),
+  as_of_date: z
+    .string()
+    .optional()
+    .describe('YYYY-MM-DD the balance is computed for'),
+  recent_txns: z
+    .array(
+      z.object({
+        date: z.string().describe('YYYY-MM-DD'),
+        payee: z.string().optional(),
+        narration: z.string().optional(),
+        amount: z
+          .number()
+          .describe(
+            'Signed amount posted to this account (positive = inflow, negative = outflow)',
+          ),
+        counterparty: z
+          .string()
+          .optional()
+          .describe('Other side of the txn, e.g. "Expenses:Food:Groceries"'),
+      }),
+    )
+    .max(15)
+    .optional(),
+})
+export type AccountCardProps = z.infer<typeof accountCardSchema>
+
 export const GEN_UI_TOOLS = {
   show_stacked_bar: stackedBarSchema,
   show_bar_chart: barChartSchema,
   show_line_chart: lineChartSchema,
   show_donut_chart: donutChartSchema,
+  show_account_card: accountCardSchema,
 } as const
 
 export type GenUiToolName = keyof typeof GEN_UI_TOOLS
