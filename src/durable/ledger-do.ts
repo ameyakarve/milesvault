@@ -65,6 +65,37 @@ export type JournalPutError = {
   error: 'parse_error' | 'partial_parse' | 'unsupported_directives' | 'currency_lock'
   message: string
 }
+export type PreviewJournalPutResponse = {
+  ok: true
+  inserted: number
+  deleted: number
+  unchanged: number
+}
+
+const ALL_DIRECTIVE_KINDS: DirectiveInput['kind'][] = [
+  'open',
+  'close',
+  'commodity',
+  'balance',
+  'pad',
+  'price',
+  'note',
+  'document',
+  'event',
+]
+
+type JournalDiffResult =
+  | JournalPutError
+  | {
+      ok: true
+      inserted: number
+      deleted: number
+      unchanged: number
+      txnsToInsert: Array<{ input: TransactionInput; hash: string }>
+      txnIdsToDelete: number[]
+      dirsToInsertByKind: Map<DirectiveInput['kind'], DirectiveInput[]>
+      dirIdsToDeleteByKind: Map<DirectiveInput['kind'], number[]>
+    }
 
 const DIRECTIVE_TABLE: Record<DirectiveInput['kind'], string> = {
   open: 'directives_open',
@@ -417,10 +448,55 @@ export class LedgerDO extends Think {
   }
 
   async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {
-    // TODO: parseJournalStrict already rejects elided postings (every posting
-    // must carry an explicit amount + currency). Surface a dedicated error
-    // kind ('elided_posting') here so the UI can show a targeted message
-    // instead of the generic 'parse_error'.
+    const diff = await this.computeJournalDiff(text)
+    if ('ok' in diff && diff.ok === false) return diff
+
+    const allKinds = ALL_DIRECTIVE_KINDS
+    const now = Date.now()
+    this.ctx.storage.transactionSync(() => {
+      for (const id of diff.txnIdsToDelete) {
+        this.db.exec('DELETE FROM transactions WHERE id = ?', id)
+      }
+      for (const { input, hash } of diff.txnsToInsert) this.insertTxn(input, hash, now)
+      for (const kind of allKinds) {
+        const table = DIRECTIVE_TABLE[kind]
+        for (const id of diff.dirIdsToDeleteByKind.get(kind)!) {
+          this.db.exec(`DELETE FROM ${table} WHERE id = ?`, id)
+        }
+        for (const d of diff.dirsToInsertByKind.get(kind)!) this.insertDirective(d, now)
+      }
+    })
+
+    const result = await this.journal_get()
+    return {
+      text: result.text,
+      inserted: diff.inserted,
+      deleted: diff.deleted,
+      unchanged: diff.unchanged,
+    }
+  }
+
+  async preview_journal_put(
+    text: string,
+  ): Promise<PreviewJournalPutResponse | JournalPutError> {
+    const diff = await this.computeJournalDiff(text)
+    if ('ok' in diff && diff.ok === false) return diff
+    return {
+      ok: true,
+      inserted: diff.inserted,
+      deleted: diff.deleted,
+      unchanged: diff.unchanged,
+    }
+  }
+
+  // Pure diff against current DO state. Both journal_put (applies) and
+  // preview_journal_put (validate-only) share this so a successful preview
+  // guarantees the subsequent put parses and validates the same way.
+  // TODO: parseJournalStrict already rejects elided postings (every posting
+  // must carry an explicit amount + currency). Surface a dedicated error
+  // kind ('elided_posting') so the UI can show a targeted message instead
+  // of the generic 'parse_error'.
+  private async computeJournalDiff(text: string): Promise<JournalDiffResult> {
     const parsed = parseJournalStrict(text)
     if (isStrictParseErr(parsed)) {
       return { ok: false, error: parsed.kind, message: parsed.message }
@@ -435,19 +511,8 @@ export class LedgerDO extends Think {
       }
     }
 
-    const allKinds: DirectiveInput['kind'][] = [
-      'open',
-      'close',
-      'commodity',
-      'balance',
-      'pad',
-      'price',
-      'note',
-      'document',
-      'event',
-    ]
+    const allKinds = ALL_DIRECTIVE_KINDS
 
-    // Pre-compute all hashes (async work must finish before transactionSync)
     const incomingTxns: Array<{ input: TransactionInput; hash: string }> = []
     for (const input of parsed.transactions) {
       incomingTxns.push({ input, hash: await transactionInputHash(input) })
@@ -481,7 +546,6 @@ export class LedgerDO extends Think {
       oldDirsByKindHash.set(kind, map)
     }
 
-    // Compute diff (pure)
     const txnsToInsert: Array<{ input: TransactionInput; hash: string }> = []
     let unchanged = 0
     for (const item of incomingTxns) {
@@ -524,24 +588,16 @@ export class LedgerDO extends Think {
       deleted += dirIdsToDeleteByKind.get(kind)!.length
     }
 
-    // Apply atomically: any throw inside rolls back all writes
-    const now = Date.now()
-    this.ctx.storage.transactionSync(() => {
-      for (const id of txnIdsToDelete) {
-        this.db.exec('DELETE FROM transactions WHERE id = ?', id)
-      }
-      for (const { input, hash } of txnsToInsert) this.insertTxn(input, hash, now)
-      for (const kind of allKinds) {
-        const table = DIRECTIVE_TABLE[kind]
-        for (const id of dirIdsToDeleteByKind.get(kind)!) {
-          this.db.exec(`DELETE FROM ${table} WHERE id = ?`, id)
-        }
-        for (const d of dirsToInsertByKind.get(kind)!) this.insertDirective(d, now)
-      }
-    })
-
-    const result = await this.journal_get()
-    return { text: result.text, inserted, deleted, unchanged }
+    return {
+      ok: true,
+      inserted,
+      deleted,
+      unchanged,
+      txnsToInsert,
+      txnIdsToDelete,
+      dirsToInsertByKind,
+      dirIdsToDeleteByKind,
+    }
   }
 
   async clear(): Promise<{ ok: true }> {
