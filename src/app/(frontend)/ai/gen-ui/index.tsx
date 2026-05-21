@@ -7,6 +7,7 @@ import { LineChartRenderer } from './line-chart'
 import { DonutChartRenderer } from './donut-chart'
 import { HeatmapRenderer } from './heatmap'
 import { AccountCard } from './account-card'
+import { StatementRows } from './statement-rows'
 import { DiffCard } from './diff-card'
 
 const RENDERERS: {
@@ -41,6 +42,11 @@ const RENDERERS: {
     const parsed = GEN_UI_TOOLS.show_account_card.safeParse(input)
     if (!parsed.success) return null
     return <AccountCard input={parsed.data} />
+  },
+  extract_statement_rows: (input) => {
+    const parsed = GEN_UI_TOOLS.extract_statement_rows.safeParse(input)
+    if (!parsed.success) return null
+    return <StatementRows input={parsed.data} />
   },
   propose_journal_edit: (input) => {
     const parsed = GEN_UI_TOOLS.propose_journal_edit.safeParse(input)

@@ -8,6 +8,7 @@ import {
   barChartSchema,
   commitJournalEditSchema,
   donutChartSchema,
+  extractStatementRowsSchema,
   heatmapSchema,
   lineChartSchema,
   ocrDocumentSchema,
@@ -240,6 +241,12 @@ export class LedgerDO extends Think {
           'Convert an uploaded statement (PDF / CSV / OFX / QIF / image) to markdown. The user attaches the file via the chat UI which returns an `r2_key`; pass that key here and you get the document\'s text content as markdown. First step of any ingest flow — call this before trying to extract rows.',
         inputSchema: ocrDocumentSchema,
         execute: async (input) => this.ocr_document(input.r2_key),
+      }),
+      extract_statement_rows: tool({
+        description:
+          'Render a preview table of normalized statement rows extracted from an OCR\'d document. Call this AFTER ocr_document — you produce the rows yourself by reading the markdown and normalizing each posting into {date, description, amount, balance?, type?}. Pick the most specific `account_hint` from the existing chart of accounts (look at sql_query results if unsure). Do NOT collapse duplicates, do NOT aggregate, do NOT commit anything — this is a review step before the user approves.',
+        inputSchema: extractStatementRowsSchema,
+        execute: async (input) => input,
       }),
       commit_journal_edit: tool({
         description:

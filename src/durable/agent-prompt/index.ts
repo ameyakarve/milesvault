@@ -192,6 +192,29 @@ write path is two-step:
 - After commit, briefly summarize what landed (counts from the
   \`summary\` field).`
 
+export const INGEST_FLOW = `# Ingesting a statement
+
+When the user attaches a file (you'll see an \`[Attached: …
+r2_key=\\\`agent/…\\\`]\` block in their message), follow this flow:
+
+1. \`ocr_document({ r2_key })\` — converts PDF / CSV / OFX / image to
+   markdown. Read the result carefully — it usually contains the
+   account number, period, currency, and a list of postings.
+2. \`extract_statement_rows({ account_hint, currency, source_filename?,
+   statement_period?, rows: [...] })\` — you produce the normalized
+   rows yourself by parsing the markdown. One row per posting; do NOT
+   collapse, aggregate, or skip any. Preserve statement order.
+3. Pick \`account_hint\` from the existing chart of accounts shown in
+   the snapshot. If you genuinely can't tell which account the
+   statement belongs to, ask the user before calling extract.
+4. Sign convention: positive = money INTO the statement account
+   (deposit on checking, payment on a credit card), negative = money
+   OUT (debit/charge). This is the sign the user sees.
+5. The user reviews the StatementRows preview card. After they
+   confirm, the next step (dedup against the existing ledger, then a
+   propose_journal_edit) lands in the next slice — for now, just show
+   the rows and stop.`
+
 export function buildSystemPrompt(snapshot: {
   today: number
   accounts: Array<{ account: string; currencies: string[]; open_date: number; close_date: number | null }>
@@ -231,6 +254,7 @@ ${snapshot.sample_txns || '(empty)'}
     QUERY_CONVENTIONS,
     RENDER_TOOLS,
     EDIT_CONVENTIONS,
+    INGEST_FLOW,
     snapshotBlock,
   ].join('\n\n---\n\n')
 }
