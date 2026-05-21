@@ -30,13 +30,6 @@ export type LedgerClient = {
     text: string,
   ): Promise<PreviewJournalPutResponse | JournalPutError>
   clear(): Promise<{ ok: true }>
-  record_attachment(opts: {
-    r2_key: string
-    sha256: string
-    filename: string
-    mime: string
-    size: number
-  }): Promise<{ ok: true; uploaded_at: number }>
 }
 
 export class LedgerInputError extends Error {
@@ -131,25 +124,6 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async clear() {
       return stub.clear()
-    },
-
-    async record_attachment(opts) {
-      if (!opts || typeof opts.r2_key !== 'string' || opts.r2_key.length === 0) {
-        throw new LedgerInputError(['r2_key must be a non-empty string.'])
-      }
-      if (typeof opts.sha256 !== 'string' || opts.sha256.length === 0) {
-        throw new LedgerInputError(['sha256 must be a non-empty string.'])
-      }
-      if (typeof opts.filename !== 'string' || opts.filename.length === 0) {
-        throw new LedgerInputError(['filename must be a non-empty string.'])
-      }
-      if (typeof opts.mime !== 'string' || opts.mime.length === 0) {
-        throw new LedgerInputError(['mime must be a non-empty string.'])
-      }
-      if (!Number.isFinite(opts.size) || opts.size < 0) {
-        throw new LedgerInputError(['size must be a non-negative number.'])
-      }
-      return stub.record_attachment(opts)
     },
   }
 }

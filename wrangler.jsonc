@@ -49,11 +49,7 @@
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
   },
   "services": [
-    // The service should match the "name" of your worker
-    // {
-    //   "binding": "WORKER_SELF_REFERENCE",
-    //   "service": "my-app"
-    // },
+    { "binding": "EXTRACTOR", "service": "milesvault", "entrypoint": "Extractor" },
   ],
   "r2_buckets": [
     {
@@ -93,7 +89,10 @@
         { "tag": "v6", "new_sqlite_classes": ["AgentDO"] },
         { "tag": "v7", "deleted_classes": ["AgentDO"] },
       ],
-      "services": [{ "binding": "PROD", "service": "milesvault" }],
+      "services": [
+        { "binding": "PROD", "service": "milesvault" },
+        { "binding": "EXTRACTOR", "service": "milesvault-staging", "entrypoint": "Extractor" },
+      ],
       "r2_buckets": [
         {
           "binding": "R2",

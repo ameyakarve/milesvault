@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { auth } from '@/auth'
-import { getLedgerClient } from '@/lib/ledger-api'
+import type { Extractor } from '@/durable/extractor'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +38,8 @@ export async function POST(req: NextRequest): Promise<Response> {
   const r2Key = `agent/${userKey.slice(0, 16)}/${sha256}`
 
   const { env } = await getCloudflareContext({ async: true })
-  const r2 = (env as Cloudflare.Env).R2
+  const cfEnv = env as Cloudflare.Env
+  const r2 = cfEnv.R2
   if (!r2) {
     return new NextResponse('R2 binding missing', { status: 500 })
   }
@@ -51,20 +52,26 @@ export async function POST(req: NextRequest): Promise<Response> {
     customMetadata: { email, filename: file.name },
   })
 
-  const ledger = await getLedgerClient(email)
-  await ledger.record_attachment({
-    r2_key: r2Key,
-    sha256,
-    filename: file.name,
-    mime: contentType,
-    size: file.size,
-  })
+  const extractor = cfEnv.EXTRACTOR as unknown as Service<Extractor> | undefined
+  if (!extractor) {
+    return new NextResponse('EXTRACTOR binding missing', { status: 500 })
+  }
+  const extracted = await extractor.extractFromR2(r2Key)
+  if (extracted.ok === false) {
+    return NextResponse.json(
+      { error: extracted.error, message: extracted.message },
+      { status: 502 },
+    )
+  }
 
   return NextResponse.json({
     r2_key: r2Key,
     content_type: contentType,
     size: file.size,
     filename: file.name,
+    markdown: extracted.markdown,
+    tokens: extracted.tokens,
+    cached: extracted.cached,
   })
 }
 

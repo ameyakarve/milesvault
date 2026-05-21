@@ -195,11 +195,15 @@ write path is two-step:
 export const INGEST_FLOW = `# Ingesting a statement
 
 When the user attaches a file (you'll see an \`[Attached: …
-r2_key=\\\`agent/…\\\`]\` block in their message), follow this flow:
+r2_key=\\\`agent/…\\\`]\` block in their message, immediately followed
+by a fenced \`markdown\` block containing the extracted statement
+text), follow this flow:
 
-1. \`ocr_document({ r2_key })\` — converts PDF / CSV / OFX / image to
-   markdown. Read the result carefully — it usually contains the
-   account number, period, currency, and a list of postings.
+1. Read the embedded markdown carefully — it usually contains the
+   account number, period, currency, and a list of postings. The
+   server has already converted the file (PDF / CSV / OFX / image)
+   to markdown before you saw the message, so do NOT ask for a
+   re-extract.
 2. \`extract_statement_rows({ account_hint, currency, source_filename?,
    statement_period?, rows: [...] })\` — you produce the normalized
    rows yourself by parsing the markdown. One row per posting; do NOT
