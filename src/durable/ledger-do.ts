@@ -7,6 +7,7 @@ import {
   accountCardSchema,
   barChartSchema,
   donutChartSchema,
+  heatmapSchema,
   lineChartSchema,
   stackedBarSchema,
 } from './agent-ui-schemas'
@@ -161,6 +162,12 @@ export class LedgerDO extends Think {
         description:
           'Render a donut chart for a single-period composition ("this month by category"). Provide each slice as {name, value, color?}.',
         inputSchema: donutChartSchema,
+        execute: async (input) => input,
+      }),
+      show_heatmap: tool({
+        description:
+          'Render a calendar heatmap of daily spend across a date range ("when did I spend this year", "spend cadence last 90 days"). Provide one row per calendar day in the requested window (include zero-spend days too) with a positive `amount` representing that day\'s total outflow in the given currency.',
+        inputSchema: heatmapSchema,
         execute: async (input) => input,
       }),
       show_account_card: tool({

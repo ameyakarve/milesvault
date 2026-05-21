@@ -5,6 +5,7 @@ import { StackedBar } from './stacked-bar'
 import { BarChartRenderer } from './bar-chart'
 import { LineChartRenderer } from './line-chart'
 import { DonutChartRenderer } from './donut-chart'
+import { HeatmapRenderer } from './heatmap'
 import { AccountCard } from './account-card'
 
 const RENDERERS: {
@@ -29,6 +30,11 @@ const RENDERERS: {
     const parsed = GEN_UI_TOOLS.show_donut_chart.safeParse(input)
     if (!parsed.success) return null
     return <DonutChartRenderer input={parsed.data} />
+  },
+  show_heatmap: (input) => {
+    const parsed = GEN_UI_TOOLS.show_heatmap.safeParse(input)
+    if (!parsed.success) return null
+    return <HeatmapRenderer input={parsed.data} />
   },
   show_account_card: (input) => {
     const parsed = GEN_UI_TOOLS.show_account_card.safeParse(input)

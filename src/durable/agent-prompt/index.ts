@@ -116,6 +116,11 @@ All chart tools share these conventions:
 - \`show_donut_chart\` — single-period composition ("this month by
   category"). Provide each slice as \`{name, value, color?}\`. Skip when
   there are >8 slices — use a bar chart instead.
+- \`show_heatmap\` — daily-spend calendar heatmap across a date range
+  ("when did I spend this year", "spend cadence last 90 days"). Provide
+  one row per calendar day in the window with a positive \`amount\`
+  (total outflows for that day in \`currency\`). Include zero-spend
+  days so the grid stays continuous.
 - \`show_account_card\` — one specific account ("what's in my Chase
   Checking", "show my Schwab brokerage"). Compute \`balance\` as the SUM
   of postings in the requested currency. Provide up to ~10
