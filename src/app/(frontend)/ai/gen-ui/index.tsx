@@ -7,6 +7,7 @@ import { LineChartRenderer } from './line-chart'
 import { DonutChartRenderer } from './donut-chart'
 import { HeatmapRenderer } from './heatmap'
 import { AccountCard } from './account-card'
+import { DiffCard } from './diff-card'
 
 const RENDERERS: {
   [K in GenUiToolName]: (input: unknown) => React.ReactElement | null
@@ -40,6 +41,11 @@ const RENDERERS: {
     const parsed = GEN_UI_TOOLS.show_account_card.safeParse(input)
     if (!parsed.success) return null
     return <AccountCard input={parsed.data} />
+  },
+  propose_journal_edit: (input) => {
+    const parsed = GEN_UI_TOOLS.propose_journal_edit.safeParse(input)
+    if (!parsed.success) return null
+    return <DiffCard input={parsed.data} />
   },
 }
 

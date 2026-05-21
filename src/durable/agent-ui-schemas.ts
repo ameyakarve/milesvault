@@ -177,6 +177,7 @@ export const GEN_UI_TOOLS = {
   show_donut_chart: donutChartSchema,
   show_heatmap: heatmapSchema,
   show_account_card: accountCardSchema,
+  propose_journal_edit: proposeJournalEditResultSchema,
 } as const
 
 export type GenUiToolName = keyof typeof GEN_UI_TOOLS
