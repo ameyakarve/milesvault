@@ -250,4 +250,15 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     sql: `ALTER TABLE ${table} DROP COLUMN raw_text`,
     allowFail: true,
   })),
+  {
+    label: 'agent_proposals',
+    sql: `CREATE TABLE IF NOT EXISTS agent_proposals (
+      id              TEXT PRIMARY KEY,
+      created_at      INTEGER NOT NULL,
+      instruction     TEXT    NOT NULL,
+      proposed_text   TEXT    NOT NULL,
+      target_txn_ids  TEXT    NOT NULL DEFAULT '[]',
+      status          TEXT    NOT NULL DEFAULT 'pending'
+    )`,
+  },
 ]

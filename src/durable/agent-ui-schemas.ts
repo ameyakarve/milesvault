@@ -123,6 +123,53 @@ export const accountCardSchema = z.object({
 })
 export type AccountCardProps = z.infer<typeof accountCardSchema>
 
+export const proposeJournalEditSchema = z.object({
+  instruction: z
+    .string()
+    .describe(
+      'Short human-readable description of what the edit does, e.g. "split Costco $200 into groceries + household"',
+    ),
+  proposed_text: z
+    .string()
+    .describe(
+      'Beancount text that should replace the target transactions (or be appended, if no targets). Must include full transaction headers and balanced postings.',
+    ),
+  target_txn_ids: z
+    .array(z.number().int())
+    .optional()
+    .describe(
+      'IDs of existing transactions to be replaced by `proposed_text`. Omit or pass [] for pure additions (e.g. opening a new account, recording a fresh txn).',
+    ),
+})
+export type ProposeJournalEditProps = z.infer<typeof proposeJournalEditSchema>
+
+export const proposeJournalEditResultSchema = z.object({
+  ok: z.literal(true),
+  proposal_id: z.string(),
+  instruction: z.string(),
+  before_text: z.string(),
+  proposed_text: z.string(),
+  summary: z.object({
+    insert: z.number().int(),
+    delete: z.number().int(),
+    unchanged: z.number().int(),
+  }),
+})
+export type ProposeJournalEditResult = z.infer<typeof proposeJournalEditResultSchema>
+
+export const commitJournalEditSchema = z.object({
+  proposal_id: z
+    .string()
+    .describe('ID returned by a prior propose_journal_edit call.'),
+  edited_text: z
+    .string()
+    .optional()
+    .describe(
+      'Optional override of `proposed_text` — used when the user tweaked the DiffCard textarea before approving.',
+    ),
+})
+export type CommitJournalEditProps = z.infer<typeof commitJournalEditSchema>
+
 export const GEN_UI_TOOLS = {
   show_stacked_bar: stackedBarSchema,
   show_bar_chart: barChartSchema,
