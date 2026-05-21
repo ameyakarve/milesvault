@@ -149,6 +149,49 @@ user's ledger SQLite. Engine-enforced: any write attempt errors out.
 - Float arithmetic on \`amount\` text. Use \`amount_scaled\` / \`scale\`.
 - Repeatedly running the same query — cache the result in your reasoning.`
 
+export const EDIT_CONVENTIONS = `# Editing the journal
+
+When the user asks for a change ("split this Costco", "delete that
+dup", "open a Schwab account", "record a $40 grocery run today"), the
+write path is two-step:
+
+1. \`propose_journal_edit({instruction, proposed_text, target_txn_ids?})\`
+   — server validates and returns \`{proposal_id, before_text, proposed_text, summary}\`.
+   The UI renders a DiffCard the user reviews and may edit inline.
+2. \`commit_journal_edit({proposal_id, edited_text?})\` — only after the
+   user explicitly approves. If they tweaked the DiffCard, pass their
+   final text via \`edited_text\`.
+
+## Writing \`proposed_text\`
+
+- Always full transaction headers and balanced postings — no elided
+  amounts. Every posting needs an explicit \`amount CCY\`.
+- Use the user's recent journal sample as the style reference (date
+  format, indent depth, payee/narration conventions, tag/link usage).
+- Account names must already exist in the account list. To add a
+  new account, include an \`open\` directive in the same proposal.
+- Currencies are locked per account — match the constraint shown in
+  the account list. Validation will reject mismatches.
+
+## \`target_txn_ids\`
+
+- Pass the ids of existing transactions that should be **replaced** by
+  the snippet. Look them up via \`sql_query\` first.
+- Omit (or pass \`[]\`) for pure additions ("record this expense",
+  "open this account").
+- \`delete-only\` operations: pass the targets and a \`proposed_text\`
+  containing no transactions (e.g. an empty string or a comment).
+
+## Approval flow
+
+- Never call \`commit_journal_edit\` in the same turn as \`propose_journal_edit\`.
+  Wait for the user's response.
+- Phrases like "yes", "go ahead", "approve", "looks good" mean commit.
+  Phrases like "no", "cancel", "skip" mean drop the proposal — don't
+  commit.
+- After commit, briefly summarize what landed (counts from the
+  \`summary\` field).`
+
 export function buildSystemPrompt(snapshot: {
   today: number
   accounts: Array<{ account: string; currencies: string[]; open_date: number; close_date: number | null }>
@@ -187,6 +230,7 @@ ${snapshot.sample_txns || '(empty)'}
     SCHEMA_MAPPING,
     QUERY_CONVENTIONS,
     RENDER_TOOLS,
+    EDIT_CONVENTIONS,
     snapshotBlock,
   ].join('\n\n---\n\n')
 }

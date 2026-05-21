@@ -6,9 +6,11 @@ import { buildSystemPrompt } from './agent-prompt'
 import {
   accountCardSchema,
   barChartSchema,
+  commitJournalEditSchema,
   donutChartSchema,
   heatmapSchema,
   lineChartSchema,
+  proposeJournalEditSchema,
   stackedBarSchema,
 } from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
@@ -71,6 +73,20 @@ export type PreviewJournalPutResponse = {
   deleted: number
   unchanged: number
 }
+export type ProposeJournalEditResponse =
+  | {
+      ok: true
+      proposal_id: string
+      instruction: string
+      before_text: string
+      proposed_text: string
+      summary: { insert: number; delete: number; unchanged: number }
+    }
+  | JournalPutError
+export type CommitJournalEditResponse =
+  | (JournalPutResponse & { ok: true; proposal_id: string })
+  | JournalPutError
+  | { ok: false; error: 'no_such_proposal' | 'already_resolved'; message: string }
 
 const ALL_DIRECTIVE_KINDS: DirectiveInput['kind'][] = [
   'open',
@@ -206,6 +222,27 @@ export class LedgerDO extends Think {
           'Render an account summary card: current balance + a short list of recent transactions hitting this account. Use when the user asks about one specific account ("what\'s in my Chase Checking", "show me my Schwab brokerage"). Compute the balance as the SUM of postings in the requested currency; provide each recent posting as signed (positive = inflow, negative = outflow).',
         inputSchema: accountCardSchema,
         execute: async (input) => input,
+      }),
+      propose_journal_edit: tool({
+        description:
+          'Propose a Beancount journal edit. Provide a short `instruction` for the user-facing description, the `proposed_text` (full Beancount snippet that should replace the targets — balanced postings, explicit amounts + currencies), and optionally `target_txn_ids` of existing transactions to be replaced (omit for pure additions). The server validates the new journal, stores a pending proposal, and returns a proposal_id + diff summary. The user reviews the DiffCard before commit; do NOT call commit_journal_edit until they explicitly approve.',
+        inputSchema: proposeJournalEditSchema,
+        execute: async (input) =>
+          this.propose_journal_edit({
+            instruction: input.instruction,
+            proposed_text: input.proposed_text,
+            target_txn_ids: input.target_txn_ids,
+          }),
+      }),
+      commit_journal_edit: tool({
+        description:
+          'Commit a previously proposed journal edit. Pass the `proposal_id` returned by propose_journal_edit. If the user tweaked the DiffCard, pass their final text via `edited_text`. Only call this after the user has explicitly approved the proposal.',
+        inputSchema: commitJournalEditSchema,
+        execute: async (input) =>
+          this.commit_journal_edit({
+            proposal_id: input.proposal_id,
+            edited_text: input.edited_text,
+          }),
       }),
     }
   }
@@ -486,6 +523,138 @@ export class LedgerDO extends Think {
       inserted: diff.inserted,
       deleted: diff.deleted,
       unchanged: diff.unchanged,
+    }
+  }
+
+  // Build the would-be new full-journal text by serializing the current
+  // ledger excluding `excludeTxnIds`, then concatenating the agent's
+  // proposed snippet. Order: existing surviving entries first (oldest →
+  // newest), then proposed text — journal_put doesn't care about order.
+  private composeJournalAfterEdit(
+    excludeTxnIds: ReadonlyArray<number>,
+    proposedText: string,
+  ): { fullText: string; beforeText: string } {
+    const excluded = new Set(excludeTxnIds.map((n) => Number(n)))
+
+    const allTxnIds = this.db
+      .exec<{ id: number }>('SELECT id FROM transactions ORDER BY date ASC, id ASC')
+      .toArray()
+      .map((r) => r.id)
+    const surviving: TransactionInput[] = []
+    const targeted: TransactionInput[] = []
+    for (const id of allTxnIds) {
+      const entry = this.readTxnEntry(id)
+      if (!entry) continue
+      const input = entryTxnToInput(entry)
+      if (excluded.has(id)) targeted.push(input)
+      else surviving.push(input)
+    }
+    const directives = this.readAllDirectives()
+    const survivingText = serializeJournal(surviving, directives)
+    const beforeText = targeted.length > 0 ? serializeJournal(targeted, []) : ''
+    const trailing = proposedText.endsWith('\n') ? '' : '\n'
+    const fullText = `${survivingText}\n\n${proposedText}${trailing}`
+    return { fullText, beforeText }
+  }
+
+  async propose_journal_edit(opts: {
+    instruction: string
+    proposed_text: string
+    target_txn_ids?: ReadonlyArray<number>
+  }): Promise<ProposeJournalEditResponse> {
+    const targets = opts.target_txn_ids ?? []
+    const { fullText, beforeText } = this.composeJournalAfterEdit(
+      targets,
+      opts.proposed_text,
+    )
+    const diff = await this.computeJournalDiff(fullText)
+    if ('ok' in diff && diff.ok === false) return diff
+
+    const id = crypto.randomUUID()
+    this.db.exec(
+      `INSERT INTO agent_proposals (id, created_at, instruction, proposed_text, target_txn_ids, status)
+       VALUES (?, ?, ?, ?, ?, 'pending')`,
+      id,
+      Date.now(),
+      opts.instruction,
+      opts.proposed_text,
+      JSON.stringify(targets.map((n) => Number(n))),
+    )
+
+    return {
+      ok: true,
+      proposal_id: id,
+      instruction: opts.instruction,
+      before_text: beforeText,
+      proposed_text: opts.proposed_text,
+      summary: {
+        insert: diff.inserted,
+        delete: diff.deleted,
+        unchanged: diff.unchanged,
+      },
+    }
+  }
+
+  async commit_journal_edit(opts: {
+    proposal_id: string
+    edited_text?: string
+  }): Promise<CommitJournalEditResponse> {
+    const row = this.db
+      .exec<{
+        instruction: string
+        proposed_text: string
+        target_txn_ids: string
+        status: string
+      }>(
+        `SELECT instruction, proposed_text, target_txn_ids, status
+         FROM agent_proposals WHERE id = ?`,
+        opts.proposal_id,
+      )
+      .toArray()[0]
+    if (!row) {
+      return {
+        ok: false,
+        error: 'no_such_proposal',
+        message: `No proposal with id ${opts.proposal_id}`,
+      }
+    }
+    if (row.status !== 'pending') {
+      return {
+        ok: false,
+        error: 'already_resolved',
+        message: `Proposal ${opts.proposal_id} is already ${row.status}`,
+      }
+    }
+
+    let targets: number[] = []
+    try {
+      const parsed = JSON.parse(row.target_txn_ids)
+      if (Array.isArray(parsed)) targets = parsed.map((n) => Number(n))
+    } catch {
+      // treat as no targets
+    }
+
+    const text =
+      typeof opts.edited_text === 'string' && opts.edited_text.length > 0
+        ? opts.edited_text
+        : row.proposed_text
+    const { fullText } = this.composeJournalAfterEdit(targets, text)
+    const result = await this.journal_put(fullText)
+    if ('ok' in result && result.ok === false) return result
+
+    this.db.exec(
+      `UPDATE agent_proposals SET status = 'committed' WHERE id = ?`,
+      opts.proposal_id,
+    )
+
+    const applied = result as JournalPutResponse
+    return {
+      ok: true,
+      proposal_id: opts.proposal_id,
+      text: applied.text,
+      inserted: applied.inserted,
+      deleted: applied.deleted,
+      unchanged: applied.unchanged,
     }
   }
 
