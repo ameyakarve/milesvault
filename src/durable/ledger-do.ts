@@ -4,6 +4,7 @@ import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
 import { buildSystemPrompt } from './agent-prompt'
 import {
+  accountCardSchema,
   barChartSchema,
   donutChartSchema,
   lineChartSchema,
@@ -160,6 +161,12 @@ export class LedgerDO extends Think {
         description:
           'Render a donut chart for a single-period composition ("this month by category"). Provide each slice as {name, value, color?}.',
         inputSchema: donutChartSchema,
+        execute: async (input) => input,
+      }),
+      show_account_card: tool({
+        description:
+          'Render an account summary card: current balance + a short list of recent transactions hitting this account. Use when the user asks about one specific account ("what\'s in my Chase Checking", "show me my Schwab brokerage"). Compute the balance as the SUM of postings in the requested currency; provide each recent posting as signed (positive = inflow, negative = outflow).',
+        inputSchema: accountCardSchema,
         execute: async (input) => input,
       }),
     }

@@ -5,6 +5,7 @@ import { StackedBar } from './stacked-bar'
 import { BarChartRenderer } from './bar-chart'
 import { LineChartRenderer } from './line-chart'
 import { DonutChartRenderer } from './donut-chart'
+import { AccountCard } from './account-card'
 
 const RENDERERS: {
   [K in GenUiToolName]: (input: unknown) => React.ReactElement | null
@@ -28,6 +29,11 @@ const RENDERERS: {
     const parsed = GEN_UI_TOOLS.show_donut_chart.safeParse(input)
     if (!parsed.success) return null
     return <DonutChartRenderer input={parsed.data} />
+  },
+  show_account_card: (input) => {
+    const parsed = GEN_UI_TOOLS.show_account_card.safeParse(input)
+    if (!parsed.success) return null
+    return <AccountCard input={parsed.data} />
   },
 }
 

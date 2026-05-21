@@ -115,7 +115,13 @@ All chart tools share these conventions:
   Optional \`curve_type\` (\`"monotone"\` default).
 - \`show_donut_chart\` — single-period composition ("this month by
   category"). Provide each slice as \`{name, value, color?}\`. Skip when
-  there are >8 slices — use a bar chart instead.`
+  there are >8 slices — use a bar chart instead.
+- \`show_account_card\` — one specific account ("what's in my Chase
+  Checking", "show my Schwab brokerage"). Compute \`balance\` as the SUM
+  of postings in the requested currency. Provide up to ~10
+  \`recent_txns\` ordered newest first; each \`amount\` is signed
+  (positive = inflow, negative = outflow). Optional \`counterparty\` is
+  the other side of the txn (e.g. \`Expenses:Food:Groceries\`).`
 
 export const QUERY_CONVENTIONS = `# Query conventions
 
