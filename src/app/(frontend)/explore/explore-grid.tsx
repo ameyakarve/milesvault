@@ -231,13 +231,25 @@ function drawDots(
   grid: ReturnType<typeof buildGrid>,
   layout: { cellW: number; cellH: number; originX: number; originY: number },
 ) {
+  let maxN = 0
+  for (let yi = 0; yi < grid.yBins.length; yi++) {
+    for (let xi = 0; xi < grid.xBins.length; xi++) {
+      if (grid.cells[yi][xi].length > maxN) maxN = grid.cells[yi][xi].length
+    }
+  }
+  if (maxN === 0) return
+  const cols = Math.max(1, Math.ceil(Math.sqrt(maxN * (layout.cellW / layout.cellH))))
+  const rowsN = Math.max(1, Math.ceil(maxN / cols))
+  const sx = layout.cellW / cols
+  const sy = layout.cellH / rowsN
+  const r = Math.max(0.8, Math.min(sx, sy) / 2 - 0.5)
   for (let yi = 0; yi < grid.yBins.length; yi++) {
     for (let xi = 0; xi < grid.xBins.length; xi++) {
       const ids = grid.cells[yi][xi]
       if (ids.length === 0) continue
       const cx = layout.originX + xi * layout.cellW
       const cy = layout.originY + yi * layout.cellH
-      packDots(ctx, rows, ids, cx, cy, layout.cellW, layout.cellH)
+      packDots(ctx, rows, ids, cx, cy, sx, sy, r, cols)
     }
   }
 }
@@ -248,16 +260,12 @@ function packDots(
   ids: number[],
   x: number,
   y: number,
-  w: number,
-  h: number,
+  sx: number,
+  sy: number,
+  r: number,
+  cols: number,
 ) {
-  const n = ids.length
-  const cols = Math.ceil(Math.sqrt(n * (w / h)))
-  const rowsN = Math.ceil(n / cols)
-  const sx = w / cols
-  const sy = h / rowsN
-  const r = Math.max(0.8, Math.min(sx, sy) / 2 - 0.5)
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < ids.length; i++) {
     const col = i % cols
     const row = Math.floor(i / cols)
     const cx = x + col * sx + sx / 2
