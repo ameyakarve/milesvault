@@ -67,7 +67,6 @@ export async function POST(req: NextRequest): Promise<Response> {
     filename: file.name,
     markdown: extracted.markdown,
     tokens: extracted.tokens,
-    cached: extracted.cached,
   })
 }
 

@@ -1,5 +1,5 @@
 export type ExtractResult =
-  | { ok: true; r2_key: string; markdown_key: string; markdown: string; tokens: number; cached: boolean }
+  | { ok: true; r2_key: string; markdown: string; tokens: number; cached: boolean }
   | { ok: false; error: string; message: string }
 
 const MARKDOWN_SUFFIX = '.md'
@@ -21,7 +21,6 @@ export async function extractFromR2(
     return {
       ok: true,
       r2_key: r2Key,
-      markdown_key: markdownKey,
       markdown: text,
       tokens,
       cached: true,
@@ -64,7 +63,6 @@ export async function extractFromR2(
   return {
     ok: true,
     r2_key: r2Key,
-    markdown_key: markdownKey,
     markdown,
     tokens,
     cached: false,
