@@ -30,6 +30,14 @@ export type LedgerClient = {
   list_account_children(account: string): Promise<string[]>
   list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
   search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse>
+  query_sql(
+    sql: string,
+    params?: ReadonlyArray<string | number | null>,
+  ): Promise<{
+    columns: string[]
+    rows: Array<Record<string, unknown>>
+    truncated: boolean
+  }>
   journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
   preview_journal_put(
     text: string,
@@ -115,6 +123,13 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async search_postings(filter) {
       return stub.search_postings(filter)
+    },
+
+    async query_sql(sql, params = []) {
+      if (typeof sql !== 'string' || sql.length === 0) {
+        throw new LedgerInputError(['sql must be a non-empty string.'])
+      }
+      return stub.query_sql(sql, params)
     },
 
     async journal_put(text) {
