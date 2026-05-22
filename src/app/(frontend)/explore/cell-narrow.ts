@@ -1,9 +1,9 @@
 import type { FacetConfig } from './facets'
 
 export type DraftPatch = {
+  scope?: string
   date_from?: string
   date_to?: string
-  account_prefix?: string
   currency?: string
   sign?: 'any' | 'debit' | 'credit'
   flag?: 'any' | '*' | '!'
@@ -39,7 +39,7 @@ export function cellNarrow(cfg: FacetConfig, binKey: string): DraftPatch | null 
     case 'account_child': {
       const scope = (cfg.account_scope ?? '').trim()
       const full = scope === '' ? binKey : `${scope}:${binKey}`
-      return { account_prefix: full }
+      return { scope: full }
     }
     case 'currency':
       return { currency: binKey }
