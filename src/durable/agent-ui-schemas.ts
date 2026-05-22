@@ -141,7 +141,6 @@ export const proposeJournalEditSchema = z.object({
       'IDs of existing transactions to be replaced by `proposed_text`. Omit or pass [] for pure additions (e.g. opening a new account, recording a fresh txn).',
     ),
 })
-export type ProposeJournalEditProps = z.infer<typeof proposeJournalEditSchema>
 
 export const proposeJournalEditResultSchema = z.object({
   ok: z.literal(true),
@@ -247,7 +246,6 @@ export const commitIngestSchema = z.object({
       'Rows the user selected in the StatementRows card. Pick a `counterparty` for each based on its description and the existing chart of accounts.',
     ),
 })
-export type CommitIngestProps = z.infer<typeof commitIngestSchema>
 
 export const commitJournalEditSchema = z.object({
   proposal_id: z
@@ -260,7 +258,6 @@ export const commitJournalEditSchema = z.object({
       'Optional override of `proposed_text` — used when the user tweaked the DiffCard textarea before approving.',
     ),
 })
-export type CommitJournalEditProps = z.infer<typeof commitJournalEditSchema>
 
 export const GEN_UI_TOOLS = {
   show_stacked_bar: stackedBarSchema,
