@@ -57,6 +57,7 @@ export function rowBinKey(row: PostingSearchRow, cfg: FacetConfig): string | nul
     case 'currency':
       return row.currency
     case 'sign':
+      if (row.amount == null) return null
       return row.amount.startsWith('-') ? 'debit' : 'credit'
     case 'flag':
       return row.flag ?? '(none)'

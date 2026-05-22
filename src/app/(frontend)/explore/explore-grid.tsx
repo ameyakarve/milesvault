@@ -263,11 +263,15 @@ function packDots(
     const cx = x + col * sx + sx / 2
     const cy = y + row * sy + sy / 2
     const posting = rows[ids[i]]
-    ctx.fillStyle = posting.amount.startsWith('-') ? DEBIT : CREDIT
+    ctx.fillStyle = isDebit(posting.amount) ? DEBIT : CREDIT
     ctx.beginPath()
     ctx.arc(cx, cy, r, 0, Math.PI * 2)
     ctx.fill()
   }
+}
+
+function isDebit(amount: string | null): boolean {
+  return amount != null && amount.startsWith('-')
 }
 
 function truncate(s: string, max: number): string {

@@ -513,8 +513,8 @@ export class LedgerDO extends Think {
         payee: string
         narration: string
         account: string
-        amount: string
-        currency: string
+        amount: string | null
+        currency: string | null
       }>(sql, ...binds, probe)
       .toArray()
 
