@@ -6,17 +6,28 @@ import type {
   PostingSearchResponse,
   PostingSearchRow,
 } from '@/lib/ledger-core/posting-search'
+import { ExploreGrid, type GridControls } from './explore-grid'
+import type { DraftPatch } from './cell-narrow'
 
 const VISIBLE_ROW_CAP = 500
 const DEBOUNCE_MS = 250
+
+type ViewMode = 'grid' | 'table'
 
 export function ExploreShell() {
   const [draft, setDraft] = useState<DraftFilter>(emptyDraft())
   const [data, setData] = useState<PostingSearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [view, setView] = useState<ViewMode>('grid')
+  const [gridCtl, setGridCtl] = useState<GridControls>({
+    x: { kind: 'month' },
+    y: { kind: 'account_child', account_scope: '' },
+  })
 
   const filter = useMemo(() => buildFilter(draft), [draft])
+
+  const applyPatch = (patch: DraftPatch) => setDraft({ ...draft, ...patch })
 
   useEffect(() => {
     let cancelled = false
@@ -51,8 +62,23 @@ export function ExploreShell() {
     <div className="flex flex-1 overflow-hidden">
       <FilterSidebar draft={draft} setDraft={setDraft} />
       <section className="flex flex-1 flex-col overflow-hidden">
-        <ResultsToolbar data={data} loading={loading} error={error} />
-        <ResultsTable rows={data?.rows ?? []} />
+        <ResultsToolbar
+          data={data}
+          loading={loading}
+          error={error}
+          view={view}
+          setView={setView}
+        />
+        {view === 'grid' ? (
+          <ExploreGrid
+            rows={data?.rows ?? []}
+            controls={gridCtl}
+            setControls={setGridCtl}
+            onNarrow={applyPatch}
+          />
+        ) : (
+          <ResultsTable rows={data?.rows ?? []} />
+        )}
       </section>
     </div>
   )
@@ -311,10 +337,14 @@ function ResultsToolbar({
   data,
   loading,
   error,
+  view,
+  setView,
 }: {
   data: PostingSearchResponse | null
   loading: boolean
   error: string | null
+  view: ViewMode
+  setView: (v: ViewMode) => void
 }) {
   return (
     <div className="flex items-center justify-between border-b border-slate-200 px-6 py-3 text-xs text-slate-600">
@@ -328,7 +358,7 @@ function ResultsToolbar({
                 truncated at {data.limit.toLocaleString()} — narrow filters
               </span>
             )}
-            {data.rows.length > VISIBLE_ROW_CAP && (
+            {view === 'table' && data.rows.length > VISIBLE_ROW_CAP && (
               <span className="ml-2 text-slate-400">
                 (showing first {VISIBLE_ROW_CAP})
               </span>
@@ -336,6 +366,23 @@ function ResultsToolbar({
           </span>
         )}
         {error && <span className="text-rose-600">{error}</span>}
+      </div>
+      <div className="inline-flex overflow-hidden rounded-[6px] border border-slate-200">
+        {(['grid', 'table'] as ViewMode[]).map((m, i) => {
+          const active = m === view
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setView(m)}
+              className={`px-3 py-1 transition ${
+                active ? 'bg-teal-500 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'
+              } ${i > 0 ? 'border-l border-slate-200' : ''}`}
+            >
+              {m === 'grid' ? 'Grid' : 'Table'}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
