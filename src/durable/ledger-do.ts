@@ -287,6 +287,11 @@ export class LedgerDO extends Think {
   }
 
   private migrate(): void {
+    // Defense in depth: DO SQLite enables FK enforcement by default in current
+    // workerd, but make it explicit so a future runtime change can't silently
+    // turn it off and leave our REFERENCES + ON DELETE CASCADE decorative.
+    this.db.exec('PRAGMA foreign_keys = ON')
+
     const v2Exists =
       (this.db
         .exec<{ n: number }>(
@@ -306,6 +311,100 @@ export class LedgerDO extends Think {
         throw e
       }
     }
+    this.hardenPostings()
+  }
+
+  // One-time rebuild of legacy postings tables that were created before the
+  // STRICT + NOT NULL + CHECK constraints were declared in schema.ts.
+  // `CREATE TABLE IF NOT EXISTS` doesn't retro-enforce constraints on an
+  // existing table, so a DO created off an older schema can keep accepting
+  // rows that today's writers would never produce (elided amounts, empty
+  // strings, sign-mismatched amount/amount_scaled, etc.).
+  private hardenPostings(): void {
+    const info = this.db
+      .exec<{ name: string; notnull: number }>('PRAGMA table_info(postings)')
+      .toArray()
+    if (info.length === 0) return
+
+    const required = ['amount', 'amount_scaled', 'scale', 'currency']
+    const allNotNull = required.every(
+      (col) => (info.find((r) => r.name === col)?.notnull ?? 0) === 1,
+    )
+    const master = this.db
+      .exec<{ sql: string }>(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='postings'",
+      )
+      .toArray()[0]
+    const hasStrict = master?.sql?.includes('STRICT') ?? false
+    const hasChecks = master?.sql?.includes('CHECK') ?? false
+    if (allNotNull && hasStrict && hasChecks) return
+
+    // Cleanup from any half-finished prior attempt.
+    this.db.exec('DROP TABLE IF EXISTS postings_v2')
+
+    // Drop rows the new constraints would reject. Logged loudly so a
+    // surprise data loss is visible in observability.
+    const reject = [
+      ...required.map((c) => `${c} IS NULL`),
+      "length(account) = 0",
+      "length(amount) = 0",
+      "length(currency) = 0",
+      "scale < 0 OR scale > 18",
+      "date < 19000101 OR date > 21001231",
+      "amount_scaled != 0 AND (substr(amount, 1, 1) = '-') != (amount_scaled < 0)",
+    ].join(' OR ')
+    const bad =
+      this.db
+        .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM postings WHERE ${reject}`)
+        .toArray()[0]?.n ?? 0
+    if (bad > 0) {
+      console.warn(
+        `[harden_postings] dropping ${bad} row(s) that violate the new STRICT/CHECK constraints`,
+      )
+      this.db.exec(`DELETE FROM postings WHERE ${reject}`)
+    }
+
+    this.db.exec(`CREATE TABLE postings_v2 (
+      txn_id              INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      idx                 INTEGER NOT NULL,
+      flag                TEXT,
+      account             TEXT    NOT NULL CHECK (length(account) > 0),
+      amount              TEXT    NOT NULL CHECK (length(amount) > 0),
+      amount_scaled       INTEGER NOT NULL,
+      scale               INTEGER NOT NULL CHECK (scale >= 0 AND scale <= 18),
+      currency            TEXT    NOT NULL CHECK (length(currency) > 0),
+      cost_raw            TEXT,
+      price_at_signs      INTEGER NOT NULL DEFAULT 0,
+      price_amount        TEXT,
+      price_amount_scaled INTEGER,
+      price_scale         INTEGER,
+      price_currency      TEXT,
+      comment             TEXT,
+      meta_json           TEXT NOT NULL DEFAULT '{}',
+      date                INTEGER NOT NULL CHECK (date >= 19000101 AND date <= 21001231),
+      PRIMARY KEY (txn_id, idx),
+      CHECK (amount_scaled = 0 OR (substr(amount, 1, 1) = '-') = (amount_scaled < 0))
+    ) STRICT`)
+    this.db.exec(`INSERT INTO postings_v2 (
+      txn_id, idx, flag, account, amount, amount_scaled, scale, currency,
+      cost_raw, price_at_signs, price_amount, price_amount_scaled,
+      price_scale, price_currency, comment, meta_json, date
+    ) SELECT
+      txn_id, idx, flag, account, amount, amount_scaled, scale, currency,
+      cost_raw, price_at_signs, price_amount, price_amount_scaled,
+      price_scale, price_currency, comment, meta_json, date
+    FROM postings`)
+    this.db.exec('DROP INDEX IF EXISTS idx_postings_account_date')
+    this.db.exec('DROP INDEX IF EXISTS idx_postings_currency_date')
+    this.db.exec('DROP TABLE postings')
+    this.db.exec('ALTER TABLE postings_v2 RENAME TO postings')
+    this.db.exec(
+      'CREATE INDEX idx_postings_account_date ON postings(account, date, txn_id, idx)',
+    )
+    this.db.exec(
+      'CREATE INDEX idx_postings_currency_date ON postings(currency, date)',
+    )
+    console.log('[harden_postings] rebuilt postings table with STRICT + NOT NULL + CHECK')
   }
 
   async journal_get(): Promise<JournalGetResponse> {
