@@ -56,8 +56,10 @@ export type PostingSearchRow = {
   payee: string
   narration: string
   account: string
-  amount: string
-  currency: string
+  /** Null for postings with elided amounts (Beancount inference). */
+  amount: string | null
+  /** Null when the amount is null. */
+  currency: string | null
 }
 
 export type PostingSearchResponse = {

@@ -424,12 +424,16 @@ function ResultsTable({ rows }: { rows: PostingSearchRow[] }) {
               </td>
               <td
                 className={`px-2 py-1.5 text-right ${
-                  r.amount.startsWith('-') ? 'text-rose-700' : 'text-teal-700'
+                  r.amount == null
+                    ? 'text-slate-400'
+                    : r.amount.startsWith('-')
+                      ? 'text-rose-700'
+                      : 'text-teal-700'
                 }`}
               >
-                {r.amount}
+                {r.amount ?? '—'}
               </td>
-              <td className="px-6 py-1.5 text-slate-500">{r.currency}</td>
+              <td className="px-6 py-1.5 text-slate-500">{r.currency ?? ''}</td>
             </tr>
           ))}
         </tbody>
