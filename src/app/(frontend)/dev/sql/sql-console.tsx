@@ -6,6 +6,7 @@ type Result = {
   columns: string[]
   rows: Array<Record<string, unknown>>
   truncated: boolean
+  rows_written: number
 }
 
 const RECENT_KEY = 'milesvault:dev-sql:recent'
@@ -116,6 +117,11 @@ export function SqlConsole() {
             <span className="text-slate-400">⌘/Ctrl + Enter</span>
             {result && (
               <span className="ml-auto">
+                {result.rows_written > 0 && (
+                  <span className="mr-2 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] text-rose-700">
+                    {result.rows_written.toLocaleString()} rows written
+                  </span>
+                )}
                 {result.rows.length.toLocaleString()} rows
                 {result.truncated && (
                   <span className="ml-2 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">

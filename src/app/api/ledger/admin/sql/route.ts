@@ -24,7 +24,7 @@ export const POST = withLedger(async ({ client, email, req }) => {
       ) as Array<string | number | null>)
     : []
   try {
-    const result = await client.query_sql(body.sql, params)
+    const result = await client.exec_sql(body.sql, params)
     return NextResponse.json(result)
   } catch (e) {
     return NextResponse.json(
