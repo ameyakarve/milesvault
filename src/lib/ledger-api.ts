@@ -7,6 +7,10 @@ import type {
   PreviewJournalPutResponse,
 } from '@/durable/ledger-do'
 import type { AccountEntriesResponse, AccountSummaryRow } from '@/durable/ledger-types'
+import type {
+  PostingSearchFilter,
+  PostingSearchResponse,
+} from '@/lib/ledger-core/posting-search'
 export const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 100
 
@@ -25,6 +29,7 @@ export type LedgerClient = {
   list_account_currencies(account: string): Promise<string[]>
   list_account_children(account: string): Promise<string[]>
   list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
+  search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse>
   journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
   preview_journal_put(
     text: string,
@@ -106,6 +111,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       }
       const asOfInt = Number(asOf.replaceAll('-', ''))
       return stub.list_account_summaries(asOfInt)
+    },
+
+    async search_postings(filter) {
+      return stub.search_postings(filter)
     },
 
     async journal_put(text) {
