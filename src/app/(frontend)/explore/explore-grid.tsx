@@ -19,19 +19,28 @@ export type GridControls = {
 
 export function ExploreGrid({
   rows,
+  scope,
   controls,
   setControls,
   onNarrow,
 }: {
   rows: PostingSearchRow[]
+  scope: string
   controls: GridControls
   setControls: (next: GridControls) => void
   onNarrow: (patch: DraftPatch) => void
 }) {
+  const scoped = useMemo<GridControls>(
+    () => ({
+      x: controls.x.kind === 'account_child' ? { ...controls.x, account_scope: scope } : controls.x,
+      y: controls.y.kind === 'account_child' ? { ...controls.y, account_scope: scope } : controls.y,
+    }),
+    [controls, scope],
+  )
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <FacetControls controls={controls} setControls={setControls} />
-      <GridCanvas rows={rows} controls={controls} onNarrow={onNarrow} />
+      <GridCanvas rows={rows} controls={scoped} onNarrow={onNarrow} />
     </div>
   )
 }
@@ -86,15 +95,6 @@ function FacetPicker({
         <option value="sign">Sign</option>
         <option value="flag">Flag</option>
       </select>
-      {cfg.kind === 'account_child' && (
-        <input
-          type="text"
-          value={cfg.account_scope ?? ''}
-          onChange={(e) => onChange({ ...cfg, account_scope: e.target.value })}
-          placeholder="scope (blank = top-level)"
-          className="w-[200px] rounded-[6px] border border-slate-200 bg-white px-2 py-1 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:border-teal-500"
-        />
-      )}
     </div>
   )
 }

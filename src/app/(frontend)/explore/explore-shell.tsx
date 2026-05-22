@@ -15,6 +15,7 @@ const DEBOUNCE_MS = 250
 type ViewMode = 'grid' | 'table'
 
 export function ExploreShell() {
+  const [scope, setScope] = useState<string>('')
   const [draft, setDraft] = useState<DraftFilter>(emptyDraft())
   const [data, setData] = useState<PostingSearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -22,12 +23,16 @@ export function ExploreShell() {
   const [view, setView] = useState<ViewMode>('grid')
   const [gridCtl, setGridCtl] = useState<GridControls>({
     x: { kind: 'month' },
-    y: { kind: 'account_child', account_scope: '' },
+    y: { kind: 'account_child' },
   })
 
-  const filter = useMemo(() => buildFilter(draft), [draft])
+  const filter = useMemo(() => buildFilter(draft, scope), [draft, scope])
 
-  const applyPatch = (patch: DraftPatch) => setDraft({ ...draft, ...patch })
+  const applyPatch = (patch: DraftPatch) => {
+    const { scope: nextScope, ...rest } = patch
+    if (nextScope !== undefined) setScope(nextScope)
+    if (Object.keys(rest).length > 0) setDraft({ ...draft, ...rest })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -62,6 +67,7 @@ export function ExploreShell() {
     <div className="flex flex-1 overflow-hidden">
       <FilterSidebar draft={draft} setDraft={setDraft} />
       <section className="flex flex-1 flex-col overflow-hidden">
+        <ScopeBar scope={scope} setScope={setScope} />
         <ResultsToolbar
           data={data}
           loading={loading}
@@ -72,6 +78,7 @@ export function ExploreShell() {
         {view === 'grid' ? (
           <ExploreGrid
             rows={data?.rows ?? []}
+            scope={scope}
             controls={gridCtl}
             setControls={setGridCtl}
             onNarrow={applyPatch}
@@ -84,12 +91,103 @@ export function ExploreShell() {
   )
 }
 
+// ---------- scope bar ----------
+
+const TOP_LEVEL_ROOTS = ['Assets', 'Liabilities', 'Income', 'Expenses', 'Equity'] as const
+
+function ScopeBar({
+  scope,
+  setScope,
+}: {
+  scope: string
+  setScope: (s: string) => void
+}) {
+  const segments = scope === '' ? [] : scope.split(':')
+  const [children, setChildren] = useState<string[]>([])
+
+  useEffect(() => {
+    if (scope === '') {
+      setChildren([...TOP_LEVEL_ROOTS])
+      return
+    }
+    let cancelled = false
+    setChildren([])
+    fetch(`/api/ledger/accounts/${encodeURIComponent(scope)}/children`)
+      .then((r) => (r.ok ? (r.json() as Promise<{ children: string[] }>) : Promise.reject(r.status)))
+      .then((j) => {
+        if (!cancelled) setChildren(j.children ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setChildren([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [scope])
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-6 py-2 text-xs">
+      <span className="mr-1 text-[11px] uppercase tracking-wide text-slate-400">
+        Scope
+      </span>
+      <button
+        type="button"
+        onClick={() => setScope('')}
+        className={`rounded-[6px] px-2 py-1 transition ${
+          segments.length === 0
+            ? 'bg-teal-500 text-white'
+            : 'text-teal-700 hover:bg-white'
+        }`}
+      >
+        All
+      </button>
+      {segments.map((seg, i) => {
+        const path = segments.slice(0, i + 1).join(':')
+        const last = i === segments.length - 1
+        return (
+          <span key={path} className="flex items-center gap-1.5">
+            <span className="text-slate-300">›</span>
+            <button
+              type="button"
+              onClick={() => setScope(path)}
+              className={`rounded-[6px] px-2 py-1 transition ${
+                last
+                  ? 'bg-teal-500 text-white'
+                  : 'text-teal-700 hover:bg-white'
+              }`}
+            >
+              {seg}
+            </button>
+          </span>
+        )
+      })}
+      {children.length > 0 && (
+        <>
+          <span className="ml-2 text-slate-300">›</span>
+          {children.map((c) => {
+            const next = scope === '' ? c : `${scope}:${c}`
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setScope(next)}
+                className="rounded-[6px] border border-slate-200 bg-white px-2 py-1 text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+              >
+                {c}
+              </button>
+            )
+          })}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ---------- filter draft & translation ----------
 
 type DraftFilter = {
   date_from: string
   date_to: string
-  account_prefix: string
   currency: string
   amount_gte: string
   amount_lte: string
@@ -102,7 +200,6 @@ function emptyDraft(): DraftFilter {
   return {
     date_from: '',
     date_to: '',
-    account_prefix: '',
     currency: '',
     amount_gte: '',
     amount_lte: '',
@@ -112,14 +209,14 @@ function emptyDraft(): DraftFilter {
   }
 }
 
-function buildFilter(d: DraftFilter): PostingSearchFilter {
+function buildFilter(d: DraftFilter, scope: string): PostingSearchFilter {
   const f: PostingSearchFilter = {}
   if (d.date_from || d.date_to) {
     f.date = {}
     if (d.date_from) f.date.from = d.date_from
     if (d.date_to) f.date.to = d.date_to
   }
-  if (d.account_prefix.trim()) f.accounts = { prefix: [d.account_prefix.trim()] }
+  if (scope.trim()) f.accounts = { prefix: [scope.trim()] }
   if (d.currency.trim()) f.currencies = [d.currency.trim().toUpperCase()]
   const gte = Number(d.amount_gte)
   const lte = Number(d.amount_lte)
@@ -162,13 +259,6 @@ function FilterSidebar({
           aria-label="to (exclusive)"
         />
       </div>
-
-      <SectionLabel>Account prefix</SectionLabel>
-      <TextInput
-        value={draft.account_prefix}
-        onChange={(v) => update('account_prefix', v)}
-        placeholder="Expenses:Dining"
-      />
 
       <SectionLabel>Payee / narration</SectionLabel>
       <TextInput
