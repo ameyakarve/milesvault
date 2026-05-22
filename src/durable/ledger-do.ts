@@ -45,6 +45,13 @@ import type {
   PostingInput,
   TransactionInput,
 } from './ledger-types'
+import {
+  POSTING_SEARCH_DEFAULT_LIMIT,
+  POSTING_SEARCH_MAX_LIMIT,
+  type PostingSearchFilter,
+  type PostingSearchResponse,
+  type PostingSearchRow,
+} from '@/lib/ledger-core/posting-search'
 
 const DATA_TABLES = [
   'transactions',
@@ -426,6 +433,105 @@ export class LedgerDO extends Think {
     return [...counts.entries()]
       .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]))
       .map(([cur]) => cur)
+  }
+
+  async search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse> {
+    const limit = Math.min(
+      filter.limit ?? POSTING_SEARCH_DEFAULT_LIMIT,
+      POSTING_SEARCH_MAX_LIMIT,
+    )
+    const wheres: string[] = []
+    const binds: unknown[] = []
+
+    if (filter.date?.from) {
+      wheres.push('p.date >= ?')
+      binds.push(dateToInt(filter.date.from))
+    }
+    if (filter.date?.to) {
+      wheres.push('p.date < ?')
+      binds.push(dateToInt(filter.date.to))
+    }
+
+    const acctOr: string[] = []
+    for (const a of filter.accounts?.exact ?? []) {
+      acctOr.push('p.account = ?')
+      binds.push(a)
+    }
+    for (const p of filter.accounts?.prefix ?? []) {
+      acctOr.push('(p.account = ? OR p.account GLOB ?)')
+      binds.push(p, p + ':*')
+    }
+    if (acctOr.length) wheres.push('(' + acctOr.join(' OR ') + ')')
+
+    if (filter.currencies?.length) {
+      wheres.push(
+        `p.currency IN (${filter.currencies.map(() => '?').join(',')})`,
+      )
+      binds.push(...filter.currencies)
+    }
+
+    if (filter.amount?.signed?.gte != null) {
+      wheres.push('CAST(p.amount AS REAL) >= ?')
+      binds.push(filter.amount.signed.gte)
+    }
+    if (filter.amount?.signed?.lte != null) {
+      wheres.push('CAST(p.amount AS REAL) <= ?')
+      binds.push(filter.amount.signed.lte)
+    }
+
+    if (filter.sign === 'debit') wheres.push('p.amount_scaled < 0')
+    if (filter.sign === 'credit') wheres.push('p.amount_scaled > 0')
+
+    if (filter.payee_q) {
+      wheres.push('(t.payee LIKE ? OR t.narration LIKE ?)')
+      const q = `%${filter.payee_q}%`
+      binds.push(q, q)
+    }
+
+    if (filter.flag) {
+      wheres.push('t.flag = ?')
+      binds.push(filter.flag)
+    }
+
+    const whereSql = wheres.length ? 'WHERE ' + wheres.join(' AND ') : ''
+    const probe = limit + 1
+    const sql = `
+      SELECT p.txn_id, p.idx, p.date, t.flag, t.payee, t.narration,
+             p.account, p.amount, p.currency
+      FROM postings p
+      JOIN transactions t ON t.id = p.txn_id
+      ${whereSql}
+      ORDER BY p.date DESC, p.txn_id DESC, p.idx ASC
+      LIMIT ?
+    `
+    const raw = this.db
+      .exec<{
+        txn_id: number
+        idx: number
+        date: number
+        flag: string | null
+        payee: string
+        narration: string
+        account: string
+        amount: string
+        currency: string
+      }>(sql, ...binds, probe)
+      .toArray()
+
+    const truncated = raw.length > limit
+    const sliced = truncated ? raw.slice(0, limit) : raw
+    const rows: PostingSearchRow[] = sliced.map((r) => ({
+      txn_id: r.txn_id,
+      idx: r.idx,
+      date: dateFromInt(r.date),
+      flag: r.flag === '*' || r.flag === '!' ? r.flag : null,
+      payee: r.payee,
+      narration: r.narration,
+      account: r.account,
+      amount: r.amount,
+      currency: r.currency,
+    }))
+    return { rows, truncated, limit }
   }
 
   async list_account_summaries(
