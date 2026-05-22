@@ -306,6 +306,78 @@ export class LedgerDO extends Think {
         throw e
       }
     }
+    this.hardenPostings()
+  }
+
+  // One-time rebuild of legacy postings tables that were created before
+  // amount / amount_scaled / scale / currency were declared NOT NULL.
+  // `CREATE TABLE IF NOT EXISTS` doesn't retro-enforce constraints on an
+  // existing table, so a DO created off the older schema can keep accepting
+  // (and silently store) elided rows from earlier ingest paths.
+  private hardenPostings(): void {
+    const info = this.db
+      .exec<{ name: string; notnull: number }>('PRAGMA table_info(postings)')
+      .toArray()
+    if (info.length === 0) return
+    const required = ['amount', 'amount_scaled', 'scale', 'currency']
+    const allEnforced = required.every(
+      (col) => (info.find((r) => r.name === col)?.notnull ?? 0) === 1,
+    )
+    if (allEnforced) return
+
+    // Cleanup from any half-finished prior attempt.
+    this.db.exec('DROP TABLE IF EXISTS postings_v2')
+
+    const whereNull = required.map((c) => `${c} IS NULL`).join(' OR ')
+    const bad =
+      this.db
+        .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM postings WHERE ${whereNull}`)
+        .toArray()[0]?.n ?? 0
+    if (bad > 0) {
+      console.warn(`[harden_postings] dropping ${bad} row(s) with null required columns`)
+      this.db.exec(`DELETE FROM postings WHERE ${whereNull}`)
+    }
+
+    this.db.exec(`CREATE TABLE postings_v2 (
+      txn_id              INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+      idx                 INTEGER NOT NULL,
+      flag                TEXT,
+      account             TEXT    NOT NULL,
+      amount              TEXT    NOT NULL,
+      amount_scaled       INTEGER NOT NULL,
+      scale               INTEGER NOT NULL,
+      currency            TEXT    NOT NULL,
+      cost_raw            TEXT,
+      price_at_signs      INTEGER NOT NULL DEFAULT 0,
+      price_amount        TEXT,
+      price_amount_scaled INTEGER,
+      price_scale         INTEGER,
+      price_currency      TEXT,
+      comment             TEXT,
+      meta_json           TEXT NOT NULL DEFAULT '{}',
+      date                INTEGER NOT NULL,
+      PRIMARY KEY (txn_id, idx)
+    )`)
+    this.db.exec(`INSERT INTO postings_v2 (
+      txn_id, idx, flag, account, amount, amount_scaled, scale, currency,
+      cost_raw, price_at_signs, price_amount, price_amount_scaled,
+      price_scale, price_currency, comment, meta_json, date
+    ) SELECT
+      txn_id, idx, flag, account, amount, amount_scaled, scale, currency,
+      cost_raw, price_at_signs, price_amount, price_amount_scaled,
+      price_scale, price_currency, comment, meta_json, date
+    FROM postings`)
+    this.db.exec('DROP INDEX IF EXISTS idx_postings_account_date')
+    this.db.exec('DROP INDEX IF EXISTS idx_postings_currency_date')
+    this.db.exec('DROP TABLE postings')
+    this.db.exec('ALTER TABLE postings_v2 RENAME TO postings')
+    this.db.exec(
+      'CREATE INDEX idx_postings_account_date ON postings(account, date, txn_id, idx)',
+    )
+    this.db.exec(
+      'CREATE INDEX idx_postings_currency_date ON postings(currency, date)',
+    )
+    console.log('[harden_postings] rebuilt postings table with NOT NULL constraints')
   }
 
   async journal_get(): Promise<JournalGetResponse> {
