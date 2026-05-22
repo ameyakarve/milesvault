@@ -19,7 +19,7 @@ export default async function DevSqlPage() {
         <header className="flex items-center gap-2 border-b border-slate-200 px-6 py-4">
           <Database size={20} weight="regular" className="text-teal-500" />
           <h1 className="text-sm font-semibold text-slate-900">SQL</h1>
-          <span className="text-xs text-slate-400">read-only · your own ledger</span>
+          <span className="text-xs text-rose-500">writes allowed · your own ledger</span>
         </header>
         <SqlConsole />
       </main>

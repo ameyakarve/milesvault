@@ -38,6 +38,15 @@ export type LedgerClient = {
     rows: Array<Record<string, unknown>>
     truncated: boolean
   }>
+  exec_sql(
+    sql: string,
+    params?: ReadonlyArray<string | number | null>,
+  ): Promise<{
+    columns: string[]
+    rows: Array<Record<string, unknown>>
+    truncated: boolean
+    rows_written: number
+  }>
   journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
   preview_journal_put(
     text: string,
@@ -130,6 +139,13 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
         throw new LedgerInputError(['sql must be a non-empty string.'])
       }
       return stub.query_sql(sql, params)
+    },
+
+    async exec_sql(sql, params = []) {
+      if (typeof sql !== 'string' || sql.length === 0) {
+        throw new LedgerInputError(['sql must be a non-empty string.'])
+      }
+      return stub.exec_sql(sql, params)
     },
 
     async journal_put(text) {

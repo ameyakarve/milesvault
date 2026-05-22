@@ -984,6 +984,32 @@ export class LedgerDO extends Think {
     return { columns, rows, truncated }
   }
 
+  // Admin SQL — writes allowed. Caller (admin/sql route) gates by allowlist.
+  // Distinct from query_sql so the AI agent's tool stays read-only.
+  async exec_sql(
+    sql: string,
+    params: ReadonlyArray<string | number | null> = [],
+  ): Promise<{
+    columns: string[]
+    rows: Array<Record<string, unknown>>
+    truncated: boolean
+    rows_written: number
+  }> {
+    const MAX_ROWS = 1000
+    const cursor = this.db.exec(sql, ...params)
+    const rows: Array<Record<string, unknown>> = []
+    let truncated = false
+    for (const row of cursor) {
+      if (rows.length >= MAX_ROWS) {
+        truncated = true
+        break
+      }
+      rows.push(row as Record<string, unknown>)
+    }
+    const columns = cursor.columnNames as string[]
+    return { columns, rows, truncated, rows_written: cursor.rowsWritten }
+  }
+
   // Lightweight, per-turn ledger snapshot for the agent's context window.
   async ledger_snapshot(): Promise<{
     today: number
