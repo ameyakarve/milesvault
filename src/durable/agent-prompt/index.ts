@@ -46,16 +46,10 @@ can query via the \`sql_query\` tool.
 
 export const SCHEMA_MAPPING = `# Schema ↔ Beancount mapping
 
-The Beancount journal is decomposed into a SQLite relational schema. **Get the
-exact columns / types / indexes by querying the database itself:**
-
-- \`SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name\` — all
-  table DDL.
-- \`PRAGMA table_info('<table>')\` — columns of a specific table.
-- \`PRAGMA index_list('<table>')\` then \`PRAGMA index_info('<index>')\` — index
-  details.
-
-This document only covers the **semantics** the schema itself can't express.
+The Beancount journal is decomposed into a SQLite relational schema. The full
+DDL (tables + indexes) is included in the per-turn snapshot below — read it
+there, do not re-query \`sqlite_master\` or \`PRAGMA table_info\`. This document
+covers the **semantics** the DDL itself can't express.
 
 ## Tables ↔ Beancount constructs
 
@@ -74,9 +68,16 @@ This document only covers the **semantics** the schema itself can't express.
   BETWEEN ? AND ?\`, never with strings.
 - **Decimals** are stored as a \`(amount_scaled, scale)\` integer pair in the
   \`amount_scaled\`/\`scale\` columns (also present on prices and balances).
-  Prefer summing these as \`SUM(amount_scaled * 1.0 / POWER(10, scale))\` when
-  scales are uniform per currency; for safety, group by \`currency\` and
-  \`scale\` in the same query.
+  **SQLite has no \`POWER\` function** — convert with a CASE on \`scale\`:
+  \`\`\`sql
+  amount_scaled * 1.0 / CASE scale
+    WHEN 0 THEN 1     WHEN 1 THEN 10      WHEN 2 THEN 100
+    WHEN 3 THEN 1000  WHEN 4 THEN 10000   WHEN 5 THEN 100000
+    WHEN 6 THEN 1000000 ELSE 1 END
+  \`\`\`
+  In practice almost everything is \`scale = 2\` (cents). Group by \`currency\`
+  and \`scale\` if you're worried about mixed scales, or filter \`WHERE scale = 2\`
+  for the common case.
 - **Flags** in \`transactions.flag\`: \`*\` cleared, \`!\` needs review, or NULL.
 - **Account hierarchy**: top-level segment is always one of \`Assets\`,
   \`Liabilities\`, \`Equity\`, \`Income\`, \`Expenses\`. Use
@@ -101,8 +102,9 @@ grammar — bars (stacked or grouped), lines, areas, points, arcs
 
 - **Inline data only.** Put rows under \`spec.data.values\`. Don't use
   remote URLs — the renderer has no network access.
-- **Convert decimals first.** Apply \`amount_scaled / POWER(10, scale)\` in
-  your SQL so the spec receives plain numbers.
+- **Convert decimals first.** Apply the \`CASE scale ...\` divisor pattern
+  from the schema-mapping section in your SQL so the spec receives plain
+  numbers — SQLite has no \`POWER\`.
 - **Sizing.** Set \`width: "container"\` so the chart fills the chat
   column. Pick a sensible \`height\` (240–320 typical; 360–420 for
   heatmaps with many cells).
@@ -292,6 +294,12 @@ user's ledger SQLite. Engine-enforced: any write attempt errors out.
 - Use \`WHERE date BETWEEN ? AND ?\` with **ordinal integers** (see encoding
   conventions). Today's ordinal is in the per-turn snapshot.
 - Prefer joins over N+1.
+- This is **SQLite** — stick to the SQLite dialect. No \`POWER\`, no \`POW\`,
+  no \`EXP\`, no \`LOG\`, no \`STDDEV\`, no \`PERCENTILE_*\`, no window-function
+  extensions beyond the SQLite spec, no \`DATE_TRUNC\`/\`EXTRACT\`. For decimal
+  conversion use the \`CASE scale ...\` divisor (see schema-mapping). For
+  bucketing dates, do the math on the integer ordinal (e.g. \`date / 100\` for
+  YYYYMM) or compute the bucket in app-side post-processing.
 
 ## Avoid
 
@@ -391,6 +399,7 @@ export function buildSystemPrompt(snapshot: {
   accounts: Array<{ account: string; currencies: string[]; open_date: number; close_date: number | null }>
   row_counts: Record<string, number>
   sample_txns: string
+  schema_ddl: string
 }): string {
   const accountLines = snapshot.accounts
     .map((a) => {
@@ -413,6 +422,11 @@ ${accountLines || '- (none yet)'}
 
 - Row counts:
 ${rowCountLines || '- (empty)'}
+
+- Schema DDL (canonical — do not re-query sqlite_master / PRAGMA):
+\`\`\`sql
+${snapshot.schema_ddl || '-- (empty)'}
+\`\`\`
 
 - Recent journal sample (newest first; reflects the user's preferred formatting):
 \`\`\`beancount

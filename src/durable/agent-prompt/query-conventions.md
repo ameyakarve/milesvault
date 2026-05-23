@@ -12,6 +12,11 @@ user's ledger SQLite. Engine-enforced: any write attempt errors out.
 - Use `WHERE date BETWEEN ? AND ?` with **ordinal integers** (see encoding
   conventions). Today's ordinal is in the per-turn snapshot.
 - Prefer joins over N+1.
+- This is **SQLite** — stick to the SQLite dialect. No `POWER`, no `POW`,
+  no `EXP`, no `LOG`, no `STDDEV`, no `PERCENTILE_*`, no `DATE_TRUNC` /
+  `EXTRACT`. For decimal conversion use the `CASE scale ...` divisor (see
+  the patterns below). For date bucketing, do math on the integer ordinal
+  (e.g. `date / 100` for `YYYYMM`).
 
 ## Avoid
 
@@ -23,7 +28,7 @@ user's ledger SQLite. Engine-enforced: any write attempt errors out.
 
 - **Top spend by payee in a window:**
   ```sql
-  SELECT t.payee, SUM(p.amount_scaled * 1.0 / POWER(10, p.scale)) AS total
+  SELECT t.payee, SUM(p.amount_scaled * 1.0 / CASE p.scale WHEN 2 THEN 100 WHEN 0 THEN 1 WHEN 1 THEN 10 WHEN 3 THEN 1000 WHEN 4 THEN 10000 ELSE 1 END) AS total
   FROM postings p JOIN transactions t ON t.id = p.txn_id
   WHERE p.account LIKE 'Expenses:%'
     AND p.date BETWEEN ? AND ?
@@ -35,7 +40,7 @@ user's ledger SQLite. Engine-enforced: any write attempt errors out.
 - **Monthly totals for an account:**
   ```sql
   SELECT (p.date / 100) AS yyyymm,
-         SUM(p.amount_scaled * 1.0 / POWER(10, p.scale)) AS total
+         SUM(p.amount_scaled * 1.0 / CASE p.scale WHEN 2 THEN 100 WHEN 0 THEN 1 WHEN 1 THEN 10 WHEN 3 THEN 1000 WHEN 4 THEN 10000 ELSE 1 END) AS total
   FROM postings p
   WHERE p.account = ?
   GROUP BY yyyymm
