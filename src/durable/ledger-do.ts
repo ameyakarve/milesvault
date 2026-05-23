@@ -185,6 +185,26 @@ export class LedgerDO extends Think {
     return buildSystemPrompt(snapshot)
   }
 
+  beforeTurn() {
+    // Hard-stop the agent loop the moment a terminal display tool returns a
+    // successful render. Without this the model regularly produces multiple
+    // chart cards plus narrative for a single question. Validation errors
+    // ({ok:false}) still allow the model to retry on the next step.
+    const TERMINAL_TOOLS = new Set(['show_vega', 'show_account_card'])
+    return {
+      stopWhen: (options: { steps: ReadonlyArray<{ toolResults: ReadonlyArray<{ toolName: string; output: unknown }> }> }) => {
+        for (const step of options.steps) {
+          for (const r of step.toolResults) {
+            if (!TERMINAL_TOOLS.has(r.toolName)) continue
+            const out = r.output as { ok?: unknown; rendered?: unknown } | null
+            if (out && out.ok === true && out.rendered === true) return true
+          }
+        }
+        return false
+      },
+    }
+  }
+
   afterToolCall(ctx: {
     toolName: string
     input?: unknown
