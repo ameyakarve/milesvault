@@ -185,6 +185,34 @@ export class LedgerDO extends Think {
     return buildSystemPrompt(snapshot)
   }
 
+  afterToolCall(ctx: {
+    toolName: string
+    input?: unknown
+    durationMs: number
+    success: boolean
+    output?: unknown
+    error?: unknown
+  }): void {
+    const preview = (v: unknown): string => {
+      if (v === undefined) return ''
+      let s: string
+      try {
+        s = typeof v === 'string' ? v : JSON.stringify(v)
+      } catch {
+        s = String(v)
+      }
+      return s.length > 400 ? s.slice(0, 400) + '…' : s
+    }
+    const base = `[tool] ${ctx.toolName} ${ctx.durationMs}ms`
+    if (ctx.success) {
+      console.log(`${base} ok in=${preview(ctx.input)} out=${preview(ctx.output)}`)
+    } else {
+      console.warn(
+        `${base} FAIL in=${preview(ctx.input)} err=${preview(ctx.error instanceof Error ? ctx.error.message : ctx.error)}`,
+      )
+    }
+  }
+
   getTools(): ToolSet {
     return {
       sql_query: tool({
@@ -1092,6 +1120,7 @@ export class LedgerDO extends Think {
     accounts: Array<{ account: string; currencies: string[]; open_date: number; close_date: number | null }>
     row_counts: Record<string, number>
     sample_txns: string
+    schema_ddl: string
   }> {
     return this.ledger_snapshot_sync()
   }
@@ -1101,6 +1130,7 @@ export class LedgerDO extends Think {
     accounts: Array<{ account: string; currencies: string[]; open_date: number; close_date: number | null }>
     row_counts: Record<string, number>
     sample_txns: string
+    schema_ddl: string
   } {
     const accounts = this.db
       .exec<{ account: string; constraint_currencies: string; date: number }>(
@@ -1156,7 +1186,21 @@ export class LedgerDO extends Think {
     const dd = now.getUTCDate().toString().padStart(2, '0')
     const today = dateToInt(`${yyyy}-${mm}-${dd}`)
 
-    return { today, accounts: accountList, row_counts: counts, sample_txns }
+    const ddlRows = this.db
+      .exec<{ sql: string | null }>(
+        `SELECT sql FROM sqlite_master
+         WHERE type IN ('table','index')
+           AND name NOT LIKE 'sqlite_%'
+           AND sql IS NOT NULL
+         ORDER BY type DESC, name`,
+      )
+      .toArray()
+    const schema_ddl = ddlRows
+      .map((r) => r.sql!.trim())
+      .filter(Boolean)
+      .join(';\n\n') + ';'
+
+    return { today, accounts: accountList, row_counts: counts, sample_txns, schema_ddl }
   }
 
   private insertTxn(input: TransactionInput, hash: string, now: number): void {

@@ -46,16 +46,10 @@ can query via the \`sql_query\` tool.
 
 export const SCHEMA_MAPPING = `# Schema ↔ Beancount mapping
 
-The Beancount journal is decomposed into a SQLite relational schema. **Get the
-exact columns / types / indexes by querying the database itself:**
-
-- \`SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name\` — all
-  table DDL.
-- \`PRAGMA table_info('<table>')\` — columns of a specific table.
-- \`PRAGMA index_list('<table>')\` then \`PRAGMA index_info('<index>')\` — index
-  details.
-
-This document only covers the **semantics** the schema itself can't express.
+The Beancount journal is decomposed into a SQLite relational schema. The full
+DDL (tables + indexes) is included in the per-turn snapshot below — read it
+there, do not re-query \`sqlite_master\` or \`PRAGMA table_info\`. This document
+covers the **semantics** the DDL itself can't express.
 
 ## Tables ↔ Beancount constructs
 
@@ -391,6 +385,7 @@ export function buildSystemPrompt(snapshot: {
   accounts: Array<{ account: string; currencies: string[]; open_date: number; close_date: number | null }>
   row_counts: Record<string, number>
   sample_txns: string
+  schema_ddl: string
 }): string {
   const accountLines = snapshot.accounts
     .map((a) => {
@@ -413,6 +408,11 @@ ${accountLines || '- (none yet)'}
 
 - Row counts:
 ${rowCountLines || '- (empty)'}
+
+- Schema DDL (canonical — do not re-query sqlite_master / PRAGMA):
+\`\`\`sql
+${snapshot.schema_ddl || '-- (empty)'}
+\`\`\`
 
 - Recent journal sample (newest first; reflects the user's preferred formatting):
 \`\`\`beancount

@@ -1,15 +1,9 @@
 # Schema ↔ Beancount mapping
 
-The Beancount journal is decomposed into a SQLite relational schema. **Get the
-exact columns / types / indexes by querying the database itself:**
-
-- `SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name` — all
-  table DDL.
-- `PRAGMA table_info('<table>')` — columns of a specific table.
-- `PRAGMA index_list('<table>')` then `PRAGMA index_info('<index>')` — index
-  details.
-
-This document only covers the **semantics** the schema itself can't express.
+The Beancount journal is decomposed into a SQLite relational schema. The full
+DDL (tables + indexes) is included in the per-turn snapshot below — read it
+there, do not re-query `sqlite_master` or `PRAGMA table_info`. This document
+covers the **semantics** the DDL itself can't express.
 
 ## Tables ↔ Beancount constructs
 
