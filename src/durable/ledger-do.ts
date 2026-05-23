@@ -5,17 +5,14 @@ import { z } from 'zod'
 import { buildSystemPrompt } from './agent-prompt'
 import {
   accountCardSchema,
-  barChartSchema,
   commitIngestSchema,
   commitJournalEditSchema,
-  donutChartSchema,
   extractStatementRowsSchema,
-  heatmapSchema,
-  lineChartSchema,
   proposeJournalEditSchema,
-  stackedBarSchema,
+  showVegaSchema,
 } from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
+import { validateVegaSpec } from '@/lib/vega-validate'
 import {
   dateFromInt,
   dateToInt,
@@ -208,35 +205,15 @@ export class LedgerDO extends Think {
           }
         },
       }),
-      show_stacked_bar: tool({
+      show_vega: tool({
         description:
-          'Render a stacked bar chart for category-over-time style questions. Use after gathering data with sql_query. Pick a small set of series (≤8) and convert scaled-decimal values to plain numbers (amount_scaled / POWER(10, scale)).',
-        inputSchema: stackedBarSchema,
-        execute: async (input) => input,
-      }),
-      show_bar_chart: tool({
-        description:
-          'Render a plain (non-stacked) bar chart. Use orientation="horizontal" for ranked lists like "top payees", "vertical" for time series. Same data shape as show_stacked_bar.',
-        inputSchema: barChartSchema,
-        execute: async (input) => input,
-      }),
-      show_line_chart: tool({
-        description:
-          'Render a line chart for trends over time (balance over months, daily spend). Wide-format data: each row has x_key plus one numeric value per series.',
-        inputSchema: lineChartSchema,
-        execute: async (input) => input,
-      }),
-      show_donut_chart: tool({
-        description:
-          'Render a donut chart for a single-period composition ("this month by category"). Provide each slice as {name, value, color?}.',
-        inputSchema: donutChartSchema,
-        execute: async (input) => input,
-      }),
-      show_heatmap: tool({
-        description:
-          'Render a calendar heatmap of daily spend across a date range ("when did I spend this year", "spend cadence last 90 days"). Provide one row per calendar day in the requested window (include zero-spend days too) with a positive `amount` representing that day\'s total outflow in the given currency.',
-        inputSchema: heatmapSchema,
-        execute: async (input) => input,
+          'Render a chart from a Vega-Lite v5 spec. Use after gathering data with sql_query — embed the rows inline as `spec.data.values` (no remote URLs; the server has no fetch). Set `width: "container"` and a reasonable `height`. Convert scaled-decimal values back to plain numbers (amount_scaled / POWER(10, scale)) before embedding. Vega-Lite gives you the full grammar: bars (stacked or grouped), lines, areas, points, arcs (donuts), rect (heatmaps), composite multi-layer specs, faceted grids — pick the right mark and encoding for the question. The server validates the spec and returns {ok:false, error, hint} if it would fail to render; in that case, fix the issue and call show_vega again — do NOT regenerate the same JSON.',
+        inputSchema: showVegaSchema,
+        execute: async (input) => {
+          const v = validateVegaSpec(input.spec)
+          if (v.ok === true) return input
+          return { ok: false, error: v.error, hint: v.hint }
+        },
       }),
       show_account_card: tool({
         description:

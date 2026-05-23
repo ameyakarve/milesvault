@@ -87,46 +87,196 @@ This document only covers the **semantics** the schema itself can't express.
 export const RENDER_TOOLS = `# Rendering UI
 
 You can render rich UI inline by calling display tools. Use them after
-gathering data with \`sql_query\`; the user sees the rendered component, not
-the tool's JSON. Convert scaled-decimal values back to plain numbers before
-emitting: \`amount_scaled / POWER(10, scale)\`. Keep series count small (≤8)
-and ordered by magnitude for readability.
+gathering data with \`sql_query\`; the user sees the rendered component,
+not the tool's JSON.
 
-All chart tools share these conventions:
+## Charts: \`show_vega({ title?, spec })\`
 
-- \`x_key\`: property name in each \`data\` row holding the x-axis label,
-  usually a date bucket like \`"2026-01"\`.
-- \`data\`: wide-format rows. Each row has \`x_key\` plus one numeric value
-  per series key.
-- \`series[i].key\` must match a property in every \`data\` row.
-- \`series[i].color\` (optional) is a Mantine reference: \`"teal.6"\`,
-  \`"violet.5"\`, \`"blue.5"\`, etc.
-- \`value_format\`: \`"currency"\` or \`"number"\`. Set \`currency\` (ISO code)
-  when using \`"currency"\`.
+All charts go through a single tool that takes a **Vega-Lite v5 spec**.
+You author the full spec; we render it. This gives you the full Vega-Lite
+grammar — bars (stacked or grouped), lines, areas, points, arcs
+(donuts), rect (heatmaps), faceted small-multiples, multi-layer specs.
 
-## Picking the right tool
+### Conventions
 
-- \`show_stacked_bar\` — category mix over time ("spend by category per
-  month", "income mix by quarter").
-- \`show_bar_chart\` — plain (non-stacked) bars. Use \`orientation:
-  "horizontal"\` for ranked lists ("top 10 payees"), \`"vertical"\` for time
-  series.
-- \`show_line_chart\` — trends over time (balance trajectory, daily spend).
-  Optional \`curve_type\` (\`"monotone"\` default).
-- \`show_donut_chart\` — single-period composition ("this month by
-  category"). Provide each slice as \`{name, value, color?}\`. Skip when
-  there are >8 slices — use a bar chart instead.
-- \`show_heatmap\` — daily-spend calendar heatmap across a date range
-  ("when did I spend this year", "spend cadence last 90 days"). Provide
-  one row per calendar day in the window with a positive \`amount\`
-  (total outflows for that day in \`currency\`). Include zero-spend
-  days so the grid stays continuous.
+- **Inline data only.** Put rows under \`spec.data.values\`. Don't use
+  remote URLs — the renderer has no network access.
+- **Convert decimals first.** Apply \`amount_scaled / POWER(10, scale)\` in
+  your SQL so the spec receives plain numbers.
+- **Sizing.** Set \`width: "container"\` so the chart fills the chat
+  column. Pick a sensible \`height\` (240–320 typical; 360–420 for
+  heatmaps with many cells).
+- **Series count.** Keep ≤8 categories in any color encoding; order by
+  magnitude for readability.
+- **Currency axes.** Use \`axis: { format: "$,.0f" }\` (or \`"$,.2f"\` for
+  small amounts). For non-USD, use \`{ format: ",.0f" }\` and put the ISO
+  code in the axis title.
+- **Don't repeat the title.** This tool already wraps the chart in a
+  card and prints \`title\` at the top — don't also set \`spec.title\`.
+- **Theme.** Default axis/legend colors are injected by the renderer.
+  Use the brand palette only when meaningful (teal \`#0d9488\` for
+  inflows / positive, rose \`#e11d48\` for outflows / negative).
+
+### Spec style: prefer inline transforms
+
+AVOID view-level \`transform\` unless strictly necessary. PREFER inlining
+field operations inside \`encoding\` (\`bin\`, \`timeUnit\`, \`aggregate\`,
+\`sort\`, \`stack\`). Inline is more compact and less error-prone.
+
+GOOD — inline aggregate:
+\`\`\`json
+{
+  "mark": "bar",
+  "encoding": {
+    "x": { "field": "Cylinders" },
+    "y": { "aggregate": "mean", "field": "Acceleration" }
+  }
+}
+\`\`\`
+
+AVOID — same chart via view-level transform:
+\`\`\`json
+{
+  "transform": [
+    { "aggregate": [{ "op": "mean", "field": "Acceleration", "as": "mean_acc" }],
+      "groupby": ["Cylinders"] }
+  ],
+  "mark": "bar",
+  "encoding": {
+    "x": { "field": "Cylinders", "type": "ordinal" },
+    "y": { "field": "mean_acc",  "type": "quantitative" }
+  }
+}
+\`\`\`
+
+If you do need a view-level \`transform\`, put it BEFORE \`encoding\` in
+the JSON and make sure every \`as\` field you compute is actually used
+by an encoding channel.
+
+### Faceting: use row/column encoding channels
+
+To make a small-multiples grid, use the \`row\` or \`column\` encoding
+channels — do NOT use the top-level \`facet\` operator.
+
+GOOD:
+\`\`\`json
+{
+  "mark": "bar",
+  "encoding": {
+    "x":   { "bin": { "maxbins": 15 }, "field": "Horsepower", "type": "quantitative" },
+    "y":   { "aggregate": "count", "type": "quantitative" },
+    "row": { "field": "Origin" }
+  }
+}
+\`\`\`
+
+### Self-correction loop
+
+The server validates every spec and returns \`{ok: false, error, hint}\`
+when it would fail to render (wrong shape, missing \`data.values\`,
+encoding field not in the data, schema error). On that result, **fix
+the issue and call \`show_vega\` again — do NOT resubmit the same JSON.**
+If the same error returns twice, change your approach (different mark,
+simpler encoding) instead of tweaking the same field.
+
+### Worked examples
+
+**Stacked bar — category mix over months:**
+\`\`\`json
+{
+  "data": { "values": [
+    { "month": "2026-01", "category": "Groceries", "amount": 412.50 },
+    { "month": "2026-01", "category": "Dining",    "amount": 188.20 },
+    { "month": "2026-02", "category": "Groceries", "amount": 388.00 }
+  ]},
+  "mark": "bar",
+  "encoding": {
+    "x": { "field": "month", "type": "ordinal", "title": null },
+    "y": { "field": "amount", "type": "quantitative", "title": "USD", "axis": { "format": "$,.0f" } },
+    "color": { "field": "category", "type": "nominal" },
+    "tooltip": [{ "field": "category" }, { "field": "amount", "format": "$,.2f" }]
+  },
+  "height": 280
+}
+\`\`\`
+
+**Ranked horizontal bar — top payees:**
+\`\`\`json
+{
+  "data": { "values": [
+    { "payee": "Whole Foods", "total": 1243.10 },
+    { "payee": "Costco",       "total":  987.40 }
+  ]},
+  "mark": "bar",
+  "encoding": {
+    "y": { "field": "payee", "type": "nominal", "sort": "-x", "title": null },
+    "x": { "field": "total", "type": "quantitative", "axis": { "format": "$,.0f" } }
+  },
+  "height": 320
+}
+\`\`\`
+
+**Line — balance over time:**
+\`\`\`json
+{
+  "data": { "values": [
+    { "date": "2026-01-15", "balance": 12450 },
+    { "date": "2026-02-15", "balance": 12980 }
+  ]},
+  "mark": { "type": "line", "point": true, "interpolate": "monotone" },
+  "encoding": {
+    "x": { "field": "date", "type": "temporal", "title": null },
+    "y": { "field": "balance", "type": "quantitative", "axis": { "format": "$,.0f" } }
+  },
+  "height": 260
+}
+\`\`\`
+
+**Calendar heatmap — daily spend:**
+\`\`\`json
+{
+  "data": { "values": [
+    { "date": "2026-01-01", "amount": 42.10 },
+    { "date": "2026-01-02", "amount":  0.00 }
+  ]},
+  "transform": [
+    { "calculate": "day(datum.date)", "as": "dow" },
+    { "calculate": "weekofyear(datum.date)", "as": "week" }
+  ],
+  "mark": { "type": "rect", "tooltip": true },
+  "encoding": {
+    "x": { "field": "week", "type": "ordinal", "title": null },
+    "y": { "field": "dow",  "type": "ordinal", "title": null,
+           "sort": [0,1,2,3,4,5,6] },
+    "color": { "field": "amount", "type": "quantitative",
+               "scale": { "scheme": "tealblues" } }
+  },
+  "height": 200
+}
+\`\`\`
+
+**Donut — single-period composition:**
+\`\`\`json
+{
+  "data": { "values": [
+    { "name": "Groceries", "value": 412 },
+    { "name": "Dining",    "value": 188 }
+  ]},
+  "mark": { "type": "arc", "innerRadius": 60 },
+  "encoding": {
+    "theta": { "field": "value", "type": "quantitative" },
+    "color": { "field": "name",  "type": "nominal" }
+  },
+  "height": 240
+}
+\`\`\`
+
+## Other display tools
+
 - \`show_account_card\` — one specific account ("what's in my Chase
-  Checking", "show my Schwab brokerage"). Compute \`balance\` as the SUM
-  of postings in the requested currency. Provide up to ~10
-  \`recent_txns\` ordered newest first; each \`amount\` is signed
-  (positive = inflow, negative = outflow). Optional \`counterparty\` is
-  the other side of the txn (e.g. \`Expenses:Food:Groceries\`).`
+  Checking"). Compute \`balance\` as the SUM of postings in the requested
+  currency. Provide up to ~10 \`recent_txns\` ordered newest first; each
+  \`amount\` is signed (positive = inflow, negative = outflow).`
 
 export const QUERY_CONVENTIONS = `# Query conventions
 
