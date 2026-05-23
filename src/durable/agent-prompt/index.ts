@@ -91,6 +91,14 @@ You can render rich UI inline by calling display tools. Use them after
 gathering data with \`sql_query\`; the user sees the rendered component,
 not the tool's JSON.
 
+**Display tools are terminal.** \`show_vega\` and \`show_account_card\`
+ARE the answer to the user's question — call ONE of them, at most ONCE
+per turn, and then **stop**. No follow-up text ("here's the chart…"),
+no second chart, no further \`sql_query\` calls. The successful tool
+result \`{ok:true, rendered:true}\` is your cue that the turn is done.
+The only reason to call \`show_vega\` again in the same turn is when the
+previous call returned \`{ok:false, error}\` — fix and retry.
+
 ## Charts: \`show_vega({ title?, spec })\`
 
 All charts go through a single tool that takes a **Vega-Lite v5 spec**.

@@ -247,19 +247,19 @@ export class LedgerDO extends Think {
       }),
       show_vega: tool({
         description:
-          'Render a chart from a Vega-Lite v5 spec. Use after gathering data with sql_query — embed the rows inline as `spec.data.values` (no remote URLs; the server has no fetch). Set `width: "container"` and a reasonable `height`. Convert scaled-decimal values back to plain numbers in SQL using the CASE-on-scale divisor pattern (SQLite has no POWER) so the spec receives plain JS numbers. Vega-Lite gives you the full grammar: bars (stacked or grouped), lines, areas, points, arcs (donuts), rect (heatmaps), composite multi-layer specs, faceted grids — pick the right mark and encoding for the question. The server validates the spec and returns {ok:false, error, hint} if it would fail to render; in that case, fix the issue and call show_vega again — do NOT regenerate the same JSON.',
+          'Render a chart from a Vega-Lite v5 spec. TERMINAL display tool — call this AT MOST ONCE per turn, and produce NO further text and NO further tool calls after a successful render. The chart IS the answer. Use after gathering data with sql_query — embed the rows inline as `spec.data.values` (no remote URLs; the server has no fetch). Set `width: "container"` and a reasonable `height`. Convert scaled-decimal values back to plain numbers in SQL using the CASE-on-scale divisor pattern (SQLite has no POWER) so the spec receives plain JS numbers. Vega-Lite gives you the full grammar: bars (stacked or grouped), lines, areas, points, arcs (donuts), rect (heatmaps), composite multi-layer specs, faceted grids — pick the right mark and encoding for the question. The server validates the spec and returns {ok:false, error, hint} if it would fail to render; in that case, fix the issue and call show_vega again — do NOT regenerate the same JSON. On success the server returns {ok:true, rendered:true} — stop there.',
         inputSchema: showVegaSchema,
         execute: async (input) => {
           const v = validateVegaSpec(input.spec)
-          if (v.ok === true) return input
+          if (v.ok === true) return { ok: true, rendered: true }
           return { ok: false, error: v.error, hint: v.hint }
         },
       }),
       show_account_card: tool({
         description:
-          'Render an account summary card: current balance + a short list of recent transactions hitting this account. Use when the user asks about one specific account ("what\'s in my Chase Checking", "show me my Schwab brokerage"). Compute the balance as the SUM of postings in the requested currency; provide each recent posting as signed (positive = inflow, negative = outflow).',
+          'Render an account summary card: current balance + a short list of recent transactions hitting this account. TERMINAL display tool — call this AT MOST ONCE per turn, and produce NO further text and NO further tool calls after the render. The card IS the answer. Use when the user asks about one specific account ("what\'s in my Chase Checking", "show me my Schwab brokerage"). Compute the balance as the SUM of postings in the requested currency; provide each recent posting as signed (positive = inflow, negative = outflow).',
         inputSchema: accountCardSchema,
-        execute: async (input) => input,
+        execute: async () => ({ ok: true, rendered: true }),
       }),
       propose_journal_edit: tool({
         description:
