@@ -117,6 +117,68 @@ grammar — bars (stacked or grouped), lines, areas, points, arcs
   Use the brand palette only when meaningful (teal \`#0d9488\` for
   inflows / positive, rose \`#e11d48\` for outflows / negative).
 
+### Spec style: prefer inline transforms
+
+AVOID view-level \`transform\` unless strictly necessary. PREFER inlining
+field operations inside \`encoding\` (\`bin\`, \`timeUnit\`, \`aggregate\`,
+\`sort\`, \`stack\`). Inline is more compact and less error-prone.
+
+GOOD — inline aggregate:
+\`\`\`json
+{
+  "mark": "bar",
+  "encoding": {
+    "x": { "field": "Cylinders" },
+    "y": { "aggregate": "mean", "field": "Acceleration" }
+  }
+}
+\`\`\`
+
+AVOID — same chart via view-level transform:
+\`\`\`json
+{
+  "transform": [
+    { "aggregate": [{ "op": "mean", "field": "Acceleration", "as": "mean_acc" }],
+      "groupby": ["Cylinders"] }
+  ],
+  "mark": "bar",
+  "encoding": {
+    "x": { "field": "Cylinders", "type": "ordinal" },
+    "y": { "field": "mean_acc",  "type": "quantitative" }
+  }
+}
+\`\`\`
+
+If you do need a view-level \`transform\`, put it BEFORE \`encoding\` in
+the JSON and make sure every \`as\` field you compute is actually used
+by an encoding channel.
+
+### Faceting: use row/column encoding channels
+
+To make a small-multiples grid, use the \`row\` or \`column\` encoding
+channels — do NOT use the top-level \`facet\` operator.
+
+GOOD:
+\`\`\`json
+{
+  "mark": "bar",
+  "encoding": {
+    "x":   { "bin": { "maxbins": 15 }, "field": "Horsepower", "type": "quantitative" },
+    "y":   { "aggregate": "count", "type": "quantitative" },
+    "row": { "field": "Origin" }
+  }
+}
+\`\`\`
+
+### Self-correction loop
+
+The server validates every spec and returns \`{ok: false, error, hint}\`
+when it would fail to render (wrong shape, missing \`data.values\`,
+encoding field not in the data, schema error). On that result, **fix
+the issue and call \`show_vega\` again — do NOT resubmit the same JSON.**
+If the same error returns twice, change your approach (different mark,
+simpler encoding) instead of tweaking the same field.
+
 ### Worked examples
 
 **Stacked bar — category mix over months:**
