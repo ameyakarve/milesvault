@@ -193,22 +193,34 @@ export class LedgerDO extends Think {
     output?: unknown
     error?: unknown
   }): void {
-    const preview = (v: unknown): string => {
+    const stringify = (v: unknown): string => {
       if (v === undefined) return ''
-      let s: string
       try {
-        s = typeof v === 'string' ? v : JSON.stringify(v)
+        return typeof v === 'string' ? v : JSON.stringify(v)
       } catch {
-        s = String(v)
+        return String(v)
       }
-      return s.length > 400 ? s.slice(0, 400) + '…' : s
     }
+    const trim = (s: string, cap: number) =>
+      s.length > cap ? s.slice(0, cap) + '…' : s
     const base = `[tool] ${ctx.toolName} ${ctx.durationMs}ms`
+    if (ctx.toolName === 'show_vega') {
+      // Dump the full spec so we can debug blank-render cases. Specs are
+      // typically 1-3 KB; cap at 8 KB just to keep one rogue payload from
+      // flooding the tail.
+      console.log(`${base} ok input=${trim(stringify(ctx.input), 8000)}`)
+      return
+    }
     if (ctx.success) {
-      console.log(`${base} ok in=${preview(ctx.input)} out=${preview(ctx.output)}`)
+      console.log(
+        `${base} ok in=${trim(stringify(ctx.input), 400)} out=${trim(stringify(ctx.output), 400)}`,
+      )
     } else {
       console.warn(
-        `${base} FAIL in=${preview(ctx.input)} err=${preview(ctx.error instanceof Error ? ctx.error.message : ctx.error)}`,
+        `${base} FAIL in=${trim(stringify(ctx.input), 400)} err=${trim(
+          stringify(ctx.error instanceof Error ? ctx.error.message : ctx.error),
+          400,
+        )}`,
       )
     }
   }
