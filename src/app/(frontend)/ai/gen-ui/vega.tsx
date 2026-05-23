@@ -1,6 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
+import { useState } from 'react'
 import type { ShowVegaProps } from '@/durable/agent-ui-schemas'
 
 const VegaEmbed = dynamic(() => import('react-vega').then((m) => m.VegaEmbed), {
@@ -22,6 +23,7 @@ const THEME_CONFIG = {
 }
 
 export function VegaChart({ input }: { input: ShowVegaProps }) {
+  const [error, setError] = useState<string | null>(null)
   const baseSpec = (input.spec ?? {}) as Record<string, unknown>
   const spec = {
     $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
@@ -31,10 +33,23 @@ export function VegaChart({ input }: { input: ShowVegaProps }) {
   }
   return (
     <ChartShell title={input.title}>
-      <VegaEmbed
-        spec={spec as never}
-        options={{ actions: false, renderer: 'svg', config: THEME_CONFIG as never }}
-      />
+      {error ? (
+        <div className="flex h-[280px] items-center justify-center px-4 text-center text-xs text-rose-600">
+          Chart failed to render: {error}
+        </div>
+      ) : (
+        <VegaEmbed
+          className="w-full"
+          style={{ minWidth: 320 }}
+          spec={spec as never}
+          options={{ actions: false, renderer: 'svg', config: THEME_CONFIG as never }}
+          onError={(err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err)
+            console.error('[VegaChart] render error', err)
+            setError(msg.length > 200 ? msg.slice(0, 200) + '…' : msg)
+          }}
+        />
+      )}
     </ChartShell>
   )
 }
