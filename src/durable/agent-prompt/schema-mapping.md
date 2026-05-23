@@ -30,7 +30,15 @@ covers the **semantics** the DDL itself can't express.
   BETWEEN ? AND ?`, never with strings.
 - **Decimals** are stored as a `(amount_scaled, scale)` integer pair in the
   `amount_scaled`/`scale` columns (also present on prices and balances).
-  Prefer summing these as `SUM(amount_scaled * 1.0 / POWER(10, scale))` when
+  **SQLite has no `POWER`** — convert with a CASE on `scale`:
+  ```sql
+  amount_scaled * 1.0 / CASE scale
+    WHEN 0 THEN 1     WHEN 1 THEN 10      WHEN 2 THEN 100
+    WHEN 3 THEN 1000  WHEN 4 THEN 10000   WHEN 5 THEN 100000
+    WHEN 6 THEN 1000000 ELSE 1 END
+  ```
+  In practice almost everything is `scale = 2` (cents). Prefer summing as
+  the CASE-divided value above when
   scales are uniform per currency; for safety, group by `currency` and `scale`
   in the same query.
 - **Flags** in `transactions.flag`: `*` cleared, `!` needs review, or NULL.

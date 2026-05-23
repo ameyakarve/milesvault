@@ -235,7 +235,7 @@ export class LedgerDO extends Think {
       }),
       show_vega: tool({
         description:
-          'Render a chart from a Vega-Lite v5 spec. Use after gathering data with sql_query — embed the rows inline as `spec.data.values` (no remote URLs; the server has no fetch). Set `width: "container"` and a reasonable `height`. Convert scaled-decimal values back to plain numbers (amount_scaled / POWER(10, scale)) before embedding. Vega-Lite gives you the full grammar: bars (stacked or grouped), lines, areas, points, arcs (donuts), rect (heatmaps), composite multi-layer specs, faceted grids — pick the right mark and encoding for the question. The server validates the spec and returns {ok:false, error, hint} if it would fail to render; in that case, fix the issue and call show_vega again — do NOT regenerate the same JSON.',
+          'Render a chart from a Vega-Lite v5 spec. Use after gathering data with sql_query — embed the rows inline as `spec.data.values` (no remote URLs; the server has no fetch). Set `width: "container"` and a reasonable `height`. Convert scaled-decimal values back to plain numbers in SQL using the CASE-on-scale divisor pattern (SQLite has no POWER) so the spec receives plain JS numbers. Vega-Lite gives you the full grammar: bars (stacked or grouped), lines, areas, points, arcs (donuts), rect (heatmaps), composite multi-layer specs, faceted grids — pick the right mark and encoding for the question. The server validates the spec and returns {ok:false, error, hint} if it would fail to render; in that case, fix the issue and call show_vega again — do NOT regenerate the same JSON.',
         inputSchema: showVegaSchema,
         execute: async (input) => {
           const v = validateVegaSpec(input.spec)

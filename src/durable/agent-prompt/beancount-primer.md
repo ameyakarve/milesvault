@@ -45,7 +45,7 @@ can query via the `sql_query` tool.
 - Amounts are decimal numbers; the relational tables store them as a
   `(amount_scaled, scale)` integer pair as well as the original text in
   `amount`. **When summing**, prefer the integer pair to avoid float drift:
-  `SUM(amount_scaled * POWER(10, -scale))` works but be aware of mixed scales.
+  use the CASE-on-scale divisor (see schema-mapping; SQLite has no `POWER`).
 - Dates in the relational tables are stored as **integer ordinals** via
   `date = year * 10000 + month * 100 + day` (e.g. 2026-05-21 → 20260521).
   Comparisons use this integer form directly. The `today` value in the
