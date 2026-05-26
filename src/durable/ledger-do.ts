@@ -342,7 +342,7 @@ export class LedgerDO extends Think {
       if (e) transactions.push(entryTxnToInput(e))
     }
     const directives = this.readAllDirectives()
-    return { text: serializeJournal(transactions, directives) }
+    return { text: serializeJournal(transactions, directives, { descending: true }) }
   }
 
   async journal_get_for_account(account: string): Promise<JournalGetResponse> {
@@ -366,7 +366,7 @@ export class LedgerDO extends Think {
     const directives = this.readAllDirectives().filter((d) =>
       directiveTouchesAccount(d, account),
     )
-    return { text: serializeJournal(transactions, directives) }
+    return { text: serializeJournal(transactions, directives, { descending: true }) }
   }
 
   async journal_get_for_account_currency(
@@ -395,7 +395,7 @@ export class LedgerDO extends Think {
     const directives = this.readAllDirectives().filter((d) =>
       directiveTouchesAccountCurrency(d, account, currency),
     )
-    return { text: serializeJournal(transactions, directives) }
+    return { text: serializeJournal(transactions, directives, { descending: true }) }
   }
 
   async list_account_children(account: string): Promise<string[]> {
@@ -715,8 +715,8 @@ export class LedgerDO extends Think {
       else surviving.push(input)
     }
     const directives = this.readAllDirectives()
-    const survivingText = serializeJournal(surviving, directives)
-    const beforeText = targeted.length > 0 ? serializeJournal(targeted, []) : ''
+    const survivingText = serializeJournal(surviving, directives, { descending: true })
+    const beforeText = targeted.length > 0 ? serializeJournal(targeted, [], { descending: true }) : ''
     const trailing = proposedText.endsWith('\n') ? '' : '\n'
     const fullText = `${survivingText}\n\n${proposedText}${trailing}`
     return { fullText, beforeText }
