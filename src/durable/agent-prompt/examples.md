@@ -279,6 +279,85 @@ Two clean postings, no `Equity:Void`.
   Liabilities:CreditCards:HDFC:Regalia    250.00 INR
 ```
 
+### Pay with points at a merchant (cross-currency)
+Same `@@` shape — the rate the merchant gave is the cash value at
+redemption. Works the same for partial redemptions (points + card).
+```
+2026-05-27 * "Amazon" "Headphones — paid 2500 HDFC pts"
+  Expenses:Shopping:Electronics       500.00 INR
+  Assets:Rewards:HDFC                 -2500 HDFC_RP @@ 500.00 INR
+```
+```
+2026-05-27 * "Amazon" "Headphones — 2500 pts + ₹500 on card"
+  Expenses:Shopping:Electronics            1000.00 INR
+  Assets:Rewards:HDFC                      -2500 HDFC_RP @@ 500.00 INR
+  Liabilities:CreditCards:HDFC:Regalia    -500.00 INR
+```
+
+### Award flight (no asserted cash value for miles)
+Miles don't have a rate here — only taxes/fees in cash. Mile side uses
+`Equity:Void`; cash side handles the co-pay.
+```
+2026-04-01 * "United" "Award flight DEL-SFO — 75k miles + ₹5000 taxes"
+  Expenses:Travel:Flights               5000.00 INR
+  Liabilities:CreditCards:HDFC:Regalia -5000.00 INR
+  Assets:Rewards:United                -75000 UA_MILES
+  Equity:Void                           75000 UA_MILES
+```
+
+## Bonuses, expiry, and other point-balance adjustments
+
+Earn / write-off events without a conversion rate. Single-currency,
+contra is `Equity:Void`. Same shape covers welcome bonuses, anniversary
+bonuses, referral bonuses, milestone bonuses, expiry sweeps, clawbacks.
+
+```
+2026-05-27 * "AMEX" "Platinum 100k welcome bonus"
+  Assets:Rewards:AMEX     100000 AMEX_MR
+  Equity:Void            -100000 AMEX_MR
+```
+```
+2026-12-31 * "HDFC" "RP expiry — 2024 vintage points"
+  Assets:Rewards:HDFC     -3500 HDFC_RP
+  Equity:Void              3500 HDFC_RP
+```
+
+## Buying points with cash
+
+Conversion at a defined rate → `@@` on the points leg. Same shape for
+program points (AMEX MR, HDFC RP, …) and FFP miles (United, Lufthansa,
+…). No expense — you've shifted INR into a different asset (points).
+
+```
+2026-05-27 * "AMEX" "Bought 10000 MR for ₹3000"
+  Assets:Rewards:AMEX        10000 AMEX_MR @@ 3000.00 INR
+  Assets:Bank:HDFC:Savings  -3000.00 INR
+```
+```
+2026-05-27 * "AMEX" "Bought 10000 MR for ₹3000 on Regalia"
+  Assets:Rewards:AMEX                      10000 AMEX_MR @@ 3000.00 INR
+  Liabilities:CreditCards:HDFC:Regalia    -3000.00 INR
+```
+
+## Redemption refunds (mirror of the original)
+
+Sign-flipped copy of whatever the redemption looked like. If the
+original used `@@`, the reversal uses `@@`. If the original used
+`Equity:Void`, so does the reversal.
+
+```
+2026-05-27 * "United" "Cancelled DEL-SFO — miles + taxes refunded"
+  Expenses:Travel:Flights              -5000.00 INR
+  Liabilities:CreditCards:HDFC:Regalia  5000.00 INR
+  Assets:Rewards:United                 75000 UA_MILES
+  Equity:Void                          -75000 UA_MILES
+```
+```
+2026-05-27 * "HDFC" "Statement-credit redemption reversed"
+  Assets:Rewards:HDFC                    1000 HDFC_RP @@ 250.00 INR
+  Liabilities:CreditCards:HDFC:Regalia  -250.00 INR
+```
+
 ## When to use `@@` vs `Equity:Void` on the point side
 
 - **Conversion** — point currency is being exchanged for cash or another
