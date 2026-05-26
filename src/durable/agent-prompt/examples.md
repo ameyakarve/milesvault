@@ -588,3 +588,79 @@ redemption was booked at.
   point-side contra. (Examples: earning points on a purchase, welcome
   bonuses, anniversary bonuses, referral bonuses, milestone bonuses,
   expiry sweeps, clawbacks.)
+
+## Balance assertions and pad
+
+These aren't transactions — they're directives the user puts in the
+journal alongside transactions. They don't move money; they declare or
+correct what's true.
+
+### `balance` — assert what the account holds (start-of-day)
+
+```
+2026-06-01 balance Assets:Bank:HDFC:Savings   123456.78 INR
+```
+
+Reads: at the **start of 2026-06-01**, the computed balance of
+`Assets:Bank:HDFC:Savings` is exactly ₹123,456.78 (sum of all postings
+dated **before** 2026-06-01). If it doesn't match, the parser flags an
+error. Pure check, no side effect.
+
+Use it for:
+- Reconciliation against a statement (your computed balance should
+  equal what the bank says).
+- A safety net after large data entry — a misposted transaction surfaces
+  as a balance mismatch instead of silently drifting.
+
+### `pad` + `balance` — start (or repair) without prior history
+
+A `pad` placed before a `balance` for the same account inserts a
+synthetic adjustment dated on the `pad` line that fills exactly the gap
+needed to make the next `balance` succeed. The contra goes to the
+**second** account on the `pad` line — by convention
+`Equity:Opening-Balances` for first-time setup.
+
+```
+2026-01-01 pad Assets:Bank:HDFC:Savings   Equity:Opening-Balances
+2026-06-01 balance Assets:Bank:HDFC:Savings   123456.78 INR
+```
+
+Reads: on 2026-01-01, plug whatever's needed in
+`Assets:Bank:HDFC:Savings` (offset to `Equity:Opening-Balances`) so
+that on 2026-06-01 the asserted balance of ₹123,456.78 holds.
+
+Use this once per account when you start tracking — you know the
+balance today but don't want to back-fill years of history.
+
+A `pad` without a following `balance` for the same account is dropped
+by the parser. The pair is the unit.
+
+### How the codebase reads these
+
+Internally, a `pad` immediately preceding a `balance` for the same
+account is merged into a single logical entry — a balance with a
+`plug_account` field. Unmatched pads are surfaced as unsupported.
+That's why you only ever see a `pad` paired with a `balance` in the
+editor.
+
+### What the chat tool can do today
+
+The `draft_transaction` tool emits transactions, not directives. So if
+the user asks to "set my HDFC balance to ₹X" or "my balance is off by
+₹Y, fix it", propose a transaction that plugs to
+`Equity:Opening-Balances` and tell the user they can add the `balance`
+assertion themselves in the editor afterwards.
+
+```
+2026-05-27 * "Opening balance" "Set Assets:Bank:HDFC:Savings"
+  Assets:Bank:HDFC:Savings    123456.78 INR
+  Equity:Opening-Balances    -123456.78 INR
+```
+
+If the user wants to correct drift (their books say ₹100k, statement
+says ₹103k), the plug transaction is for the **difference**:
+```
+2026-05-27 * "Reconcile" "HDFC drift correction"
+  Assets:Bank:HDFC:Savings      3000.00 INR
+  Equity:Opening-Balances      -3000.00 INR
+```
