@@ -13,6 +13,7 @@ import {
 } from '@/lib/beancount/ast'
 import { isStrictParseErr, parseJournalStrict } from '@/lib/beancount/parse-strict'
 import { validateAccountCurrencies } from '@/lib/beancount/validate-currency'
+import { validateAccountShapes } from '@/lib/beancount/validate-account-shape'
 import {
   directiveTouchesAccount,
   directiveTouchesAccountCurrency,
@@ -66,7 +67,12 @@ export type JournalGetResponse = { text: string }
 export type JournalPutResponse = { text: string; inserted: number; deleted: number; unchanged: number }
 export type JournalPutError = {
   ok: false
-  error: 'parse_error' | 'partial_parse' | 'unsupported_directives' | 'currency_lock'
+  error:
+    | 'parse_error'
+    | 'partial_parse'
+    | 'unsupported_directives'
+    | 'currency_lock'
+    | 'credit_card_format'
   message: string
 }
 export type PreviewJournalPutResponse = {
@@ -865,6 +871,15 @@ export class LedgerDO extends Think {
         ok: false,
         error: 'currency_lock',
         message: issues.map((i) => i.message).join('; '),
+      }
+    }
+
+    const shapeIssues = validateAccountShapes(parsed.transactions, parsed.directives)
+    if (shapeIssues.length > 0) {
+      return {
+        ok: false,
+        error: 'credit_card_format',
+        message: shapeIssues.map((i) => i.message).join('; '),
       }
     }
 
