@@ -223,6 +223,41 @@ leg accordingly.
   Liabilities:CreditCards:HDFC:Regalia        3500.00 INR
 ```
 
+## Points transfers between programs
+
+Moving points from one program to another at a defined rate — always a
+conversion, so the rate lives in `@@`. The ratio (1:1, 1:1.3, 1:2,
+whatever bonus is running) doesn't change the shape; it just changes
+the two numbers.
+
+### Instant landing (points show up in the destination right away)
+```
+2026-05-27 * "Chase" "Transfer 10000 UR → 13000 United (30% bonus)"
+  Assets:Rewards:United     13000 UA_MILES @@ 10000 CHASE_UR
+  Assets:Rewards:Chase     -10000 CHASE_UR
+```
+
+### Pending (transfer initiated but points haven't landed yet)
+Mirror of the cashback-vs-discount split: until the destination program
+posts the points, they're owed by that program — sit them in a
+receivable.
+```
+2026-05-27 * "Chase" "Transfer 10000 UR → 13000 United (pending)"
+  Assets:Receivable:United     13000 UA_MILES @@ 10000 CHASE_UR
+  Assets:Rewards:Chase        -10000 CHASE_UR
+```
+
+When the points land, settle the receivable:
+```
+2026-05-30 * "United" "Transfer credited"
+  Assets:Rewards:United        13000 UA_MILES
+  Assets:Receivable:United    -13000 UA_MILES
+```
+
+If the user didn't say whether the transfer was instant or pending and
+it could plausibly be either, call `clarify` with chips like "Landed
+instantly" / "Still pending".
+
 ## Redemptions (using up rewards earned earlier)
 
 ### Cashback applied to the statement (same currency)
