@@ -286,11 +286,15 @@ export function Chat({
                           )
                         }
                         if (p.type === 'reasoning' && typeof p.text === 'string') {
+                          // defaultOpen={true} so live reasoning expands as it
+                          // streams; ai-elements auto-collapses ~1s after the
+                          // stream ends. Trade-off: completed reasoning loaded
+                          // from history briefly flashes open before closing.
                           return (
                             <Reasoning
                               key={i}
                               isStreaming={p.state === 'streaming'}
-                              defaultOpen={false}
+                              defaultOpen
                             >
                               <ReasoningTrigger />
                               <ReasoningContent>{p.text}</ReasoningContent>
