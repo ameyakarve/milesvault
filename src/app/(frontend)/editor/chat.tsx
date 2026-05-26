@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { ArrowUp } from 'lucide-react'
@@ -60,9 +61,18 @@ function Composer({
   )
 }
 
-export function Chat() {
+export function Chat({
+  onBusyChange,
+}: {
+  onBusyChange?: (busy: boolean) => void
+} = {}) {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
   const { messages, sendMessage, status, stop } = useAgentChat({ agent })
+
+  const busy = status === 'submitted' || status === 'streaming'
+  useEffect(() => {
+    onBusyChange?.(busy)
+  }, [busy, onBusyChange])
 
   function handleSubmit(message: PromptInputMessage) {
     const text = message.text.trim()
