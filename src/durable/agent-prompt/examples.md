@@ -6,9 +6,15 @@ Credit card accounts MUST be `Liabilities:CreditCards:<Issuer>:<Card>[:<Id>]`
 — e.g. `Liabilities:CreditCards:HDFC:Regalia` or `…:Regalia:1234`. Anything
 shorter (no card name) or longer is rejected on save.
 
-## Cashback (post-purchase)
+## Cashback
 
-Receivable plus expense reduction, each balanced through `Equity:Void`:
+**Default for the word "cashback".** A separately-redeemable credit (the
+user gets ₹X back, redeemable later) — NOT a discount on the original
+purchase. Use this unless the user explicitly says "instant", "at
+checkout", "at POS", or "applied to the bill".
+
+Four postings: receivable plus expense reduction, each balanced through
+`Equity:Void`.
 
 ```
 Assets:Receivable:HDFC      250.00 INR
@@ -27,9 +33,11 @@ Assets:Receivable:HDFC       25 HDFC_RP
 Equity:Void                 -25 HDFC_RP
 ```
 
-## Instant cashback (discount at purchase)
+## Discount at purchase (a.k.a. instant cashback)
 
-Negative posting on the same expense; no `Equity:Void`, no receivable.
+ONLY when the user says the discount/cashback was applied at the point of
+sale — i.e. it reduced the bill they paid, nothing to redeem later. A
+negative posting on the same expense; no `Equity:Void`, no receivable.
 
 ```
 Expenses:Food:Restaurants              500.00 INR
