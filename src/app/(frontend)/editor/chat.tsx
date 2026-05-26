@@ -178,16 +178,19 @@ export function Chat({
   const isEmpty = messages.length === 0
   const showThinking =
     (status === 'submitted' || status === 'streaming') && !isToolContinuation
-  const hasAssistantText = (() => {
+  const hasAssistantContent = (() => {
     if (messages.length === 0) return false
     const last = messages[messages.length - 1]
     if (last.role !== 'assistant') return false
     const parts = Array.isArray(last.parts) ? (last.parts as Part[]) : []
     return parts.some(
-      (p) => p.type === 'text' && typeof p.text === 'string' && p.text.length > 0,
+      (p) =>
+        (p.type === 'text' && typeof p.text === 'string' && p.text.length > 0) ||
+        p.type === 'reasoning' ||
+        p.type.startsWith('tool-'),
     )
   })()
-  const showThinkingBubble = showThinking && !hasAssistantText
+  const showThinkingBubble = showThinking && !hasAssistantContent
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -225,14 +228,26 @@ export function Chat({
                 const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
                 return (
                   <Message key={m.id} from={m.role}>
-                    <MessageContent>
+                    <MessageContent
+                      className={m.role === 'assistant' ? 'w-full' : undefined}
+                    >
                       {parts.map((p, i) => {
                         if (p.type === 'text' && typeof p.text === 'string') {
                           return (
                             <MessageResponse key={i}>{p.text}</MessageResponse>
                           )
                         }
-                        if (p.type.startsWith('tool-') && isGenUiTool(p.type)) {
+                        if (p.type === 'reasoning' && typeof p.text === 'string') {
+                          return (
+                            <div
+                              key={i}
+                              className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground italic"
+                            >
+                              {p.text}
+                            </div>
+                          )
+                        }
+                        if (p.type.startsWith('tool-')) {
                           const toolCallId = p.toolCallId ?? `${m.id}-${i}`
                           const subState = submitStatus[toolCallId] ?? 'idle'
                           const cardStatus =
@@ -251,28 +266,33 @@ export function Chat({
                                 : cardStatus === 'submitting'
                                   ? 'input-available'
                                   : (p.state ?? 'input-streaming')
-                          const rendered = renderGenUi(p.type, p.input, {
-                            status: cardStatus,
-                            errorMessage: submitError[toolCallId],
-                            onApprove: (final) =>
-                              void handleApprove(toolCallId, final),
-                            onSendBack: (final, note) =>
-                              handleSendBack(toolCallId, final, note),
-                            onReject: () => handleReject(toolCallId),
-                          })
-                          if (!rendered) return null
+                          const rendered = isGenUiTool(p.type)
+                            ? renderGenUi(p.type, p.input, {
+                                status: cardStatus,
+                                errorMessage: submitError[toolCallId],
+                                onApprove: (final) =>
+                                  void handleApprove(toolCallId, final),
+                                onSendBack: (final, note) =>
+                                  handleSendBack(toolCallId, final, note),
+                                onReject: () => handleReject(toolCallId),
+                              })
+                            : null
                           return (
-                            <Tool
-                              key={i}
-                              defaultOpen
-                              className="group"
-                            >
+                            <Tool key={i} defaultOpen>
                               <ToolHeader
                                 type={p.type as ToolUIPart['type']}
                                 state={toolState}
                               />
                               <ToolContent>
-                                <div className="p-2">{rendered}</div>
+                                {rendered ? (
+                                  <div className="p-2">{rendered}</div>
+                                ) : (
+                                  <div className="p-4 text-xs text-muted-foreground">
+                                    {toolState === 'input-streaming'
+                                      ? 'Preparing…'
+                                      : 'Waiting for input…'}
+                                  </div>
+                                )}
                                 {p.output || p.errorText ? (
                                   <ToolOutput
                                     output={p.output}
