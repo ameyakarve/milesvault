@@ -425,6 +425,46 @@ bonuses, referral bonuses, milestone bonuses, expiry sweeps, clawbacks.
   Equity:Void              3500 HDFC_RP
 ```
 
+## Referrals (you referred someone; reward landed for you)
+
+Shape depends on what the reward actually is. If it's **cash** (lands in
+a bank, a wallet, or as a statement credit), the credit side is
+`Income:Referrals` because realized cash value is changing hands. If
+it's **points / miles**, it's the same shape as a welcome bonus —
+single-currency with `Equity:Void`.
+
+### Cash referral credited to bank
+```
+2026-05-27 * "Niyo" "Referral bonus — Aman signed up"
+  Assets:Bank:HDFC:Savings    500.00 INR
+  Income:Referrals           -500.00 INR
+```
+
+### Cash referral as a statement credit on the card
+Card liability goes down; income captures the realized value.
+```
+2026-05-27 * "HDFC" "Referral statement credit — Aman signed up"
+  Liabilities:CreditCards:HDFC:Regalia    1000.00 INR
+  Income:Referrals                       -1000.00 INR
+```
+
+### Pending cash referral (friend hasn't completed signup yet)
+Sit it in a receivable until the issuer actually pays out.
+```
+2026-05-27 * "HDFC" "Referral promised — Aman card under review"
+  Assets:Receivable:HDFC      1000.00 INR
+  Income:Referrals           -1000.00 INR
+```
+When it lands, settle the receivable against the bank / card just like
+any other receivable payout.
+
+### Points referral
+```
+2026-05-27 * "AMEX" "Referral bonus — 15000 MR for referring Aman"
+  Assets:Rewards:AMEX     15000 AMEX_MR
+  Equity:Void            -15000 AMEX_MR
+```
+
 ## Buying points with cash
 
 Conversion at a defined rate → `@@` on the points leg. Same shape for
