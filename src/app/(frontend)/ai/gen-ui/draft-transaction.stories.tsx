@@ -62,9 +62,6 @@ function CardShell(props: Partial<DraftTransactionCardProps>) {
             input={BALANCED}
             accounts={ACCOUNTS}
             onApprove={(f) => push(`approve ${JSON.stringify(f)}`)}
-            onSendBack={(f, n) =>
-              push(`sendBack note=${n ?? '(none)'} ${JSON.stringify(f)}`)
-            }
             onReject={() => push('reject')}
             {...props}
           />
@@ -109,8 +106,5 @@ export const Failed: StoryObj<typeof CardShell> = {
 }
 
 export const Done: StoryObj<typeof CardShell> = {
-  args: {
-    status: 'done',
-    committedSummary: 'Recorded · 2026-05-26 Whole Foods $42.10',
-  },
+  args: { status: 'done' },
 }

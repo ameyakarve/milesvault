@@ -19,7 +19,6 @@ import {
   Tool,
   ToolContent,
   ToolHeader,
-  ToolOutput,
 } from '@/components/ai-elements/tool'
 import {
   PromptInput,
@@ -175,17 +174,6 @@ export function Chat({
     }
   }
 
-  function handleSendBack(
-    toolCallId: string,
-    final: DraftTransaction,
-    note?: string,
-  ) {
-    addToolOutput({
-      toolCallId,
-      output: { ok: false, reason: 'revise', edited_draft: final, note: note ?? null },
-    })
-  }
-
   function handleReject(toolCallId: string) {
     addToolOutput({
       toolCallId,
@@ -291,8 +279,6 @@ export function Chat({
                                 errorMessage: submitError[toolCallId],
                                 onApprove: (final) =>
                                   void handleApprove(toolCallId, final),
-                                onSendBack: (final, note) =>
-                                  handleSendBack(toolCallId, final, note),
                                 onReject: () => handleReject(toolCallId),
                               })
                             : null
@@ -312,12 +298,6 @@ export function Chat({
                                       : 'Waiting for input…'}
                                   </div>
                                 )}
-                                {p.output || p.errorText ? (
-                                  <ToolOutput
-                                    output={p.output}
-                                    errorText={p.errorText}
-                                  />
-                                ) : null}
                               </ToolContent>
                             </Tool>
                           )
