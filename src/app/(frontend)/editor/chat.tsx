@@ -105,6 +105,23 @@ export function Chat({
     Record<string, 'idle' | 'submitting' | 'done' | 'failed'>
   >({})
   const [submitError, setSubmitError] = useState<Record<string, string>>({})
+  const [accounts, setAccounts] = useState<string[]>([])
+
+  useEffect(() => {
+    const ac = new AbortController()
+    ledgerClient
+      .getAccounts({ signal: ac.signal })
+      .then((r) => setAccounts(r.accounts))
+      .catch(() => {})
+    return () => ac.abort()
+  }, [])
+
+  async function refreshAccounts() {
+    try {
+      const r = await ledgerClient.getAccounts()
+      setAccounts(r.accounts)
+    } catch {}
+  }
 
   const busy = isStreaming
   useEffect(() => {
@@ -144,6 +161,7 @@ export function Chat({
         toolCallId,
         output: { ok: true, committed: newTxn.trim() },
       })
+      void refreshAccounts()
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Save failed'
       setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
@@ -268,6 +286,7 @@ export function Chat({
                                   : (p.state ?? 'input-streaming')
                           const rendered = isGenUiTool(p.type)
                             ? renderGenUi(p.type, p.input, {
+                                accounts,
                                 status: cardStatus,
                                 errorMessage: submitError[toolCallId],
                                 onApprove: (final) =>

@@ -52,6 +52,18 @@ export type LedgerClient = {
     text: string,
   ): Promise<PreviewJournalPutResponse | JournalPutError>
   clear(): Promise<{ ok: true }>
+  ledger_snapshot(): Promise<{
+    today: number
+    accounts: Array<{
+      account: string
+      currencies: string[]
+      open_date: number
+      close_date: number | null
+    }>
+    row_counts: Record<string, number>
+    sample_txns: string
+    schema_ddl: string
+  }>
 }
 
 export class LedgerInputError extends Error {
@@ -164,6 +176,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async clear() {
       return stub.clear()
+    },
+
+    async ledger_snapshot() {
+      return stub.ledger_snapshot()
     },
   }
 }
