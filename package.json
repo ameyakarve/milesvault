@@ -5,14 +5,15 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build --webpack",
-    "deploy": "opennextjs-cloudflare build --env=$CLOUDFLARE_ENV && node scripts/inject-do.mjs && opennextjs-cloudflare deploy --env=$CLOUDFLARE_ENV",
+    "build:prompt": "node scripts/build-agent-prompt.mjs",
+    "build": "pnpm build:prompt && cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build --webpack",
+    "deploy": "pnpm build:prompt && opennextjs-cloudflare build --env=$CLOUDFLARE_ENV && node scripts/inject-do.mjs && opennextjs-cloudflare deploy --env=$CLOUDFLARE_ENV",
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev --webpack",
     "devsafe": "rm -rf .next && rm -rf .open-next && cross-env NODE_OPTIONS=--no-deprecation next dev --webpack",
     "generate:types": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "ii": "pnpm install --ignore-workspace",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
-    "preview": "opennextjs-cloudflare build && node scripts/inject-do.mjs && opennextjs-cloudflare preview --env=$CLOUDFLARE_ENV",
+    "preview": "pnpm build:prompt && opennextjs-cloudflare build && node scripts/inject-do.mjs && opennextjs-cloudflare preview --env=$CLOUDFLARE_ENV",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
