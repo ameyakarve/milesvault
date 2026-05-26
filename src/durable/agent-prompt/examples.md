@@ -42,9 +42,12 @@ clarify({
 - Credit cards: `Liabilities:CreditCards:<Issuer>:<Card>[:<Id>]`
   — e.g. `Liabilities:CreditCards:HDFC:Regalia` or
   `Liabilities:CreditCards:HSBC:Cashback:9065`.
-- Cashback / points receivable: `Assets:Receivable:<Issuer>` — singular
-  `Receivable`, then the issuer (NOT the card name, NOT `Cashback`,
-  NOT plural).
+- Cashback receivable (cash owed, lands later on a statement):
+  `Assets:Receivable:<Issuer>` — singular `Receivable`, then the issuer
+  (NOT the card name, NOT `Cashback`, NOT plural).
+- Held points / miles balance (already in your account, not "owed"):
+  `Assets:Rewards:<Issuer>` — e.g. `Assets:Rewards:HDFC`,
+  `Assets:Rewards:AMEX`. Use this for any point-currency balance.
 
 ## Cashback pattern (word: "cashback")
 
@@ -73,7 +76,7 @@ No expense-reduction leg — points' cash value isn't fixed at earn time.
 2026-05-21 * "Taj" "Dinner — 250 reward points"
   Expenses:Food:Restaurants                  2500.00 INR
   Liabilities:CreditCards:HDFC:Regalia      -2500.00 INR
-  Assets:Receivable:HDFC                         250 HDFC_RP
+  Assets:Rewards:HDFC                            250 HDFC_RP
   Equity:Void                                   -250 HDFC_RP
 ```
 
@@ -237,7 +240,7 @@ gets re-expressed in the target currency (INR) for the balance check.
 Two clean postings, no `Equity:Void`.
 ```
 2026-05-31 * "HDFC" "Redeem 1000 pts → ₹250 statement credit"
-  Assets:Receivable:HDFC                 -1000 HDFC_RP @@ 250.00 INR
+  Assets:Rewards:HDFC                    -1000 HDFC_RP @@ 250.00 INR
   Liabilities:CreditCards:HDFC:Regalia    250.00 INR
 ```
 
