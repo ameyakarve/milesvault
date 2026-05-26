@@ -16,6 +16,11 @@ import {
   MessageResponse,
 } from '@/components/ai-elements/message'
 import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from '@/components/ai-elements/reasoning'
+import {
   Tool,
   ToolContent,
   ToolHeader,
@@ -39,7 +44,7 @@ import type { ToolUIPart } from 'ai'
 type Part = {
   type: string
   text?: string
-  state?: ToolUIPart['state']
+  state?: ToolUIPart['state'] | 'streaming' | 'done'
   input?: unknown
   output?: unknown
   errorText?: string
@@ -245,12 +250,14 @@ export function Chat({
                         }
                         if (p.type === 'reasoning' && typeof p.text === 'string') {
                           return (
-                            <div
+                            <Reasoning
                               key={i}
-                              className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground italic"
+                              isStreaming={p.state === 'streaming'}
+                              defaultOpen={false}
                             >
-                              {p.text}
-                            </div>
+                              <ReasoningTrigger />
+                              <ReasoningContent>{p.text}</ReasoningContent>
+                            </Reasoning>
                           )
                         }
                         if (p.type.startsWith('tool-')) {
@@ -271,7 +278,7 @@ export function Chat({
                                 ? 'output-error'
                                 : cardStatus === 'submitting'
                                   ? 'input-available'
-                                  : (p.state ?? 'input-streaming')
+                                  : ((p.state as ToolUIPart['state'] | undefined) ?? 'input-streaming')
                           const rendered = isGenUiTool(p.type)
                             ? renderGenUi(p.type, p.input, {
                                 accounts,
