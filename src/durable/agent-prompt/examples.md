@@ -48,6 +48,13 @@ clarify({
 - Held points / miles balance (already in your account, not "owed"):
   `Assets:Rewards:<Issuer>` — e.g. `Assets:Rewards:HDFC`,
   `Assets:Rewards:AMEX`. Use this for any point-currency balance.
+- Prepaid cards (food wallets, forex cards, store wallets — anything
+  you've already loaded with money): `Assets:Prepaid:<Issuer>:<Card>` —
+  e.g. `Assets:Prepaid:Sodexo:Meal`, `Assets:Prepaid:HDFC:Forex:Multi`.
+  Forex cards live here too; the currency on the posting tells you it's
+  foreign.
+- Gift cards / vouchers: `Assets:GiftCards:<Merchant>` — e.g.
+  `Assets:GiftCards:Amazon`.
 
 ## Cashback pattern (word: "cashback")
 
@@ -149,6 +156,102 @@ like any other charge.)
 2026-05-26 * "Auto driver" "UPI — ride home"
   Expenses:Travel:Auto       120.00 INR
   Assets:Bank:HDFC:Savings  -120.00 INR
+```
+
+## Prepaid cards (food wallets, store wallets)
+
+You loaded money in advance; the balance sits as an asset until you
+spend it down. Two moves: load (bank → prepaid) and spend (prepaid →
+expense).
+
+### Load
+```
+2026-05-27 * "Sodexo" "Top-up food wallet"
+  Assets:Prepaid:Sodexo:Meal    2000.00 INR
+  Assets:Bank:HDFC:Savings     -2000.00 INR
+```
+
+### Spend
+```
+2026-05-27 * "Cafe Coffee Day" "Lunch — Sodexo"
+  Expenses:Food:Restaurants     400.00 INR
+  Assets:Prepaid:Sodexo:Meal   -400.00 INR
+```
+
+## Forex cards (prepaid, foreign currency)
+
+Same `Assets:Prepaid` segment — the currency on the posting tells you
+it's forex. Loading is a conversion (₹ → foreign), so use `@@` for the
+rate. Spending abroad is single-currency in the foreign unit.
+
+### Load
+```
+2026-05-27 * "HDFC" "Loaded forex card — 1000 USD @ ₹84.50"
+  Assets:Prepaid:HDFC:Forex:Multi    1000.00 USD @@ 84500.00 INR
+  Assets:Bank:HDFC:Savings         -84500.00 INR
+```
+
+### Spend abroad (already in USD — no FX at point of sale)
+```
+2026-05-30 * "Whole Foods" "Groceries — NYC"
+  Expenses:Travel:Food                   50.00 USD
+  Assets:Prepaid:HDFC:Forex:Multi      -50.00 USD
+```
+
+## Forex spends on a regular INR credit card
+
+When a foreign-currency charge hits an INR card, the bank converts at
+its rate (incl. markup). Keep the expense in foreign currency so the
+trip's USD total stays meaningful; use `@@` to re-express the weight in
+INR for the card leg.
+
+### Single line (markup baked into the rate)
+```
+2026-05-30 * "Joe's Pizza" "Dinner — NYC"
+  Expenses:Travel:Food                   50.00 USD @@ 4225.00 INR
+  Liabilities:CreditCards:HDFC:Regalia -4225.00 INR
+```
+
+### Markup itemized separately (when the statement breaks it out)
+```
+2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 forex markup)"
+  Expenses:Travel:Food                   50.00 USD @@ 4225.00 INR
+  Expenses:Bank:ForexMarkup            148.00 INR
+  Liabilities:CreditCards:HDFC:Regalia -4373.00 INR
+```
+
+## Gift cards / vouchers
+
+A gift card is an asset — value you hold until you spend it.
+
+### Bought with cash or card
+```
+2026-05-27 * "Amazon" "Bought ₹1000 Amazon gift card"
+  Assets:GiftCards:Amazon                1000.00 INR
+  Liabilities:CreditCards:HDFC:Regalia  -1000.00 INR
+```
+
+### Received as a gift (income)
+```
+2026-05-27 * "Friend" "Birthday — Amazon gift card"
+  Assets:GiftCards:Amazon    1000.00 INR
+  Income:Gifts              -1000.00 INR
+```
+
+### Redeemed at checkout
+Full:
+```
+2026-05-27 * "Amazon" "Book — paid with gift card"
+  Expenses:Shopping:Books     500.00 INR
+  Assets:GiftCards:Amazon    -500.00 INR
+```
+
+Partial (gift card + card):
+```
+2026-05-27 * "Amazon" "Book — ₹500 gift card + ₹300 on Regalia"
+  Expenses:Shopping:Books                  800.00 INR
+  Assets:GiftCards:Amazon                 -500.00 INR
+  Liabilities:CreditCards:HDFC:Regalia    -300.00 INR
 ```
 
 ## Settling with people
