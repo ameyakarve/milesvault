@@ -1,18 +1,8 @@
 import { Think } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
-import { tool, type ToolSet } from 'ai'
-import { z } from 'zod'
+import type { ToolSet } from 'ai'
 import { buildSystemPrompt } from './agent-prompt'
-import {
-  accountCardSchema,
-  commitIngestSchema,
-  commitJournalEditSchema,
-  extractStatementRowsSchema,
-  proposeJournalEditSchema,
-  showVegaSchema,
-} from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
-import { validateVegaSpec } from '@/lib/vega-validate'
 import {
   dateFromInt,
   dateToInt,
@@ -188,142 +178,8 @@ export class LedgerDO extends Think {
     return buildSystemPrompt(snapshot)
   }
 
-  beforeTurn() {
-    // Hard-stop the agent loop the moment a terminal display tool returns a
-    // successful render. Without this the model regularly produces multiple
-    // chart cards plus narrative for a single question. Validation errors
-    // ({ok:false}) still allow the model to retry on the next step.
-    const TERMINAL_TOOLS = new Set(['show_vega', 'show_account_card'])
-    return {
-      stopWhen: (options: { steps: ReadonlyArray<{ toolResults: ReadonlyArray<{ toolName: string; output: unknown }> }> }) => {
-        for (const step of options.steps) {
-          for (const r of step.toolResults) {
-            if (!TERMINAL_TOOLS.has(r.toolName)) continue
-            const out = r.output as { ok?: unknown; rendered?: unknown } | null
-            if (out && out.ok === true && out.rendered === true) return true
-          }
-        }
-        return false
-      },
-    }
-  }
-
-  afterToolCall(ctx: {
-    toolName: string
-    input?: unknown
-    durationMs: number
-    success: boolean
-    output?: unknown
-    error?: unknown
-  }): void {
-    const stringify = (v: unknown): string => {
-      if (v === undefined) return ''
-      try {
-        return typeof v === 'string' ? v : JSON.stringify(v)
-      } catch {
-        return String(v)
-      }
-    }
-    const trim = (s: string, cap: number) =>
-      s.length > cap ? s.slice(0, cap) + '…' : s
-    const base = `[tool] ${ctx.toolName} ${ctx.durationMs}ms`
-    if (ctx.toolName === 'show_vega') {
-      // Dump the full spec so we can debug blank-render cases. Specs are
-      // typically 1-3 KB; cap at 8 KB just to keep one rogue payload from
-      // flooding the tail.
-      console.log(`${base} ok input=${trim(stringify(ctx.input), 8000)}`)
-      return
-    }
-    if (ctx.success) {
-      console.log(
-        `${base} ok in=${trim(stringify(ctx.input), 400)} out=${trim(stringify(ctx.output), 400)}`,
-      )
-    } else {
-      console.warn(
-        `${base} FAIL in=${trim(stringify(ctx.input), 400)} err=${trim(
-          stringify(ctx.error instanceof Error ? ctx.error.message : ctx.error),
-          400,
-        )}`,
-      )
-    }
-  }
-
   getTools(): ToolSet {
-    return {
-      sql_query: tool({
-        description:
-          'Run a read-only SQL query against the ledger SQLite. Engine-enforced read-only; use parameters; LIMIT aggressively.',
-        inputSchema: z.object({
-          sql: z.string().describe('SELECT or WITH statement only.'),
-          params: z
-            .array(z.union([z.string(), z.number(), z.null()]))
-            .optional()
-            .describe('Positional parameters bound to ? placeholders.'),
-        }),
-        execute: async ({ sql, params }) => {
-          try {
-            return await this.query_sql(sql, params ?? [])
-          } catch (e) {
-            return { error: e instanceof Error ? e.message : String(e) }
-          }
-        },
-      }),
-      show_vega: tool({
-        description:
-          'Render a chart from a Vega-Lite v5 spec. Use after gathering data with sql_query — embed the rows inline as `spec.data.values` (no remote URLs; the server has no fetch). Set `width: "container"` and a reasonable `height`. Convert scaled-decimal values back to plain numbers in SQL using the CASE-on-scale divisor pattern (SQLite has no POWER) so the spec receives plain JS numbers. Vega-Lite gives you the full grammar: bars (stacked or grouped), lines, areas, points, arcs (donuts), rect (heatmaps), composite multi-layer specs, faceted grids — pick the right mark and encoding for the question. The server validates the spec and returns {ok:false, error, hint} if it would fail to render; fix the issue and call show_vega again — do NOT regenerate the same JSON. On success the chart is the final answer.',
-        inputSchema: showVegaSchema,
-        execute: async (input) => {
-          const v = validateVegaSpec(input.spec)
-          if (v.ok === true) return { ok: true, rendered: true }
-          return { ok: false, error: v.error, hint: v.hint }
-        },
-      }),
-      show_account_card: tool({
-        description:
-          'Render an account summary card: current balance + a short list of recent transactions hitting this account. Use when the user asks about one specific account ("what\'s in my Chase Checking", "show me my Schwab brokerage"). Compute the balance as the SUM of postings in the requested currency; provide each recent posting as signed (positive = inflow, negative = outflow). The card is the final answer.',
-        inputSchema: accountCardSchema,
-        execute: async () => ({ ok: true, rendered: true }),
-      }),
-      propose_journal_edit: tool({
-        description:
-          'Propose a Beancount journal edit. Provide a short `instruction` for the user-facing description, the `proposed_text` (full Beancount snippet that should replace the targets — balanced postings, explicit amounts + currencies), and optionally `target_txn_ids` of existing transactions to be replaced (omit for pure additions). The server validates the new journal, stores a pending proposal, and returns a proposal_id + diff summary. The user reviews the DiffCard before commit; do NOT call commit_journal_edit until they explicitly approve.',
-        inputSchema: proposeJournalEditSchema,
-        execute: async (input) =>
-          this.propose_journal_edit({
-            instruction: input.instruction,
-            proposed_text: input.proposed_text,
-            target_txn_ids: input.target_txn_ids,
-          }),
-      }),
-      extract_statement_rows: tool({
-        description:
-          'Render a preview table of normalized statement rows extracted from a statement. The user attaches a file via the chat UI and you receive its markdown text inline in their message; you produce the rows yourself by reading that markdown and normalizing each posting into {date, description, amount, balance?, type?}. Pick the most specific `account_hint` from the existing chart of accounts (look at sql_query results if unsure). Do NOT collapse duplicates, do NOT aggregate, do NOT commit anything — this is a review step before the user approves.',
-        inputSchema: extractStatementRowsSchema,
-        execute: async (input) => input,
-      }),
-      commit_ingest: tool({
-        description:
-          'Turn the user-selected statement rows into a balanced Beancount proposal. Call this when the user clicks "Commit N selection" in the StatementRows card (you\'ll see a chat message listing the selected rows). Pick a `counterparty` Beancount account for each row based on its description and the existing chart of accounts; you may ask the user first if a row\'s category is genuinely ambiguous. The server builds the Beancount text, runs the same diff/validate path as propose_journal_edit, and returns a proposal_id + DiffCard. The user reviews and approves before commit.',
-        inputSchema: commitIngestSchema,
-        execute: async (input) =>
-          this.commit_ingest({
-            account: input.account,
-            currency: input.currency,
-            source_filename: input.source_filename,
-            rows: input.rows,
-          }),
-      }),
-      commit_journal_edit: tool({
-        description:
-          'Commit a previously proposed journal edit. Pass the `proposal_id` returned by propose_journal_edit. If the user tweaked the DiffCard, pass their final text via `edited_text`. Only call this after the user has explicitly approved the proposal.',
-        inputSchema: commitJournalEditSchema,
-        execute: async (input) =>
-          this.commit_journal_edit({
-            proposal_id: input.proposal_id,
-            edited_text: input.edited_text,
-          }),
-      }),
-    }
+    return {}
   }
 
   private migrate(): void {
