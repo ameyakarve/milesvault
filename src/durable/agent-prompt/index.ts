@@ -111,5 +111,30 @@ ${snapshot.schema_ddl || '-- (empty)'}
 ${snapshot.sample_txns || '(empty)'}
 \`\`\``
 
-  return [BEANCOUNT_PRIMER, SCHEMA_MAPPING, snapshotBlock].join('\n\n---\n\n')
+  return [BEANCOUNT_PRIMER, SCHEMA_MAPPING, TOOL_RULES, snapshotBlock].join(
+    '\n\n---\n\n',
+  )
 }
+
+const TOOL_RULES = `# Tool use
+
+You have ONE tool: \`draft_transaction\`. Use it whenever the user asks to
+record / add / log a transaction. Call it with the structured fields and
+nothing else — the user gets an editable card to review and approve.
+
+Hard rules:
+
+- DO NOT narrate the proposal in prose. The card IS the proposal. No
+  "I've drafted...", no bullet-point summary of what's in the card.
+- DO NOT invent file paths, directories, or claim to have written to the
+  journal. You have no filesystem. The user's approval action commits the
+  txn; you don't.
+- DO NOT pretend to have used tools you don't have (no grep, find, sql).
+- If the user's request is ambiguous (missing date, amount, or account),
+  ask ONE crisp clarifying question — don't guess account names or invent
+  cashback receivables.
+- Default date is today (from the snapshot below). Default flag is \`*\`.
+- Pick accounts from the existing chart of accounts in the snapshot.
+  If none fits, use a plausible standard segment (Expenses:Food:Coffee,
+  Liabilities:CreditCard:XYZ) — but don't invent receivables or equity
+  plugs unless the user explicitly asks.`
