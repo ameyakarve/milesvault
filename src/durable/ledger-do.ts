@@ -1,7 +1,8 @@
 import { Think } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
-import type { ToolSet } from 'ai'
+import { tool, type ToolSet } from 'ai'
 import { buildSystemPrompt } from './agent-prompt'
+import { draftTransactionSchema } from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -179,7 +180,15 @@ export class LedgerDO extends Think {
   }
 
   getTools(): ToolSet {
-    return {}
+    return {
+      draft_transaction: tool({
+        description:
+          'Propose a single beancount transaction for the user to review and approve. Use this whenever the user asks to record / add a transaction. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields. The user sees an editable card and approves or rejects.',
+        inputSchema: draftTransactionSchema,
+        // No execute → client-side tool. The agent loop suspends until the
+        // UI resolves it via addToolResult.
+      }),
+    }
   }
 
   private migrate(): void {

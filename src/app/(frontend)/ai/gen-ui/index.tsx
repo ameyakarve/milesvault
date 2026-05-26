@@ -1,16 +1,30 @@
 'use client'
 
-// Placeholder registry. The previous generation of agent display tools
-// (show_vega, show_account_card, extract_statement_rows, propose_journal_edit)
-// has been removed; new write-path tools will register their renderers here.
+import { DraftTransactionCard, type DraftTransactionCardProps } from './draft-transaction'
+import { draftTransactionSchema } from '@/durable/agent-ui-schemas'
 
-export function isGenUiTool(_typeOrName: string): boolean {
-  return false
+const RENDERERS: Record<
+  string,
+  (input: unknown, props: Omit<DraftTransactionCardProps, 'input'>) => React.ReactElement | null
+> = {
+  draft_transaction: (input, props) => {
+    const parsed = draftTransactionSchema.safeParse(input)
+    if (!parsed.success) return null
+    return <DraftTransactionCard input={parsed.data} {...props} />
+  },
+}
+
+const stripPrefix = (s: string) => (s.startsWith('tool-') ? s.slice(5) : s)
+
+export function isGenUiTool(typeOrName: string): boolean {
+  return stripPrefix(typeOrName) in RENDERERS
 }
 
 export function renderGenUi(
-  _typeOrName: string,
-  _input: unknown,
+  typeOrName: string,
+  input: unknown,
+  props: Omit<DraftTransactionCardProps, 'input'>,
 ): React.ReactElement | null {
-  return null
+  const fn = RENDERERS[stripPrefix(typeOrName)]
+  return fn ? fn(input, props) : null
 }

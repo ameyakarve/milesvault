@@ -1,15 +1,26 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, Eraser } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation'
-import { MessageResponse } from '@/components/ai-elements/message'
+import { Loader } from '@/components/ai-elements/loader'
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from '@/components/ai-elements/message'
+import {
+  Tool,
+  ToolContent,
+  ToolHeader,
+  ToolOutput,
+} from '@/components/ai-elements/tool'
 import {
   PromptInput,
   PromptInputFooter,
@@ -18,19 +29,38 @@ import {
   PromptInputTools,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
+import { Button } from '@/components/ui/button'
+import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
+import type { DraftTransaction } from '@/durable/agent-ui-schemas'
+import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
+import { serializeTransactionInput } from '@/lib/beancount/ast'
+import type { TransactionInput } from '@/durable/ledger-types'
+import type { ToolUIPart } from 'ai'
 
-type Part = { type: string; text?: string; [k: string]: unknown }
-
-function partsToText(parts: unknown): string {
-  if (!Array.isArray(parts)) return ''
-  return (parts as Part[])
-    .filter((p) => p.type === 'text' && typeof p.text === 'string')
-    .map((p) => p.text as string)
-    .join('')
+type Part = {
+  type: string
+  text?: string
+  state?: ToolUIPart['state']
+  input?: unknown
+  output?: unknown
+  errorText?: string
+  toolCallId?: string
+  [k: string]: unknown
 }
 
-const COMPOSER_CLASSES =
-  '[&>div]:h-auto [&>div]:rounded-[28px] [&>div]:border [&>div]:border-slate-200/80 [&>div]:bg-white [&>div]:shadow-[0_2px_12px_rgba(0,0,0,0.04)] [&>div]:transition-shadow [&>div]:focus-within:shadow-[0_2px_20px_rgba(0,0,0,0.07)] [&>div]:focus-within:border-slate-300'
+function draftToTxnInput(d: DraftTransaction): TransactionInput {
+  return {
+    date: d.date,
+    flag: d.flag ?? '*',
+    payee: d.payee,
+    narration: d.narration,
+    postings: d.postings.map((p) => ({
+      account: p.account,
+      amount: String(p.amount),
+      currency: p.currency,
+    })),
+  }
+}
 
 function Composer({
   onSubmit,
@@ -42,18 +72,11 @@ function Composer({
   onStop: () => void
 }) {
   return (
-    <PromptInput onSubmit={onSubmit} className={COMPOSER_CLASSES}>
-      <PromptInputTextarea
-        placeholder="Ask anything"
-        className="min-h-[56px] resize-none border-0 bg-transparent px-5 pt-4 pb-1 text-[15px] leading-6 shadow-none focus-visible:ring-0"
-      />
-      <PromptInputFooter className="px-2.5 pb-2.5">
+    <PromptInput onSubmit={onSubmit}>
+      <PromptInputTextarea placeholder="Ask anything" />
+      <PromptInputFooter>
         <PromptInputTools />
-        <PromptInputSubmit
-          status={status}
-          onStop={onStop}
-          className="size-9 rounded-full bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
-        >
+        <PromptInputSubmit status={status} onStop={onStop}>
           <ArrowUp className="size-4" strokeWidth={2.5} />
         </PromptInputSubmit>
       </PromptInputFooter>
@@ -67,9 +90,23 @@ export function Chat({
   onBusyChange?: (busy: boolean) => void
 } = {}) {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
-  const { messages, sendMessage, status, stop } = useAgentChat({ agent })
+  const {
+    messages,
+    sendMessage,
+    status,
+    stop,
+    addToolOutput,
+    clearHistory,
+    isStreaming,
+    isToolContinuation,
+  } = useAgentChat({ agent })
 
-  const busy = status === 'submitted' || status === 'streaming'
+  const [submitStatus, setSubmitStatus] = useState<
+    Record<string, 'idle' | 'submitting' | 'done' | 'failed'>
+  >({})
+  const [submitError, setSubmitError] = useState<Record<string, string>>({})
+
+  const busy = isStreaming
   useEffect(() => {
     onBusyChange?.(busy)
   }, [busy, onBusyChange])
@@ -80,14 +117,99 @@ export function Chat({
     void sendMessage({ text })
   }
 
+  async function handleApprove(toolCallId: string, final: DraftTransaction) {
+    setSubmitStatus((s) => ({ ...s, [toolCallId]: 'submitting' }))
+    setSubmitError((s) => {
+      const { [toolCallId]: _drop, ...rest } = s
+      return rest
+    })
+    try {
+      const cur = await ledgerClient.getJournal()
+      const newTxn = serializeTransactionInput(draftToTxnInput(final))
+      const next = cur.text ? cur.text.replace(/\s*$/, '\n\n') + newTxn : newTxn
+      const r = await ledgerClient.putJournal(next)
+      if (isJournalPutError(r)) {
+        setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
+        setSubmitError((s) => ({ ...s, [toolCallId]: r.message }))
+        addToolOutput({
+          toolCallId,
+          output: { ok: false, error: r.message },
+          state: 'output-error',
+          errorText: r.message,
+        })
+        return
+      }
+      setSubmitStatus((s) => ({ ...s, [toolCallId]: 'done' }))
+      addToolOutput({
+        toolCallId,
+        output: { ok: true, committed: newTxn.trim() },
+      })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Save failed'
+      setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
+      setSubmitError((s) => ({ ...s, [toolCallId]: msg }))
+      addToolOutput({
+        toolCallId,
+        output: { ok: false, error: msg },
+        state: 'output-error',
+        errorText: msg,
+      })
+    }
+  }
+
+  function handleSendBack(
+    toolCallId: string,
+    final: DraftTransaction,
+    note?: string,
+  ) {
+    addToolOutput({
+      toolCallId,
+      output: { ok: false, reason: 'revise', edited_draft: final, note: note ?? null },
+    })
+  }
+
+  function handleReject(toolCallId: string) {
+    addToolOutput({
+      toolCallId,
+      output: { ok: false, reason: 'rejected' },
+    })
+  }
+
   const isEmpty = messages.length === 0
+  const showThinking =
+    (status === 'submitted' || status === 'streaming') && !isToolContinuation
+  const hasAssistantText = (() => {
+    if (messages.length === 0) return false
+    const last = messages[messages.length - 1]
+    if (last.role !== 'assistant') return false
+    const parts = Array.isArray(last.parts) ? (last.parts as Part[]) : []
+    return parts.some(
+      (p) => p.type === 'text' && typeof p.text === 'string' && p.text.length > 0,
+    )
+  })()
+  const showThinkingBubble = showThinking && !hasAssistantText
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      {!isEmpty ? (
+        <div className="flex items-center justify-end px-4 pt-2 sm:px-6">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => clearHistory()}
+            disabled={busy}
+          >
+            <Eraser className="size-3.5" />
+            Clear
+          </Button>
+        </div>
+      ) : null}
+
       {isEmpty ? (
         <div className="flex flex-1 items-center justify-center px-4">
           <div className="flex w-full max-w-3xl -translate-y-8 flex-col items-center gap-7">
-            <h1 className="text-[30px] font-semibold tracking-tight text-slate-900">
+            <h1 className="text-3xl font-semibold tracking-tight">
               How can I help?
             </h1>
             <div className="w-full">
@@ -99,31 +221,88 @@ export function Chat({
         <>
           <Conversation>
             <ConversationContent className="mx-auto w-full max-w-3xl py-6">
-              {messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={
-                    m.role === 'user' ? 'flex justify-end' : 'flex justify-start'
-                  }
-                >
-                  <div
-                    className={
-                      m.role === 'user'
-                        ? 'max-w-[80%] rounded-3xl bg-slate-100 px-4 py-2.5 text-[15px] text-slate-900'
-                        : 'max-w-[80%] text-[15px] leading-7 text-slate-800'
-                    }
-                  >
-                    <MessageResponse>{partsToText(m.parts)}</MessageResponse>
-                  </div>
-                </div>
-              ))}
+              {messages.map((m) => {
+                const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
+                return (
+                  <Message key={m.id} from={m.role}>
+                    <MessageContent>
+                      {parts.map((p, i) => {
+                        if (p.type === 'text' && typeof p.text === 'string') {
+                          return (
+                            <MessageResponse key={i}>{p.text}</MessageResponse>
+                          )
+                        }
+                        if (p.type.startsWith('tool-') && isGenUiTool(p.type)) {
+                          const toolCallId = p.toolCallId ?? `${m.id}-${i}`
+                          const subState = submitStatus[toolCallId] ?? 'idle'
+                          const cardStatus =
+                            p.state === 'output-available' || subState === 'done'
+                              ? 'done'
+                              : subState === 'submitting'
+                                ? 'submitting'
+                                : subState === 'failed' || p.state === 'output-error'
+                                  ? 'failed'
+                                  : 'idle'
+                          const toolState: ToolUIPart['state'] =
+                            cardStatus === 'done'
+                              ? 'output-available'
+                              : cardStatus === 'failed'
+                                ? 'output-error'
+                                : cardStatus === 'submitting'
+                                  ? 'input-available'
+                                  : (p.state ?? 'input-streaming')
+                          const rendered = renderGenUi(p.type, p.input, {
+                            status: cardStatus,
+                            errorMessage: submitError[toolCallId],
+                            onApprove: (final) =>
+                              void handleApprove(toolCallId, final),
+                            onSendBack: (final, note) =>
+                              handleSendBack(toolCallId, final, note),
+                            onReject: () => handleReject(toolCallId),
+                          })
+                          if (!rendered) return null
+                          return (
+                            <Tool
+                              key={i}
+                              defaultOpen
+                              className="group"
+                            >
+                              <ToolHeader
+                                type={p.type as ToolUIPart['type']}
+                                state={toolState}
+                              />
+                              <ToolContent>
+                                <div className="p-2">{rendered}</div>
+                                {p.output || p.errorText ? (
+                                  <ToolOutput
+                                    output={p.output}
+                                    errorText={p.errorText}
+                                  />
+                                ) : null}
+                              </ToolContent>
+                            </Tool>
+                          )
+                        }
+                        return null
+                      })}
+                    </MessageContent>
+                  </Message>
+                )
+              })}
+              {showThinkingBubble ? (
+                <Message from="assistant">
+                  <MessageContent>
+                    <Loader />
+                  </MessageContent>
+                </Message>
+              ) : null}
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
 
           <div className="mx-auto w-full max-w-3xl px-4 pb-4">
             <Composer onSubmit={handleSubmit} status={status} onStop={stop} />
-            <p className="mt-2 text-center text-[11px] text-slate-400">
+            <p className="mt-2 text-center text-xs text-muted-foreground">
               MilesVault can make mistakes. Check important info.
             </p>
           </div>
