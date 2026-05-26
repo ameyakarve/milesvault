@@ -386,30 +386,49 @@ If the user didn't say whether the transfer was instant or pending and
 it could plausibly be either, call `clarify` with chips like "Landed
 instantly" / "Still pending".
 
-## Redemptions (using up rewards earned earlier)
+## Redemptions — always associate a cash value
+
+**Hard rule:** every redemption associates a cash value with the points
+side via `@@`. There are no exceptions — statement credits, pay-at-
+merchant, award flights, award hotels, hybrid fares, all the same shape.
+The points leg's weight is the cash equivalent at redemption time
+(statement credit amount, cash fare displaced, hotel cash rate, etc.).
+
+**If the user didn't say the cash value, call `clarify`.** Don't guess
+the cash value from a fixed cpp rate, don't pull a number out of the air,
+and don't fall back to `Equity:Void`. Example chip set:
+
+```
+clarify({
+  question: "What was the cash equivalent of this redemption? (so we can
+  record what the points were worth)",
+  options: [],
+  multi_select: false,
+  allow_custom: true,
+})
+```
 
 ### Cashback applied to the statement (same currency)
 Settles the receivable from the Cashback pattern. Card liability goes
-down, receivable goes back to zero.
+down, receivable goes back to zero. (Same-currency, so no `@@` needed —
+the value is already in INR.)
 ```
 2026-05-31 * "HSBC" "Cashback credited to May statement"
   Liabilities:CreditCards:HSBC:Cashback:9065   3.70 INR
   Assets:Receivable:HSBC                      -3.70 INR
 ```
 
-### Points redeemed for statement credit (cross-currency)
-Use Beancount's `@@` total-price annotation — the points leg's weight
-gets re-expressed in the target currency (INR) for the balance check.
-Two clean postings, no `Equity:Void`.
+### Points redeemed for statement credit
+The statement-credit amount IS the cash value.
 ```
 2026-05-31 * "HDFC" "Redeem 1000 pts → ₹250 statement credit"
   Assets:Rewards:HDFC                    -1000 HDFC_RP @@ 250.00 INR
   Liabilities:CreditCards:HDFC:Regalia    250.00 INR
 ```
 
-### Pay with points at a merchant (cross-currency)
-Same `@@` shape — the rate the merchant gave is the cash value at
-redemption. Works the same for partial redemptions (points + card).
+### Pay with points at a merchant
+Merchant's quoted price IS the cash value. Same shape for partial
+redemptions (points + card).
 ```
 2026-05-27 * "Amazon" "Headphones — paid 2500 HDFC pts"
   Expenses:Shopping:Electronics       500.00 INR
@@ -422,15 +441,40 @@ redemption. Works the same for partial redemptions (points + card).
   Liabilities:CreditCards:HDFC:Regalia    -500.00 INR
 ```
 
-### Award flight (no asserted cash value for miles)
-Miles don't have a rate here — only taxes/fees in cash. Mile side uses
-`Equity:Void`; cash side handles the co-pay.
+### Award flight (miles + taxes/fees)
+The cash-equivalent fare is the value the miles unlocked. Expense is the
+full fare (what the trip "cost" you in honest terms); miles cover the
+fare minus the cash co-pay; card / bank pays the co-pay (taxes, fees).
+
+Example: 75k UA miles + ₹5k taxes for a DEL-SFO ticket whose cash fare
+is ₹100k → miles' cash value is ₹95k (100k − 5k).
 ```
-2026-04-01 * "United" "Award flight DEL-SFO — 75k miles + ₹5000 taxes"
-  Expenses:Travel:Flights               5000.00 INR
-  Liabilities:CreditCards:HDFC:Regalia -5000.00 INR
-  Assets:Rewards:United                -75000 UA_MILES
-  Equity:Void                           75000 UA_MILES
+2026-05-27 * "United" "Award DEL-SFO — 75k miles + ₹5k taxes (₹100k cash fare)"
+  Expenses:Travel:Flights              100000.00 INR
+  Assets:Rewards:United                -75000 UA_MILES @@ 95000.00 INR
+  Liabilities:CreditCards:HDFC:Regalia  -5000.00 INR
+```
+If the user didn't volunteer the cash fare, `clarify` and ask.
+
+### Award hotel night
+Same shape — cash-equivalent room rate is the value the points unlocked.
+Resort fee / taxes hit the card.
+```
+2026-05-27 * "Hyatt" "Award night — 40k pts + ₹500 resort fee (₹15k cash rate)"
+  Expenses:Travel:Hotels                15000.00 INR
+  Assets:Rewards:Hyatt                  -40000 HYATT_PT @@ 14500.00 INR
+  Liabilities:CreditCards:HDFC:Regalia   -500.00 INR
+```
+
+### Hybrid cash + points fare (Pay-with-Miles / cash-and-points)
+Cash + points together cover the full fare. Each side's contribution is
+what it actually paid. Below, ₹6k cash fare, 15k 6E points cover ₹5.5k,
+₹500 convenience fee on card.
+```
+2026-05-27 * "Indigo" "DEL-BLR — 15k 6E pts + ₹500 fee (₹6k cash fare)"
+  Expenses:Travel:Flights               6000.00 INR
+  Assets:Rewards:Indigo                -15000 6E_PT @@ 5500.00 INR
+  Liabilities:CreditCards:HDFC:Regalia  -500.00 INR
 ```
 
 ## Bonuses, expiry, and other point-balance adjustments
@@ -509,17 +553,19 @@ program points (AMEX MR, HDFC RP, …) and FFP miles (United, Lufthansa,
 
 ## Redemption refunds (mirror of the original)
 
-Sign-flipped copy of whatever the redemption looked like. If the
-original used `@@`, the reversal uses `@@`. If the original used
-`Equity:Void`, so does the reversal.
+Sign-flipped copy of the original redemption — every redemption was
+`@@`, so every refund is `@@` too. Use the same cash value the
+redemption was booked at.
 
+### Award flight cancelled (miles + taxes come back)
 ```
 2026-05-27 * "United" "Cancelled DEL-SFO — miles + taxes refunded"
-  Expenses:Travel:Flights              -5000.00 INR
-  Liabilities:CreditCards:HDFC:Regalia  5000.00 INR
-  Assets:Rewards:United                 75000 UA_MILES
-  Equity:Void                          -75000 UA_MILES
+  Expenses:Travel:Flights              -100000.00 INR
+  Assets:Rewards:United                  75000 UA_MILES @@ 95000.00 INR
+  Liabilities:CreditCards:HDFC:Regalia    5000.00 INR
 ```
+
+### Statement-credit redemption reversed
 ```
 2026-05-27 * "HDFC" "Statement-credit redemption reversed"
   Assets:Rewards:HDFC                    1000 HDFC_RP @@ 250.00 INR
@@ -528,13 +574,17 @@ original used `@@`, the reversal uses `@@`. If the original used
 
 ## When to use `@@` vs `Equity:Void` on the point side
 
-- **Conversion** — point currency is being exchanged for cash or another
-  point currency at a defined rate: use `@@` on the point posting.
-  (Examples: transferring 10k Chase UR → 13k United, redeeming points
-  for a statement credit, paying with points at a merchant, buying
-  points with cash.)
-- **Accrual / write-off** — point balance changes without any conversion
-  (no rate is being asserted): use `Equity:Void` as the point-side
-  contra. (Examples: earning points on a purchase, anniversary bonuses,
-  expiry sweeps, redeeming miles for an award flight where the flight
-  itself doesn't have a cost-in-miles being claimed.)
+- **Any redemption or conversion** — points are being exchanged for
+  cash, for a flight, for a hotel night, or for another point currency:
+  use `@@` on the point posting with the cash-equivalent value at
+  redemption. (Examples: transferring 10k Chase UR → 13k United,
+  redeeming points for a statement credit, paying with points at a
+  merchant, buying points with cash, award flights, award hotel nights,
+  hybrid cash-and-points fares.) If the user didn't tell you the cash
+  value, call `clarify` and ask — do not guess and do not fall back to
+  `Equity:Void`.
+- **Accrual / write-off** — your point balance changes without a
+  transaction (no rate is being asserted): use `Equity:Void` as the
+  point-side contra. (Examples: earning points on a purchase, welcome
+  bonuses, anniversary bonuses, referral bonuses, milestone bonuses,
+  expiry sweeps, clawbacks.)
