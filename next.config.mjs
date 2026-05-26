@@ -47,6 +47,11 @@ const nextConfig = {
       }),
     )
 
+    webpackConfig.module.rules.push({
+      test: /\.md$/,
+      type: 'asset/source',
+    })
+
     // The `agents` package transitively imports `cloudflare:workers` and
     // `cloudflare:email`. Webpack can't bundle those — leave them external
     // so workerd resolves them at runtime.
