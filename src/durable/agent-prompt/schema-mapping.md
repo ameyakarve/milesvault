@@ -16,8 +16,7 @@ covers the **semantics** the DDL itself can't express.
 | `directives_open` | `open` directive | account opens; `constraint_currencies` is a JSON array |
 | `directives_close` | `close` directive | |
 | `directives_commodity` | `commodity` directive | |
-| `directives_balance` | `balance` directive | balance assertions |
-| `directives_pad` | `pad` directive | balancing pad between two accounts |
+| `directives_balance` | `balance` directive | balance assertions; nullable `plug_account` pairs the assertion with an implicit pad that routes the gap from `plug_account` to `account` |
 | `directives_price` | `price` directive | commodity prices over time |
 | `directives_note` | `note` directive | |
 | `directives_document` | `document` directive | attached files |

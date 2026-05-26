@@ -163,7 +163,7 @@ export function computeCardSpecs(
           mismatch,
           deltas: [],
         })
-      } else if (d.kind === 'pad' || d.kind === 'close') {
+      } else if (d.kind === 'close') {
         specs.push({
           ...e.range,
           balance: formatBalance(running, currency),
@@ -243,7 +243,7 @@ function computeCardSpecsDesc(
           mismatch,
           deltas: [],
         })
-      } else if (d.kind === 'pad' || d.kind === 'close') {
+      } else if (d.kind === 'close') {
         const after = accountBalance - upcomingDeltas
         specs.push({
           ...e.range,

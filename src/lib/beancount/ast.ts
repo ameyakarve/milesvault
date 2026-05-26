@@ -25,7 +25,6 @@ import type {
   EventInput,
   NoteInput,
   OpenInput,
-  PadInput,
   PostingInput,
   PriceInput,
   TransactionInput,
@@ -56,7 +55,7 @@ export function serializeJournal(
   if (transactions.length === 0 && directives.length === 0) return ''
   const nodes: BcNode[] = [
     ...transactions.map(transactionFromInput),
-    ...directives.map(directiveFromInput),
+    ...directives.flatMap(directiveToBcNodes),
   ]
   const descending = options.descending ?? false
   nodes.sort((a, b) => compareDatedNodes(a, b, descending))
@@ -130,6 +129,7 @@ export function parseJournal(text: string): ParsedJournal {
   const unsupportedTypes = new Set<string>()
   let parsedDirectiveCount = 0
   const ranges = findDirectiveRanges(text)
+  const pendingPads = new Map<string, { node: BcPad; range: DirectiveRange | undefined }>()
   for (const node of result.nodes) {
     if (FORMATTING_NODE_TYPES.has(node.type)) continue
     const range = ranges[parsedDirectiveCount]
@@ -138,6 +138,33 @@ export function parseJournal(text: string): ParsedJournal {
       const idx = transactions.length
       transactions.push(transactionToInput(node as BcTransaction))
       if (range) entries.push({ kind: 'transaction', index: idx, range })
+      continue
+    }
+    if (node.type === 'pad') {
+      const n = node as BcPad
+      pendingPads.set(n.account, { node: n, range })
+      continue
+    }
+    if (node.type === 'balance') {
+      const n = node as BcBalance
+      const pending = pendingPads.get(n.account)
+      pendingPads.delete(n.account)
+      const dir: BalanceInput & { kind: 'balance' } = {
+        kind: 'balance',
+        date: n.date.toString(),
+        account: n.account,
+        amount: n.amount,
+        currency: n.currency,
+        plug_account: pending ? pending.node.accountPad : null,
+        meta: valueMapToMeta(n.metadata),
+      }
+      const idx = directives.length
+      directives.push(dir)
+      const combinedRange =
+        pending && pending.range && range
+          ? { startLine: pending.range.startLine, endLine: range.endLine }
+          : range
+      if (combinedRange) entries.push({ kind: 'directive', index: idx, range: combinedRange })
       continue
     }
     const dir = nodeToDirective(node)
@@ -149,6 +176,7 @@ export function parseJournal(text: string): ParsedJournal {
       unsupportedTypes.add(node.type)
     }
   }
+  if (pendingPads.size > 0) unsupportedTypes.add('pad')
   const dateLineNumbers = findDateLineNumbers(text)
   const expected = dateLineNumbers.length
   const partialParse = expected > parsedDirectiveCount
@@ -168,15 +196,15 @@ export function parseJournal(text: string): ParsedJournal {
 }
 
 export async function transactionInputHash(input: TransactionInput): Promise<string> {
-  return canonicalHash(transactionFromInput(input))
+  return canonicalHash([transactionFromInput(input)])
 }
 
 export async function directiveInputHash(input: DirectiveInput): Promise<string> {
-  return canonicalHash(directiveFromInput(input))
+  return canonicalHash(directiveToBcNodes(input))
 }
 
-async function canonicalHash(node: BcNode): Promise<string> {
-  const result = new ParseResult([node])
+async function canonicalHash(nodes: BcNode[]): Promise<string> {
+  const result = new ParseResult(nodes)
   const col = result.calculateCurrencyColumn({ minPadding: 2 })
   const text = result.toFormattedString({ currencyColumn: col }).trim()
   const buf = new TextEncoder().encode(text)
@@ -189,8 +217,9 @@ async function canonicalHash(node: BcNode): Promise<string> {
 
 function intradayWeight(type: string): number {
   if (type === 'note') return 0
-  if (type === 'balance') return 1
-  return 2
+  if (type === 'pad') return 1
+  if (type === 'balance') return 2
+  return 3
 }
 
 function compareDatedNodes(a: BcNode, b: BcNode, descending: boolean): number {
@@ -322,13 +351,6 @@ function directiveFromInput(d: DirectiveInput): BcNode {
         currency: d.currency,
         metadata: metaToValueMap(d.meta ?? null),
       })
-    case 'pad':
-      return new BcPad({
-        date: d.date,
-        account: d.account,
-        accountPad: d.account_pad,
-        metadata: metaToValueMap(d.meta ?? null),
-      })
     case 'price':
       return new BcPrice({
         date: d.date,
@@ -359,6 +381,19 @@ function directiveFromInput(d: DirectiveInput): BcNode {
         metadata: metaToValueMap(d.meta ?? null),
       })
   }
+}
+
+function directiveToBcNodes(d: DirectiveInput): BcNode[] {
+  if (d.kind === 'balance' && d.plug_account) {
+    const pad = new BcPad({
+      date: d.date,
+      account: d.account,
+      accountPad: d.plug_account,
+    })
+    const balance = directiveFromInput({ ...d, plug_account: null })
+    return [pad, balance]
+  }
+  return [directiveFromInput(d)]
 }
 
 function nodeToDirective(node: BcNode): DirectiveInput | null {
@@ -405,17 +440,6 @@ function nodeToDirective(node: BcNode): DirectiveInput | null {
         account: n.account,
         amount: n.amount,
         currency: n.currency,
-        meta: valueMapToMeta(n.metadata),
-      }
-      return out
-    }
-    case 'pad': {
-      const n = node as BcPad
-      const out: PadInput & { kind: 'pad' } = {
-        kind: 'pad',
-        date: n.date.toString(),
-        account: n.account,
-        account_pad: n.accountPad,
         meta: valueMapToMeta(n.metadata),
       }
       return out

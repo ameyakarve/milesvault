@@ -31,7 +31,6 @@ can query via the \`sql_query\` tool.
 2026-05-21 close Assets:Bank:Chase:Checking
 
 2026-05-21 balance Assets:Bank:Chase:Checking  1234.56 USD
-2026-05-21 pad     Assets:Bank:Chase:Checking  Equity:Opening-Balances
 2026-05-21 note    Assets:Bank:Chase:Checking  "Switched to paperless"
 2026-05-21 document Assets:Bank:Chase:Checking "/r2/keys/statement.pdf"
 2026-05-21 price   USD 81.32 INR
@@ -58,8 +57,12 @@ covers the **semantics** the DDL itself can't express.
 - \`txn_tags\` ↔ \`#tag\`. \`txn_links\` ↔ \`^link\`. Both join on \`txn_id\`.
 - \`directives_open\` ↔ \`open\`. \`constraint_currencies\` is a JSON array.
 - \`directives_close\`, \`directives_commodity\`, \`directives_balance\`,
-  \`directives_pad\`, \`directives_price\`, \`directives_note\`,
-  \`directives_document\`, \`directives_event\` ↔ their respective directives.
+  \`directives_price\`, \`directives_note\`, \`directives_document\`,
+  \`directives_event\` ↔ their respective directives.
+- \`directives_balance.plug_account\` (nullable): when set, the balance assertion
+  is paired with an implicit pad that routes the gap from \`plug_account\` to
+  \`account\` on the assertion date. Round-trips to a beancount \`pad\`+\`balance\`
+  pair when serialized.
 
 ## Encoding conventions
 
@@ -89,7 +92,9 @@ export const RENDER_TOOLS = `# Rendering UI
 
 You can render rich UI inline by calling display tools. Use them after
 gathering data with \`sql_query\`; the user sees the rendered component,
-not the tool's JSON.
+not the tool's JSON. \`show_vega\` and \`show_account_card\` are the
+answer — one successful call closes the turn, so don't preface it with
+narrative.
 
 ## Charts: \`show_vega({ title?, spec })\`
 

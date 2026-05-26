@@ -36,7 +36,6 @@ import type {
   EntryDocument,
   EntryNote,
   EntryOpen,
-  EntryPad,
   EntryTxn,
   Posting,
   PostingInput,
@@ -50,6 +49,11 @@ import {
   type PostingSearchRow,
 } from '@/lib/ledger-core/posting-search'
 
+// Order matters for clear(): we DELETE in this order. transactions first so
+// the FK cascade tears down postings (which fires the materialized-balance
+// triggers); the balance_totals / daily_balances entries at the end then
+// flush any zero-rows the triggers left behind, so the DO comes back to a
+// clean empty state.
 const DATA_TABLES = [
   'transactions',
   'postings',
@@ -59,11 +63,12 @@ const DATA_TABLES = [
   'directives_close',
   'directives_commodity',
   'directives_balance',
-  'directives_pad',
   'directives_price',
   'directives_note',
   'directives_document',
   'directives_event',
+  'balance_totals',
+  'daily_balances',
 ] as const
 
 export type JournalGetResponse = { text: string }
@@ -99,7 +104,6 @@ const ALL_DIRECTIVE_KINDS: DirectiveInput['kind'][] = [
   'close',
   'commodity',
   'balance',
-  'pad',
   'price',
   'note',
   'document',
@@ -124,7 +128,6 @@ const DIRECTIVE_TABLE: Record<DirectiveInput['kind'], string> = {
   close: 'directives_close',
   commodity: 'directives_commodity',
   balance: 'directives_balance',
-  pad: 'directives_pad',
   price: 'directives_price',
   note: 'directives_note',
   document: 'directives_document',
@@ -183,6 +186,26 @@ export class LedgerDO extends Think {
     // calls this on every turn, so we recompute fresh each time.
     const snapshot = this.ledger_snapshot_sync()
     return buildSystemPrompt(snapshot)
+  }
+
+  beforeTurn() {
+    // Hard-stop the agent loop the moment a terminal display tool returns a
+    // successful render. Without this the model regularly produces multiple
+    // chart cards plus narrative for a single question. Validation errors
+    // ({ok:false}) still allow the model to retry on the next step.
+    const TERMINAL_TOOLS = new Set(['show_vega', 'show_account_card'])
+    return {
+      stopWhen: (options: { steps: ReadonlyArray<{ toolResults: ReadonlyArray<{ toolName: string; output: unknown }> }> }) => {
+        for (const step of options.steps) {
+          for (const r of step.toolResults) {
+            if (!TERMINAL_TOOLS.has(r.toolName)) continue
+            const out = r.output as { ok?: unknown; rendered?: unknown } | null
+            if (out && out.ok === true && out.rendered === true) return true
+          }
+        }
+        return false
+      },
+    }
   }
 
   afterToolCall(ctx: {
@@ -247,19 +270,19 @@ export class LedgerDO extends Think {
       }),
       show_vega: tool({
         description:
-          'Render a chart from a Vega-Lite v5 spec. Use after gathering data with sql_query — embed the rows inline as `spec.data.values` (no remote URLs; the server has no fetch). Set `width: "container"` and a reasonable `height`. Convert scaled-decimal values back to plain numbers in SQL using the CASE-on-scale divisor pattern (SQLite has no POWER) so the spec receives plain JS numbers. Vega-Lite gives you the full grammar: bars (stacked or grouped), lines, areas, points, arcs (donuts), rect (heatmaps), composite multi-layer specs, faceted grids — pick the right mark and encoding for the question. The server validates the spec and returns {ok:false, error, hint} if it would fail to render; in that case, fix the issue and call show_vega again — do NOT regenerate the same JSON.',
+          'Render a chart from a Vega-Lite v5 spec. Use after gathering data with sql_query — embed the rows inline as `spec.data.values` (no remote URLs; the server has no fetch). Set `width: "container"` and a reasonable `height`. Convert scaled-decimal values back to plain numbers in SQL using the CASE-on-scale divisor pattern (SQLite has no POWER) so the spec receives plain JS numbers. Vega-Lite gives you the full grammar: bars (stacked or grouped), lines, areas, points, arcs (donuts), rect (heatmaps), composite multi-layer specs, faceted grids — pick the right mark and encoding for the question. The server validates the spec and returns {ok:false, error, hint} if it would fail to render; fix the issue and call show_vega again — do NOT regenerate the same JSON. On success the chart is the final answer.',
         inputSchema: showVegaSchema,
         execute: async (input) => {
           const v = validateVegaSpec(input.spec)
-          if (v.ok === true) return input
+          if (v.ok === true) return { ok: true, rendered: true }
           return { ok: false, error: v.error, hint: v.hint }
         },
       }),
       show_account_card: tool({
         description:
-          'Render an account summary card: current balance + a short list of recent transactions hitting this account. Use when the user asks about one specific account ("what\'s in my Chase Checking", "show me my Schwab brokerage"). Compute the balance as the SUM of postings in the requested currency; provide each recent posting as signed (positive = inflow, negative = outflow).',
+          'Render an account summary card: current balance + a short list of recent transactions hitting this account. Use when the user asks about one specific account ("what\'s in my Chase Checking", "show me my Schwab brokerage"). Compute the balance as the SUM of postings in the requested currency; provide each recent posting as signed (positive = inflow, negative = outflow). The card is the final answer.',
         inputSchema: accountCardSchema,
-        execute: async (input) => input,
+        execute: async () => ({ ok: true, rendered: true }),
       }),
       propose_journal_edit: tool({
         description:
@@ -515,7 +538,10 @@ export class LedgerDO extends Think {
     )
     collect(`SELECT account FROM directives_open  WHERE account GLOB ?`, glob)
     collect(`SELECT account FROM directives_close WHERE account GLOB ?`, glob)
-    collect(`SELECT account FROM directives_pad   WHERE account GLOB ?`, glob)
+    collect(
+      `SELECT plug_account AS account FROM directives_balance WHERE plug_account GLOB ?`,
+      glob,
+    )
     collect(`SELECT account FROM directives_note  WHERE account GLOB ?`, glob)
     return [...set].sort()
   }
@@ -739,32 +765,37 @@ export class LedgerDO extends Think {
   }
 
   async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {
-    const diff = await this.computeJournalDiff(text)
-    if ('ok' in diff && diff.ok === false) return diff
+    // Hold the input gate across the diff (async, has await points) and the
+    // apply (sync transactionSync) so concurrent puts can't race the read
+    // phase and end up applying a stale plan.
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const diff = await this.computeJournalDiff(text)
+      if ('ok' in diff && diff.ok === false) return diff
 
-    const allKinds = ALL_DIRECTIVE_KINDS
-    const now = Date.now()
-    this.ctx.storage.transactionSync(() => {
-      for (const id of diff.txnIdsToDelete) {
-        this.db.exec('DELETE FROM transactions WHERE id = ?', id)
-      }
-      for (const { input, hash } of diff.txnsToInsert) this.insertTxn(input, hash, now)
-      for (const kind of allKinds) {
-        const table = DIRECTIVE_TABLE[kind]
-        for (const id of diff.dirIdsToDeleteByKind.get(kind)!) {
-          this.db.exec(`DELETE FROM ${table} WHERE id = ?`, id)
+      const allKinds = ALL_DIRECTIVE_KINDS
+      const now = Date.now()
+      this.ctx.storage.transactionSync(() => {
+        for (const id of diff.txnIdsToDelete) {
+          this.db.exec('DELETE FROM transactions WHERE id = ?', id)
         }
-        for (const d of diff.dirsToInsertByKind.get(kind)!) this.insertDirective(d, now)
+        for (const { input, hash } of diff.txnsToInsert) this.insertTxn(input, hash, now)
+        for (const kind of allKinds) {
+          const table = DIRECTIVE_TABLE[kind]
+          for (const id of diff.dirIdsToDeleteByKind.get(kind)!) {
+            this.db.exec(`DELETE FROM ${table} WHERE id = ?`, id)
+          }
+          for (const d of diff.dirsToInsertByKind.get(kind)!) this.insertDirective(d, now)
+        }
+      })
+
+      const result = await this.journal_get()
+      return {
+        text: result.text,
+        inserted: diff.inserted,
+        deleted: diff.deleted,
+        unchanged: diff.unchanged,
       }
     })
-
-    const result = await this.journal_get()
-    return {
-      text: result.text,
-      inserted: diff.inserted,
-      deleted: diff.deleted,
-      unchanged: diff.unchanged,
-    }
   }
 
   async preview_journal_put(
@@ -1065,6 +1096,133 @@ export class LedgerDO extends Think {
     return { ok: true }
   }
 
+  // Compare materialized balance tables against a fresh GROUP BY of postings.
+  // Returns the rows that disagree — empty array means the triggers have
+  // kept everything in sync. Cheap enough to call after every test write.
+  async verify_balances(): Promise<{
+    totals_drift: Array<{
+      account: string
+      currency: string
+      scale: number
+      stored: number
+      expected: number
+    }>
+    daily_drift: Array<{
+      account: string
+      currency: string
+      scale: number
+      date: number
+      stored: number
+      expected: number
+    }>
+  }> {
+    const totalsDrift = this.db
+      .exec<{
+        account: string
+        currency: string
+        scale: number
+        stored: number
+        expected: number
+      }>(
+        `WITH expected AS (
+           SELECT account, currency, scale, SUM(amount_scaled) AS s
+           FROM postings GROUP BY account, currency, scale
+         )
+         SELECT b.account, b.currency, b.scale,
+                b.balance_scaled AS stored,
+                COALESCE(e.s, 0) AS expected
+         FROM balance_totals b
+         LEFT JOIN expected e
+           ON b.account = e.account AND b.currency = e.currency AND b.scale = e.scale
+         WHERE b.balance_scaled != COALESCE(e.s, 0)
+         UNION ALL
+         SELECT e.account, e.currency, e.scale,
+                0 AS stored,
+                e.s AS expected
+         FROM expected e
+         LEFT JOIN balance_totals b
+           ON b.account = e.account AND b.currency = e.currency AND b.scale = e.scale
+         WHERE b.account IS NULL`,
+      )
+      .toArray()
+
+    const dailyDrift = this.db
+      .exec<{
+        account: string
+        currency: string
+        scale: number
+        date: number
+        stored: number
+        expected: number
+      }>(
+        `WITH daily_deltas AS (
+           SELECT account, currency, scale, date,
+                  SUM(amount_scaled) AS d
+           FROM postings
+           GROUP BY account, currency, scale, date
+         ),
+         expected AS (
+           SELECT account, currency, scale, date,
+                  SUM(d) OVER (
+                    PARTITION BY account, currency, scale
+                    ORDER BY date
+                  ) AS s
+           FROM daily_deltas
+         )
+         SELECT d.account, d.currency, d.scale, d.date,
+                d.balance_scaled AS stored,
+                COALESCE(e.s, 0) AS expected
+         FROM daily_balances d
+         LEFT JOIN expected e
+           ON d.account = e.account AND d.currency = e.currency
+              AND d.scale = e.scale AND d.date = e.date
+         WHERE d.balance_scaled != COALESCE(e.s, 0)
+         UNION ALL
+         SELECT e.account, e.currency, e.scale, e.date,
+                0 AS stored,
+                e.s AS expected
+         FROM expected e
+         LEFT JOIN daily_balances d
+           ON d.account = e.account AND d.currency = e.currency
+              AND d.scale = e.scale AND d.date = e.date
+         WHERE d.account IS NULL`,
+      )
+      .toArray()
+
+    return { totals_drift: totalsDrift, daily_drift: dailyDrift }
+  }
+
+  // Wipe + re-derive both tables from postings. Same SQL as the backfill
+  // SCHEMA_STEPS, exposed as an admin escape hatch in case the triggers ever
+  // drift in production.
+  async rebuild_balances(): Promise<{ ok: true }> {
+    this.ctx.storage.transactionSync(() => {
+      this.db.exec('DELETE FROM balance_totals')
+      this.db.exec(
+        `INSERT INTO balance_totals (account, currency, scale, balance_scaled)
+         SELECT account, currency, scale, SUM(amount_scaled)
+         FROM postings
+         GROUP BY account, currency, scale`,
+      )
+      this.db.exec('DELETE FROM daily_balances')
+      this.db.exec(
+        `INSERT INTO daily_balances (account, currency, scale, date, balance_scaled)
+         SELECT account, currency, scale, date,
+                SUM(daily_delta) OVER (
+                  PARTITION BY account, currency, scale
+                  ORDER BY date
+                )
+         FROM (
+           SELECT account, currency, scale, date,
+                  SUM(amount_scaled) AS daily_delta
+           FROM postings
+           GROUP BY account, currency, scale, date
+         )`,
+      )
+    })
+    return { ok: true }
+  }
+
   // Read-only SQL escape hatch used by the AI agent. Workerd's SQL authorizer
   // rejects `PRAGMA query_only` (not on its allowlist), so we lean on two
   // language-level invariants instead: DO `sql.exec` runs exactly one
@@ -1257,7 +1415,6 @@ export class LedgerDO extends Think {
     out.push(...this.readDirectivesByKind('close').map((e) => e.input))
     out.push(...this.readDirectivesByKind('commodity').map((e) => e.input))
     out.push(...this.readDirectivesByKind('balance').map((e) => e.input))
-    out.push(...this.readDirectivesByKind('pad').map((e) => e.input))
     out.push(...this.readDirectivesByKind('price').map((e) => e.input))
     out.push(...this.readDirectivesByKind('note').map((e) => e.input))
     out.push(...this.readDirectivesByKind('document').map((e) => e.input))
@@ -1331,9 +1488,10 @@ export class LedgerDO extends Think {
             account: string
             amount: string
             currency: string
+            plug_account: string | null
             meta_json: string
           }>(
-            'SELECT id, date, account, amount, currency, meta_json FROM directives_balance',
+            'SELECT id, date, account, amount, currency, plug_account, meta_json FROM directives_balance',
           )
           .toArray()
           .map((r) => ({
@@ -1344,28 +1502,7 @@ export class LedgerDO extends Think {
               account: r.account,
               amount: r.amount,
               currency: r.currency,
-              meta: parseMetaOrNull(r.meta_json),
-            },
-          }))
-      case 'pad':
-        return this.db
-          .exec<{
-            id: number
-            date: number
-            account: string
-            account_pad: string
-            meta_json: string
-          }>(
-            'SELECT id, date, account, account_pad, meta_json FROM directives_pad',
-          )
-          .toArray()
-          .map((r) => ({
-            id: r.id,
-            input: {
-              kind: 'pad',
-              date: dateFromInt(r.date),
-              account: r.account,
-              account_pad: r.account_pad,
+              plug_account: r.plug_account,
               meta: parseMetaOrNull(r.meta_json),
             },
           }))
@@ -1501,32 +1638,21 @@ export class LedgerDO extends Think {
         if (!bal) throw new Error(`unparseable balance amount: ${d.amount}`)
         this.db.exec(
           `INSERT INTO directives_balance
-             (date, account, amount, amount_scaled, scale, currency, meta_json, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (date, account, amount, amount_scaled, scale, currency, plug_account, meta_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           dateInt,
           d.account,
           d.amount,
           bal.scaled,
           bal.scale,
           d.currency,
+          d.plug_account ?? null,
           meta,
           now,
           now,
         )
         return
       }
-      case 'pad':
-        this.db.exec(
-          `INSERT INTO directives_pad (date, account, account_pad, meta_json, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          dateInt,
-          d.account,
-          d.account_pad,
-          meta,
-          now,
-          now,
-        )
-        return
       case 'price': {
         const pr = decimalToScaled(d.amount)
         if (!pr) throw new Error(`unparseable price amount: ${d.amount}`)
@@ -1630,12 +1756,10 @@ export class LedgerDO extends Think {
              WHERE t.id IN (SELECT p.txn_id FROM postings p WHERE p.account = ?))
         + (SELECT COUNT(*) FROM directives_open WHERE account = ?)
         + (SELECT COUNT(*) FROM directives_close WHERE account = ?)
-        + (SELECT COUNT(*) FROM directives_balance WHERE account = ?)
-        + (SELECT COUNT(*) FROM directives_pad WHERE account = ? OR account_pad = ?)
+        + (SELECT COUNT(*) FROM directives_balance WHERE account = ? OR plug_account = ?)
         + (SELECT COUNT(*) FROM directives_note WHERE account = ?)
         + (SELECT COUNT(*) FROM directives_document WHERE account = ?)
         AS c`,
-        account,
         account,
         account,
         account,
@@ -1678,16 +1802,13 @@ export class LedgerDO extends Think {
            UNION ALL
            SELECT date, 'close' AS kind, id FROM directives_close WHERE account = ?
            UNION ALL
-           SELECT date, 'balance' AS kind, id FROM directives_balance WHERE account = ?
-           UNION ALL
-           SELECT date, 'pad' AS kind, id FROM directives_pad
-             WHERE account = ? OR account_pad = ?
+           SELECT date, 'balance' AS kind, id FROM directives_balance
+             WHERE account = ? OR plug_account = ?
            UNION ALL
            SELECT date, 'note' AS kind, id FROM directives_note WHERE account = ?
          )
          ORDER BY date DESC, kind ASC, id DESC
          LIMIT ?`,
-        account,
         account,
         account,
         account,
@@ -1728,8 +1849,6 @@ export class LedgerDO extends Think {
         return this.readCloseEntry(ref.id)
       case 'balance':
         return this.readBalanceEntry(ref.id)
-      case 'pad':
-        return this.readPadEntry(ref.id)
       case 'note':
         return this.readNoteEntry(ref.id)
       case 'document':
@@ -1887,11 +2006,12 @@ export class LedgerDO extends Think {
         account: string
         amount: string
         currency: string
+        plug_account: string | null
         meta_json: string
         created_at: number
         updated_at: number
       }>(
-        `SELECT id, date, account, amount, currency, meta_json, created_at, updated_at
+        `SELECT id, date, account, amount, currency, plug_account, meta_json, created_at, updated_at
          FROM directives_balance WHERE id = ?`,
         id,
       )
@@ -1904,35 +2024,7 @@ export class LedgerDO extends Think {
       account: row.account,
       amount: row.amount,
       currency: row.currency,
-      meta: parseMeta(row.meta_json),
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-    }
-  }
-
-  private readPadEntry(id: number): EntryPad | null {
-    const row = this.db
-      .exec<{
-        id: number
-        date: number
-        account: string
-        account_pad: string
-        meta_json: string
-        created_at: number
-        updated_at: number
-      }>(
-        `SELECT id, date, account, account_pad, meta_json, created_at, updated_at
-         FROM directives_pad WHERE id = ?`,
-        id,
-      )
-      .toArray()[0]
-    if (!row) return null
-    return {
-      kind: 'pad',
-      id: row.id,
-      date: dateFromInt(row.date),
-      account: row.account,
-      account_pad: row.account_pad,
+      plug_account: row.plug_account,
       meta: parseMeta(row.meta_json),
       created_at: row.created_at,
       updated_at: row.updated_at,
