@@ -43,12 +43,16 @@ export function ClarifyCard({
 
   function toggle(opt: string) {
     if (disabled) return
-    setSelected((prev) => {
-      if (multi) {
-        return prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt]
-      }
-      return prev[0] === opt ? [] : [opt]
-    })
+    if (multi) {
+      setSelected((prev) =>
+        prev.includes(opt) ? prev.filter((o) => o !== opt) : [...prev, opt],
+      )
+      return
+    }
+    // Single-select: clicking an option commits immediately. Anything the
+    // user typed in the custom field is ignored — the chip click is the
+    // explicit answer.
+    onAnswer([opt])
   }
 
   function submit() {
