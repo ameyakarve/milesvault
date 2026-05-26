@@ -169,7 +169,10 @@ export class LedgerDO extends Think {
 
   getModel() {
     const workersai = createWorkersAI({ binding: this.env.AI })
-    return workersai(MODEL_ID)
+    // Kimi K2 emits a long reasoning trace by default. With a single
+    // tool and unambiguous prompts, "low" effort is plenty and shaves
+    // most of the per-turn latency.
+    return workersai(MODEL_ID, { reasoning_effort: 'low' })
   }
 
   getSystemPrompt(): string {
