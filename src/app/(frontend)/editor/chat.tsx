@@ -44,7 +44,7 @@ export function Chat() {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <Conversation>
         <ConversationContent className="mx-auto w-full max-w-3xl">
           {messages.length === 0 ? (
@@ -65,8 +65,8 @@ export function Chat() {
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="mx-auto w-full max-w-3xl p-4">
-        <PromptInput onSubmit={handleSubmit}>
+      <div className="sticky bottom-0 z-10 mx-auto flex w-full max-w-3xl gap-2 bg-background px-2 pb-3 md:px-4 md:pb-4">
+        <PromptInput onSubmit={handleSubmit} className="w-full">
           <PromptInputBody>
             <PromptInputTextarea placeholder="Message…" />
             <PromptInputFooter>
