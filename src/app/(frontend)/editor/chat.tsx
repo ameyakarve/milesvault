@@ -253,6 +253,7 @@ export function Chat({
                             <Reasoning
                               key={i}
                               isStreaming={p.state === 'streaming'}
+                              defaultOpen={false}
                             >
                               <ReasoningTrigger />
                               <ReasoningContent>{p.text}</ReasoningContent>
