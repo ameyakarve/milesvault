@@ -91,3 +91,154 @@ negative posting on the same expense; no `Equity:Void`, no receivable.
   Expenses:Food:Restaurants                  -50.00 INR
   Liabilities:CreditCards:HDFC:Regalia      -450.00 INR
 ```
+
+## Transfers (money moves between your accounts — no expense)
+
+### Salary received
+Income postings are negative — that's the Beancount sign convention for
+a credit to your books.
+```
+2026-05-25 * "ACME Corp" "May salary"
+  Assets:Bank:HDFC:Savings   125000.00 INR
+  Income:Salary             -125000.00 INR
+```
+
+### Bank → bank (your own accounts)
+Pure shuffle between accounts you own. No expense, no income.
+```
+2026-05-26 * "Self" "Move to ICICI for rent"
+  Assets:Bank:ICICI:Savings   50000.00 INR
+  Assets:Bank:HDFC:Savings   -50000.00 INR
+```
+
+### ATM withdrawal (bank → cash)
+```
+2026-05-26 * "ATM" "Cash withdrawal"
+  Assets:Cash                 2000.00 INR
+  Assets:Bank:HDFC:Savings   -2000.00 INR
+```
+
+### Credit-card bill payment (bank → card)
+Mirror of a purchase. The card leg is positive (reducing the liability),
+the bank leg is negative.
+```
+2026-05-26 * "HDFC" "May Regalia bill"
+  Liabilities:CreditCards:HDFC:Regalia   45000.00 INR
+  Assets:Bank:HDFC:Savings              -45000.00 INR
+```
+
+## Cash and UPI spends
+
+UPI from a regular bank account behaves exactly like cash — money leaves
+the bank instantly, no liability in between. Same shape on both: expense
+on one side, bank/cash on the other.
+
+(UPI on a credit card is a separate case — that hits the card liability
+like any other charge.)
+
+```
+2026-05-26 * "Chai shop" "Tea"
+  Expenses:Food:Beverages    30.00 INR
+  Assets:Cash               -30.00 INR
+```
+
+```
+2026-05-26 * "Auto driver" "UPI — ride home"
+  Expenses:Travel:Auto       120.00 INR
+  Assets:Bank:HDFC:Savings  -120.00 INR
+```
+
+## Settling with people
+
+Use `Assets:Receivable:<Person>` for what they owe you,
+`Liabilities:Payable:<Person>` for what you owe them. Payables follow
+the same sign convention as credit cards (negative = you owe).
+
+### You paid the whole bill; friend owes their share
+Card got charged the full amount; half is your expense, half is owed to
+you and sits in `Receivable` until they pay.
+```
+2026-05-26 * "BBQ Nation" "Dinner — split 50/50 with Rohan"
+  Expenses:Food:Restaurants               1500.00 INR
+  Assets:Receivable:Rohan                 1500.00 INR
+  Liabilities:CreditCards:HDFC:Regalia   -3000.00 INR
+```
+
+### Friend pays you back
+Clears the receivable to zero.
+```
+2026-05-27 * "Rohan" "UPI — dinner share"
+  Assets:Bank:HDFC:Savings    1500.00 INR
+  Assets:Receivable:Rohan    -1500.00 INR
+```
+
+### Friend paid for both; you owe them
+You consumed the expense, but no card / cash of yours moved — the credit
+side is a `Payable`.
+```
+2026-05-26 * "Sneha" "Movie tickets she booked for both of us"
+  Expenses:Entertainment:Movies   750.00 INR
+  Liabilities:Payable:Sneha      -750.00 INR
+```
+
+### You pay friend back
+Cash leaves your bank; the payable posting is positive (reducing the
+liability back to zero).
+```
+2026-05-27 * "Sneha" "UPI — movie tickets"
+  Liabilities:Payable:Sneha    750.00 INR
+  Assets:Bank:HDFC:Savings    -750.00 INR
+```
+
+## Reimbursements (work expenses you'll claim back)
+
+### Out of pocket now, claim later
+Record the receivable up front so the spend doesn't dilute personal P&L.
+Same shape as splitting a bill — company in place of friend.
+```
+2026-05-26 * "Uber" "Client meeting — claim from ACME"
+  Assets:Receivable:ACME                  500.00 INR
+  Liabilities:CreditCards:HDFC:Regalia   -500.00 INR
+```
+
+### Reimbursement lands
+Same shape as a friend paying you back.
+```
+2026-06-15 * "ACME" "May reimbursement payout"
+  Assets:Bank:HDFC:Savings    500.00 INR
+  Assets:Receivable:ACME     -500.00 INR
+```
+
+## Refunds (reverse an earlier purchase)
+
+Exact mirror of the original purchase — sign-flipped on both legs. If the
+refund hits a different card / bank than the original, swap the second
+leg accordingly.
+```
+2026-05-26 * "Amazon" "Refund — returned earphones"
+  Expenses:Shopping:Electronics              -3500.00 INR
+  Liabilities:CreditCards:HDFC:Regalia        3500.00 INR
+```
+
+## Redemptions (using up rewards earned earlier)
+
+### Cashback applied to the statement (same currency)
+Settles the receivable from the Cashback pattern. Card liability goes
+down, receivable goes back to zero.
+```
+2026-05-31 * "HSBC" "Cashback credited to May statement"
+  Liabilities:CreditCards:HSBC:Cashback:9065   3.70 INR
+  Assets:Receivable:HSBC                      -3.70 INR
+```
+
+### Points redeemed for statement credit (cross-currency)
+Two currencies, balanced independently. `Equity:Void` clears the point
+side (mirror of earn). `Income:Rewards` captures the realized cash value
+— this is where points finally turn into "real money" in your books.
+```
+2026-05-31 * "HDFC" "Redeem 1000 pts → ₹250 statement credit"
+  Assets:Receivable:HDFC                 -1000 HDFC_RP
+  Equity:Void                             1000 HDFC_RP
+  Liabilities:CreditCards:HDFC:Regalia    250.00 INR
+  Income:Rewards                         -250.00 INR
+```
