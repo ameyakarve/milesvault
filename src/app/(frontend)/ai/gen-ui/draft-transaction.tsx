@@ -1,12 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import {
-  ArrowCounterClockwise,
-  Check,
-  Plus,
-  X,
-} from '@phosphor-icons/react'
+import { Check, Plus, X } from '@phosphor-icons/react'
 import {
   Card,
   CardAction,
@@ -20,7 +15,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Popover,
   PopoverContent,
@@ -46,10 +40,8 @@ export type DraftTransactionCardProps = {
   input: DraftTransaction
   accounts?: string[]
   status?: CardStatus
-  committedSummary?: string
   errorMessage?: string
   onApprove: (final: DraftTransaction) => void
-  onSendBack: (final: DraftTransaction, note?: string) => void
   onReject: () => void
 }
 
@@ -80,29 +72,17 @@ export function DraftTransactionCard({
   input,
   accounts = [],
   status = 'idle',
-  committedSummary,
   errorMessage,
   onApprove,
-  onSendBack,
   onReject,
 }: DraftTransactionCardProps) {
   const [draft, setDraft] = useState<DraftTransaction>(input)
-  const [showSendBack, setShowSendBack] = useState(false)
-  const [note, setNote] = useState('')
 
   const balance = useMemo(() => computeBalance(draft.postings), [draft.postings])
   const balanced = isBalanced(balance)
 
-  if (status === 'done' && committedSummary) {
-    return (
-      <Badge variant="secondary" className="gap-1.5">
-        <Check size={14} weight="bold" />
-        {committedSummary}
-      </Badge>
-    )
-  }
-
-  const disabled = status === 'submitting'
+  const done = status === 'done'
+  const disabled = status === 'submitting' || done
 
   const updatePosting = (idx: number, patch: Partial<DraftPosting>) => {
     setDraft((d) => ({
@@ -254,26 +234,6 @@ export function DraftTransactionCard({
         </Button>
       </CardContent>
 
-      {showSendBack ? (
-        <>
-          <Separator />
-          <CardContent>
-            <Label htmlFor="dt-note" className="text-xs uppercase tracking-wide">
-              Note for the agent (optional)
-            </Label>
-            <Textarea
-              id="dt-note"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder='e.g. "split into Food + Household"'
-              disabled={disabled}
-              rows={2}
-              className="mt-1.5"
-            />
-          </CardContent>
-        </>
-      ) : null}
-
       {status === 'failed' && errorMessage ? (
         <>
           <Separator />
@@ -283,53 +243,17 @@ export function DraftTransactionCard({
         </>
       ) : null}
 
-      <CardFooter className="justify-between">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onReject}
-          disabled={disabled}
-        >
-          Reject
-        </Button>
-        <div className="flex items-center gap-2">
-          {showSendBack ? (
-            <>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowSendBack(false)
-                  setNote('')
-                }}
-                disabled={disabled}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onSendBack(draft, note.trim() || undefined)}
-                disabled={disabled}
-              >
-                <ArrowCounterClockwise size={12} weight="bold" />
-                Send back
-              </Button>
-            </>
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSendBack(true)}
-              disabled={disabled}
-            >
-              Send back
-            </Button>
-          )}
+      {done ? null : (
+        <CardFooter className="justify-between">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onReject}
+            disabled={disabled}
+          >
+            Reject
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -339,8 +263,8 @@ export function DraftTransactionCard({
           >
             {status === 'submitting' ? 'Saving…' : 'Approve'}
           </Button>
-        </div>
-      </CardFooter>
+        </CardFooter>
+      )}
     </Card>
   )
 }
