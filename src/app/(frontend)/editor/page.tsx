@@ -9,7 +9,7 @@ export default async function EditorPage() {
   if (!session?.user) redirect('/login?callbackUrl=/editor')
 
   return (
-    <div className="flex h-screen overflow-hidden bg-white pb-[28px]">
+    <div className="flex h-screen overflow-hidden bg-[#fbfbfa] pb-[28px]">
       <NavRail />
       <main className="flex flex-1 flex-col">
         <EditorShell />

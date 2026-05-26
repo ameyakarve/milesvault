@@ -1,6 +1,8 @@
 import { chromium } from '@playwright/test'
 
-const URL = 'http://localhost:6006/iframe.html?id=editor-chatshell--default&viewMode=story'
+const STORY = process.env.STORY ?? 'editor-chatshell--empty'
+const OUT = process.env.OUT ?? '/tmp/chat-shell.png'
+const URL = `http://localhost:6006/iframe.html?id=${STORY}&viewMode=story`
 const browser = await chromium.launch()
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const page = await ctx.newPage()
@@ -42,6 +44,6 @@ const data = await page.evaluate(() => {
 })
 
 console.log(JSON.stringify(data, null, 2))
-await page.screenshot({ path: '/tmp/chat-shell.png', fullPage: true })
-console.log('screenshot → /tmp/chat-shell.png')
+await page.screenshot({ path: OUT, fullPage: true })
+console.log('screenshot →', OUT)
 await browser.close()
