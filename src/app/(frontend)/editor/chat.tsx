@@ -2,17 +2,13 @@
 
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
+import { ArrowUp } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
-  ConversationEmptyState,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation'
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from '@/components/ai-elements/message'
+import { MessageResponse } from '@/components/ai-elements/message'
 import {
   PromptInput,
   PromptInputFooter,
@@ -32,6 +28,38 @@ function partsToText(parts: unknown): string {
     .join('')
 }
 
+const COMPOSER_CLASSES =
+  '[&>div]:h-auto [&>div]:rounded-[28px] [&>div]:border [&>div]:border-slate-200/80 [&>div]:bg-white [&>div]:shadow-[0_2px_12px_rgba(0,0,0,0.04)] [&>div]:transition-shadow [&>div]:focus-within:shadow-[0_2px_20px_rgba(0,0,0,0.07)] [&>div]:focus-within:border-slate-300'
+
+function Composer({
+  onSubmit,
+  status,
+  onStop,
+}: {
+  onSubmit: (m: PromptInputMessage) => void
+  status: ReturnType<typeof useAgentChat>['status']
+  onStop: () => void
+}) {
+  return (
+    <PromptInput onSubmit={onSubmit} className={COMPOSER_CLASSES}>
+      <PromptInputTextarea
+        placeholder="Ask anything"
+        className="min-h-[56px] resize-none border-0 bg-transparent px-5 pt-4 pb-1 text-[15px] leading-6 shadow-none focus-visible:ring-0"
+      />
+      <PromptInputFooter className="px-2.5 pb-2.5">
+        <PromptInputTools />
+        <PromptInputSubmit
+          status={status}
+          onStop={onStop}
+          className="size-9 rounded-full bg-slate-900 text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
+        >
+          <ArrowUp className="size-4" strokeWidth={2.5} />
+        </PromptInputSubmit>
+      </PromptInputFooter>
+    </PromptInput>
+  )
+}
+
 export function Chat() {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
   const { messages, sendMessage, status, stop } = useAgentChat({ agent })
@@ -42,37 +70,55 @@ export function Chat() {
     void sendMessage({ text })
   }
 
-  return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <Conversation>
-        <ConversationContent className="mx-auto w-full max-w-3xl">
-          {messages.length === 0 ? (
-            <ConversationEmptyState
-              title="How can I help?"
-              description="Ask anything about your finances."
-            />
-          ) : (
-            messages.map((m) => (
-              <Message key={m.id} from={m.role}>
-                <MessageContent>
-                  <MessageResponse>{partsToText(m.parts)}</MessageResponse>
-                </MessageContent>
-              </Message>
-            ))
-          )}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
+  const isEmpty = messages.length === 0
 
-      <div className="sticky bottom-0 z-10 mx-auto flex w-full max-w-3xl gap-2 bg-background px-2 pb-3 md:px-4 md:pb-4">
-        <PromptInput onSubmit={handleSubmit} className="w-full">
-          <PromptInputTextarea placeholder="Message…" />
-          <PromptInputFooter>
-            <PromptInputTools />
-            <PromptInputSubmit status={status} onStop={stop} />
-          </PromptInputFooter>
-        </PromptInput>
-      </div>
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      {isEmpty ? (
+        <div className="flex flex-1 items-center justify-center px-4">
+          <div className="flex w-full max-w-3xl -translate-y-8 flex-col items-center gap-7">
+            <h1 className="text-[30px] font-semibold tracking-tight text-slate-900">
+              How can I help?
+            </h1>
+            <div className="w-full">
+              <Composer onSubmit={handleSubmit} status={status} onStop={stop} />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <Conversation>
+            <ConversationContent className="mx-auto w-full max-w-3xl py-6">
+              {messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={
+                    m.role === 'user' ? 'flex justify-end' : 'flex justify-start'
+                  }
+                >
+                  <div
+                    className={
+                      m.role === 'user'
+                        ? 'max-w-[80%] rounded-3xl bg-slate-100 px-4 py-2.5 text-[15px] text-slate-900'
+                        : 'max-w-[80%] text-[15px] leading-7 text-slate-800'
+                    }
+                  >
+                    <MessageResponse>{partsToText(m.parts)}</MessageResponse>
+                  </div>
+                </div>
+              ))}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+
+          <div className="mx-auto w-full max-w-3xl px-4 pb-4">
+            <Composer onSubmit={handleSubmit} status={status} onStop={stop} />
+            <p className="mt-2 text-center text-[11px] text-slate-400">
+              MilesVault can make mistakes. Check important info.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   )
 }

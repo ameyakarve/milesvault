@@ -11,39 +11,41 @@ export function EditorShell() {
 
   return (
     <>
-      <header className="flex items-center gap-1 border-b border-slate-200 px-6 py-3">
-        <TabButton active={tab === 'chat'} onClick={() => setTab('chat')}>
-          Chat
-        </TabButton>
-        <TabButton active={tab === 'journal'} onClick={() => setTab('journal')}>
-          Journal
-        </TabButton>
+      <header className="flex items-center justify-center border-b border-slate-200/60 px-6 py-3">
+        <SegmentedTabs value={tab} onChange={setTab} />
       </header>
       {tab === 'chat' ? <Chat /> : <Journal />}
     </>
   )
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
+function SegmentedTabs({
+  value,
+  onChange,
 }: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
+  value: Tab
+  onChange: (t: Tab) => void
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-[6px] px-3 py-1.5 text-sm transition ${
-        active
-          ? 'bg-slate-100 font-medium text-slate-900'
-          : 'text-slate-500 hover:text-slate-900'
-      }`}
-    >
-      {children}
-    </button>
+    <div className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5">
+      {(['chat', 'journal'] as const).map((t) => {
+        const active = value === t
+        return (
+          <button
+            key={t}
+            type="button"
+            onClick={() => onChange(t)}
+            className={[
+              'rounded-full px-3.5 py-1 text-[13px] font-medium transition',
+              active
+                ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                : 'text-slate-600 hover:text-slate-900',
+            ].join(' ')}
+          >
+            {t === 'chat' ? 'Chat' : 'Journal'}
+          </button>
+        )
+      })}
+    </div>
   )
 }
