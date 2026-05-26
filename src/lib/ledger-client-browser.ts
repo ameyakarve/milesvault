@@ -29,6 +29,9 @@ export const ledgerClient = {
   putJournal(text: string): Promise<JournalPutResponse | JournalPutError> {
     return putJSON('/api/ledger/journal', { text })
   },
+  getAccounts(opts?: FetchOpts): Promise<{ accounts: string[] }> {
+    return getJSON('/api/ledger/accounts', opts)
+  },
 }
 
 export function isJournalPutError(

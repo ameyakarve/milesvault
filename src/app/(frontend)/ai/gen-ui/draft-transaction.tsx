@@ -380,10 +380,8 @@ function AccountCombobox({
       >
         {value || 'Account…'}
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-[--radix-popover-trigger-width] min-w-[18rem] p-0"
-      >
+      <PopoverContent align="start" className="w-72 p-0">
+
         <Command>
           <CommandInput
             placeholder="Search accounts…"
