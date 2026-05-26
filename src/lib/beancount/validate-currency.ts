@@ -9,14 +9,14 @@ import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 // (rewards points, conversion residuals, opening balances).
 //
 // Policy for in-scope accounts:
-// - Every account that participates in a posting must have an `open` directive.
-// - That open must declare exactly one constraint currency.
-// - Every posting on the account must use that currency.
-// - Postings dated after the account's `close` are rejected.
-//
-// The validator is pure. Callers decide what to do with each issue kind:
-// the DO rejects on any issue; the client auto-inserts opens for
-// `missing_open` and rejects everything else.
+// - An account's locked currency is either declared by an explicit
+//   single-currency `open` directive, or implied by the chronologically
+//   earliest posting on that account.
+// - Every subsequent posting on the account must use the locked currency.
+// - An explicit `open` with anything other than exactly one constraint
+//   currency is a hard error.
+// - `open` and `close` directives do not gate postings; they are pure
+//   documentation. A posting may predate the open or postdate the close.
 
 const LOCKED_TOPS = new Set(['Assets', 'Liabilities'])
 
@@ -40,132 +40,78 @@ export type CurrencyIssue =
       postingDate: string
       message: string
     }
-  | {
-      kind: 'closed_account'
-      account: string
-      closeDate: string
-      postingDate: string
-      message: string
-    }
-  | {
-      kind: 'missing_open'
-      account: string
-      currency: string
-      firstUseDate: string
-      message: string
-    }
 
 export function validateAccountCurrencies(
   transactions: TransactionInput[],
   directives: DirectiveInput[],
 ): CurrencyIssue[] {
-  const opens = new Map<string, { date: string; currencies: string[] }>()
-  const closes = new Map<string, { date: string }>()
-  for (const d of directives) {
-    if (d.kind === 'open') {
-      opens.set(d.account, {
-        date: d.date,
-        currencies: d.constraint_currencies ?? [],
-      })
-    } else if (d.kind === 'close') {
-      closes.set(d.account, { date: d.date })
-    }
-  }
-
   const issues: CurrencyIssue[] = []
-  const reportedMultiCurrencyOpens = new Set<string>()
-  const reportedMismatches = new Set<string>()
-  const reportedClosed = new Set<string>()
-  const missingByAccount = new Map<string, { currency: string; firstUseDate: string }>()
-  const conflictingMissingAccounts = new Set<string>()
 
-  for (const [account, info] of opens) {
-    if (!isLocked(account)) continue
-    if (info.currencies.length !== 1 && !reportedMultiCurrencyOpens.has(account)) {
-      reportedMultiCurrencyOpens.add(account)
-      issues.push({
-        kind: 'multi_currency_open',
-        account,
-        currencies: info.currencies,
-        message:
-          info.currencies.length === 0
-            ? `${account}: open directive must declare exactly one currency`
-            : `${account}: open directive declares ${info.currencies.length} currencies (${info.currencies.join(', ')}); must declare exactly one`,
-      })
+  // 1. Walk explicit opens. A single-currency open sets the lock.
+  //    Anything else (0 or 2+ constraint currencies) is a hard error.
+  //    Duplicate single-currency opens are tolerated; the first wins.
+  const explicitLocks = new Map<string, string>()
+  const reportedMultiCurrencyOpens = new Set<string>()
+  for (const d of directives) {
+    if (d.kind !== 'open') continue
+    if (!isLocked(d.account)) continue
+    const ccs = d.constraint_currencies ?? []
+    if (ccs.length === 1) {
+      if (!explicitLocks.has(d.account)) explicitLocks.set(d.account, ccs[0]!)
+      continue
     }
+    if (reportedMultiCurrencyOpens.has(d.account)) continue
+    reportedMultiCurrencyOpens.add(d.account)
+    issues.push({
+      kind: 'multi_currency_open',
+      account: d.account,
+      currencies: ccs,
+      message:
+        ccs.length === 0
+          ? `${d.account}: open directive must declare exactly one currency`
+          : `${d.account}: open directive declares ${ccs.length} currencies (${ccs.join(', ')}); must declare exactly one`,
+    })
   }
 
+  // 2. Implicit lock = earliest (date, then position) posting per locked
+  //    account that has no explicit lock.
+  const implicitLocks = new Map<string, { currency: string; date: string }>()
   for (const txn of transactions) {
     for (const p of txn.postings) {
       if (!p.currency) continue
       if (!isLocked(p.account)) continue
-      const open = opens.get(p.account)
-      const close = closes.get(p.account)
-
-      if (close && txn.date > close.date) {
-        const key = `${p.account}|${close.date}|${txn.date}`
-        if (!reportedClosed.has(key)) {
-          reportedClosed.add(key)
-          issues.push({
-            kind: 'closed_account',
-            account: p.account,
-            closeDate: close.date,
-            postingDate: txn.date,
-            message: `${p.account}: account closed on ${close.date}, posting on ${txn.date}`,
-          })
-        }
-      }
-
-      if (open) {
-        if (open.currencies.length === 1) {
-          const expected = open.currencies[0]!
-          if (p.currency !== expected) {
-            const key = `${p.account}|${expected}|${p.currency}`
-            if (!reportedMismatches.has(key)) {
-              reportedMismatches.add(key)
-              issues.push({
-                kind: 'currency_mismatch',
-                account: p.account,
-                expected,
-                found: p.currency,
-                postingDate: txn.date,
-                message: `${p.account}: expected ${expected}, found ${p.currency}`,
-              })
-            }
-          }
-        }
-      } else {
-        const existing = missingByAccount.get(p.account)
-        if (existing) {
-          if (existing.currency !== p.currency && !conflictingMissingAccounts.has(p.account)) {
-            conflictingMissingAccounts.add(p.account)
-            issues.push({
-              kind: 'multi_currency_open',
-              account: p.account,
-              currencies: [existing.currency, p.currency],
-              message: `${p.account}: postings use multiple currencies (${existing.currency}, ${p.currency}); cannot lock to a single currency`,
-            })
-          }
-          if (txn.date < existing.firstUseDate) existing.firstUseDate = txn.date
-        } else {
-          missingByAccount.set(p.account, {
-            currency: p.currency,
-            firstUseDate: txn.date,
-          })
-        }
+      if (explicitLocks.has(p.account)) continue
+      const existing = implicitLocks.get(p.account)
+      if (!existing || txn.date < existing.date) {
+        implicitLocks.set(p.account, { currency: p.currency, date: txn.date })
       }
     }
   }
 
-  for (const [account, info] of missingByAccount) {
-    if (conflictingMissingAccounts.has(account)) continue
-    issues.push({
-      kind: 'missing_open',
-      account,
-      currency: info.currency,
-      firstUseDate: info.firstUseDate,
-      message: `${account}: no open directive; first use ${info.firstUseDate} with ${info.currency}`,
-    })
+  // 3. Every posting on a locked account must match the established lock.
+  //    Dedup by (account, expected, found) so a misconfigured account
+  //    only reports once per offending currency.
+  const reportedMismatches = new Set<string>()
+  for (const txn of transactions) {
+    for (const p of txn.postings) {
+      if (!p.currency) continue
+      if (!isLocked(p.account)) continue
+      const expected =
+        explicitLocks.get(p.account) ?? implicitLocks.get(p.account)?.currency
+      if (!expected) continue
+      if (p.currency === expected) continue
+      const key = `${p.account}|${expected}|${p.currency}`
+      if (reportedMismatches.has(key)) continue
+      reportedMismatches.add(key)
+      issues.push({
+        kind: 'currency_mismatch',
+        account: p.account,
+        expected,
+        found: p.currency,
+        postingDate: txn.date,
+        message: `${p.account}: expected ${expected}, found ${p.currency}`,
+      })
+    }
   }
 
   return issues

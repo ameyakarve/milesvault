@@ -20,7 +20,6 @@ import {
   txnTouchesAccountCurrency,
 } from '@/lib/beancount/scope'
 import { validateAccountCurrencies } from '@/lib/beancount/validate-currency'
-import type { DirectiveInput } from '@/durable/ledger-types'
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
 import { resolveDashboard } from '@/lib/ledger-core/taxonomy'
 import { NotebookShell } from './notebook-shell'
@@ -267,29 +266,14 @@ export function PerAccountView({ account }: { account: string }) {
       const mergedTxns = [...keepTxns, ...parsedSlice.transactions]
       const mergedDirs = [...keepDirectives, ...parsedSlice.directives]
 
-      // Currency lock: auto-insert opens for accounts missing one; reject
-      // mismatches and other issues so the user fixes them before save.
       const issues = validateAccountCurrencies(mergedTxns, mergedDirs)
-      const blockers = issues.filter((i) => i.kind !== 'missing_open')
-      if (blockers.length > 0) {
-        setError(blockers.map((i) => i.message).join('; '))
+      if (issues.length > 0) {
+        setError(issues.map((i) => i.message).join('; '))
         setSaving(false)
         return
       }
-      const autoOpens: DirectiveInput[] = issues.flatMap((i): DirectiveInput[] =>
-        i.kind === 'missing_open'
-          ? [
-              {
-                kind: 'open',
-                date: i.firstUseDate,
-                account: i.account,
-                constraint_currencies: [i.currency],
-              },
-            ]
-          : [],
-      )
 
-      const newWholeText = serializeJournal(mergedTxns, [...mergedDirs, ...autoOpens])
+      const newWholeText = serializeJournal(mergedTxns, mergedDirs)
       const data = await ledgerClient.putJournal(newWholeText)
       if (isJournalPutError(data)) {
         setError(data.message)
