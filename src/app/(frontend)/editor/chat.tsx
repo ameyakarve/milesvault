@@ -116,6 +116,7 @@ export function Chat({
     Record<string, 'idle' | 'submitting' | 'done' | 'failed'>
   >({})
   const [submitError, setSubmitError] = useState<Record<string, string>>({})
+  const [clarifyAnswers, setClarifyAnswers] = useState<Record<string, string[]>>({})
   const [accounts, setAccounts] = useState<string[]>([])
 
   useEffect(() => {
@@ -207,6 +208,19 @@ export function Chat({
       toolCallId,
       output: { ok: false, reason: 'rejected' },
     })
+  }
+
+  function handleClarifyAnswer(toolCallId: string, answers: string[]) {
+    setClarifyAnswers((s) => ({ ...s, [toolCallId]: answers }))
+    addToolOutput({
+      toolCallId,
+      output: { answers },
+    })
+    // clarify NEEDS continuation — the model asked, the user answered, the
+    // model must now produce the next step (typically draft_transaction).
+    // draft_transaction stays halting via autoContinueAfterToolResult: false;
+    // we manually nudge here with an empty user message.
+    void sendMessage({ text: '' })
   }
 
   const isEmpty = messages.length === 0
@@ -317,8 +331,11 @@ export function Chat({
                                 accounts,
                                 status: cardStatus,
                                 errorMessage: submitError[toolCallId],
+                                resolvedAnswers: clarifyAnswers[toolCallId],
                                 onApprove: (final) =>
                                   void handleApprove(toolCallId, final),
+                                onAnswer: (answers) =>
+                                  handleClarifyAnswer(toolCallId, answers),
                                 onReject: () => handleReject(toolCallId),
                               })
                             : null

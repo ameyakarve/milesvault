@@ -2,7 +2,7 @@ import { Think } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
 import { tool, type ToolSet } from 'ai'
 import { buildSystemPrompt } from './agent-prompt'
-import { draftTransactionSchema } from './agent-ui-schemas'
+import { clarifyInputSchema, draftTransactionSchema } from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -196,6 +196,12 @@ export class LedgerDO extends Think {
         inputSchema: draftTransactionSchema,
         // No execute → client-side tool. The agent loop suspends until the
         // UI resolves it via addToolResult.
+      }),
+      clarify: tool({
+        description:
+          'Ask the user one short clarifying question when a required accounting choice is genuinely ambiguous (e.g. instant discount vs separately-redeemable cashback). Provide suggested `options` as short chips; set `multi_select: true` for "all that apply"; set `allow_custom: false` only when free text would not make sense. After the user answers, you will receive { answers: string[] } as the tool result — then proceed (typically to draft_transaction).',
+        inputSchema: clarifyInputSchema,
+        // Client-side — resolved by the user picking / typing.
       }),
     }
   }
