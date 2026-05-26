@@ -15,7 +15,6 @@ import {
 } from '@/components/ai-elements/message'
 import {
   PromptInput,
-  PromptInputBody,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
@@ -67,13 +66,11 @@ export function Chat() {
 
       <div className="sticky bottom-0 z-10 mx-auto flex w-full max-w-3xl gap-2 bg-background px-2 pb-3 md:px-4 md:pb-4">
         <PromptInput onSubmit={handleSubmit} className="w-full">
-          <PromptInputBody>
-            <PromptInputTextarea placeholder="Message…" />
-            <PromptInputFooter>
-              <PromptInputTools />
-              <PromptInputSubmit status={status} onStop={stop} />
-            </PromptInputFooter>
-          </PromptInputBody>
+          <PromptInputTextarea placeholder="Message…" />
+          <PromptInputFooter>
+            <PromptInputTools />
+            <PromptInputSubmit status={status} onStop={stop} />
+          </PromptInputFooter>
         </PromptInput>
       </div>
     </div>
