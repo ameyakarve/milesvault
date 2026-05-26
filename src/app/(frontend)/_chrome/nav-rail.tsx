@@ -8,6 +8,7 @@ import {
   GearSix,
   Lightbulb,
   MagnifyingGlass,
+  NotePencil,
   Sparkle,
 } from '@phosphor-icons/react/dist/ssr'
 
@@ -16,6 +17,7 @@ type NavItem = { href: string; label: string; icon: React.ElementType }
 const TOP: NavItem[] = [
   { href: '/home', label: 'Home', icon: House },
   { href: '/ai', label: 'AI', icon: Sparkle },
+  { href: '/editor', label: 'Editor', icon: NotePencil },
   { href: '/explore', label: 'Explore', icon: MagnifyingGlass },
   { href: '/insights', label: 'Insights', icon: ChartLineUp },
   { href: '/ideas', label: 'Ideas', icon: Lightbulb },
