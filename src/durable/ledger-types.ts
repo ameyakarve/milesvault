@@ -47,13 +47,11 @@ export type BalanceInput = {
   account: string
   amount: string
   currency: string
-  meta?: Record<string, string> | null
-}
-
-export type PadInput = {
-  date: string
-  account: string
-  account_pad: string
+  // When set, on assertion the projection materializes a reconciling posting
+  // routing the gap between `account` and `plug_account`. Subsumes the legacy
+  // `pad` directive: a pad+balance pair in beancount text round-trips through
+  // a single BalanceInput with `plug_account` set.
+  plug_account?: string | null
   meta?: Record<string, string> | null
 }
 
@@ -91,7 +89,6 @@ export type DirectiveKind =
   | 'close'
   | 'commodity'
   | 'balance'
-  | 'pad'
   | 'price'
   | 'note'
   | 'document'
@@ -102,7 +99,6 @@ export type DirectiveInput =
   | ({ kind: 'close' } & CloseInput)
   | ({ kind: 'commodity' } & CommodityInput)
   | ({ kind: 'balance' } & BalanceInput)
-  | ({ kind: 'pad' } & PadInput)
   | ({ kind: 'price' } & PriceInput)
   | ({ kind: 'note' } & NoteInput)
   | ({ kind: 'document' } & DocumentInput)
@@ -155,12 +151,7 @@ export type EntryBalance = EntryBase & {
   account: string
   amount: string
   currency: string
-}
-
-export type EntryPad = EntryBase & {
-  kind: 'pad'
-  account: string
-  account_pad: string
+  plug_account: string | null
 }
 
 export type EntryNote = EntryBase & {
@@ -180,7 +171,6 @@ export type Entry =
   | EntryOpen
   | EntryClose
   | EntryBalance
-  | EntryPad
   | EntryNote
   | EntryDocument
 

@@ -26,14 +26,13 @@ export function directiveTouchesAccount(d: DirectiveInput, account: string): boo
   switch (d.kind) {
     case 'open':
     case 'close':
-    case 'balance':
     case 'note':
     case 'document':
       return accountMatchesPrefix(d.account, account)
-    case 'pad':
+    case 'balance':
       return (
         accountMatchesPrefix(d.account, account) ||
-        accountMatchesPrefix(d.account_pad, account)
+        (d.plug_account != null && accountMatchesPrefix(d.plug_account, account))
       )
     case 'commodity':
     case 'price':
@@ -56,13 +55,11 @@ export function directiveTouchesAccountCurrency(
     case 'note':
     case 'document':
       return accountMatchesPrefix(d.account, account)
-    case 'pad':
-      return (
-        accountMatchesPrefix(d.account, account) ||
-        accountMatchesPrefix(d.account_pad, account)
-      )
     case 'balance':
-      return accountMatchesPrefix(d.account, account) && d.currency === currency
+      return (
+        (accountMatchesPrefix(d.account, account) && d.currency === currency) ||
+        (d.plug_account != null && accountMatchesPrefix(d.plug_account, account))
+      )
     case 'commodity':
     case 'price':
     case 'event':

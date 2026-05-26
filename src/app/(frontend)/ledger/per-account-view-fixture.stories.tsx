@@ -29,6 +29,7 @@ const FIXTURE = `2025-01-01 open ${ACCOUNT} INR
 2025-01-31 balance ${ACCOUNT}                      -1250.50 INR
 
 2025-02-01 pad ${ACCOUNT} Equity:Opening-Balances
+2025-02-02 balance ${ACCOUNT}                      -1250.50 INR
 
 2025-02-15 note ${ACCOUNT} "checked statement"
 
