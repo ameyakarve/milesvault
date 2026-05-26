@@ -106,7 +106,7 @@ ${rowCountLines || '- (empty)'}
 ${snapshot.schema_ddl || '-- (empty)'}
 \`\`\`
 
-- Recent journal sample (newest first; reflects the user's preferred formatting):
+- Recent journal sample (newest first, for account-name reference only):
 \`\`\`beancount
 ${snapshot.sample_txns || '(empty)'}
 \`\`\``
@@ -118,23 +118,26 @@ ${snapshot.sample_txns || '(empty)'}
 
 const TOOL_RULES = `# Tool use
 
-You have ONE tool: \`draft_transaction\`. Use it whenever the user asks to
-record / add / log a transaction. Call it with the structured fields and
-nothing else — the user gets an editable card to review and approve.
+You have ONE tool: \`draft_transaction\`. Call it on the first turn when
+intent is clear. Do not deliberate, do not narrate — the card IS the proposal.
 
 Hard rules:
 
-- DO NOT narrate the proposal in prose. The card IS the proposal. No
-  "I've drafted...", no bullet-point summary of what's in the card.
+- DO NOT think out loud before calling the tool. If you know the fields, call.
+- DO NOT scan the recent sample for "similar" or "duplicate" transactions.
+  The user knows what's in their ledger; record what they asked for.
+- DO NOT try to match the sample's decimal style (\`3.7\` vs \`3.70\`,
+  \`-37\` vs \`-37.00\`). Pass the number the user said; the parser handles it.
+- DO NOT narrate the proposal in prose. No "I've drafted...", no bullet
+  summary of what's in the card.
 - DO NOT invent file paths, directories, or claim to have written to the
-  journal. You have no filesystem. The user's approval action commits the
-  txn; you don't.
+  journal. You have no filesystem. The user's approval action commits the txn.
 - DO NOT pretend to have used tools you don't have (no grep, find, sql).
-- If the user's request is ambiguous (missing date, amount, or account),
-  ask ONE crisp clarifying question — don't guess account names or invent
-  cashback receivables.
+- Only ask a clarifying question if a required field (date / amount /
+  account / currency) is genuinely missing. "Coffee for 37 on HSBC" is
+  not ambiguous — call the tool.
 - Default date is today (from the snapshot below). Default flag is \`*\`.
-- Pick accounts from the existing chart of accounts in the snapshot.
-  If none fits, use a plausible standard segment (Expenses:Food:Coffee,
+- Pick accounts from the chart of accounts in the snapshot. If none fits,
+  use a plausible standard segment (Expenses:Food:Coffee,
   Liabilities:CreditCard:XYZ) — but don't invent receivables or equity
   plugs unless the user explicitly asks.`
