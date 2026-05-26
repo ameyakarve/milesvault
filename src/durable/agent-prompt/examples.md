@@ -200,23 +200,48 @@ rate. Spending abroad is single-currency in the foreign unit.
 
 ## Forex spends on a regular INR credit card
 
-When a foreign-currency charge hits an INR card, the bank converts at
-its rate (incl. markup). Keep the expense in foreign currency so the
-trip's USD total stays meaningful; use `@@` to re-express the weight in
-INR for the card leg.
+**The mechanic, because this trips people up:**
+An INR credit card never holds USD (or any foreign currency). When a
+foreign-currency charge comes in, the bank converts it to INR at its
+own FX rate and posts that INR amount to the card. Then the bank
+typically adds a **separate** forex-markup fee (often ~3.5% of the
+converted INR), and GST on that fee, as their own line items on the
+statement.
 
-### Single line (markup baked into the rate)
+So every Indian-bank forex charge has up to three pieces:
+1. The merchant amount, converted at the bank's FX rate (INR).
+2. A forex markup fee (INR) — bank's cut for doing the conversion.
+3. GST on the markup (INR) — Indian-statutory, usually 18%.
+
+Keep the merchant amount in the foreign currency on the expense leg so
+the trip's USD total stays meaningful; use `@@` to re-express its
+weight in INR for the card balance. The markup and GST are plain INR
+expense lines.
+
+### Full shape (markup + GST itemized — closest to what an Indian statement actually shows)
 ```
-2026-05-30 * "Joe's Pizza" "Dinner — NYC"
-  Expenses:Travel:Food                   50.00 USD @@ 4225.00 INR
-  Liabilities:CreditCards:HDFC:Regalia -4225.00 INR
+2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 markup + ₹26.64 GST)"
+  Expenses:Travel:Food                     50.00 USD @@ 4225.00 INR
+  Expenses:Bank:ForexMarkup              148.00 INR
+  Expenses:Tax:GST                        26.64 INR
+  Liabilities:CreditCards:HDFC:Regalia -4399.64 INR
 ```
 
-### Markup itemized separately (when the statement breaks it out)
+### Markup only (when GST isn't broken out separately)
 ```
 2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 forex markup)"
   Expenses:Travel:Food                   50.00 USD @@ 4225.00 INR
   Expenses:Bank:ForexMarkup            148.00 INR
+  Liabilities:CreditCards:HDFC:Regalia -4373.00 INR
+```
+
+### Short form (markup baked into a single INR total)
+Use this only when the user can't see the markup split out, or
+explicitly wants a single line. The `@@` rate ends up implicitly
+including the markup.
+```
+2026-05-30 * "Joe's Pizza" "Dinner — NYC"
+  Expenses:Travel:Food                   50.00 USD @@ 4373.00 INR
   Liabilities:CreditCards:HDFC:Regalia -4373.00 INR
 ```
 
