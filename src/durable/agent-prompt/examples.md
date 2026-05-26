@@ -232,13 +232,24 @@ down, receivable goes back to zero.
 ```
 
 ### Points redeemed for statement credit (cross-currency)
-Two currencies, balanced independently. `Equity:Void` clears the point
-side (mirror of earn). `Income:Rewards` captures the realized cash value
-— this is where points finally turn into "real money" in your books.
+Use Beancount's `@@` total-price annotation — the points leg's weight
+gets re-expressed in the target currency (INR) for the balance check.
+Two clean postings, no `Equity:Void`.
 ```
 2026-05-31 * "HDFC" "Redeem 1000 pts → ₹250 statement credit"
-  Assets:Receivable:HDFC                 -1000 HDFC_RP
-  Equity:Void                             1000 HDFC_RP
+  Assets:Receivable:HDFC                 -1000 HDFC_RP @@ 250.00 INR
   Liabilities:CreditCards:HDFC:Regalia    250.00 INR
-  Income:Rewards                         -250.00 INR
 ```
+
+## When to use `@@` vs `Equity:Void` on the point side
+
+- **Conversion** — point currency is being exchanged for cash or another
+  point currency at a defined rate: use `@@` on the point posting.
+  (Examples: transferring 10k Chase UR → 13k United, redeeming points
+  for a statement credit, paying with points at a merchant, buying
+  points with cash.)
+- **Accrual / write-off** — point balance changes without any conversion
+  (no rate is being asserted): use `Equity:Void` as the point-side
+  contra. (Examples: earning points on a purchase, anniversary bonuses,
+  expiry sweeps, redeeming miles for an award flight where the flight
+  itself doesn't have a cost-in-miles being claimed.)
