@@ -161,6 +161,11 @@ function Row({
   query: string
 }) {
   const [open, setOpen] = useState(depth < 1 || query.length > 0)
+  const [lastQuery, setLastQuery] = useState(query)
+  if (lastQuery !== query) {
+    setLastQuery(query)
+    setOpen(depth < 1 || query.length > 0)
+  }
   const hasChildren = node.children.length > 0
   return (
     <li>
