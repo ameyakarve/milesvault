@@ -103,7 +103,14 @@ export function Chat({
     clearHistory,
     isStreaming,
     isToolContinuation,
-  } = useAgentChat({ agent })
+  } = useAgentChat({
+    agent,
+    // The card IS the proposal; don't let the model continue after a tool
+    // result. Approve transitions the card to "done" locally and we're
+    // ready for the next user message. Reject just dismisses the card —
+    // no apology / retry from the model.
+    autoContinueAfterToolResult: false,
+  })
 
   const [submitStatus, setSubmitStatus] = useState<
     Record<string, 'idle' | 'submitting' | 'done' | 'failed'>
@@ -135,6 +142,22 @@ export function Chat({
   function handleSubmit(message: PromptInputMessage) {
     const text = message.text.trim()
     if (!text) return
+    // Any tool cards still awaiting a decision get superseded by the new
+    // message — otherwise the agent stays stuck waiting on them.
+    for (const m of messages) {
+      const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
+      for (const p of parts) {
+        if (!p.type.startsWith('tool-')) continue
+        if (!p.toolCallId) continue
+        if (p.state !== 'input-available' && p.state !== 'input-streaming') continue
+        const sub = submitStatus[p.toolCallId]
+        if (sub === 'done' || sub === 'failed' || sub === 'submitting') continue
+        addToolOutput({
+          toolCallId: p.toolCallId,
+          output: { ok: false, reason: 'superseded' },
+        })
+      }
+    }
     void sendMessage({ text })
   }
 
@@ -263,8 +286,18 @@ export function Chat({
                         if (p.type.startsWith('tool-')) {
                           const toolCallId = p.toolCallId ?? `${m.id}-${i}`
                           const subState = submitStatus[toolCallId] ?? 'idle'
-                          const cardStatus =
-                            p.state === 'output-available' || subState === 'done'
+                          const outputObj =
+                            p.output && typeof p.output === 'object'
+                              ? (p.output as { ok?: boolean; reason?: string })
+                              : null
+                          const isRejection =
+                            p.state === 'output-available' &&
+                            outputObj?.ok === false &&
+                            (outputObj.reason === 'rejected' ||
+                              outputObj.reason === 'superseded')
+                          const cardStatus = isRejection
+                            ? 'rejected'
+                            : p.state === 'output-available' || subState === 'done'
                               ? 'done'
                               : subState === 'submitting'
                                 ? 'submitting'
@@ -272,7 +305,7 @@ export function Chat({
                                   ? 'failed'
                                   : 'idle'
                           const toolState: ToolUIPart['state'] =
-                            cardStatus === 'done'
+                            cardStatus === 'done' || cardStatus === 'rejected'
                               ? 'output-available'
                               : cardStatus === 'failed'
                                 ? 'output-error'

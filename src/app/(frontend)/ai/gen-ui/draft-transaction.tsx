@@ -34,7 +34,7 @@ import type {
   DraftTransaction,
 } from '@/durable/agent-ui-schemas'
 
-type CardStatus = 'idle' | 'submitting' | 'done' | 'failed'
+type CardStatus = 'idle' | 'submitting' | 'done' | 'failed' | 'rejected'
 
 export type DraftTransactionCardProps = {
   input: DraftTransaction
@@ -82,7 +82,8 @@ export function DraftTransactionCard({
   const balanced = isBalanced(balance)
 
   const done = status === 'done'
-  const disabled = status === 'submitting' || done
+  const rejected = status === 'rejected'
+  const disabled = status === 'submitting' || done || rejected
 
   const updatePosting = (idx: number, patch: Partial<DraftPosting>) => {
     setDraft((d) => ({
@@ -243,7 +244,16 @@ export function DraftTransactionCard({
         </>
       ) : null}
 
-      {done ? null : (
+      {rejected ? (
+        <>
+          <Separator />
+          <CardContent className="text-sm text-muted-foreground italic">
+            Rejected
+          </CardContent>
+        </>
+      ) : null}
+
+      {done || rejected ? null : (
         <CardFooter className="justify-between">
           <Button
             type="button"
