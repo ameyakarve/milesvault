@@ -1,10 +1,13 @@
 // System-prompt fragments for the AI agent. The .md files alongside this
-// module are the source of truth — they're inlined as strings at build time
-// via the webpack `asset/source` rule in next.config.mjs.
+// module are the source of truth — they're codegen'd into inline.generated.ts
+// by scripts/build-agent-prompt.mjs, which runs automatically before build
+// and deploy. Edit the .md files, not the generated one.
 
-import BEANCOUNT_PRIMER from './beancount-primer.md'
-import TOOL_RULES from './tool-rules.md'
-import EXAMPLES from './examples.md'
+import {
+  BEANCOUNT_PRIMER,
+  TOOL_RULES,
+  EXAMPLES,
+} from './inline.generated'
 
 export { BEANCOUNT_PRIMER }
 
