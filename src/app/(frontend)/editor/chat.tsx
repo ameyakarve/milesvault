@@ -249,9 +249,11 @@ export function Chat({
     // Poll get_statement until ready/error. The DO runs extraction in
     // waitUntil so this loop just observes the row flipping state. Quietly
     // gives up if the user removed the chip mid-flight (state cleared).
+    let transientErrors = 0
     for (;;) {
       try {
         const rec = await ledgerClient.getStatement(id)
+        transientErrors = 0
         // If the user removed the chip while we were waiting, bail.
         // We compare by id to avoid racing a stale poller against a new
         // upload.
@@ -276,8 +278,19 @@ export function Chat({
           return curr
         })
         if (rec.status === 'ready' || rec.status === 'error') return
-      } catch {
-        // transient — sleep and try again
+      } catch (e) {
+        // Bail after a few consecutive failures so the chip doesn't loop
+        // forever when the server row is gone (404) or the network is down.
+        transientErrors++
+        if (transientErrors >= 5) {
+          const msg = e instanceof Error ? e.message : 'Status poll failed'
+          setStatement((curr) => {
+            if (!curr) return curr
+            if ('id' in curr && curr.id !== id) return curr
+            return { kind: 'error', file, message: msg }
+          })
+          return
+        }
       }
       await new Promise((r) => setTimeout(r, 1000))
     }

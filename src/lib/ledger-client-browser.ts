@@ -24,6 +24,9 @@ async function putJSON<T>(url: string, body: unknown): Promise<T> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
+  // Note: we don't throw on !res.ok here — replaceBuffer returns a structured
+  // OCC conflict body with HTTP 409 that callers branch on via
+  // isReplaceBufferConflict.
   return (await res.json()) as T
 }
 
@@ -34,6 +37,7 @@ async function postJSON<T>(url: string, body: unknown): Promise<T> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   })
+  if (!res.ok) throw new Error(`POST ${url} → HTTP ${res.status}`)
   return (await res.json()) as T
 }
 
