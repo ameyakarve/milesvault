@@ -111,6 +111,13 @@ export function Chat({
     // ready for the next user message. Reject just dismisses the card —
     // no apology / retry from the model.
     autoContinueAfterToolResult: false,
+    // Skip the library's HTTP /get-messages fetch. On SSR `useAgent` builds
+    // a partysocket URL pointing at "dummy-domain.com" (its fallback when
+    // window is undefined), and `useAgentChat` then calls `use(fetch(...))`
+    // against that URL — the resulting snapshot diverges from client and
+    // causes React #418. Setting this to null short-circuits that path; the
+    // WebSocket connection still replays history via the resume flow.
+    getInitialMessages: null,
   })
 
   const [submitStatus, setSubmitStatus] = useState<

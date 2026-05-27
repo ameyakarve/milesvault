@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorView } from '@codemirror/view'
 import { Eraser } from 'lucide-react'
 import { Chat } from './chat'
@@ -273,9 +273,7 @@ export function EditorShell() {
         </div>
       </header>
       {tab === 'chat' ? (
-        <ClientOnly>
-          <Chat onBusyChange={setChatBusy} onClearableChange={setChatClear} />
-        </ClientOnly>
+        <Chat onBusyChange={setChatBusy} onClearableChange={setChatClear} />
       ) : (
         <>
           {entries.loaded ? (
@@ -444,15 +442,6 @@ function UnsavedModal({
       </div>
     </div>
   )
-}
-
-// Bisecting React #418: render the chat subtree only after mount so it
-// drops out of the SSR/CSR diff. If #418 disappears the mismatch lives
-// inside <Chat>; if it persists, look upstream (chrome, layout, root).
-function ClientOnly({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-  return mounted ? <>{children}</> : null
 }
 
 function SavedChip({ dirty, saving }: { dirty: boolean; saving: boolean }) {
