@@ -994,9 +994,10 @@ export class LedgerDO extends Think {
     // Run extraction in the background so the upload RPC returns immediately
     // — the client polls via get_statement. ctx.waitUntil keeps the DO alive
     // until the work resolves.
+    console.log('[statement_extract] queued', { id, filename: opts.filename, bytes: opts.text.length })
     this.ctx.waitUntil(
       this.run_statement_extraction(id).catch((e) => {
-        console.error('[statement_extract] failed', { id, err: String(e) })
+        console.error('[statement_extract] outer-catch failed', { id, err: String(e) })
       }),
     )
     return { id }
@@ -1072,17 +1073,24 @@ export class LedgerDO extends Think {
   }
 
   // The extraction subagent. Runs synchronously inside the DO with
-  // reasoning_effort: 'none' so Kimi emits the structured output without
-  // a CoT trace. The bytes live in this scope only — never crossed into
-  // the main chat session.
+  // reasoning_effort: 'low' (vs main chat's 'low') and structured output
+  // so Kimi emits only { transactions: [...] }. The bytes live in this
+  // scope only — never crossed into the main chat session.
+  //
+  // Hard-bounded: a 90-second AbortSignal caps the call and an input cap
+  // truncates ridiculous PDFs so we don't accidentally feed a 1 MB blob.
   private async run_statement_extraction(id: string): Promise<void> {
+    console.log('[statement_extract] start', { id })
     const row = this.db
       .exec<{ filename: string; text: string }>(
         `SELECT filename, text FROM statements WHERE id = ? AND status = 'pending'`,
         id,
       )
       .toArray()[0]
-    if (!row) return
+    if (!row) {
+      console.log('[statement_extract] no pending row, skipping', { id })
+      return
+    }
 
     const snapshot = this.ledger_snapshot_sync()
     const accountLines = snapshot.accounts
@@ -1100,20 +1108,35 @@ export class LedgerDO extends Think {
       `# Output format\n\nReturn ONLY the structured object { transactions: string[] }. Each element is one complete Beancount entry. Do not include reasoning, prose, or any text outside the JSON.`,
     ].join('\n\n---\n\n')
 
-    const workersai = createWorkersAI({ binding: this.env.AI })
-    // `reasoning_effort: null` is the workers-ai-provider signal to fully
-    // disable reasoning — Kimi will emit only the structured output without
-    // a CoT trace.
-    const model = workersai(MODEL_ID, { reasoning_effort: null })
+    // Workers AI rejects truly oversized inputs and the model gets confused
+    // by enormous PDF blobs. Statements rarely exceed ~80KB of useful text;
+    // cap aggressively so a noisy/multi-month PDF still fits.
+    const MAX_INPUT_BYTES = 120_000
+    const statementText =
+      row.text.length > MAX_INPUT_BYTES
+        ? row.text.slice(0, MAX_INPUT_BYTES) + '\n\n[truncated]'
+        : row.text
 
+    const workersai = createWorkersAI({ binding: this.env.AI })
+    const model = workersai(MODEL_ID, { reasoning_effort: 'low' })
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 90_000)
     try {
+      const t0 = Date.now()
       const result = await generateObject({
         model,
         system,
-        prompt: `Statement filename: ${row.filename}\n\nExtracted text follows. Read it once, internally extract the per-row transactions per the rules above, and emit the structured object.\n\n<statement>\n${row.text}\n</statement>`,
+        prompt: `Statement filename: ${row.filename}\n\nExtracted text follows. Read it once, internally extract the per-row transactions per the rules above, and emit the structured object.\n\n<statement>\n${statementText}\n</statement>`,
         schema: draftTransactionBatchSchema,
+        abortSignal: controller.signal,
       })
       const batch = result.object.transactions
+      console.log('[statement_extract] done', {
+        id,
+        ms: Date.now() - t0,
+        count: batch.length,
+      })
       this.db.exec(
         `UPDATE statements SET status = 'ready', batch_json = ? WHERE id = ?`,
         JSON.stringify(batch),
@@ -1121,11 +1144,14 @@ export class LedgerDO extends Think {
       )
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
+      console.error('[statement_extract] failed', { id, err: msg })
       this.db.exec(
         `UPDATE statements SET status = 'error', error = ? WHERE id = ?`,
         msg.slice(0, 500),
         id,
       )
+    } finally {
+      clearTimeout(timeoutId)
     }
   }
 
