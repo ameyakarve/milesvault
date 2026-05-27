@@ -165,7 +165,10 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     try {
       const workersai = createWorkersAI({ binding: this.env.AI })
       const model = workersai(MODEL_ID, {
-        chat_template_kwargs: { enable_thinking: false },
+        // The Workers AI schema key is `thinking`, not `enable_thinking` (the
+        // workers-ai-provider TS surface mistranslates it). Default is true,
+        // so we must pass false explicitly to skip the reasoning trace.
+        chat_template_kwargs: { thinking: false } as never,
       })
       const { fullStream } = streamText({
         model,
