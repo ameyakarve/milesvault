@@ -7,7 +7,6 @@ import {
   BEANCOUNT_PRIMER,
   TOOL_RULES,
   EXAMPLES,
-  STATEMENT_HANDLING,
 } from './inline.generated'
 
 export { BEANCOUNT_PRIMER }
@@ -34,11 +33,16 @@ export function buildSystemPrompt(snapshot: {
 - Open accounts (use these — don't invent new ones unless none fits):
 ${accountLines || '- (none yet)'}`
 
+  // STATEMENT_HANDLING is intentionally excluded — the main chat LLM no
+  // longer sees raw statement bytes. Uploads now flow through a separate
+  // reasoning-off extraction subagent (see LedgerDO.run_statement_extraction)
+  // that loads STATEMENT_HANDLING directly. Keeping the block out of the
+  // main prompt avoids confusing the model with rules about `<statement>`
+  // tags it will never encounter.
   return [
     BEANCOUNT_PRIMER,
     TOOL_RULES,
     EXAMPLES,
-    STATEMENT_HANDLING,
     snapshotBlock,
   ].join('\n\n---\n\n')
 }

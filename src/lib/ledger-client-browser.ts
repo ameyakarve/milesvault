@@ -5,6 +5,8 @@ import type {
   ListEntriesResponse,
   ReplaceBufferConflict,
   ReplaceBufferResponse,
+  StatementStatus,
+  SubmitStatementCardResponse,
 } from '@/durable/ledger-do'
 
 type FetchOpts = { signal?: AbortSignal }
@@ -25,6 +27,23 @@ async function putJSON<T>(url: string, body: unknown): Promise<T> {
   return (await res.json()) as T
 }
 
+async function postJSON<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return (await res.json()) as T
+}
+
+export type StatementStatusResponse = {
+  id: string
+  filename: string
+  status: StatementStatus
+  error: string | null
+}
+
 export const ledgerClient = {
   getJournal(opts?: FetchOpts): Promise<JournalGetResponse> {
     return getJSON('/api/ledger/journal', opts)
@@ -40,6 +59,29 @@ export const ledgerClient = {
   },
   getAccounts(opts?: FetchOpts): Promise<{ accounts: string[] }> {
     return getJSON('/api/ledger/accounts', opts)
+  },
+  attachStatement(filename: string, text: string): Promise<{ id: string }> {
+    return postJSON('/api/statements', { filename, text })
+  },
+  getStatement(
+    id: string,
+    opts?: FetchOpts,
+  ): Promise<StatementStatusResponse> {
+    return getJSON(`/api/statements/${encodeURIComponent(id)}`, opts)
+  },
+  submitStatementCard(
+    id: string,
+    userText?: string,
+  ): Promise<SubmitStatementCardResponse> {
+    return postJSON(`/api/statements/${encodeURIComponent(id)}/submit`, {
+      userText,
+    })
+  },
+  deleteStatement(id: string): Promise<{ ok: true }> {
+    return fetch(`/api/statements/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    }).then(() => ({ ok: true }) as const)
   },
   getJournalFiltered(
     params: {

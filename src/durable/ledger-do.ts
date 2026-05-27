@@ -1,7 +1,8 @@
 import { Think } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
-import { tool, type ToolSet } from 'ai'
+import { tool, generateObject, type ToolSet, type UIMessage } from 'ai'
 import { buildSystemPrompt } from './agent-prompt'
+import { STATEMENT_HANDLING } from './agent-prompt/inline.generated'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
@@ -63,7 +64,13 @@ const DATA_TABLES = [
   'directives_event',
   'balance_totals',
   'daily_balances',
+  'statements',
 ] as const
+
+// Orphaned statement rows are reaped this long after creation. The
+// chat-side approve/reject path explicitly deletes the row, so the TTL
+// only fires for uploads the user abandoned mid-flow.
+const STATEMENT_TTL_MS = 24 * 60 * 60 * 1000
 
 export type JournalGetResponse = { text: string }
 export type JournalCursor = { date: string; id: number }
@@ -129,6 +136,22 @@ export type EntryRow = {
 }
 
 export type ListEntriesResponse = { rows: EntryRow[] }
+
+// Statement upload pipeline. Bytes never reach the chat LLM's context — the
+// user uploads via attach_statement, a reasoning-off subagent extracts the
+// batch, and submit_statement_card injects a synthesized assistant turn
+// containing the draft_transaction tool call.
+export type StatementStatus = 'pending' | 'ready' | 'error'
+export type StatementRecord = {
+  id: string
+  filename: string
+  status: StatementStatus
+  batch: string[] | null
+  error: string | null
+}
+export type SubmitStatementCardResponse =
+  | { ok: true }
+  | { ok: false; error: 'not_found' | 'not_ready'; message: string }
 
 export type EntryRef2 = {
   kind: EntryKind
@@ -935,6 +958,226 @@ export class LedgerDO extends Think {
       deleted: knownIds.length,
       unchanged: 0,
     }
+  }
+
+  // --- Statement upload pipeline ----------------------------------------
+  //
+  // attach_statement is called once per upload with the client-extracted PDF
+  // text. We immediately persist the row and kick off the extraction subagent
+  // in waitUntil so the upload RPC returns instantly. The client polls
+  // get_statement(id) until status flips to "ready" or "error". When the user
+  // submits, the client calls submit_statement_card which appends the user
+  // turn + a synthesized assistant tool-call directly into history — the main
+  // chat LLM never sees the bytes.
+
+  async attach_statement(opts: {
+    filename: string
+    text: string
+  }): Promise<{ id: string }> {
+    const id = `STMT-${crypto.randomUUID()}`
+    const now = Date.now()
+    this.db.exec(
+      `INSERT INTO statements (id, filename, text, status, created_at) VALUES (?, ?, ?, 'pending', ?)`,
+      id,
+      opts.filename,
+      opts.text,
+      now,
+    )
+    // Reap any abandoned rows STATEMENT_TTL_MS from now. If an alarm is
+    // already pending sooner (a previous upload still expiring), keep the
+    // earlier one — the sweep is idempotent and clears any matured rows.
+    const existing = await this.ctx.storage.getAlarm()
+    const want = now + STATEMENT_TTL_MS
+    if (existing == null || existing > want) {
+      await this.ctx.storage.setAlarm(want)
+    }
+    // Run extraction in the background so the upload RPC returns immediately
+    // — the client polls via get_statement. ctx.waitUntil keeps the DO alive
+    // until the work resolves.
+    this.ctx.waitUntil(
+      this.run_statement_extraction(id).catch((e) => {
+        console.error('[statement_extract] failed', { id, err: String(e) })
+      }),
+    )
+    return { id }
+  }
+
+  // Sweep statement rows older than the TTL. Fires on the alarm set in
+  // attach_statement. Safe to call manually for tests.
+  async alarm(): Promise<void> {
+    const cutoff = Date.now() - STATEMENT_TTL_MS
+    const stale = this.db
+      .exec<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM statements WHERE created_at < ?`,
+        cutoff,
+      )
+      .toArray()[0]?.n ?? 0
+    if (stale > 0) {
+      this.db.exec(`DELETE FROM statements WHERE created_at < ?`, cutoff)
+      console.log(`[statement_ttl] reaped ${stale} orphaned statement row(s)`)
+    }
+    // If any rows remain, reschedule for when the oldest survivor will
+    // expire — keeps the alarm budget bounded to one fire per TTL window.
+    const next = this.db
+      .exec<{ created_at: number }>(
+        `SELECT created_at FROM statements ORDER BY created_at ASC LIMIT 1`,
+      )
+      .toArray()[0]
+    if (next) {
+      await this.ctx.storage.setAlarm(next.created_at + STATEMENT_TTL_MS)
+    }
+  }
+
+  async get_statement(id: string): Promise<StatementRecord | null> {
+    const row = this.db
+      .exec<{
+        id: string
+        filename: string
+        status: string
+        batch_json: string | null
+        error: string | null
+      }>(
+        `SELECT id, filename, status, batch_json, error FROM statements WHERE id = ?`,
+        id,
+      )
+      .toArray()[0]
+    if (!row) return null
+    let batch: string[] | null = null
+    if (row.batch_json) {
+      try {
+        const parsed = JSON.parse(row.batch_json) as unknown
+        if (Array.isArray(parsed)) {
+          batch = parsed.filter((v): v is string => typeof v === 'string')
+        }
+      } catch {
+        // treat as no batch
+      }
+    }
+    const status =
+      row.status === 'pending' || row.status === 'ready' || row.status === 'error'
+        ? (row.status as StatementStatus)
+        : 'error'
+    return {
+      id: row.id,
+      filename: row.filename,
+      status,
+      batch,
+      error: row.error,
+    }
+  }
+
+  async delete_statement(id: string): Promise<{ ok: true }> {
+    this.db.exec(`DELETE FROM statements WHERE id = ?`, id)
+    return { ok: true }
+  }
+
+  // The extraction subagent. Runs synchronously inside the DO with
+  // reasoning_effort: 'none' so Kimi emits the structured output without
+  // a CoT trace. The bytes live in this scope only — never crossed into
+  // the main chat session.
+  private async run_statement_extraction(id: string): Promise<void> {
+    const row = this.db
+      .exec<{ filename: string; text: string }>(
+        `SELECT filename, text FROM statements WHERE id = ? AND status = 'pending'`,
+        id,
+      )
+      .toArray()[0]
+    if (!row) return
+
+    const snapshot = this.ledger_snapshot_sync()
+    const accountLines = snapshot.accounts
+      .filter((a) => a.close_date == null)
+      .map((a) => {
+        const ccys = a.currencies.length ? ` [${a.currencies.join(',')}]` : ''
+        return `- ${a.account}${ccys}`
+      })
+      .join('\n')
+    const t = snapshot.today
+    const iso = `${Math.floor(t / 10000)}-${String(Math.floor((t % 10000) / 100)).padStart(2, '0')}-${String(t % 100).padStart(2, '0')}`
+    const system = [
+      STATEMENT_HANDLING,
+      `# Ledger context\n\n- Today: ${iso}\n- Open accounts:\n${accountLines || '- (none yet)'}`,
+      `# Output format\n\nReturn ONLY the structured object { transactions: string[] }. Each element is one complete Beancount entry. Do not include reasoning, prose, or any text outside the JSON.`,
+    ].join('\n\n---\n\n')
+
+    const workersai = createWorkersAI({ binding: this.env.AI })
+    // `reasoning_effort: null` is the workers-ai-provider signal to fully
+    // disable reasoning — Kimi will emit only the structured output without
+    // a CoT trace.
+    const model = workersai(MODEL_ID, { reasoning_effort: null })
+
+    try {
+      const result = await generateObject({
+        model,
+        system,
+        prompt: `Statement filename: ${row.filename}\n\nExtracted text follows. Read it once, internally extract the per-row transactions per the rules above, and emit the structured object.\n\n<statement>\n${row.text}\n</statement>`,
+        schema: draftTransactionBatchSchema,
+      })
+      const batch = result.object.transactions
+      this.db.exec(
+        `UPDATE statements SET status = 'ready', batch_json = ? WHERE id = ?`,
+        JSON.stringify(batch),
+        id,
+      )
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      this.db.exec(
+        `UPDATE statements SET status = 'error', error = ? WHERE id = ?`,
+        msg.slice(0, 500),
+        id,
+      )
+    }
+  }
+
+  // Consume a ready statement and inject it into the chat history as a
+  // synthesized assistant tool-call. The main LLM never runs for this turn
+  // — we just append the user message + assistant message and the existing
+  // gen-ui renderer picks up the draft_transaction card.
+  async submit_statement_card(opts: {
+    id: string
+    userText?: string
+  }): Promise<SubmitStatementCardResponse> {
+    const rec = await this.get_statement(opts.id)
+    if (!rec) {
+      return { ok: false, error: 'not_found', message: `Unknown statement ${opts.id}` }
+    }
+    if (rec.status !== 'ready' || !rec.batch || rec.batch.length === 0) {
+      return {
+        ok: false,
+        error: 'not_ready',
+        message: rec.error ?? `Statement ${opts.id} is not ready yet`,
+      }
+    }
+
+    const userText =
+      (opts.userText && opts.userText.trim().length > 0
+        ? opts.userText.trim() + '\n\n'
+        : '') + `[Statement uploaded: ${rec.filename}]`
+    const userMsg: UIMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      parts: [{ type: 'text', text: userText }],
+    }
+    const assistantMsg: UIMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      parts: [
+        {
+          type: 'tool-draft_transaction',
+          toolCallId: crypto.randomUUID(),
+          state: 'input-available',
+          input: { transactions: rec.batch },
+        } as unknown as UIMessage['parts'][number],
+      ],
+    }
+    await this.appendMessageToHistory(userMsg)
+    await this.appendMessageToHistory(assistantMsg)
+
+    // Statement bytes are consumed — drop the row so we don't keep PDF text
+    // around. The card itself owns the lifecycle from here.
+    this.db.exec(`DELETE FROM statements WHERE id = ?`, opts.id)
+
+    return { ok: true }
   }
 
   async listEntries(): Promise<ListEntriesResponse> {

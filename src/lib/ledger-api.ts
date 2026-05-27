@@ -7,6 +7,8 @@ import type {
   ListEntriesResponse,
   ReplaceBufferRequest,
   ReplaceBufferResponse,
+  StatementRecord,
+  SubmitStatementCardResponse,
 } from '@/durable/ledger-do'
 import type { AccountEntriesResponse, AccountSummaryRow } from '@/durable/ledger-types'
 import type {
@@ -53,6 +55,13 @@ export type LedgerClient = {
   list_entries(): Promise<ListEntriesResponse>
   replace_buffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse>
   clear(): Promise<{ ok: true }>
+  attach_statement(opts: { filename: string; text: string }): Promise<{ id: string }>
+  get_statement(id: string): Promise<StatementRecord | null>
+  submit_statement_card(opts: {
+    id: string
+    userText?: string
+  }): Promise<SubmitStatementCardResponse>
+  delete_statement(id: string): Promise<{ ok: true }>
   ledger_snapshot(): Promise<{
     today: number
     accounts: Array<{
@@ -193,6 +202,37 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async clear() {
       return stub.clear()
+    },
+
+    async attach_statement(opts) {
+      if (typeof opts?.filename !== 'string' || opts.filename.length === 0) {
+        throw new LedgerInputError(['filename must be a non-empty string.'])
+      }
+      if (typeof opts?.text !== 'string' || opts.text.length === 0) {
+        throw new LedgerInputError(['text must be a non-empty string.'])
+      }
+      return stub.attach_statement(opts)
+    },
+
+    async get_statement(id) {
+      if (typeof id !== 'string' || id.length === 0) {
+        throw new LedgerInputError(['id must be a non-empty string.'])
+      }
+      return stub.get_statement(id)
+    },
+
+    async submit_statement_card(opts) {
+      if (typeof opts?.id !== 'string' || opts.id.length === 0) {
+        throw new LedgerInputError(['id must be a non-empty string.'])
+      }
+      return stub.submit_statement_card(opts)
+    },
+
+    async delete_statement(id) {
+      if (typeof id !== 'string' || id.length === 0) {
+        throw new LedgerInputError(['id must be a non-empty string.'])
+      }
+      return stub.delete_statement(id)
     },
 
     async ledger_snapshot() {
