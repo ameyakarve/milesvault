@@ -164,7 +164,9 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     let textBuf = ''
     try {
       const workersai = createWorkersAI({ binding: this.env.AI })
-      const model = workersai(MODEL_ID, { reasoning_effort: null })
+      const model = workersai(MODEL_ID, {
+        chat_template_kwargs: { enable_thinking: false },
+      })
       const { fullStream } = streamText({
         model,
         system,
