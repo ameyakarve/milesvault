@@ -62,7 +62,7 @@ export function buildStatementExtractionPrompt(
 - Open accounts (use these — don't invent new ones unless none fits):
 ${renderAccounts(snapshot) || '- (none yet)'}`
 
-  return [BEANCOUNT_PRIMER, STATEMENT_EXTRACTION, snapshotBlock].join(
+  return [BEANCOUNT_PRIMER, EXAMPLES, STATEMENT_EXTRACTION, snapshotBlock].join(
     '\n\n---\n\n',
   )
 }
