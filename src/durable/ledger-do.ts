@@ -1,12 +1,14 @@
 import { Think, type ChatResponseResult } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
-import { generateObject, tool, type ToolSet } from 'ai'
+import { tool, type ToolSet } from 'ai'
+import { agentTool } from 'agents/agent-tools'
 import { z } from 'zod'
-import { buildStatementExtractionPrompt, buildSystemPrompt } from './agent-prompt'
+import { buildSystemPrompt } from './agent-prompt'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
 } from './agent-ui-schemas'
+import { StatementExtractor } from './statement-extractor'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -265,72 +267,31 @@ export class LedgerDO extends Think {
         inputSchema: clarifyInputSchema,
         // Client-side — resolved by the user picking / typing.
       }),
-      process_statement: tool({
+      process_statement: agentTool(StatementExtractor, {
         description:
-          'Turn a previously-uploaded statement into a batch of drafted Beancount transactions. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message — you do NOT see the statement bytes; this tool runs them through extraction server-side and returns `{ ok: true, transactions: string[] }`. On success, immediately call `draft_transaction` with the returned `transactions` array verbatim. On `{ ok: false, error }`, briefly tell the user and stop — do not fabricate transactions.',
+          'Turn a previously-uploaded statement into a batch of drafted Beancount transactions. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message — you do NOT see the statement bytes; the subagent reads them server-side and returns its structured output. On success, immediately call `draft_transaction` with the returned `transactions` array verbatim. On error, briefly tell the user and stop — do not fabricate transactions.',
         inputSchema: z.object({
           statement_id: z
             .string()
             .regex(/^STMT-/, 'statement_id must start with "STMT-"'),
         }),
-        execute: async ({ statement_id }) => this.processStatement(statement_id),
       }),
     }
   }
 
-  // Looks up a previously-attached statement and runs a one-shot
-  // generateObject call to extract drafted transactions. The main agent
-  // sees only the structured result — never the raw statement text.
-  private async processStatement(
-    statement_id: string,
-  ): Promise<
-    | { ok: true; transactions: string[] }
-    | { ok: false; error: 'statement_not_found' | 'inference_failed' | 'empty_result'; message?: string }
-  > {
+  // RPC callable invoked by the StatementExtractor child. The bytes never
+  // travel through the parent's LLM context — the child reads them, runs
+  // extraction, and returns structured transactions.
+  async getStatementText(
+    id: string,
+  ): Promise<{ filename: string; text: string } | null> {
     const row = this.db
       .exec<{ filename: string; text: string }>(
         'SELECT filename, text FROM statements WHERE id = ?',
-        statement_id,
+        id,
       )
       .toArray()[0]
-    if (!row) {
-      console.warn(`[process_statement] not_found id=${statement_id}`)
-      return { ok: false, error: 'statement_not_found' }
-    }
-    console.log(
-      `[process_statement] start id=${statement_id} filename=${row.filename} bytes=${row.text.length}`,
-    )
-    const startedAt = Date.now()
-    try {
-      const snapshot = this.ledger_snapshot_sync()
-      const system = buildStatementExtractionPrompt(snapshot, row.filename)
-      const result = await generateObject({
-        model: this.getModel(),
-        schema: draftTransactionBatchSchema,
-        system,
-        prompt: row.text,
-        abortSignal: AbortSignal.timeout(240_000),
-      })
-      const elapsedMs = Date.now() - startedAt
-      const transactions = result.object.transactions
-      if (transactions.length === 0) {
-        console.warn(
-          `[process_statement] empty id=${statement_id} elapsedMs=${elapsedMs}`,
-        )
-        return { ok: false, error: 'empty_result' }
-      }
-      console.log(
-        `[process_statement] done id=${statement_id} count=${transactions.length} elapsedMs=${elapsedMs}`,
-      )
-      return { ok: true, transactions }
-    } catch (e) {
-      const elapsedMs = Date.now() - startedAt
-      const message = e instanceof Error ? e.message : String(e)
-      console.error(`[process_statement] failed id=${statement_id} elapsedMs=${elapsedMs}`, {
-        err: message,
-      })
-      return { ok: false, error: 'inference_failed', message }
-    }
+    return row ? { filename: row.filename, text: row.text } : null
   }
 
   // After every turn, redact raw <statement>…</statement> blocks from any
