@@ -2,7 +2,10 @@ import { Think } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
 import { tool, type ToolSet } from 'ai'
 import { buildSystemPrompt } from './agent-prompt'
-import { clarifyInputSchema, draftTransactionSchema } from './agent-ui-schemas'
+import {
+  clarifyInputSchema,
+  draftTransactionBatchSchema,
+} from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -204,8 +207,8 @@ export class LedgerDO extends Think {
     return {
       draft_transaction: tool({
         description:
-          'Propose a single beancount transaction for the user to review and approve. Use this whenever the user asks to record / add a transaction. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields. The user sees an editable card and approves or rejects.',
-        inputSchema: draftTransactionSchema,
+          'Propose one or more beancount transactions for the user to review and approve. Always pass an array under `transactions` — a one-off entry is just a batch of length 1. Batch related entries (statement uploads, splits across categories, subscription series) into a single call; the user pages through them and approves the whole batch at once. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields.',
+        inputSchema: draftTransactionBatchSchema,
         // No execute → client-side tool. The agent loop suspends until the
         // UI resolves it via addToolResult.
       }),

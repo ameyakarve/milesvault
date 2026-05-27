@@ -162,7 +162,7 @@ export function Chat({
     void sendMessage({ text })
   }
 
-  async function handleApprove(toolCallId: string, final: DraftTransaction) {
+  async function handleApprove(toolCallId: string, final: DraftTransaction[]) {
     setSubmitStatus((s) => ({ ...s, [toolCallId]: 'submitting' }))
     setSubmitError((s) => {
       const { [toolCallId]: _drop, ...rest } = s
@@ -170,8 +170,10 @@ export function Chat({
     })
     try {
       const cur = await ledgerClient.getJournal()
-      const newTxn = serializeTransactionInput(draftToTxnInput(final))
-      const next = cur.text ? cur.text.replace(/\s*$/, '\n\n') + newTxn : newTxn
+      const newTxns = final
+        .map((d) => serializeTransactionInput(draftToTxnInput(d)))
+        .join('\n\n')
+      const next = cur.text ? cur.text.replace(/\s*$/, '\n\n') + newTxns : newTxns
       const r = await ledgerClient.putJournal(next)
       if (isJournalPutError(r)) {
         setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
@@ -187,7 +189,7 @@ export function Chat({
       setSubmitStatus((s) => ({ ...s, [toolCallId]: 'done' }))
       addToolOutput({
         toolCallId,
-        output: { ok: true, committed: newTxn.trim() },
+        output: { ok: true, committed: newTxns.trim() },
       })
       void refreshAccounts()
     } catch (e) {

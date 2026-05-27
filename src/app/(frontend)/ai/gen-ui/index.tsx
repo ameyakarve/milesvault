@@ -1,10 +1,10 @@
 'use client'
 
-import { DraftTransactionCard } from './draft-transaction'
+import { DraftTransactionBatchCard } from './draft-transaction'
 import { ClarifyCard } from './clarify'
 import {
   clarifyInputSchema,
-  draftTransactionSchema,
+  draftTransactionBatchSchema,
   type ClarifyInput,
   type DraftTransaction,
 } from '@/durable/agent-ui-schemas'
@@ -15,7 +15,7 @@ export type GenUiProps = {
   status?: 'idle' | 'submitting' | 'done' | 'failed' | 'rejected'
   errorMessage?: string
   // For draft_transaction
-  onApprove?: (final: DraftTransaction) => void
+  onApprove?: (final: DraftTransaction[]) => void
   // For clarify
   resolvedAnswers?: string[]
   onAnswer?: (answers: string[]) => void
@@ -25,15 +25,31 @@ export type GenUiProps = {
 
 const noop = () => {}
 
+// Persisted chat history from before the batch schema landed has draft
+// transactions stored flat — { date, postings, ... } at the top level.
+// Wrap that shape so the new batch parser accepts it. Streaming inputs
+// (partial JSON) just fail parsing and render as "Preparing…", same as
+// they did before.
+function normalizeDraftTxnInput(input: unknown): unknown {
+  if (!input || typeof input !== 'object') return input
+  if ('transactions' in input) return input
+  if ('postings' in input || 'date' in input) {
+    return { transactions: [input] }
+  }
+  return input
+}
+
 const RENDERERS: Record<
   string,
   (input: unknown, props: GenUiProps) => React.ReactElement | null
 > = {
   draft_transaction: (input, props) => {
-    const parsed = draftTransactionSchema.safeParse(input)
+    const parsed = draftTransactionBatchSchema.safeParse(
+      normalizeDraftTxnInput(input),
+    )
     if (!parsed.success) return null
     return (
-      <DraftTransactionCard
+      <DraftTransactionBatchCard
         input={parsed.data}
         accounts={props.accounts}
         status={

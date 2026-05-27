@@ -1,9 +1,10 @@
 import { z } from 'zod'
 
-// Single-transaction draft. The agent emits this as a client-side tool call;
-// the user reviews / edits / approves in DraftTransactionCard. Amounts are
-// signed plain numbers — the card formats and the client serializes back to
-// Beancount text before PUT /api/ledger/journal.
+// One drafted transaction. The agent emits one or more of these inside a
+// `draft_transaction` tool call; the user pages through, edits, and approves
+// the whole batch in DraftTransactionBatchCard. Amounts are signed plain
+// numbers — the card formats and the client serializes back to Beancount text
+// before PUT /api/ledger/journal.
 export const draftTransactionSchema = z.object({
   date: z.string().describe('YYYY-MM-DD posting date'),
   flag: z
@@ -30,6 +31,16 @@ export const draftTransactionSchema = z.object({
 
 export type DraftTransaction = z.infer<typeof draftTransactionSchema>
 export type DraftPosting = DraftTransaction['postings'][number]
+
+// Batch wrapper for the draft_transaction tool. Always emits an array — a
+// single one-off transaction is just a batch of length 1. Use multiple
+// entries for related transactions the user will review together
+// (statement uploads, splits, subscription series).
+export const draftTransactionBatchSchema = z.object({
+  transactions: z.array(draftTransactionSchema).min(1),
+})
+
+export type DraftTransactionBatch = z.infer<typeof draftTransactionBatchSchema>
 
 // Ask the user a clarifying question when the agent can't decide between
 // genuinely ambiguous paths (e.g. instant discount vs separately-redeemable

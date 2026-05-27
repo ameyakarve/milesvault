@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
 import {
-  DraftTransactionCard,
-  type DraftTransactionCardProps,
+  DraftTransactionBatchCard,
+  type DraftTransactionBatchCardProps,
 } from './draft-transaction'
 import type { DraftTransaction } from '@/durable/agent-ui-schemas'
 
@@ -51,17 +51,52 @@ const SPLIT: DraftTransaction = {
   ],
 }
 
-function CardShell(props: Partial<DraftTransactionCardProps>) {
+const STATEMENT_BATCH: DraftTransaction[] = [
+  {
+    date: '2026-05-02',
+    flag: '*',
+    payee: 'Trader Joe’s',
+    narration: 'Groceries',
+    postings: [
+      { account: 'Expenses:Food:Groceries', amount: 58.2, currency: 'USD' },
+      { account: 'Liabilities:CreditCard:Amex', amount: -58.2, currency: 'USD' },
+    ],
+  },
+  {
+    date: '2026-05-05',
+    flag: '*',
+    payee: 'Shell',
+    narration: 'Gas',
+    postings: [
+      { account: 'Expenses:Travel:Air', amount: 41.0, currency: 'USD' },
+      { account: 'Liabilities:CreditCard:Amex', amount: -41.0, currency: 'USD' },
+    ],
+  },
+  {
+    date: '2026-05-07',
+    flag: '*',
+    payee: 'Spotify',
+    narration: 'Monthly subscription',
+    postings: [
+      { account: 'Expenses:Food:Dining', amount: 9.99, currency: 'USD' },
+      { account: 'Liabilities:CreditCard:Amex', amount: -9.99, currency: 'USD' },
+    ],
+  },
+]
+
+function CardShell(props: Partial<DraftTransactionBatchCardProps>) {
   const [logs, setLogs] = useState<string[]>([])
   const push = (s: string) => setLogs((l) => [...l, s])
   return (
     <div className="min-h-screen bg-[#fbfbfa] p-8">
       <div className="mx-auto max-w-2xl space-y-4">
         <div className="rounded-[12px] bg-slate-50 px-4 py-3 text-sm text-slate-900">
-          <DraftTransactionCard
-            input={BALANCED}
+          <DraftTransactionBatchCard
+            input={{ transactions: [BALANCED] }}
             accounts={ACCOUNTS}
-            onApprove={(f) => push(`approve ${JSON.stringify(f)}`)}
+            onApprove={(f: DraftTransaction[]) =>
+              push(`approve ${JSON.stringify(f)}`)
+            }
             onReject={() => push('reject')}
             {...props}
           />
@@ -86,11 +121,15 @@ export default meta
 export const Balanced: StoryObj<typeof CardShell> = {}
 
 export const Unbalanced: StoryObj<typeof CardShell> = {
-  args: { input: UNBALANCED },
+  args: { input: { transactions: [UNBALANCED] } },
 }
 
 export const ThreePostingSplit: StoryObj<typeof CardShell> = {
-  args: { input: SPLIT },
+  args: { input: { transactions: [SPLIT] } },
+}
+
+export const Batch: StoryObj<typeof CardShell> = {
+  args: { input: { transactions: STATEMENT_BATCH } },
 }
 
 export const Submitting: StoryObj<typeof CardShell> = {

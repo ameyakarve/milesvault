@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Check, Plus, X } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Check, Plus, X } from '@phosphor-icons/react'
 import {
   Card,
   CardAction,
@@ -32,16 +32,17 @@ import { cn } from '@/lib/utils'
 import type {
   DraftPosting,
   DraftTransaction,
+  DraftTransactionBatch,
 } from '@/durable/agent-ui-schemas'
 
 type CardStatus = 'idle' | 'submitting' | 'done' | 'failed' | 'rejected'
 
-export type DraftTransactionCardProps = {
-  input: DraftTransaction
+export type DraftTransactionBatchCardProps = {
+  input: DraftTransactionBatch
   accounts?: string[]
   status?: CardStatus
   errorMessage?: string
-  onApprove: (final: DraftTransaction) => void
+  onApprove: (final: DraftTransaction[]) => void
   onReject: () => void
 }
 
@@ -68,58 +69,84 @@ function formatBalanceIssue(b: Map<string, number>): string {
   return parts.join(', ')
 }
 
-export function DraftTransactionCard({
+export function DraftTransactionBatchCard({
   input,
   accounts = [],
   status = 'idle',
   errorMessage,
   onApprove,
   onReject,
-}: DraftTransactionCardProps) {
-  const [draft, setDraft] = useState<DraftTransaction>(input)
+}: DraftTransactionBatchCardProps) {
+  const [drafts, setDrafts] = useState<DraftTransaction[]>(input.transactions)
+  const [page, setPage] = useState(0)
 
-  const balance = useMemo(() => computeBalance(draft.postings), [draft.postings])
-  const balanced = isBalanced(balance)
+  const total = drafts.length
+  const safePage = Math.min(page, total - 1)
+  const current = drafts[safePage]
+
+  const currentBalance = useMemo(
+    () => computeBalance(current.postings),
+    [current.postings],
+  )
+  const currentBalanced = isBalanced(currentBalance)
+  const allBalanced = useMemo(
+    () => drafts.every((d) => isBalanced(computeBalance(d.postings))),
+    [drafts],
+  )
 
   const done = status === 'done'
   const rejected = status === 'rejected'
   const disabled = status === 'submitting' || done || rejected
 
+  const updateCurrent = (patch: (d: DraftTransaction) => DraftTransaction) => {
+    setDrafts((arr) => arr.map((d, i) => (i === safePage ? patch(d) : d)))
+  }
+
   const updatePosting = (idx: number, patch: Partial<DraftPosting>) => {
-    setDraft((d) => ({
+    updateCurrent((d) => ({
       ...d,
       postings: d.postings.map((p, i) => (i === idx ? { ...p, ...patch } : p)),
     }))
   }
 
   const addPosting = () => {
-    const currency = draft.postings[0]?.currency ?? 'USD'
-    setDraft((d) => ({
+    const currency = current.postings[0]?.currency ?? 'USD'
+    updateCurrent((d) => ({
       ...d,
       postings: [...d.postings, { account: '', amount: 0, currency }],
     }))
   }
 
   const removePosting = (idx: number) => {
-    setDraft((d) => ({
+    updateCurrent((d) => ({
       ...d,
       postings: d.postings.filter((_, i) => i !== idx),
     }))
   }
 
+  const isBatch = total > 1
+  const title = isBatch ? `Proposed transactions` : 'Proposed transaction'
+
   return (
     <Card size="sm">
       <CardHeader>
-        <CardTitle>Proposed transaction</CardTitle>
+        <CardTitle>
+          {title}
+          {isBatch ? (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              {safePage + 1} of {total}
+            </span>
+          ) : null}
+        </CardTitle>
         <CardAction>
-          {balanced ? (
+          {currentBalanced ? (
             <Badge variant="secondary" className="gap-1 bg-emerald-50 text-emerald-700">
               <Check size={12} weight="bold" />
               balanced
             </Badge>
           ) : (
             <Badge variant="secondary" className="bg-amber-50 text-amber-800">
-              off by {formatBalanceIssue(balance)}
+              off by {formatBalanceIssue(currentBalance)}
             </Badge>
           )}
         </CardAction>
@@ -131,17 +158,17 @@ export function DraftTransactionCard({
           <Input
             id="dt-date"
             type="date"
-            value={draft.date}
-            onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+            value={current.date}
+            onChange={(e) => updateCurrent((d) => ({ ...d, date: e.target.value }))}
             disabled={disabled}
           />
           <Label htmlFor="dt-payee">Payee</Label>
           <Input
             id="dt-payee"
             type="text"
-            value={draft.payee ?? ''}
+            value={current.payee ?? ''}
             onChange={(e) =>
-              setDraft((d) => ({ ...d, payee: e.target.value || undefined }))
+              updateCurrent((d) => ({ ...d, payee: e.target.value || undefined }))
             }
             placeholder="—"
             disabled={disabled}
@@ -150,9 +177,12 @@ export function DraftTransactionCard({
           <Input
             id="dt-narration"
             type="text"
-            value={draft.narration ?? ''}
+            value={current.narration ?? ''}
             onChange={(e) =>
-              setDraft((d) => ({ ...d, narration: e.target.value || undefined }))
+              updateCurrent((d) => ({
+                ...d,
+                narration: e.target.value || undefined,
+              }))
             }
             placeholder="—"
             disabled={disabled}
@@ -170,7 +200,7 @@ export function DraftTransactionCard({
           <div />
         </div>
         <div className="flex flex-col gap-1.5">
-          {draft.postings.map((p, idx) => (
+          {current.postings.map((p, idx) => (
             <div
               key={idx}
               className="grid grid-cols-[1fr_120px_72px_28px] items-center gap-x-2"
@@ -205,7 +235,7 @@ export function DraftTransactionCard({
                 disabled={disabled}
                 className="font-mono uppercase"
               />
-              {draft.postings.length > 2 && !disabled ? (
+              {current.postings.length > 2 && !disabled ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -234,6 +264,37 @@ export function DraftTransactionCard({
           Add posting
         </Button>
       </CardContent>
+
+      {isBatch ? (
+        <>
+          <Separator />
+          <CardContent className="flex items-center justify-between py-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={safePage === 0}
+            >
+              <CaretLeft size={14} weight="bold" />
+              Prev
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              {safePage + 1} / {total}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(total - 1, p + 1))}
+              disabled={safePage === total - 1}
+            >
+              Next
+              <CaretRight size={14} weight="bold" />
+            </Button>
+          </CardContent>
+        </>
+      ) : null}
 
       {status === 'failed' && errorMessage ? (
         <>
@@ -267,11 +328,21 @@ export function DraftTransactionCard({
           <Button
             type="button"
             size="sm"
-            onClick={() => onApprove(draft)}
-            disabled={disabled || !balanced}
-            title={!balanced ? 'Postings must balance' : undefined}
+            onClick={() => onApprove(drafts)}
+            disabled={disabled || !allBalanced}
+            title={
+              !allBalanced
+                ? isBatch
+                  ? 'All rows must balance'
+                  : 'Postings must balance'
+                : undefined
+            }
           >
-            {status === 'submitting' ? 'Saving…' : 'Approve'}
+            {status === 'submitting'
+              ? 'Saving…'
+              : isBatch
+                ? `Approve ${total}`
+                : 'Approve'}
           </Button>
         </CardFooter>
       )}
