@@ -54,17 +54,10 @@ type Part = {
   [k: string]: unknown
 }
 
-// Client-side state for a statement attachment. The PDF text never travels
-// with the chat message — it goes through /api/statements where the DO runs
-// a reasoning-off extraction subagent. The chip walks: extracting (PDF.js) →
-// uploading (POST) → processing (poll) → ready (cardable). Submit then calls
-// submit_statement_card which injects the assistant tool-call directly.
 type StatementAttachment =
   | { kind: 'extracting'; file: File }
   | { kind: 'needs_password'; file: File; wrong?: boolean }
-  | { kind: 'uploading'; file: File }
-  | { kind: 'processing'; file: File; id: string }
-  | { kind: 'ready'; file: File; id: string }
+  | { kind: 'ready'; file: File; text: string }
   | { kind: 'error'; file: File; message: string }
 
 function StatementChip({
@@ -91,16 +84,6 @@ function StatementChip({
         <span className="flex items-center gap-1 text-slate-500">
           <Loader2 className="size-3 animate-spin" />
           Reading…
-        </span>
-      ) : state.kind === 'uploading' ? (
-        <span className="flex items-center gap-1 text-slate-500">
-          <Loader2 className="size-3 animate-spin" />
-          Uploading…
-        </span>
-      ) : state.kind === 'processing' ? (
-        <span className="flex items-center gap-1 text-slate-500">
-          <Loader2 className="size-3 animate-spin" />
-          Extracting…
         </span>
       ) : state.kind === 'ready' ? (
         <span className="text-emerald-600">Ready</span>
@@ -245,80 +228,12 @@ export function Chat({
   const [statement, setStatement] = useState<StatementAttachment | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  async function pollStatement(id: string, file: File) {
-    // Poll get_statement until ready/error. The DO runs extraction in
-    // waitUntil so this loop just observes the row flipping state. Quietly
-    // gives up if the user removed the chip mid-flight (state cleared).
-    let transientErrors = 0
-    const startedAt = Date.now()
-    const HARD_CAP_MS = 150_000 // server abort is 90s; give it a buffer.
-    for (;;) {
-      if (Date.now() - startedAt > HARD_CAP_MS) {
-        console.error('[statement] poll timed out', { id })
-        setStatement((curr) => {
-          if (!curr) return curr
-          if ('id' in curr && curr.id !== id) return curr
-          return {
-            kind: 'error',
-            file,
-            message: 'Extraction timed out — try again',
-          }
-        })
-        return
-      }
-      try {
-        const rec = await ledgerClient.getStatement(id)
-        console.log('[statement] poll', { id, status: rec.status })
-        transientErrors = 0
-        // If the user removed the chip while we were waiting, bail.
-        // We compare by id to avoid racing a stale poller against a new
-        // upload.
-        setStatement((curr) => {
-          if (!curr) return curr
-          if (
-            (curr.kind === 'processing' || curr.kind === 'ready') &&
-            'id' in curr &&
-            curr.id !== id
-          ) {
-            // a newer upload claimed the chip
-            return curr
-          }
-          if (rec.status === 'ready') return { kind: 'ready', file, id }
-          if (rec.status === 'error') {
-            return {
-              kind: 'error',
-              file,
-              message: rec.error ?? 'Extraction failed',
-            }
-          }
-          return curr
-        })
-        if (rec.status === 'ready' || rec.status === 'error') return
-      } catch (e) {
-        // Bail after a few consecutive failures so the chip doesn't loop
-        // forever when the server row is gone (404) or the network is down.
-        transientErrors++
-        console.error('[statement] poll error', { id, err: e })
-        if (transientErrors >= 5) {
-          const msg = e instanceof Error ? e.message : 'Status poll failed'
-          setStatement((curr) => {
-            if (!curr) return curr
-            if ('id' in curr && curr.id !== id) return curr
-            return { kind: 'error', file, message: msg }
-          })
-          return
-        }
-      }
-      await new Promise((r) => setTimeout(r, 1000))
-    }
-  }
-
   async function tryExtract(file: File, password?: string) {
     setStatement({ kind: 'extracting', file })
-    let text: string
     try {
       const { doc } = await loadStatement(file, password)
-      text = await extractStatementText(doc)
+      const text = await extractStatementText(doc)
+      setStatement({ kind: 'ready', file, text })
     } catch (e) {
       if (e instanceof StatementExtractError) {
         if (e.detail.kind === 'need_password') {
@@ -342,21 +257,7 @@ export function Chat({
       }
       const msg = e instanceof Error ? e.message : 'Failed to read PDF'
       setStatement({ kind: 'error', file, message: msg })
-      return
     }
-
-    setStatement({ kind: 'uploading', file })
-    let id: string
-    try {
-      const r = await ledgerClient.attachStatement(file.name, text)
-      id = r.id
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Upload failed'
-      setStatement({ kind: 'error', file, message: msg })
-      return
-    }
-    setStatement({ kind: 'processing', file, id })
-    void pollStatement(id, file)
   }
 
   function onAttachClick() {
@@ -407,7 +308,16 @@ export function Chat({
     onClearableChange?.({ canClear, clear: () => clearHistoryRef.current() })
   }, [canClear, onClearableChange])
 
-  function supersedePendingCards() {
+  function handleSubmit(message: PromptInputMessage) {
+    const userText = message.text.trim()
+    const stmt = statement?.kind === 'ready' ? statement : null
+    // Allow a statement-only submit (no typed note) — the prompt block alone
+    // is enough signal for the agent.
+    if (!userText && !stmt) return
+    if (statement && !stmt) return // statement attached but not ready
+    const text = stmt
+      ? `${userText || 'Process the attached statement and draft transactions.'}\n\n<statement filename="${stmt.file.name}">\n${stmt.text}\n</statement>`
+      : userText
     // Any tool cards still awaiting a decision get superseded by the new
     // message — otherwise the agent stays stuck waiting on them.
     for (const m of messages) {
@@ -424,45 +334,7 @@ export function Chat({
         })
       }
     }
-  }
-
-  function handleSubmit(message: PromptInputMessage) {
-    const userText = message.text.trim()
-    const stmt = statement?.kind === 'ready' ? statement : null
-    // Allow a statement-only submit (no typed note) — the card alone is
-    // enough signal that the user wants to process the upload.
-    if (!userText && !stmt) return
-    if (statement && !stmt) return // statement attached but not ready
-
-    supersedePendingCards()
-
-    if (stmt) {
-      // Statement path: the DO injects the assistant tool-call message
-      // directly into history. The main LLM is NOT invoked — the extracted
-      // batch never crosses into the chat context.
-      void ledgerClient
-        .submitStatementCard(stmt.id, userText || undefined)
-        .catch(() => {
-          // Surface as an error chip so the user can retry.
-          setStatement({
-            kind: 'error',
-            file: stmt.file,
-            message: 'Failed to submit statement',
-          })
-        })
-      setStatement(null)
-      return
-    }
-
-    void sendMessage({ text: userText })
-  }
-
-  function onRemoveStatement() {
-    // Drop the server row when the user dismisses the chip. The poller
-    // notices the state change and exits on the next tick.
-    if (statement && 'id' in statement) {
-      void ledgerClient.deleteStatement(statement.id).catch(() => {})
-    }
+    void sendMessage({ text })
     setStatement(null)
   }
 
@@ -568,7 +440,7 @@ export function Chat({
                 onStop={stop}
                 statement={statement}
                 onAttachClick={onAttachClick}
-                onRemoveStatement={onRemoveStatement}
+                onRemoveStatement={() => setStatement(null)}
                 onProvidePassword={onProvidePassword}
               />
             </div>

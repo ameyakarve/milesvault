@@ -423,23 +423,4 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
             GROUP BY account, currency, scale, date
           )`,
   },
-  // Side-storage for uploaded statement text. The chat LLM never sees the
-  // bytes — the client uploads via the `attach_statement` RPC, gets back an
-  // id, and references it in the user turn via `body.statementId`. The DO
-  // runs a reasoning-off extraction subagent over the text and stores the
-  // resulting batch; when the chat turn fires with that body, we bypass the
-  // main LLM and inject a synthesized `draft_transaction` tool call.
-  {
-    label: 'statements',
-    sql: `CREATE TABLE IF NOT EXISTS statements (
-      id          TEXT PRIMARY KEY,
-      filename    TEXT NOT NULL,
-      text        TEXT NOT NULL,
-      batch_json  TEXT,
-      status      TEXT NOT NULL,
-      error       TEXT,
-      created_at  INTEGER NOT NULL,
-      used_at     INTEGER
-    )`,
-  },
 ]
