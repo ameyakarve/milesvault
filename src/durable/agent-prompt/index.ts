@@ -7,6 +7,7 @@ import {
   BEANCOUNT_PRIMER,
   TOOL_RULES,
   EXAMPLES,
+  CLARIFICATIONS,
   STATEMENT_HANDLING,
   STATEMENT_EXTRACTION,
 } from './inline.generated'
@@ -43,6 +44,7 @@ ${renderAccounts(snapshot) || '- (none yet)'}`
     BEANCOUNT_PRIMER,
     TOOL_RULES,
     EXAMPLES,
+    CLARIFICATIONS,
     STATEMENT_HANDLING,
     snapshotBlock,
   ].join('\n\n---\n\n')

@@ -19,24 +19,6 @@ ignore it. Decide by what the reward did to THIS purchase:
 - Is it in a non-cash unit (points, miles)? → **Points** pattern
   (4 postings, multi-currency, `Equity:Void` contra).
 
-If the user's wording is genuinely ambiguous between Discount and
-Cashback (e.g. just "10% discount on this card" — could be at-POS or
-deferred), call `clarify` with one short question and 2-3 chip
-options, e.g.:
-
-```
-clarify({
-  question: "Was the 10% reduction applied to this bill, or does it
-  come back later as cashback?",
-  options: [
-    "Applied to this bill (POS discount)",
-    "Comes back later as cashback",
-  ],
-  multi_select: false,
-  allow_custom: false,
-})
-```
-
 ## Account formats (strict)
 
 - Credit cards: `Liabilities:CreditCards:<Issuer>:<Card>[:<Id>]`
@@ -382,10 +364,6 @@ When the points land, settle the receivable:
   Assets:Receivable:United    -13000 UA_MILES
 ```
 
-If the user didn't say whether the transfer was instant or pending and
-it could plausibly be either, call `clarify` with chips like "Landed
-instantly" / "Still pending".
-
 ## Redemptions — always associate a cash value
 
 **Hard rule:** every redemption associates a cash value with the points
@@ -393,20 +371,6 @@ side via `@@`. There are no exceptions — statement credits, pay-at-
 merchant, award flights, award hotels, hybrid fares, all the same shape.
 The points leg's weight is the cash equivalent at redemption time
 (statement credit amount, cash fare displaced, hotel cash rate, etc.).
-
-**If the user didn't say the cash value, call `clarify`.** Don't guess
-the cash value from a fixed cpp rate, don't pull a number out of the air,
-and don't fall back to `Equity:Void`. Example chip set:
-
-```
-clarify({
-  question: "What was the cash equivalent of this redemption? (so we can
-  record what the points were worth)",
-  options: [],
-  multi_select: false,
-  allow_custom: true,
-})
-```
 
 ### Cashback applied to the statement (same currency)
 Settles the receivable from the Cashback pattern. Card liability goes
@@ -454,7 +418,6 @@ is ₹100k → miles' cash value is ₹95k (100k − 5k).
   Assets:Rewards:United                -75000 UA_MILES @@ 95000.00 INR
   Liabilities:CreditCards:HDFC:Regalia  -5000.00 INR
 ```
-If the user didn't volunteer the cash fare, `clarify` and ask.
 
 ### Award hotel night
 Same shape — cash-equivalent room rate is the value the points unlocked.
@@ -580,9 +543,7 @@ redemption was booked at.
   redemption. (Examples: transferring 10k Chase UR → 13k United,
   redeeming points for a statement credit, paying with points at a
   merchant, buying points with cash, award flights, award hotel nights,
-  hybrid cash-and-points fares.) If the user didn't tell you the cash
-  value, call `clarify` and ask — do not guess and do not fall back to
-  `Equity:Void`.
+  hybrid cash-and-points fares.)
 - **Accrual / write-off** — your point balance changes without a
   transaction (no rate is being asserted): use `Equity:Void` as the
   point-side contra. (Examples: earning points on a purchase, welcome

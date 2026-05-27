@@ -20,6 +20,7 @@ const FRAGMENTS = [
   { file: 'beancount-primer.md', name: 'BEANCOUNT_PRIMER' },
   { file: 'tool-rules.md', name: 'TOOL_RULES' },
   { file: 'examples.md', name: 'EXAMPLES' },
+  { file: 'clarifications.md', name: 'CLARIFICATIONS' },
   { file: 'statement-handling.md', name: 'STATEMENT_HANDLING' },
   { file: 'statement-extraction.md', name: 'STATEMENT_EXTRACTION' },
 ]
