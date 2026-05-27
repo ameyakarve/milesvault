@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowUp, Eraser } from 'lucide-react'
+import { ArrowUp } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -33,7 +33,6 @@ import {
   PromptInputTools,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
-import { Button } from '@/components/ui/button'
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import type { DraftTransaction } from '@/durable/agent-ui-schemas'
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
@@ -90,8 +89,10 @@ function Composer({
 
 export function Chat({
   onBusyChange,
+  onClearableChange,
 }: {
   onBusyChange?: (busy: boolean) => void
+  onClearableChange?: (state: { canClear: boolean; clear: () => void }) => void
 } = {}) {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
   const {
@@ -139,6 +140,11 @@ export function Chat({
   useEffect(() => {
     onBusyChange?.(busy)
   }, [busy, onBusyChange])
+
+  const canClear = messages.length > 0
+  useEffect(() => {
+    onClearableChange?.({ canClear, clear: () => clearHistory() })
+  }, [canClear, clearHistory, onClearableChange])
 
   function handleSubmit(message: PromptInputMessage) {
     const text = message.text.trim()
@@ -244,21 +250,6 @@ export function Chat({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-      {!isEmpty ? (
-        <div className="flex items-center justify-end px-4 pt-2 sm:px-6">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => clearHistory()}
-            disabled={busy}
-          >
-            <Eraser className="size-3.5" />
-            Clear
-          </Button>
-        </div>
-      ) : null}
-
       {isEmpty ? (
         <div className="flex flex-1 items-center justify-center px-4">
           <div className="flex w-full max-w-3xl -translate-y-8 flex-col items-center gap-7">
