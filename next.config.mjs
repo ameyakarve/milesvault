@@ -30,7 +30,7 @@ const nextConfig = {
     NEXT_PUBLIC_BUILD_ID: buildId,
   },
   generateBuildId: async () => buildId,
-  webpack: (webpackConfig, { webpack, isServer }) => {
+  webpack: (webpackConfig, { webpack }) => {
     webpackConfig.resolve.extensionAlias = {
       '.cjs': ['.cts', '.cjs'],
       '.js': ['.ts', '.tsx', '.js', '.jsx'],
@@ -51,29 +51,6 @@ const nextConfig = {
         contextRegExp: /beancount/,
       }),
     )
-
-    // Staging-only: swap React's production CJS bundles for the development
-    // builds on the client. Dev React prints the full hydration diff (element
-    // names + server-vs-client subtree) when #418 fires; the minified prod
-    // build only throws an opaque error code. The conditional `require` in
-    // react/react-dom entry files picks production at runtime when
-    // NODE_ENV='production', so we rewrite the request at bundle time
-    // instead. Server bundles untouched — SSR continues to render minified.
-    if (process.env.CLOUDFLARE_ENV === 'staging' && !isServer) {
-      const reactCjsContext = /[\\/](react|react-dom)(?:[\\/]|$)/
-      webpackConfig.plugins.push(
-        new webpack.NormalModuleReplacementPlugin(
-          /\.production\.js$/,
-          (resource) => {
-            if (!reactCjsContext.test(resource.context ?? '')) return
-            resource.request = resource.request.replace(
-              /\.production\.js$/,
-              '.development.js',
-            )
-          },
-        ),
-      )
-    }
 
     // The `agents` package transitively imports `cloudflare:workers` and
     // `cloudflare:email`. Webpack can't bundle those — leave them external
