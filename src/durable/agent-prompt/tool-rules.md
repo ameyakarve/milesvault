@@ -44,3 +44,26 @@ Hard rules:
   use a foreign currency on an INR card, you MUST use `@@` so the INR
   weight closes against the card's INR posting — otherwise the card
   shows "off by X USD" and the user can't approve.
+
+## Balance / pad asks (no directive tool)
+
+`draft_transaction` emits transactions, not directives. If the user
+asks to "set my HDFC balance to ₹X" or "my balance is off by ₹Y, fix
+it", propose a transaction that plugs to `Equity:Opening-Balances` and
+tell the user they can add the `balance` assertion themselves in the
+editor afterwards.
+
+```
+2026-05-27 * "Opening balance" "Set Assets:Bank:HDFC:Savings"
+  Assets:Bank:HDFC:Savings    123456.78 INR
+  Equity:Opening-Balances    -123456.78 INR
+```
+
+For drift correction (books say ₹100k, statement says ₹103k), the plug
+transaction is for the **difference**:
+
+```
+2026-05-27 * "Reconcile" "HDFC drift correction"
+  Assets:Bank:HDFC:Savings      3000.00 INR
+  Equity:Opening-Balances      -3000.00 INR
+```

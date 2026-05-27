@@ -603,25 +603,3 @@ account is merged into a single logical entry — a balance with a
 `plug_account` field. Unmatched pads are surfaced as unsupported.
 That's why you only ever see a `pad` paired with a `balance` in the
 editor.
-
-### What the chat tool can do today
-
-The `draft_transaction` tool emits transactions, not directives. So if
-the user asks to "set my HDFC balance to ₹X" or "my balance is off by
-₹Y, fix it", propose a transaction that plugs to
-`Equity:Opening-Balances` and tell the user they can add the `balance`
-assertion themselves in the editor afterwards.
-
-```
-2026-05-27 * "Opening balance" "Set Assets:Bank:HDFC:Savings"
-  Assets:Bank:HDFC:Savings    123456.78 INR
-  Equity:Opening-Balances    -123456.78 INR
-```
-
-If the user wants to correct drift (their books say ₹100k, statement
-says ₹103k), the plug transaction is for the **difference**:
-```
-2026-05-27 * "Reconcile" "HDFC drift correction"
-  Assets:Bank:HDFC:Savings      3000.00 INR
-  Equity:Opening-Balances      -3000.00 INR
-```
