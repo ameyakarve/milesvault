@@ -7,6 +7,7 @@ import {
   BEANCOUNT_PRIMER,
   TOOL_RULES,
   EXAMPLES,
+  STATEMENT_HANDLING,
 } from './inline.generated'
 
 export { BEANCOUNT_PRIMER }
@@ -33,5 +34,11 @@ export function buildSystemPrompt(snapshot: {
 - Open accounts (use these — don't invent new ones unless none fits):
 ${accountLines || '- (none yet)'}`
 
-  return [BEANCOUNT_PRIMER, TOOL_RULES, EXAMPLES, snapshotBlock].join('\n\n---\n\n')
+  return [
+    BEANCOUNT_PRIMER,
+    TOOL_RULES,
+    EXAMPLES,
+    STATEMENT_HANDLING,
+    snapshotBlock,
+  ].join('\n\n---\n\n')
 }

@@ -1,9 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowUp, Check, Copy } from 'lucide-react'
+import { ArrowUp, Check, Copy, FileText, Loader2, Lock, Paperclip, X } from 'lucide-react'
+import {
+  loadStatement,
+  extractStatementText,
+  StatementExtractError,
+} from '@/lib/pdf/extract'
 import {
   Conversation,
   ConversationContent,
@@ -27,6 +32,7 @@ import {
 } from '@/components/ai-elements/tool'
 import {
   PromptInput,
+  PromptInputButton,
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
@@ -65,21 +71,122 @@ function draftToTxnInput(d: DraftTransaction): TransactionInput {
   }
 }
 
+type StatementAttachment =
+  | { kind: 'extracting'; file: File }
+  | { kind: 'needs_password'; file: File; wrong?: boolean }
+  | { kind: 'ready'; file: File; text: string }
+  | { kind: 'error'; file: File; message: string }
+
+function StatementChip({
+  state,
+  onRemove,
+  onPassword,
+}: {
+  state: StatementAttachment
+  onRemove: () => void
+  onPassword: (pw: string) => void
+}) {
+  const [pw, setPw] = useState('')
+  const needsPw = state.kind === 'needs_password'
+  return (
+    <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
+      <FileText className="size-4 shrink-0 text-slate-500" />
+      <span className="min-w-0 truncate font-medium text-slate-700">
+        {state.file.name}
+      </span>
+      <span className="text-slate-400">·</span>
+      {state.kind === 'extracting' ? (
+        <span className="flex items-center gap-1 text-slate-500">
+          <Loader2 className="size-3 animate-spin" />
+          Reading…
+        </span>
+      ) : state.kind === 'ready' ? (
+        <span className="text-emerald-600">Ready</span>
+      ) : state.kind === 'error' ? (
+        <span className="truncate text-rose-600">{state.message}</span>
+      ) : (
+        <form
+          className="flex items-center gap-1"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (pw) onPassword(pw)
+          }}
+        >
+          <Lock className="size-3 text-slate-500" />
+          <input
+            type="password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            placeholder={state.wrong ? 'Wrong password — try again' : 'Password'}
+            autoFocus
+            className="h-6 w-40 rounded border border-slate-300 bg-white px-2 text-xs focus:border-slate-400 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!pw}
+            className="rounded bg-slate-900 px-2 py-0.5 text-xs text-white disabled:opacity-40"
+          >
+            Unlock
+          </button>
+        </form>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="Remove attachment"
+        className="ml-auto flex size-5 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  )
+}
+
 function Composer({
   onSubmit,
   status,
   onStop,
+  statement,
+  onAttachClick,
+  onRemoveStatement,
+  onProvidePassword,
 }: {
   onSubmit: (m: PromptInputMessage) => void
   status: ReturnType<typeof useAgentChat>['status']
   onStop: () => void
+  statement: StatementAttachment | null
+  onAttachClick: () => void
+  onRemoveStatement: () => void
+  onProvidePassword: (pw: string) => void
 }) {
+  const submitBlocked =
+    statement !== null && statement.kind !== 'ready'
   return (
     <PromptInput onSubmit={onSubmit}>
       <PromptInputTextarea placeholder="Ask anything" />
+      {statement ? (
+        <StatementChip
+          state={statement}
+          onRemove={onRemoveStatement}
+          onPassword={onProvidePassword}
+        />
+      ) : null}
       <PromptInputFooter>
-        <PromptInputTools />
-        <PromptInputSubmit status={status} onStop={onStop}>
+        <PromptInputTools>
+          <PromptInputButton
+            type="button"
+            onClick={onAttachClick}
+            tooltip="Attach statement (PDF)"
+            disabled={statement !== null}
+          >
+            <Paperclip className="size-4" />
+          </PromptInputButton>
+        </PromptInputTools>
+        <PromptInputSubmit
+          status={status}
+          onStop={onStop}
+          disabled={submitBlocked}
+        >
           <ArrowUp className="size-4" strokeWidth={2.5} />
         </PromptInputSubmit>
       </PromptInputFooter>
@@ -128,6 +235,57 @@ export function Chat({
   const [submitError, setSubmitError] = useState<Record<string, string>>({})
   const [clarifyAnswers, setClarifyAnswers] = useState<Record<string, string[]>>({})
   const [accounts, setAccounts] = useState<string[]>([])
+  const [statement, setStatement] = useState<StatementAttachment | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  async function tryExtract(file: File, password?: string) {
+    setStatement({ kind: 'extracting', file })
+    try {
+      const { doc } = await loadStatement(file, password)
+      const text = await extractStatementText(doc)
+      setStatement({ kind: 'ready', file, text })
+    } catch (e) {
+      if (e instanceof StatementExtractError) {
+        if (e.detail.kind === 'need_password') {
+          setStatement({ kind: 'needs_password', file })
+          return
+        }
+        if (e.detail.kind === 'wrong_password') {
+          setStatement({ kind: 'needs_password', file, wrong: true })
+          return
+        }
+        if (e.detail.kind === 'image_only') {
+          setStatement({
+            kind: 'error',
+            file,
+            message: 'Image-only PDF — text extraction not supported yet.',
+          })
+          return
+        }
+        setStatement({ kind: 'error', file, message: e.detail.message })
+        return
+      }
+      const msg = e instanceof Error ? e.message : 'Failed to read PDF'
+      setStatement({ kind: 'error', file, message: msg })
+    }
+  }
+
+  function onAttachClick() {
+    fileInputRef.current?.click()
+  }
+
+  function onFileChosen(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file later
+    if (!file) return
+    void tryExtract(file)
+  }
+
+  function onProvidePassword(pw: string) {
+    if (statement && (statement.kind === 'needs_password')) {
+      void tryExtract(statement.file, pw)
+    }
+  }
 
   useEffect(() => {
     const ac = new AbortController()
@@ -161,8 +319,15 @@ export function Chat({
   }, [canClear, onClearableChange])
 
   function handleSubmit(message: PromptInputMessage) {
-    const text = message.text.trim()
-    if (!text) return
+    const userText = message.text.trim()
+    const stmt = statement?.kind === 'ready' ? statement : null
+    // Allow a statement-only submit (no typed note) — the prompt block alone
+    // is enough signal for the agent.
+    if (!userText && !stmt) return
+    if (statement && !stmt) return // statement attached but not ready
+    const text = stmt
+      ? `${userText || 'Process the attached statement and draft transactions.'}\n\n<statement filename="${stmt.file.name}">\n${stmt.text}\n</statement>`
+      : userText
     // Any tool cards still awaiting a decision get superseded by the new
     // message — otherwise the agent stays stuck waiting on them.
     for (const m of messages) {
@@ -180,6 +345,7 @@ export function Chat({
       }
     }
     void sendMessage({ text })
+    setStatement(null)
   }
 
   async function handleApprove(toolCallId: string, final: DraftTransaction[]) {
@@ -267,6 +433,13 @@ export function Chat({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        className="hidden"
+        onChange={onFileChosen}
+      />
       {isEmpty ? (
         <div className="flex flex-1 items-center justify-center px-4">
           <div className="flex w-full max-w-3xl -translate-y-8 flex-col items-center gap-7">
@@ -274,7 +447,15 @@ export function Chat({
               How can I help?
             </h1>
             <div className="w-full">
-              <Composer onSubmit={handleSubmit} status={status} onStop={stop} />
+              <Composer
+                onSubmit={handleSubmit}
+                status={status}
+                onStop={stop}
+                statement={statement}
+                onAttachClick={onAttachClick}
+                onRemoveStatement={() => setStatement(null)}
+                onProvidePassword={onProvidePassword}
+              />
             </div>
           </div>
         </div>
@@ -396,7 +577,15 @@ export function Chat({
           </Conversation>
 
           <div className="mx-auto w-full max-w-3xl px-4 pb-4">
-            <Composer onSubmit={handleSubmit} status={status} onStop={stop} />
+            <Composer
+              onSubmit={handleSubmit}
+              status={status}
+              onStop={stop}
+              statement={statement}
+              onAttachClick={onAttachClick}
+              onRemoveStatement={() => setStatement(null)}
+              onProvidePassword={onProvidePassword}
+            />
             <p className="mt-2 text-center text-xs text-muted-foreground">
               MilesVault can make mistakes. Check important info.
             </p>
