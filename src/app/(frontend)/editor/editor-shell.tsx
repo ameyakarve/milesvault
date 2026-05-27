@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorView } from '@codemirror/view'
+import { Eraser } from 'lucide-react'
 import { Chat } from './chat'
 import { Journal } from './journal'
 import {
@@ -24,6 +25,10 @@ export function EditorShell() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [chatBusy, setChatBusy] = useState(false)
+  const [chatClear, setChatClear] = useState<{
+    canClear: boolean
+    clear: () => void
+  }>({ canClear: false, clear: () => {} })
   const editorViewRef = useRef<EditorView | null>(null)
 
   const [filter, setFilter] = useState<JournalFilter>(() => ({
@@ -199,10 +204,22 @@ export function EditorShell() {
               </button>
             </>
           ) : null}
+          {tab === 'chat' && chatClear.canClear ? (
+            <button
+              type="button"
+              onClick={chatClear.clear}
+              disabled={chatBusy}
+              title="Clear conversation"
+              aria-label="Clear conversation"
+              className="rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+            >
+              <Eraser className="size-3.5" />
+            </button>
+          ) : null}
         </div>
       </header>
       {tab === 'chat' ? (
-        <Chat onBusyChange={setChatBusy} />
+        <Chat onBusyChange={setChatBusy} onClearableChange={setChatClear} />
       ) : (
         <>
           {loaded ? (
