@@ -20,6 +20,11 @@ const mantineCjs = (pkg) =>
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Emit .map files on staging only so the browser console resolves minified
+  // traces back to the original TS files. /editor is auth-gated so we can't
+  // repro hydration warnings in dev; staging maps fill that gap. Prod builds
+  // don't set CLOUDFLARE_ENV, so this stays off there.
+  productionBrowserSourceMaps: process.env.CLOUDFLARE_ENV === 'staging',
   serverExternalPackages: ['jose', 'pg-cloudflare'],
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,
