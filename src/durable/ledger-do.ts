@@ -300,6 +300,7 @@ export class LedgerDO extends Think {
     console.log(
       `[process_statement] start id=${statement_id} filename=${row.filename} bytes=${row.text.length}`,
     )
+    const startedAt = Date.now()
     try {
       const snapshot = this.ledger_snapshot_sync()
       const system = buildStatementExtractionPrompt(snapshot, row.filename)
@@ -308,20 +309,24 @@ export class LedgerDO extends Think {
         schema: draftTransactionBatchSchema,
         system,
         prompt: row.text,
-        abortSignal: AbortSignal.timeout(90_000),
+        abortSignal: AbortSignal.timeout(240_000),
       })
+      const elapsedMs = Date.now() - startedAt
       const transactions = result.object.transactions
       if (transactions.length === 0) {
-        console.warn(`[process_statement] empty id=${statement_id}`)
+        console.warn(
+          `[process_statement] empty id=${statement_id} elapsedMs=${elapsedMs}`,
+        )
         return { ok: false, error: 'empty_result' }
       }
       console.log(
-        `[process_statement] done id=${statement_id} count=${transactions.length}`,
+        `[process_statement] done id=${statement_id} count=${transactions.length} elapsedMs=${elapsedMs}`,
       )
       return { ok: true, transactions }
     } catch (e) {
+      const elapsedMs = Date.now() - startedAt
       const message = e instanceof Error ? e.message : String(e)
-      console.error(`[process_statement] failed id=${statement_id}`, {
+      console.error(`[process_statement] failed id=${statement_id} elapsedMs=${elapsedMs}`, {
         err: message,
       })
       return { ok: false, error: 'inference_failed', message }
