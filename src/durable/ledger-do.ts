@@ -324,6 +324,7 @@ export class LedgerDO extends Think {
       this.db.exec('DROP TABLE IF EXISTS transactions')
       this.db.exec('ALTER TABLE transactions_v2 RENAME TO transactions')
     }
+    this.dropLegacyStatementsTable()
     for (const step of SCHEMA_STEPS) {
       try {
         this.db.exec(step.sql)
@@ -334,6 +335,25 @@ export class LedgerDO extends Think {
       }
     }
     this.hardenPostings()
+  }
+
+  // The reverted statement-subagent commit created a `statements` table with
+  // status/batch_json/error/used_at columns. The current schema is just
+  // id/filename/text/created_at, but CREATE TABLE IF NOT EXISTS is a no-op
+  // when the table already exists — so DOs that touched the reverted deploy
+  // keep the legacy shape and our INSERT fails the NOT NULL on `status`.
+  // No data was ever consumed successfully from the legacy table, so drop it.
+  private dropLegacyStatementsTable(): void {
+    const cols = this.db
+      .exec<{ name: string }>('PRAGMA table_info(statements)')
+      .toArray()
+      .map((r) => r.name)
+    if (cols.length === 0) return
+    const isLegacy = cols.includes('status') || cols.includes('batch_json')
+    if (isLegacy) {
+      console.warn('[migrate] dropping legacy statements table')
+      this.db.exec('DROP TABLE statements')
+    }
   }
 
   // One-time rebuild of legacy postings tables that were created before the
