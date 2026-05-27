@@ -26,7 +26,7 @@ const wrapper = `
 ${marker}
 import { getToken as __authGetToken } from "next-auth/jwt"
 export { LedgerDO } from "../src/durable/ledger-do.ts"
-export { StatementExtractor } from "../src/durable/statement-extractor.ts"
+export { StatementExtractorDO } from "../src/durable/statement-extractor.ts"
 
 const __SESSION_COOKIE = "authjs.session-token"
 

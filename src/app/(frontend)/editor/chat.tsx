@@ -42,6 +42,7 @@ import {
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import type { ToolUIPart } from 'ai'
+import type { LedgerDOState, ExtractorProgress } from '@/durable/ledger-do'
 
 type Part = {
   type: string
@@ -184,6 +185,70 @@ function Composer({
   )
 }
 
+function ExtractorProgressList({
+  extractors,
+  ids,
+}: {
+  extractors: Record<string, ExtractorProgress>
+  ids: string[]
+}) {
+  if (ids.length === 0) return null
+  return (
+    <div className="mx-auto mb-2 flex w-full max-w-3xl flex-col gap-1 px-4">
+      {ids.map((id) => {
+        const p = extractors[id]
+        if (!p) return null
+        const filename = 'filename' in p ? p.filename : undefined
+        return (
+          <div
+            key={id}
+            className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs"
+          >
+            <FileText className="size-4 shrink-0 text-slate-500" />
+            <span className="min-w-0 truncate font-medium text-slate-700">
+              {filename ?? id}
+            </span>
+            <span className="text-slate-400">·</span>
+            {p.status === 'starting' ? (
+              <span className="flex items-center gap-1 text-slate-500">
+                <Loader2 className="size-3 animate-spin" />
+                Starting…
+              </span>
+            ) : p.status === 'running' ? (
+              <ExtractorRunningHint partial={p.partial} />
+            ) : p.status === 'finalizing' ? (
+              <span className="flex items-center gap-1 text-slate-500">
+                <Loader2 className="size-3 animate-spin" />
+                Finalizing…
+              </span>
+            ) : p.status === 'done' ? (
+              <span className="text-emerald-600">
+                {p.count} transaction{p.count === 1 ? '' : 's'} extracted
+              </span>
+            ) : (
+              <span className="truncate text-rose-600">{p.error}</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ExtractorRunningHint({ partial }: { partial: string }) {
+  let count = 0
+  try {
+    const obj = JSON.parse(partial) as { transactions?: unknown[] }
+    count = Array.isArray(obj.transactions) ? obj.transactions.length : 0
+  } catch {}
+  return (
+    <span className="flex items-center gap-1 text-slate-500">
+      <Loader2 className="size-3 animate-spin" />
+      Extracting{count > 0 ? ` · ${count} so far` : '…'}
+    </span>
+  )
+}
+
 export function Chat({
   onBusyChange,
   onClearableChange,
@@ -193,7 +258,9 @@ export function Chat({
   onClearableChange?: (state: { canClear: boolean; clear: () => void }) => void
   onAppended?: () => void
 } = {}) {
-  const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
+  const agent = useAgent<LedgerDOState>({ agent: 'LedgerDO', basePath: 'api/agents' })
+  const extractors = agent.state?.extractors ?? {}
+  const extractorIds = Object.keys(extractors)
   const {
     messages,
     sendMessage,
@@ -457,6 +524,10 @@ export function Chat({
               How can I help?
             </h1>
             <div className="w-full">
+              <ExtractorProgressList
+                extractors={extractors}
+                ids={extractorIds}
+              />
               <Composer
                 onSubmit={handleSubmit}
                 status={status}
@@ -586,6 +657,10 @@ export function Chat({
             <ConversationScrollButton />
           </Conversation>
 
+          <ExtractorProgressList
+            extractors={extractors}
+            ids={extractorIds}
+          />
           <div className="mx-auto w-full max-w-3xl px-4 pb-4">
             <Composer
               onSubmit={handleSubmit}

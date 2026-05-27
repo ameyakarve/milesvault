@@ -29,6 +29,10 @@
         "name": "LEDGER_DO",
         "class_name": "LedgerDO",
       },
+      {
+        "name": "STATEMENT_EXTRACTOR_DO",
+        "class_name": "StatementExtractorDO",
+      },
     ],
   },
   "ai": {
@@ -36,6 +40,7 @@
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
+    { "tag": "v2", "new_sqlite_classes": ["StatementExtractorDO"] },
   ],
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
@@ -64,6 +69,10 @@
             "name": "LEDGER_DO",
             "class_name": "LedgerDO",
           },
+          {
+            "name": "STATEMENT_EXTRACTOR_DO",
+            "class_name": "StatementExtractorDO",
+          },
         ],
       },
       "ai": {
@@ -71,6 +80,7 @@
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
+        { "tag": "v2", "new_sqlite_classes": ["StatementExtractorDO"] },
       ],
       "services": [
         { "binding": "PROD", "service": "milesvault" },

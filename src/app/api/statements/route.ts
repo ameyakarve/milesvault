@@ -1,14 +1,19 @@
-import { NextResponse } from 'next/server'
-import { withLedger } from '@/lib/ledger-route-handler'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { getCloudflareContext } from '@opennextjs/cloudflare'
+import type { StatementExtractorDO } from '@/durable/statement-extractor'
 
 export const dynamic = 'force-dynamic'
 
-// POST /api/statements — stash extracted PDF text in DO side-storage.
-// Body: { filename: string, text: string }. Returns { id }.
-// The client embeds that id in its chat message via
-// <statement id="STMT-..." filename="..."> so the bytes never enter the
-// chat agent's history.
-export const POST = withLedger(async ({ client, req }) => {
+// POST /api/statements — stash extracted PDF text on a dedicated
+// StatementExtractorDO keyed by the minted statement id. The chat agent's
+// LedgerDO never sees these bytes. Returns { id }; the client embeds that
+// id in its chat message as <statement id="STMT-..." filename="...">.
+export async function POST(req: NextRequest): Promise<Response> {
+  const session = await auth()
+  const email = session?.user?.email
+  if (!email) return new NextResponse('unauthorized', { status: 401 })
+
   const body = (await req.json().catch((): null => null)) as
     | { filename?: unknown; text?: unknown }
     | null
@@ -21,9 +26,25 @@ export const POST = withLedger(async ({ client, req }) => {
   if (typeof body.text !== 'string' || body.text.length === 0) {
     return NextResponse.json({ errors: ['text required'] }, { status: 400 })
   }
-  const result = await client.attach_statement({
+
+  const { env } = await getCloudflareContext({ async: true })
+  const ns = env.STATEMENT_EXTRACTOR_DO as
+    | DurableObjectNamespace<StatementExtractorDO>
+    | undefined
+  if (!ns) {
+    return new NextResponse('STATEMENT_EXTRACTOR_DO binding missing', { status: 500 })
+  }
+
+  const id = `STMT-${crypto.randomUUID()}`
+  const stub = ns.get(ns.idFromName(id))
+  const r = await stub.ingest({
+    statementId: id,
+    ownerEmail: email,
     filename: body.filename,
     text: body.text,
   })
-  return NextResponse.json(result)
-})
+  if ('error' in r) {
+    return NextResponse.json({ errors: [r.error] }, { status: 409 })
+  }
+  return NextResponse.json({ id })
+}

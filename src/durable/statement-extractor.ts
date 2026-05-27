@@ -1,178 +1,262 @@
-import { Think } from '@cloudflare/think'
+import { DurableObject } from 'cloudflare:workers'
 import { createWorkersAI } from 'workers-ai-provider'
-import { generateObject, tool, type ToolSet, type UIMessage } from 'ai'
-import { z } from 'zod'
+import { streamObject } from 'ai'
 import { buildStatementExtractionPrompt } from './agent-prompt'
-import { draftTransactionBatchSchema } from './agent-ui-schemas'
+import { draftTransactionBatchSchema, type DraftTransactionBatch } from './agent-ui-schemas'
 
 const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
+const FLUSH_INTERVAL_MS = 200
 
-const STATEMENT_ID_RE = /STMT-[a-f0-9-]+/i
-
-// The child sees no chat history — only a single user turn that names the
-// statement to process. Its sole job is to call run_extraction once; the
-// tool's `execute` fetches the bytes from the parent, runs generateObject,
-// and persists the result locally. The parent's main chat agent never sees
-// the raw bytes.
-const EXTRACT_SYSTEM = `You process a single bank/credit-card statement. You have ONE tool: \`run_extraction\`. Call it exactly once with no arguments. Do NOT respond in prose; do NOT narrate; just call the tool.`
-
-type ParentStub = {
-  getStatementText(
-    id: string,
-  ): Promise<{ filename: string; text: string } | null>
-  ledger_snapshot(): Promise<{
-    today: number
-    accounts: Array<{
-      account: string
-      currencies: string[]
-      open_date: number
-      close_date: number | null
-    }>
-    row_counts: Record<string, number>
-    sample_txns: string
-    schema_ddl: string
+type Snapshot = {
+  today: number
+  accounts: Array<{
+    account: string
+    currencies: string[]
+    open_date: number
+    close_date: number | null
   }>
+  row_counts: Record<string, number>
+  sample_txns: string
+  schema_ddl: string
 }
 
-export class StatementExtractor extends Think<Cloudflare.Env> {
-  constructor(state: DurableObjectState, env: Cloudflare.Env) {
-    super(state, env)
-    this.sql`
-      CREATE TABLE IF NOT EXISTS extraction_runs (
-        run_id TEXT PRIMARY KEY,
-        result_json TEXT NOT NULL,
-        created_at INTEGER NOT NULL
-      )
-    `
+type JobRow = {
+  id: string
+  owner_email: string
+  parent_name: string | null
+  filename: string
+  text: string
+  snapshot_json: string | null
+  status: 'ingested' | 'running' | 'done' | 'failed'
+  result_json: string | null
+  error: string | null
+  created_at: number
+  completed_at: number | null
+}
+
+// Parent's RPC surface that we call back into. Keep this minimal — the methods
+// are added to LedgerDO as plain async methods so they pass DO-RPC validation.
+type ParentStub = {
+  appendExtractorPartial(
+    statementId: string,
+    partialJson: string,
+    final: boolean,
+  ): Promise<void>
+  onExtractionComplete(
+    statementId: string,
+    result: DraftTransactionBatch,
+  ): Promise<void>
+  onExtractionFailed(statementId: string, error: string): Promise<void>
+}
+
+export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
+  private sql: SqlStorage
+
+  constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
+    super(ctx, env)
+    this.sql = ctx.storage.sql
+    ctx.blockConcurrencyWhile(async () => {
+      this.sql.exec(`CREATE TABLE IF NOT EXISTS job (
+        id TEXT PRIMARY KEY,
+        owner_email TEXT NOT NULL,
+        parent_name TEXT,
+        filename TEXT NOT NULL,
+        text TEXT NOT NULL,
+        snapshot_json TEXT,
+        status TEXT NOT NULL,
+        result_json TEXT,
+        error TEXT,
+        created_at INTEGER NOT NULL,
+        completed_at INTEGER
+      )`)
+    })
   }
 
-  getModel() {
-    const workersai = createWorkersAI({ binding: this.env.AI })
-    return workersai(MODEL_ID, { reasoning_effort: 'low' })
+  // Upload route → ExtractorDO. Bytes live here from now on; LedgerDO never
+  // sees them.
+  async ingest(opts: {
+    statementId: string
+    ownerEmail: string
+    filename: string
+    text: string
+  }): Promise<{ ok: true } | { ok: false; error: 'already_ingested' }> {
+    const existing = this.readJob()
+    if (existing) return { ok: false, error: 'already_ingested' }
+    this.sql.exec(
+      `INSERT INTO job (id, owner_email, filename, text, status, created_at)
+       VALUES (?, ?, ?, ?, 'ingested', ?)`,
+      opts.statementId,
+      opts.ownerEmail,
+      opts.filename,
+      opts.text,
+      Date.now(),
+    )
+    return { ok: true }
   }
 
-  getSystemPrompt(): string {
-    return EXTRACT_SYSTEM
-  }
-
-  getTools(): ToolSet {
-    return {
-      run_extraction: tool({
-        description:
-          'Run the statement extraction. Call this exactly once with no arguments.',
-        inputSchema: z.object({}),
-        execute: async () => this.runExtraction(),
-      }),
-    }
-  }
-
-  private async runExtraction(): Promise<
-    | { ok: true; count: number }
-    | {
-        ok: false
-        error:
-          | 'no_statement_id'
-          | 'no_parent'
-          | 'statement_not_found'
-          | 'inference_failed'
-          | 'empty_result'
-        message?: string
-      }
+  // LedgerDO's process_statement tool → ExtractorDO. Returns in ms; the
+  // alarm runs the actual inference.
+  async kickoff(opts: {
+    parentName: string
+    snapshot: Snapshot
+  }): Promise<
+    | { ok: true }
+    | { ok: false; error: 'not_found' | 'unauthorized' | 'wrong_status' }
   > {
-    const statementId = this.extractStatementId()
-    if (!statementId) return { ok: false, error: 'no_statement_id' }
+    const job = this.readJob()
+    if (!job) return { ok: false, error: 'not_found' }
+    if (job.owner_email !== opts.parentName) {
+      console.warn(
+        `[extractor] kickoff unauthorized id=${job.id} owner=${job.owner_email} caller=${opts.parentName}`,
+      )
+      return { ok: false, error: 'unauthorized' }
+    }
+    if (job.status !== 'ingested' && job.status !== 'failed') {
+      return { ok: false, error: 'wrong_status' }
+    }
+    this.sql.exec(
+      `UPDATE job
+         SET parent_name = ?, snapshot_json = ?, status = 'running',
+             error = NULL, result_json = NULL, completed_at = NULL
+       WHERE id = ?`,
+      opts.parentName,
+      JSON.stringify(opts.snapshot),
+      job.id,
+    )
+    await this.ctx.storage.setAlarm(Date.now() + 50)
+    return { ok: true }
+  }
 
-    const parentName = this.parentPath.at(-1)?.name
-    if (!parentName) return { ok: false, error: 'no_parent' }
-    const ns = this.env.LEDGER_DO
-    const parent = ns.get(ns.idFromName(parentName)) as unknown as ParentStub
+  async status(): Promise<JobRow | null> {
+    return this.readJob()
+  }
 
-    const stmt = await parent.getStatementText(statementId)
-    if (!stmt) return { ok: false, error: 'statement_not_found' }
-
-    const snapshot = await parent.ledger_snapshot()
-    const system = buildStatementExtractionPrompt(snapshot, stmt.filename)
+  async alarm(): Promise<void> {
+    const job = this.readJob()
+    if (!job || job.status !== 'running') return
+    if (!job.parent_name || !job.snapshot_json) return
+    const parent = this.getParentStub(job.parent_name)
+    const snapshot = JSON.parse(job.snapshot_json) as Snapshot
+    const system = buildStatementExtractionPrompt(snapshot, job.filename)
     const startedAt = Date.now()
     console.log(
-      `[statement_extractor] start id=${statementId} filename=${stmt.filename} bytes=${stmt.text.length}`,
+      `[extractor] alarm start id=${job.id} filename=${job.filename} bytes=${job.text.length}`,
     )
     try {
-      const result = await generateObject({
-        model: this.getModel(),
+      const workersai = createWorkersAI({ binding: this.env.AI })
+      const model = workersai(MODEL_ID, { reasoning_effort: 'low' })
+      const { partialObjectStream, object } = streamObject({
+        model,
         schema: draftTransactionBatchSchema,
         system,
-        prompt: stmt.text,
+        prompt: job.text,
         abortSignal: AbortSignal.timeout(240_000),
       })
-      const elapsedMs = Date.now() - startedAt
-      const transactions = result.object.transactions
-      if (transactions.length === 0) {
-        console.warn(
-          `[statement_extractor] empty id=${statementId} elapsedMs=${elapsedMs}`,
-        )
-        return { ok: false, error: 'empty_result' }
+      let lastFlushAt = 0
+      let pending: string | null = null
+      let flushes = 0
+      for await (const partial of partialObjectStream) {
+        pending = JSON.stringify(partial)
+        const now = Date.now()
+        if (now - lastFlushAt >= FLUSH_INTERVAL_MS) {
+          await this.safeAppend(parent, job.id, pending, false)
+          pending = null
+          lastFlushAt = now
+          flushes++
+        }
       }
-      this.sql`
-        INSERT OR REPLACE INTO extraction_runs (run_id, result_json, created_at)
-        VALUES (${this.name}, ${JSON.stringify(result.object)}, ${Date.now()})
-      `
-      console.log(
-        `[statement_extractor] done id=${statementId} count=${transactions.length} elapsedMs=${elapsedMs}`,
+      const final = await object
+      // One last flush so the UI sees the final partial shape before the
+      // completion callback flips status.
+      if (pending) {
+        await this.safeAppend(parent, job.id, pending, true)
+        flushes++
+      } else {
+        await this.safeAppend(parent, job.id, JSON.stringify(final), true)
+        flushes++
+      }
+      this.sql.exec(
+        `UPDATE job SET status='done', result_json=?, completed_at=? WHERE id=?`,
+        JSON.stringify(final),
+        Date.now(),
+        job.id,
       )
-      return { ok: true, count: transactions.length }
+      const elapsedMs = Date.now() - startedAt
+      console.log(
+        `[extractor] done id=${job.id} count=${final.transactions.length} flushes=${flushes} elapsedMs=${elapsedMs}`,
+      )
+      await this.safeComplete(parent, job.id, final)
     } catch (e) {
       const elapsedMs = Date.now() - startedAt
       const message = e instanceof Error ? e.message : String(e)
       console.error(
-        `[statement_extractor] failed id=${statementId} elapsedMs=${elapsedMs}`,
+        `[extractor] failed id=${job.id} elapsedMs=${elapsedMs}`,
         { err: message },
       )
-      return { ok: false, error: 'inference_failed', message }
+      this.sql.exec(
+        `UPDATE job SET status='failed', error=?, completed_at=? WHERE id=?`,
+        message,
+        Date.now(),
+        job.id,
+      )
+      await this.safeFail(parent, job.id, message)
     }
   }
 
-  // The parent passes `{ statement_id }`; formatAgentToolInput wrote it into
-  // the child's first user message. Read it back from history.
-  private extractStatementId(): string | null {
-    for (const msg of this.messages) {
-      if (msg.role !== 'user') continue
-      for (const part of msg.parts ?? []) {
-        if (part.type !== 'text' || typeof part.text !== 'string') continue
-        const m = part.text.match(STATEMENT_ID_RE)
-        if (m) return m[0]
-      }
-    }
-    return null
+  private getParentStub(parentName: string): ParentStub {
+    const ns = this.env.LEDGER_DO
+    return ns.get(ns.idFromName(parentName)) as unknown as ParentStub
   }
 
-  protected formatAgentToolInput(input: unknown): UIMessage {
-    const id =
-      typeof input === 'object' && input !== null && 'statement_id' in input
-        ? String((input as { statement_id: unknown }).statement_id)
-        : ''
-    return {
-      id: crypto.randomUUID(),
-      role: 'user',
-      parts: [{ type: 'text', text: `Process statement ${id}.` }],
-    }
-  }
-
-  protected getAgentToolOutput(runId: string): unknown {
-    const rows = this.sql<{ result_json: string }>`
-      SELECT result_json FROM extraction_runs WHERE run_id = ${runId}
-    `
-    if (rows.length === 0) return undefined
+  // Cross-DO RPC: swallow errors so a flaky parent gate doesn't bring down
+  // the extraction. The final completion callback retries below.
+  private async safeAppend(
+    parent: ParentStub,
+    id: string,
+    partialJson: string,
+    final: boolean,
+  ): Promise<void> {
     try {
-      return JSON.parse(rows[0]!.result_json)
-    } catch {
-      return undefined
+      await parent.appendExtractorPartial(id, partialJson, final)
+    } catch (e) {
+      console.warn(`[extractor] appendExtractorPartial failed id=${id}`, {
+        err: e instanceof Error ? e.message : String(e),
+      })
     }
   }
 
-  protected getAgentToolSummary(_runId: string, output: unknown): string {
-    if (!output || typeof output !== 'object') return ''
-    const obj = output as { transactions?: unknown }
-    const n = Array.isArray(obj.transactions) ? obj.transactions.length : 0
-    return `Extracted ${n} transactions.`
+  private async safeComplete(
+    parent: ParentStub,
+    id: string,
+    result: DraftTransactionBatch,
+  ): Promise<void> {
+    try {
+      await parent.onExtractionComplete(id, result)
+    } catch (e) {
+      console.error(`[extractor] onExtractionComplete failed id=${id}`, {
+        err: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  private async safeFail(
+    parent: ParentStub,
+    id: string,
+    error: string,
+  ): Promise<void> {
+    try {
+      await parent.onExtractionFailed(id, error)
+    } catch (e) {
+      console.error(`[extractor] onExtractionFailed failed id=${id}`, {
+        err: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  private readJob(): JobRow | null {
+    const rows = this.sql
+      .exec<JobRow>(`SELECT * FROM job LIMIT 1`)
+      .toArray()
+    return rows[0] ?? null
   }
 }

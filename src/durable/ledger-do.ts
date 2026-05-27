@@ -1,14 +1,14 @@
 import { Think, type ChatResponseResult } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
 import { tool, type ToolSet } from 'ai'
-import { agentTool } from 'agents/agent-tools'
 import { z } from 'zod'
 import { buildSystemPrompt } from './agent-prompt'
+import type { StatementExtractorDO } from './statement-extractor'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
+  type DraftTransactionBatch,
 } from './agent-ui-schemas'
-import { StatementExtractor } from './statement-extractor'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -228,8 +228,26 @@ function stripStatementBlocks(text: string): string {
   )
 }
 
-export class LedgerDO extends Think {
+// State slice broadcast to the single client WebSocket alongside the chat
+// turn stream. The StatementExtractorDO calls back into LedgerDO with
+// `appendExtractorPartial` while streaming and `onExtractionComplete` /
+// `onExtractionFailed` when done; each call updates this slice via
+// setState, which the agents SDK broadcasts as a state diff to every
+// connected client. No second WebSocket needed.
+export type ExtractorProgress =
+  | { status: 'starting'; filename?: string }
+  | { status: 'running'; partial: string; filename?: string }
+  | { status: 'finalizing'; partial: string; filename?: string }
+  | { status: 'done'; count: number; filename?: string }
+  | { status: 'failed'; error: string; filename?: string }
+
+export type LedgerDOState = {
+  extractors: Record<string, ExtractorProgress>
+}
+
+export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
   private db: SqlStorage
+  initialState: LedgerDOState = { extractors: {} }
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
@@ -267,31 +285,157 @@ export class LedgerDO extends Think {
         inputSchema: clarifyInputSchema,
         // Client-side — resolved by the user picking / typing.
       }),
-      process_statement: agentTool(StatementExtractor, {
+      process_statement: tool({
         description:
-          'Turn a previously-uploaded statement into a batch of drafted Beancount transactions. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message — you do NOT see the statement bytes; the subagent reads them server-side and returns its structured output. On success, immediately call `draft_transaction` with the returned `transactions` array verbatim. On error, briefly tell the user and stop — do not fabricate transactions.',
+          'Kick off extraction for a previously-uploaded statement. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message. Returns immediately with `{ status: "extracting" }` — the actual extraction runs server-side on a separate Durable Object and pushes its result back as a follow-up system message containing the drafted transactions. Do NOT call `draft_transaction` from this turn; finish with a short ack ("Extracting…") and wait for the system message before drafting.',
         inputSchema: z.object({
           statement_id: z
             .string()
             .regex(/^STMT-/, 'statement_id must start with "STMT-"'),
         }),
+        execute: async ({ statement_id }) => {
+          const ns = this.env.STATEMENT_EXTRACTOR_DO
+          if (!ns) return { ok: false, error: 'binding_missing' as const }
+          const snapshot = this.ledger_snapshot_sync()
+          const filename = await this.lookupExtractorFilename(statement_id)
+          // Mark "starting" in state immediately so the UI's progress card
+          // appears before the cross-DO kickoff round-trip completes.
+          this.setState({
+            ...this.state,
+            extractors: {
+              ...(this.state?.extractors ?? {}),
+              [statement_id]: { status: 'starting', filename },
+            },
+          })
+          const stub = ns.get(
+            ns.idFromName(statement_id),
+          ) as unknown as DurableObjectStub<StatementExtractorDO>
+          const r = await stub.kickoff({
+            parentName: this.name,
+            snapshot,
+          })
+          if ('error' in r) {
+            this.setState({
+              ...this.state,
+              extractors: {
+                ...(this.state?.extractors ?? {}),
+                [statement_id]: { status: 'failed', error: r.error, filename },
+              },
+            })
+            return { ok: false, error: r.error }
+          }
+          return {
+            ok: true,
+            status: 'extracting' as const,
+            statement_id,
+          }
+        },
       }),
     }
   }
 
-  // RPC callable invoked by the StatementExtractor child. The bytes never
-  // travel through the parent's LLM context — the child reads them, runs
-  // extraction, and returns structured transactions.
-  async getStatementText(
-    id: string,
-  ): Promise<{ filename: string; text: string } | null> {
-    const row = this.db
-      .exec<{ filename: string; text: string }>(
-        'SELECT filename, text FROM statements WHERE id = ?',
-        id,
-      )
-      .toArray()[0]
-    return row ? { filename: row.filename, text: row.text } : null
+  // ---- Callbacks invoked over cross-DO RPC by StatementExtractorDO ----
+
+  // Streaming partial — each flush replaces the rolling partial in state
+  // (the SDK broadcasts the state diff to all connected clients).
+  async appendExtractorPartial(
+    statementId: string,
+    partialJson: string,
+    final: boolean,
+  ): Promise<void> {
+    const prev = this.state?.extractors?.[statementId]
+    const filename = prev && 'filename' in prev ? prev.filename : undefined
+    this.setState({
+      ...this.state,
+      extractors: {
+        ...(this.state?.extractors ?? {}),
+        [statementId]: {
+          status: final ? 'finalizing' : 'running',
+          partial: partialJson,
+          filename,
+        },
+      },
+    })
+  }
+
+  // Terminal success. Flip state to 'done' and inject a programmatic user
+  // message so the LLM gets a fresh turn to draft the transactions. The
+  // bytes never enter this message — only the structured result.
+  async onExtractionComplete(
+    statementId: string,
+    result: DraftTransactionBatch,
+  ): Promise<void> {
+    const prev = this.state?.extractors?.[statementId]
+    const filename = prev && 'filename' in prev ? prev.filename : undefined
+    this.setState({
+      ...this.state,
+      extractors: {
+        ...(this.state?.extractors ?? {}),
+        [statementId]: {
+          status: 'done',
+          count: result.transactions.length,
+          filename,
+        },
+      },
+    })
+    await this.submitMessages([
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        parts: [
+          {
+            type: 'text',
+            text:
+              `[system] Statement ${statementId} extracted ${result.transactions.length} transactions. ` +
+              `Call draft_transaction now passing this exact \`transactions\` array verbatim — no edits, no reordering, no trimming. Do not ask the user.\n\n` +
+              JSON.stringify(result),
+          },
+        ],
+      },
+    ])
+  }
+
+  async onExtractionFailed(statementId: string, error: string): Promise<void> {
+    const prev = this.state?.extractors?.[statementId]
+    const filename = prev && 'filename' in prev ? prev.filename : undefined
+    this.setState({
+      ...this.state,
+      extractors: {
+        ...(this.state?.extractors ?? {}),
+        [statementId]: { status: 'failed', error, filename },
+      },
+    })
+    await this.submitMessages([
+      {
+        id: crypto.randomUUID(),
+        role: 'user',
+        parts: [
+          {
+            type: 'text',
+            text: `[system] Statement ${statementId} extraction failed: ${error}. Tell the user briefly and stop — do not fabricate transactions.`,
+          },
+        ],
+      },
+    ])
+  }
+
+  // Look up filename from the ExtractorDO so the UI's progress card can
+  // label itself before the first partial arrives. Best-effort — returns
+  // undefined if the lookup fails.
+  private async lookupExtractorFilename(
+    statementId: string,
+  ): Promise<string | undefined> {
+    const ns = this.env.STATEMENT_EXTRACTOR_DO
+    if (!ns) return undefined
+    try {
+      const stub = ns.get(
+        ns.idFromName(statementId),
+      ) as unknown as DurableObjectStub<StatementExtractorDO>
+      const job = await stub.status()
+      return job?.filename
+    } catch {
+      return undefined
+    }
   }
 
   // After every turn, redact raw <statement>…</statement> blocks from any
@@ -1198,25 +1342,6 @@ export class LedgerDO extends Think {
       )
       .toArray()[0]
     return row ? row.updated_at : null
-  }
-
-  // Persist an uploaded statement's extracted text. Returns the id the
-  // client embeds in its chat message as <statement id="..." filename="...">.
-  // The bytes stay here; the main chat agent never sees them.
-  async attach_statement(opts: {
-    filename: string
-    text: string
-  }): Promise<{ id: string }> {
-    const id = `STMT-${crypto.randomUUID()}`
-    this.db.exec(
-      `INSERT INTO statements (id, filename, text, created_at)
-       VALUES (?, ?, ?, ?)`,
-      id,
-      opts.filename,
-      opts.text,
-      Date.now(),
-    )
-    return { id }
   }
 
   async clear(): Promise<{ ok: true }> {
