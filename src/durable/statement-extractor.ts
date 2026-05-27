@@ -1,8 +1,7 @@
 import { DurableObject } from 'cloudflare:workers'
 import { createWorkersAI } from 'workers-ai-provider'
-import { streamObject } from 'ai'
+import { streamText } from 'ai'
 import { buildStatementExtractionPrompt } from './agent-prompt'
-import { draftTransactionBatchSchema, type DraftTransactionBatch } from './agent-ui-schemas'
 
 const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
 const FLUSH_INTERVAL_MS = 200
@@ -34,19 +33,25 @@ type JobRow = {
   completed_at: number | null
 }
 
-// Parent's RPC surface that we call back into. Keep this minimal — the methods
-// are added to LedgerDO as plain async methods so they pass DO-RPC validation.
+// Parent's RPC surface. Reasoning and text are streamed back as raw deltas
+// so the parent can broadcast them to the browser on its existing WS.
 type ParentStub = {
   appendExtractorPartial(
     statementId: string,
-    partialJson: string,
-    final: boolean,
+    reasoning: string,
+    text: string,
   ): Promise<void>
   onExtractionComplete(
     statementId: string,
-    result: DraftTransactionBatch,
+    text: string,
+    reasoning: string,
   ): Promise<void>
-  onExtractionFailed(statementId: string, error: string): Promise<void>
+  onExtractionFailed(
+    statementId: string,
+    error: string,
+    reasoning?: string,
+    text?: string,
+  ): Promise<void>
 }
 
 export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
@@ -72,8 +77,6 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     })
   }
 
-  // Upload route → ExtractorDO. Bytes live here from now on; LedgerDO never
-  // sees them.
   async ingest(opts: {
     statementId: string
     ownerEmail: string
@@ -94,8 +97,6 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     return { ok: true }
   }
 
-  // LedgerDO's process_statement tool → ExtractorDO. Returns in ms; the
-  // alarm runs the actual inference.
   async kickoff(opts: {
     parentName: string
     snapshot: Snapshot
@@ -137,55 +138,76 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     if (!job.parent_name || !job.snapshot_json) return
     const parent = this.getParentStub(job.parent_name)
     const snapshot = JSON.parse(job.snapshot_json) as Snapshot
-    const system = buildStatementExtractionPrompt(snapshot, job.filename)
+    const baseSystem = buildStatementExtractionPrompt(snapshot, job.filename)
+    // streamText emits free-form text. Beancount is already a textual
+    // format, so we ask for raw entries rather than a JSON envelope —
+    // simpler for the model, no escape-the-multiline-string trap.
+    const system =
+      baseSystem +
+      `\n\n---\n\n# Output format (strict)\n\n` +
+      `Emit the extracted transactions as raw Beancount entries, nothing ` +
+      `else. Rules:\n\n` +
+      `- One entry per transaction. Each entry starts with a \`YYYY-MM-DD\` ` +
+      `date at column 0 (no leading whitespace), followed by postings on ` +
+      `indented lines.\n` +
+      `- Separate consecutive entries with a single blank line.\n` +
+      `- No prose, no preamble, no summary, no closing remarks, no fenced ` +
+      `code blocks, no comments narrating what you found. The reply is ` +
+      `only Beancount.\n` +
+      `- If the statement genuinely has nothing to extract, reply with an ` +
+      `empty string. Do NOT invent placeholder entries.`
     const startedAt = Date.now()
     console.log(
       `[extractor] alarm start id=${job.id} filename=${job.filename} bytes=${job.text.length}`,
     )
+    let reasoningBuf = ''
+    let textBuf = ''
     try {
       const workersai = createWorkersAI({ binding: this.env.AI })
       const model = workersai(MODEL_ID, { reasoning_effort: 'low' })
-      const { partialObjectStream, object } = streamObject({
+      const { fullStream } = streamText({
         model,
-        schema: draftTransactionBatchSchema,
         system,
         prompt: job.text,
         abortSignal: AbortSignal.timeout(240_000),
       })
       let lastFlushAt = 0
-      let pending: string | null = null
-      let flushes = 0
-      for await (const partial of partialObjectStream) {
-        pending = JSON.stringify(partial)
+      let dirty = false
+      for await (const part of fullStream) {
+        if (part.type === 'reasoning-delta') {
+          reasoningBuf += part.text
+          dirty = true
+        } else if (part.type === 'text-delta') {
+          textBuf += part.text
+          dirty = true
+        } else if (part.type === 'error') {
+          throw part.error instanceof Error
+            ? part.error
+            : new Error(String(part.error))
+        } else {
+          continue
+        }
         const now = Date.now()
-        if (now - lastFlushAt >= FLUSH_INTERVAL_MS) {
-          await this.safeAppend(parent, job.id, pending, false)
-          pending = null
+        if (dirty && now - lastFlushAt >= FLUSH_INTERVAL_MS) {
+          await this.safeAppend(parent, job.id, reasoningBuf, textBuf)
           lastFlushAt = now
-          flushes++
+          dirty = false
         }
       }
-      const final = await object
-      // One last flush so the UI sees the final partial shape before the
-      // completion callback flips status.
-      if (pending) {
-        await this.safeAppend(parent, job.id, pending, true)
-        flushes++
-      } else {
-        await this.safeAppend(parent, job.id, JSON.stringify(final), true)
-        flushes++
-      }
+      // Final flush so the UI sees the last few deltas before status flips.
+      await this.safeAppend(parent, job.id, reasoningBuf, textBuf)
+
       this.sql.exec(
         `UPDATE job SET status='done', result_json=?, completed_at=? WHERE id=?`,
-        JSON.stringify(final),
+        textBuf,
         Date.now(),
         job.id,
       )
       const elapsedMs = Date.now() - startedAt
       console.log(
-        `[extractor] done id=${job.id} count=${final.transactions.length} flushes=${flushes} elapsedMs=${elapsedMs}`,
+        `[extractor] done id=${job.id} elapsedMs=${elapsedMs} reasoningBytes=${reasoningBuf.length} textBytes=${textBuf.length}`,
       )
-      await this.safeComplete(parent, job.id, final)
+      await this.safeComplete(parent, job.id, textBuf, reasoningBuf)
     } catch (e) {
       const elapsedMs = Date.now() - startedAt
       const message = e instanceof Error ? e.message : String(e)
@@ -199,7 +221,7 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
         Date.now(),
         job.id,
       )
-      await this.safeFail(parent, job.id, message)
+      await this.safeFail(parent, job.id, message, reasoningBuf, textBuf)
     }
   }
 
@@ -208,16 +230,14 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     return ns.get(ns.idFromName(parentName)) as unknown as ParentStub
   }
 
-  // Cross-DO RPC: swallow errors so a flaky parent gate doesn't bring down
-  // the extraction. The final completion callback retries below.
   private async safeAppend(
     parent: ParentStub,
     id: string,
-    partialJson: string,
-    final: boolean,
+    reasoning: string,
+    text: string,
   ): Promise<void> {
     try {
-      await parent.appendExtractorPartial(id, partialJson, final)
+      await parent.appendExtractorPartial(id, reasoning, text)
     } catch (e) {
       console.warn(`[extractor] appendExtractorPartial failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),
@@ -228,10 +248,11 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
   private async safeComplete(
     parent: ParentStub,
     id: string,
-    result: DraftTransactionBatch,
+    text: string,
+    reasoning: string,
   ): Promise<void> {
     try {
-      await parent.onExtractionComplete(id, result)
+      await parent.onExtractionComplete(id, text, reasoning)
     } catch (e) {
       console.error(`[extractor] onExtractionComplete failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),
@@ -243,9 +264,11 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     parent: ParentStub,
     id: string,
     error: string,
+    reasoning?: string,
+    text?: string,
   ): Promise<void> {
     try {
-      await parent.onExtractionFailed(id, error)
+      await parent.onExtractionFailed(id, error, reasoning, text)
     } catch (e) {
       console.error(`[extractor] onExtractionFailed failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),
@@ -260,3 +283,4 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     return rows[0] ?? null
   }
 }
+

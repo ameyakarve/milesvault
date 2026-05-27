@@ -7,7 +7,6 @@ import type { StatementExtractorDO } from './statement-extractor'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
-  type DraftTransactionBatch,
 } from './agent-ui-schemas'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
@@ -236,10 +235,20 @@ function stripStatementBlocks(text: string): string {
 // connected client. No second WebSocket needed.
 export type ExtractorProgress =
   | { status: 'starting'; filename?: string }
-  | { status: 'running'; partial: string; filename?: string }
-  | { status: 'finalizing'; partial: string; filename?: string }
-  | { status: 'done'; count: number; filename?: string }
-  | { status: 'failed'; error: string; filename?: string }
+  | {
+      status: 'running'
+      reasoning: string
+      text: string
+      filename?: string
+    }
+  | { status: 'done'; count: number; reasoning: string; filename?: string }
+  | {
+      status: 'failed'
+      error: string
+      reasoning?: string
+      text?: string
+      filename?: string
+    }
 
 export type LedgerDOState = {
   extractors: Record<string, ExtractorProgress>
@@ -340,8 +349,8 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
   // (the SDK broadcasts the state diff to all connected clients).
   async appendExtractorPartial(
     statementId: string,
-    partialJson: string,
-    final: boolean,
+    reasoning: string,
+    text: string,
   ): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
     const filename = prev && 'filename' in prev ? prev.filename : undefined
@@ -350,59 +359,62 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
       extractors: {
         ...(this.state?.extractors ?? {}),
         [statementId]: {
-          status: final ? 'finalizing' : 'running',
-          partial: partialJson,
+          status: 'running',
+          reasoning,
+          text,
           filename,
         },
       },
     })
   }
 
-  // Terminal success. Flip state to 'done' and inject a programmatic user
-  // message so the LLM gets a fresh turn to draft the transactions. The
-  // bytes never enter this message — only the structured result.
+  // Terminal success. Flip state to 'done' and inject the extractor's raw
+  // beancount text as a user message so the main model gets a fresh turn
+  // to call draft_transaction. The subagent is text-in/text-out — the
+  // main model decides what to do with the beancount.
   async onExtractionComplete(
     statementId: string,
-    result: DraftTransactionBatch,
+    text: string,
+    reasoning: string,
   ): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
     const filename = prev && 'filename' in prev ? prev.filename : undefined
+    const count = (text.match(/^\d{4}-\d{2}-\d{2}\s/gm) ?? []).length
     this.setState({
       ...this.state,
       extractors: {
         ...(this.state?.extractors ?? {}),
-        [statementId]: {
-          status: 'done',
-          count: result.transactions.length,
-          filename,
-        },
+        [statementId]: { status: 'done', count, reasoning, filename },
       },
     })
+    const body =
+      text.trim().length === 0
+        ? `[system] Statement ${statementId} produced no transactions. Tell the user briefly and stop — do not fabricate transactions.`
+        : `[system] Statement ${statementId} extracted the following beancount transactions. ` +
+          `Call draft_transaction now passing each entry verbatim as a string in the \`transactions\` array. Do not edit, reorder, or trim.\n\n` +
+          text
     await this.submitMessages([
       {
         id: crypto.randomUUID(),
         role: 'user',
-        parts: [
-          {
-            type: 'text',
-            text:
-              `[system] Statement ${statementId} extracted ${result.transactions.length} transactions. ` +
-              `Call draft_transaction now passing this exact \`transactions\` array verbatim — no edits, no reordering, no trimming. Do not ask the user.\n\n` +
-              JSON.stringify(result),
-          },
-        ],
+        parts: [{ type: 'text', text: body }],
       },
     ])
   }
 
-  async onExtractionFailed(statementId: string, error: string): Promise<void> {
+  async onExtractionFailed(
+    statementId: string,
+    error: string,
+    reasoning?: string,
+    text?: string,
+  ): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
     const filename = prev && 'filename' in prev ? prev.filename : undefined
     this.setState({
       ...this.state,
       extractors: {
         ...(this.state?.extractors ?? {}),
-        [statementId]: { status: 'failed', error, filename },
+        [statementId]: { status: 'failed', error, reasoning, text, filename },
       },
     })
     await this.submitMessages([
@@ -496,6 +508,7 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
       this.db.exec('ALTER TABLE transactions_v2 RENAME TO transactions')
     }
     this.dropLegacyStatementsTable()
+    this.dropStaleFacetRecords()
     for (const step of SCHEMA_STEPS) {
       try {
         this.db.exec(step.sql)
@@ -506,6 +519,38 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
       }
     }
     this.hardenPostings()
+  }
+
+  // A prior deploy spawned a `StatementExtractor` facet sub-agent via
+  // agentTool(). The agents SDK records facet bookkeeping in
+  // `cf_agents_facet_runs` / `cf_agents_sub_agents`; on every alarm and
+  // init it tries to rehydrate those facets and now errors with
+  // `Sub-agent class "StatementExtractor" not found in worker exports`.
+  // The class is gone for good. Wipe the rows so the hydrate path goes
+  // quiet. Best-effort — tables may not exist on a fresh DO.
+  private dropStaleFacetRecords(): void {
+    for (const table of ['cf_agents_facet_runs', 'cf_agents_sub_agents']) {
+      try {
+        const exists =
+          (this.db
+            .exec<{ n: number }>(
+              "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name=?",
+              table,
+            )
+            .toArray()[0]?.n ?? 0) > 0
+        if (!exists) continue
+        const before = this.db
+          .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`)
+          .toArray()[0]?.n ?? 0
+        if (before === 0) continue
+        this.db.exec(`DELETE FROM ${table}`)
+        console.warn(`[migrate] cleared ${before} stale row(s) from ${table}`)
+      } catch (e) {
+        console.warn(`[migrate] facet cleanup failed for ${table}`, {
+          err: e instanceof Error ? e.message : String(e),
+        })
+      }
+    }
   }
 
   // The reverted statement-subagent commit created a `statements` table with

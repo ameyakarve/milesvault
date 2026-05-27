@@ -194,58 +194,90 @@ function ExtractorProgressList({
 }) {
   if (ids.length === 0) return null
   return (
-    <div className="mx-auto mb-2 flex w-full max-w-3xl flex-col gap-1 px-4">
+    <div className="mx-auto mb-2 flex w-full max-w-3xl flex-col gap-2 px-4">
       {ids.map((id) => {
         const p = extractors[id]
         if (!p) return null
-        const filename = 'filename' in p ? p.filename : undefined
-        return (
-          <div
-            key={id}
-            className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs"
-          >
-            <FileText className="size-4 shrink-0 text-slate-500" />
-            <span className="min-w-0 truncate font-medium text-slate-700">
-              {filename ?? id}
-            </span>
-            <span className="text-slate-400">·</span>
-            {p.status === 'starting' ? (
-              <span className="flex items-center gap-1 text-slate-500">
-                <Loader2 className="size-3 animate-spin" />
-                Starting…
-              </span>
-            ) : p.status === 'running' ? (
-              <ExtractorRunningHint partial={p.partial} />
-            ) : p.status === 'finalizing' ? (
-              <span className="flex items-center gap-1 text-slate-500">
-                <Loader2 className="size-3 animate-spin" />
-                Finalizing…
-              </span>
-            ) : p.status === 'done' ? (
-              <span className="text-emerald-600">
-                {p.count} transaction{p.count === 1 ? '' : 's'} extracted
-              </span>
-            ) : (
-              <span className="truncate text-rose-600">{p.error}</span>
-            )}
-          </div>
-        )
+        return <ExtractorCard key={id} progress={p} />
       })}
     </div>
   )
 }
 
-function ExtractorRunningHint({ partial }: { partial: string }) {
-  let count = 0
-  try {
-    const obj = JSON.parse(partial) as { transactions?: unknown[] }
-    count = Array.isArray(obj.transactions) ? obj.transactions.length : 0
-  } catch {}
+function ExtractorCard({ progress }: { progress: ExtractorProgress }) {
+  const filename = 'filename' in progress ? progress.filename : undefined
+  const reasoning =
+    'reasoning' in progress && typeof progress.reasoning === 'string'
+      ? progress.reasoning
+      : ''
+  const isRunning = progress.status === 'running'
   return (
-    <span className="flex items-center gap-1 text-slate-500">
-      <Loader2 className="size-3 animate-spin" />
-      Extracting{count > 0 ? ` · ${count} so far` : '…'}
-    </span>
+    <div className="rounded-md border border-slate-200 bg-slate-50 text-xs">
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <FileText className="size-4 shrink-0 text-slate-500" />
+        <span className="min-w-0 truncate font-medium text-slate-700">
+          {filename ?? 'Statement'}
+        </span>
+        <span className="text-slate-400">·</span>
+        {progress.status === 'starting' ? (
+          <span className="flex items-center gap-1 text-slate-500">
+            <Loader2 className="size-3 animate-spin" />
+            Starting…
+          </span>
+        ) : progress.status === 'running' ? (
+          <span className="flex items-center gap-1 text-slate-500">
+            <Loader2 className="size-3 animate-spin" />
+            Extracting…
+          </span>
+        ) : progress.status === 'done' ? (
+          <span className="text-emerald-600">
+            {progress.count} transaction{progress.count === 1 ? '' : 's'}{' '}
+            extracted
+          </span>
+        ) : (
+          <span className="truncate text-rose-600">{progress.error}</span>
+        )}
+      </div>
+      {reasoning.length > 0 ? (
+        <ReasoningTrace text={reasoning} streaming={isRunning} />
+      ) : null}
+    </div>
+  )
+}
+
+function ReasoningTrace({
+  text,
+  streaming,
+}: {
+  text: string
+  streaming: boolean
+}) {
+  const [open, setOpen] = useState(true)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!streaming) return
+    const el = scrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [text, streaming])
+  return (
+    <div className="border-t border-slate-200">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
+      >
+        <span>{open ? 'Hide reasoning' : 'Show reasoning'}</span>
+        <span className="text-slate-400">{text.length} chars</span>
+      </button>
+      {open ? (
+        <div
+          ref={scrollRef}
+          className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words px-2 pb-2 font-mono text-[11px] leading-snug text-slate-600"
+        >
+          {text}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
