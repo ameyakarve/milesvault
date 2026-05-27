@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { ArrowUp, Check, Copy } from 'lucide-react'
@@ -141,10 +141,15 @@ export function Chat({
     onBusyChange?.(busy)
   }, [busy, onBusyChange])
 
+  // clearHistory from useAgentChat is not reference-stable across renders;
+  // depending on it directly turns this effect into a setState loop with the
+  // parent. Route through a ref so the effect only fires when canClear flips.
+  const clearHistoryRef = useRef(clearHistory)
+  clearHistoryRef.current = clearHistory
   const canClear = messages.length > 0
   useEffect(() => {
-    onClearableChange?.({ canClear, clear: () => clearHistory() })
-  }, [canClear, clearHistory, onClearableChange])
+    onClearableChange?.({ canClear, clear: () => clearHistoryRef.current() })
+  }, [canClear, onClearableChange])
 
   function handleSubmit(message: PromptInputMessage) {
     const text = message.text.trim()
