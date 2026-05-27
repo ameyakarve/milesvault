@@ -5,6 +5,9 @@ import type {
   EntryRow,
   ReplaceBufferResponse,
 } from '@/durable/ledger-do'
+import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
+import { serializeJournal } from '@/lib/beancount/ast'
+import { isStrictParseErr, parseJournalStrict } from '@/lib/beancount/parse-strict'
 
 export type SaveOutcome =
   | { ok: true }
@@ -21,6 +24,62 @@ function rowsToSnapshots(rows: ReadonlyArray<EntryRow>): EntryRef2[] {
     id: r.id,
     expected_updated_at: r.updated_at,
   }))
+}
+
+function canonicalizeTxn(t: TransactionInput): string {
+  return serializeJournal([t], [], { descending: false }).trimEnd()
+}
+
+function canonicalizeDir(d: DirectiveInput): string {
+  return serializeJournal([], [d], { descending: false }).trimEnd()
+}
+
+// Diff the buffer against rows by canonical text. Server-stored `raw_text`
+// is already the canonical form (same serializeJournal call). Multiset
+// matching (Map<text, rows[]> + shift) handles duplicates safely. Returns
+// null on parse failure so the caller can fall back to whole-buffer replace
+// — the server will reject with the same parse_error.
+export function diffBuffer(
+  rows: ReadonlyArray<EntryRow>,
+  buffer: string,
+): { knownIds: EntryRef2[]; bufferToSend: string } | null {
+  const parsed = parseJournalStrict(buffer)
+  if (isStrictParseErr(parsed)) return null
+
+  const baselineByText = new Map<string, EntryRow[]>()
+  for (const r of rows) {
+    const arr = baselineByText.get(r.raw_text)
+    if (arr) arr.push(r)
+    else baselineByText.set(r.raw_text, [r])
+  }
+
+  const bufferOnly: string[] = []
+  for (const t of parsed.transactions) {
+    const canon = canonicalizeTxn(t)
+    const queue = baselineByText.get(canon)
+    if (queue && queue.length > 0) queue.shift()
+    else bufferOnly.push(canon)
+  }
+  for (const d of parsed.directives) {
+    const canon = canonicalizeDir(d)
+    const queue = baselineByText.get(canon)
+    if (queue && queue.length > 0) queue.shift()
+    else bufferOnly.push(canon)
+  }
+
+  const knownIds: EntryRef2[] = []
+  for (const queue of baselineByText.values()) {
+    for (const r of queue) {
+      knownIds.push({
+        kind: r.kind,
+        id: r.id,
+        expected_updated_at: r.updated_at,
+      })
+    }
+  }
+
+  const bufferToSend = bufferOnly.length > 0 ? bufferOnly.join('\n\n') + '\n' : ''
+  return { knownIds, bufferToSend }
 }
 
 // Loads /api/ledger/journal/entries and tracks rows + baseline + buffer
@@ -76,10 +135,13 @@ export function useEntries() {
     if (saving) return { ok: false, message: 'already saving', conflict: false }
     setSaving(true)
     const buf = bufferRef.current
+    const plan = diffBuffer(rows, buf)
+    const knownIdsToSend = plan ? plan.knownIds : snapshots
+    const bufferToSend = plan ? plan.bufferToSend : buf
     try {
       const r: ReplaceBufferResponse = await ledgerClient.replaceBuffer(
-        snapshots,
-        buf,
+        knownIdsToSend,
+        bufferToSend,
       )
       if (isReplaceBufferError(r)) {
         if (r.error === 'occ_conflict') {
@@ -103,7 +165,7 @@ export function useEntries() {
     } finally {
       setSaving(false)
     }
-  }, [saving, snapshots, refetch, replaceFromRows])
+  }, [saving, rows, snapshots, refetch, replaceFromRows])
 
   const isDirty = loaded && buffer !== baseline
 

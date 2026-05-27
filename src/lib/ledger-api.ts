@@ -170,27 +170,23 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
     },
 
     async replace_buffer(req) {
-      if (!req || typeof req !== 'object') {
-        throw new LedgerInputError(['body must be an object.'])
-      }
-      if (typeof req.buffer !== 'string') {
-        throw new LedgerInputError(['buffer must be a string.'])
-      }
       if (!Array.isArray(req.knownIds)) {
         throw new LedgerInputError(['knownIds must be an array.'])
       }
-      for (const k of req.knownIds) {
-        if (
-          !k ||
-          typeof k !== 'object' ||
-          typeof k.kind !== 'string' ||
-          typeof k.id !== 'number' ||
-          typeof k.expected_updated_at !== 'number'
-        ) {
+      for (const [idx, k] of req.knownIds.entries()) {
+        if (!Number.isInteger(k.id) || k.id <= 0) {
           throw new LedgerInputError([
-            'each knownIds entry needs {kind, id, expected_updated_at}.',
+            `knownIds[${idx}].id must be a positive integer.`,
           ])
         }
+        if (!Number.isInteger(k.expected_updated_at)) {
+          throw new LedgerInputError([
+            `knownIds[${idx}].expected_updated_at must be an integer.`,
+          ])
+        }
+      }
+      if (typeof req.buffer !== 'string') {
+        throw new LedgerInputError(['buffer must be a string.'])
       }
       return stub.replaceBuffer(req)
     },

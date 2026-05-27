@@ -10,7 +10,7 @@ import {
   thisMonthRange,
   type JournalFilter,
 } from './journal-filter-bar'
-import { useEntries, composeBaseline } from './use-entries'
+import { useEntries, composeBaseline, diffBuffer } from './use-entries'
 import {
   ledgerClient,
   isReplaceBufferError,
@@ -152,7 +152,10 @@ export function EditorShell() {
         id: r.id,
         expected_updated_at: r.updated_at,
       }))
-      const resp = await ledgerClient.replaceBuffer(snapshots, filteredBuffer)
+      const plan = diffBuffer(filteredRows, filteredBuffer)
+      const knownIdsToSend = plan ? plan.knownIds : snapshots
+      const bufferToSend = plan ? plan.bufferToSend : filteredBuffer
+      const resp = await ledgerClient.replaceBuffer(knownIdsToSend, bufferToSend)
       if (isReplaceBufferError(resp)) {
         if (resp.error === 'occ_conflict') {
           await entries.refetch().catch(() => {})
