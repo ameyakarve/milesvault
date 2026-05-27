@@ -4,7 +4,6 @@ import {
   DraftTransactionBatchCard,
   type DraftTransactionBatchCardProps,
 } from './draft-transaction'
-import type { DraftTransaction } from '@/durable/agent-ui-schemas'
 
 const ACCOUNTS = [
   'Assets:Bank:Chase:Checking',
@@ -19,69 +18,35 @@ const ACCOUNTS = [
   'Liabilities:CreditCard:Amex',
 ]
 
-const BALANCED: DraftTransaction = {
-  date: '2026-05-26',
-  flag: '*',
-  payee: 'Whole Foods',
-  narration: 'Weekly grocery run',
-  postings: [
-    { account: 'Expenses:Food:Groceries', amount: 42.1, currency: 'USD' },
-    { account: 'Assets:Bank:Chase:Checking', amount: -42.1, currency: 'USD' },
-  ],
-}
+const BALANCED = `2026-05-26 * "Whole Foods" "Weekly grocery run"
+  Expenses:Food:Groceries        42.10 USD
+  Assets:Bank:Chase:Checking    -42.10 USD`
 
-const UNBALANCED: DraftTransaction = {
-  date: '2026-05-26',
-  payee: 'Whole Foods',
-  narration: 'Weekly grocery run',
-  postings: [
-    { account: 'Expenses:Food:Groceries', amount: 42.1, currency: 'USD' },
-    { account: 'Assets:Bank:Chase:Checking', amount: -38.0, currency: 'USD' },
-  ],
-}
+const UNBALANCED = `2026-05-26 * "Whole Foods" "Weekly grocery run"
+  Expenses:Food:Groceries        42.10 USD
+  Assets:Bank:Chase:Checking    -38.00 USD`
 
-const SPLIT: DraftTransaction = {
-  date: '2026-05-26',
-  payee: 'Costco',
-  narration: 'Run',
-  postings: [
-    { account: 'Expenses:Food:Groceries', amount: 120.5, currency: 'USD' },
-    { account: 'Expenses:Household', amount: 79.99, currency: 'USD' },
-    { account: 'Liabilities:CreditCard:Amex', amount: -200.49, currency: 'USD' },
-  ],
-}
+const SPLIT = `2026-05-26 * "Costco" "Run"
+  Expenses:Food:Groceries       120.50 USD
+  Expenses:Household             79.99 USD
+  Liabilities:CreditCard:Amex  -200.49 USD`
 
-const STATEMENT_BATCH: DraftTransaction[] = [
-  {
-    date: '2026-05-02',
-    flag: '*',
-    payee: 'Trader Joe’s',
-    narration: 'Groceries',
-    postings: [
-      { account: 'Expenses:Food:Groceries', amount: 58.2, currency: 'USD' },
-      { account: 'Liabilities:CreditCard:Amex', amount: -58.2, currency: 'USD' },
-    ],
-  },
-  {
-    date: '2026-05-05',
-    flag: '*',
-    payee: 'Shell',
-    narration: 'Gas',
-    postings: [
-      { account: 'Expenses:Travel:Air', amount: 41.0, currency: 'USD' },
-      { account: 'Liabilities:CreditCard:Amex', amount: -41.0, currency: 'USD' },
-    ],
-  },
-  {
-    date: '2026-05-07',
-    flag: '*',
-    payee: 'Spotify',
-    narration: 'Monthly subscription',
-    postings: [
-      { account: 'Expenses:Food:Dining', amount: 9.99, currency: 'USD' },
-      { account: 'Liabilities:CreditCard:Amex', amount: -9.99, currency: 'USD' },
-    ],
-  },
+const FOREX = `2026-05-13 * "Cloudflare" "Subscription"
+  Expenses:Software:Subscriptions    2.36 USD @@ 225.98 INR
+  Expenses:Bank:ForexMarkup          4.52 INR
+  Expenses:Tax:GST                   0.81 INR
+  Liabilities:CreditCards:Axis:Magnus -231.31 INR`
+
+const STATEMENT_BATCH = [
+  `2026-05-02 * "Trader Joe’s" "Groceries"
+  Expenses:Food:Groceries       58.20 USD
+  Liabilities:CreditCard:Amex  -58.20 USD`,
+  `2026-05-05 * "Shell" "Gas"
+  Expenses:Travel:Air           41.00 USD
+  Liabilities:CreditCard:Amex  -41.00 USD`,
+  `2026-05-07 * "Spotify" "Monthly subscription"
+  Expenses:Food:Dining           9.99 USD
+  Liabilities:CreditCard:Amex   -9.99 USD`,
 ]
 
 function CardShell(props: Partial<DraftTransactionBatchCardProps>) {
@@ -94,9 +59,7 @@ function CardShell(props: Partial<DraftTransactionBatchCardProps>) {
           <DraftTransactionBatchCard
             input={{ transactions: [BALANCED] }}
             accounts={ACCOUNTS}
-            onApprove={(f: DraftTransaction[]) =>
-              push(`approve ${JSON.stringify(f)}`)
-            }
+            onApprove={(f: string) => push(`approve\n${f}`)}
             onReject={() => push('reject')}
             {...props}
           />
@@ -126,6 +89,10 @@ export const Unbalanced: StoryObj<typeof CardShell> = {
 
 export const ThreePostingSplit: StoryObj<typeof CardShell> = {
   args: { input: { transactions: [SPLIT] } },
+}
+
+export const Forex: StoryObj<typeof CardShell> = {
+  args: { input: { transactions: [FOREX] } },
 }
 
 export const Batch: StoryObj<typeof CardShell> = {

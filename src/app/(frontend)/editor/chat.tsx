@@ -40,10 +40,7 @@ import {
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
-import type { DraftTransaction } from '@/durable/agent-ui-schemas'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
-import { serializeTransactionInput } from '@/lib/beancount/ast'
-import type { TransactionInput } from '@/durable/ledger-types'
 import type { ToolUIPart } from 'ai'
 
 type Part = {
@@ -55,20 +52,6 @@ type Part = {
   errorText?: string
   toolCallId?: string
   [k: string]: unknown
-}
-
-function draftToTxnInput(d: DraftTransaction): TransactionInput {
-  return {
-    date: d.date,
-    flag: d.flag ?? '*',
-    payee: d.payee,
-    narration: d.narration,
-    postings: d.postings.map((p) => ({
-      account: p.account,
-      amount: String(p.amount),
-      currency: p.currency,
-    })),
-  }
 }
 
 type StatementAttachment =
@@ -355,20 +338,17 @@ export function Chat({
     setStatement(null)
   }
 
-  async function handleApprove(toolCallId: string, final: DraftTransaction[]) {
+  async function handleApprove(toolCallId: string, finalText: string) {
     setSubmitStatus((s) => ({ ...s, [toolCallId]: 'submitting' }))
     setSubmitError((s) => {
       const { [toolCallId]: _drop, ...rest } = s
       return rest
     })
     try {
-      const newTxns = final
-        .map((d) => serializeTransactionInput(draftToTxnInput(d)))
-        .join('\n\n')
       // Append-only: knownIds: [] tells the server "delete nothing, just
       // parse-and-insert what's in buffer". Avoids re-sending the full
       // journal text and side-steps OCC races against a user-side edit.
-      const r = await ledgerClient.replaceBuffer([], newTxns)
+      const r = await ledgerClient.replaceBuffer([], finalText)
       if (isReplaceBufferError(r)) {
         const message = 'message' in r ? r.message : 'Save conflict'
         setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
@@ -384,7 +364,7 @@ export function Chat({
       setSubmitStatus((s) => ({ ...s, [toolCallId]: 'done' }))
       addToolOutput({
         toolCallId,
-        output: { ok: true, committed: newTxns.trim() },
+        output: { ok: true, committed: finalText.trim() },
       })
       void refreshAccounts()
       onAppended?.()

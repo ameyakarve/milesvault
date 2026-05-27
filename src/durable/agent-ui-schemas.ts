@@ -1,43 +1,31 @@
 import { z } from 'zod'
 
-// One drafted transaction. The agent emits one or more of these inside a
-// `draft_transaction` tool call; the user pages through, edits, and approves
-// the whole batch in DraftTransactionBatchCard. Amounts are signed plain
-// numbers — the card formats and the client serializes back to Beancount text
-// before PUT /api/ledger/journal.
-export const draftTransactionSchema = z.object({
-  date: z.string().describe('YYYY-MM-DD posting date'),
-  flag: z
-    .enum(['*', '!'])
-    .optional()
-    .describe('* = cleared (default), ! = needs review'),
-  payee: z.string().optional(),
-  narration: z.string().optional(),
-  postings: z
-    .array(
-      z.object({
-        account: z
-          .string()
-          .describe('Full Beancount account, e.g. "Expenses:Food:Groceries"'),
-        amount: z
-          .number()
-          .describe('Signed amount; postings must sum to zero per currency'),
-        currency: z.string().describe('ISO 4217 code, e.g. "USD"'),
-      }),
-    )
-    .min(2)
-    .describe('Two or more balanced postings.'),
-})
-
-export type DraftTransaction = z.infer<typeof draftTransactionSchema>
-export type DraftPosting = DraftTransaction['postings'][number]
-
-// Batch wrapper for the draft_transaction tool. Always emits an array — a
-// single one-off transaction is just a batch of length 1. Use multiple
-// entries for related transactions the user will review together
-// (statement uploads, splits, subscription series).
+// The agent emits one or more drafted transactions inside a `draft_transaction`
+// tool call. Each element is a complete Beancount entry (date / payee / narration
+// header + 2+ postings) — the model writes Beancount syntax directly so it can
+// use `@@` (forex), `@`, cost basis, metadata, and tags without us re-modelling
+// each feature in a JSON schema. The user reviews each entry in a per-card
+// CodeMirror editor and approves the batch; we then concatenate and replaceBuffer.
 export const draftTransactionBatchSchema = z.object({
-  transactions: z.array(draftTransactionSchema).min(1),
+  transactions: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .describe(
+          'One complete Beancount transaction as text. Example:\n' +
+            '2026-05-13 * "Cloudflare" "Workers subscription"\n' +
+            '  Expenses:Software:Subscriptions    2.36 USD @@ 225.98 INR\n' +
+            '  Expenses:Bank:ForexMarkup          4.52 INR\n' +
+            '  Expenses:Tax:GST                   0.81 INR\n' +
+            '  Liabilities:CreditCards:Axis:Magnus -231.31 INR',
+        ),
+    )
+    .min(1)
+    .describe(
+      'Array of Beancount transaction strings. One-off entries are an array of length 1; ' +
+        'statement uploads / splits / subscription series go in the same call.',
+    ),
 })
 
 export type DraftTransactionBatch = z.infer<typeof draftTransactionBatchSchema>
