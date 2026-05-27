@@ -90,9 +90,11 @@ function Composer({
 export function Chat({
   onBusyChange,
   onClearableChange,
+  onAppended,
 }: {
   onBusyChange?: (busy: boolean) => void
   onClearableChange?: (state: { canClear: boolean; clear: () => void }) => void
+  onAppended?: () => void
 } = {}) {
   const agent = useAgent({ agent: 'LedgerDO', basePath: 'api/agents' })
   const {
@@ -212,6 +214,7 @@ export function Chat({
         output: { ok: true, committed: newTxns.trim() },
       })
       void refreshAccounts()
+      onAppended?.()
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Save failed'
       setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))

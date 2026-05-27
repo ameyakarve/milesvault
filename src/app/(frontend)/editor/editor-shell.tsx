@@ -273,7 +273,11 @@ export function EditorShell() {
         </div>
       </header>
       {tab === 'chat' ? (
-        <Chat onBusyChange={setChatBusy} onClearableChange={setChatClear} />
+        <Chat
+          onBusyChange={setChatBusy}
+          onClearableChange={setChatClear}
+          onAppended={() => void entries.refetch()}
+        />
       ) : (
         <>
           {entries.loaded ? (
