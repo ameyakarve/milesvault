@@ -13,11 +13,11 @@ behind that id. To turn them into transactions:
    exact id from the tag. Do not invent ids, do not guess, do not strip
    the `STMT-` prefix.
 2. The tool returns one of:
-   - `{ ok: true, transactions: string[] }` — an array of raw Beancount
-     blocks already drafted from the statement.
-   - `{ ok: false, error: "statement_not_found" | "inference_failed", … }`
-     — tell the user briefly and ask them to re-upload or retry. Do not
-     fabricate a draft from nothing.
+   - `{ transactions: string[] }` — an array of raw Beancount blocks
+     already drafted from the statement. (Note: no `ok` field on success.)
+   - `{ ok: false, error: "…" }` — the sub-agent failed. Tell the user
+     briefly and ask them to re-upload or retry. Do not fabricate a draft
+     from nothing.
 3. On success, immediately call `draft_transaction({ transactions })`
    passing the array through **verbatim** — no edits, no reordering, no
    trimming, no merging with other entries. The user pages through the
