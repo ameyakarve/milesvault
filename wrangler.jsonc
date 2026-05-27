@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "main": ".open-next/worker.js",
   "name": "milesvault",
-  "compatibility_date": "2026-05-20",
+  "compatibility_date": "2025-08-15",
   "compatibility_flags": [
     // Enable Node.js API
     // see https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag
@@ -59,7 +59,7 @@
   "env": {
     "staging": {
       "name": "milesvault-staging",
-      "compatibility_date": "2026-05-20",
+      "compatibility_date": "2025-08-15",
       "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
       "upload_source_maps": true,
       "routes": [{ "pattern": "staging.milesvault.com", "custom_domain": true }],
