@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, Check, Copy } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -267,6 +267,10 @@ export function Chat({
             <ConversationContent className="mx-auto w-full max-w-3xl py-6">
               {messages.map((m) => {
                 const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
+                const textBlob = parts
+                  .filter((p) => p.type === 'text' && typeof p.text === 'string')
+                  .map((p) => p.text as string)
+                  .join('\n\n')
                 return (
                   <Message key={m.id} from={m.role}>
                     <MessageContent
@@ -359,6 +363,7 @@ export function Chat({
                         return null
                       })}
                     </MessageContent>
+                    {textBlob ? <CopyMessageButton text={textBlob} /> : null}
                   </Message>
                 )
               })}
@@ -382,5 +387,31 @@ export function Chat({
         </>
       )}
     </div>
+  )
+}
+
+function CopyMessageButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const onClick = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {}
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={copied ? 'Copied' : 'Copy message'}
+      title={copied ? 'Copied' : 'Copy message'}
+      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-900 group-[.is-user]:ml-auto focus-visible:opacity-100"
+    >
+      {copied ? (
+        <Check className="size-3.5" />
+      ) : (
+        <Copy className="size-3.5" />
+      )}
+    </button>
   )
 }
