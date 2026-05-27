@@ -250,9 +250,25 @@ export function Chat({
     // waitUntil so this loop just observes the row flipping state. Quietly
     // gives up if the user removed the chip mid-flight (state cleared).
     let transientErrors = 0
+    const startedAt = Date.now()
+    const HARD_CAP_MS = 150_000 // server abort is 90s; give it a buffer.
     for (;;) {
+      if (Date.now() - startedAt > HARD_CAP_MS) {
+        console.error('[statement] poll timed out', { id })
+        setStatement((curr) => {
+          if (!curr) return curr
+          if ('id' in curr && curr.id !== id) return curr
+          return {
+            kind: 'error',
+            file,
+            message: 'Extraction timed out — try again',
+          }
+        })
+        return
+      }
       try {
         const rec = await ledgerClient.getStatement(id)
+        console.log('[statement] poll', { id, status: rec.status })
         transientErrors = 0
         // If the user removed the chip while we were waiting, bail.
         // We compare by id to avoid racing a stale poller against a new
@@ -282,6 +298,7 @@ export function Chat({
         // Bail after a few consecutive failures so the chip doesn't loop
         // forever when the server row is gone (404) or the network is down.
         transientErrors++
+        console.error('[statement] poll error', { id, err: e })
         if (transientErrors >= 5) {
           const msg = e instanceof Error ? e.message : 'Status poll failed'
           setStatement((curr) => {
