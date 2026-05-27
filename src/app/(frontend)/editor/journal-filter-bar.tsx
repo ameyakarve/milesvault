@@ -225,20 +225,25 @@ function DatePicker({
         <p className="px-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
           Custom
         </p>
-        <div className="mt-1 flex items-center gap-1.5 px-2 pb-1">
-          <input
-            type="date"
-            value={customFrom}
-            onChange={(e) => setCustomFrom(e.target.value)}
-            className="w-full rounded border border-slate-200 px-1.5 py-1 text-[12px]"
-          />
-          <span className="text-slate-400">→</span>
-          <input
-            type="date"
-            value={customTo}
-            onChange={(e) => setCustomTo(e.target.value)}
-            className="w-full rounded border border-slate-200 px-1.5 py-1 text-[12px]"
-          />
+        <div className="mt-1 flex flex-col gap-1.5 px-2 pb-1">
+          <label className="flex items-center gap-2">
+            <span className="w-8 text-[11px] text-slate-500">From</span>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-[12px]"
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="w-8 text-[11px] text-slate-500">To</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-[12px]"
+            />
+          </label>
         </div>
         <div className="flex justify-between gap-1.5 px-2 pt-1">
           <button
