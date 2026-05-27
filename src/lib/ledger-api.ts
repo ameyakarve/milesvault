@@ -52,6 +52,7 @@ export type LedgerClient = {
   }>
   list_entries(): Promise<ListEntriesResponse>
   replace_buffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse>
+  attach_statement(opts: { filename: string; text: string }): Promise<{ id: string }>
   clear(): Promise<{ ok: true }>
   ledger_snapshot(): Promise<{
     today: number
@@ -189,6 +190,16 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
         throw new LedgerInputError(['buffer must be a string.'])
       }
       return stub.replaceBuffer(req)
+    },
+
+    async attach_statement(opts) {
+      if (typeof opts?.filename !== 'string' || opts.filename.length === 0) {
+        throw new LedgerInputError(['filename must be a non-empty string.'])
+      }
+      if (typeof opts?.text !== 'string' || opts.text.length === 0) {
+        throw new LedgerInputError(['text must be a non-empty string.'])
+      }
+      return stub.attach_statement(opts)
     },
 
     async clear() {

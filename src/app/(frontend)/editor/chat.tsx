@@ -308,15 +308,38 @@ export function Chat({
     onClearableChange?.({ canClear, clear: () => clearHistoryRef.current() })
   }, [canClear, onClearableChange])
 
-  function handleSubmit(message: PromptInputMessage) {
+  async function handleSubmit(message: PromptInputMessage) {
     const userText = message.text.trim()
     const stmt = statement?.kind === 'ready' ? statement : null
     // Allow a statement-only submit (no typed note) — the prompt block alone
     // is enough signal for the agent.
     if (!userText && !stmt) return
     if (statement && !stmt) return // statement attached but not ready
+
+    // Upload statement bytes to DO side-storage before sending. The user's
+    // chat message carries only a reference, so the bytes never enter the
+    // chat agent's history (or its inference context).
+    let stmtId: string | null = null
+    if (stmt) {
+      try {
+        const { id } = await ledgerClient.attachStatement({
+          filename: stmt.file.name,
+          text: stmt.text,
+        })
+        stmtId = id
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        setStatement({ kind: 'error', file: stmt.file, message: msg })
+        return
+      }
+    }
+
+    const refTag =
+      stmt && stmtId
+        ? `<statement id="${stmtId}" filename="${stmt.file.name}" />`
+        : ''
     const text = stmt
-      ? `${userText || 'Process the attached statement and draft transactions.'}\n\n<statement filename="${stmt.file.name}">\n${stmt.text}\n</statement>`
+      ? `${userText || 'Process the attached statement and draft transactions.'}\n\n${refTag}`
       : userText
     // Any tool cards still awaiting a decision get superseded by the new
     // message — otherwise the agent stays stuck waiting on them.

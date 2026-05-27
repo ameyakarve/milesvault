@@ -423,4 +423,18 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
             GROUP BY account, currency, scale, date
           )`,
   },
+  // Side-storage for uploaded statement text. The client extracts a PDF
+  // locally and POSTs the text here; the user's chat message carries only
+  // an id (STMT-<uuid>) so the bytes never enter the chat agent's history.
+  // A subagent (added in a follow-up step) reads from this table and emits
+  // structured draft transactions back to the main agent.
+  {
+    label: 'statements',
+    sql: `CREATE TABLE IF NOT EXISTS statements (
+      id          TEXT PRIMARY KEY,
+      filename    TEXT NOT NULL,
+      text        TEXT NOT NULL,
+      created_at  INTEGER NOT NULL
+    )`,
+  },
 ]

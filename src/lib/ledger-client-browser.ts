@@ -25,6 +25,17 @@ async function putJSON<T>(url: string, body: unknown): Promise<T> {
   return (await res.json()) as T
 }
 
+async function postJSON<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`POST ${url} → HTTP ${res.status}`)
+  return (await res.json()) as T
+}
+
 export const ledgerClient = {
   getJournal(opts?: FetchOpts): Promise<JournalGetResponse> {
     return getJSON('/api/ledger/journal', opts)
@@ -40,6 +51,12 @@ export const ledgerClient = {
   },
   getAccounts(opts?: FetchOpts): Promise<{ accounts: string[] }> {
     return getJSON('/api/ledger/accounts', opts)
+  },
+  attachStatement(body: {
+    filename: string
+    text: string
+  }): Promise<{ id: string }> {
+    return postJSON('/api/statements', body)
   },
   getJournalFiltered(
     params: {

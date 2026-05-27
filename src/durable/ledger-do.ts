@@ -1153,6 +1153,25 @@ export class LedgerDO extends Think {
     return row ? row.updated_at : null
   }
 
+  // Persist an uploaded statement's extracted text. Returns the id the
+  // client embeds in its chat message as <statement id="..." filename="...">.
+  // The bytes stay here; the main chat agent never sees them.
+  async attach_statement(opts: {
+    filename: string
+    text: string
+  }): Promise<{ id: string }> {
+    const id = `STMT-${crypto.randomUUID()}`
+    this.db.exec(
+      `INSERT INTO statements (id, filename, text, created_at)
+       VALUES (?, ?, ?, ?)`,
+      id,
+      opts.filename,
+      opts.text,
+      Date.now(),
+    )
+    return { id }
+  }
+
   async clear(): Promise<{ ok: true }> {
     for (const t of DATA_TABLES) {
       this.db.exec(`DELETE FROM ${t}`)
