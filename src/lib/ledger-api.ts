@@ -1,5 +1,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type {
+  JournalGetFilteredRequest,
+  JournalGetFilteredResponse,
   JournalGetResponse,
   JournalPutError,
   JournalPutResponse,
@@ -26,6 +28,7 @@ export type LedgerClient = {
     account: string,
     currency: string,
   ): Promise<JournalGetResponse>
+  journal_get_filtered(req: JournalGetFilteredRequest): Promise<JournalGetFilteredResponse>
   list_account_currencies(account: string): Promise<string[]>
   list_account_children(account: string): Promise<string[]>
   list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
@@ -108,6 +111,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
         throw new LedgerInputError(['account must be a non-empty string.'])
       }
       return stub.journal_get_for_account(account)
+    },
+
+    async journal_get_filtered(req) {
+      return stub.journal_get_filtered(req)
     },
 
     async journal_get_for_account_currency(account, currency) {

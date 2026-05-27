@@ -1,12 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ListTree } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorView } from '@codemirror/view'
 import { Chat } from './chat'
 import { Journal } from './journal'
-import { AccountSheet } from './account-sheet'
+import {
+  JournalFilterBar,
+  thisMonthRange,
+  type JournalFilter,
+} from './journal-filter-bar'
 import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
+import type { JournalCursor } from '@/durable/ledger-do'
 
 type Tab = 'chat' | 'journal'
 
@@ -19,9 +23,20 @@ export function EditorShell() {
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [accountsOpen, setAccountsOpen] = useState(false)
   const [chatBusy, setChatBusy] = useState(false)
   const editorViewRef = useRef<EditorView | null>(null)
+
+  const [filter, setFilter] = useState<JournalFilter>(() => ({
+    account: null,
+    date: thisMonthRange(),
+  }))
+  const filterActive = filter.account != null || filter.date != null
+
+  const [filteredText, setFilteredText] = useState('')
+  const [filteredCursor, setFilteredCursor] = useState<JournalCursor | null>(null)
+  const [filteredLoading, setFilteredLoading] = useState(false)
+  const [filteredError, setFilteredError] = useState<string | null>(null)
+  const [accounts, setAccounts] = useState<string[]>([])
 
   const isDirty = loaded && text !== savedText
 
@@ -40,10 +55,63 @@ export function EditorShell() {
         setSaveError(e instanceof Error ? e.message : 'Failed to load journal')
         setLoaded(true)
       })
+    ledgerClient.getAccounts().then((r) => {
+      if (alive) setAccounts(r.accounts)
+    }).catch(() => {})
     return () => {
       alive = false
     }
   }, [])
+
+  // Refetch filtered view whenever filter or savedText changes.
+  useEffect(() => {
+    if (tab !== 'journal') return
+    if (!filterActive) return
+    let alive = true
+    setFilteredLoading(true)
+    setFilteredError(null)
+    ledgerClient
+      .getJournalFiltered({
+        account: filter.account,
+        dateFrom: filter.date?.from ?? null,
+        dateTo: filter.date?.to ?? null,
+        cursor: null,
+      })
+      .then((r) => {
+        if (!alive) return
+        setFilteredText(r.text)
+        setFilteredCursor(r.nextCursor)
+      })
+      .catch((e) => {
+        if (!alive) return
+        setFilteredError(e instanceof Error ? e.message : 'Failed to load filtered journal')
+      })
+      .finally(() => {
+        if (alive) setFilteredLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [tab, filterActive, filter.account, filter.date, savedText])
+
+  const loadMore = useCallback(async () => {
+    if (!filteredCursor || filteredLoading) return
+    setFilteredLoading(true)
+    try {
+      const r = await ledgerClient.getJournalFiltered({
+        account: filter.account,
+        dateFrom: filter.date?.from ?? null,
+        dateTo: filter.date?.to ?? null,
+        cursor: filteredCursor,
+      })
+      setFilteredText((prev) => (prev ? `${prev}\n${r.text}` : r.text))
+      setFilteredCursor(r.nextCursor)
+    } catch (e) {
+      setFilteredError(e instanceof Error ? e.message : 'Failed to load more')
+    } finally {
+      setFilteredLoading(false)
+    }
+  }, [filteredCursor, filteredLoading, filter.account, filter.date])
 
   const textRef = useRef(text)
   useEffect(() => {
@@ -108,43 +176,17 @@ export function EditorShell() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [isDirty])
 
-  const scrollToAccount = useCallback((account: string) => {
-    const view = editorViewRef.current
-    if (!view) return
-    const doc = view.state.doc
-    const idx = doc.toString().indexOf(account)
-    if (idx < 0) return
-    const line = doc.lineAt(idx)
-    view.dispatch({
-      selection: { anchor: line.from },
-      scrollIntoView: true,
-    })
-    setAccountsOpen(false)
-    view.focus()
-  }, [])
-
   return (
     <>
       <header className="flex items-center justify-between gap-3 border-b border-slate-200/60 px-4 py-3 sm:px-6">
-        <div className="flex w-[120px] items-center gap-2">
-          {tab === 'journal' && loaded ? (
-            <button
-              type="button"
-              onClick={() => setAccountsOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[13px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            >
-              <ListTree className="size-4" />
-              Accounts
-            </button>
-          ) : null}
-        </div>
+        <div className="w-[60px] sm:w-[120px]" />
         <SegmentedTabs
           value={tab}
           onChange={requestTab}
           lockJournal={chatBusy}
         />
-        <div className="flex w-[120px] items-center justify-end gap-2">
-          {tab === 'journal' && loaded ? (
+        <div className="flex w-[60px] items-center justify-end gap-2 sm:w-[120px]">
+          {tab === 'journal' && loaded && !filterActive ? (
             <>
               <SavedChip dirty={isDirty} saving={saving} />
               <button
@@ -163,12 +205,58 @@ export function EditorShell() {
         <Chat onBusyChange={setChatBusy} />
       ) : (
         <>
+          {loaded ? (
+            <JournalFilterBar
+              accounts={accounts}
+              filter={filter}
+              onChange={setFilter}
+            />
+          ) : null}
           {saveError ? (
             <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-[12px] text-rose-700 sm:px-6">
               {saveError}
             </div>
           ) : null}
-          {loaded ? (
+          {filteredError ? (
+            <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-[12px] text-rose-700 sm:px-6">
+              {filteredError}
+            </div>
+          ) : null}
+          {!loaded ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+              Loading…
+            </div>
+          ) : filterActive ? (
+            <div className="flex flex-1 flex-col overflow-hidden">
+              {filteredLoading && !filteredText ? (
+                <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+                  Loading…
+                </div>
+              ) : (
+                <Journal
+                  text={filteredText}
+                  onChange={() => {}}
+                  onSave={() => {}}
+                  readOnly
+                  onMount={(view) => {
+                    editorViewRef.current = view
+                  }}
+                />
+              )}
+              {filteredCursor ? (
+                <div className="border-t border-slate-200/60 px-4 py-2 text-center sm:px-6">
+                  <button
+                    type="button"
+                    onClick={() => void loadMore()}
+                    disabled={filteredLoading}
+                    className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                  >
+                    {filteredLoading ? 'Loading…' : 'Load older'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
             <Journal
               text={text}
               onChange={setText}
@@ -178,20 +266,9 @@ export function EditorShell() {
                 editorViewRef.current = view
               }}
             />
-          ) : (
-            <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
-              Loading…
-            </div>
           )}
         </>
       )}
-      {accountsOpen ? (
-        <AccountSheet
-          text={text}
-          onSelect={scrollToAccount}
-          onClose={() => setAccountsOpen(false)}
-        />
-      ) : null}
       {pendingTab !== null ? (
         <UnsavedModal
           saving={saving}

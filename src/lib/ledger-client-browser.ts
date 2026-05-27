@@ -1,4 +1,5 @@
 import type {
+  JournalGetFilteredResponse,
   JournalGetResponse,
   JournalPutError,
   JournalPutResponse,
@@ -31,6 +32,27 @@ export const ledgerClient = {
   },
   getAccounts(opts?: FetchOpts): Promise<{ accounts: string[] }> {
     return getJSON('/api/ledger/accounts', opts)
+  },
+  getJournalFiltered(
+    params: {
+      account?: string | null
+      dateFrom?: string | null
+      dateTo?: string | null
+      cursor?: { date: string; id: number } | null
+      limit?: number | null
+    },
+    opts?: FetchOpts,
+  ): Promise<JournalGetFilteredResponse> {
+    const usp = new URLSearchParams()
+    if (params.account) usp.set('account', params.account)
+    if (params.dateFrom) usp.set('dateFrom', params.dateFrom)
+    if (params.dateTo) usp.set('dateTo', params.dateTo)
+    if (params.cursor) {
+      usp.set('cursorDate', params.cursor.date)
+      usp.set('cursorId', String(params.cursor.id))
+    }
+    if (params.limit != null) usp.set('limit', String(params.limit))
+    return getJSON(`/api/ledger/journal/filtered?${usp.toString()}`, opts)
   },
 }
 

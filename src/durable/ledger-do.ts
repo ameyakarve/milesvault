@@ -64,6 +64,18 @@ const DATA_TABLES = [
 ] as const
 
 export type JournalGetResponse = { text: string }
+export type JournalCursor = { date: string; id: number }
+export type JournalGetFilteredRequest = {
+  account?: string | null
+  dateFrom?: string | null
+  dateTo?: string | null
+  cursor?: JournalCursor | null
+  limit?: number | null
+}
+export type JournalGetFilteredResponse = {
+  text: string
+  nextCursor: JournalCursor | null
+}
 export type JournalPutResponse = { text: string; inserted: number; deleted: number; unchanged: number }
 export type JournalPutError = {
   ok: false
@@ -396,6 +408,82 @@ export class LedgerDO extends Think {
       directiveTouchesAccountCurrency(d, account, currency),
     )
     return { text: serializeJournal(transactions, directives, { descending: true }) }
+  }
+
+  async journal_get_filtered(
+    req: JournalGetFilteredRequest,
+  ): Promise<JournalGetFilteredResponse> {
+    const PAGE_DEFAULT = 200
+    const PAGE_MAX = 500
+    const account =
+      typeof req.account === 'string' && req.account.length > 0 ? req.account : null
+    const fromInt = req.dateFrom ? dateToInt(req.dateFrom) : null
+    const toInt = req.dateTo ? dateToInt(req.dateTo) : null
+    const cursor =
+      req.cursor && typeof req.cursor.date === 'string' && Number.isFinite(req.cursor.id)
+        ? { date: dateToInt(req.cursor.date), id: req.cursor.id }
+        : null
+    const limit = Math.min(
+      PAGE_MAX,
+      Math.max(1, Math.floor(req.limit ?? PAGE_DEFAULT)),
+    )
+
+    const wheres: string[] = []
+    const binds: unknown[] = []
+    if (account) {
+      wheres.push(
+        `id IN (SELECT txn_id FROM postings WHERE account = ? OR account GLOB ?)`,
+      )
+      binds.push(account, account + ':*')
+    }
+    if (fromInt != null) {
+      wheres.push('date >= ?')
+      binds.push(fromInt)
+    }
+    if (toInt != null) {
+      wheres.push('date <= ?')
+      binds.push(toInt)
+    }
+    if (cursor) {
+      wheres.push('(date < ? OR (date = ? AND id < ?))')
+      binds.push(cursor.date, cursor.date, cursor.id)
+    }
+    const whereClause = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : ''
+    const rows = this.db
+      .exec<{ id: number; date: number }>(
+        `SELECT id, date FROM transactions
+         ${whereClause}
+         ORDER BY date DESC, id DESC
+         LIMIT ?`,
+        ...binds,
+        limit + 1,
+      )
+      .toArray()
+    const hasMore = rows.length > limit
+    const pageRows = hasMore ? rows.slice(0, limit) : rows
+    const transactions: TransactionInput[] = []
+    for (const r of pageRows) {
+      const e = this.readTxnEntry(r.id)
+      if (e) transactions.push(entryTxnToInput(e))
+    }
+    const last = pageRows[pageRows.length - 1]
+    const nextCursor: JournalCursor | null = hasMore && last
+      ? { date: dateFromInt(last.date), id: last.id }
+      : null
+
+    // Directives included only on the first page (cursor==null). They're
+    // typically sparse (open/close/balance/note) and filtering by date+account
+    // keeps the payload small.
+    let directives = cursor ? [] : this.readAllDirectives()
+    if (!cursor) {
+      if (account) directives = directives.filter((d) => directiveTouchesAccount(d, account))
+      if (fromInt != null) directives = directives.filter((d) => dateToInt(d.date) >= fromInt)
+      if (toInt != null) directives = directives.filter((d) => dateToInt(d.date) <= toInt)
+    }
+    return {
+      text: serializeJournal(transactions, directives, { descending: true }),
+      nextCursor,
+    }
   }
 
   async list_account_children(account: string): Promise<string[]> {
