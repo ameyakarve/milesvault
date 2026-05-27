@@ -10,7 +10,6 @@ import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
   dateToInt,
-  directiveInputHash,
   serializeJournal,
   transactionInputHash,
 } from '@/lib/beancount/ast'
@@ -79,7 +78,6 @@ export type JournalGetFilteredResponse = {
   text: string
   nextCursor: JournalCursor | null
 }
-export type JournalPutResponse = { text: string; inserted: number; deleted: number; unchanged: number }
 export type JournalPutError = {
   ok: false
   error:
@@ -89,12 +87,6 @@ export type JournalPutError = {
     | 'currency_lock'
     | 'credit_card_format'
   message: string
-}
-export type PreviewJournalPutResponse = {
-  ok: true
-  inserted: number
-  deleted: number
-  unchanged: number
 }
 export type ProposeJournalEditResponse =
   | {
@@ -107,9 +99,62 @@ export type ProposeJournalEditResponse =
     }
   | JournalPutError
 export type CommitJournalEditResponse =
-  | (JournalPutResponse & { ok: true; proposal_id: string })
+  | {
+      ok: true
+      proposal_id: string
+      text: string
+      inserted: number
+      deleted: number
+      unchanged: number
+    }
   | JournalPutError
   | { ok: false; error: 'no_such_proposal' | 'already_resolved'; message: string }
+
+export type EntryKind =
+  | 'txn'
+  | 'open'
+  | 'close'
+  | 'commodity'
+  | 'balance'
+  | 'price'
+  | 'note'
+  | 'document'
+  | 'event'
+
+export type EntryRow = {
+  kind: EntryKind
+  id: number
+  raw_text: string
+  updated_at: number
+}
+
+export type ListEntriesResponse = { rows: EntryRow[] }
+
+export type EntryRef2 = {
+  kind: EntryKind
+  id: number
+  expected_updated_at: number
+}
+
+export type ReplaceBufferRequest = {
+  knownIds: EntryRef2[]
+  buffer: string
+}
+
+export type ReplaceBufferConflict = {
+  ok: false
+  error: 'occ_conflict'
+  conflictingIds: Array<{
+    kind: EntryKind
+    id: number
+    current_updated_at: number | null
+  }>
+}
+
+export type ReplaceBufferResponse =
+  | { ok: true; rows: EntryRow[] }
+  | JournalPutError
+  | ReplaceBufferConflict
 
 const ALL_DIRECTIVE_KINDS: DirectiveInput['kind'][] = [
   'open',
@@ -121,19 +166,6 @@ const ALL_DIRECTIVE_KINDS: DirectiveInput['kind'][] = [
   'document',
   'event',
 ]
-
-type JournalDiffResult =
-  | JournalPutError
-  | {
-      ok: true
-      inserted: number
-      deleted: number
-      unchanged: number
-      txnsToInsert: Array<{ input: TransactionInput; hash: string }>
-      txnIdsToDelete: number[]
-      dirsToInsertByKind: Map<DirectiveInput['kind'], DirectiveInput[]>
-      dirIdsToDeleteByKind: Map<DirectiveInput['kind'], number[]>
-    }
 
 const DIRECTIVE_TABLE: Record<DirectiveInput['kind'], string> = {
   open: 'directives_open',
@@ -735,96 +767,33 @@ export class LedgerDO extends Think {
     }))
   }
 
-  async journal_put(text: string): Promise<JournalPutResponse | JournalPutError> {
-    // Hold the input gate across the diff (async, has await points) and the
-    // apply (sync transactionSync) so concurrent puts can't race the read
-    // phase and end up applying a stale plan.
-    return this.ctx.blockConcurrencyWhile(async () => {
-      const diff = await this.computeJournalDiff(text)
-      if ('ok' in diff && diff.ok === false) return diff
-
-      const allKinds = ALL_DIRECTIVE_KINDS
-      const now = Date.now()
-      this.ctx.storage.transactionSync(() => {
-        for (const id of diff.txnIdsToDelete) {
-          this.db.exec('DELETE FROM transactions WHERE id = ?', id)
-        }
-        for (const { input, hash } of diff.txnsToInsert) this.insertTxn(input, hash, now)
-        for (const kind of allKinds) {
-          const table = DIRECTIVE_TABLE[kind]
-          for (const id of diff.dirIdsToDeleteByKind.get(kind)!) {
-            this.db.exec(`DELETE FROM ${table} WHERE id = ?`, id)
-          }
-          for (const d of diff.dirsToInsertByKind.get(kind)!) this.insertDirective(d, now)
-        }
-      })
-
-      const result = await this.journal_get()
-      return {
-        text: result.text,
-        inserted: diff.inserted,
-        deleted: diff.deleted,
-        unchanged: diff.unchanged,
-      }
-    })
-  }
-
-  async preview_journal_put(
-    text: string,
-  ): Promise<PreviewJournalPutResponse | JournalPutError> {
-    const diff = await this.computeJournalDiff(text)
-    if ('ok' in diff && diff.ok === false) return diff
-    return {
-      ok: true,
-      inserted: diff.inserted,
-      deleted: diff.deleted,
-      unchanged: diff.unchanged,
-    }
-  }
-
-  // Build the would-be new full-journal text by serializing the current
-  // ledger excluding `excludeTxnIds`, then concatenating the agent's
-  // proposed snippet. Order: existing surviving entries first (oldest →
-  // newest), then proposed text — journal_put doesn't care about order.
-  private composeJournalAfterEdit(
-    excludeTxnIds: ReadonlyArray<number>,
-    proposedText: string,
-  ): { fullText: string; beforeText: string } {
-    const excluded = new Set(excludeTxnIds.map((n) => Number(n)))
-
-    const allTxnIds = this.db
-      .exec<{ id: number }>('SELECT id FROM transactions ORDER BY date ASC, id ASC')
-      .toArray()
-      .map((r) => r.id)
-    const surviving: TransactionInput[] = []
-    const targeted: TransactionInput[] = []
-    for (const id of allTxnIds) {
-      const entry = this.readTxnEntry(id)
-      if (!entry) continue
-      const input = entryTxnToInput(entry)
-      if (excluded.has(id)) targeted.push(input)
-      else surviving.push(input)
-    }
-    const directives = this.readAllDirectives()
-    const survivingText = serializeJournal(surviving, directives, { descending: true })
-    const beforeText = targeted.length > 0 ? serializeJournal(targeted, [], { descending: true }) : ''
-    const trailing = proposedText.endsWith('\n') ? '' : '\n'
-    const fullText = `${survivingText}\n\n${proposedText}${trailing}`
-    return { fullText, beforeText }
-  }
-
   async propose_journal_edit(opts: {
     instruction: string
     proposed_text: string
     target_txn_ids?: ReadonlyArray<number>
   }): Promise<ProposeJournalEditResponse> {
-    const targets = opts.target_txn_ids ?? []
-    const { fullText, beforeText } = this.composeJournalAfterEdit(
-      targets,
-      opts.proposed_text,
-    )
-    const diff = await this.computeJournalDiff(fullText)
-    if ('ok' in diff && diff.ok === false) return diff
+    const targets = (opts.target_txn_ids ?? []).map((n) => Number(n))
+
+    // Validate the proposed text in isolation. We don't compose against
+    // the full ledger any more — replaceBuffer at commit time handles
+    // that with proper OCC. This is just a parse/shape gate so the agent
+    // gets early failure on a malformed proposal.
+    const parsed = parseJournalStrict(opts.proposed_text)
+    if (isStrictParseErr(parsed)) {
+      return { ok: false, error: parsed.kind, message: parsed.message }
+    }
+
+    // before_text: the targeted transactions, rendered for the agent to
+    // show the user. Empty when no targets.
+    const targetedInputs: TransactionInput[] = []
+    for (const id of targets) {
+      const entry = this.readTxnEntry(id)
+      if (entry) targetedInputs.push(entryTxnToInput(entry))
+    }
+    const beforeText =
+      targetedInputs.length > 0
+        ? serializeJournal(targetedInputs, [], { descending: true })
+        : ''
 
     const id = crypto.randomUUID()
     this.db.exec(
@@ -834,7 +803,7 @@ export class LedgerDO extends Think {
       Date.now(),
       opts.instruction,
       opts.proposed_text,
-      JSON.stringify(targets.map((n) => Number(n))),
+      JSON.stringify(targets),
     )
 
     return {
@@ -844,9 +813,9 @@ export class LedgerDO extends Think {
       before_text: beforeText,
       proposed_text: opts.proposed_text,
       summary: {
-        insert: diff.inserted,
-        delete: diff.deleted,
-        unchanged: diff.unchanged,
+        insert: parsed.transactions.length + parsed.directives.length,
+        delete: targets.length,
+        unchanged: 0,
       },
     }
   }
@@ -929,144 +898,204 @@ export class LedgerDO extends Think {
       typeof opts.edited_text === 'string' && opts.edited_text.length > 0
         ? opts.edited_text
         : row.proposed_text
-    const { fullText } = this.composeJournalAfterEdit(targets, text)
-    const result = await this.journal_put(fullText)
-    if ('ok' in result && result.ok === false) return result
+
+    // Targets are transactions to drop in favour of the proposed text. We
+    // read each target's current updated_at so replaceBuffer's OCC check
+    // succeeds; this is an agent-internal write so the read-then-write
+    // race is bounded by the DO's input-gate semantics.
+    const knownIds: EntryRef2[] = []
+    for (const id of targets) {
+      const ua = this.readUpdatedAt('txn', id)
+      if (ua !== null) knownIds.push({ kind: 'txn', id, expected_updated_at: ua })
+    }
+
+    const result = await this.replaceBuffer({ knownIds, buffer: text })
+    if ('ok' in result && result.ok === false) {
+      if (result.error === 'occ_conflict') {
+        return {
+          ok: false,
+          error: 'parse_error',
+          message: 'target transactions changed concurrently',
+        }
+      }
+      return result
+    }
 
     this.db.exec(
       `UPDATE agent_proposals SET status = 'committed' WHERE id = ?`,
       opts.proposal_id,
     )
 
-    const applied = result as JournalPutResponse
+    const journal = this.journal_get_sync()
     return {
       ok: true,
       proposal_id: opts.proposal_id,
-      text: applied.text,
-      inserted: applied.inserted,
-      deleted: applied.deleted,
-      unchanged: applied.unchanged,
+      text: journal.text,
+      inserted: result.rows.length,
+      deleted: knownIds.length,
+      unchanged: 0,
     }
   }
 
-  // Pure diff against current DO state. Both journal_put (applies) and
-  // preview_journal_put (validate-only) share this so a successful preview
-  // guarantees the subsequent put parses and validates the same way.
-  // TODO: parseJournalStrict already rejects elided postings (every posting
-  // must carry an explicit amount + currency). Surface a dedicated error
-  // kind ('elided_posting') so the UI can show a targeted message instead
-  // of the generic 'parse_error'.
-  private async computeJournalDiff(text: string): Promise<JournalDiffResult> {
-    const parsed = parseJournalStrict(text)
-    if (isStrictParseErr(parsed)) {
-      return { ok: false, error: parsed.kind, message: parsed.message }
+  async listEntries(): Promise<ListEntriesResponse> {
+    return { rows: this.listEntriesSync() }
+  }
+
+  // Order matches serializeJournal({descending: true}): date DESC, then
+  // intraday weight (note < pad < balance < else), then id ASC for stability.
+  // Each row's raw_text is the entry serialized on its own, trimmed of trailing
+  // newlines so callers can join with '\n\n'.
+  private listEntriesSync(): EntryRow[] {
+    type Item = {
+      row: EntryRow
+      dateInt: number
+      intraday: number
+    }
+    const items: Item[] = []
+
+    const txnIds = this.db
+      .exec<{ id: number }>('SELECT id FROM transactions')
+      .toArray()
+      .map((r) => r.id)
+    for (const id of txnIds) {
+      const e = this.readTxnEntry(id)
+      if (!e) continue
+      const input = entryTxnToInput(e)
+      const raw = serializeJournal([input], [], { descending: false }).trimEnd()
+      items.push({
+        row: { kind: 'txn', id, raw_text: raw, updated_at: e.updated_at },
+        dateInt: dateToInt(e.date),
+        intraday: 3,
+      })
     }
 
-    const issues = validateAccountCurrencies(parsed.transactions, parsed.directives)
-    if (issues.length > 0) {
-      return {
-        ok: false,
-        error: 'currency_lock',
-        message: issues.map((i) => i.message).join('; '),
+    for (const kind of ALL_DIRECTIVE_KINDS) {
+      for (const row of this.readDirectivesByKind(kind)) {
+        const updatedAt = this.readUpdatedAt(kind, row.id) ?? 0
+        const raw = serializeJournal([], [row.input], { descending: false }).trimEnd()
+        const intraday =
+          kind === 'note'
+            ? 0
+            : kind === 'balance' && row.input.kind === 'balance' && row.input.plug_account
+              ? 1
+              : kind === 'balance'
+                ? 2
+                : 3
+        items.push({
+          row: { kind, id: row.id, raw_text: raw, updated_at: updatedAt },
+          dateInt: dateToInt(row.input.date),
+          intraday,
+        })
       }
     }
 
-    const shapeIssues = validateAccountShapes(parsed.transactions, parsed.directives)
-    if (shapeIssues.length > 0) {
-      return {
-        ok: false,
-        error: 'credit_card_format',
-        message: shapeIssues.map((i) => i.message).join('; '),
-      }
-    }
+    items.sort((a, b) => {
+      if (a.dateInt !== b.dateInt) return b.dateInt - a.dateInt
+      if (a.intraday !== b.intraday) return a.intraday - b.intraday
+      return a.row.id - b.row.id
+    })
+    return items.map((i) => i.row)
+  }
 
-    const allKinds = ALL_DIRECTIVE_KINDS
-
-    const incomingTxns: Array<{ input: TransactionInput; hash: string }> = []
-    for (const input of parsed.transactions) {
-      incomingTxns.push({ input, hash: await transactionInputHash(input) })
-    }
-    const incomingDirsByKind = new Map<
-      DirectiveInput['kind'],
-      Array<{ input: DirectiveInput; hash: string }>
-    >()
-    for (const kind of allKinds) incomingDirsByKind.set(kind, [])
-    for (const d of parsed.directives) {
-      const hash = await directiveInputHash(d)
-      incomingDirsByKind.get(d.kind)!.push({ input: d, hash })
-    }
-
-    const oldTxnsByHash = new Map<string, number[]>()
-    for (const r of this.db
-      .exec<{ id: number; hash: string | null }>('SELECT id, hash FROM transactions')
-      .toArray()) {
-      const key = r.hash ?? ''
-      if (!oldTxnsByHash.has(key)) oldTxnsByHash.set(key, [])
-      oldTxnsByHash.get(key)!.push(r.id)
-    }
-    const oldDirsByKindHash = new Map<DirectiveInput['kind'], Map<string, number[]>>()
-    for (const kind of allKinds) {
-      const map = new Map<string, number[]>()
-      for (const e of this.readDirectivesByKind(kind)) {
-        const h = await directiveInputHash(e.input)
-        if (!map.has(h)) map.set(h, [])
-        map.get(h)!.push(e.id)
-      }
-      oldDirsByKindHash.set(kind, map)
-    }
-
-    const txnsToInsert: Array<{ input: TransactionInput; hash: string }> = []
-    let unchanged = 0
-    for (const item of incomingTxns) {
-      const ids = oldTxnsByHash.get(item.hash)
-      if (ids && ids.length > 0) {
-        ids.shift()
-        unchanged++
-      } else {
-        txnsToInsert.push(item)
-      }
-    }
-    const txnIdsToDelete: number[] = []
-    for (const ids of oldTxnsByHash.values()) txnIdsToDelete.push(...ids)
-
-    const dirsToInsertByKind = new Map<DirectiveInput['kind'], DirectiveInput[]>()
-    const dirIdsToDeleteByKind = new Map<DirectiveInput['kind'], number[]>()
-    for (const kind of allKinds) {
-      const incoming = incomingDirsByKind.get(kind)!
-      const oldMap = oldDirsByKindHash.get(kind)!
-      const toInsert: DirectiveInput[] = []
-      for (const item of incoming) {
-        const ids = oldMap.get(item.hash)
-        if (ids && ids.length > 0) {
-          ids.shift()
-          unchanged++
-        } else {
-          toInsert.push(item.input)
+  async replaceBuffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse> {
+    return this.ctx.blockConcurrencyWhile(async () => {
+      // 1. OCC: verify every knownId still has the expected updated_at.
+      const conflicts: ReplaceBufferConflict['conflictingIds'] = []
+      for (const ref of req.knownIds) {
+        const current = this.readUpdatedAt(ref.kind, ref.id)
+        if (current === null || current !== ref.expected_updated_at) {
+          conflicts.push({
+            kind: ref.kind,
+            id: ref.id,
+            current_updated_at: current,
+          })
         }
       }
-      const idsToDelete: number[] = []
-      for (const ids of oldMap.values()) idsToDelete.push(...ids)
-      dirsToInsertByKind.set(kind, toInsert)
-      dirIdsToDeleteByKind.set(kind, idsToDelete)
-    }
+      if (conflicts.length > 0) {
+        return { ok: false, error: 'occ_conflict', conflictingIds: conflicts }
+      }
 
-    let inserted = txnsToInsert.length
-    let deleted = txnIdsToDelete.length
-    for (const kind of allKinds) {
-      inserted += dirsToInsertByKind.get(kind)!.length
-      deleted += dirIdsToDeleteByKind.get(kind)!.length
-    }
+      // 2. Parse the buffer.
+      const parsed = parseJournalStrict(req.buffer)
+      if (isStrictParseErr(parsed)) {
+        return { ok: false, error: parsed.kind, message: parsed.message }
+      }
 
-    return {
-      ok: true,
-      inserted,
-      deleted,
-      unchanged,
-      txnsToInsert,
-      txnIdsToDelete,
-      dirsToInsertByKind,
-      dirIdsToDeleteByKind,
-    }
+      // 3. Validate the post-state (carry-over entries + parsed buffer).
+      const knownTxnIds = new Set<number>()
+      const knownDirIds = new Map<DirectiveInput['kind'], Set<number>>()
+      for (const k of ALL_DIRECTIVE_KINDS) knownDirIds.set(k, new Set())
+      for (const ref of req.knownIds) {
+        if (ref.kind === 'txn') knownTxnIds.add(ref.id)
+        else knownDirIds.get(ref.kind)!.add(ref.id)
+      }
+      const carryTxns: TransactionInput[] = []
+      for (const r of this.db
+        .exec<{ id: number }>('SELECT id FROM transactions')
+        .toArray()) {
+        if (knownTxnIds.has(r.id)) continue
+        const e = this.readTxnEntry(r.id)
+        if (e) carryTxns.push(entryTxnToInput(e))
+      }
+      const carryDirs: DirectiveInput[] = []
+      for (const kind of ALL_DIRECTIVE_KINDS) {
+        const skip = knownDirIds.get(kind)!
+        for (const row of this.readDirectivesByKind(kind)) {
+          if (!skip.has(row.id)) carryDirs.push(row.input)
+        }
+      }
+      const postTxns = [...carryTxns, ...parsed.transactions]
+      const postDirs = [...carryDirs, ...parsed.directives]
+      const issues = validateAccountCurrencies(postTxns, postDirs)
+      if (issues.length > 0) {
+        return {
+          ok: false,
+          error: 'currency_lock',
+          message: issues.map((i) => i.message).join('; '),
+        }
+      }
+      const shapeIssues = validateAccountShapes(postTxns, postDirs)
+      if (shapeIssues.length > 0) {
+        return {
+          ok: false,
+          error: 'credit_card_format',
+          message: shapeIssues.map((i) => i.message).join('; '),
+        }
+      }
+
+      // 4. Pre-compute txn hashes (async; can't run inside transactionSync).
+      const txnHashes: string[] = []
+      for (const t of parsed.transactions) {
+        txnHashes.push(await transactionInputHash(t))
+      }
+
+      // 5. Atomic: DELETE the knownIds, INSERT parsed entries.
+      const now = Date.now()
+      this.ctx.storage.transactionSync(() => {
+        for (const ref of req.knownIds) {
+          const table =
+            ref.kind === 'txn' ? 'transactions' : DIRECTIVE_TABLE[ref.kind]
+          this.db.exec(`DELETE FROM ${table} WHERE id = ?`, ref.id)
+        }
+        parsed.transactions.forEach((t, i) =>
+          this.insertTxn(t, txnHashes[i]!, now),
+        )
+        for (const d of parsed.directives) this.insertDirective(d, now)
+      })
+
+      return { ok: true, rows: this.listEntriesSync() }
+    })
+  }
+
+  private readUpdatedAt(kind: EntryKind, id: number): number | null {
+    const table = kind === 'txn' ? 'transactions' : DIRECTIVE_TABLE[kind]
+    const row = this.db
+      .exec<{ updated_at: number }>(
+        `SELECT updated_at FROM ${table} WHERE id = ?`,
+        id,
+      )
+      .toArray()[0]
+    return row ? row.updated_at : null
   }
 
   async clear(): Promise<{ ok: true }> {

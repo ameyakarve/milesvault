@@ -1,8 +1,10 @@
 import type {
+  EntryRef2,
   JournalGetFilteredResponse,
   JournalGetResponse,
-  JournalPutError,
-  JournalPutResponse,
+  ListEntriesResponse,
+  ReplaceBufferConflict,
+  ReplaceBufferResponse,
 } from '@/durable/ledger-do'
 
 type FetchOpts = { signal?: AbortSignal }
@@ -27,8 +29,14 @@ export const ledgerClient = {
   getJournal(opts?: FetchOpts): Promise<JournalGetResponse> {
     return getJSON('/api/ledger/journal', opts)
   },
-  putJournal(text: string): Promise<JournalPutResponse | JournalPutError> {
-    return putJSON('/api/ledger/journal', { text })
+  getEntries(opts?: FetchOpts): Promise<ListEntriesResponse> {
+    return getJSON('/api/ledger/journal/entries', opts)
+  },
+  replaceBuffer(
+    knownIds: EntryRef2[],
+    buffer: string,
+  ): Promise<ReplaceBufferResponse> {
+    return putJSON('/api/ledger/journal/batch', { knownIds, buffer })
   },
   getAccounts(opts?: FetchOpts): Promise<{ accounts: string[] }> {
     return getJSON('/api/ledger/accounts', opts)
@@ -56,8 +64,14 @@ export const ledgerClient = {
   },
 }
 
-export function isJournalPutError(
-  r: JournalPutResponse | JournalPutError,
-): r is JournalPutError {
+export function isReplaceBufferConflict(
+  r: ReplaceBufferResponse,
+): r is ReplaceBufferConflict {
+  return 'ok' in r && r.ok === false && r.error === 'occ_conflict'
+}
+
+export function isReplaceBufferError(
+  r: ReplaceBufferResponse,
+): r is Exclude<ReplaceBufferResponse, { ok: true; rows: unknown }> {
   return 'ok' in r && r.ok === false
 }

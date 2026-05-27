@@ -35,7 +35,7 @@ import {
 } from '@/components/ai-elements/prompt-input'
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import type { DraftTransaction } from '@/durable/agent-ui-schemas'
-import { ledgerClient, isJournalPutError } from '@/lib/ledger-client-browser'
+import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import { serializeTransactionInput } from '@/lib/beancount/ast'
 import type { TransactionInput } from '@/durable/ledger-types'
 import type { ToolUIPart } from 'ai'
@@ -175,20 +175,22 @@ export function Chat({
       return rest
     })
     try {
-      const cur = await ledgerClient.getJournal()
       const newTxns = final
         .map((d) => serializeTransactionInput(draftToTxnInput(d)))
         .join('\n\n')
-      const next = cur.text ? cur.text.replace(/\s*$/, '\n\n') + newTxns : newTxns
-      const r = await ledgerClient.putJournal(next)
-      if (isJournalPutError(r)) {
+      // Append-only: knownIds: [] tells the server "delete nothing, just
+      // parse-and-insert what's in buffer". Avoids re-sending the full
+      // journal text and side-steps OCC races against a user-side edit.
+      const r = await ledgerClient.replaceBuffer([], newTxns)
+      if (isReplaceBufferError(r)) {
+        const message = 'message' in r ? r.message : 'Save conflict'
         setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
-        setSubmitError((s) => ({ ...s, [toolCallId]: r.message }))
+        setSubmitError((s) => ({ ...s, [toolCallId]: message }))
         addToolOutput({
           toolCallId,
-          output: { ok: false, error: r.message },
+          output: { ok: false, error: message },
           state: 'output-error',
-          errorText: r.message,
+          errorText: message,
         })
         return
       }

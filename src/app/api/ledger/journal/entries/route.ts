@@ -4,6 +4,6 @@ import { withLedger } from '@/lib/ledger-route-handler'
 export const dynamic = 'force-dynamic'
 
 export const GET = withLedger(async ({ client }) => {
-  const result = await client.journal_get()
+  const result = await client.list_entries()
   return NextResponse.json(result)
 })

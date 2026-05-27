@@ -3,10 +3,10 @@ import type {
   JournalGetFilteredRequest,
   JournalGetFilteredResponse,
   JournalGetResponse,
-  JournalPutError,
-  JournalPutResponse,
   LedgerDO,
-  PreviewJournalPutResponse,
+  ListEntriesResponse,
+  ReplaceBufferRequest,
+  ReplaceBufferResponse,
 } from '@/durable/ledger-do'
 import type { AccountEntriesResponse, AccountSummaryRow } from '@/durable/ledger-types'
 import type {
@@ -50,10 +50,8 @@ export type LedgerClient = {
     truncated: boolean
     rows_written: number
   }>
-  journal_put(text: string): Promise<JournalPutResponse | JournalPutError>
-  preview_journal_put(
-    text: string,
-  ): Promise<PreviewJournalPutResponse | JournalPutError>
+  list_entries(): Promise<ListEntriesResponse>
+  replace_buffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse>
   clear(): Promise<{ ok: true }>
   ledger_snapshot(): Promise<{
     today: number
@@ -167,18 +165,34 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       return stub.exec_sql(sql, params)
     },
 
-    async journal_put(text) {
-      if (typeof text !== 'string') {
-        throw new LedgerInputError(['text must be a string.'])
-      }
-      return stub.journal_put(text)
+    async list_entries() {
+      return stub.listEntries()
     },
 
-    async preview_journal_put(text) {
-      if (typeof text !== 'string') {
-        throw new LedgerInputError(['text must be a string.'])
+    async replace_buffer(req) {
+      if (!req || typeof req !== 'object') {
+        throw new LedgerInputError(['body must be an object.'])
       }
-      return stub.preview_journal_put(text)
+      if (typeof req.buffer !== 'string') {
+        throw new LedgerInputError(['buffer must be a string.'])
+      }
+      if (!Array.isArray(req.knownIds)) {
+        throw new LedgerInputError(['knownIds must be an array.'])
+      }
+      for (const k of req.knownIds) {
+        if (
+          !k ||
+          typeof k !== 'object' ||
+          typeof k.kind !== 'string' ||
+          typeof k.id !== 'number' ||
+          typeof k.expected_updated_at !== 'number'
+        ) {
+          throw new LedgerInputError([
+            'each knownIds entry needs {kind, id, expected_updated_at}.',
+          ])
+        }
+      }
+      return stub.replaceBuffer(req)
     },
 
     async clear() {

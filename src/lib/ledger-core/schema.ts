@@ -289,7 +289,7 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
   // Materialized balance tables. Source of truth is `postings`; these two are
   // pure derived state maintained by AFTER INSERT / AFTER DELETE triggers on
   // postings. The transactions → postings cascade fires the DELETE triggers
-  // automatically, so journal_put's batched writes never need to touch these
+  // automatically, so replaceBuffer's batched writes never need to touch these
   // tables directly. Both are rebuildable from postings via
   // LedgerDO.rebuild_balances().
   //
@@ -326,9 +326,9 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     label: 'idx_daily_balances_lookup',
     sql: 'CREATE INDEX IF NOT EXISTS idx_daily_balances_lookup ON daily_balances(account, currency, scale, date DESC)',
   },
-  // Triggers. journal_put only INSERTs and DELETEs postings (it never
-  // UPDATEs — edits are realized as delete+insert via the hash diff), so we
-  // intentionally skip AFTER UPDATE. If posting UPDATEs ever land, the
+  // Triggers. replaceBuffer only INSERTs and DELETEs postings (it never
+  // UPDATEs — edits are realized as delete+insert against the knownIds set),
+  // so we intentionally skip AFTER UPDATE. If posting UPDATEs ever land, the
   // tables will silently drift — add the third trigger then.
   {
     label: 'trg_postings_balance_ai',
