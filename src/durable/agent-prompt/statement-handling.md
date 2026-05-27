@@ -1,52 +1,34 @@
 # Statement uploads
 
-A user message may include a block like:
+A user message may contain a self-closing reference like:
 
 ```
-<statement filename="hsbc-jan.pdf">
-... raw extracted text from the PDF, layout-preserved per line ...
-</statement>
+<statement id="STMT-abc123…" filename="hsbc-jan.pdf" />
 ```
 
-When you see this, the user is uploading a card / bank statement. Do this:
+You do **not** see the statement text. The bytes are held server-side
+behind that id. To turn them into transactions:
 
-1. **Identify the account.** Scan the statement header for issuer + last-4
-   digits / account suffix and match against the open-accounts list. If
-   the user has `Liabilities:CreditCard:HSBC-1234` and the statement says
-   `Card ending 1234`, that's your account. If multiple accounts match
-   the issuer but you can't pin the suffix, call `clarify` once.
-2. **Infer dates.** Statements usually show `dd Mon` (no year) within a
-   billing period printed elsewhere. Use the period or statement date to
-   resolve the year, then emit each posting as `YYYY-MM-DD`.
-3. **Filter noise.** Skip these lines — they aren't user-facing
-   transactions to record:
-   - Payment received / auto-debit credits to the card
-   - Interest charged, finance charges, late fees the issuer levies
-     (record only if the user explicitly asks)
-   - Statement balance / minimum due / credit limit summary rows
-   - Reward-point accrual / redemption summaries
-4. **Categorize from history.** Use the journal patterns the user has
-   already established. "ZOMATO" repeatedly hitting `Expenses:Food` →
-   keep doing that. Unknown merchants get a best-guess expense category
-   from the same family (e.g., a grocery name → `Expenses:Food:Groceries`).
-5. **Emit one `draft_transaction` call with the full batch.** Every row
-   is a separate transaction in the `transactions` array. Don't chunk
-   across multiple tool calls. The user pages through and approves.
-6. **Currency follows the card.** If the open account is tagged `[INR]`,
-   each posting is INR — don't infer FX from a merchant name unless the
-   statement explicitly shows a foreign currency amount alongside the
-   INR billed amount (in which case those become separate forex-markup
-   legs per the existing rules).
+1. Call `process_statement({ statement_id: "STMT-abc123…" })` with the
+   exact id from the tag. Do not invent ids, do not guess, do not strip
+   the `STMT-` prefix.
+2. The tool returns one of:
+   - `{ ok: true, transactions: string[] }` — an array of raw Beancount
+     blocks already drafted from the statement.
+   - `{ ok: false, error: "statement_not_found" | "inference_failed", … }`
+     — tell the user briefly and ask them to re-upload or retry. Do not
+     fabricate a draft from nothing.
+3. On success, immediately call `draft_transaction({ transactions })`
+   passing the array through **verbatim** — no edits, no reordering, no
+   trimming, no merging with other entries. The user pages through the
+   batch and approves.
 
-If the `<statement>` block is empty or unintelligible, call `clarify`
-asking the user to re-upload or paste the data manually.
+If the user message has both a statement reference and an in-line
+question ("ignore the small ones", "skip Amazon refunds"), call
+`process_statement` first, then apply the user's filter to the returned
+array before calling `draft_transaction`. The statement bytes still
+never enter this conversation.
 
-## Do not echo the statement
-
-The `<statement>` block can be thousands of tokens. **Do not quote,
-restate, summarize, transcribe, paraphrase, or list its rows in your
-reasoning or any text output.** Read it once, internally extract the
-relevant rows, and emit the `draft_transaction` tool call. Reasoning,
-if any, should be brief and structural (e.g. "matched card to
-Liabilities:CreditCard:HSBC-1234; 23 rows after filtering payments")
-— never reproduce merchant lines, amounts, or dates from the input.
+If the user message has multiple statement references, call
+`process_statement` once per id and concatenate the returned arrays
+into a single `draft_transaction` call.

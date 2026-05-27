@@ -8,31 +8,36 @@ import {
   TOOL_RULES,
   EXAMPLES,
   STATEMENT_HANDLING,
+  STATEMENT_EXTRACTION,
 } from './inline.generated'
 
 export { BEANCOUNT_PRIMER }
 
-export function buildSystemPrompt(snapshot: {
+type Snapshot = {
   today: number
   accounts: Array<{ account: string; currencies: string[]; close_date: number | null }>
-}): string {
-  const accountLines = snapshot.accounts
+}
+
+function isoToday(today: number): string {
+  return `${Math.floor(today / 10000)}-${String(Math.floor((today % 10000) / 100)).padStart(2, '0')}-${String(today % 100).padStart(2, '0')}`
+}
+
+function renderAccounts(snapshot: Snapshot): string {
+  return snapshot.accounts
     .filter((a) => a.close_date == null)
     .map((a) => {
       const ccys = a.currencies.length ? ` [${a.currencies.join(',')}]` : ''
       return `- ${a.account}${ccys}`
     })
     .join('\n')
+}
 
-  // today is YYYYMMDD ordinal; render as ISO for the model.
-  const t = snapshot.today
-  const iso = `${Math.floor(t / 10000)}-${String(Math.floor((t % 10000) / 100)).padStart(2, '0')}-${String(t % 100).padStart(2, '0')}`
-
+export function buildSystemPrompt(snapshot: Snapshot): string {
   const snapshotBlock = `# Ledger context
 
-- Today: ${iso}
+- Today: ${isoToday(snapshot.today)}
 - Open accounts (use these — don't invent new ones unless none fits):
-${accountLines || '- (none yet)'}`
+${renderAccounts(snapshot) || '- (none yet)'}`
 
   return [
     BEANCOUNT_PRIMER,
@@ -41,4 +46,23 @@ ${accountLines || '- (none yet)'}`
     STATEMENT_HANDLING,
     snapshotBlock,
   ].join('\n\n---\n\n')
+}
+
+// System prompt for the one-shot statement-extraction subagent. It sees
+// only the raw statement text plus the ledger context — never the main
+// chat history. Output is structured against draftTransactionBatchSchema.
+export function buildStatementExtractionPrompt(
+  snapshot: Snapshot,
+  filename: string,
+): string {
+  const snapshotBlock = `# Ledger context
+
+- Today: ${isoToday(snapshot.today)}
+- Statement filename: ${filename}
+- Open accounts (use these — don't invent new ones unless none fits):
+${renderAccounts(snapshot) || '- (none yet)'}`
+
+  return [BEANCOUNT_PRIMER, STATEMENT_EXTRACTION, snapshotBlock].join(
+    '\n\n---\n\n',
+  )
 }
