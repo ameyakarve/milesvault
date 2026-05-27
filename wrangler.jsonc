@@ -44,6 +44,7 @@
     { "tag": "v7", "deleted_classes": ["ThinkAgent"] },
     { "tag": "v8", "new_sqlite_classes": ["AgentDO"] },
     { "tag": "v9", "deleted_classes": ["AgentDO"] },
+    { "tag": "v10", "new_sqlite_classes": ["StatementExtractor"] },
   ],
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
@@ -85,6 +86,7 @@
         { "tag": "v5", "deleted_classes": ["ThinkAgent"] },
         { "tag": "v6", "new_sqlite_classes": ["AgentDO"] },
         { "tag": "v7", "deleted_classes": ["AgentDO"] },
+        { "tag": "v8", "new_sqlite_classes": ["StatementExtractor"] },
       ],
       "services": [
         { "binding": "PROD", "service": "milesvault" },
