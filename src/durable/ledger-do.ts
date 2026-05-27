@@ -1,4 +1,4 @@
-import { Think } from '@cloudflare/think'
+import { Think, type ChatResponseResult } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
 import { tool, type ToolSet } from 'ai'
 import { buildSystemPrompt } from './agent-prompt'
@@ -211,6 +211,20 @@ function formatPosting(account: string, amount: number, currency: string): strin
   return `${prefix}${' '.repeat(gap)}${amountStr} ${currency}`
 }
 
+// Matches the inline statement block emitted by chat.tsx handleSubmit:
+//   <statement filename="x.pdf">\n<extracted PDF text>\n</statement>
+// Capturing group is the filename so we can leave a readable marker in
+// the user's message after the block is stripped from history.
+const STATEMENT_BLOCK_RE =
+  /<statement filename="([^"]*)">[\s\S]*?<\/statement>/g
+
+function stripStatementBlocks(text: string): string {
+  return text.replace(
+    STATEMENT_BLOCK_RE,
+    (_match, filename: string) => `[Statement: ${filename}]`,
+  )
+}
+
 export class LedgerDO extends Think {
   private db: SqlStorage
 
@@ -250,6 +264,47 @@ export class LedgerDO extends Think {
         inputSchema: clarifyInputSchema,
         // Client-side — resolved by the user picking / typing.
       }),
+    }
+  }
+
+  // After every turn, redact raw <statement>…</statement> blocks from any
+  // user message in stored history. The model has already seen the bytes
+  // during this turn; leaving them in the conversation log would re-pay
+  // the token cost on every subsequent turn (Kimi's reasoning trace
+  // amplifies a 50 KB statement into thousands of CoT tokens). We replace
+  // each block in-place with `[Statement: <filename>]` so the user still
+  // has a visible reminder that an upload happened.
+  //
+  // Exception: if the assistant asked a `clarify` question this turn, the
+  // bytes must survive until the model's follow-up turn (which reads them
+  // and emits draft_transaction). We defer stripping until a non-clarify
+  // turn completes.
+  //
+  // Idempotent: messages without a <statement> block are skipped. We scan
+  // all user messages (not just the latest) so a turn that errored before
+  // this hook ran also gets cleaned up the next time around.
+  async onChatResponse(result: ChatResponseResult): Promise<void> {
+    const parts = Array.isArray(result.message.parts) ? result.message.parts : []
+    const isClarifyTurn = parts.some(
+      (p) => typeof p === 'object' && p !== null && (p as { type?: unknown }).type === 'tool-clarify',
+    )
+    if (isClarifyTurn) return
+
+    const messages = await this.syncMessagesFromStorage()
+    for (const msg of messages) {
+      if (msg.role !== 'user') continue
+      const msgParts = Array.isArray(msg.parts) ? msg.parts : []
+      let mutated = false
+      const nextParts = msgParts.map((p) => {
+        if (p.type !== 'text' || typeof p.text !== 'string') return p
+        const stripped = stripStatementBlocks(p.text)
+        if (stripped === p.text) return p
+        mutated = true
+        return { ...p, text: stripped }
+      })
+      if (mutated) {
+        await this.updateMessageInHistory({ ...msg, parts: nextParts })
+      }
     }
   }
 
