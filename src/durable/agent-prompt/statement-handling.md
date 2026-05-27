@@ -40,3 +40,13 @@ When you see this, the user is uploading a card / bank statement. Do this:
 
 If the `<statement>` block is empty or unintelligible, call `clarify`
 asking the user to re-upload or paste the data manually.
+
+## Do not echo the statement
+
+The `<statement>` block can be thousands of tokens. **Do not quote,
+restate, summarize, transcribe, paraphrase, or list its rows in your
+reasoning or any text output.** Read it once, internally extract the
+relevant rows, and emit the `draft_transaction` tool call. Reasoning,
+if any, should be brief and structural (e.g. "matched card to
+Liabilities:CreditCard:HSBC-1234; 23 rows after filtering payments")
+— never reproduce merchant lines, amounts, or dates from the input.
