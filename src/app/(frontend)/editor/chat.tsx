@@ -87,7 +87,9 @@ function StatementChip({
   onPassword: (pw: string) => void
 }) {
   const [pw, setPw] = useState('')
-  const needsPw = state.kind === 'needs_password'
+  const submitPw = () => {
+    if (pw) onPassword(pw)
+  }
   return (
     <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
       <FileText className="size-4 shrink-0 text-slate-500" />
@@ -105,30 +107,35 @@ function StatementChip({
       ) : state.kind === 'error' ? (
         <span className="truncate text-rose-600">{state.message}</span>
       ) : (
-        <form
-          className="flex items-center gap-1"
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (pw) onPassword(pw)
-          }}
-        >
+        <div className="flex items-center gap-1">
           <Lock className="size-3 text-slate-500" />
           <input
             type="password"
             value={pw}
             onChange={(e) => setPw(e.target.value)}
+            onKeyDown={(e) => {
+              // Nested <form> elements aren't allowed in HTML — pressing
+              // Enter would bubble to the outer PromptInput form and submit
+              // a half-attached statement (or reload). Intercept here.
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                e.stopPropagation()
+                submitPw()
+              }
+            }}
             placeholder={state.wrong ? 'Wrong password — try again' : 'Password'}
             autoFocus
             className="h-6 w-40 rounded border border-slate-300 bg-white px-2 text-xs focus:border-slate-400 focus:outline-none"
           />
           <button
-            type="submit"
+            type="button"
+            onClick={submitPw}
             disabled={!pw}
             className="rounded bg-slate-900 px-2 py-0.5 text-xs text-white disabled:opacity-40"
           >
             Unlock
           </button>
-        </form>
+        </div>
       )}
       <button
         type="button"
