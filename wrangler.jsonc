@@ -35,15 +35,7 @@
     "binding": "AI",
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["VaultAgent"] },
-    { "tag": "v2", "deleted_classes": ["VaultAgent"] },
-    { "tag": "v3", "new_sqlite_classes": ["LedgerDO"] },
-    { "tag": "v4", "new_sqlite_classes": ["ChatAgent"] },
-    { "tag": "v5", "new_sqlite_classes": ["ThinkAgent"] },
-    { "tag": "v6", "deleted_classes": ["ChatAgent"] },
-    { "tag": "v7", "deleted_classes": ["ThinkAgent"] },
-    { "tag": "v8", "new_sqlite_classes": ["AgentDO"] },
-    { "tag": "v9", "deleted_classes": ["AgentDO"] },
+    { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
   ],
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
@@ -79,12 +71,6 @@
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
-        { "tag": "v2", "new_sqlite_classes": ["ChatAgent"] },
-        { "tag": "v3", "new_sqlite_classes": ["ThinkAgent"] },
-        { "tag": "v4", "deleted_classes": ["ChatAgent"] },
-        { "tag": "v5", "deleted_classes": ["ThinkAgent"] },
-        { "tag": "v6", "new_sqlite_classes": ["AgentDO"] },
-        { "tag": "v7", "deleted_classes": ["AgentDO"] },
       ],
       "services": [
         { "binding": "PROD", "service": "milesvault" },
