@@ -201,6 +201,13 @@ function decimalToScaled(text: string): { scaled: number; scale: number } | null
 
 const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
 
+// Watchdog cadence and the hard ceiling on how long a chip may sit
+// 'extracting' before we force-fail it. Kept just above the extractor's own
+// EXTRACTION_TIMEOUT_MS (240s) + MAX_JOB_AGE_MS so the extractor's own
+// failure path normally wins and the watchdog is a true backstop.
+const EXTRACTION_RECONCILE_INTERVAL_S = 120
+const EXTRACTION_MAX_AGE_MS = 16 * 60_000
+
 function escapeBeancountString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
@@ -308,7 +315,7 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
           const stub = ns.get(
             ns.idFromName(statement_id),
           ) as unknown as DurableObjectStub<StatementExtractorDO>
-          const r = await stub.kickoff({
+          const r = await stub.extract({
             parentName: this.name,
             snapshot,
           })
@@ -322,6 +329,17 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
             })
             return { ok: false, error: r.error }
           }
+          // The extractor runs the model in a background fiber and pushes the
+          // result back via onExtractionComplete. That push can be lost (DO
+          // eviction, transient RPC failure), so arm a periodic watchdog that
+          // re-reads status() and delivers/fails any chip stuck 'extracting'.
+          // scheduleEvery is idempotent — one interval no matter how many
+          // statements are in flight; reconcileExtractions cancels it when
+          // nothing is pending.
+          await this.scheduleEvery(
+            EXTRACTION_RECONCILE_INTERVAL_S,
+            'reconcileExtractions',
+          )
           return {
             ok: true,
             status: 'extracting' as const,
@@ -340,6 +358,10 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
   // model decides what to do with the beancount.
   async onExtractionComplete(statementId: string, text: string): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
+    // Idempotent: the extractor's push and the reconcile watchdog can both
+    // race to deliver. Whoever flips the chip off 'extracting' first wins;
+    // the loser sees a terminal status and bails, so we submit exactly once.
+    if (prev && prev.status !== 'extracting') return
     const filename = prev && 'filename' in prev ? prev.filename : undefined
     this.setState({
       ...this.state,
@@ -365,6 +387,7 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
 
   async onExtractionFailed(statementId: string, error: string): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
+    if (prev && prev.status !== 'extracting') return
     const filename = prev && 'filename' in prev ? prev.filename : undefined
     this.setState({
       ...this.state,
@@ -385,6 +408,65 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
         ],
       },
     ])
+  }
+
+  // Periodic backstop (armed by process_statement, fires every
+  // EXTRACTION_RECONCILE_INTERVAL_S). Re-reads each in-flight extractor's
+  // status() and delivers the result the push may have dropped, force-failing
+  // anything past EXTRACTION_MAX_AGE_MS so a wedged job can never leave the
+  // chip stuck on 'extracting'. Self-cancels the interval once nothing is
+  // pending so an idle DO stops waking.
+  async reconcileExtractions(): Promise<void> {
+    const ns = this.env.STATEMENT_EXTRACTOR_DO
+    const extractors = this.state?.extractors ?? {}
+    const pending = Object.entries(extractors).filter(
+      ([, p]) => p.status === 'extracting',
+    )
+    for (const [statementId] of pending) {
+      if (!ns) continue
+      let job: Awaited<
+        ReturnType<DurableObjectStub<StatementExtractorDO>['status']>
+      > = null
+      try {
+        const stub = ns.get(
+          ns.idFromName(statementId),
+        ) as unknown as DurableObjectStub<StatementExtractorDO>
+        job = await stub.status()
+      } catch (e) {
+        console.error(`[ledger] reconcile status() failed id=${statementId}`, {
+          err: e instanceof Error ? e.message : String(e),
+        })
+        continue
+      }
+      if (!job) {
+        await this.onExtractionFailed(statementId, 'extractor job not found')
+        continue
+      }
+      if (job.status === 'done' && job.result_json !== null) {
+        console.log(`[ledger] reconcile delivering id=${statementId}`)
+        await this.onExtractionComplete(statementId, job.result_json)
+      } else if (job.status === 'failed') {
+        await this.onExtractionFailed(statementId, job.error ?? 'unknown error')
+      } else if (Date.now() - job.created_at > EXTRACTION_MAX_AGE_MS) {
+        console.warn(`[ledger] reconcile force-fail (stale) id=${statementId}`)
+        await this.onExtractionFailed(
+          statementId,
+          'extraction timed out (watchdog)',
+        )
+      }
+    }
+    // Nothing left in flight → stop the interval so an idle ledger goes quiet.
+    const stillPending = Object.values(this.state?.extractors ?? {}).some(
+      (p) => p.status === 'extracting',
+    )
+    if (!stillPending) {
+      const schedules = await this.listSchedules({ type: 'interval' })
+      for (const s of schedules) {
+        if (s.callback === 'reconcileExtractions') {
+          await this.cancelSchedule(s.id)
+        }
+      }
+    }
   }
 
   // Look up filename from the ExtractorDO so the UI's progress card can

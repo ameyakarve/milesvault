@@ -1,9 +1,14 @@
-import { DurableObject } from 'cloudflare:workers'
+import { Agent, type AgentContext } from 'agents'
 import { createWorkersAI } from 'workers-ai-provider'
 import { streamText } from 'ai'
 import { buildStatementExtractionPrompt } from './agent-prompt'
 
 const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
+const EXTRACTION_TIMEOUT_MS = 240_000
+// Hard ceiling on a job's lifetime. Past this the parent watchdog force-fails
+// the chip and onFiberRecovered refuses to re-run, so a wedged statement can
+// never hang the UI forever.
+const MAX_JOB_AGE_MS = 15 * 60_000
 
 type Snapshot = {
   today: number
@@ -32,23 +37,29 @@ type JobRow = {
   completed_at: number | null
 }
 
-// Parent's RPC surface — terminal callbacks only. The extractor runs to
-// completion server-side, then hands the parent the raw beancount (success)
-// or an error string (failure). No mid-stream partials: the user never sees
-// the subagent, only the uploaded file's status in their chat message.
+// Minimal view of the parent LedgerDO we call back into. Declared locally to
+// keep this DO decoupled from ledger-do.ts (which already imports this file's
+// type — a runtime import cycle would otherwise form).
 type ParentStub = {
   onExtractionComplete(statementId: string, text: string): Promise<void>
   onExtractionFailed(statementId: string, error: string): Promise<void>
 }
 
-export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
-  private sql: SqlStorage
+// A durable, single-purpose sub-agent. One DO instance per statement_id
+// (`idFromName`). Extraction runs as a managed fiber (`startFiber`): the row
+// is persisted before the model call, `keepAlive()` pins the DO for the
+// fiber's lifetime so it isn't evicted mid-stream, and if the process does die
+// the framework calls `onFiberRecovered` on the next wake to resume. The
+// result is persisted first, then pushed to the parent — so a lost push is
+// recoverable, and the parent's watchdog re-reads `status()` as a backstop.
+export class StatementExtractorDO extends Agent<Cloudflare.Env> {
+  private sql2: SqlStorage
 
-  constructor(ctx: DurableObjectState, env: Cloudflare.Env) {
+  constructor(ctx: AgentContext, env: Cloudflare.Env) {
     super(ctx, env)
-    this.sql = ctx.storage.sql
+    this.sql2 = ctx.storage.sql
     ctx.blockConcurrencyWhile(async () => {
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS job (
+      this.sql2.exec(`CREATE TABLE IF NOT EXISTS job (
         id TEXT PRIMARY KEY,
         owner_email TEXT NOT NULL,
         parent_name TEXT,
@@ -72,7 +83,7 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
   }): Promise<{ ok: true } | { ok: false; error: 'already_ingested' }> {
     const existing = this.readJob()
     if (existing) return { ok: false, error: 'already_ingested' }
-    this.sql.exec(
+    this.sql2.exec(
       `INSERT INTO job (id, owner_email, filename, text, status, created_at)
        VALUES (?, ?, ?, ?, 'ingested', ?)`,
       opts.statementId,
@@ -84,25 +95,37 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     return { ok: true }
   }
 
-  async kickoff(opts: {
+  async status(): Promise<JobRow | null> {
+    return this.readJob()
+  }
+
+  // Accept-and-return-fast. We register a managed fiber and return immediately
+  // — the caller (LedgerDO's process_statement tool) is NOT blocked on the
+  // model call, so the chat turn ends and the composer frees right away. The
+  // fiber's idempotencyKey is the statement_id, so a duplicate call while one
+  // is already in flight is a no-op rather than a second extraction. A done
+  // job re-delivers from cache without re-running the model.
+  async extract(opts: {
     parentName: string
     snapshot: Snapshot
   }): Promise<
-    | { ok: true }
-    | { ok: false; error: 'not_found' | 'unauthorized' | 'wrong_status' }
+    | { accepted: boolean }
+    | { ok: false; error: 'not_found' | 'unauthorized' }
   > {
     const job = this.readJob()
     if (!job) return { ok: false, error: 'not_found' }
     if (job.owner_email !== opts.parentName) {
       console.warn(
-        `[extractor] kickoff unauthorized id=${job.id} owner=${job.owner_email} caller=${opts.parentName}`,
+        `[extractor] extract unauthorized id=${job.id} owner=${job.owner_email} caller=${opts.parentName}`,
       )
       return { ok: false, error: 'unauthorized' }
     }
-    if (job.status !== 'ingested' && job.status !== 'failed') {
-      return { ok: false, error: 'wrong_status' }
+    if (job.status === 'done' && job.result_json !== null) {
+      console.log(`[extractor] extract cache-hit id=${job.id}`)
+      await this.deliverComplete(opts.parentName, job.id, job.result_json)
+      return { accepted: true }
     }
-    this.sql.exec(
+    this.sql2.exec(
       `UPDATE job
          SET parent_name = ?, snapshot_json = ?, status = 'running',
              error = NULL, result_json = NULL, completed_at = NULL
@@ -111,39 +134,51 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
       JSON.stringify(opts.snapshot),
       job.id,
     )
-    // Run the extraction in the background: kickoff returns to the caller
-    // immediately, while waitUntil keeps this DO alive until streamText
-    // finishes and the terminal callback fires. No alarm round-trip.
-    this.ctx.waitUntil(this.runExtraction())
-    return { ok: true }
+    const result = await this.startFiber(
+      'extract',
+      (fiber) => this.runExtraction(fiber.signal),
+      { idempotencyKey: job.id },
+    )
+    return { accepted: result.accepted }
   }
 
-  async status(): Promise<JobRow | null> {
-    return this.readJob()
-  }
-
-  private async runExtraction(): Promise<void> {
+  // Re-entered by the framework when the DO is evicted/restarted with this
+  // fiber still un-settled. The job's parent_name + snapshot are persisted, so
+  // we can resume the model call from scratch. Past MAX_JOB_AGE_MS we give up
+  // and fail the job rather than loop forever.
+  async onFiberRecovered(ctx: {
+    name: string
+    createdAt: number
+  }): Promise<void> {
+    if (ctx.name !== 'extract') return
     const job = this.readJob()
-    // Never bail silently: a stuck "Extracting…" chip with no callback is the
-    // failure mode we can't see otherwise. Log why we bailed.
-    if (!job) {
-      console.error('[extractor] runExtraction bail: no job row')
+    if (!job || job.status === 'done' || job.status === 'failed') return
+    if (Date.now() - ctx.createdAt > MAX_JOB_AGE_MS) {
+      const message = 'extraction abandoned: exceeded max age after restart'
+      console.error(`[extractor] recovery-give-up id=${job.id}`)
+      this.markFailed(job.id, message)
+      if (job.parent_name) {
+        await this.deliverFail(job.parent_name, job.id, message)
+      }
       return
     }
-    if (job.status !== 'running') {
-      console.error(
-        `[extractor] runExtraction bail id=${job.id} status=${job.status} (expected running)`,
-      )
+    console.log(`[extractor] recovering interrupted fiber id=${job.id}`)
+    await this.runExtraction(undefined)
+  }
+
+  // The actual work, callable from both the initial fiber and recovery. Reads
+  // everything it needs from the persisted row so it is self-contained.
+  private async runExtraction(signal: AbortSignal | undefined): Promise<void> {
+    const job = this.readJob()
+    if (!job) return
+    const parentName = job.parent_name
+    const snapshot = job.snapshot_json
+      ? (JSON.parse(job.snapshot_json) as Snapshot)
+      : null
+    if (!parentName || !snapshot) {
+      this.markFailed(job.id, 'missing parent_name or snapshot')
       return
     }
-    if (!job.parent_name || !job.snapshot_json) {
-      console.error(
-        `[extractor] runExtraction bail id=${job.id} parent_name=${job.parent_name} hasSnapshot=${!!job.snapshot_json}`,
-      )
-      return
-    }
-    const parent = this.getParentStub(job.parent_name)
-    const snapshot = JSON.parse(job.snapshot_json) as Snapshot
     const baseSystem = buildStatementExtractionPrompt(snapshot, job.filename)
     // streamText emits free-form text. Beancount is already a textual
     // format, so we ask for raw entries rather than a JSON envelope —
@@ -168,6 +203,10 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     )
     let textBuf = ''
     try {
+      const timeout = AbortSignal.timeout(EXTRACTION_TIMEOUT_MS)
+      const abortSignal = signal
+        ? AbortSignal.any([signal, timeout])
+        : timeout
       const workersai = createWorkersAI({ binding: this.env.AI })
       const model = workersai(MODEL_ID, {
         // The Workers AI schema key is `thinking`, not `enable_thinking` (the
@@ -179,7 +218,7 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
         model,
         system,
         prompt: job.text,
-        abortSignal: AbortSignal.timeout(240_000),
+        abortSignal,
       })
       for await (const part of fullStream) {
         if (part.type === 'text-delta') {
@@ -190,9 +229,8 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
             : new Error(String(part.error))
         }
       }
-
-      this.sql.exec(
-        `UPDATE job SET status='done', result_json=?, completed_at=? WHERE id=?`,
+      this.sql2.exec(
+        `UPDATE job SET status='done', result_json=?, error=NULL, completed_at=? WHERE id=?`,
         textBuf,
         Date.now(),
         job.id,
@@ -201,7 +239,7 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
       console.log(
         `[extractor] done id=${job.id} elapsedMs=${elapsedMs} textBytes=${textBuf.length}`,
       )
-      await this.safeComplete(parent, job.id, textBuf)
+      await this.deliverComplete(parentName, job.id, textBuf)
     } catch (e) {
       const elapsedMs = Date.now() - startedAt
       const message = e instanceof Error ? e.message : String(e)
@@ -209,14 +247,18 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
         `[extractor] failed id=${job.id} elapsedMs=${elapsedMs}`,
         { err: message },
       )
-      this.sql.exec(
-        `UPDATE job SET status='failed', error=?, completed_at=? WHERE id=?`,
-        message,
-        Date.now(),
-        job.id,
-      )
-      await this.safeFail(parent, job.id, message)
+      this.markFailed(job.id, message)
+      await this.deliverFail(parentName, job.id, message)
     }
+  }
+
+  private markFailed(id: string, error: string): void {
+    this.sql2.exec(
+      `UPDATE job SET status='failed', error=?, completed_at=? WHERE id=?`,
+      error,
+      Date.now(),
+      id,
+    )
   }
 
   private getParentStub(parentName: string): ParentStub {
@@ -224,13 +266,13 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     return ns.get(ns.idFromName(parentName)) as unknown as ParentStub
   }
 
-  private async safeComplete(
-    parent: ParentStub,
+  private async deliverComplete(
+    parentName: string,
     id: string,
     text: string,
   ): Promise<void> {
     try {
-      await parent.onExtractionComplete(id, text)
+      await this.getParentStub(parentName).onExtractionComplete(id, text)
     } catch (e) {
       console.error(`[extractor] onExtractionComplete failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),
@@ -238,13 +280,13 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     }
   }
 
-  private async safeFail(
-    parent: ParentStub,
+  private async deliverFail(
+    parentName: string,
     id: string,
     error: string,
   ): Promise<void> {
     try {
-      await parent.onExtractionFailed(id, error)
+      await this.getParentStub(parentName).onExtractionFailed(id, error)
     } catch (e) {
       console.error(`[extractor] onExtractionFailed failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),
@@ -253,10 +295,9 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
   }
 
   private readJob(): JobRow | null {
-    const rows = this.sql
+    const rows = this.sql2
       .exec<JobRow>(`SELECT * FROM job LIMIT 1`)
       .toArray()
     return rows[0] ?? null
   }
 }
-
