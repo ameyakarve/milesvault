@@ -1,5 +1,4 @@
 import {
-  Think,
   type ChatResponseResult,
   type ThinkSubmissionInspection,
 } from '@cloudflare/think'
@@ -8,6 +7,7 @@ import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
 import { buildSystemPrompt } from './agent-prompt'
 import type { StatementExtractorDO } from './statement-extractor'
+import { TaskCoordinator, type TaskPhase } from './agent-tasks'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
@@ -205,13 +205,6 @@ function decimalToScaled(text: string): { scaled: number; scale: number } | null
 
 const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
 
-// Watchdog cadence and the hard ceiling on how long a chip may sit
-// 'extracting' before we force-fail it. Kept just above the extractor's own
-// EXTRACTION_TIMEOUT_MS (240s) + MAX_JOB_AGE_MS so the extractor's own
-// failure path normally wins and the watchdog is a true backstop.
-const EXTRACTION_RECONCILE_INTERVAL_S = 120
-const EXTRACTION_MAX_AGE_MS = 16 * 60_000
-
 function escapeBeancountString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
@@ -254,16 +247,14 @@ export type LedgerDOState = {
   extractors: Record<string, ExtractorProgress>
 }
 
-export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
+export class LedgerDO extends TaskCoordinator<
+  Cloudflare.Env,
+  LedgerDOState,
+  string
+> {
   private db: SqlStorage
   initialState: LedgerDOState = { extractors: {} }
-  // statement_ids whose delivery turn is in flight in THIS instance. The
-  // extractor's push and the reconcile watchdog can both observe a chip as
-  // 'extracting' and race to deliver; this dedupes them within an instance.
-  // It is intentionally not persisted — after a crash/restart the chip is
-  // still 'extracting' (we mark 'done' only after delivery), so reconcile
-  // re-delivers exactly the runs that were interrupted.
-  private _delivering = new Set<string>()
+  protected override logTag = '[ledger]'
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
@@ -310,12 +301,13 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
             .regex(/^STMT-/, 'statement_id must start with "STMT-"'),
         }),
         execute: async ({ statement_id }) => {
-          const ns = this.env.STATEMENT_EXTRACTOR_DO
-          if (!ns) return { ok: false, error: 'binding_missing' as const }
+          if (!this.env.STATEMENT_EXTRACTOR_DO)
+            return { ok: false, error: 'binding_missing' as const }
           const snapshot = this.ledger_snapshot_sync()
-          const filename = await this.lookupExtractorFilename(statement_id)
           // Mark "extracting" immediately so the file chip flips before the
-          // cross-DO kickoff round-trip completes.
+          // cross-DO kickoff round-trip completes. The filename is recovered
+          // from the worker's prepared payload inside dispatchTask's hooks.
+          const filename = await this.lookupExtractorFilename(statement_id)
           this.setState({
             ...this.state,
             extractors: {
@@ -323,43 +315,11 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
               [statement_id]: { status: 'extracting', filename },
             },
           })
-          const stub = ns.get(
-            ns.idFromName(statement_id),
-          ) as unknown as DurableObjectStub<StatementExtractorDO>
-          const r = await stub.extract({
-            parentName: this.name,
-            snapshot,
-          })
-          if ('error' in r) {
-            this.setState({
-              ...this.state,
-              extractors: {
-                ...(this.state?.extractors ?? {}),
-                [statement_id]: { status: 'failed', error: r.error, filename },
-              },
-            })
-            return { ok: false, error: r.error }
-          }
-          // The extractor runs the model in a background fiber and pushes the
-          // result back via onExtractionComplete. That push can be lost (DO
-          // eviction, transient RPC failure), so arm a periodic watchdog that
-          // re-reads status() and delivers/fails any chip stuck 'extracting'.
-          // scheduleEvery is idempotent — one interval no matter how many
-          // statements are in flight; reconcileExtractions cancels it when
-          // nothing is pending.
-          // Pass an explicit {} payload: scheduleEvery does
-          // JSON.stringify(payload) on insert and JSON.parse(row.payload) on
-          // dispatch, and the dispatcher silently swallows a parse failure —
-          // an undefined payload can therefore wedge the callback so it never
-          // fires. {} round-trips cleanly.
-          await this.scheduleEvery(
-            EXTRACTION_RECONCILE_INTERVAL_S,
-            'reconcileExtractions',
-            {},
-          )
-          console.log(
-            `[ledger] process_statement armed watchdog id=${statement_id} interval=${EXTRACTION_RECONCILE_INTERVAL_S}s`,
-          )
+          // dispatchTask records the coord row, kicks the worker fiber, and
+          // arms the reconcile watchdog. Delivery/failure flow back through the
+          // TaskCoordinator hooks below, which update the extractors map.
+          const r = await this.dispatchTask(statement_id, { snapshot })
+          if ('error' in r) return { ok: false, error: r.error }
           return {
             ok: true,
             status: 'extracting' as const,
@@ -370,177 +330,73 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
     }
   }
 
-  // ---- Callbacks invoked over cross-DO RPC by StatementExtractorDO ----
+  // ---- TaskCoordinator wiring (StatementExtractorDO is the worker) ----
 
-  // Terminal success. Inject the extractor's raw beancount text as a user
-  // message so the main model gets a fresh turn to call draft_transaction,
-  // and flip the chip to 'done' ONLY after that delivery turn persists. The
-  // ordering is load-bearing: if the DO is evicted/redeployed mid-turn, the
-  // chip stays 'extracting' and the reconcile watchdog redelivers — marking
-  // 'done' first (as we used to) leaves the chip terminal with the draft
-  // never sent, which reconcile then skips. The subagent is text-in/text-
-  // out — the main model decides what to do with the beancount.
-  async onExtractionComplete(statementId: string, text: string): Promise<void> {
-    const prev = this.state?.extractors?.[statementId]
-    console.log(
-      `[ledger] onExtractionComplete id=${statementId} prevStatus=${prev?.status ?? 'none'} textBytes=${text.length}`,
-    )
-    if (prev && prev.status !== 'extracting') {
-      console.log(
-        `[ledger] onExtractionComplete skip (already ${prev.status}) id=${statementId}`,
-      )
-      return
-    }
-    // The extractor's push and the reconcile watchdog can both see the chip
-    // as 'extracting' and race here; dedupe the in-flight delivery so the
-    // draft is submitted exactly once.
-    if (this._delivering.has(statementId)) {
-      console.log(`[ledger] onExtractionComplete skip (delivering) id=${statementId}`)
-      return
-    }
-    this._delivering.add(statementId)
-    try {
-      const filename = prev && 'filename' in prev ? prev.filename : undefined
-      const body =
-        text.trim().length === 0
-          ? `[system] Statement ${statementId} produced no transactions. Tell the user briefly and stop — do not fabricate transactions.`
-          : `[system] Statement ${statementId} extracted the following beancount transactions. ` +
-            `Call draft_transaction now passing each entry verbatim as a string in the \`transactions\` array. Do not edit, reorder, or trim.\n\n` +
-            text
-      await this.saveMessages([
-        {
-          id: crypto.randomUUID(),
-          role: 'user',
-          parts: [{ type: 'text', text: body }],
-        },
-      ])
-      this.setState({
-        ...this.state,
-        extractors: {
-          ...(this.state?.extractors ?? {}),
-          [statementId]: { status: 'done', filename },
-        },
-      })
-      console.log(
-        `[ledger] onExtractionComplete delivered id=${statementId} (turn ran inline, chip now done)`,
-      )
-    } finally {
-      this._delivering.delete(statementId)
-    }
+  protected override taskWorkerNamespace(): DurableObjectNamespace {
+    return this.env
+      .STATEMENT_EXTRACTOR_DO as unknown as DurableObjectNamespace
   }
 
-  async onExtractionFailed(statementId: string, error: string): Promise<void> {
-    const prev = this.state?.extractors?.[statementId]
-    console.log(
-      `[ledger] onExtractionFailed id=${statementId} prevStatus=${prev?.status ?? 'none'} error=${error}`,
-    )
-    if (prev && prev.status !== 'extracting') {
-      console.log(
-        `[ledger] onExtractionFailed skip (already ${prev.status}) id=${statementId}`,
-      )
-      return
-    }
-    if (this._delivering.has(statementId)) {
-      console.log(`[ledger] onExtractionFailed skip (delivering) id=${statementId}`)
-      return
-    }
-    this._delivering.add(statementId)
-    try {
-      const filename = prev && 'filename' in prev ? prev.filename : undefined
-      await this.saveMessages([
-        {
-          id: crypto.randomUUID(),
-          role: 'user',
-          parts: [
-            {
-              type: 'text',
-              text: `[system] Statement ${statementId} extraction failed: ${error}. Tell the user briefly and stop — do not fabricate transactions.`,
-            },
-          ],
-        },
-      ])
-      this.setState({
-        ...this.state,
-        extractors: {
-          ...(this.state?.extractors ?? {}),
-          [statementId]: { status: 'failed', error, filename },
-        },
-      })
-    } finally {
-      this._delivering.delete(statementId)
-    }
+  protected override taskCoordSql(): SqlStorage {
+    return this.db
   }
 
-  // Periodic backstop (armed by process_statement, fires every
-  // EXTRACTION_RECONCILE_INTERVAL_S). Re-reads each in-flight extractor's
-  // status() and delivers the result the push may have dropped, force-failing
-  // anything past EXTRACTION_MAX_AGE_MS so a wedged job can never leave the
-  // chip stuck on 'extracting'. Self-cancels the interval once nothing is
-  // pending so an idle DO stops waking.
-  async reconcileExtractions(): Promise<void> {
-    const ns = this.env.STATEMENT_EXTRACTOR_DO
-    const extractors = this.state?.extractors ?? {}
-    const pending = Object.entries(extractors).filter(
-      ([, p]) => p.status === 'extracting',
-    )
-    console.log(
-      `[ledger] reconcile tick: ${pending.length} extracting / ${Object.keys(extractors).length} total [${pending.map(([id]) => id).join(',')}]`,
-    )
-    for (const [statementId] of pending) {
-      if (!ns) continue
-      let job: Awaited<
-        ReturnType<DurableObjectStub<StatementExtractorDO>['status']>
-      > = null
-      try {
-        const stub = ns.get(
-          ns.idFromName(statementId),
-        ) as unknown as DurableObjectStub<StatementExtractorDO>
-        job = await stub.status()
-      } catch (e) {
-        console.error(`[ledger] reconcile status() failed id=${statementId}`, {
-          err: e instanceof Error ? e.message : String(e),
-        })
-        continue
-      }
-      if (!job) {
-        await this.onExtractionFailed(statementId, 'extractor job not found')
-        continue
-      }
-      const ageMs = Date.now() - job.created_at
-      console.log(
-        `[ledger] reconcile job id=${statementId} status=${job.status} hasResult=${job.result_json !== null} ageMs=${ageMs}`,
-      )
-      if (job.status === 'done' && job.result_json !== null) {
-        console.log(`[ledger] reconcile delivering id=${statementId}`)
-        await this.onExtractionComplete(statementId, job.result_json)
-      } else if (job.status === 'failed') {
-        await this.onExtractionFailed(statementId, job.error ?? 'unknown error')
-      } else if (ageMs > EXTRACTION_MAX_AGE_MS) {
-        console.warn(`[ledger] reconcile force-fail (stale) id=${statementId}`)
-        await this.onExtractionFailed(
-          statementId,
-          'extraction timed out (watchdog)',
-        )
-      }
-    }
-    // Nothing left in flight → stop the interval so an idle ledger goes quiet.
-    const stillPending = Object.values(this.state?.extractors ?? {}).some(
-      (p) => p.status === 'extracting',
-    )
-    if (!stillPending) {
-      const schedules = await this.listSchedules({ type: 'interval' })
-      for (const s of schedules) {
-        if (s.callback === 'reconcileExtractions') {
-          await this.cancelSchedule(s.id)
-          console.log(`[ledger] reconcile idle — cancelled watchdog ${s.id}`)
-        }
-      }
-    }
+  // The worker's result is raw beancount text (serializeResult is identity),
+  // so deserialization is identity too.
+  protected override deserializeResult(resultJson: string): string {
+    return resultJson
+  }
+
+  // Inject the extractor's raw beancount text as a user message so the main
+  // model gets a fresh turn to call draft_transaction. The subagent is
+  // text-in/text-out — the main model decides what to do with the beancount.
+  protected override buildTaskDeliveryMessage(
+    statementId: string,
+    text: string,
+  ): string {
+    return text.trim().length === 0
+      ? `[system] Statement ${statementId} produced no transactions. Tell the user briefly and stop — do not fabricate transactions.`
+      : `[system] Statement ${statementId} extracted the following beancount transactions. ` +
+          `Call draft_transaction now passing each entry verbatim as a string in the \`transactions\` array. Do not edit, reorder, or trim.\n\n` +
+          text
+  }
+
+  protected override buildTaskFailureMessage(
+    statementId: string,
+    error: string,
+  ): string {
+    return `[system] Statement ${statementId} extraction failed: ${error}. Tell the user briefly and stop — do not fabricate transactions.`
+  }
+
+  // Reflect the task lifecycle into the extractors map that drives the file
+  // chip. The filename is preserved from the existing 'extracting' entry that
+  // process_statement set before dispatch.
+  protected override onTaskPhase(
+    statementId: string,
+    phase: TaskPhase,
+    error?: string,
+  ): void {
+    const prev = this.state?.extractors?.[statementId]
+    const filename = prev && 'filename' in prev ? prev.filename : undefined
+    const next: ExtractorProgress =
+      phase === 'delivered'
+        ? { status: 'done', filename }
+        : phase === 'failed'
+          ? { status: 'failed', error: error ?? 'unknown error', filename }
+          : { status: 'extracting', filename }
+    this.setState({
+      ...this.state,
+      extractors: {
+        ...(this.state?.extractors ?? {}),
+        [statementId]: next,
+      },
+    })
   }
 
   // Look up filename from the ExtractorDO so the UI's progress card can
   // label itself before the first partial arrives. Best-effort — returns
-  // undefined if the lookup fails.
+  // undefined if the lookup fails. The filename lives in the worker's
+  // prepared payload (TaskWorker stores it as prepared_json).
   private async lookupExtractorFilename(
     statementId: string,
   ): Promise<string | undefined> {
@@ -551,7 +407,9 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
         ns.idFromName(statementId),
       ) as unknown as DurableObjectStub<StatementExtractorDO>
       const job = await stub.status()
-      return job?.filename
+      if (!job?.prepared_json) return undefined
+      const prepared = JSON.parse(job.prepared_json) as { filename?: string }
+      return prepared.filename
     } catch {
       return undefined
     }
@@ -633,6 +491,7 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
     }
     this.dropLegacyStatementsTable()
     this.dropStaleFacetRecords()
+    this.dropRenamedScheduleCallbacks()
     for (const step of SCHEMA_STEPS) {
       try {
         this.db.exec(step.sql)
@@ -674,6 +533,39 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
           err: e instanceof Error ? e.message : String(e),
         })
       }
+    }
+  }
+
+  // The reconcile watchdog used to be `reconcileExtractions`; it is now the
+  // generic `reconcileTasks` (TaskCoordinator). A DO that had an extraction in
+  // flight at upgrade time still holds an interval schedule pointing at the old
+  // method name. That method is gone, so the alarm would log "callback
+  // reconcileExtractions not found" every interval forever and never
+  // self-cancel (the canceller was that same method). Delete the orphaned rows.
+  // Best-effort — the schedules table may not exist on a fresh DO.
+  private dropRenamedScheduleCallbacks(): void {
+    try {
+      const exists =
+        (this.db
+          .exec<{ n: number }>(
+            "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='cf_agents_schedules'",
+          )
+          .toArray()[0]?.n ?? 0) > 0
+      if (!exists) return
+      const before = this.db
+        .exec<{ n: number }>(
+          "SELECT COUNT(*) AS n FROM cf_agents_schedules WHERE callback='reconcileExtractions'",
+        )
+        .toArray()[0]?.n ?? 0
+      if (before === 0) return
+      this.db.exec(
+        "DELETE FROM cf_agents_schedules WHERE callback='reconcileExtractions'",
+      )
+      console.warn(`[migrate] cancelled ${before} orphaned reconcileExtractions schedule(s)`)
+    } catch (e) {
+      console.warn('[migrate] schedule cleanup failed', {
+        err: e instanceof Error ? e.message : String(e),
+      })
     }
   }
 
