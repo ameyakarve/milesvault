@@ -257,6 +257,13 @@ export type LedgerDOState = {
 export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
   private db: SqlStorage
   initialState: LedgerDOState = { extractors: {} }
+  // statement_ids whose delivery turn is in flight in THIS instance. The
+  // extractor's push and the reconcile watchdog can both observe a chip as
+  // 'extracting' and race to deliver; this dedupes them within an instance.
+  // It is intentionally not persisted — after a crash/restart the chip is
+  // still 'extracting' (we mark 'done' only after delivery), so reconcile
+  // re-delivers exactly the runs that were interrupted.
+  private _delivering = new Set<string>()
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
@@ -365,48 +372,61 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
 
   // ---- Callbacks invoked over cross-DO RPC by StatementExtractorDO ----
 
-  // Terminal success. Flip the file chip to 'done' and inject the extractor's
-  // raw beancount text as a user message so the main model gets a fresh turn
-  // to call draft_transaction. The subagent is text-in/text-out — the main
-  // model decides what to do with the beancount.
+  // Terminal success. Inject the extractor's raw beancount text as a user
+  // message so the main model gets a fresh turn to call draft_transaction,
+  // and flip the chip to 'done' ONLY after that delivery turn persists. The
+  // ordering is load-bearing: if the DO is evicted/redeployed mid-turn, the
+  // chip stays 'extracting' and the reconcile watchdog redelivers — marking
+  // 'done' first (as we used to) leaves the chip terminal with the draft
+  // never sent, which reconcile then skips. The subagent is text-in/text-
+  // out — the main model decides what to do with the beancount.
   async onExtractionComplete(statementId: string, text: string): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
     console.log(
       `[ledger] onExtractionComplete id=${statementId} prevStatus=${prev?.status ?? 'none'} textBytes=${text.length}`,
     )
-    // Idempotent: the extractor's push and the reconcile watchdog can both
-    // race to deliver. Whoever flips the chip off 'extracting' first wins;
-    // the loser sees a terminal status and bails, so we submit exactly once.
     if (prev && prev.status !== 'extracting') {
       console.log(
         `[ledger] onExtractionComplete skip (already ${prev.status}) id=${statementId}`,
       )
       return
     }
-    const filename = prev && 'filename' in prev ? prev.filename : undefined
-    this.setState({
-      ...this.state,
-      extractors: {
-        ...(this.state?.extractors ?? {}),
-        [statementId]: { status: 'done', filename },
-      },
-    })
-    const body =
-      text.trim().length === 0
-        ? `[system] Statement ${statementId} produced no transactions. Tell the user briefly and stop — do not fabricate transactions.`
-        : `[system] Statement ${statementId} extracted the following beancount transactions. ` +
-          `Call draft_transaction now passing each entry verbatim as a string in the \`transactions\` array. Do not edit, reorder, or trim.\n\n` +
-          text
-    await this.saveMessages([
-      {
-        id: crypto.randomUUID(),
-        role: 'user',
-        parts: [{ type: 'text', text: body }],
-      },
-    ])
-    console.log(
-      `[ledger] onExtractionComplete delivered id=${statementId} (state=done, turn ran inline)`,
-    )
+    // The extractor's push and the reconcile watchdog can both see the chip
+    // as 'extracting' and race here; dedupe the in-flight delivery so the
+    // draft is submitted exactly once.
+    if (this._delivering.has(statementId)) {
+      console.log(`[ledger] onExtractionComplete skip (delivering) id=${statementId}`)
+      return
+    }
+    this._delivering.add(statementId)
+    try {
+      const filename = prev && 'filename' in prev ? prev.filename : undefined
+      const body =
+        text.trim().length === 0
+          ? `[system] Statement ${statementId} produced no transactions. Tell the user briefly and stop — do not fabricate transactions.`
+          : `[system] Statement ${statementId} extracted the following beancount transactions. ` +
+            `Call draft_transaction now passing each entry verbatim as a string in the \`transactions\` array. Do not edit, reorder, or trim.\n\n` +
+            text
+      await this.saveMessages([
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          parts: [{ type: 'text', text: body }],
+        },
+      ])
+      this.setState({
+        ...this.state,
+        extractors: {
+          ...(this.state?.extractors ?? {}),
+          [statementId]: { status: 'done', filename },
+        },
+      })
+      console.log(
+        `[ledger] onExtractionComplete delivered id=${statementId} (turn ran inline, chip now done)`,
+      )
+    } finally {
+      this._delivering.delete(statementId)
+    }
   }
 
   async onExtractionFailed(statementId: string, error: string): Promise<void> {
@@ -420,26 +440,35 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
       )
       return
     }
-    const filename = prev && 'filename' in prev ? prev.filename : undefined
-    this.setState({
-      ...this.state,
-      extractors: {
-        ...(this.state?.extractors ?? {}),
-        [statementId]: { status: 'failed', error, filename },
-      },
-    })
-    await this.saveMessages([
-      {
-        id: crypto.randomUUID(),
-        role: 'user',
-        parts: [
-          {
-            type: 'text',
-            text: `[system] Statement ${statementId} extraction failed: ${error}. Tell the user briefly and stop — do not fabricate transactions.`,
-          },
-        ],
-      },
-    ])
+    if (this._delivering.has(statementId)) {
+      console.log(`[ledger] onExtractionFailed skip (delivering) id=${statementId}`)
+      return
+    }
+    this._delivering.add(statementId)
+    try {
+      const filename = prev && 'filename' in prev ? prev.filename : undefined
+      await this.saveMessages([
+        {
+          id: crypto.randomUUID(),
+          role: 'user',
+          parts: [
+            {
+              type: 'text',
+              text: `[system] Statement ${statementId} extraction failed: ${error}. Tell the user briefly and stop — do not fabricate transactions.`,
+            },
+          ],
+        },
+      ])
+      this.setState({
+        ...this.state,
+        extractors: {
+          ...(this.state?.extractors ?? {}),
+          [statementId]: { status: 'failed', error, filename },
+        },
+      })
+    } finally {
+      this._delivering.delete(statementId)
+    }
   }
 
   // Periodic backstop (armed by process_statement, fires every
