@@ -397,7 +397,7 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
         : `[system] Statement ${statementId} extracted the following beancount transactions. ` +
           `Call draft_transaction now passing each entry verbatim as a string in the \`transactions\` array. Do not edit, reorder, or trim.\n\n` +
           text
-    await this.submitMessages([
+    await this.saveMessages([
       {
         id: crypto.randomUUID(),
         role: 'user',
@@ -405,7 +405,7 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
       },
     ])
     console.log(
-      `[ledger] onExtractionComplete delivered id=${statementId} (state=done, message submitted)`,
+      `[ledger] onExtractionComplete delivered id=${statementId} (state=done, turn ran inline)`,
     )
   }
 
@@ -428,7 +428,7 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
         [statementId]: { status: 'failed', error, filename },
       },
     })
-    await this.submitMessages([
+    await this.saveMessages([
       {
         id: crypto.randomUUID(),
         role: 'user',
@@ -545,10 +545,9 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
   // all user messages (not just the latest) so a turn that errored before
   // this hook ran also gets cleaned up the next time around.
   // Fires on every durable-submission transition (pending→running→
-  // completed/error/skipped/aborted). The programmatic turn kicked by
-  // onExtractionComplete's submitMessages runs here; if it errors, Think
-  // swallows the error into the submission row and persists no assistant
-  // message — invisible to the UI. This is the only place that surfaces it.
+  // completed/error/skipped/aborted). Delivery now goes through saveMessages
+  // (inline, awaited) so it no longer creates submission rows; this only
+  // surfaces any residual/legacy rows still draining from past wedged runs.
   onSubmissionStatus(s: ThinkSubmissionInspection): void {
     console.log(
       `[ledger] submission ${s.submissionId} status=${s.status}` +
