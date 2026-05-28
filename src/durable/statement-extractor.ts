@@ -113,7 +113,13 @@ export class StatementExtractorDO extends Agent<Cloudflare.Env> {
     | { ok: false; error: 'not_found' | 'unauthorized' }
   > {
     const job = this.readJob()
-    if (!job) return { ok: false, error: 'not_found' }
+    if (!job) {
+      console.warn(`[extractor] extract not_found caller=${opts.parentName}`)
+      return { ok: false, error: 'not_found' }
+    }
+    console.log(
+      `[extractor] extract id=${job.id} status=${job.status} caller=${opts.parentName}`,
+    )
     if (job.owner_email !== opts.parentName) {
       console.warn(
         `[extractor] extract unauthorized id=${job.id} owner=${job.owner_email} caller=${opts.parentName}`,
@@ -139,6 +145,9 @@ export class StatementExtractorDO extends Agent<Cloudflare.Env> {
       (fiber) => this.runExtraction(fiber.signal),
       { idempotencyKey: job.id },
     )
+    console.log(
+      `[extractor] startFiber id=${job.id} accepted=${result.accepted} fiber=${result.fiberId} status=${result.status}`,
+    )
     return { accepted: result.accepted }
   }
 
@@ -152,6 +161,9 @@ export class StatementExtractorDO extends Agent<Cloudflare.Env> {
   }): Promise<void> {
     if (ctx.name !== 'extract') return
     const job = this.readJob()
+    console.log(
+      `[extractor] onFiberRecovered name=${ctx.name} jobStatus=${job?.status ?? 'none'} ageMs=${Date.now() - ctx.createdAt}`,
+    )
     if (!job || job.status === 'done' || job.status === 'failed') return
     if (Date.now() - ctx.createdAt > MAX_JOB_AGE_MS) {
       const message = 'extraction abandoned: exceeded max age after restart'
@@ -237,7 +249,7 @@ export class StatementExtractorDO extends Agent<Cloudflare.Env> {
       )
       const elapsedMs = Date.now() - startedAt
       console.log(
-        `[extractor] done id=${job.id} elapsedMs=${elapsedMs} textBytes=${textBuf.length}`,
+        `[extractor] done id=${job.id} elapsedMs=${elapsedMs} textBytes=${textBuf.length} — pushing to parent=${parentName}`,
       )
       await this.deliverComplete(parentName, job.id, textBuf)
     } catch (e) {
@@ -273,9 +285,11 @@ export class StatementExtractorDO extends Agent<Cloudflare.Env> {
   ): Promise<void> {
     try {
       await this.getParentStub(parentName).onExtractionComplete(id, text)
+      console.log(`[extractor] push onExtractionComplete ok id=${id}`)
     } catch (e) {
       console.error(`[extractor] onExtractionComplete failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
       })
     }
   }
@@ -287,9 +301,11 @@ export class StatementExtractorDO extends Agent<Cloudflare.Env> {
   ): Promise<void> {
     try {
       await this.getParentStub(parentName).onExtractionFailed(id, error)
+      console.log(`[extractor] push onExtractionFailed ok id=${id}`)
     } catch (e) {
       console.error(`[extractor] onExtractionFailed failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
       })
     }
   }

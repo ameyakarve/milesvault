@@ -336,9 +336,18 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
           // scheduleEvery is idempotent — one interval no matter how many
           // statements are in flight; reconcileExtractions cancels it when
           // nothing is pending.
+          // Pass an explicit {} payload: scheduleEvery does
+          // JSON.stringify(payload) on insert and JSON.parse(row.payload) on
+          // dispatch, and the dispatcher silently swallows a parse failure —
+          // an undefined payload can therefore wedge the callback so it never
+          // fires. {} round-trips cleanly.
           await this.scheduleEvery(
             EXTRACTION_RECONCILE_INTERVAL_S,
             'reconcileExtractions',
+            {},
+          )
+          console.log(
+            `[ledger] process_statement armed watchdog id=${statement_id} interval=${EXTRACTION_RECONCILE_INTERVAL_S}s`,
           )
           return {
             ok: true,
@@ -358,10 +367,18 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
   // model decides what to do with the beancount.
   async onExtractionComplete(statementId: string, text: string): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
+    console.log(
+      `[ledger] onExtractionComplete id=${statementId} prevStatus=${prev?.status ?? 'none'} textBytes=${text.length}`,
+    )
     // Idempotent: the extractor's push and the reconcile watchdog can both
     // race to deliver. Whoever flips the chip off 'extracting' first wins;
     // the loser sees a terminal status and bails, so we submit exactly once.
-    if (prev && prev.status !== 'extracting') return
+    if (prev && prev.status !== 'extracting') {
+      console.log(
+        `[ledger] onExtractionComplete skip (already ${prev.status}) id=${statementId}`,
+      )
+      return
+    }
     const filename = prev && 'filename' in prev ? prev.filename : undefined
     this.setState({
       ...this.state,
@@ -383,11 +400,22 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
         parts: [{ type: 'text', text: body }],
       },
     ])
+    console.log(
+      `[ledger] onExtractionComplete delivered id=${statementId} (state=done, message submitted)`,
+    )
   }
 
   async onExtractionFailed(statementId: string, error: string): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
-    if (prev && prev.status !== 'extracting') return
+    console.log(
+      `[ledger] onExtractionFailed id=${statementId} prevStatus=${prev?.status ?? 'none'} error=${error}`,
+    )
+    if (prev && prev.status !== 'extracting') {
+      console.log(
+        `[ledger] onExtractionFailed skip (already ${prev.status}) id=${statementId}`,
+      )
+      return
+    }
     const filename = prev && 'filename' in prev ? prev.filename : undefined
     this.setState({
       ...this.state,
@@ -422,6 +450,9 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
     const pending = Object.entries(extractors).filter(
       ([, p]) => p.status === 'extracting',
     )
+    console.log(
+      `[ledger] reconcile tick: ${pending.length} extracting / ${Object.keys(extractors).length} total [${pending.map(([id]) => id).join(',')}]`,
+    )
     for (const [statementId] of pending) {
       if (!ns) continue
       let job: Awaited<
@@ -442,12 +473,16 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
         await this.onExtractionFailed(statementId, 'extractor job not found')
         continue
       }
+      const ageMs = Date.now() - job.created_at
+      console.log(
+        `[ledger] reconcile job id=${statementId} status=${job.status} hasResult=${job.result_json !== null} ageMs=${ageMs}`,
+      )
       if (job.status === 'done' && job.result_json !== null) {
         console.log(`[ledger] reconcile delivering id=${statementId}`)
         await this.onExtractionComplete(statementId, job.result_json)
       } else if (job.status === 'failed') {
         await this.onExtractionFailed(statementId, job.error ?? 'unknown error')
-      } else if (Date.now() - job.created_at > EXTRACTION_MAX_AGE_MS) {
+      } else if (ageMs > EXTRACTION_MAX_AGE_MS) {
         console.warn(`[ledger] reconcile force-fail (stale) id=${statementId}`)
         await this.onExtractionFailed(
           statementId,
@@ -464,6 +499,7 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
       for (const s of schedules) {
         if (s.callback === 'reconcileExtractions') {
           await this.cancelSchedule(s.id)
+          console.log(`[ledger] reconcile idle — cancelled watchdog ${s.id}`)
         }
       }
     }
