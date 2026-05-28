@@ -111,7 +111,10 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
       JSON.stringify(opts.snapshot),
       job.id,
     )
-    await this.ctx.storage.setAlarm(Date.now() + 50)
+    // Run the extraction in the background: kickoff returns to the caller
+    // immediately, while waitUntil keeps this DO alive until streamText
+    // finishes and the terminal callback fires. No alarm round-trip.
+    this.ctx.waitUntil(this.runExtraction())
     return { ok: true }
   }
 
@@ -119,10 +122,26 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     return this.readJob()
   }
 
-  async alarm(): Promise<void> {
+  private async runExtraction(): Promise<void> {
     const job = this.readJob()
-    if (!job || job.status !== 'running') return
-    if (!job.parent_name || !job.snapshot_json) return
+    // Never bail silently: a stuck "Extracting…" chip with no callback is the
+    // failure mode we can't see otherwise. Log why we bailed.
+    if (!job) {
+      console.error('[extractor] runExtraction bail: no job row')
+      return
+    }
+    if (job.status !== 'running') {
+      console.error(
+        `[extractor] runExtraction bail id=${job.id} status=${job.status} (expected running)`,
+      )
+      return
+    }
+    if (!job.parent_name || !job.snapshot_json) {
+      console.error(
+        `[extractor] runExtraction bail id=${job.id} parent_name=${job.parent_name} hasSnapshot=${!!job.snapshot_json}`,
+      )
+      return
+    }
     const parent = this.getParentStub(job.parent_name)
     const snapshot = JSON.parse(job.snapshot_json) as Snapshot
     const baseSystem = buildStatementExtractionPrompt(snapshot, job.filename)
@@ -145,7 +164,7 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
       `empty string. Do NOT invent placeholder entries.`
     const startedAt = Date.now()
     console.log(
-      `[extractor] alarm start id=${job.id} filename=${job.filename} bytes=${job.text.length}`,
+      `[extractor] extraction start id=${job.id} filename=${job.filename} bytes=${job.text.length}`,
     )
     let textBuf = ''
     try {
