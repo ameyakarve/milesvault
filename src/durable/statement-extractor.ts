@@ -4,7 +4,6 @@ import { streamText } from 'ai'
 import { buildStatementExtractionPrompt } from './agent-prompt'
 
 const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
-const FLUSH_INTERVAL_MS = 200
 
 type Snapshot = {
   today: number
@@ -33,25 +32,13 @@ type JobRow = {
   completed_at: number | null
 }
 
-// Parent's RPC surface. Reasoning and text are streamed back as raw deltas
-// so the parent can broadcast them to the browser on its existing WS.
+// Parent's RPC surface — terminal callbacks only. The extractor runs to
+// completion server-side, then hands the parent the raw beancount (success)
+// or an error string (failure). No mid-stream partials: the user never sees
+// the subagent, only the uploaded file's status in their chat message.
 type ParentStub = {
-  appendExtractorPartial(
-    statementId: string,
-    reasoning: string,
-    text: string,
-  ): Promise<void>
-  onExtractionComplete(
-    statementId: string,
-    text: string,
-    reasoning: string,
-  ): Promise<void>
-  onExtractionFailed(
-    statementId: string,
-    error: string,
-    reasoning?: string,
-    text?: string,
-  ): Promise<void>
+  onExtractionComplete(statementId: string, text: string): Promise<void>
+  onExtractionFailed(statementId: string, error: string): Promise<void>
 }
 
 export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
@@ -160,7 +147,6 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     console.log(
       `[extractor] alarm start id=${job.id} filename=${job.filename} bytes=${job.text.length}`,
     )
-    let reasoningBuf = ''
     let textBuf = ''
     try {
       const workersai = createWorkersAI({ binding: this.env.AI })
@@ -176,31 +162,15 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
         prompt: job.text,
         abortSignal: AbortSignal.timeout(240_000),
       })
-      let lastFlushAt = 0
-      let dirty = false
       for await (const part of fullStream) {
-        if (part.type === 'reasoning-delta') {
-          reasoningBuf += part.text
-          dirty = true
-        } else if (part.type === 'text-delta') {
+        if (part.type === 'text-delta') {
           textBuf += part.text
-          dirty = true
         } else if (part.type === 'error') {
           throw part.error instanceof Error
             ? part.error
             : new Error(String(part.error))
-        } else {
-          continue
-        }
-        const now = Date.now()
-        if (dirty && now - lastFlushAt >= FLUSH_INTERVAL_MS) {
-          await this.safeAppend(parent, job.id, reasoningBuf, textBuf)
-          lastFlushAt = now
-          dirty = false
         }
       }
-      // Final flush so the UI sees the last few deltas before status flips.
-      await this.safeAppend(parent, job.id, reasoningBuf, textBuf)
 
       this.sql.exec(
         `UPDATE job SET status='done', result_json=?, completed_at=? WHERE id=?`,
@@ -210,9 +180,9 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
       )
       const elapsedMs = Date.now() - startedAt
       console.log(
-        `[extractor] done id=${job.id} elapsedMs=${elapsedMs} reasoningBytes=${reasoningBuf.length} textBytes=${textBuf.length}`,
+        `[extractor] done id=${job.id} elapsedMs=${elapsedMs} textBytes=${textBuf.length}`,
       )
-      await this.safeComplete(parent, job.id, textBuf, reasoningBuf)
+      await this.safeComplete(parent, job.id, textBuf)
     } catch (e) {
       const elapsedMs = Date.now() - startedAt
       const message = e instanceof Error ? e.message : String(e)
@@ -226,7 +196,7 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
         Date.now(),
         job.id,
       )
-      await this.safeFail(parent, job.id, message, reasoningBuf, textBuf)
+      await this.safeFail(parent, job.id, message)
     }
   }
 
@@ -235,29 +205,13 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     return ns.get(ns.idFromName(parentName)) as unknown as ParentStub
   }
 
-  private async safeAppend(
-    parent: ParentStub,
-    id: string,
-    reasoning: string,
-    text: string,
-  ): Promise<void> {
-    try {
-      await parent.appendExtractorPartial(id, reasoning, text)
-    } catch (e) {
-      console.warn(`[extractor] appendExtractorPartial failed id=${id}`, {
-        err: e instanceof Error ? e.message : String(e),
-      })
-    }
-  }
-
   private async safeComplete(
     parent: ParentStub,
     id: string,
     text: string,
-    reasoning: string,
   ): Promise<void> {
     try {
-      await parent.onExtractionComplete(id, text, reasoning)
+      await parent.onExtractionComplete(id, text)
     } catch (e) {
       console.error(`[extractor] onExtractionComplete failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),
@@ -269,11 +223,9 @@ export class StatementExtractorDO extends DurableObject<Cloudflare.Env> {
     parent: ParentStub,
     id: string,
     error: string,
-    reasoning?: string,
-    text?: string,
   ): Promise<void> {
     try {
-      await parent.onExtractionFailed(id, error, reasoning, text)
+      await parent.onExtractionFailed(id, error)
     } catch (e) {
       console.error(`[extractor] onExtractionFailed failed id=${id}`, {
         err: e instanceof Error ? e.message : String(e),

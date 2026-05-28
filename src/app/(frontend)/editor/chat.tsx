@@ -185,98 +185,57 @@ function Composer({
   )
 }
 
-function ExtractorProgressList({
-  extractors,
-  ids,
-}: {
-  extractors: Record<string, ExtractorProgress>
-  ids: string[]
-}) {
-  if (ids.length === 0) return null
-  return (
-    <div className="mx-auto mb-2 flex w-full max-w-3xl flex-col gap-2 px-4">
-      {ids.map((id) => {
-        const p = extractors[id]
-        if (!p) return null
-        return <ExtractorCard key={id} progress={p} />
-      })}
-    </div>
-  )
-}
+// The chat message that uploaded a statement carries a self-closing
+// reference tag: <statement id="STMT-…" filename="…" />. We pull it out of
+// the message text so we can render a file chip in its place (and keep the
+// raw tag out of the visible bubble / copy text).
+const STATEMENT_REF_RE = /<statement\s+id="([^"]*)"\s+filename="([^"]*)"\s*\/>/g
 
-function ExtractorCard({ progress }: { progress: ExtractorProgress }) {
-  const filename = 'filename' in progress ? progress.filename : undefined
-  const reasoning =
-    'reasoning' in progress && typeof progress.reasoning === 'string'
-      ? progress.reasoning
-      : ''
-  const isRunning = progress.status === 'running'
-  return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 text-xs">
-      <div className="flex items-center gap-2 px-2 py-1.5">
-        <FileText className="size-4 shrink-0 text-slate-500" />
-        <span className="min-w-0 truncate font-medium text-slate-700">
-          {filename ?? 'Statement'}
-        </span>
-        <span className="text-slate-400">·</span>
-        {progress.status === 'starting' ? (
-          <span className="flex items-center gap-1 text-slate-500">
-            <Loader2 className="size-3 animate-spin" />
-            Starting…
-          </span>
-        ) : progress.status === 'running' ? (
-          <span className="flex items-center gap-1 text-slate-500">
-            <Loader2 className="size-3 animate-spin" />
-            Extracting…
-          </span>
-        ) : progress.status === 'done' ? (
-          <span className="text-emerald-600">
-            {progress.count} transaction{progress.count === 1 ? '' : 's'}{' '}
-            extracted
-          </span>
-        ) : (
-          <span className="truncate text-rose-600">{progress.error}</span>
-        )}
-      </div>
-      {reasoning.length > 0 ? (
-        <ReasoningTrace text={reasoning} streaming={isRunning} />
-      ) : null}
-    </div>
-  )
-}
-
-function ReasoningTrace({
-  text,
-  streaming,
-}: {
+function parseStatementRefs(text: string): {
   text: string
-  streaming: boolean
+  refs: Array<{ id: string; filename: string }>
+} {
+  const refs: Array<{ id: string; filename: string }> = []
+  const cleaned = text
+    .replace(STATEMENT_REF_RE, (_m, id: string, filename: string) => {
+      refs.push({ id, filename })
+      return ''
+    })
+    .trim()
+  return { text: cleaned, refs }
+}
+
+// The extractor runs as a hidden subagent; the only thing the user sees is
+// their uploaded file plus a status. Status comes from the DO state slice
+// keyed by statement_id (undefined until the first diff lands → treat as
+// in-progress).
+function StatementStatusChip({
+  filename,
+  progress,
+}: {
+  filename: string
+  progress: ExtractorProgress | undefined
 }) {
-  const [open, setOpen] = useState(true)
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    if (!streaming) return
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [text, streaming])
+  const status = progress?.status
   return (
-    <div className="border-t border-slate-200">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
-      >
-        <span>{open ? 'Hide reasoning' : 'Show reasoning'}</span>
-        <span className="text-slate-400">{text.length} chars</span>
-      </button>
-      {open ? (
-        <div
-          ref={scrollRef}
-          className="max-h-48 overflow-y-auto whitespace-pre-wrap break-words px-2 pb-2 font-mono text-[11px] leading-snug text-slate-600"
-        >
-          {text}
-        </div>
-      ) : null}
+    <div className="my-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
+      <FileText className="size-4 shrink-0 text-slate-500" />
+      <span className="min-w-0 truncate font-medium text-slate-700">
+        {filename}
+      </span>
+      <span className="text-slate-400">·</span>
+      {status === 'done' ? (
+        <span className="text-emerald-600">Extracted</span>
+      ) : status === 'failed' ? (
+        <span className="truncate text-rose-600">
+          {progress?.status === 'failed' ? progress.error : 'Failed'}
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-slate-500">
+          <Loader2 className="size-3 animate-spin" />
+          Extracting…
+        </span>
+      )}
     </div>
   )
 }
@@ -292,7 +251,6 @@ export function Chat({
 } = {}) {
   const agent = useAgent<LedgerDOState>({ agent: 'LedgerDO', basePath: 'api/agents' })
   const extractors = agent.state?.extractors ?? {}
-  const extractorIds = Object.keys(extractors)
   const {
     messages,
     sendMessage,
@@ -556,10 +514,6 @@ export function Chat({
               How can I help?
             </h1>
             <div className="w-full">
-              <ExtractorProgressList
-                extractors={extractors}
-                ids={extractorIds}
-              />
               <Composer
                 onSubmit={handleSubmit}
                 status={status}
@@ -578,10 +532,22 @@ export function Chat({
             <ConversationContent className="mx-auto w-full max-w-3xl py-6">
               {messages.map((m) => {
                 const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
+                // Programmatic turns we inject to drive the agent (the
+                // extractor handoff carrying the raw beancount, failure
+                // notes) are role 'user' but must stay invisible — the user
+                // must not see the subagent plumbing.
+                const isInjected = parts.some(
+                  (p) =>
+                    p.type === 'text' &&
+                    typeof p.text === 'string' &&
+                    p.text.trimStart().startsWith('[system]'),
+                )
+                if (isInjected) return null
                 const textBlob = parts
                   .filter((p) => p.type === 'text' && typeof p.text === 'string')
-                  .map((p) => p.text as string)
+                  .map((p) => parseStatementRefs(p.text as string).text)
                   .join('\n\n')
+                  .trim()
                 return (
                   <Message key={m.id} from={m.role}>
                     <MessageContent
@@ -589,8 +555,22 @@ export function Chat({
                     >
                       {parts.map((p, i) => {
                         if (p.type === 'text' && typeof p.text === 'string') {
+                          const { text: cleaned, refs } = parseStatementRefs(
+                            p.text,
+                          )
                           return (
-                            <MessageResponse key={i}>{p.text}</MessageResponse>
+                            <div key={i}>
+                              {refs.map((r) => (
+                                <StatementStatusChip
+                                  key={r.id}
+                                  filename={r.filename}
+                                  progress={extractors[r.id]}
+                                />
+                              ))}
+                              {cleaned ? (
+                                <MessageResponse>{cleaned}</MessageResponse>
+                              ) : null}
+                            </div>
                           )
                         }
                         if (p.type === 'reasoning' && typeof p.text === 'string') {
@@ -689,10 +669,6 @@ export function Chat({
             <ConversationScrollButton />
           </Conversation>
 
-          <ExtractorProgressList
-            extractors={extractors}
-            ids={extractorIds}
-          />
           <div className="mx-auto w-full max-w-3xl px-4 pb-4">
             <Composer
               onSubmit={handleSubmit}

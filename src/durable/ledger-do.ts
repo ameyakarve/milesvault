@@ -227,28 +227,17 @@ function stripStatementBlocks(text: string): string {
   )
 }
 
-// State slice broadcast to the single client WebSocket alongside the chat
-// turn stream. The StatementExtractorDO calls back into LedgerDO with
-// `appendExtractorPartial` while streaming and `onExtractionComplete` /
-// `onExtractionFailed` when done; each call updates this slice via
-// setState, which the agents SDK broadcasts as a state diff to every
-// connected client. No second WebSocket needed.
+// Per-statement extraction status, keyed by statement_id. Broadcast to the
+// client over the existing chat WebSocket as a state diff so the uploaded
+// file's chip in the chat message can show "Extracting…" / "Extracted" /
+// "Failed". Deliberately minimal: status + filename only. The reasoning
+// trace and extracted beancount never live here — those are subagent
+// internals the user must not see, and persisting big blobs in DO state
+// (rebroadcast on every diff) is the antipattern we're avoiding.
 export type ExtractorProgress =
-  | { status: 'starting'; filename?: string }
-  | {
-      status: 'running'
-      reasoning: string
-      text: string
-      filename?: string
-    }
-  | { status: 'done'; count: number; reasoning: string; filename?: string }
-  | {
-      status: 'failed'
-      error: string
-      reasoning?: string
-      text?: string
-      filename?: string
-    }
+  | { status: 'extracting'; filename?: string }
+  | { status: 'done'; filename?: string }
+  | { status: 'failed'; error: string; filename?: string }
 
 export type LedgerDOState = {
   extractors: Record<string, ExtractorProgress>
@@ -307,13 +296,13 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
           if (!ns) return { ok: false, error: 'binding_missing' as const }
           const snapshot = this.ledger_snapshot_sync()
           const filename = await this.lookupExtractorFilename(statement_id)
-          // Mark "starting" in state immediately so the UI's progress card
-          // appears before the cross-DO kickoff round-trip completes.
+          // Mark "extracting" immediately so the file chip flips before the
+          // cross-DO kickoff round-trip completes.
           this.setState({
             ...this.state,
             extractors: {
               ...(this.state?.extractors ?? {}),
-              [statement_id]: { status: 'starting', filename },
+              [statement_id]: { status: 'extracting', filename },
             },
           })
           const stub = ns.get(
@@ -345,46 +334,18 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
 
   // ---- Callbacks invoked over cross-DO RPC by StatementExtractorDO ----
 
-  // Streaming partial — each flush replaces the rolling partial in state
-  // (the SDK broadcasts the state diff to all connected clients).
-  async appendExtractorPartial(
-    statementId: string,
-    reasoning: string,
-    text: string,
-  ): Promise<void> {
+  // Terminal success. Flip the file chip to 'done' and inject the extractor's
+  // raw beancount text as a user message so the main model gets a fresh turn
+  // to call draft_transaction. The subagent is text-in/text-out — the main
+  // model decides what to do with the beancount.
+  async onExtractionComplete(statementId: string, text: string): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
     const filename = prev && 'filename' in prev ? prev.filename : undefined
     this.setState({
       ...this.state,
       extractors: {
         ...(this.state?.extractors ?? {}),
-        [statementId]: {
-          status: 'running',
-          reasoning,
-          text,
-          filename,
-        },
-      },
-    })
-  }
-
-  // Terminal success. Flip state to 'done' and inject the extractor's raw
-  // beancount text as a user message so the main model gets a fresh turn
-  // to call draft_transaction. The subagent is text-in/text-out — the
-  // main model decides what to do with the beancount.
-  async onExtractionComplete(
-    statementId: string,
-    text: string,
-    reasoning: string,
-  ): Promise<void> {
-    const prev = this.state?.extractors?.[statementId]
-    const filename = prev && 'filename' in prev ? prev.filename : undefined
-    const count = (text.match(/^\d{4}-\d{2}-\d{2}\s/gm) ?? []).length
-    this.setState({
-      ...this.state,
-      extractors: {
-        ...(this.state?.extractors ?? {}),
-        [statementId]: { status: 'done', count, reasoning, filename },
+        [statementId]: { status: 'done', filename },
       },
     })
     const body =
@@ -402,19 +363,14 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
     ])
   }
 
-  async onExtractionFailed(
-    statementId: string,
-    error: string,
-    reasoning?: string,
-    text?: string,
-  ): Promise<void> {
+  async onExtractionFailed(statementId: string, error: string): Promise<void> {
     const prev = this.state?.extractors?.[statementId]
     const filename = prev && 'filename' in prev ? prev.filename : undefined
     this.setState({
       ...this.state,
       extractors: {
         ...(this.state?.extractors ?? {}),
-        [statementId]: { status: 'failed', error, reasoning, text, filename },
+        [statementId]: { status: 'failed', error, filename },
       },
     })
     await this.submitMessages([
