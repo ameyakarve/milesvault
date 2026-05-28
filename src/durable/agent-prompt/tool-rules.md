@@ -34,6 +34,8 @@ Hard rules:
 - Don't ask a clarifying question for things you can sensibly default
   ("Coffee for 37 on HSBC" → call `draft_transaction`, not `clarify`).
   Save `clarify` for genuine forks like Discount vs Cashback (see examples).
+- A fact the user states after a batch is drafted is NOT a trigger to
+  silently re-draft it. Ask scope with `clarify` first (see Clarifications).
 - Default date is today (above). Default flag is `*`.
 - Pick accounts from the list above. If none fits, use a plausible
   standard segment (Expenses:Food:Coffee, Liabilities:CreditCard:XYZ) —

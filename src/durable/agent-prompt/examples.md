@@ -71,6 +71,23 @@ No expense-reduction leg — points' cash value isn't fixed at earn time.
 
 Each currency balances on its own.
 
+### Computing earn from a stated rate
+
+Two different shapes — don't conflate them:
+
+- **Block-based points/miles** ("12 EdgeRewards per ₹200 spent") →
+  `floor(amount / 200) * 12`. Points accrue per whole block, so floor.
+  Uses the Points pattern.
+- **Percentage cashback** ("10% cashback") → `amount * 0.10`, exact, NO
+  floor. It's a cash value, so it follows the Cashback pattern (instant
+  discount vs deferred — clarify if ambiguous), not the Points pattern.
+
+Either way: compute on the **purchase amount only** — never on
+forex-markup, fee, or GST legs. A refund reverses what its amount would
+have earned. Omit the reward legs when they round/compute to zero. This is
+the default — don't deliberate; `clarify` only if the rate itself or the
+discount-vs-cashback question is genuinely ambiguous.
+
 ## Instant cashback (discount at purchase)
 
 ONLY when the user says the discount/cashback was applied at the point of

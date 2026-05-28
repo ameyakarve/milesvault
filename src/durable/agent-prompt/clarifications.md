@@ -56,3 +56,26 @@ clarify({
 This applies equally to award flights (ask for the cash fare displaced),
 award hotels (ask for the cash room rate), and hybrid cash + points
 fares (ask what the points side covered).
+
+## A rule the user states after you've drafted (earn rate, fee policy, scope)
+
+When the user volunteers a rule once a batch is already on screen —
+"Magnus earns 12 EdgeRewards per ₹200", "skip the GST lines", "these are
+all reimbursable" — that's a fork, not a command to silently redo work.
+They may want it applied to the batch you just drafted, or just noted for
+next time. Do NOT re-draft an already-drafted batch on your own. Ask once:
+
+```
+clarify({
+  question: "Apply that to the statement I just drafted, or use it from
+  now on?",
+  options: [
+    "Re-draft this statement with it",
+    "Just going forward",
+  ],
+  multi_select: false,
+  allow_custom: true,
+})
+```
+
+Only after they pick "re-draft" do you call `draft_transaction`.
