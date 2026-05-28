@@ -1,4 +1,8 @@
-import { Think, type ChatResponseResult } from '@cloudflare/think'
+import {
+  Think,
+  type ChatResponseResult,
+  type ThinkSubmissionInspection,
+} from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
@@ -540,8 +544,26 @@ export class LedgerDO extends Think<Cloudflare.Env, LedgerDOState> {
   // Idempotent: messages without a <statement> block are skipped. We scan
   // all user messages (not just the latest) so a turn that errored before
   // this hook ran also gets cleaned up the next time around.
+  // Fires on every durable-submission transition (pending→running→
+  // completed/error/skipped/aborted). The programmatic turn kicked by
+  // onExtractionComplete's submitMessages runs here; if it errors, Think
+  // swallows the error into the submission row and persists no assistant
+  // message — invisible to the UI. This is the only place that surfaces it.
+  onSubmissionStatus(s: ThinkSubmissionInspection): void {
+    console.log(
+      `[ledger] submission ${s.submissionId} status=${s.status}` +
+        (s.error ? ` error=${s.error}` : ''),
+    )
+  }
+
   async onChatResponse(result: ChatResponseResult): Promise<void> {
     const parts = Array.isArray(result.message.parts) ? result.message.parts : []
+    const toolTypes = parts
+      .map((p) => (typeof p === 'object' && p && 'type' in p ? String((p as { type: unknown }).type) : ''))
+      .filter((t) => t.startsWith('tool-'))
+    console.log(
+      `[ledger] onChatResponse role=${result.message.role} parts=${parts.length} tools=[${toolTypes.join(',')}]`,
+    )
     const isClarifyTurn = parts.some(
       (p) => typeof p === 'object' && p !== null && (p as { type?: unknown }).type === 'tool-clarify',
     )
