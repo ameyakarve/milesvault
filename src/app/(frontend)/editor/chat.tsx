@@ -658,7 +658,13 @@ export function Chat({
                                 : cardStatus === 'submitting'
                                   ? 'input-available'
                                   : ((p.state as ToolUIPart['state'] | undefined) ?? 'input-streaming')
-                          const rendered = isGenUiTool(p.type)
+                          // Don't render the card from partial input: while the
+                          // tool-call args still stream (input-streaming), p.input
+                          // is incomplete JSON, so the draft/clarify card would
+                          // flash half-formed values (an empty batch, a lone "2"
+                          // before the amount finishes). Wait for input-available;
+                          // show the Preparing… placeholder until then.
+                          const rendered = isGenUiTool(p.type) && toolState !== 'input-streaming'
                             ? renderGenUi(p.type, p.input, {
                                 accounts,
                                 status: cardStatus,
