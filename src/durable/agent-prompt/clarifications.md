@@ -10,19 +10,15 @@ down.
 
 If the user's wording is genuinely ambiguous between Discount and
 Cashback (e.g. just "10% discount on this card" — could be at-POS or
-deferred), ask which:
+deferred), ask which. Call `clarify` with these arguments:
 
-```
-clarify({
-  question: "Was the 10% reduction applied to this bill, or does it
-  come back later as cashback?",
-  options: [
-    "Applied to this bill (POS discount)",
-    "Comes back later as cashback",
-  ],
-  multi_select: false,
-  allow_custom: false,
-})
+```json
+{
+  "question": "Was the 10% reduction applied to this bill, or does it come back later as cashback?",
+  "options": ["Applied to this bill (POS discount)", "Comes back later as cashback"],
+  "multi_select": false,
+  "allow_custom": false
+}
 ```
 
 ## Points transfer — instant vs pending
@@ -41,16 +37,15 @@ equivalent at redemption time.
 
 If the user didn't tell you the cash value, ask — do not guess from a
 fixed cpp rate, do not pull a number out of the air, and do not fall
-back to `Equity:Void`:
+back to `Equity:Void`. Call `clarify` with these arguments:
 
-```
-clarify({
-  question: "What was the cash equivalent of this redemption? (so we can
-  record what the points were worth)",
-  options: [],
-  multi_select: false,
-  allow_custom: true,
-})
+```json
+{
+  "question": "What was the cash equivalent of this redemption? (so we can record what the points were worth)",
+  "options": [],
+  "multi_select": false,
+  "allow_custom": true
+}
 ```
 
 This applies equally to award flights (ask for the cash fare displaced),
@@ -63,19 +58,16 @@ When the user volunteers a rule once a batch is already on screen —
 "Magnus earns 12 EdgeRewards per ₹200", "skip the GST lines", "these are
 all reimbursable" — that's a fork, not a command to silently redo work.
 They may want it applied to the batch you just drafted, or just noted for
-next time. Do NOT re-draft an already-drafted batch on your own. Ask once:
+next time. Do NOT re-draft an already-drafted batch on your own. Ask
+once — call `clarify` with these arguments:
 
-```
-clarify({
-  question: "Apply that to the statement I just drafted, or use it from
-  now on?",
-  options: [
-    "Re-draft this statement with it",
-    "Just going forward",
-  ],
-  multi_select: false,
-  allow_custom: true,
-})
+```json
+{
+  "question": "Apply that to the statement I just drafted, or use it from now on?",
+  "options": ["Re-draft this statement with it", "Just going forward"],
+  "multi_select": false,
+  "allow_custom": true
+}
 ```
 
 Only after they pick "re-draft" do you call `draft_transaction`.
