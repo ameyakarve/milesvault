@@ -57,16 +57,17 @@ the user clearly wants a statement turned into transactions), call
 \`handoff({ to: "statement", context })\`. Put the exact statement id(s) and any
 inline instructions the user gave ("skip Amazon refunds", "ignore the small
 ones") into \`context\`. The statement specialist then owns the conversation —
-it extracts, clarifies if needed, and drafts. Do NOT call \`process_statement\`
+it extracts, clarifies if needed, and drafts. Do NOT call \`read_statement\`
 or \`draft_transaction\` for an upload yourself.`
 
-// Statement specialist agent: owns the conversation after a handoff, drives the
-// extraction worker, clarifies, and drafts. STATEMENT_HANDLING carries the
-// process_statement flow; HANDOFF_BACK tells it to return control when done.
+// Statement specialist agent: owns the conversation after a handoff, reads the
+// statement text inline via read_statement, clarifies, and drafts.
+// STATEMENT_HANDLING carries the read_statement flow; STATEMENT_EXTRACTION the
+// output rules; HANDOFF_BACK tells it to return control when done.
 const STATEMENT_AGENT_ROLE = `# You are the statement specialist
 
 The conversation was handed to you to turn an uploaded statement into reviewed
-transactions. Drive that to completion: process the statement, clarify any
+transactions. Drive that to completion: read the statement, clarify any
 genuinely ambiguous accounting choice, then draft the transactions for approval.`
 
 const HANDOFF_BACK = `# Returning control
@@ -81,17 +82,6 @@ message, hand the conversation back with \`handoff({ to: "ledger", context })\`,
 summarizing what was done in \`context\` — UNLESS that message is a direct
 correction or follow-up to the statement you just handled (e.g. "fix the date
 on the Amazon row"), in which case handle it first, then hand back.`
-
-export function buildSystemPrompt(snapshot: Snapshot): string {
-  return [
-    BEANCOUNT_PRIMER,
-    TOOL_RULES,
-    EXAMPLES,
-    CLARIFICATIONS,
-    STATEMENT_HANDLING,
-    renderSnapshotBlock(snapshot),
-  ].join('\n\n---\n\n')
-}
 
 // System prompt for the `ledger` agent in the handoff-based editor registry.
 export function buildLedgerSystem(snapshot: Snapshot): string {
@@ -113,32 +103,8 @@ export function buildStatementAgentSystem(snapshot: Snapshot): string {
     CLARIFICATIONS,
     STATEMENT_AGENT_ROLE,
     STATEMENT_HANDLING,
+    STATEMENT_EXTRACTION,
     HANDOFF_BACK,
     renderSnapshotBlock(snapshot),
   ].join('\n\n---\n\n')
-}
-
-// Static system prompt for the one-shot statement-extraction subagent. It sees
-// only the raw statement text plus the ledger context — never the main chat
-// history. This deliberately holds NO per-request data: it must stay byte-
-// identical across every statement and user so Workers AI prefix-caching can
-// reuse the prefill. The dynamic ledger context (today, filename, accounts)
-// goes in the user message via buildExtractionContextBlock — putting it here
-// would change the prefix on every request and defeat the cache.
-export function buildStatementExtractionPrompt(): string {
-  return [BEANCOUNT_PRIMER, EXAMPLES, STATEMENT_EXTRACTION].join('\n\n---\n\n')
-}
-
-// Per-request ledger context, prepended to the statement text in the user
-// message. Kept out of the system prompt so the cacheable prefix stays stable.
-export function buildExtractionContextBlock(
-  snapshot: Snapshot,
-  filename: string,
-): string {
-  return `# Ledger context
-
-- Today: ${isoToday(snapshot.today)}
-- Statement filename: ${filename}
-- Open accounts (use these — don't invent new ones unless none fits):
-${renderAccounts(snapshot) || '- (none yet)'}`
 }

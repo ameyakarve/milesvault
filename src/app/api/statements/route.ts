@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { getCloudflareContext } from '@opennextjs/cloudflare'
-import type { StatementExtractorDO } from '@/durable/statement-extractor'
+import { getLedgerClient } from '@/lib/ledger-api'
 
 export const dynamic = 'force-dynamic'
 
-// POST /api/statements — stash extracted PDF text on a dedicated
-// StatementExtractorDO keyed by the minted statement id. The chat agent's
-// LedgerDO never sees these bytes. Returns { id }; the client embeds that
-// id in its chat message as <statement id="STMT-..." filename="...">.
+// POST /api/statements — stash extracted PDF text in the user's LedgerDO
+// (pure storage) keyed by a minted statement id. Returns { id }; the client
+// embeds that id in its chat message as <statement id="STMT-..." filename="..." />.
+// The chat agent later reads it back over RPC via read_statement.
 export async function POST(req: NextRequest): Promise<Response> {
   const session = await auth()
   const email = session?.user?.email
@@ -27,24 +26,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     return NextResponse.json({ errors: ['text required'] }, { status: 400 })
   }
 
-  const { env } = await getCloudflareContext({ async: true })
-  const ns = env.STATEMENT_EXTRACTOR_DO as
-    | DurableObjectNamespace<StatementExtractorDO>
-    | undefined
-  if (!ns) {
-    return new NextResponse('STATEMENT_EXTRACTOR_DO binding missing', { status: 500 })
-  }
-
+  const client = await getLedgerClient(email)
   const id = `STMT-${crypto.randomUUID()}`
-  const stub = ns.get(ns.idFromName(id))
-  const r = await stub.ingest({
-    statementId: id,
+  await client.put_statement({
+    id,
     ownerEmail: email,
     filename: body.filename,
     text: body.text,
   })
-  if ('error' in r) {
-    return NextResponse.json({ errors: [r.error] }, { status: 409 })
-  }
   return NextResponse.json({ id })
 }

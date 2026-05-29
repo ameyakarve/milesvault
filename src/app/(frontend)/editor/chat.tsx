@@ -42,7 +42,7 @@ import {
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import type { ToolUIPart } from 'ai'
-import type { LedgerDOState, ExtractorProgress } from '@/durable/ledger-do'
+import type { ChatDOState } from '@/durable/chat-do'
 
 type Part = {
   type: string
@@ -205,37 +205,16 @@ function parseStatementRefs(text: string): {
   return { text: cleaned, refs }
 }
 
-// The extractor runs as a hidden subagent; the only thing the user sees is
-// their uploaded file plus a status. Status comes from the DO state slice
-// keyed by statement_id (undefined until the first diff lands → treat as
-// in-progress).
-function StatementStatusChip({
-  filename,
-  progress,
-}: {
-  filename: string
-  progress: ExtractorProgress | undefined
-}) {
-  const status = progress?.status
+// The user's uploaded statement renders as a static chip in their message —
+// the specialist reads and drafts inline within the turn, so there's no
+// separate server-side extraction status to surface.
+function SentStatementChip({ filename }: { filename: string }) {
   return (
     <div className="my-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
       <FileText className="size-4 shrink-0 text-slate-500" />
       <span className="min-w-0 truncate font-medium text-slate-700">
         {filename}
       </span>
-      <span className="text-slate-400">·</span>
-      {status === 'done' ? (
-        <span className="text-emerald-600">Extracted</span>
-      ) : status === 'failed' ? (
-        <span className="truncate text-rose-600">
-          {progress?.status === 'failed' ? progress.error : 'Failed'}
-        </span>
-      ) : (
-        <span className="flex items-center gap-1 text-slate-500">
-          <Loader2 className="size-3 animate-spin" />
-          Extracting…
-        </span>
-      )}
     </div>
   )
 }
@@ -274,8 +253,7 @@ export function Chat({
   onClearableChange?: (state: { canClear: boolean; clear: () => void }) => void
   onAppended?: () => void
 } = {}) {
-  const agent = useAgent<LedgerDOState>({ agent: 'LedgerDO', basePath: 'api/agents' })
-  const extractors = agent.state?.extractors ?? {}
+  const agent = useAgent<ChatDOState>({ agent: 'ChatDO', basePath: 'api/agents' })
   const {
     messages,
     sendMessage,
@@ -608,11 +586,7 @@ export function Chat({
                           return (
                             <div key={i}>
                               {refs.map((r) => (
-                                <StatementStatusChip
-                                  key={r.id}
-                                  filename={r.filename}
-                                  progress={extractors[r.id]}
-                                />
+                                <SentStatementChip key={r.id} filename={r.filename} />
                               ))}
                               {cleaned ? (
                                 <MessageResponse>{cleaned}</MessageResponse>

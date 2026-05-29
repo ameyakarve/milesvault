@@ -262,6 +262,21 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
       status          TEXT    NOT NULL DEFAULT 'pending'
     )`,
   },
+  // Transient statement-blob storage. POST /api/statements stashes the
+  // extracted PDF text here keyed by a minted STMT-<uuid>; the chat agent's
+  // ChatDO reads it back over RPC via get_statement when the statement
+  // specialist calls read_statement. The DO is keyed per-user, so ownership is
+  // already scoped by routing; owner_email is kept for record-keeping only.
+  {
+    label: 'statements',
+    sql: `CREATE TABLE IF NOT EXISTS statements (
+      id          TEXT    PRIMARY KEY,
+      owner_email TEXT    NOT NULL,
+      filename    TEXT    NOT NULL,
+      text        TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL
+    )`,
+  },
   {
     label: 'agent_attachments',
     sql: `CREATE TABLE IF NOT EXISTS agent_attachments (

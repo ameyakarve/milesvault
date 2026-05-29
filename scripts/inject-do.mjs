@@ -26,7 +26,7 @@ const wrapper = `
 ${marker}
 import { getToken as __authGetToken } from "next-auth/jwt"
 export { LedgerDO } from "../src/durable/ledger-do.ts"
-export { StatementExtractorDO } from "../src/durable/statement-extractor.ts"
+export { ChatDO } from "../src/durable/chat-do.ts"
 
 const __SESSION_COOKIE = "authjs.session-token"
 
@@ -50,8 +50,8 @@ export default {
     if (url.pathname === "/api/agents" || url.pathname.startsWith("/api/agents/")) {
       const email = await __resolveEmail(request, env)
       if (!email) return new Response("unauthorized", { status: 401 })
-      const ns = env.LEDGER_DO
-      if (!ns) return new Response("LEDGER_DO binding missing", { status: 500 })
+      const ns = env.CHAT_DO
+      if (!ns) return new Response("CHAT_DO binding missing", { status: 500 })
       const id = ns.idFromName(email)
       const stub = ns.get(id)
       await stub.setName(email)

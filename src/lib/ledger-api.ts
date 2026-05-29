@@ -8,6 +8,7 @@ import type {
   ReplaceBufferRequest,
   ReplaceBufferResponse,
 } from '@/durable/ledger-do'
+import type { ChatDO } from '@/durable/chat-do'
 import type { AccountEntriesResponse, AccountSummaryRow } from '@/durable/ledger-types'
 import type {
   PostingSearchFilter,
@@ -53,7 +54,12 @@ export type LedgerClient = {
   list_entries(): Promise<ListEntriesResponse>
   replace_buffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse>
   clear(): Promise<{ ok: true }>
-  reset_active_agent(): Promise<{ ok: true }>
+  put_statement(opts: {
+    id: string
+    ownerEmail: string
+    filename: string
+    text: string
+  }): Promise<{ ok: true }>
   ledger_snapshot(): Promise<{
     today: number
     accounts: Array<{
@@ -196,12 +202,33 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       return stub.clear()
     },
 
-    async reset_active_agent() {
-      return stub.reset_active_agent()
+    async put_statement(opts) {
+      if (typeof opts.id !== 'string' || !opts.id.startsWith('STMT-')) {
+        throw new LedgerInputError(['id must start with "STMT-".'])
+      }
+      return stub.put_statement(opts)
     },
 
     async ledger_snapshot() {
       return stub.ledger_snapshot()
+    },
+  }
+}
+
+// The chat/agent runtime lives in ChatDO (extends Think), keyed per-user just
+// like LedgerDO. Only the reset-on-clear path needs a server-side handle.
+export async function getChatClient(
+  email: string,
+): Promise<{ reset_active_agent(): Promise<{ ok: true }> }> {
+  const { env } = await getCloudflareContext({ async: true })
+  const ns = (env as Cloudflare.Env).CHAT_DO as
+    | DurableObjectNamespace<ChatDO>
+    | undefined
+  if (!ns) throw new Error('CHAT_DO binding missing')
+  const stub = ns.get(ns.idFromName(email))
+  return {
+    async reset_active_agent() {
+      return stub.reset_active_agent()
     },
   }
 }

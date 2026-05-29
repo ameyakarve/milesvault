@@ -1,26 +1,4 @@
-import {
-  type ChatResponseResult,
-  type ThinkSubmissionInspection,
-  type TurnConfig,
-  type StepConfig,
-} from '@cloudflare/think'
-import { createWorkersAI } from 'workers-ai-provider'
-import { tool, type LanguageModel, type ToolSet } from 'ai'
-import { z } from 'zod'
-import { buildLedgerSystem, buildStatementAgentSystem } from './agent-prompt'
-import type { StatementExtractorDO } from './statement-extractor'
-import { TaskCoordinator, type TaskPhase } from './agent-tasks'
-import { makeEditorRegistry, type EditorHost } from './agents/registries/editor'
-import {
-  activeToolNames,
-  allAgentNames,
-  HANDOFF_TOOL_NAME,
-  resolveActiveAgent,
-  unionTools,
-} from './agents/runtime'
-import { makeHandoffTool, type HandoffResult } from './agents/handoff'
-import { draftTransactionTool, clarifyTool } from './agents/tools'
-import type { AgentDef, AgentState, Registry } from './agents/types'
+import { DurableObject } from 'cloudflare:workers'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -212,8 +190,6 @@ function decimalToScaled(text: string): { scaled: number; scale: number } | null
   return { scaled: negative ? -mag : mag, scale }
 }
 
-const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
-
 function escapeBeancountString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
@@ -226,376 +202,54 @@ function formatPosting(account: string, amount: number, currency: string): strin
   return `${prefix}${' '.repeat(gap)}${amountStr} ${currency}`
 }
 
-// Matches the inline statement block emitted by chat.tsx handleSubmit:
-//   <statement filename="x.pdf">\n<extracted PDF text>\n</statement>
-// Capturing group is the filename so we can leave a readable marker in
-// the user's message after the block is stripped from history.
-const STATEMENT_BLOCK_RE =
-  /<statement filename="([^"]*)">[\s\S]*?<\/statement>/g
-
-function stripStatementBlocks(text: string): string {
-  return text.replace(
-    STATEMENT_BLOCK_RE,
-    (_match, filename: string) => `[Statement: ${filename}]`,
-  )
-}
-
-// Per-statement extraction status, keyed by statement_id. Broadcast to the
-// client over the existing chat WebSocket as a state diff so the uploaded
-// file's chip in the chat message can show "Extracting…" / "Extracted" /
-// "Failed". Deliberately minimal: status + filename only. The reasoning
-// trace and extracted beancount never live here — those are subagent
-// internals the user must not see, and persisting big blobs in DO state
-// (rebroadcast on every diff) is the antipattern we're avoiding.
-export type ExtractorProgress =
-  | { status: 'extracting'; filename?: string }
-  | { status: 'done'; filename?: string }
-  | { status: 'failed'; error: string; filename?: string }
-
-export type LedgerDOState = {
-  extractors: Record<string, ExtractorProgress>
-}
-
-export class LedgerDO
-  extends TaskCoordinator<Cloudflare.Env, LedgerDOState, string>
-  implements EditorHost
-{
+// Pure storage Durable Object: the per-user SQLite ledger + its RPC API +
+// transient statement-blob storage. The chat/agent runtime lives in a separate
+// ChatDO (extends Think) that reads from here over RPC; this class holds no
+// conversation state and no agent code.
+export class LedgerDO extends DurableObject<Cloudflare.Env> {
   private db: SqlStorage
-  // Per-surface agent roster + handoff graph. The editor registry currently
-  // holds a single `ledger` agent (today's persona); beforeTurn resolves the
-  // active agent each turn so adding personas later is purely additive.
-  private registry: Registry
-  initialState: LedgerDOState = { extractors: {} }
-  protected override logTag = '[ledger]'
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
     this.db = state.storage.sql
-    this.registry = makeEditorRegistry(this)
     this.migrate()
   }
 
-  // The agent that currently owns the conversation (persisted via configure()).
-  private activeAgent(): AgentDef {
-    return resolveActiveAgent(this.registry, this.getConfig<AgentState>())
-  }
+  // ---- Statement-blob storage ----
+  //
+  // POST /api/statements stashes extracted PDF text here keyed by a minted
+  // STMT-<uuid>; ChatDO's read_statement tool reads it back over RPC. The DO is
+  // keyed per-user, so ownership is scoped by routing.
 
-  // Per-turn / per-step config for whichever agent currently owns the
-  // conversation. Re-resolved every step (beforeStep) so a mid-turn handoff —
-  // the handoff tool flips activeAgent inside execute — takes effect on the
-  // very next step rather than waiting for the next user message.
-  private activeAgentConfig(): {
-    system: string
-    model: LanguageModel
-    activeTools: string[]
-  } {
-    const agent = this.activeAgent()
-    return {
-      system: agent.system(),
-      model: agent.model(),
-      activeTools: activeToolNames(agent),
-    }
-  }
-
-  // ---- Think per-turn config (delegates to the active agent) ----
-
-  // getModel/getSystemPrompt are the fallbacks Think uses to assemble the
-  // TurnContext; beforeTurn/beforeStep then pin the active agent's config.
-  getModel(): LanguageModel {
-    return this.activeAgent().model()
-  }
-
-  getSystemPrompt(): string {
-    return this.activeAgent().system()
-  }
-
-  getTools(): ToolSet {
-    // Register every agent's tools plus the one global handoff tool; the
-    // per-step activeTools list gates which are callable for the active agent.
-    return {
-      ...unionTools(this.registry),
-      [HANDOFF_TOOL_NAME]: this.handoffTool(),
-    }
-  }
-
-  override beforeTurn(): TurnConfig {
-    return this.activeAgentConfig()
-  }
-
-  override beforeStep(): StepConfig {
-    return this.activeAgentConfig()
-  }
-
-  // ---- Handoff ----
-
-  // The single global handoff tool. Its enum spans all agents (a tool's schema
-  // can't change per step); doHandoff enforces the active agent's graph edges.
-  private handoffTool() {
-    return makeHandoffTool(allAgentNames(this.registry), (to, context) =>
-      this.doHandoff(to, context),
+  async put_statement(opts: {
+    id: string
+    ownerEmail: string
+    filename: string
+    text: string
+  }): Promise<{ ok: true }> {
+    this.db.exec(
+      `INSERT OR REPLACE INTO statements (id, owner_email, filename, text, created_at)
+       VALUES (?, ?, ?, ?, ?)`,
+      opts.id,
+      opts.ownerEmail,
+      opts.filename,
+      opts.text,
+      Date.now(),
     )
-  }
-
-  // Flip the active agent, but only along a declared graph edge. Persisted via
-  // configure() so it survives eviction and is read by the next beforeStep.
-  private doHandoff(to: string, context: string): HandoffResult {
-    const current = this.activeAgent()
-    if (!current.canHandoffTo.includes(to) || !this.registry.agents[to]) {
-      return {
-        ok: false,
-        error: 'invalid_target',
-        allowed: [...current.canHandoffTo],
-      }
-    }
-    this.configure<AgentState>({ activeAgent: to, handoffContext: context })
-    return { ok: true, handed_off_to: to }
-  }
-
-  // Reset conversational ownership back to the registry's entry agent. Called
-  // when the user clears the conversation so the next statement upload starts
-  // from `ledger` and produces a fresh, visible handoff (activeAgent persists
-  // across a chat clear otherwise — clearing only wipes messages). Dropping
-  // handoffContext is intentional: it belonged to the abandoned flow.
-  async reset_active_agent(): Promise<{ ok: true }> {
-    await this.__unsafe_ensureInitialized()
-    this.configure<AgentState>({ activeAgent: this.registry.entry })
     return { ok: true }
   }
 
-  // Context the previous agent handed forward, appended to the receiving
-  // agent's system prompt so it continues without reconstructing state.
-  private handoffContextBlock(): string {
-    const ctx = this.getConfig<AgentState>()?.handoffContext
-    return ctx ? `\n\n---\n\n# Context from the previous agent\n\n${ctx}` : ''
-  }
-
-  // ---- EditorHost: shared model ----
-
-  private makeModel(): LanguageModel {
-    const workersai = createWorkersAI({ binding: this.env.AI })
-    // Kimi K2 emits a long reasoning trace by default. With unambiguous
-    // prompts, "low" effort is plenty and shaves most per-turn latency.
-    return workersai(MODEL_ID, { reasoning_effort: 'low' })
-  }
-
-  // ---- EditorHost: the `ledger` agent (freeform editor) ----
-
-  ledgerModel(): LanguageModel {
-    return this.makeModel()
-  }
-
-  ledgerSystem(): string {
-    // Synchronous per the Think API; rebuilt every turn from the live snapshot.
-    return buildLedgerSystem(this.ledger_snapshot_sync()) + this.handoffContextBlock()
-  }
-
-  ledgerTools(): ToolSet {
-    return {
-      draft_transaction: draftTransactionTool(),
-      clarify: clarifyTool(),
-    }
-  }
-
-  // ---- EditorHost: the `statement` specialist agent ----
-
-  statementModel(): LanguageModel {
-    return this.makeModel()
-  }
-
-  statementSystem(): string {
-    return (
-      buildStatementAgentSystem(this.ledger_snapshot_sync()) +
-      this.handoffContextBlock()
-    )
-  }
-
-  statementTools(): ToolSet {
-    return {
-      draft_transaction: draftTransactionTool(),
-      clarify: clarifyTool(),
-      process_statement: this.processStatementTool(),
-    }
-  }
-
-  // Kick off extraction on the worker DO. Owned by the statement agent —
-  // returns immediately; the result is pushed back as a follow-up message
-  // (TaskCoordinator) that wakes a new turn under the still-active statement
-  // agent, which then drafts.
-  private processStatementTool() {
-    return tool({
-      description:
-        'Kick off extraction for a previously-uploaded statement. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message. Returns immediately with `{ status: "extracting" }` — the actual extraction runs server-side on a separate Durable Object and pushes its result back as a follow-up system message containing the drafted transactions. Do NOT call `draft_transaction` from this turn; finish with a short ack ("Extracting…") and wait for the system message before drafting.',
-      inputSchema: z.object({
-        statement_id: z
-          .string()
-          .regex(/^STMT-/, 'statement_id must start with "STMT-"'),
-      }),
-      execute: async ({ statement_id }) => {
-        if (!this.env.STATEMENT_EXTRACTOR_DO)
-          return { ok: false, error: 'binding_missing' as const }
-        const snapshot = this.ledger_snapshot_sync()
-        // Mark "extracting" immediately so the file chip flips before the
-        // cross-DO kickoff round-trip completes. The filename is recovered
-        // from the worker's prepared payload inside dispatchTask's hooks.
-        const filename = await this.lookupExtractorFilename(statement_id)
-        this.setState({
-          ...this.state,
-          extractors: {
-            ...(this.state?.extractors ?? {}),
-            [statement_id]: { status: 'extracting', filename },
-          },
-        })
-        // dispatchTask records the coord row, kicks the worker fiber, and
-        // arms the reconcile watchdog. Delivery/failure flow back through the
-        // TaskCoordinator hooks below, which update the extractors map.
-        const r = await this.dispatchTask(statement_id, { snapshot })
-        if ('error' in r) return { ok: false, error: r.error }
-        return { ok: true, status: 'extracting' as const, statement_id }
-      },
-    })
-  }
-
-  // ---- TaskCoordinator wiring (StatementExtractorDO is the worker) ----
-
-  protected override taskWorkerNamespace(): DurableObjectNamespace {
-    return this.env
-      .STATEMENT_EXTRACTOR_DO as unknown as DurableObjectNamespace
-  }
-
-  protected override taskCoordSql(): SqlStorage {
-    return this.db
-  }
-
-  // The worker's result is raw beancount text (serializeResult is identity),
-  // so deserialization is identity too.
-  protected override deserializeResult(resultJson: string): string {
-    return resultJson
-  }
-
-  // Inject the extractor's raw beancount text as a user message so the main
-  // model gets a fresh turn to call draft_transaction. The subagent is
-  // text-in/text-out — the main model decides what to do with the beancount.
-  protected override buildTaskDeliveryMessage(
-    statementId: string,
-    text: string,
-  ): string {
-    return text.trim().length === 0
-      ? `[system] Statement ${statementId} produced no transactions. Tell the user briefly and stop — do not fabricate transactions.`
-      : `[system] Statement ${statementId} extracted the following beancount transactions. ` +
-          `Call draft_transaction now passing each entry verbatim as a string in the \`transactions\` array. Do not edit, reorder, or trim.\n\n` +
-          text
-  }
-
-  protected override buildTaskFailureMessage(
-    statementId: string,
-    error: string,
-  ): string {
-    return `[system] Statement ${statementId} extraction failed: ${error}. Tell the user briefly and stop — do not fabricate transactions.`
-  }
-
-  // Reflect the task lifecycle into the extractors map that drives the file
-  // chip. The filename is preserved from the existing 'extracting' entry that
-  // process_statement set before dispatch.
-  protected override onTaskPhase(
-    statementId: string,
-    phase: TaskPhase,
-    error?: string,
-  ): void {
-    const prev = this.state?.extractors?.[statementId]
-    const filename = prev && 'filename' in prev ? prev.filename : undefined
-    const next: ExtractorProgress =
-      phase === 'delivered'
-        ? { status: 'done', filename }
-        : phase === 'failed'
-          ? { status: 'failed', error: error ?? 'unknown error', filename }
-          : { status: 'extracting', filename }
-    this.setState({
-      ...this.state,
-      extractors: {
-        ...(this.state?.extractors ?? {}),
-        [statementId]: next,
-      },
-    })
-  }
-
-  // Look up filename from the ExtractorDO so the UI's progress card can
-  // label itself before the first partial arrives. Best-effort — returns
-  // undefined if the lookup fails. The filename lives in the worker's
-  // prepared payload (TaskWorker stores it as prepared_json).
-  private async lookupExtractorFilename(
-    statementId: string,
-  ): Promise<string | undefined> {
-    const ns = this.env.STATEMENT_EXTRACTOR_DO
-    if (!ns) return undefined
-    try {
-      const stub = ns.get(
-        ns.idFromName(statementId),
-      ) as unknown as DurableObjectStub<StatementExtractorDO>
-      const job = await stub.status()
-      if (!job?.prepared_json) return undefined
-      const prepared = JSON.parse(job.prepared_json) as { filename?: string }
-      return prepared.filename
-    } catch {
-      return undefined
-    }
-  }
-
-  // After every turn, redact raw <statement>…</statement> blocks from any
-  // user message in stored history. The model has already seen the bytes
-  // during this turn; leaving them in the conversation log would re-pay
-  // the token cost on every subsequent turn (Kimi's reasoning trace
-  // amplifies a 50 KB statement into thousands of CoT tokens). We replace
-  // each block in-place with `[Statement: <filename>]` so the user still
-  // has a visible reminder that an upload happened.
-  //
-  // Exception: if the assistant asked a `clarify` question this turn, the
-  // bytes must survive until the model's follow-up turn (which reads them
-  // and emits draft_transaction). We defer stripping until a non-clarify
-  // turn completes.
-  //
-  // Idempotent: messages without a <statement> block are skipped. We scan
-  // all user messages (not just the latest) so a turn that errored before
-  // this hook ran also gets cleaned up the next time around.
-  // Fires on every durable-submission transition (pending→running→
-  // completed/error/skipped/aborted). Delivery now goes through saveMessages
-  // (inline, awaited) so it no longer creates submission rows; this only
-  // surfaces any residual/legacy rows still draining from past wedged runs.
-  onSubmissionStatus(s: ThinkSubmissionInspection): void {
-    console.log(
-      `[ledger] submission ${s.submissionId} status=${s.status}` +
-        (s.error ? ` error=${s.error}` : ''),
-    )
-  }
-
-  async onChatResponse(result: ChatResponseResult): Promise<void> {
-    const parts = Array.isArray(result.message.parts) ? result.message.parts : []
-    const toolTypes = parts
-      .map((p) => (typeof p === 'object' && p && 'type' in p ? String((p as { type: unknown }).type) : ''))
-      .filter((t) => t.startsWith('tool-'))
-    console.log(
-      `[ledger] onChatResponse role=${result.message.role} parts=${parts.length} tools=[${toolTypes.join(',')}]`,
-    )
-    const isClarifyTurn = parts.some(
-      (p) => typeof p === 'object' && p !== null && (p as { type?: unknown }).type === 'tool-clarify',
-    )
-    if (isClarifyTurn) return
-
-    const messages = await this.syncMessagesFromStorage()
-    for (const msg of messages) {
-      if (msg.role !== 'user') continue
-      const msgParts = Array.isArray(msg.parts) ? msg.parts : []
-      let mutated = false
-      const nextParts = msgParts.map((p) => {
-        if (p.type !== 'text' || typeof p.text !== 'string') return p
-        const stripped = stripStatementBlocks(p.text)
-        if (stripped === p.text) return p
-        mutated = true
-        return { ...p, text: stripped }
-      })
-      if (mutated) {
-        await this.updateMessageInHistory({ ...msg, parts: nextParts })
-      }
-    }
+  async get_statement(
+    id: string,
+  ): Promise<{ filename: string; text: string; ownerEmail: string } | null> {
+    const row = this.db
+      .exec<{ filename: string; text: string; owner_email: string }>(
+        `SELECT filename, text, owner_email FROM statements WHERE id = ?`,
+        id,
+      )
+      .toArray()[0]
+    if (!row) return null
+    return { filename: row.filename, text: row.text, ownerEmail: row.owner_email }
   }
 
   private migrate(): void {
