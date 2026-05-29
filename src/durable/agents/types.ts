@@ -1,4 +1,13 @@
-import type { LanguageModel, ToolSet } from 'ai'
+import type { ToolSet } from 'ai'
+
+// Declarative model choice for an agent. `reasoning` is intent, not a wire
+// value: 'low'|'medium'|'high' map to reasoning_effort; 'off' disables the
+// thinking trace (the host translates this to the model's chat-template flag,
+// since reasoning_effort:null is a no-op on Kimi/GLM).
+export interface ModelConfig {
+  readonly id: string
+  readonly reasoning: 'low' | 'medium' | 'high' | 'off'
+}
 
 // A single persona the conversation can run under. The builders are closures
 // over the host DO (so an agent can read the live snapshot, dispatch tasks,
@@ -7,9 +16,10 @@ export interface AgentDef {
   readonly name: string
   // Agents this one may hand the conversation off to. Empty = terminal.
   readonly canHandoffTo: readonly string[]
+  // Model choice is plain data, owned by the agent definition.
+  readonly model: ModelConfig
   system(): string
   tools(): ToolSet
-  model(): LanguageModel
 }
 
 // A named roster + handoff graph + entry agent. One registry per product

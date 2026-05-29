@@ -19,9 +19,7 @@ import {
 } from './agents/runtime'
 import { makeHandoffTool, type HandoffResult } from './agents/handoff'
 import { draftTransactionTool, clarifyTool, readStatementTool } from './agents/tools'
-import type { AgentDef, AgentState, Registry } from './agents/types'
-
-const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
+import type { AgentDef, AgentState, ModelConfig, Registry } from './agents/types'
 
 // The chat/agent runtime. Holds conversation history + the agent registry and
 // drives the editor agents (ledger ↔ statement). It is pure compute: all
@@ -86,15 +84,27 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
     const agent = this.activeAgent()
     return {
       system: agent.system(),
-      model: agent.model(),
+      model: this.buildModel(agent.model),
       activeTools: activeToolNames(agent),
     }
+  }
+
+  // Build the Workers AI model for an agent's declared config. Reasoning 'off'
+  // must use the chat-template flag — reasoning_effort:null is a no-op on Kimi
+  // (it still streams a thinking trace); enable_thinking=false is what the model
+  // actually honors. The other levels map straight to reasoning_effort.
+  private buildModel(cfg: ModelConfig): LanguageModel {
+    const workersai = createWorkersAI({ binding: this.env.AI })
+    if (cfg.reasoning === 'off') {
+      return workersai(cfg.id, { chat_template_kwargs: { enable_thinking: false } })
+    }
+    return workersai(cfg.id, { reasoning_effort: cfg.reasoning })
   }
 
   // ---- Think per-turn config (delegates to the active agent) ----
 
   getModel(): LanguageModel {
-    return this.activeAgent().model()
+    return this.buildModel(this.activeAgent().model)
   }
 
   getSystemPrompt(): string {
@@ -158,18 +168,7 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
     return ctx ? `\n\n---\n\n# Context from the previous agent\n\n${ctx}` : ''
   }
 
-  // ---- EditorHost: shared model ----
-
-  private makeModel(): LanguageModel {
-    const workersai = createWorkersAI({ binding: this.env.AI })
-    return workersai(MODEL_ID, { reasoning_effort: 'low' })
-  }
-
   // ---- EditorHost: the `ledger` agent (freeform editor) ----
-
-  ledgerModel(): LanguageModel {
-    return this.makeModel()
-  }
 
   ledgerSystem(): string {
     return buildLedgerSystem(this.snapshot()) + this.handoffContextBlock()
@@ -183,10 +182,6 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
   }
 
   // ---- EditorHost: the `statement` specialist agent ----
-
-  statementModel(): LanguageModel {
-    return this.makeModel()
-  }
 
   statementSystem(): string {
     return buildStatementAgentSystem(this.snapshot()) + this.handoffContextBlock()
