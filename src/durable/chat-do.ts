@@ -90,13 +90,16 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
   }
 
   // Build the Workers AI model for an agent's declared config. Reasoning 'off'
-  // must use the chat-template flag — reasoning_effort:null is a no-op on Kimi
-  // (it still streams a thinking trace); enable_thinking=false is what the model
-  // actually honors. The other levels map straight to reasoning_effort.
+  // needs the chat-template flag, not reasoning_effort:null (a no-op on Kimi —
+  // it keeps streaming a thinking trace). kimi-k2.6 honors `thinking: false`
+  // specifically; `enable_thinking` (the older k2.5 key) is ignored. Verified
+  // by probe. The provider only types enable_thinking/clear_thinking, so cast.
   private buildModel(cfg: ModelConfig): LanguageModel {
     const workersai = createWorkersAI({ binding: this.env.AI })
     if (cfg.reasoning === 'off') {
-      return workersai(cfg.id, { chat_template_kwargs: { enable_thinking: false } })
+      return workersai(cfg.id, {
+        chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
+      })
     }
     return workersai(cfg.id, { reasoning_effort: cfg.reasoning })
   }
