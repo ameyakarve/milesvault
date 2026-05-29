@@ -71,10 +71,16 @@ genuinely ambiguous accounting choice, then draft the transactions for approval.
 
 const HANDOFF_BACK = `# Returning control
 
-When the statement work is done (drafted, or nothing to extract, or failed) and
-the user's next message is NOT about this statement, hand the conversation back
-with \`handoff({ to: "ledger", context })\`, summarizing what was done in
-\`context\`. While statement work is still in progress, stay in control.`
+Once you have finished the statement work — drafted the transactions, found
+nothing to extract, or failed — your job is done. Stay in control ONLY while
+that work is still unfinished (mid-extraction, or you still owe a clarification
+or a draft).
+
+After it's done, returning to \`ledger\` is the DEFAULT. On the user's next
+message, hand the conversation back with \`handoff({ to: "ledger", context })\`,
+summarizing what was done in \`context\` — UNLESS that message is a direct
+correction or follow-up to the statement you just handled (e.g. "fix the date
+on the Amazon row"), in which case handle it first, then hand back.`
 
 export function buildSystemPrompt(snapshot: Snapshot): string {
   return [

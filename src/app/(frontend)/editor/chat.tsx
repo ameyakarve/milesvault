@@ -394,7 +394,17 @@ export function Chat({
   clearHistoryRef.current = clearHistory
   const canClear = messages.length > 0
   useEffect(() => {
-    onClearableChange?.({ canClear, clear: () => clearHistoryRef.current() })
+    onClearableChange?.({
+      canClear,
+      // Clearing the conversation also resets the active agent back to the
+      // entry (ledger) so the next statement upload triggers a fresh, visible
+      // handoff — activeAgent persists server-side and a message-only clear
+      // would otherwise leave us stuck on the statement specialist.
+      clear: () => {
+        void ledgerClient.resetAgent().catch(() => {})
+        clearHistoryRef.current()
+      },
+    })
   }, [canClear, onClearableChange])
 
   async function handleSubmit(message: PromptInputMessage) {

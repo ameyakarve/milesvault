@@ -53,6 +53,7 @@ export type LedgerClient = {
   list_entries(): Promise<ListEntriesResponse>
   replace_buffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse>
   clear(): Promise<{ ok: true }>
+  reset_active_agent(): Promise<{ ok: true }>
   ledger_snapshot(): Promise<{
     today: number
     accounts: Array<{
@@ -193,6 +194,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async clear() {
       return stub.clear()
+    },
+
+    async reset_active_agent() {
+      return stub.reset_active_agent()
     },
 
     async ledger_snapshot() {

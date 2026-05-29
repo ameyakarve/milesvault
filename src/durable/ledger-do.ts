@@ -351,6 +351,17 @@ export class LedgerDO
     return { ok: true, handed_off_to: to }
   }
 
+  // Reset conversational ownership back to the registry's entry agent. Called
+  // when the user clears the conversation so the next statement upload starts
+  // from `ledger` and produces a fresh, visible handoff (activeAgent persists
+  // across a chat clear otherwise — clearing only wipes messages). Dropping
+  // handoffContext is intentional: it belonged to the abandoned flow.
+  async reset_active_agent(): Promise<{ ok: true }> {
+    await this.__unsafe_ensureInitialized()
+    this.configure<AgentState>({ activeAgent: this.registry.entry })
+    return { ok: true }
+  }
+
   // Context the previous agent handed forward, appended to the receiving
   // agent's system prompt so it continues without reconstructing state.
   private handoffContextBlock(): string {

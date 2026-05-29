@@ -58,6 +58,9 @@ export const ledgerClient = {
   }): Promise<{ id: string }> {
     return postJSON('/api/statements', body)
   },
+  resetAgent(): Promise<{ ok: true }> {
+    return postJSON('/api/ledger/reset-agent', {})
+  },
   getJournalFiltered(
     params: {
       account?: string | null
