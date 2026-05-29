@@ -122,6 +122,13 @@ export abstract class TaskCoordinator<
   // ---- Push-back RPC (called by the worker) ----
 
   async onTaskComplete(taskId: string, resultJson: string): Promise<void> {
+    // The worker invokes this via native DO RPC, which bypasses the
+    // fetch/alarm entrypoints where the agents runtime runs onStart() (and
+    // thus initializes the chat session that saveMessages writes to). Without
+    // this, saveMessages throws "Cannot read properties of undefined (reading
+    // 'appendMessage')" and delivery only succeeds later via the reconcile
+    // watchdog (which inits through super.alarm). Idempotent if already started.
+    await this.__unsafe_ensureInitialized()
     this.ensureCoordTable()
     const row = this.coordRow(taskId)
     console.log(
@@ -158,6 +165,9 @@ export abstract class TaskCoordinator<
   }
 
   async onTaskFailed(taskId: string, error: string): Promise<void> {
+    // See onTaskComplete: initialize via the agents escape hatch so the
+    // session exists before saveMessages runs on this RPC entrypoint.
+    await this.__unsafe_ensureInitialized()
     this.ensureCoordTable()
     const row = this.coordRow(taskId)
     console.log(
