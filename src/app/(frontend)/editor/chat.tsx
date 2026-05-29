@@ -309,6 +309,13 @@ export function Chat({
   const [accounts, setAccounts] = useState<string[]>([])
   const [statement, setStatement] = useState<StatementAttachment | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  // Guards handleSubmit against re-entry. attachStatement is an async network
+  // round-trip; until sendMessage runs, `status` is still idle and the submit
+  // button isn't disabled, so a second Enter/click would fire a second upload
+  // and dispatch a duplicate statement. A duplicate in-flight statement
+  // collides with the first's pending draft_transaction tool call and wedges
+  // the turn (AI_MissingToolResultsError).
+  const submittingRef = useRef(false)
 
   async function tryExtract(file: File, password?: string) {
     setStatement({ kind: 'extracting', file })
@@ -397,50 +404,55 @@ export function Chat({
     // is enough signal for the agent.
     if (!userText && !stmt) return
     if (statement && !stmt) return // statement attached but not ready
-
-    // Upload statement bytes to DO side-storage before sending. The user's
-    // chat message carries only a reference, so the bytes never enter the
-    // chat agent's history (or its inference context).
-    let stmtId: string | null = null
-    if (stmt) {
-      try {
-        const { id } = await ledgerClient.attachStatement({
-          filename: stmt.file.name,
-          text: stmt.text,
-        })
-        stmtId = id
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        setStatement({ kind: 'error', file: stmt.file, message: msg })
-        return
+    if (submittingRef.current) return // re-entry guard (see ref decl)
+    submittingRef.current = true
+    try {
+      // Upload statement bytes to DO side-storage before sending. The user's
+      // chat message carries only a reference, so the bytes never enter the
+      // chat agent's history (or its inference context).
+      let stmtId: string | null = null
+      if (stmt) {
+        try {
+          const { id } = await ledgerClient.attachStatement({
+            filename: stmt.file.name,
+            text: stmt.text,
+          })
+          stmtId = id
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          setStatement({ kind: 'error', file: stmt.file, message: msg })
+          return
+        }
       }
-    }
 
-    const refTag =
-      stmt && stmtId
-        ? `<statement id="${stmtId}" filename="${stmt.file.name}" />`
-        : ''
-    const text = stmt
-      ? `${userText || 'Process the attached statement and draft transactions.'}\n\n${refTag}`
-      : userText
-    // Any tool cards still awaiting a decision get superseded by the new
-    // message — otherwise the agent stays stuck waiting on them.
-    for (const m of messages) {
-      const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
-      for (const p of parts) {
-        if (!p.type.startsWith('tool-')) continue
-        if (!p.toolCallId) continue
-        if (p.state !== 'input-available' && p.state !== 'input-streaming') continue
-        const sub = submitStatus[p.toolCallId]
-        if (sub === 'done' || sub === 'failed' || sub === 'submitting') continue
-        addToolOutput({
-          toolCallId: p.toolCallId,
-          output: { ok: false, reason: 'superseded' },
-        })
+      const refTag =
+        stmt && stmtId
+          ? `<statement id="${stmtId}" filename="${stmt.file.name}" />`
+          : ''
+      const text = stmt
+        ? `${userText || 'Process the attached statement and draft transactions.'}\n\n${refTag}`
+        : userText
+      // Any tool cards still awaiting a decision get superseded by the new
+      // message — otherwise the agent stays stuck waiting on them.
+      for (const m of messages) {
+        const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
+        for (const p of parts) {
+          if (!p.type.startsWith('tool-')) continue
+          if (!p.toolCallId) continue
+          if (p.state !== 'input-available' && p.state !== 'input-streaming') continue
+          const sub = submitStatus[p.toolCallId]
+          if (sub === 'done' || sub === 'failed' || sub === 'submitting') continue
+          addToolOutput({
+            toolCallId: p.toolCallId,
+            output: { ok: false, reason: 'superseded' },
+          })
+        }
       }
+      void sendMessage({ text })
+      setStatement(null)
+    } finally {
+      submittingRef.current = false
     }
-    void sendMessage({ text })
-    setStatement(null)
   }
 
   async function handleApprove(toolCallId: string, finalText: string) {

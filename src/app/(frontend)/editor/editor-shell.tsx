@@ -22,6 +22,12 @@ type Tab = 'chat' | 'journal'
 export function EditorShell() {
   const [tab, setTab] = useState<Tab>('chat')
   const [pendingTab, setPendingTab] = useState<Tab | null>(null)
+  // Chat opens a WebSocket via useAgent/useAgentChat; its first render depends
+  // on live socket state that can't exist during SSR, so server HTML and the
+  // first client render diverge (React #418 hydration mismatch). Mount it only
+  // after hydration so both renders agree on "not yet present."
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const entries = useEntries()
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -273,11 +279,13 @@ export function EditorShell() {
         </div>
       </header>
       {tab === 'chat' ? (
-        <Chat
-          onBusyChange={setChatBusy}
-          onClearableChange={setChatClear}
-          onAppended={() => void entries.refetch()}
-        />
+        mounted ? (
+          <Chat
+            onBusyChange={setChatBusy}
+            onClearableChange={setChatClear}
+            onAppended={() => void entries.refetch()}
+          />
+        ) : null
       ) : (
         <>
           {entries.loaded ? (
