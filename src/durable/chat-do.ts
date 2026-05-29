@@ -4,7 +4,6 @@ import {
   type ThinkSubmissionInspection,
   type TurnConfig,
   type StepConfig,
-  type PrepareStepContext,
 } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
 import { type LanguageModel, type ToolSet } from 'ai'
@@ -117,28 +116,10 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
     return this.activeAgentConfig()
   }
 
-  override beforeStep(ctx: PrepareStepContext): StepConfig {
+  override beforeStep(): StepConfig {
     // Re-resolve each step so a mid-turn handoff takes effect immediately. Reuse
     // the snapshot fetched in beforeTurn — it doesn't change within a turn.
-    const base = this.activeAgentConfig()
-
-    // When the ledger agent hands off to the statement specialist, the model
-    // that called `handoff` tends to emit a "handed off — they'll read it"
-    // farewell and stop. The next step is the statement agent, but it sees that
-    // farewell and concludes the turn is done, so it never reads the statement.
-    // Force the specialist's first step (the one right after a same-turn
-    // handoff, before any read) to call `read_statement` so the inline
-    // extraction actually starts. Drafting is left to the model once it has the
-    // text in hand.
-    if (this.activeAgent().name === 'statement') {
-      const calls = (ctx.steps ?? []).flatMap((s) =>
-        (s.toolCalls ?? []).map((t) => t.toolName),
-      )
-      if (calls.includes(HANDOFF_TOOL_NAME) && !calls.includes('read_statement')) {
-        return { ...base, toolChoice: { type: 'tool', toolName: 'read_statement' } }
-      }
-    }
-    return base
+    return this.activeAgentConfig()
   }
 
   // ---- Handoff ----
@@ -220,19 +201,6 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
   }
 
   // ---- Observability + history hygiene ----
-
-  // TEMP diagnostic: confirm whether a handoff continues to the statement agent
-  // within the same turn (step 2 should switch active agent + call read_statement).
-  onStepFinish(ctx: unknown): void {
-    const c = ctx as {
-      finishReason?: string
-      toolCalls?: Array<{ toolName?: string }>
-    }
-    const tools = (c.toolCalls ?? []).map((t) => t.toolName ?? '?').join(',')
-    console.log(
-      `[chat] step finishReason=${c.finishReason ?? '?'} activeAgent=${this.activeAgent().name} toolCalls=[${tools}]`,
-    )
-  }
 
   onSubmissionStatus(s: ThinkSubmissionInspection): void {
     console.log(
