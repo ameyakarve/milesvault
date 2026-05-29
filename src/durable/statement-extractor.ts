@@ -1,6 +1,9 @@
 import { createWorkersAI } from 'workers-ai-provider'
 import { streamText } from 'ai'
-import { buildStatementExtractionPrompt } from './agent-prompt'
+import {
+  buildStatementExtractionPrompt,
+  buildExtractionContextBlock,
+} from './agent-prompt'
 import { TaskWorker } from './agent-tasks'
 
 const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
@@ -85,15 +88,13 @@ export class StatementExtractorDO extends TaskWorker<
     context: ExtractContext,
     signal: AbortSignal | undefined,
   ): Promise<string> {
-    const baseSystem = buildStatementExtractionPrompt(
-      context.snapshot,
-      prepared.filename,
-    )
     // streamText emits free-form text. Beancount is already a textual format,
     // so we ask for raw entries rather than a JSON envelope — simpler for the
-    // model, no escape-the-multiline-string trap.
+    // model, no escape-the-multiline-string trap. The system prompt is fully
+    // static (no per-request data) so Workers AI prefix-caching can reuse the
+    // prefill; per-statement context rides in the user message instead.
     const system =
-      baseSystem +
+      buildStatementExtractionPrompt() +
       `\n\n---\n\n# Output format (strict)\n\n` +
       `Emit the extracted transactions as raw Beancount entries, nothing ` +
       `else. Rules:\n\n` +
@@ -117,11 +118,18 @@ export class StatementExtractorDO extends TaskWorker<
       // workers-ai-provider TS surface mistranslates it). Default is true, so
       // we must pass false explicitly to skip the reasoning trace.
       chat_template_kwargs: { thinking: false } as never,
+      // Route a given user's uploads to the same backend replica so the static
+      // system-prompt prefix stays warm in that replica's prefix cache.
+      sessionAffinity: prepared.ownerEmail,
     })
+    const contextBlock = buildExtractionContextBlock(
+      context.snapshot,
+      prepared.filename,
+    )
     const { fullStream } = streamText({
       model,
       system,
-      prompt: prepared.text,
+      prompt: `${contextBlock}\n\n---\n\n${prepared.text}`,
       abortSignal,
     })
     let textBuf = ''

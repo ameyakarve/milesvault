@@ -50,21 +50,27 @@ ${renderAccounts(snapshot) || '- (none yet)'}`
   ].join('\n\n---\n\n')
 }
 
-// System prompt for the one-shot statement-extraction subagent. It sees
-// only the raw statement text plus the ledger context — never the main
-// chat history. Output is structured against draftTransactionBatchSchema.
-export function buildStatementExtractionPrompt(
+// Static system prompt for the one-shot statement-extraction subagent. It sees
+// only the raw statement text plus the ledger context — never the main chat
+// history. This deliberately holds NO per-request data: it must stay byte-
+// identical across every statement and user so Workers AI prefix-caching can
+// reuse the prefill. The dynamic ledger context (today, filename, accounts)
+// goes in the user message via buildExtractionContextBlock — putting it here
+// would change the prefix on every request and defeat the cache.
+export function buildStatementExtractionPrompt(): string {
+  return [BEANCOUNT_PRIMER, EXAMPLES, STATEMENT_EXTRACTION].join('\n\n---\n\n')
+}
+
+// Per-request ledger context, prepended to the statement text in the user
+// message. Kept out of the system prompt so the cacheable prefix stays stable.
+export function buildExtractionContextBlock(
   snapshot: Snapshot,
   filename: string,
 ): string {
-  const snapshotBlock = `# Ledger context
+  return `# Ledger context
 
 - Today: ${isoToday(snapshot.today)}
 - Statement filename: ${filename}
 - Open accounts (use these — don't invent new ones unless none fits):
 ${renderAccounts(snapshot) || '- (none yet)'}`
-
-  return [BEANCOUNT_PRIMER, EXAMPLES, STATEMENT_EXTRACTION, snapshotBlock].join(
-    '\n\n---\n\n',
-  )
 }
