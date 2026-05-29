@@ -4,6 +4,12 @@ One transaction captures the purchase AND the reward it earned. Cashback
 and points don't fall out of the sky — they always pair with the expense
 that generated them.
 
+The accounts below use `<Issuer>`/`<Card>`/`<PTS>` placeholders on
+purpose: these examples teach the *shape* of each entry, not how any
+specific card behaves. Fill in the real issuer, card, and point ticker
+from the transaction in front of you. Card-specific routing (where a
+given program's points land, the earn rate) is not assumed here.
+
 ## Which pattern (decide by the economics, not the card's name)
 
 The card's product name (e.g. "HSBC Cashback card") is just branding —
@@ -22,14 +28,13 @@ ignore it. Decide by what the reward did to THIS purchase:
 ## Account formats (strict)
 
 - Credit cards: `Liabilities:CreditCards:<Issuer>:<Card>[:<Id>]`
-  — e.g. `Liabilities:CreditCards:HDFC:Regalia` or
-  `Liabilities:CreditCards:HSBC:Cashback:9065`.
+  — e.g. `Liabilities:CreditCards:<Issuer>:<Card>` or
+  `Liabilities:CreditCards:<Issuer>:<Card>:<Id>`.
 - Cashback receivable (cash owed, lands later on a statement):
   `Assets:Receivable:<Issuer>` — singular `Receivable`, then the issuer
   (NOT the card name, NOT `Cashback`, NOT plural).
 - Held points / miles balance (already in your account, not "owed"):
-  `Assets:Rewards:<Issuer>` — e.g. `Assets:Rewards:HDFC`,
-  `Assets:Rewards:AMEX`. Use this for any point-currency balance.
+  `Assets:Rewards:<Issuer>`. Use this for any point-currency balance.
 - Prepaid cards (food wallets, forex cards, store wallets — anything
   you've already loaded with money): `Assets:Prepaid:<Issuer>:<Card>` —
   e.g. `Assets:Prepaid:Sodexo:Meal`, `Assets:Prepaid:HDFC:Forex:Multi`.
@@ -47,8 +52,8 @@ expense reduction (−). The expense leg IS the contra — no `Equity:Void`.
 ```
 2026-05-21 * "Starbucks" "Coffee — ₹3.70 cashback"
   Expenses:Food:Coffee                       37.00 INR
-  Liabilities:CreditCards:HSBC:Cashback:9065 -37.00 INR
-  Assets:Receivable:HSBC                      3.70 INR
+  Liabilities:CreditCards:<Issuer>:<Card>   -37.00 INR
+  Assets:Receivable:<Issuer>                  3.70 INR
   Expenses:Food:Coffee                       -3.70 INR
 ```
 
@@ -58,24 +63,27 @@ receivable accrues ₹3.70.
 ## Points pattern (words: "points", "miles")
 
 Multi-currency single transaction: purchase legs in INR/USD, points legs
-in the program's point currency (`HDFC_RP`, `AMEX_MR`, `CHASE_UR`, …).
-No expense-reduction leg — points' cash value isn't fixed at earn time.
+in the program's point currency (a program-specific ticker, shown as
+`<PTS>` below). No expense-reduction leg — points' cash value isn't fixed
+at earn time.
 
 ```
 2026-05-21 * "Taj" "Dinner — 250 reward points"
   Expenses:Food:Restaurants                  2500.00 INR
-  Liabilities:CreditCards:HDFC:Regalia      -2500.00 INR
-  Assets:Rewards:HDFC                            250 HDFC_RP
-  Equity:Void                                   -250 HDFC_RP
+  Liabilities:CreditCards:<Issuer>:<Card>   -2500.00 INR
+  Assets:Rewards:<Issuer>                         250 <PTS>
+  Equity:Void                                    -250 <PTS>
 ```
 
-Each currency balances on its own.
+Each currency balances on its own. The point currency MUST sum to zero
+too — the `Assets:Rewards` leg always needs its contra (here `Equity:Void`);
+a lone point posting won't balance and gets rejected.
 
 ### Computing earn from a stated rate
 
 Two different shapes — don't conflate them:
 
-- **Block-based points/miles** ("12 EdgeRewards per ₹200 spent") →
+- **Block-based points/miles** ("12 points per ₹200 spent") →
   `floor(amount / 200) * 12`. Points accrue per whole block, so floor.
   Uses the Points pattern.
 - **Percentage cashback** ("10% cashback") → `amount * 0.10`, exact, NO
@@ -88,6 +96,10 @@ have earned. Omit the reward legs when they round/compute to zero. This is
 the default — don't deliberate; `clarify` only if the rate itself or the
 discount-vs-cashback question is genuinely ambiguous.
 
+When a stated earn rate applies to a batch (e.g. a whole statement), add
+the reward legs to EVERY qualifying transaction — do not skip the first
+row or any row. A row earns zero only if its amount rounds to zero blocks.
+
 ## Instant cashback (discount at purchase)
 
 ONLY when the user says the discount/cashback was applied at the point of
@@ -98,7 +110,7 @@ negative posting on the same expense; no `Equity:Void`, no receivable.
 2026-05-21 * "Swiggy" "Dinner — ₹50 instant cashback"
   Expenses:Food:Restaurants                  500.00 INR
   Expenses:Food:Restaurants                  -50.00 INR
-  Liabilities:CreditCards:HDFC:Regalia      -450.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>   -450.00 INR
 ```
 
 ## Transfers (money moves between your accounts — no expense)
@@ -131,9 +143,9 @@ Pure shuffle between accounts you own. No expense, no income.
 Mirror of a purchase. The card leg is positive (reducing the liability),
 the bank leg is negative.
 ```
-2026-05-26 * "HDFC" "May Regalia bill"
-  Liabilities:CreditCards:HDFC:Regalia   45000.00 INR
-  Assets:Bank:HDFC:Savings              -45000.00 INR
+2026-05-26 * "Card payment" "May bill"
+  Liabilities:CreditCards:<Issuer>:<Card>   45000.00 INR
+  Assets:Bank:HDFC:Savings                 -45000.00 INR
 ```
 
 ## Cash and UPI spends
@@ -185,7 +197,7 @@ rate. Spending abroad is single-currency in the foreign unit.
 
 ### Load
 ```
-2026-05-27 * "HDFC" "Loaded forex card — 1000 USD @ ₹84.50"
+2026-05-27 * "Forex load" "Loaded forex card — 1000 USD @ ₹84.50"
   Assets:Prepaid:HDFC:Forex:Multi    1000.00 USD @@ 84500.00 INR
   Assets:Bank:HDFC:Savings         -84500.00 INR
 ```
@@ -220,18 +232,18 @@ expense lines.
 ### Full shape (markup + GST itemized — closest to what an Indian statement actually shows)
 ```
 2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 markup + ₹26.64 GST)"
-  Expenses:Travel:Food                     50.00 USD @@ 4225.00 INR
-  Expenses:Bank:ForexMarkup              148.00 INR
-  Expenses:Tax:GST                        26.64 INR
-  Liabilities:CreditCards:HDFC:Regalia -4399.64 INR
+  Expenses:Travel:Food                       50.00 USD @@ 4225.00 INR
+  Expenses:Bank:ForexMarkup                 148.00 INR
+  Expenses:Tax:GST                           26.64 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -4399.64 INR
 ```
 
 ### Markup only (when GST isn't broken out separately)
 ```
 2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 forex markup)"
-  Expenses:Travel:Food                   50.00 USD @@ 4225.00 INR
-  Expenses:Bank:ForexMarkup            148.00 INR
-  Liabilities:CreditCards:HDFC:Regalia -4373.00 INR
+  Expenses:Travel:Food                       50.00 USD @@ 4225.00 INR
+  Expenses:Bank:ForexMarkup                 148.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -4373.00 INR
 ```
 
 ### Short form (markup baked into a single INR total)
@@ -240,8 +252,8 @@ explicitly wants a single line. The `@@` rate ends up implicitly
 including the markup.
 ```
 2026-05-30 * "Joe's Pizza" "Dinner — NYC"
-  Expenses:Travel:Food                   50.00 USD @@ 4373.00 INR
-  Liabilities:CreditCards:HDFC:Regalia -4373.00 INR
+  Expenses:Travel:Food                       50.00 USD @@ 4373.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -4373.00 INR
 ```
 
 ### When the statement itemizes the markup / GST on separate rows (fold them in)
@@ -268,10 +280,10 @@ the card's forex rate (commonly **2%**) of the billed INR, and the GST is
 debited 875.30 + 17.51 + 3.15 = 895.96:
 ```
 2026-04-26 * "Cloudflare" "Hosting (USD 9.28 + ₹17.51 markup + ₹3.15 GST)"
-  Expenses:Software:Hosting   9.28 USD @@ 875.30 INR
-  Expenses:Bank:ForexMarkup  17.51 INR
-  Expenses:Tax:GST            3.15 INR
-  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -895.96 INR
+  Expenses:Software:Hosting                  9.28 USD @@ 875.30 INR
+  Expenses:Bank:ForexMarkup                 17.51 INR
+  Expenses:Tax:GST                           3.15 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -895.96 INR
 ```
 A "DCC MARKUP" row works identically — same fold, same `Expenses:Bank:ForexMarkup`
 leg — even when the merchant charge is billed straight in INR (no USD
@@ -284,8 +296,8 @@ A gift card is an asset — value you hold until you spend it.
 ### Bought with cash or card
 ```
 2026-05-27 * "Amazon" "Bought ₹1000 Amazon gift card"
-  Assets:GiftCards:Amazon                1000.00 INR
-  Liabilities:CreditCards:HDFC:Regalia  -1000.00 INR
+  Assets:GiftCards:Amazon                   1000.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -1000.00 INR
 ```
 
 ### Received as a gift (income)
@@ -305,10 +317,10 @@ Full:
 
 Partial (gift card + card):
 ```
-2026-05-27 * "Amazon" "Book — ₹500 gift card + ₹300 on Regalia"
-  Expenses:Shopping:Books                  800.00 INR
-  Assets:GiftCards:Amazon                 -500.00 INR
-  Liabilities:CreditCards:HDFC:Regalia    -300.00 INR
+2026-05-27 * "Amazon" "Book — ₹500 gift card + ₹300 on card"
+  Expenses:Shopping:Books                   800.00 INR
+  Assets:GiftCards:Amazon                  -500.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -300.00 INR
 ```
 
 ## Settling with people
@@ -322,9 +334,9 @@ Card got charged the full amount; half is your expense, half is owed to
 you and sits in `Receivable` until they pay.
 ```
 2026-05-26 * "BBQ Nation" "Dinner — split 50/50 with Rohan"
-  Expenses:Food:Restaurants               1500.00 INR
-  Assets:Receivable:Rohan                 1500.00 INR
-  Liabilities:CreditCards:HDFC:Regalia   -3000.00 INR
+  Expenses:Food:Restaurants                 1500.00 INR
+  Assets:Receivable:Rohan                   1500.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -3000.00 INR
 ```
 
 ### Friend pays you back
@@ -360,8 +372,8 @@ Record the receivable up front so the spend doesn't dilute personal P&L.
 Same shape as splitting a bill — company in place of friend.
 ```
 2026-05-26 * "Uber" "Client meeting — claim from ACME"
-  Assets:Receivable:ACME                  500.00 INR
-  Liabilities:CreditCards:HDFC:Regalia   -500.00 INR
+  Assets:Receivable:ACME                    500.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -500.00 INR
 ```
 
 ### Reimbursement lands
@@ -379,8 +391,8 @@ refund hits a different card / bank than the original, swap the second
 leg accordingly.
 ```
 2026-05-26 * "Amazon" "Refund — returned earphones"
-  Expenses:Shopping:Electronics              -3500.00 INR
-  Liabilities:CreditCards:HDFC:Regalia        3500.00 INR
+  Expenses:Shopping:Electronics            -3500.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>   3500.00 INR
 ```
 
 On a statement, a row marked **`Cr`** / **"Credit"** that is NOT a bill
@@ -395,13 +407,14 @@ rows are two separate refunds, each `−877.82` expense / `+877.82` card.
 Moving points from one program to another at a defined rate — always a
 conversion, so the rate lives in `@@`. The ratio (1:1, 1:1.3, 1:2,
 whatever bonus is running) doesn't change the shape; it just changes
-the two numbers.
+the two numbers. `<Src>`/`<SRC_PTS>` is the program you transfer from,
+`<Dest>`/`<DST_PTS>` the one you transfer to.
 
 ### Instant landing (points show up in the destination right away)
 ```
-2026-05-27 * "Chase" "Transfer 10000 UR → 13000 United (30% bonus)"
-  Assets:Rewards:United     13000 UA_MILES @@ 10000 CHASE_UR
-  Assets:Rewards:Chase     -10000 CHASE_UR
+2026-05-27 * "Transfer" "10000 source pts → 13000 dest (30% bonus)"
+  Assets:Rewards:<Dest>     13000 <DST_PTS> @@ 10000 <SRC_PTS>
+  Assets:Rewards:<Src>     -10000 <SRC_PTS>
 ```
 
 ### Pending (transfer initiated but points haven't landed yet)
@@ -409,16 +422,16 @@ Mirror of the cashback-vs-discount split: until the destination program
 posts the points, they're owed by that program — sit them in a
 receivable.
 ```
-2026-05-27 * "Chase" "Transfer 10000 UR → 13000 United (pending)"
-  Assets:Receivable:United     13000 UA_MILES @@ 10000 CHASE_UR
-  Assets:Rewards:Chase        -10000 CHASE_UR
+2026-05-27 * "Transfer" "10000 source pts → 13000 dest (pending)"
+  Assets:Receivable:<Dest>     13000 <DST_PTS> @@ 10000 <SRC_PTS>
+  Assets:Rewards:<Src>        -10000 <SRC_PTS>
 ```
 
 When the points land, settle the receivable:
 ```
-2026-05-30 * "United" "Transfer credited"
-  Assets:Rewards:United        13000 UA_MILES
-  Assets:Receivable:United    -13000 UA_MILES
+2026-05-30 * "Transfer credited" "Dest program posted the points"
+  Assets:Rewards:<Dest>        13000 <DST_PTS>
+  Assets:Receivable:<Dest>    -13000 <DST_PTS>
 ```
 
 ## Redemptions — always associate a cash value
@@ -434,32 +447,32 @@ Settles the receivable from the Cashback pattern. Card liability goes
 down, receivable goes back to zero. (Same-currency, so no `@@` needed —
 the value is already in INR.)
 ```
-2026-05-31 * "HSBC" "Cashback credited to May statement"
-  Liabilities:CreditCards:HSBC:Cashback:9065   3.70 INR
-  Assets:Receivable:HSBC                      -3.70 INR
+2026-05-31 * "Statement credit" "Cashback credited to May statement"
+  Liabilities:CreditCards:<Issuer>:<Card>    3.70 INR
+  Assets:Receivable:<Issuer>                -3.70 INR
 ```
 
 ### Points redeemed for statement credit
 The statement-credit amount IS the cash value.
 ```
-2026-05-31 * "HDFC" "Redeem 1000 pts → ₹250 statement credit"
-  Assets:Rewards:HDFC                    -1000 HDFC_RP @@ 250.00 INR
-  Liabilities:CreditCards:HDFC:Regalia    250.00 INR
+2026-05-31 * "Statement credit" "Redeem 1000 pts → ₹250 statement credit"
+  Assets:Rewards:<Issuer>                  -1000 <PTS> @@ 250.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>   250.00 INR
 ```
 
 ### Pay with points at a merchant
 Merchant's quoted price IS the cash value. Same shape for partial
 redemptions (points + card).
 ```
-2026-05-27 * "Amazon" "Headphones — paid 2500 HDFC pts"
+2026-05-27 * "Amazon" "Headphones — paid 2500 pts"
   Expenses:Shopping:Electronics       500.00 INR
-  Assets:Rewards:HDFC                 -2500 HDFC_RP @@ 500.00 INR
+  Assets:Rewards:<Issuer>            -2500 <PTS> @@ 500.00 INR
 ```
 ```
 2026-05-27 * "Amazon" "Headphones — 2500 pts + ₹500 on card"
   Expenses:Shopping:Electronics            1000.00 INR
-  Assets:Rewards:HDFC                      -2500 HDFC_RP @@ 500.00 INR
-  Liabilities:CreditCards:HDFC:Regalia    -500.00 INR
+  Assets:Rewards:<Issuer>                  -2500 <PTS> @@ 500.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -500.00 INR
 ```
 
 ### Award flight (miles + taxes/fees)
@@ -467,34 +480,34 @@ The cash-equivalent fare is the value the miles unlocked. Expense is the
 full fare (what the trip "cost" you in honest terms); miles cover the
 fare minus the cash co-pay; card / bank pays the co-pay (taxes, fees).
 
-Example: 75k UA miles + ₹5k taxes for a DEL-SFO ticket whose cash fare
+Example: 75k miles + ₹5k taxes for a DEL-SFO ticket whose cash fare
 is ₹100k → miles' cash value is ₹95k (100k − 5k).
 ```
-2026-05-27 * "United" "Award DEL-SFO — 75k miles + ₹5k taxes (₹100k cash fare)"
-  Expenses:Travel:Flights              100000.00 INR
-  Assets:Rewards:United                -75000 UA_MILES @@ 95000.00 INR
-  Liabilities:CreditCards:HDFC:Regalia  -5000.00 INR
+2026-05-27 * "Airline" "Award DEL-SFO — 75k miles + ₹5k taxes (₹100k cash fare)"
+  Expenses:Travel:Flights                  100000.00 INR
+  Assets:Rewards:<Issuer>                   -75000 <PTS> @@ 95000.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>    -5000.00 INR
 ```
 
 ### Award hotel night
 Same shape — cash-equivalent room rate is the value the points unlocked.
 Resort fee / taxes hit the card.
 ```
-2026-05-27 * "Hyatt" "Award night — 40k pts + ₹500 resort fee (₹15k cash rate)"
-  Expenses:Travel:Hotels                15000.00 INR
-  Assets:Rewards:Hyatt                  -40000 HYATT_PT @@ 14500.00 INR
-  Liabilities:CreditCards:HDFC:Regalia   -500.00 INR
+2026-05-27 * "Hotel" "Award night — 40k pts + ₹500 resort fee (₹15k cash rate)"
+  Expenses:Travel:Hotels                    15000.00 INR
+  Assets:Rewards:<Issuer>                   -40000 <PTS> @@ 14500.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>    -500.00 INR
 ```
 
 ### Hybrid cash + points fare (Pay-with-Miles / cash-and-points)
 Cash + points together cover the full fare. Each side's contribution is
-what it actually paid. Below, ₹6k cash fare, 15k 6E points cover ₹5.5k,
+what it actually paid. Below, ₹6k cash fare, 15k points cover ₹5.5k,
 ₹500 convenience fee on card.
 ```
-2026-05-27 * "Indigo" "DEL-BLR — 15k 6E pts + ₹500 fee (₹6k cash fare)"
-  Expenses:Travel:Flights               6000.00 INR
-  Assets:Rewards:Indigo                -15000 6E_PT @@ 5500.00 INR
-  Liabilities:CreditCards:HDFC:Regalia  -500.00 INR
+2026-05-27 * "Airline" "DEL-BLR — 15k pts + ₹500 fee (₹6k cash fare)"
+  Expenses:Travel:Flights                   6000.00 INR
+  Assets:Rewards:<Issuer>                   -15000 <PTS> @@ 5500.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>   -500.00 INR
 ```
 
 ## Bonuses, expiry, and other point-balance adjustments
@@ -504,14 +517,14 @@ contra is `Equity:Void`. Same shape covers welcome bonuses, anniversary
 bonuses, referral bonuses, milestone bonuses, expiry sweeps, clawbacks.
 
 ```
-2026-05-27 * "AMEX" "Platinum 100k welcome bonus"
-  Assets:Rewards:AMEX     100000 AMEX_MR
-  Equity:Void            -100000 AMEX_MR
+2026-05-27 * "Welcome bonus" "100k welcome bonus"
+  Assets:Rewards:<Issuer>     100000 <PTS>
+  Equity:Void                -100000 <PTS>
 ```
 ```
-2026-12-31 * "HDFC" "RP expiry — 2024 vintage points"
-  Assets:Rewards:HDFC     -3500 HDFC_RP
-  Equity:Void              3500 HDFC_RP
+2026-12-31 * "Points expiry" "Expired 2024 vintage points"
+  Assets:Rewards:<Issuer>     -3500 <PTS>
+  Equity:Void                  3500 <PTS>
 ```
 
 ## Referrals (you referred someone; reward landed for you)
@@ -532,43 +545,43 @@ single-currency with `Equity:Void`.
 ### Cash referral as a statement credit on the card
 Card liability goes down; income captures the realized value.
 ```
-2026-05-27 * "HDFC" "Referral statement credit — Aman signed up"
-  Liabilities:CreditCards:HDFC:Regalia    1000.00 INR
-  Income:Referrals                       -1000.00 INR
+2026-05-27 * "Referral credit" "Referral statement credit — Aman signed up"
+  Liabilities:CreditCards:<Issuer>:<Card>   1000.00 INR
+  Income:Referrals                         -1000.00 INR
 ```
 
 ### Pending cash referral (friend hasn't completed signup yet)
 Sit it in a receivable until the issuer actually pays out.
 ```
-2026-05-27 * "HDFC" "Referral promised — Aman card under review"
-  Assets:Receivable:HDFC      1000.00 INR
-  Income:Referrals           -1000.00 INR
+2026-05-27 * "Referral promised" "Aman card under review"
+  Assets:Receivable:<Issuer>   1000.00 INR
+  Income:Referrals            -1000.00 INR
 ```
 When it lands, settle the receivable against the bank / card just like
 any other receivable payout.
 
 ### Points referral
 ```
-2026-05-27 * "AMEX" "Referral bonus — 15000 MR for referring Aman"
-  Assets:Rewards:AMEX     15000 AMEX_MR
-  Equity:Void            -15000 AMEX_MR
+2026-05-27 * "Referral bonus" "15000 pts for referring Aman"
+  Assets:Rewards:<Issuer>     15000 <PTS>
+  Equity:Void                -15000 <PTS>
 ```
 
 ## Buying points with cash
 
 Conversion at a defined rate → `@@` on the points leg. Same shape for
-program points (AMEX MR, HDFC RP, …) and FFP miles (United, Lufthansa,
-…). No expense — you've shifted INR into a different asset (points).
+program points and airline miles alike. No expense — you've shifted INR
+into a different asset (points).
 
 ```
-2026-05-27 * "AMEX" "Bought 10000 MR for ₹3000"
-  Assets:Rewards:AMEX        10000 AMEX_MR @@ 3000.00 INR
+2026-05-27 * "Buy points" "Bought 10000 pts for ₹3000"
+  Assets:Rewards:<Issuer>    10000 <PTS> @@ 3000.00 INR
   Assets:Bank:HDFC:Savings  -3000.00 INR
 ```
 ```
-2026-05-27 * "AMEX" "Bought 10000 MR for ₹3000 on Regalia"
-  Assets:Rewards:AMEX                      10000 AMEX_MR @@ 3000.00 INR
-  Liabilities:CreditCards:HDFC:Regalia    -3000.00 INR
+2026-05-27 * "Buy points" "Bought 10000 pts for ₹3000 on card"
+  Assets:Rewards:<Issuer>                  10000 <PTS> @@ 3000.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -3000.00 INR
 ```
 
 ## Redemption refunds (mirror of the original)
@@ -579,17 +592,17 @@ redemption was booked at.
 
 ### Award flight cancelled (miles + taxes come back)
 ```
-2026-05-27 * "United" "Cancelled DEL-SFO — miles + taxes refunded"
-  Expenses:Travel:Flights              -100000.00 INR
-  Assets:Rewards:United                  75000 UA_MILES @@ 95000.00 INR
-  Liabilities:CreditCards:HDFC:Regalia    5000.00 INR
+2026-05-27 * "Airline" "Cancelled DEL-SFO — miles + taxes refunded"
+  Expenses:Travel:Flights                  -100000.00 INR
+  Assets:Rewards:<Issuer>                    75000 <PTS> @@ 95000.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>     5000.00 INR
 ```
 
 ### Statement-credit redemption reversed
 ```
-2026-05-27 * "HDFC" "Statement-credit redemption reversed"
-  Assets:Rewards:HDFC                    1000 HDFC_RP @@ 250.00 INR
-  Liabilities:CreditCards:HDFC:Regalia  -250.00 INR
+2026-05-27 * "Statement credit" "Statement-credit redemption reversed"
+  Assets:Rewards:<Issuer>                   1000 <PTS> @@ 250.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -250.00 INR
 ```
 
 ## When to use `@@` vs `Equity:Void` on the point side
@@ -597,7 +610,7 @@ redemption was booked at.
 - **Any redemption or conversion** — points are being exchanged for
   cash, for a flight, for a hotel night, or for another point currency:
   use `@@` on the point posting with the cash-equivalent value at
-  redemption. (Examples: transferring 10k Chase UR → 13k United,
+  redemption. (Examples: transferring points between programs,
   redeeming points for a statement credit, paying with points at a
   merchant, buying points with cash, award flights, award hotel nights,
   hybrid cash-and-points fares.)
