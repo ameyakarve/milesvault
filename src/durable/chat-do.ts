@@ -202,6 +202,19 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
 
   // ---- Observability + history hygiene ----
 
+  // TEMP diagnostic: confirm whether a handoff continues to the statement agent
+  // within the same turn (step 2 should switch active agent + call read_statement).
+  onStepFinish(ctx: unknown): void {
+    const c = ctx as {
+      finishReason?: string
+      toolCalls?: Array<{ toolName?: string }>
+    }
+    const tools = (c.toolCalls ?? []).map((t) => t.toolName ?? '?').join(',')
+    console.log(
+      `[chat] step finishReason=${c.finishReason ?? '?'} activeAgent=${this.activeAgent().name} toolCalls=[${tools}]`,
+    )
+  }
+
   onSubmissionStatus(s: ThinkSubmissionInspection): void {
     console.log(
       `[chat] submission ${s.submissionId} status=${s.status}` +
