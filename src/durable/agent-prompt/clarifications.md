@@ -70,4 +70,8 @@ once — call `clarify` with these arguments:
 }
 ```
 
-Only after they pick "re-draft" do you call `draft_transaction`.
+Only after they pick "re-draft" do you call `draft_transaction`. When you
+re-draft, apply the rule to EVERY transaction in the batch and re-emit the
+WHOLE batch in one `draft_transaction` call — same count of entries as
+before, none dropped. If the rule is an earn/accrual rate, add the reward
+posting to each transaction it applies to; do not silently skip a row.
