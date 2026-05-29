@@ -1,9 +1,11 @@
 import type { ToolSet } from 'ai'
 import type { AgentDef, Registry } from '../types'
 
-// Shared by both editor agents — one Workers AI model id. Reasoning level is
-// per-agent (see each AgentDef.model below), not part of the id.
-const MODEL_ID = '@cf/moonshotai/kimi-k2.6'
+// Workers AI model ids. The ledger agent runs Kimi (freeform reasoning over
+// edits); the statement specialist runs Gemma (cheap, fast, reasoning-off
+// extraction — the shape the extractor evals were tuned on).
+const LEDGER_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
+const STATEMENT_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 
 // The host (ChatDO) supplies the concrete builders, closing over the live
 // DO instance. The registry just names agents and wires the handoff graph,
@@ -25,16 +27,16 @@ export function makeEditorRegistry(host: EditorHost): Registry {
   const ledger: AgentDef = {
     name: 'ledger',
     canHandoffTo: ['statement'],
-    model: { id: MODEL_ID, reasoning: 'low' },
+    model: { id: LEDGER_MODEL_ID, reasoning: 'low' },
     system: () => host.ledgerSystem(),
     tools: () => host.ledgerTools(),
   }
   const statement: AgentDef = {
     name: 'statement',
     canHandoffTo: ['ledger'],
-    // Extraction ran with reasoning OFF historically (the old extractor used
-    // enable_thinking=false); the trace mostly added latency, not accuracy.
-    model: { id: MODEL_ID, reasoning: 'off' },
+    // Gemma with reasoning OFF — the extractor evals were tuned on this; the
+    // thinking trace mostly added latency, not accuracy.
+    model: { id: STATEMENT_MODEL_ID, reasoning: 'off' },
     system: () => host.statementSystem(),
     tools: () => host.statementTools(),
   }
