@@ -348,21 +348,21 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     }
   }
 
-  // The reverted statement-subagent commit created a `statements` table with
-  // status/batch_json/error/used_at columns. The current schema is just
-  // id/filename/text/created_at, but CREATE TABLE IF NOT EXISTS is a no-op
-  // when the table already exists — so DOs that touched the reverted deploy
-  // keep the legacy shape and our INSERT fails the NOT NULL on `status`.
-  // No data was ever consumed successfully from the legacy table, so drop it.
+  // Earlier deploys created `statements` with different shapes (the reverted
+  // subagent's status/batch_json/error/used_at, then a leaner
+  // id/filename/text/created_at). The current schema adds owner_email, but
+  // CREATE TABLE IF NOT EXISTS is a no-op when the table already exists, so a
+  // DO carrying any older shape is missing columns our INSERT needs. Statement
+  // blobs are transient and nothing reads across deploys, so drop any table
+  // that doesn't match the current schema and let SCHEMA_STEPS recreate it.
   private dropLegacyStatementsTable(): void {
     const cols = this.db
       .exec<{ name: string }>('PRAGMA table_info(statements)')
       .toArray()
       .map((r) => r.name)
     if (cols.length === 0) return
-    const isLegacy = cols.includes('status') || cols.includes('batch_json')
-    if (isLegacy) {
-      console.warn('[migrate] dropping legacy statements table')
+    if (!cols.includes('owner_email')) {
+      console.warn('[migrate] dropping legacy statements table (missing owner_email)')
       this.db.exec('DROP TABLE statements')
     }
   }
