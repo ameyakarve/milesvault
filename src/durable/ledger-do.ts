@@ -1,17 +1,26 @@
 import {
   type ChatResponseResult,
   type ThinkSubmissionInspection,
+  type TurnConfig,
+  type StepConfig,
 } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
-import { tool, type ToolSet } from 'ai'
+import { tool, type LanguageModel, type ToolSet } from 'ai'
 import { z } from 'zod'
-import { buildSystemPrompt } from './agent-prompt'
+import { buildLedgerSystem, buildStatementAgentSystem } from './agent-prompt'
 import type { StatementExtractorDO } from './statement-extractor'
 import { TaskCoordinator, type TaskPhase } from './agent-tasks'
+import { makeEditorRegistry, type EditorHost } from './agents/registries/editor'
 import {
-  clarifyInputSchema,
-  draftTransactionBatchSchema,
-} from './agent-ui-schemas'
+  activeToolNames,
+  allAgentNames,
+  HANDOFF_TOOL_NAME,
+  resolveActiveAgent,
+  unionTools,
+} from './agents/runtime'
+import { makeHandoffTool, type HandoffResult } from './agents/handoff'
+import { draftTransactionTool, clarifyTool } from './agents/tools'
+import type { AgentDef, AgentState, Registry } from './agents/types'
 import { SCHEMA_STEPS } from '@/lib/ledger-core/schema'
 import {
   dateFromInt,
@@ -247,87 +256,192 @@ export type LedgerDOState = {
   extractors: Record<string, ExtractorProgress>
 }
 
-export class LedgerDO extends TaskCoordinator<
-  Cloudflare.Env,
-  LedgerDOState,
-  string
-> {
+export class LedgerDO
+  extends TaskCoordinator<Cloudflare.Env, LedgerDOState, string>
+  implements EditorHost
+{
   private db: SqlStorage
+  // Per-surface agent roster + handoff graph. The editor registry currently
+  // holds a single `ledger` agent (today's persona); beforeTurn resolves the
+  // active agent each turn so adding personas later is purely additive.
+  private registry: Registry
   initialState: LedgerDOState = { extractors: {} }
   protected override logTag = '[ledger]'
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
     this.db = state.storage.sql
+    this.registry = makeEditorRegistry(this)
     this.migrate()
   }
 
-  getModel() {
-    const workersai = createWorkersAI({ binding: this.env.AI })
-    // Kimi K2 emits a long reasoning trace by default. With a single
-    // tool and unambiguous prompts, "low" effort is plenty and shaves
-    // most of the per-turn latency.
-    return workersai(MODEL_ID, { reasoning_effort: 'low' })
+  // The agent that currently owns the conversation (persisted via configure()).
+  private activeAgent(): AgentDef {
+    return resolveActiveAgent(this.registry, this.getConfig<AgentState>())
+  }
+
+  // Per-turn / per-step config for whichever agent currently owns the
+  // conversation. Re-resolved every step (beforeStep) so a mid-turn handoff —
+  // the handoff tool flips activeAgent inside execute — takes effect on the
+  // very next step rather than waiting for the next user message.
+  private activeAgentConfig(): {
+    system: string
+    model: LanguageModel
+    activeTools: string[]
+  } {
+    const agent = this.activeAgent()
+    return {
+      system: agent.system(),
+      model: agent.model(),
+      activeTools: activeToolNames(agent),
+    }
+  }
+
+  // ---- Think per-turn config (delegates to the active agent) ----
+
+  // getModel/getSystemPrompt are the fallbacks Think uses to assemble the
+  // TurnContext; beforeTurn/beforeStep then pin the active agent's config.
+  getModel(): LanguageModel {
+    return this.activeAgent().model()
   }
 
   getSystemPrompt(): string {
-    // Synchronous per the Think API. Build from the cached snapshot — Think
-    // calls this on every turn, so we recompute fresh each time.
-    const snapshot = this.ledger_snapshot_sync()
-    return buildSystemPrompt(snapshot)
+    return this.activeAgent().system()
   }
 
   getTools(): ToolSet {
+    // Register every agent's tools plus the one global handoff tool; the
+    // per-step activeTools list gates which are callable for the active agent.
     return {
-      draft_transaction: tool({
-        description:
-          'Propose one or more beancount transactions for the user to review and approve. Always pass an array under `transactions` — a one-off entry is just a batch of length 1. Batch related entries (statement uploads, splits across categories, subscription series) into a single call; the user pages through them and approves the whole batch at once. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields.',
-        inputSchema: draftTransactionBatchSchema,
-        // No execute → client-side tool. The agent loop suspends until the
-        // UI resolves it via addToolResult.
-      }),
-      clarify: tool({
-        description:
-          'Ask the user one short clarifying question when a required accounting choice is genuinely ambiguous (e.g. instant discount vs separately-redeemable cashback). Provide suggested `options` as short chips; set `multi_select: true` for "all that apply"; set `allow_custom: false` only when free text would not make sense. After the user answers, you will receive { answers: string[] } as the tool result — then proceed (typically to draft_transaction).',
-        inputSchema: clarifyInputSchema,
-        // Client-side — resolved by the user picking / typing.
-      }),
-      process_statement: tool({
-        description:
-          'Kick off extraction for a previously-uploaded statement. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message. Returns immediately with `{ status: "extracting" }` — the actual extraction runs server-side on a separate Durable Object and pushes its result back as a follow-up system message containing the drafted transactions. Do NOT call `draft_transaction` from this turn; finish with a short ack ("Extracting…") and wait for the system message before drafting.',
-        inputSchema: z.object({
-          statement_id: z
-            .string()
-            .regex(/^STMT-/, 'statement_id must start with "STMT-"'),
-        }),
-        execute: async ({ statement_id }) => {
-          if (!this.env.STATEMENT_EXTRACTOR_DO)
-            return { ok: false, error: 'binding_missing' as const }
-          const snapshot = this.ledger_snapshot_sync()
-          // Mark "extracting" immediately so the file chip flips before the
-          // cross-DO kickoff round-trip completes. The filename is recovered
-          // from the worker's prepared payload inside dispatchTask's hooks.
-          const filename = await this.lookupExtractorFilename(statement_id)
-          this.setState({
-            ...this.state,
-            extractors: {
-              ...(this.state?.extractors ?? {}),
-              [statement_id]: { status: 'extracting', filename },
-            },
-          })
-          // dispatchTask records the coord row, kicks the worker fiber, and
-          // arms the reconcile watchdog. Delivery/failure flow back through the
-          // TaskCoordinator hooks below, which update the extractors map.
-          const r = await this.dispatchTask(statement_id, { snapshot })
-          if ('error' in r) return { ok: false, error: r.error }
-          return {
-            ok: true,
-            status: 'extracting' as const,
-            statement_id,
-          }
-        },
-      }),
+      ...unionTools(this.registry),
+      [HANDOFF_TOOL_NAME]: this.handoffTool(),
     }
+  }
+
+  override beforeTurn(): TurnConfig {
+    return this.activeAgentConfig()
+  }
+
+  override beforeStep(): StepConfig {
+    return this.activeAgentConfig()
+  }
+
+  // ---- Handoff ----
+
+  // The single global handoff tool. Its enum spans all agents (a tool's schema
+  // can't change per step); doHandoff enforces the active agent's graph edges.
+  private handoffTool() {
+    return makeHandoffTool(allAgentNames(this.registry), (to, context) =>
+      this.doHandoff(to, context),
+    )
+  }
+
+  // Flip the active agent, but only along a declared graph edge. Persisted via
+  // configure() so it survives eviction and is read by the next beforeStep.
+  private doHandoff(to: string, context: string): HandoffResult {
+    const current = this.activeAgent()
+    if (!current.canHandoffTo.includes(to) || !this.registry.agents[to]) {
+      return {
+        ok: false,
+        error: 'invalid_target',
+        allowed: [...current.canHandoffTo],
+      }
+    }
+    this.configure<AgentState>({ activeAgent: to, handoffContext: context })
+    return { ok: true, handed_off_to: to }
+  }
+
+  // Context the previous agent handed forward, appended to the receiving
+  // agent's system prompt so it continues without reconstructing state.
+  private handoffContextBlock(): string {
+    const ctx = this.getConfig<AgentState>()?.handoffContext
+    return ctx ? `\n\n---\n\n# Context from the previous agent\n\n${ctx}` : ''
+  }
+
+  // ---- EditorHost: shared model ----
+
+  private makeModel(): LanguageModel {
+    const workersai = createWorkersAI({ binding: this.env.AI })
+    // Kimi K2 emits a long reasoning trace by default. With unambiguous
+    // prompts, "low" effort is plenty and shaves most per-turn latency.
+    return workersai(MODEL_ID, { reasoning_effort: 'low' })
+  }
+
+  // ---- EditorHost: the `ledger` agent (freeform editor) ----
+
+  ledgerModel(): LanguageModel {
+    return this.makeModel()
+  }
+
+  ledgerSystem(): string {
+    // Synchronous per the Think API; rebuilt every turn from the live snapshot.
+    return buildLedgerSystem(this.ledger_snapshot_sync()) + this.handoffContextBlock()
+  }
+
+  ledgerTools(): ToolSet {
+    return {
+      draft_transaction: draftTransactionTool(),
+      clarify: clarifyTool(),
+    }
+  }
+
+  // ---- EditorHost: the `statement` specialist agent ----
+
+  statementModel(): LanguageModel {
+    return this.makeModel()
+  }
+
+  statementSystem(): string {
+    return (
+      buildStatementAgentSystem(this.ledger_snapshot_sync()) +
+      this.handoffContextBlock()
+    )
+  }
+
+  statementTools(): ToolSet {
+    return {
+      draft_transaction: draftTransactionTool(),
+      clarify: clarifyTool(),
+      process_statement: this.processStatementTool(),
+    }
+  }
+
+  // Kick off extraction on the worker DO. Owned by the statement agent —
+  // returns immediately; the result is pushed back as a follow-up message
+  // (TaskCoordinator) that wakes a new turn under the still-active statement
+  // agent, which then drafts.
+  private processStatementTool() {
+    return tool({
+      description:
+        'Kick off extraction for a previously-uploaded statement. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message. Returns immediately with `{ status: "extracting" }` — the actual extraction runs server-side on a separate Durable Object and pushes its result back as a follow-up system message containing the drafted transactions. Do NOT call `draft_transaction` from this turn; finish with a short ack ("Extracting…") and wait for the system message before drafting.',
+      inputSchema: z.object({
+        statement_id: z
+          .string()
+          .regex(/^STMT-/, 'statement_id must start with "STMT-"'),
+      }),
+      execute: async ({ statement_id }) => {
+        if (!this.env.STATEMENT_EXTRACTOR_DO)
+          return { ok: false, error: 'binding_missing' as const }
+        const snapshot = this.ledger_snapshot_sync()
+        // Mark "extracting" immediately so the file chip flips before the
+        // cross-DO kickoff round-trip completes. The filename is recovered
+        // from the worker's prepared payload inside dispatchTask's hooks.
+        const filename = await this.lookupExtractorFilename(statement_id)
+        this.setState({
+          ...this.state,
+          extractors: {
+            ...(this.state?.extractors ?? {}),
+            [statement_id]: { status: 'extracting', filename },
+          },
+        })
+        // dispatchTask records the coord row, kicks the worker fiber, and
+        // arms the reconcile watchdog. Delivery/failure flow back through the
+        // TaskCoordinator hooks below, which update the extractors map.
+        const r = await this.dispatchTask(statement_id, { snapshot })
+        if ('error' in r) return { ok: false, error: r.error }
+        return { ok: true, status: 'extracting' as const, statement_id }
+      },
+    })
   }
 
   // ---- TaskCoordinator wiring (StatementExtractorDO is the worker) ----

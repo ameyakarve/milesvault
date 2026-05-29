@@ -22,3 +22,20 @@ format.
 - `*` flag = cleared, `!` flag = needs review.
 - Account names are case-sensitive; the first segment must be one of the five
   top-level types.
+
+## Credit-card accounts (strict — validated)
+
+Credit-card liabilities MUST be exactly `Liabilities:CreditCards:<Issuer>:<Card>`
+with an OPTIONAL trailing `:<Id>` — i.e. exactly 4 or 5 colon-separated
+segments. Plural `CreditCards`. Anything else is rejected by the ledger
+validator.
+
+- Fold the tier/variant/product name INTO the single `<Card>` segment — do
+  NOT spill it into an extra segment. E.g. an Axis Magnus Burgundy card is
+  `Liabilities:CreditCards:Axis:MagnusBurgundy`, NOT
+  `Liabilities:CreditCards:Axis:Magnus:Burgundy`.
+- Use the optional `<Id>` ONLY for the last-4 digits / account suffix, e.g.
+  `Liabilities:CreditCards:HSBC:Cashback:9065`.
+- Never emit a 6th segment. `Liabilities:CreditCards:Axis:Magnus:Burgundy:3467`
+  is invalid (6 segments); the valid form is
+  `Liabilities:CreditCards:Axis:MagnusBurgundy:3467`.

@@ -102,6 +102,8 @@ export class StatementExtractorDO extends TaskWorker<
       `date at column 0 (no leading whitespace), followed by postings on ` +
       `indented lines.\n` +
       `- Separate consecutive entries with a single blank line.\n` +
+      `- Amounts are plain decimals: \`10155.00\`, never \`10,155.00\`. No ` +
+      `thousands separators, no currency symbols on the number.\n` +
       `- No prose, no preamble, no summary, no closing remarks, no fenced ` +
       `code blocks, no comments narrating what you found. The reply is ` +
       `only Beancount.\n` +

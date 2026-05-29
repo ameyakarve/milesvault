@@ -38,7 +38,7 @@ Hard rules:
   silently re-draft it. Ask scope with `clarify` first (see Clarifications).
 - Default date is today (above). Default flag is `*`.
 - Pick accounts from the list above. If none fits, use a plausible
-  standard segment (Expenses:Food:Coffee, Liabilities:CreditCard:XYZ) —
+  standard segment (Expenses:Food:Coffee, Liabilities:CreditCards:Issuer:Card) —
   but don't invent receivables or equity plugs unless the user explicitly
   asks.
 - Postings MUST balance per currency under Beancount weight rules

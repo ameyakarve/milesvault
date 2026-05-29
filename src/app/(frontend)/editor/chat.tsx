@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowUp, Check, Copy, FileText, Loader2, Lock, Paperclip, X } from 'lucide-react'
+import { ArrowRightLeft, ArrowUp, Check, Copy, FileText, Loader2, Lock, Paperclip, X } from 'lucide-react'
 import {
   loadStatement,
   extractStatementText,
@@ -236,6 +236,31 @@ function StatementStatusChip({
           Extracting…
         </span>
       )}
+    </div>
+  )
+}
+
+// Friendly labels for the visible handoff seam. Keep in sync with the editor
+// registry's agent names (src/durable/agents/registries/editor.ts).
+const AGENT_LABELS: Record<string, string> = {
+  ledger: 'Editor',
+  statement: 'Statement specialist',
+}
+
+// The handoff tool runs server-side and surfaces here as a `tool-handoff`
+// message part (input {to, context}, output {ok, handed_off_to}). We render it
+// as an inline divider so the conversation visibly seams when one specialist
+// takes over from another, rather than as a generic tool card.
+function HandoffChip({ to }: { to: string }) {
+  const label = AGENT_LABELS[to] ?? to
+  return (
+    <div className="my-3 flex items-center gap-2 text-xs text-slate-400">
+      <span className="h-px flex-1 bg-slate-200" />
+      <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-medium text-slate-500">
+        <ArrowRightLeft className="size-3" />
+        {label}
+      </span>
+      <span className="h-px flex-1 bg-slate-200" />
     </div>
   )
 }
@@ -588,6 +613,25 @@ export function Chat({
                               <ReasoningContent>{p.text}</ReasoningContent>
                             </Reasoning>
                           )
+                        }
+                        if (p.type === 'tool-handoff') {
+                          const out =
+                            p.output && typeof p.output === 'object'
+                              ? (p.output as {
+                                  ok?: boolean
+                                  handed_off_to?: string
+                                })
+                              : null
+                          // A rejected edge (ok:false) never moved the
+                          // conversation — show nothing.
+                          if (out && out.ok === false) return null
+                          const inp =
+                            p.input && typeof p.input === 'object'
+                              ? (p.input as { to?: string })
+                              : null
+                          const to = out?.handed_off_to ?? inp?.to
+                          if (!to) return null
+                          return <HandoffChip key={i} to={to} />
                         }
                         if (p.type.startsWith('tool-')) {
                           const toolCallId = p.toolCallId ?? `${m.id}-${i}`

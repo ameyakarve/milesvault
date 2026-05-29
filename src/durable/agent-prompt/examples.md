@@ -244,6 +244,39 @@ including the markup.
   Liabilities:CreditCards:HDFC:Regalia -4373.00 INR
 ```
 
+### When the statement itemizes the markup / GST on separate rows (fold them in)
+Indian statements usually print the merchant charge, the **"FOREIGN
+CURRENCY TRANSACTION FEE"** (or **"DCC MARKUP"**), and the **"GST"** as
+three separate rows — often dated a day or two apart, sometimes
+interleaved with other transactions. They are NOT three transactions.
+They are ONE: fold the fee and GST back into the merchant's transaction.
+
+- The `@@` INR weight is the merchant's billed INR amount **exactly as
+  shown on that row** — do NOT re-derive, round, or "back out" the fee
+  from it. Re-deriving the rate is the most common mistake; the billed
+  INR is printed, use it verbatim.
+- The markup fee and its GST are their own plain INR legs
+  (`Expenses:Bank:ForexMarkup`, `Expenses:Tax:GST`).
+- The card liability is the **sum of all three**: billed INR + markup +
+  GST. The transaction balances on that sum, not on the billed amount
+  alone.
+
+To pair a stray fee/GST row with the charge it belongs to: the markup is
+the card's forex rate (commonly **2%**) of the billed INR, and the GST is
+**18% of that markup**. Match by that arithmetic. E.g. an ₹875.30 charge
+→ ₹17.51 markup (2% of 875.30) → ₹3.15 GST (18% of 17.51), so the card is
+debited 875.30 + 17.51 + 3.15 = 895.96:
+```
+2026-04-26 * "Cloudflare" "Hosting (USD 9.28 + ₹17.51 markup + ₹3.15 GST)"
+  Expenses:Software:Hosting   9.28 USD @@ 875.30 INR
+  Expenses:Bank:ForexMarkup  17.51 INR
+  Expenses:Tax:GST            3.15 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -895.96 INR
+```
+A "DCC MARKUP" row works identically — same fold, same `Expenses:Bank:ForexMarkup`
+leg — even when the merchant charge is billed straight in INR (no USD
+shown), in which case the expense leg is plain INR with no `@@`.
+
 ## Gift cards / vouchers
 
 A gift card is an asset — value you hold until you spend it.
@@ -349,6 +382,13 @@ leg accordingly.
   Expenses:Shopping:Electronics              -3500.00 INR
   Liabilities:CreditCards:HDFC:Regalia        3500.00 INR
 ```
+
+On a statement, a row marked **`Cr`** / **"Credit"** that is NOT a bill
+payment is a refund — it follows this shape: the expense leg is
+**negative**, the card leg **positive** (a credit reduces what you owe).
+Each `Cr` row is its own transaction; do NOT net two credits into one, and
+do NOT collapse a refund into a receivable. Two identical ₹877.82 `Cr`
+rows are two separate refunds, each `−877.82` expense / `+877.82` card.
 
 ## Points transfers between programs
 
