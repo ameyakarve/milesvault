@@ -9,6 +9,8 @@ import {
 import { isStrictParseErr, parseJournalStrict } from '@/lib/beancount/parse-strict'
 import { validateAccountCurrencies } from '@/lib/beancount/validate-currency'
 import { validateAccountShapes } from '@/lib/beancount/validate-account-shape'
+import { validateBatchBalance } from '@/lib/beancount/validate-balance'
+import { decimalToScaled } from '@/lib/beancount/decimal'
 import {
   directiveTouchesAccount,
   directiveTouchesAccountCurrency,
@@ -79,6 +81,7 @@ export type JournalPutError = {
     | 'unsupported_directives'
     | 'currency_lock'
     | 'credit_card_format'
+    | 'unbalanced'
   message: string
 }
 export type ProposeJournalEditResponse =
@@ -172,23 +175,6 @@ const DIRECTIVE_TABLE: Record<DirectiveInput['kind'], string> = {
 }
 
 type EntryRef = { kind: Entry['kind']; id: number; date: number }
-
-// Parse a Beancount decimal string like "1234.56" or "-100" into a fixed-point
-// (scaled, scale) pair. Returns null only on malformed input. The result fits
-// safely in a JS Number for typical financial amounts (max ~9e15 / 10^scale).
-function decimalToScaled(text: string): { scaled: number; scale: number } | null {
-  const trimmed = text.trim()
-  if (!/^-?\d+(\.\d+)?$/.test(trimmed)) return null
-  const negative = trimmed.startsWith('-')
-  const body = negative ? trimmed.slice(1) : trimmed
-  const dot = body.indexOf('.')
-  const intPart = dot === -1 ? body : body.slice(0, dot)
-  const fracPart = dot === -1 ? '' : body.slice(dot + 1)
-  const scale = fracPart.length
-  const digits = intPart + fracPart
-  const mag = Number(digits === '' ? '0' : digits)
-  return { scaled: negative ? -mag : mag, scale }
-}
 
 function escapeBeancountString(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
@@ -1146,6 +1132,16 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
           ok: false,
           error: 'credit_card_format',
           message: shapeIssues.map((i) => i.message).join('; '),
+        }
+      }
+      // Per-currency balance — only check the newly-parsed transactions;
+      // carry-overs were already validated when they were originally written.
+      const balanceIssues = validateBatchBalance(parsed.transactions)
+      if (balanceIssues.length > 0) {
+        return {
+          ok: false,
+          error: 'unbalanced',
+          message: balanceIssues.map((i) => i.message).join('; '),
         }
       }
 

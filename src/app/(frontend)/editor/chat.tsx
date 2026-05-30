@@ -634,13 +634,22 @@ export function Chat({
                           const subState = submitStatus[toolCallId] ?? 'idle'
                           const outputObj =
                             p.output && typeof p.output === 'object'
-                              ? (p.output as { ok?: boolean; reason?: string })
+                              ? (p.output as {
+                                  ok?: boolean
+                                  reason?: string
+                                  issues?: unknown
+                                })
                               : null
+                          // Treat as rejection: explicit user reject/supersede,
+                          // OR a server-validation failure from draft_transaction.execute
+                          // (model will re-draft; the rejected card just shows what was
+                          // tried so the trail is visible).
                           const isRejection =
                             p.state === 'output-available' &&
                             outputObj?.ok === false &&
                             (outputObj.reason === 'rejected' ||
-                              outputObj.reason === 'superseded')
+                              outputObj.reason === 'superseded' ||
+                              Array.isArray(outputObj.issues))
                           const cardStatus = isRejection
                             ? 'rejected'
                             : p.state === 'output-available' || subState === 'done'

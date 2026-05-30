@@ -53,6 +53,23 @@ Hard rules:
   weight closes against the card's INR posting — otherwise the card
   shows "off by X USD" and the user can't approve.
 
+## `draft_transaction` server response
+
+The tool returns one of:
+
+- `{ ok: true, pending_approval: true, transaction_count }` — your
+  draft passed validation. The card is now shown for user approval.
+  Stop the turn; do NOT narrate, do NOT call another tool.
+- `{ ok: false, issues: [{ index, message }], message }` — one or more
+  entries failed validation. `index` is the 0-based position in the
+  `transactions` array you sent. Common failures: the points currency
+  doesn't sum to zero (missing the `Equity:Void` contra), parse errors
+  in the Beancount text, malformed account names. Fix the listed
+  entries and call `draft_transaction` AGAIN in this same turn with
+  the corrected batch — do not narrate the failure to the user, do not
+  apologize, just re-call the tool. Re-send the WHOLE batch (not just
+  the bad indices).
+
 ## Balance / pad asks (no directive tool)
 
 `draft_transaction` emits transactions, not directives. If the user

@@ -1,20 +1,40 @@
 import { tool } from 'ai'
 import { z } from 'zod'
+import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
 } from '../agent-ui-schemas'
 
-// Client-side tools shared by multiple agents (ledger + statement). Both have
-// NO `execute` → the agent loop suspends until the UI resolves them via
-// addToolResult. Kept here so every persona that drafts or clarifies uses the
-// identical schema + description.
+// Shared tools used by multiple agents (ledger + statement). `clarify` has no
+// `execute` → the agent loop suspends until the UI resolves it via
+// addToolResult. `draft_transaction` has a server-side `execute` that runs the
+// same validators (`@/lib/beancount/*`) the journal write path runs, so the
+// model can't emit a draft that won't persist. On `ok: true` the UI still
+// shows an approval card (rendered from the streamed input); on `ok: false`
+// the model sees per-entry issues and re-drafts in the same turn.
 
 export function draftTransactionTool() {
   return tool({
     description:
-      'Propose one or more beancount transactions for the user to review and approve. Always pass an array under `transactions` — a one-off entry is just a batch of length 1. Batch related entries (statement uploads, splits across categories, subscription series) into a single call; the user pages through them and approves the whole batch at once. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields.',
+      'Propose one or more beancount transactions for the user to review and approve. Always pass an array under `transactions` — a one-off entry is just a batch of length 1. Batch related entries (statement uploads, splits across categories, subscription series) into a single call; the user pages through them and approves the whole batch at once. The server validates each entry (parse + per-currency balance + account shape) and returns `{ ok: false, issues: [{ index, message }] }` if anything is wrong — fix the listed entries and call this tool again in the same turn. On success returns `{ ok: true, pending_approval: true }` and the user approves the batch in the UI. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields.',
     inputSchema: draftTransactionBatchSchema,
+    execute: async ({ transactions }) => {
+      const result = validateDraftBatch(transactions)
+      if (result.ok === false) {
+        return {
+          ok: false as const,
+          issues: result.issues,
+          message:
+            'draft_transaction rejected — fix the listed entries (each `index` is 0-based into the `transactions` array you sent) and call draft_transaction again with the corrected batch.',
+        }
+      }
+      return {
+        ok: true as const,
+        pending_approval: true,
+        transaction_count: transactions.length,
+      }
+    },
   })
 }
 
