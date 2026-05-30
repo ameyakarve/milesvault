@@ -70,7 +70,9 @@ export function transformMagnifyRow(row: MagnifyApiRow): VoucherBrand {
     name: row.name,
     denominations_inr: (row.denomination ?? []).map(paiseToRupees),
     denomination_type: row.denominationType,
-    discount_pct: row.discount,
+    // Magnify's `discount` ships as a fraction (0.1325 = 13.25%), same shape
+    // as `onlyLoyaltyMultiplier`. Normalise both to a percent number.
+    discount_pct: fractionToPct(row.discount) ?? 0,
     loyalty_multiplier_pct: fractionToPct(row.onlyLoyaltyMultiplier),
     channels: row.redemptionChannel ?? [],
     categories: normaliseCategories(row.categories),
