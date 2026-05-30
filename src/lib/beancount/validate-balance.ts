@@ -67,9 +67,13 @@ export function validateTransactionBalance(
   txnIndex?: number,
 ): BalanceIssue | null {
   const sums = new Map<string, Scaled>()
+  const weights: { account: string; currency: string; amount: Scaled; via: 'native' | '@' | '@@' }[] = []
   for (const p of txn.postings) {
     const w = postingWeight(p)
     if (!w) continue
+    const via: 'native' | '@' | '@@' =
+      p.price_at_signs === 2 ? '@@' : p.price_at_signs === 1 ? '@' : 'native'
+    weights.push({ account: p.account, currency: w.currency, amount: w.amount, via })
     const prev = sums.get(w.currency)
     sums.set(w.currency, prev ? scaledAdd(prev, w.amount) : w.amount)
   }
@@ -86,10 +90,53 @@ export function validateTransactionBalance(
     payee: txn.payee ?? null,
     narration: txn.narration ?? null,
     residuals,
-    message: `transaction does not balance — residual ${residuals
-      .map((r) => `${r.amount} ${r.currency}`)
-      .join(', ')}`,
+    message: formatBalanceMessage(residuals, weights),
   }
+}
+
+// Per-posting weight breakdown for each unbalanced currency. The bare
+// "residual N CCY" the SDK shows the model on a tool-error isn't enough
+// signal to actually correct the entry — without seeing which postings
+// contributed and what the debit/credit split is, the model just regenerates
+// the same arithmetic and spirals. Listing the weights lets it see exactly
+// which leg is off (or that a leg is missing).
+function formatBalanceMessage(
+  residuals: { currency: string; amount: string }[],
+  weights: { account: string; currency: string; amount: Scaled; via: 'native' | '@' | '@@' }[],
+): string {
+  const lines: string[] = ['transaction does not balance:']
+  for (const r of residuals) {
+    const inCcy = weights.filter((w) => w.currency === r.currency)
+    let debits: Scaled | null = null
+    let credits: Scaled | null = null
+    for (const w of inCcy) {
+      if (w.amount.scaled >= 0) {
+        debits = debits ? scaledAdd(debits, w.amount) : w.amount
+      } else {
+        credits = credits ? scaledAdd(credits, w.amount) : w.amount
+      }
+    }
+    lines.push(`  ${r.currency}: net = ${signed(r.amount)} (must be 0)`)
+    for (const w of inCcy) {
+      const tag = w.via === '@@' ? ' (via @@)' : w.via === '@' ? ' (via @)' : ''
+      lines.push(`    ${w.account}: ${signed(scaledFormat(w.amount))} ${w.currency}${tag}`)
+    }
+    if (debits || credits) {
+      const dStr = debits ? scaledFormat(debits) : '0'
+      const cStr = credits ? scaledFormat(credits) : '0'
+      lines.push(`    debits=${dStr}, credits=${cStr}, diff=${signed(r.amount)}`)
+    }
+    lines.push(
+      `    fix: adjust postings so ${r.currency} weights sum to 0 (a single leg ` +
+        `off by ${signed(r.amount)}, OR a leg is missing/extra). Do not just retry the same numbers.`,
+    )
+  }
+  return lines.join('\n')
+}
+
+function signed(amount: string): string {
+  if (amount.startsWith('-') || amount.startsWith('+')) return amount
+  return amount === '0' ? '0' : `+${amount}`
 }
 
 export function validateBatchBalance(
