@@ -148,7 +148,11 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
   // `enable_thinking: false` — the two are not interchangeable. The provider
   // only types enable_thinking/clear_thinking, so cast.
   private buildModel(cfg: ModelConfig): LanguageModel {
-    const workersai = createWorkersAI({ binding: this.env.AI })
+    const gatewayId = this.env.AI_GATEWAY_ID
+    const workersai = createWorkersAI({
+      binding: this.env.AI,
+      ...(gatewayId ? { gateway: { id: gatewayId } } : {}),
+    })
     if (cfg.reasoning === 'off') {
       const kwargs = cfg.id.includes('gemma')
         ? { enable_thinking: false }
@@ -220,6 +224,15 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
     await this.__unsafe_ensureInitialized()
     this.configure<AgentState>({ activeAgent: this.registry.entry })
     return { ok: true }
+  }
+
+  // Debug-only: dump the full conversation history for inspection. Lets us see
+  // exactly what the model emitted (e.g. multiple draft_transaction calls in
+  // one assistant message) without relying on UI rendering. Returns raw
+  // UIMessage[] including tool-call parts with their input payloads.
+  async dump_messages(): Promise<unknown[]> {
+    await this.__unsafe_ensureInitialized()
+    return this.getMessages()
   }
 
   private handoffContextBlock(): string {

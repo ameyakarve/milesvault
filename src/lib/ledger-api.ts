@@ -217,9 +217,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
 // The chat/agent runtime lives in ChatDO (extends Think), keyed per-user just
 // like LedgerDO. Only the reset-on-clear path needs a server-side handle.
-export async function getChatClient(
-  email: string,
-): Promise<{ reset_active_agent(): Promise<{ ok: true }> }> {
+export async function getChatClient(email: string): Promise<{
+  reset_active_agent(): Promise<{ ok: true }>
+  dump_messages(): Promise<unknown[]>
+}> {
   const { env } = await getCloudflareContext({ async: true })
   const ns = (env as Cloudflare.Env).CHAT_DO as
     | DurableObjectNamespace<ChatDO>
@@ -229,6 +230,9 @@ export async function getChatClient(
   return {
     async reset_active_agent() {
       return stub.reset_active_agent()
+    },
+    async dump_messages() {
+      return stub.dump_messages()
     },
   }
 }

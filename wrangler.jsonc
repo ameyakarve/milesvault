@@ -45,6 +45,7 @@
   ],
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
+    "AI_GATEWAY_ID": "milesvault",
   },
   "r2_buckets": [
     {
@@ -97,6 +98,7 @@
         "ENABLE_HYDRATE": "1",
         "ALLOWED_EMAILS": "ameya.karve@gmail.com,amogh.karve@gmail.com,tushar.sadhwani000@gmail.com,vandana.karve@gmail.com",
         "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
+        "AI_GATEWAY_ID": "milesvault-staging",
       },
       "observability": {
         "enabled": true,
