@@ -10,6 +10,7 @@ import {
   CLARIFICATIONS,
   STATEMENT_HANDLING,
   STATEMENT_EXTRACTION,
+  ANALYST_ROLE,
 } from './inline.generated'
 
 export { BEANCOUNT_PRIMER }
@@ -17,6 +18,12 @@ export { BEANCOUNT_PRIMER }
 type Snapshot = {
   today: number
   accounts: Array<{ account: string; currencies: string[]; close_date: number | null }>
+}
+
+type AnalystSnapshot = Snapshot & {
+  row_counts: Record<string, number>
+  sample_txns: string
+  schema_ddl: string
 }
 
 function isoToday(today: number): string {
@@ -106,5 +113,42 @@ export function buildStatementAgentSystem(snapshot: Snapshot): string {
     STATEMENT_EXTRACTION,
     HANDOFF_BACK,
     renderSnapshotBlock(snapshot),
+  ].join('\n\n---\n\n')
+}
+
+// Fuller snapshot block for the analyst: it writes SQL, so it needs the
+// schema DDL and a few sample transactions to anchor on the data shape.
+function renderAnalystSnapshotBlock(snapshot: AnalystSnapshot): string {
+  const counts = Object.entries(snapshot.row_counts)
+    .map(([t, n]) => `  ${t}: ${n}`)
+    .join('\n')
+  return `# Ledger context
+
+- Today: ${isoToday(snapshot.today)}
+- Open accounts (cite these by exact name):
+${renderAccounts(snapshot) || '- (none yet)'}
+
+## Schema
+
+\`\`\`sql
+${snapshot.schema_ddl.trim()}
+\`\`\`
+
+## Row counts
+
+${counts || '  (empty)'}
+
+## A few real transactions for shape reference
+
+${snapshot.sample_txns.trim() || '(no transactions yet)'}`
+}
+
+// System prompt for the `analyst` agent (Concierge surface). Read-only Q&A
+// over the ledger via SQL — no Beancount editing, no statement handling.
+export function buildAnalystSystem(snapshot: AnalystSnapshot): string {
+  return [
+    ANALYST_ROLE,
+    BEANCOUNT_PRIMER,
+    renderAnalystSnapshotBlock(snapshot),
   ].join('\n\n---\n\n')
 }

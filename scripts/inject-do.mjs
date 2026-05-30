@@ -31,6 +31,7 @@ ${marker}
 import { getToken as __authGetToken } from "next-auth/jwt"
 export { LedgerDO } from "../src/durable/ledger-do.ts"
 export { ChatDO } from "../src/durable/chat-do.ts"
+export { ConciergeDO } from "../src/durable/concierge-do.ts"
 
 const __SESSION_COOKIE = "authjs.session-token"
 
