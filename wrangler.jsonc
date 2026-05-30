@@ -42,6 +42,19 @@
   "ai": {
     "binding": "AI",
   },
+  "artifacts": [
+    { "binding": "ARTIFACTS", "namespace": "default" },
+  ],
+  "workflows": [
+    {
+      "name": "refresh-magnify",
+      "binding": "REFRESH_MAGNIFY",
+      "class_name": "RefreshMagnifyWorkflow",
+    },
+  ],
+  "triggers": {
+    "crons": ["30 3 * * *"],
+  },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },
     { "tag": "v2", "new_sqlite_classes": ["StatementExtractorDO"] },
@@ -88,6 +101,19 @@
       },
       "ai": {
         "binding": "AI",
+      },
+      "artifacts": [
+        { "binding": "ARTIFACTS", "namespace": "default" },
+      ],
+      "workflows": [
+        {
+          "name": "refresh-magnify-staging",
+          "binding": "REFRESH_MAGNIFY",
+          "class_name": "RefreshMagnifyWorkflow",
+        },
+      ],
+      "triggers": {
+        "crons": ["30 3 * * *"],
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["LedgerDO"] },

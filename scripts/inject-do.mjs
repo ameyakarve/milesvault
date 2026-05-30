@@ -32,6 +32,7 @@ import { getToken as __authGetToken } from "next-auth/jwt"
 export { LedgerDO } from "../src/durable/ledger-do.ts"
 export { ChatDO } from "../src/durable/chat-do.ts"
 export { ConciergeDO } from "../src/durable/concierge-do.ts"
+export { RefreshMagnifyWorkflow } from "../src/workflows/refresh-magnify.ts"
 
 const __SESSION_COOKIE = "authjs.session-token"
 
@@ -57,9 +58,41 @@ async function __resolveEmail(request, env) {
   }
 }
 
+// Manual workflow trigger: POST /api/admin/workflows/<name>. Gated to the
+// admin email so a stray request can't trigger an Artifact-write workflow.
+const __ADMIN_EMAIL = "ameya.karve@gmail.com"
+const __WORKFLOW_BINDINGS = {
+  "refresh-magnify": "REFRESH_MAGNIFY",
+}
+
 export default {
+  async scheduled(_event, env, ctx) {
+    // The only cron we register today is the daily Magnify refresh — see
+    // wrangler.jsonc \`triggers.crons\`. If we add a second cron the
+    // dispatch will need to switch on \`_event.cron\` (the cron pattern).
+    ctx.waitUntil(env.REFRESH_MAGNIFY.create())
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+    if (
+      url.pathname.startsWith("/api/admin/workflows/") &&
+      request.method === "POST"
+    ) {
+      const name = url.pathname.slice("/api/admin/workflows/".length)
+      const bindingName = __WORKFLOW_BINDINGS[name]
+      if (!bindingName) {
+        return new Response("unknown workflow: " + name, { status: 404 })
+      }
+      const email = await __resolveEmail(request, env)
+      if (email !== __ADMIN_EMAIL) {
+        return new Response("forbidden", { status: 403 })
+      }
+      const wf = env[bindingName]
+      if (!wf) return new Response(bindingName + " binding missing", { status: 500 })
+      const instance = await wf.create()
+      return Response.json({ id: instance.id, status: await instance.status() })
+    }
     if (url.pathname === "/api/agents" || url.pathname.startsWith("/api/agents/")) {
       // Path shape: /api/agents/<product>[/anything]. parts[2] selects the
       // product DO; everything after is opaque to the wrapper and forwarded
