@@ -1,0 +1,33 @@
+diff --git a/dist/think.d.ts b/dist/think.d.ts
+index b7a574f8ab8d22a135cb2c1caf34cc4c78c80096..cabb73cd1b3d462075dd38a48880b856e34b8291 100644
+--- a/dist/think.d.ts
++++ b/dist/think.d.ts
+@@ -227,6 +227,16 @@ interface TurnConfig {
+   experimental_telemetry?: Parameters<
+     typeof streamText
+   >[0]["experimental_telemetry"];
++  /**
++   * Optional tool-call repair callback. Forwarded to streamText as
++   * `experimental_repairToolCall`. Invoked when a tool call fails input
++   * validation; can either programmatically fix the call or do a focused
++   * sub-call to the model to repair it. Returning a corrected toolCall
++   * skips the tool-error path entirely.
++   */
++  repairToolCall?: Parameters<
++    typeof streamText
++  >[0]["experimental_repairToolCall"];
+   /**
+    * Optional structured-output specification (AI SDK `output`).
+    * Forwarded to `streamText` so the model's final response is parsed
+diff --git a/dist/think.js b/dist/think.js
+index e951279f912f4feb0d5746751d9eb79b9e414d9a..bfea48ff1702eabe074a5f38a898681459c77452 100644
+--- a/dist/think.js
++++ b/dist/think.js
+@@ -622,6 +622,7 @@ var Think = class Think extends Agent {
+ 			stopWhen: finalStopWhen,
+ 			providerOptions: config.providerOptions,
+ 			experimental_telemetry: config.experimental_telemetry,
++			experimental_repairToolCall: config.repairToolCall,
+ 			output: config.output,
+ 			abortSignal: input.signal,
+ 			prepareStep: (async (event) => {

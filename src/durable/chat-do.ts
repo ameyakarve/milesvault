@@ -6,7 +6,12 @@ import {
   type StepConfig,
 } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
-import { type LanguageModel, type ToolSet } from 'ai'
+import {
+  type LanguageModel,
+  type ToolCallRepairFunction,
+  type ToolSet,
+} from 'ai'
+import { repairDraftBatch } from '@/lib/beancount/repair-draft-batch'
 import { buildLedgerSystem, buildStatementAgentSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { makeEditorRegistry, type EditorHost } from './agents/registries/editor'
@@ -31,6 +36,51 @@ type Snapshot = Awaited<ReturnType<LedgerDO['ledger_snapshot']>>
 // No broadcast state: the file chip is driven entirely by local upload state in
 // the client now that extraction is inline (no async worker phase to mirror).
 export type ChatDOState = Record<string, never>
+
+// Tool-call repair hook. Forwarded to streamText as `experimental_repairToolCall`
+// via TurnConfig.repairToolCall — see patches/@cloudflare__think@0.7.1.patch.
+//
+// TODO(upstream-repair): drop this whole indirection (and the patch file) when
+// `@cloudflare/think` exposes `repairToolCall` on TurnConfig upstream. The
+// rename target is whatever name they pick (current candidate: `repairToolCall`
+// to mirror the streamText `experimental_repairToolCall` option without the
+// experimental_ prefix). Track via the PR we file at
+// github.com/cloudflare/agents. When upstream lands:
+//   1. `pnpm patch-remove @cloudflare/think@<old>` (or delete patches/ entry)
+//   2. bump @cloudflare/think to the version that ships the field
+//   3. if upstream renamed the option, rename here at the single call site
+// Nothing else in our codebase touches the patched fields.
+//
+// Today the repair handles the forex-rounding class only (LLMs round off by
+// ₹0.01 on `@@`-priced INR statements and can't fix it on retry — see
+// src/lib/beancount/repair-draft-batch.ts). Genuinely-bad batches fall through
+// to the SDK's tool-error path (and the existing spiral bound by maxSteps).
+const draftTransactionRepair: ToolCallRepairFunction<ToolSet> = async ({
+  toolCall,
+}) => {
+  if (toolCall.toolName !== 'draft_transaction') return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(toolCall.input)
+  } catch {
+    return null
+  }
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !Array.isArray((parsed as { transactions?: unknown }).transactions)
+  ) {
+    return null
+  }
+  const transactions = (parsed as { transactions: unknown[] }).transactions
+  if (!transactions.every((t): t is string => typeof t === 'string')) return null
+  const repaired = repairDraftBatch(transactions)
+  if (!repaired.changed) return null
+  return {
+    ...toolCall,
+    input: JSON.stringify({ transactions: repaired.transactions }),
+  }
+}
 
 function todayInt(): number {
   const now = new Date()
@@ -80,12 +130,14 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
     system: string
     model: LanguageModel
     activeTools: string[]
+    repairToolCall: ToolCallRepairFunction<ToolSet>
   } {
     const agent = this.activeAgent()
     return {
       system: agent.system(),
       model: this.buildModel(agent.model),
       activeTools: activeToolNames(agent),
+      repairToolCall: draftTransactionRepair,
     }
   }
 

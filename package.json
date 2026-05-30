@@ -110,7 +110,10 @@
       "sharp",
       "esbuild",
       "unrs-resolver"
-    ]
+    ],
+    "patchedDependencies": {
+      "@cloudflare/think@0.7.1": "patches/@cloudflare__think@0.7.1.patch"
+    }
   },
   "cloudflare": {
     "bindings": {
