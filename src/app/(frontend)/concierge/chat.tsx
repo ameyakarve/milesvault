@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowUp, Database, Loader2 } from 'lucide-react'
+import { ArrowUp, Database, Loader2, Trash2 } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -62,11 +62,12 @@ export function ConciergeChat() {
     agent: 'ConciergeDO',
     basePath: 'api/agents/concierge',
   })
-  const { messages, sendMessage, status, isStreaming } = useAgentChat({
-    agent,
-    autoContinueAfterToolResult: true,
-    getInitialMessages: null,
-  })
+  const { messages, sendMessage, status, isStreaming, clearHistory } =
+    useAgentChat({
+      agent,
+      autoContinueAfterToolResult: true,
+      getInitialMessages: null,
+    })
 
   const [text, setText] = useState('')
 
@@ -83,11 +84,24 @@ export function ConciergeChat() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-slate-200 bg-white px-6 py-3">
-        <h1 className="text-sm font-semibold text-slate-700">Concierge</h1>
-        <p className="text-xs text-slate-500">
-          Ask anything about your ledger — spending, balances, trends.
-        </p>
+      <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-3">
+        <div>
+          <h1 className="text-sm font-semibold text-slate-700">Concierge</h1>
+          <p className="text-xs text-slate-500">
+            Ask anything about your ledger — spending, balances, trends.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => clearHistory()}
+          disabled={messages.length === 0 || busy}
+          title="Clear conversation"
+          aria-label="Clear conversation"
+          className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500"
+        >
+          <Trash2 className="size-3.5" />
+          Clear
+        </button>
       </header>
 
       <Conversation className="flex-1">
