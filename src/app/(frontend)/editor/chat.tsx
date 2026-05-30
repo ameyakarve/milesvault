@@ -269,7 +269,7 @@ export function Chat({
   onClearableChange?: (state: { canClear: boolean; clear: () => void }) => void
   onAppended?: () => void
 } = {}) {
-  const agent = useAgent<ChatDOState>({ agent: 'ChatDO', basePath: 'api/agents' })
+  const agent = useAgent<ChatDOState>({ agent: 'ChatDO', basePath: 'api/agents/editor' })
   const {
     messages,
     sendMessage,

@@ -19,9 +19,13 @@ if (transformed === original) {
   throw new Error('[inject-do] could not find `export default {` in worker.js')
 }
 
-// Append: durable object export, auth-aware wrapper that routes /api/agents/*
-// straight to the LedgerDO (preserving WebSocket upgrades that Next.js can't
-// proxy through its fetch route handlers).
+// Append: durable object exports + auth-aware wrapper. Requests under
+// /api/agents/<product>/... route to that product's DO namespace
+// (editor → CHAT_DO, concierge → CONCIERGE_DO, …), preserving WebSocket
+// upgrades that Next.js can't proxy through its fetch route handlers. The
+// instance-name on the namespace is the signed-in user's email — clients
+// don't pick it (they set partysocket `basePath` which leaves the path flat),
+// and we bind to the authenticated identity to prevent impersonation.
 const wrapper = `
 ${marker}
 import { getToken as __authGetToken } from "next-auth/jwt"
@@ -29,6 +33,14 @@ export { LedgerDO } from "../src/durable/ledger-do.ts"
 export { ChatDO } from "../src/durable/chat-do.ts"
 
 const __SESSION_COOKIE = "authjs.session-token"
+
+// Product segment after /api/agents/ → env binding name. Add a row when a
+// new product DO ships; this script and wrangler.jsonc bindings are the only
+// touch-points.
+const __AGENT_DO_BINDINGS = {
+  editor: "CHAT_DO",
+  concierge: "CONCIERGE_DO",
+}
 
 async function __resolveEmail(request, env) {
   try {
@@ -48,10 +60,26 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
     if (url.pathname === "/api/agents" || url.pathname.startsWith("/api/agents/")) {
+      // Path shape: /api/agents/<product>[/anything]. parts[2] selects the
+      // product DO; everything after is opaque to the wrapper and forwarded
+      // to the DO's fetch().
+      const parts = url.pathname.split("/").filter(Boolean)
+      const product = parts[2]
+      const bindingName = product ? __AGENT_DO_BINDINGS[product] : undefined
+      if (!bindingName) {
+        return new Response(
+          "unknown agent product: " + (product ?? "(none)") +
+            ". Set useAgent({ basePath: 'api/agents/<product>' }) to one of: " +
+            Object.keys(__AGENT_DO_BINDINGS).join(", "),
+          { status: 404 },
+        )
+      }
+      const ns = env[bindingName]
+      if (!ns) {
+        return new Response(bindingName + " binding missing", { status: 500 })
+      }
       const email = await __resolveEmail(request, env)
       if (!email) return new Response("unauthorized", { status: 401 })
-      const ns = env.CHAT_DO
-      if (!ns) return new Response("CHAT_DO binding missing", { status: 500 })
       const id = ns.idFromName(email)
       const stub = ns.get(id)
       await stub.setName(email)

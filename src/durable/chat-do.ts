@@ -1,35 +1,24 @@
-import {
-  Think,
-  type ChatResponseResult,
-  type ThinkSubmissionInspection,
-  type TurnConfig,
-  type StepConfig,
-} from '@cloudflare/think'
-import { createWorkersAI } from 'workers-ai-provider'
-import {
-  type LanguageModel,
-  type ToolCallRepairFunction,
-  type ToolSet,
-} from 'ai'
+import type { ChatResponseResult } from '@cloudflare/think'
+import type { ToolCallRepairFunction, ToolSet } from 'ai'
 import { repairDraftBatch } from '@/lib/beancount/repair-draft-batch'
 import { buildLedgerSystem, buildStatementAgentSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
-import { makeEditorRegistry, type EditorHost } from './agents/registries/editor'
+import { BaseAgentDO } from './base-agent-do'
 import {
-  activeToolNames,
-  allAgentNames,
-  HANDOFF_TOOL_NAME,
-  resolveActiveAgent,
-  unionTools,
-} from './agents/runtime'
-import { makeHandoffTool, type HandoffResult } from './agents/handoff'
-import { draftTransactionTool, clarifyTool, readStatementTool } from './agents/tools'
-import type { AgentDef, AgentState, ModelConfig, Registry } from './agents/types'
+  makeEditorRegistry,
+  type EditorAgentName,
+} from './agents/registries/editor'
+import {
+  draftTransactionTool,
+  clarifyTool,
+  readStatementTool,
+} from './agents/tools/editor'
+import type { AgentHost, Registry } from './agents/types'
 
-// The chat/agent runtime. Holds conversation history + the agent registry and
-// drives the editor agents (ledger ↔ statement). It is pure compute: all
-// ledger reads (snapshot, statement blobs) go to the LedgerDO storage object
-// over RPC, keyed by the same per-user name; writes (approved drafts) flow back
+// The chat/agent runtime for the `/editor` surface. Hosts the `ledger ↔
+// statement` agents and the genUI tools they call. Pure compute: all ledger
+// reads (snapshot, statement blobs) go to the LedgerDO storage object over
+// RPC, keyed by the same per-user name; writes (approved drafts) flow back
 // through the browser REST path, never directly from here.
 type Snapshot = Awaited<ReturnType<LedgerDO['ledger_snapshot']>>
 
@@ -49,7 +38,6 @@ export type ChatDOState = Record<string, never>
 //   1. `pnpm patch-remove @cloudflare/think@<old>` (or delete patches/ entry)
 //   2. bump @cloudflare/think to the version that ships the field
 //   3. if upstream renamed the option, rename here at the single call site
-// Nothing else in our codebase touches the patched fields.
 //
 // Today the repair handles the forex-rounding class only (LLMs round off by
 // ₹0.01 on `@@`-priced INR statements and can't fix it on retry — see
@@ -90,12 +78,15 @@ function todayInt(): number {
   return Number(`${yyyy}${mm}${dd}`)
 }
 
-export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements EditorHost {
-  private registry: Registry
+export class ChatDO
+  extends BaseAgentDO<Cloudflare.Env, ChatDOState>
+  implements AgentHost<EditorAgentName>
+{
+  protected registry: Registry
   initialState: ChatDOState = {}
 
-  // The ledger snapshot for the current turn, fetched once in beforeTurn (async
-  // RPC) and reused by the sync system-prompt builders + every beforeStep.
+  // The ledger snapshot for the current turn, fetched once in beforeTurnFetch
+  // (async RPC) and reused by the sync system-prompt builders + every step.
   private turnSnapshot: Snapshot | null = null
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
@@ -120,179 +111,49 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
     )
   }
 
-  // ---- Active agent resolution ----
-
-  private activeAgent(): AgentDef {
-    return resolveActiveAgent(this.registry, this.getConfig<AgentState>())
-  }
-
-  private activeAgentConfig(): {
-    system: string
-    model: LanguageModel
-    activeTools: string[]
-    repairToolCall: ToolCallRepairFunction<ToolSet>
-  } {
-    const agent = this.activeAgent()
-    return {
-      system: agent.system(),
-      model: this.buildModel(agent.model),
-      activeTools: activeToolNames(agent),
-      repairToolCall: draftTransactionRepair,
-    }
-  }
-
-  // Build the Workers AI model for an agent's declared config. Reasoning 'off'
-  // needs a chat-template flag, not reasoning_effort:null (a no-op — the model
-  // keeps streaming a thinking trace). The flag NAME is model-specific (verified
-  // by probe): kimi-k2.6 honors `thinking: false`, gemma-4 honors
-  // `enable_thinking: false` — the two are not interchangeable. The provider
-  // only types enable_thinking/clear_thinking, so cast.
-  private buildModel(cfg: ModelConfig): LanguageModel {
-    const gatewayId = this.env.AI_GATEWAY_ID
-    const workersai = createWorkersAI({
-      binding: this.env.AI,
-      ...(gatewayId ? { gateway: { id: gatewayId } } : {}),
-    })
-    if (cfg.reasoning === 'off') {
-      const kwargs = cfg.id.includes('gemma')
-        ? { enable_thinking: false }
-        : { thinking: false }
-      return workersai(cfg.id, {
-        chat_template_kwargs: kwargs as { enable_thinking?: boolean },
-      })
-    }
-    return workersai(cfg.id, { reasoning_effort: cfg.reasoning })
-  }
-
-  // ---- Think per-turn config (delegates to the active agent) ----
-
-  getModel(): LanguageModel {
-    return this.buildModel(this.activeAgent().model)
-  }
-
-  getSystemPrompt(): string {
-    return this.activeAgent().system()
-  }
-
-  getTools(): ToolSet {
-    return {
-      ...unionTools(this.registry),
-      [HANDOFF_TOOL_NAME]: this.handoffTool(),
-    }
-  }
-
-  // beforeTurn is awaited by the framework, so we fetch the live ledger
-  // snapshot over RPC here (getSystemPrompt is sync and can't) and pin the
-  // active agent's config for the turn.
-  override async beforeTurn(): Promise<TurnConfig> {
+  // Pull the live ledger snapshot for this turn over RPC (the sync system-
+  // prompt builders can't `await`).
+  protected override async beforeTurnFetch(): Promise<void> {
     this.turnSnapshot = await this.ledgerStub().ledger_snapshot()
-    return this.activeAgentConfig()
   }
 
-  override beforeStep(): StepConfig {
-    // Re-resolve each step so a mid-turn handoff takes effect immediately. Reuse
-    // the snapshot fetched in beforeTurn — it doesn't change within a turn.
-    return this.activeAgentConfig()
+  protected override getRepairToolCall():
+    | ToolCallRepairFunction<ToolSet>
+    | undefined {
+    return draftTransactionRepair
   }
 
-  // ---- Handoff ----
+  // ---- AgentHost<EditorAgentName> ----
 
-  private handoffTool() {
-    return makeHandoffTool(allAgentNames(this.registry), (to, context) =>
-      this.doHandoff(to, context),
+  system(name: EditorAgentName): string {
+    if (name === 'ledger') {
+      return buildLedgerSystem(this.snapshot()) + this.handoffContextBlock()
+    }
+    return (
+      buildStatementAgentSystem(this.snapshot()) + this.handoffContextBlock()
     )
   }
 
-  private doHandoff(to: string, context: string): HandoffResult {
-    const current = this.activeAgent()
-    if (!current.canHandoffTo.includes(to) || !this.registry.agents[to]) {
+  tools(name: EditorAgentName): ToolSet {
+    if (name === 'ledger') {
       return {
-        ok: false,
-        error: 'invalid_target',
-        allowed: [...current.canHandoffTo],
+        draft_transaction: draftTransactionTool(),
+        clarify: clarifyTool(),
       }
     }
-    this.configure<AgentState>({ activeAgent: to, handoffContext: context })
-    return { ok: true, handed_off_to: to }
-  }
-
-  // Reset conversational ownership back to the registry's entry agent. Called
-  // when the user clears the conversation so the next statement upload starts
-  // from `ledger` and produces a fresh, visible handoff (activeAgent persists
-  // across a chat clear otherwise — clearing only wipes messages).
-  async reset_active_agent(): Promise<{ ok: true }> {
-    await this.__unsafe_ensureInitialized()
-    this.configure<AgentState>({ activeAgent: this.registry.entry })
-    return { ok: true }
-  }
-
-  // Debug-only: dump the full conversation history for inspection. Lets us see
-  // exactly what the model emitted (e.g. multiple draft_transaction calls in
-  // one assistant message) without relying on UI rendering. Returns raw
-  // UIMessage[] including tool-call parts with their input payloads.
-  async dump_messages(): Promise<unknown[]> {
-    await this.__unsafe_ensureInitialized()
-    return this.getMessages()
-  }
-
-  private handoffContextBlock(): string {
-    const ctx = this.getConfig<AgentState>()?.handoffContext
-    return ctx ? `\n\n---\n\n# Context from the previous agent\n\n${ctx}` : ''
-  }
-
-  // ---- EditorHost: the `ledger` agent (freeform editor) ----
-
-  ledgerSystem(): string {
-    return buildLedgerSystem(this.snapshot()) + this.handoffContextBlock()
-  }
-
-  ledgerTools(): ToolSet {
     return {
       draft_transaction: draftTransactionTool(),
       clarify: clarifyTool(),
+      read_statement: readStatementTool((id) =>
+        this.ledgerStub().get_statement(id),
+      ),
     }
   }
 
-  // ---- EditorHost: the `statement` specialist agent ----
+  // ---- History hygiene: redact heavy statement-text outputs ----
 
-  statementSystem(): string {
-    return buildStatementAgentSystem(this.snapshot()) + this.handoffContextBlock()
-  }
-
-  statementTools(): ToolSet {
-    return {
-      draft_transaction: draftTransactionTool(),
-      clarify: clarifyTool(),
-      read_statement: readStatementTool((id) => this.ledgerStub().get_statement(id)),
-    }
-  }
-
-  // ---- Observability + history hygiene ----
-
-  onSubmissionStatus(s: ThinkSubmissionInspection): void {
-    console.log(
-      `[chat] submission ${s.submissionId} status=${s.status}` +
-        (s.error ? ` error=${s.error}` : ''),
-    )
-  }
-
-  async onChatResponse(result: ChatResponseResult): Promise<void> {
-    const parts = Array.isArray(result.message.parts) ? result.message.parts : []
-    const toolTypes = parts
-      .map((p) => {
-        if (typeof p !== 'object' || p === null || !('type' in p)) return ''
-        const t = String((p as { type: unknown }).type)
-        if (t.startsWith('tool-')) return t
-        if (t === 'dynamic-tool') {
-          const name = (p as { toolName?: unknown }).toolName
-          return typeof name === 'string' ? `dynamic-tool:${name}` : 'dynamic-tool'
-        }
-        return ''
-      })
-      .filter((t) => t.length > 0)
-    console.log(
-      `[chat] onChatResponse role=${result.message.role} parts=${parts.length} tools=[${toolTypes.join(',')}]`,
-    )
+  override async onChatResponse(result: ChatResponseResult): Promise<void> {
+    await super.onChatResponse(result)
 
     // Redact the raw statement text that read_statement injected into history.
     // The model has used it this turn; leaving the full blob (often tens of KB)
@@ -313,17 +174,27 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
         }
         const part = p as { output?: { ok?: boolean; text?: unknown } }
         const out = part.output
-        if (!out || typeof out.text !== 'string' || out.text.startsWith('[statement text')) {
+        if (
+          !out ||
+          typeof out.text !== 'string' ||
+          out.text.startsWith('[statement text')
+        ) {
           return p
         }
         mutated = true
         return {
           ...p,
-          output: { ...out, text: '[statement text omitted from history — call read_statement again if you need it]' },
+          output: {
+            ...out,
+            text: '[statement text omitted from history — call read_statement again if you need it]',
+          },
         }
       })
       if (mutated) {
-        await this.updateMessageInHistory({ ...msg, parts: nextParts as typeof msg.parts })
+        await this.updateMessageInHistory({
+          ...msg,
+          parts: nextParts as typeof msg.parts,
+        })
       }
     }
   }

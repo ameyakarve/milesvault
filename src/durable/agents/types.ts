@@ -37,3 +37,13 @@ export interface AgentState {
   activeAgent: string
   handoffContext?: string
 }
+
+// What a DO supplies to a registry: per-agent system prompt + tool set,
+// keyed by the registry's agent-name union. The DO closes over its live
+// state (snapshot, fetchers); the registry stays a pure data wiring file.
+// Generic over the name union so each product (editor, concierge, …)
+// declares its own agent vocabulary and the runtime stays unaware.
+export interface AgentHost<N extends string> {
+  system(name: N): string
+  tools(name: N): ToolSet
+}
