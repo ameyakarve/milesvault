@@ -81,11 +81,15 @@ export function transformMagnifyRow(row: MagnifyApiRow): VoucherBrand {
 // Stable ordering by slug — keeps the diff between daily refreshes small
 // and reviewable. Without this, the Magnify API's row order (by id desc)
 // would surface every new brand as a churn in the middle of the file.
+// Rows with a null/empty slug are dropped — slug is the identity we key
+// on downstream and Magnify occasionally surfaces incomplete entries.
 export function buildMagnifyDoc(
   rows: MagnifyApiRow[],
   fetchedAt: string,
 ): VoucherPlatformDoc {
-  const brands = rows.map(transformMagnifyRow)
+  const brands = rows
+    .filter((r) => typeof r.slug === 'string' && r.slug.length > 0)
+    .map(transformMagnifyRow)
   brands.sort((a, b) => a.slug.localeCompare(b.slug))
   return {
     platform: 'Magnify',
