@@ -4,11 +4,16 @@ One transaction captures the purchase AND the reward it earned. Cashback
 and points don't fall out of the sky — they always pair with the expense
 that generated them.
 
-The accounts below use `<Issuer>`/`<Card>`/`<PTS>` placeholders on
-purpose: these examples teach the *shape* of each entry, not how any
-specific card behaves. Fill in the real issuer, card, and point ticker
-from the transaction in front of you. Card-specific routing (where a
-given program's points land, the earn rate) is not assumed here.
+The accounts below use `<Issuer>`/`<Card>` placeholders on purpose:
+these examples teach the *shape* of each entry, not how any specific
+card behaves. Fill in the real issuer and card from the transaction in
+front of you. Point commodities use `RWD_PTS` (and `SRC_PTS`/`DST_PTS`
+for transfers) as a stand-in ticker — **always replace with the
+program's actual ticker** (e.g. `EDGE_PTS`, `RP`, `MR`, `UR`, `MILES`,
+whatever the program calls its unit). Never emit `RWD_PTS` in real
+output, and never emit angle brackets — they are markdown placeholders,
+not Beancount syntax. Card-specific routing (where a given program's
+points land, the earn rate) is not assumed here.
 
 ## Which pattern (decide by the economics, not the card's name)
 
@@ -63,21 +68,25 @@ receivable accrues ₹3.70.
 ## Points pattern (words: "points", "miles")
 
 Multi-currency single transaction: purchase legs in INR/USD, points legs
-in the program's point currency (a program-specific ticker, shown as
-`<PTS>` below). No expense-reduction leg — points' cash value isn't fixed
-at earn time.
+in the program's point currency. No expense-reduction leg — points'
+cash value isn't fixed at earn time.
 
 ```
 2026-05-21 * "Taj" "Dinner — 250 reward points"
   Expenses:Food:Restaurants                  2500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>   -2500.00 INR
-  Assets:Rewards:<Issuer>                         250 <PTS>
-  Equity:Void                                    -250 <PTS>
+  Assets:Rewards:<Issuer>                         250 RWD_PTS
+  Equity:Void                                    -250 RWD_PTS
 ```
 
-Each currency balances on its own. The point currency MUST sum to zero
-too — the `Assets:Rewards` leg always needs its contra (here `Equity:Void`);
-a lone point posting won't balance and gets rejected.
+Each currency balances on its own. **The point currency MUST sum to
+zero too** — the `Assets:Rewards` leg ALWAYS needs its `Equity:Void`
+contra with the equal-and-opposite amount in the SAME point currency.
+A three-posting variant with only `Assets:Rewards` and no contra is
+rejected by the parser. Replace `RWD_PTS` with the program's actual
+ticker (e.g. `EDGE_PTS`, `RP`, `MR`); never emit `RWD_PTS` literally,
+and never emit angle-bracket currencies like `<EdgeRewards>` —
+Beancount has no such syntax.
 
 ### Computing earn from a stated rate
 
@@ -407,14 +416,16 @@ rows are two separate refunds, each `−877.82` expense / `+877.82` card.
 Moving points from one program to another at a defined rate — always a
 conversion, so the rate lives in `@@`. The ratio (1:1, 1:1.3, 1:2,
 whatever bonus is running) doesn't change the shape; it just changes
-the two numbers. `<Src>`/`<SRC_PTS>` is the program you transfer from,
-`<Dest>`/`<DST_PTS>` the one you transfer to.
+the two numbers. `<Src>` / `SRC_PTS` is the program you transfer from,
+`<Dest>` / `DST_PTS` the one you transfer to. Replace both names with
+the real programs (e.g. `Axis`/`EDGE_PTS` → `Marriott`/`BONVOY`); never
+emit `SRC_PTS`/`DST_PTS` literally in output.
 
 ### Instant landing (points show up in the destination right away)
 ```
 2026-05-27 * "Transfer" "10000 source pts → 13000 dest (30% bonus)"
-  Assets:Rewards:<Dest>     13000 <DST_PTS> @@ 10000 <SRC_PTS>
-  Assets:Rewards:<Src>     -10000 <SRC_PTS>
+  Assets:Rewards:<Dest>     13000 DST_PTS @@ 10000 SRC_PTS
+  Assets:Rewards:<Src>     -10000 SRC_PTS
 ```
 
 ### Pending (transfer initiated but points haven't landed yet)
@@ -423,15 +434,15 @@ posts the points, they're owed by that program — sit them in a
 receivable.
 ```
 2026-05-27 * "Transfer" "10000 source pts → 13000 dest (pending)"
-  Assets:Receivable:<Dest>     13000 <DST_PTS> @@ 10000 <SRC_PTS>
-  Assets:Rewards:<Src>        -10000 <SRC_PTS>
+  Assets:Receivable:<Dest>     13000 DST_PTS @@ 10000 SRC_PTS
+  Assets:Rewards:<Src>        -10000 SRC_PTS
 ```
 
 When the points land, settle the receivable:
 ```
 2026-05-30 * "Transfer credited" "Dest program posted the points"
-  Assets:Rewards:<Dest>        13000 <DST_PTS>
-  Assets:Receivable:<Dest>    -13000 <DST_PTS>
+  Assets:Rewards:<Dest>        13000 DST_PTS
+  Assets:Receivable:<Dest>    -13000 DST_PTS
 ```
 
 ## Redemptions — always associate a cash value
@@ -456,7 +467,7 @@ the value is already in INR.)
 The statement-credit amount IS the cash value.
 ```
 2026-05-31 * "Statement credit" "Redeem 1000 pts → ₹250 statement credit"
-  Assets:Rewards:<Issuer>                  -1000 <PTS> @@ 250.00 INR
+  Assets:Rewards:<Issuer>                  -1000 RWD_PTS @@ 250.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>   250.00 INR
 ```
 
@@ -466,12 +477,12 @@ redemptions (points + card).
 ```
 2026-05-27 * "Amazon" "Headphones — paid 2500 pts"
   Expenses:Shopping:Electronics       500.00 INR
-  Assets:Rewards:<Issuer>            -2500 <PTS> @@ 500.00 INR
+  Assets:Rewards:<Issuer>            -2500 RWD_PTS @@ 500.00 INR
 ```
 ```
 2026-05-27 * "Amazon" "Headphones — 2500 pts + ₹500 on card"
   Expenses:Shopping:Electronics            1000.00 INR
-  Assets:Rewards:<Issuer>                  -2500 <PTS> @@ 500.00 INR
+  Assets:Rewards:<Issuer>                  -2500 RWD_PTS @@ 500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -500.00 INR
 ```
 
@@ -485,7 +496,7 @@ is ₹100k → miles' cash value is ₹95k (100k − 5k).
 ```
 2026-05-27 * "Airline" "Award DEL-SFO — 75k miles + ₹5k taxes (₹100k cash fare)"
   Expenses:Travel:Flights                  100000.00 INR
-  Assets:Rewards:<Issuer>                   -75000 <PTS> @@ 95000.00 INR
+  Assets:Rewards:<Issuer>                   -75000 RWD_PTS @@ 95000.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>    -5000.00 INR
 ```
 
@@ -495,7 +506,7 @@ Resort fee / taxes hit the card.
 ```
 2026-05-27 * "Hotel" "Award night — 40k pts + ₹500 resort fee (₹15k cash rate)"
   Expenses:Travel:Hotels                    15000.00 INR
-  Assets:Rewards:<Issuer>                   -40000 <PTS> @@ 14500.00 INR
+  Assets:Rewards:<Issuer>                   -40000 RWD_PTS @@ 14500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>    -500.00 INR
 ```
 
@@ -506,7 +517,7 @@ what it actually paid. Below, ₹6k cash fare, 15k points cover ₹5.5k,
 ```
 2026-05-27 * "Airline" "DEL-BLR — 15k pts + ₹500 fee (₹6k cash fare)"
   Expenses:Travel:Flights                   6000.00 INR
-  Assets:Rewards:<Issuer>                   -15000 <PTS> @@ 5500.00 INR
+  Assets:Rewards:<Issuer>                   -15000 RWD_PTS @@ 5500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>   -500.00 INR
 ```
 
@@ -518,13 +529,13 @@ bonuses, referral bonuses, milestone bonuses, expiry sweeps, clawbacks.
 
 ```
 2026-05-27 * "Welcome bonus" "100k welcome bonus"
-  Assets:Rewards:<Issuer>     100000 <PTS>
-  Equity:Void                -100000 <PTS>
+  Assets:Rewards:<Issuer>     100000 RWD_PTS
+  Equity:Void                -100000 RWD_PTS
 ```
 ```
 2026-12-31 * "Points expiry" "Expired 2024 vintage points"
-  Assets:Rewards:<Issuer>     -3500 <PTS>
-  Equity:Void                  3500 <PTS>
+  Assets:Rewards:<Issuer>     -3500 RWD_PTS
+  Equity:Void                  3500 RWD_PTS
 ```
 
 ## Referrals (you referred someone; reward landed for you)
@@ -563,8 +574,8 @@ any other receivable payout.
 ### Points referral
 ```
 2026-05-27 * "Referral bonus" "15000 pts for referring Aman"
-  Assets:Rewards:<Issuer>     15000 <PTS>
-  Equity:Void                -15000 <PTS>
+  Assets:Rewards:<Issuer>     15000 RWD_PTS
+  Equity:Void                -15000 RWD_PTS
 ```
 
 ## Buying points with cash
@@ -575,12 +586,12 @@ into a different asset (points).
 
 ```
 2026-05-27 * "Buy points" "Bought 10000 pts for ₹3000"
-  Assets:Rewards:<Issuer>    10000 <PTS> @@ 3000.00 INR
+  Assets:Rewards:<Issuer>    10000 RWD_PTS @@ 3000.00 INR
   Assets:Bank:HDFC:Savings  -3000.00 INR
 ```
 ```
 2026-05-27 * "Buy points" "Bought 10000 pts for ₹3000 on card"
-  Assets:Rewards:<Issuer>                  10000 <PTS> @@ 3000.00 INR
+  Assets:Rewards:<Issuer>                  10000 RWD_PTS @@ 3000.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -3000.00 INR
 ```
 
@@ -594,14 +605,14 @@ redemption was booked at.
 ```
 2026-05-27 * "Airline" "Cancelled DEL-SFO — miles + taxes refunded"
   Expenses:Travel:Flights                  -100000.00 INR
-  Assets:Rewards:<Issuer>                    75000 <PTS> @@ 95000.00 INR
+  Assets:Rewards:<Issuer>                    75000 RWD_PTS @@ 95000.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>     5000.00 INR
 ```
 
 ### Statement-credit redemption reversed
 ```
 2026-05-27 * "Statement credit" "Statement-credit redemption reversed"
-  Assets:Rewards:<Issuer>                   1000 <PTS> @@ 250.00 INR
+  Assets:Rewards:<Issuer>                   1000 RWD_PTS @@ 250.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -250.00 INR
 ```
 
