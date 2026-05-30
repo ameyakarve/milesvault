@@ -42,9 +42,6 @@
   "ai": {
     "binding": "AI",
   },
-  "artifacts": [
-    { "binding": "ARTIFACTS", "namespace": "default" },
-  ],
   "workflows": [
     {
       "name": "refresh-magnify",
@@ -102,9 +99,6 @@
       "ai": {
         "binding": "AI",
       },
-      "artifacts": [
-        { "binding": "ARTIFACTS", "namespace": "default" },
-      ],
       "workflows": [
         {
           "name": "refresh-magnify-staging",

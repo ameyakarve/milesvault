@@ -8,16 +8,14 @@ import {
   renderMagnifyYaml,
   type MagnifyApiResponse,
 } from '@/lib/vouchers/magnify-transform'
-import { commitFileToArtifact } from '@/lib/vouchers/artifact-git'
 
 const MAGNIFY_INVENTORY_URL =
   'https://api.magnify.club/api/giftcard/public/inventory?limit=2000&offset=0'
 
-const ARTIFACT_REPO = 'milesvault-vouchers'
-const ARTIFACT_PATH = 'magnify.yaml'
+const R2_KEY = 'vouchers/magnify.yaml'
 
 // Daily refresh of the Magnify catalog. Three durable steps so any one can
-// retry independently (the API call, the YAML rendering, the git push).
+// retry independently (the API call, the YAML rendering, the R2 write).
 // Workflow steps' return values are persisted by the runtime — keep them
 // JSON-serializable.
 export class RefreshMagnifyWorkflow extends WorkflowEntrypoint<
@@ -49,29 +47,35 @@ export class RefreshMagnifyWorkflow extends WorkflowEntrypoint<
     })
 
     const pushed = await step.do(
-      'push-to-artifact',
+      'put-to-r2',
       { retries: { limit: 3, delay: '30 seconds', backoff: 'exponential' } },
       async () => {
-        const repo = await this.env.ARTIFACTS.get(ARTIFACT_REPO)
-        // 900s = 15 min — generous window for the clone + push round-trip
-        // (a few hundred ms in practice; if it spikes we'd rather the token
-        // outlive the step than need to refresh mid-push).
-        const { plaintext } = await repo.createToken('write', 900)
-        const result = await commitFileToArtifact({
-          repoUrl: repo.remote,
-          token: plaintext,
-          path: ARTIFACT_PATH,
-          content: yamlText,
-          message: `refresh: magnify (${inventory.length} brands)`,
+        // Skip the PUT if the byte-for-byte content is identical to what's
+        // already in the bucket. R2 PUTs are cheap but a no-op write would
+        // still bump the object's etag/uploaded timestamp, which we'd rather
+        // not do (downstream cache-busting reads off etag).
+        const current = await this.env.R2.get(R2_KEY)
+        if (current) {
+          const existing = await current.text()
+          if (existing === yamlText) {
+            return { changed: false }
+          }
+        }
+        const result = await this.env.R2.put(R2_KEY, yamlText, {
+          httpMetadata: { contentType: 'text/yaml; charset=utf-8' },
+          customMetadata: {
+            fetched_at: new Date().toISOString(),
+            brand_count: String(inventory.length),
+          },
         })
-        return result
+        return { changed: true, etag: result?.etag ?? null }
       },
     )
 
     return {
       brand_count: inventory.length,
       changed: pushed.changed,
-      sha: pushed.sha ?? null,
+      etag: 'etag' in pushed ? pushed.etag : null,
     }
   }
 }
