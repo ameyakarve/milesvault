@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 
 // The agent emits one or more drafted transactions inside a `draft_transaction`
 // tool call. Each element is a complete Beancount entry (date / payee / narration
@@ -6,27 +7,46 @@ import { z } from 'zod'
 // use `@@` (forex), `@`, cost basis, metadata, and tags without us re-modelling
 // each feature in a JSON schema. The user reviews each entry in a per-card
 // CodeMirror editor and approves the batch; we then concatenate and replaceBuffer.
-export const draftTransactionBatchSchema = z.object({
-  transactions: z
-    .array(
-      z
-        .string()
-        .min(1)
-        .describe(
-          'One complete Beancount transaction as text. Example:\n' +
-            '2026-05-13 * "Cloudflare" "Workers subscription"\n' +
-            '  Expenses:Software:Subscriptions    2.36 USD @@ 225.98 INR\n' +
-            '  Expenses:Bank:ForexMarkup          4.52 INR\n' +
-            '  Expenses:Tax:GST                   0.81 INR\n' +
-            '  Liabilities:CreditCards:Axis:Magnus -231.31 INR',
-        ),
-    )
-    .min(1)
-    .describe(
-      'Array of Beancount transaction strings. One-off entries are an array of length 1; ' +
-        'statement uploads / splits / subscription series go in the same call.',
-    ),
-})
+//
+// superRefine runs the same beancount validators replaceBuffer runs at the
+// journal-write boundary (parse + per-currency balance + account shape). When
+// it fails, the AI SDK surfaces the zod issues back to the model as a tool
+// input-error and the model re-emits in the same turn. Requires the tool to
+// be registered with `dynamicTool` — static tools with invalid input get
+// silently dropped by the SDK, never reaching the model.
+export const draftTransactionBatchSchema = z
+  .object({
+    transactions: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .describe(
+            'One complete Beancount transaction as text. Example:\n' +
+              '2026-05-13 * "Cloudflare" "Workers subscription"\n' +
+              '  Expenses:Software:Subscriptions    2.36 USD @@ 225.98 INR\n' +
+              '  Expenses:Bank:ForexMarkup          4.52 INR\n' +
+              '  Expenses:Tax:GST                   0.81 INR\n' +
+              '  Liabilities:CreditCards:Axis:Magnus -231.31 INR',
+          ),
+      )
+      .min(1)
+      .describe(
+        'Array of Beancount transaction strings. One-off entries are an array of length 1; ' +
+          'statement uploads / splits / subscription series go in the same call.',
+      ),
+  })
+  .superRefine((value, ctx) => {
+    const result = validateDraftBatch(value.transactions)
+    if (result.ok === true) return
+    for (const issue of result.issues) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['transactions', issue.index],
+        message: issue.message,
+      })
+    }
+  })
 
 export type DraftTransactionBatch = z.infer<typeof draftTransactionBatchSchema>
 

@@ -53,22 +53,24 @@ Hard rules:
   weight closes against the card's INR posting — otherwise the card
   shows "off by X USD" and the user can't approve.
 
-## `draft_transaction` server response
+## `draft_transaction` input validation
 
-The tool returns one of:
+Each Beancount entry is validated at the tool boundary (parse +
+per-currency balance + account shape). On failure you get back a
+tool-error: `Invalid input for tool draft_transaction: <zod issues
+as JSON>`. Each issue has a `path` like `["transactions", N]` (N is
+0-based into the `transactions` array you sent) and a `message`
+identifying the entry by date / payee plus what's wrong — e.g.
+`entry 3 (2026-04-17 "ASH CRADLE,BANGALORE"): unbalanced — RWD_PTS
+sums to 48 (missing the Equity:Void contra)`.
 
-- `{ ok: true, pending_approval: true, transaction_count }` — your
-  draft passed validation. The card is now shown for user approval.
-  Stop the turn; do NOT narrate, do NOT call another tool.
-- `{ ok: false, issues: [{ index, message }], message }` — one or more
-  entries failed validation. `index` is the 0-based position in the
-  `transactions` array you sent. Common failures: the points currency
-  doesn't sum to zero (missing the `Equity:Void` contra), parse errors
-  in the Beancount text, malformed account names. Fix the listed
-  entries and call `draft_transaction` AGAIN in this same turn with
-  the corrected batch — do not narrate the failure to the user, do not
-  apologize, just re-call the tool. Re-send the WHOLE batch (not just
-  the bad indices).
+When that happens: fix the listed entries and call `draft_transaction`
+AGAIN in this same turn with the corrected batch. Re-send the WHOLE
+batch (not just the bad indices). Do not narrate the failure to the
+user, do not apologize, just re-call the tool.
+
+When validation passes, the card renders for the user; you stop the
+turn there — do NOT also narrate, do NOT call another tool.
 
 ## Balance / pad asks (no directive tool)
 

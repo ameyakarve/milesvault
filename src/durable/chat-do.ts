@@ -214,8 +214,17 @@ export class ChatDO extends Think<Cloudflare.Env, ChatDOState> implements Editor
   async onChatResponse(result: ChatResponseResult): Promise<void> {
     const parts = Array.isArray(result.message.parts) ? result.message.parts : []
     const toolTypes = parts
-      .map((p) => (typeof p === 'object' && p && 'type' in p ? String((p as { type: unknown }).type) : ''))
-      .filter((t) => t.startsWith('tool-'))
+      .map((p) => {
+        if (typeof p !== 'object' || p === null || !('type' in p)) return ''
+        const t = String((p as { type: unknown }).type)
+        if (t.startsWith('tool-')) return t
+        if (t === 'dynamic-tool') {
+          const name = (p as { toolName?: unknown }).toolName
+          return typeof name === 'string' ? `dynamic-tool:${name}` : 'dynamic-tool'
+        }
+        return ''
+      })
+      .filter((t) => t.length > 0)
     console.log(
       `[chat] onChatResponse role=${result.message.role} parts=${parts.length} tools=[${toolTypes.join(',')}]`,
     )

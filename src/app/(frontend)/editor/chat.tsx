@@ -52,7 +52,23 @@ type Part = {
   output?: unknown
   errorText?: string
   toolCallId?: string
+  toolName?: string
   [k: string]: unknown
+}
+
+// Tool parts come in two shapes: static (`type: "tool-<name>"`) and dynamic
+// (`type: "dynamic-tool"` with a separate `toolName`). draft_transaction and
+// clarify are registered with `dynamicTool` so the SDK surfaces input-validation
+// errors back to the model (static client tools are silently dropped on invalid
+// input); handoff and read_statement are static. Normalize both here so the
+// rest of the UI treats them uniformly.
+function isToolPart(p: Part): boolean {
+  return p.type.startsWith('tool-') || p.type === 'dynamic-tool'
+}
+function toolNameOf(p: Part): string | null {
+  if (p.type === 'dynamic-tool') return typeof p.toolName === 'string' ? p.toolName : null
+  if (p.type.startsWith('tool-')) return p.type.slice(5)
+  return null
 }
 
 type StatementAttachment =
@@ -425,7 +441,7 @@ export function Chat({
       for (const m of messages) {
         const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
         for (const p of parts) {
-          if (!p.type.startsWith('tool-')) continue
+          if (!isToolPart(p)) continue
           if (!p.toolCallId) continue
           if (p.state !== 'input-available' && p.state !== 'input-streaming') continue
           const sub = submitStatus[p.toolCallId]
@@ -518,7 +534,7 @@ export function Chat({
       (p) =>
         (p.type === 'text' && typeof p.text === 'string' && p.text.length > 0) ||
         p.type === 'reasoning' ||
-        p.type.startsWith('tool-'),
+        isToolPart(p),
     )
   })()
   const showThinkingBubble = showThinking && !hasAssistantContent
@@ -629,27 +645,26 @@ export function Chat({
                           if (!to) return null
                           return <HandoffChip key={i} to={to} />
                         }
-                        if (p.type.startsWith('tool-')) {
+                        if (isToolPart(p)) {
                           const toolCallId = p.toolCallId ?? `${m.id}-${i}`
+                          const toolName = toolNameOf(p)
                           const subState = submitStatus[toolCallId] ?? 'idle'
                           const outputObj =
                             p.output && typeof p.output === 'object'
                               ? (p.output as {
                                   ok?: boolean
                                   reason?: string
-                                  issues?: unknown
                                 })
                               : null
-                          // Treat as rejection: explicit user reject/supersede,
-                          // OR a server-validation failure from draft_transaction.execute
-                          // (model will re-draft; the rejected card just shows what was
-                          // tried so the trail is visible).
+                          // Rejection covers explicit user reject/supersede and
+                          // tool-call output-error (e.g. input-validation failure
+                          // surfaced by the SDK for dynamic tools).
                           const isRejection =
-                            p.state === 'output-available' &&
-                            outputObj?.ok === false &&
-                            (outputObj.reason === 'rejected' ||
-                              outputObj.reason === 'superseded' ||
-                              Array.isArray(outputObj.issues))
+                            p.state === 'output-error' ||
+                            (p.state === 'output-available' &&
+                              outputObj?.ok === false &&
+                              (outputObj.reason === 'rejected' ||
+                                outputObj.reason === 'superseded'))
                           const cardStatus = isRejection
                             ? 'rejected'
                             : p.state === 'output-available' || subState === 'done'
@@ -673,22 +688,28 @@ export function Chat({
                           // flash half-formed values (an empty batch, a lone "2"
                           // before the amount finishes). Wait for input-available;
                           // show the Preparing… placeholder until then.
-                          const rendered = isGenUiTool(p.type) && toolState !== 'input-streaming'
-                            ? renderGenUi(p.type, p.input, {
-                                accounts,
-                                status: cardStatus,
-                                errorMessage: submitError[toolCallId],
-                                resolvedAnswers: clarifyAnswers[toolCallId],
-                                onApprove: (final) =>
-                                  void handleApprove(toolCallId, final),
-                                onAnswer: (answers) =>
-                                  handleClarifyAnswer(toolCallId, answers),
-                                onReject: () => handleReject(toolCallId),
-                              })
-                            : null
+                          const rendered =
+                            toolName && isGenUiTool(toolName) && toolState !== 'input-streaming'
+                              ? renderGenUi(toolName, p.input, {
+                                  accounts,
+                                  status: cardStatus,
+                                  errorMessage:
+                                    submitError[toolCallId] ?? p.errorText,
+                                  resolvedAnswers: clarifyAnswers[toolCallId],
+                                  onApprove: (final) =>
+                                    void handleApprove(toolCallId, final),
+                                  onAnswer: (answers) =>
+                                    handleClarifyAnswer(toolCallId, answers),
+                                  onReject: () => handleReject(toolCallId),
+                                })
+                              : null
+                          // ToolHeader's default label is `type.split('-').slice(1).join('-')`
+                          // — gives the right label for `tool-X` but yields "tool" for
+                          // `dynamic-tool`. Pass the resolved name as `title`.
                           return (
                             <Tool key={i} defaultOpen>
                               <ToolHeader
+                                title={toolName ?? undefined}
                                 type={p.type as ToolUIPart['type']}
                                 state={toolState}
                               />

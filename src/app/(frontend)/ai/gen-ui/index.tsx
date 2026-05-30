@@ -66,17 +66,19 @@ const RENDERERS: Record<
   },
 }
 
-const stripPrefix = (s: string) => (s.startsWith('tool-') ? s.slice(5) : s)
-
-export function isGenUiTool(typeOrName: string): boolean {
-  return stripPrefix(typeOrName) in RENDERERS
+// Caller passes the resolved tool name (e.g. "draft_transaction"). Static tool
+// parts have type `tool-<name>`, dynamic tool parts have type `dynamic-tool`
+// with a separate `toolName` field — chat.tsx normalizes via getToolName(part)
+// before calling in.
+export function isGenUiTool(toolName: string): boolean {
+  return toolName in RENDERERS
 }
 
 export function renderGenUi(
-  typeOrName: string,
+  toolName: string,
   input: unknown,
   props: GenUiProps,
 ): React.ReactElement | null {
-  const fn = RENDERERS[stripPrefix(typeOrName)]
+  const fn = RENDERERS[toolName]
   return fn ? fn(input, props) : null
 }

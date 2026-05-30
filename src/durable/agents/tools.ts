@@ -1,48 +1,52 @@
-import { tool } from 'ai'
+import { dynamicTool, tool, type ToolExecuteFunction } from 'ai'
 import { z } from 'zod'
-import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
 } from '../agent-ui-schemas'
 
-// Shared tools used by multiple agents (ledger + statement). `clarify` has no
-// `execute` → the agent loop suspends until the UI resolves it via
-// addToolResult. `draft_transaction` has a server-side `execute` that runs the
-// same validators (`@/lib/beancount/*`) the journal write path runs, so the
-// model can't emit a draft that won't persist. On `ok: true` the UI still
-// shows an approval card (rendered from the streamed input); on `ok: false`
-// the model sees per-entry issues and re-drafts in the same turn.
+// Shared tools used by multiple agents (ledger + statement).
+//
+// `draft_transaction` and `clarify` are CLIENT tools — they have no runtime
+// `execute`, so the SDK loop suspends after the call until the UI resolves
+// them via addToolResult (approve / reject / answer). They're registered with
+// `dynamicTool` (not `tool`) on purpose: the AI SDK silently drops invalid
+// input for static client tools, but surfaces a `tool-error` to the model for
+// dynamic ones (parseToolCall in ai/dist/index.mjs:4521). Validation lives in
+// `draftTransactionBatchSchema.superRefine` (same `validateDraftBatch` used
+// by replaceBuffer at the journal-write boundary) — on bad input the model
+// gets per-entry issues back and re-emits in the same turn, without an empty
+// approval card cluttering history.
+//
+// `dynamicTool`'s TypeScript signature requires `execute`, but the runtime
+// (executeToolCall: `if (tool?.execute == null) return void 0`) short-circuits
+// on a literally-undefined execute. We provide `undefined` cast to the expected
+// type to keep the suspending behavior while satisfying the compiler.
+//
+// `read_statement` below is a SERVER tool (real `execute`) — it runs inline,
+// returns the raw statement text, and lets the model continue to
+// draft_transaction in the same turn.
+
+const SUSPENDING_EXECUTE = undefined as unknown as ToolExecuteFunction<
+  unknown,
+  unknown
+>
 
 export function draftTransactionTool() {
-  return tool({
+  return dynamicTool({
     description:
-      'Propose one or more beancount transactions for the user to review and approve. Always pass an array under `transactions` — a one-off entry is just a batch of length 1. Batch related entries (statement uploads, splits across categories, subscription series) into a single call; the user pages through them and approves the whole batch at once. The server validates each entry (parse + per-currency balance + account shape) and returns `{ ok: false, issues: [{ index, message }] }` if anything is wrong — fix the listed entries and call this tool again in the same turn. On success returns `{ ok: true, pending_approval: true }` and the user approves the batch in the UI. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields.',
+      'Propose one or more beancount transactions for the user to review and approve. Always pass an array under `transactions` — a one-off entry is just a batch of length 1. Batch related entries (statement uploads, splits across categories, subscription series) into a single call; the user pages through them and approves the whole batch at once. Input is validated server-side (parse + per-currency balance + account shape); on validation failure you will receive a tool-error describing each bad entry by index — fix the listed entries and call this tool again in the same turn. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields.',
     inputSchema: draftTransactionBatchSchema,
-    execute: async ({ transactions }) => {
-      const result = validateDraftBatch(transactions)
-      if (result.ok === false) {
-        return {
-          ok: false as const,
-          issues: result.issues,
-          message:
-            'draft_transaction rejected — fix the listed entries (each `index` is 0-based into the `transactions` array you sent) and call draft_transaction again with the corrected batch.',
-        }
-      }
-      return {
-        ok: true as const,
-        pending_approval: true,
-        transaction_count: transactions.length,
-      }
-    },
+    execute: SUSPENDING_EXECUTE,
   })
 }
 
 export function clarifyTool() {
-  return tool({
+  return dynamicTool({
     description:
       'Ask the user one short clarifying question when a required accounting choice is genuinely ambiguous (e.g. instant discount vs separately-redeemable cashback). Provide suggested `options` as short chips; set `multi_select: true` for "all that apply"; set `allow_custom: false` only when free text would not make sense. After the user answers, you will receive { answers: string[] } as the tool result — then proceed (typically to draft_transaction).',
     inputSchema: clarifyInputSchema,
+    execute: SUSPENDING_EXECUTE,
   })
 }
 
