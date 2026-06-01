@@ -1,17 +1,23 @@
 import type { ToolSet } from 'ai'
-import { buildAnalystSystem } from './agent-prompt'
+import { buildAnalystSystem, buildGraphWalkerSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
 import {
   makeConciergeRegistry,
   type ConciergeAgentName,
 } from './agents/registries/concierge'
-import { querySqlTool } from './agents/tools/concierge'
+import {
+  fetchKbAgentsMd,
+  kbHttpOverFetch,
+  makeKbTools,
+  querySqlTool,
+} from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
 
-// The chat/agent runtime for the `/concierge` surface. Read-only Q&A over
-// the user's ledger. Pure compute: every read (snapshot, ad-hoc SQL) goes
-// to LedgerDO over RPC, keyed by the same per-user name. No writes.
+// The chat/agent runtime for the `/concierge` surface. Read-only Q&A — over
+// the user's ledger (`analyst`) and the milesvault knowledge graph
+// (`graph-walker`). Pure compute: every read goes to LedgerDO over RPC
+// (ledger) or to the kb worker over HTTP (graph). No writes.
 type Snapshot = Awaited<ReturnType<LedgerDO['ledger_snapshot']>>
 
 export type ConciergeDOState = Record<string, never>
@@ -31,9 +37,11 @@ export class ConciergeDO
   protected registry: Registry
   initialState: ConciergeDOState = {}
 
-  // The ledger snapshot for the current turn, fetched once in beforeTurnFetch
-  // (async RPC) and reused by the sync system-prompt builder + every step.
+  // Per-turn context. Both fetched once in beforeTurnFetch (async) so the
+  // sync system-prompt builder + every step can reuse them without further
+  // RPC. Cleared after the turn config is built — the next turn re-fetches.
   private turnSnapshot: Snapshot | null = null
+  private turnAgentsBriefing: string | null = null
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
@@ -57,17 +65,41 @@ export class ConciergeDO
     )
   }
 
+  // Synthetic host for the kb service binding — only the path is used.
+  private readonly KB_BASE = 'https://kb'
+
   protected override async beforeTurnFetch(): Promise<void> {
-    this.turnSnapshot = await this.ledgerStub().ledger_snapshot()
+    // Always pull a fresh ledger snapshot. The graph briefing only matters
+    // when the graph-walker is active; skip the fetch otherwise to keep the
+    // ledger-only path cheap.
+    const wantsGraph = this.activeAgent().name === 'graph-walker'
+    const [snapshot, briefing] = await Promise.all([
+      this.ledgerStub().ledger_snapshot(),
+      wantsGraph
+        ? fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((err) => {
+            console.warn(`[concierge] kb agents.md fetch failed: ${err}`)
+            return ''
+          })
+        : Promise.resolve(''),
+    ])
+    this.turnSnapshot = snapshot
+    this.turnAgentsBriefing = briefing
   }
 
   // ---- AgentHost<ConciergeAgentName> ----
 
-  system(_name: ConciergeAgentName): string {
-    return buildAnalystSystem(this.snapshot()) + this.handoffContextBlock()
+  system(name: ConciergeAgentName): string {
+    const base =
+      name === 'graph-walker'
+        ? buildGraphWalkerSystem(this.turnAgentsBriefing ?? '')
+        : buildAnalystSystem(this.snapshot())
+    return base + this.handoffContextBlock()
   }
 
-  tools(_name: ConciergeAgentName): ToolSet {
+  tools(name: ConciergeAgentName): ToolSet {
+    if (name === 'graph-walker') {
+      return makeKbTools(kbHttpOverFetch(this.KB_BASE, this.env.KB))
+    }
     return {
       query_sql: querySqlTool((sql, params) =>
         this.ledgerStub().query_sql(sql, params),

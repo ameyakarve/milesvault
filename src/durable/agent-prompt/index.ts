@@ -11,6 +11,7 @@ import {
   STATEMENT_HANDLING,
   STATEMENT_EXTRACTION,
   ANALYST_ROLE,
+  GRAPH_WALKER_ROLE,
 } from './inline.generated'
 
 export { BEANCOUNT_PRIMER }
@@ -151,4 +152,14 @@ export function buildAnalystSystem(snapshot: AnalystSnapshot): string {
     BEANCOUNT_PRIMER,
     renderAnalystSnapshotBlock(snapshot),
   ].join('\n\n---\n\n')
+}
+
+// System prompt for the `graph-walker` agent (Concierge surface). Read-only
+// traversal of the milesvault knowledge graph via the kb HTTP API. The
+// `agentsBriefing` is the live `/api/kb/agents.md` document (schema + counts),
+// fetched per turn so the agent sees the current type vocabulary.
+export function buildGraphWalkerSystem(agentsBriefing: string): string {
+  return [GRAPH_WALKER_ROLE, '# Live graph schema', agentsBriefing.trim()].join(
+    '\n\n---\n\n',
+  )
 }

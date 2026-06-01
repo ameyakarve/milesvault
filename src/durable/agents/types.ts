@@ -7,6 +7,10 @@ import type { ToolSet } from 'ai'
 export interface ModelConfig {
   readonly id: string
   readonly reasoning: 'low' | 'medium' | 'high' | 'off'
+  // Per-agent override on the per-turn step cap. Think's default is 10;
+  // agents doing focused multi-hop work can tighten this. Omit to inherit
+  // the default.
+  readonly maxSteps?: number
 }
 
 // A single persona the conversation can run under. The builders are closures

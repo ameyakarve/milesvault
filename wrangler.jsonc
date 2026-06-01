@@ -68,6 +68,9 @@
       "bucket_name": "milesvault",
     },
   ],
+  "services": [
+    { "binding": "KB", "service": "milesvault-kb" },
+  ],
 
   "env": {
     "staging": {
@@ -117,6 +120,7 @@
       ],
       "services": [
         { "binding": "PROD", "service": "milesvault" },
+        { "binding": "KB", "service": "milesvault-kb-staging" },
       ],
       "r2_buckets": [
         {

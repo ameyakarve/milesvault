@@ -75,6 +75,7 @@ export abstract class BaseAgentDO<
       model: this.buildModel(agent.model),
       activeTools: activeToolNames(agent),
       repairToolCall: this.getRepairToolCall(),
+      ...(agent.model.maxSteps !== undefined ? { maxSteps: agent.model.maxSteps } : {}),
     }
   }
 
