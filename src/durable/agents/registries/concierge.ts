@@ -30,7 +30,7 @@ export function makeConciergeRegistry(
   const graphWalker: AgentDef = {
     name: 'graph-walker',
     canHandoffTo: ['analyst'],
-    model: { id: GRAPH_WALKER_MODEL_ID, reasoning: 'off', maxSteps: 5 },
+    model: { id: GRAPH_WALKER_MODEL_ID, reasoning: 'off', maxSteps: 10 },
     system: () => host.system('graph-walker'),
     tools: () => host.tools('graph-walker'),
   }
