@@ -36,7 +36,11 @@ export function makeConciergeRegistry(
   }
   return {
     name: 'concierge',
-    entry: 'analyst',
+    // graph-walker is the default — most concierge questions are about the
+    // points/miles world (cards, transfer partners, alliances) rather than
+    // the user's personal ledger numbers. It hands off to analyst when the
+    // question turns out to be about the user's own data.
+    entry: 'graph-walker',
     agents: { analyst, 'graph-walker': graphWalker },
   }
 }

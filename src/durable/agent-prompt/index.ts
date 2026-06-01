@@ -144,11 +144,51 @@ ${counts || '  (empty)'}
 ${snapshot.sample_txns.trim() || '(no transactions yet)'}`
 }
 
+// Handoff teaching for the Concierge surface. The analyst owns ledger
+// questions; the graph-walker owns the points & miles knowledge graph
+// (cards, programmes, transfer partners, alliances). Either can hand the
+// conversation to the other when the question shifts domain.
+const HANDOFF_TO_GRAPH_WALKER = `# Knowledge-graph questions — hand off
+
+If the user is asking about credit cards, loyalty programmes, transfer
+partners, airline alliances, hotel chains, or anything else about the points
+& miles world IN GENERAL (i.e. not about their own ledger numbers), you do
+NOT have that data. Hand off to the graph-walker:
+
+\`\`\`
+handoff({ to: "graph-walker", context: "<the user's question, plus any
+constraint they mentioned>" })
+\`\`\`
+
+Examples that belong to the graph-walker: "which cards transfer to Turkish
+Airlines?", "what's the Marriott → United transfer ratio?", "which Indian
+banks issue Amex?", "what hotels are in Hyatt's portfolio?".
+
+Do NOT try to answer these from the ledger — the ledger only records the
+user's transactions, not the universe of cards and programmes.`
+
+const HANDOFF_TO_ANALYST = `# Ledger questions — hand off
+
+If the user asks about their OWN finances — spend, balances, transactions,
+points they personally hold, things in their ledger — you do not have that
+data. Hand off to the analyst:
+
+\`\`\`
+handoff({ to: "analyst", context: "<the user's question>" })
+\`\`\`
+
+Examples that belong to the analyst: "how much did I spend on flights last
+month?", "what's my Avios balance?", "show me my Marriott stays this year".
+
+Stay on the question yourself when it's about the graph (cards, programmes,
+transfer ratios, alliances) — that's your domain.`
+
 // System prompt for the `analyst` agent (Concierge surface). Read-only Q&A
 // over the ledger via SQL — no Beancount editing, no statement handling.
 export function buildAnalystSystem(snapshot: AnalystSnapshot): string {
   return [
     ANALYST_ROLE,
+    HANDOFF_TO_GRAPH_WALKER,
     BEANCOUNT_PRIMER,
     renderAnalystSnapshotBlock(snapshot),
   ].join('\n\n---\n\n')
@@ -159,7 +199,10 @@ export function buildAnalystSystem(snapshot: AnalystSnapshot): string {
 // `agentsBriefing` is the live `/api/kb/agents.md` document (schema + counts),
 // fetched per turn so the agent sees the current type vocabulary.
 export function buildGraphWalkerSystem(agentsBriefing: string): string {
-  return [GRAPH_WALKER_ROLE, '# Live graph schema', agentsBriefing.trim()].join(
-    '\n\n---\n\n',
-  )
+  return [
+    GRAPH_WALKER_ROLE,
+    HANDOFF_TO_ANALYST,
+    '# Live graph schema',
+    agentsBriefing.trim(),
+  ].join('\n\n---\n\n')
 }

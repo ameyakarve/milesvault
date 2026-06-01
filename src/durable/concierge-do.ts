@@ -69,18 +69,15 @@ export class ConciergeDO
   private readonly KB_BASE = 'https://kb'
 
   protected override async beforeTurnFetch(): Promise<void> {
-    // Always pull a fresh ledger snapshot. The graph briefing only matters
-    // when the graph-walker is active; skip the fetch otherwise to keep the
-    // ledger-only path cheap.
-    const wantsGraph = this.activeAgent().name === 'graph-walker'
+    // Fetch both context sources in parallel. Either agent can hand off
+    // mid-turn, so we can't gate on the agent active at turn start —
+    // the receiving agent's system prompt is rebuilt per step.
     const [snapshot, briefing] = await Promise.all([
       this.ledgerStub().ledger_snapshot(),
-      wantsGraph
-        ? fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((err) => {
-            console.warn(`[concierge] kb agents.md fetch failed: ${err}`)
-            return ''
-          })
-        : Promise.resolve(''),
+      fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((err) => {
+        console.warn(`[concierge] kb agents.md fetch failed: ${err}`)
+        return ''
+      }),
     ])
     this.turnSnapshot = snapshot
     this.turnAgentsBriefing = briefing
