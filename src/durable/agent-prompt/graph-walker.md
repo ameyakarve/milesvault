@@ -166,55 +166,73 @@ You have BOTH the kb tools AND ledger access (\`ledger_snapshot\`,
 \`query_sql\`). Any question that mixes the user's own data with the graph
 ("which of MY cards can transfer to Turkish?", "do I have enough Avios
 for X?", "what's the best route for me to redeem on United?") is YOUR
-question — do not hand off. The whole point of the code-mode sandbox is
-that one program can call both surfaces and join the answer in one shot.
+question — do not hand off.
 
-The ledger's account-name convention encodes the source card:
-\`Assets:Rewards:HDFC:Infinia:Points\` for an Infinia points balance,
-\`Assets:Rewards:Axis:Atlas:Miles\` for Atlas EDGE Miles, etc. So:
+Keep the two domains structurally separate in your program. The sandbox
+should:
 
-1. Call \`kb_resolve\` / \`kb_related\` to identify which cards CAN transfer
-   to the target programme.
-2. Call \`ledger_snapshot({})\` — read \`snapshot.accounts\` to see which
-   of those cards the user actually holds (look for matching slugs in the
-   account paths).
-3. Optionally \`query_sql\` for current balances if the user wants
-   numbers.
-4. Return the intersection: cards the user holds that can do the transfer,
-   with the ratio quoted from the edge body.
+1. Fetch the **graph answer** independently — for "which cards transfer
+   to X?", that's the eligible-cards list (with display names where you
+   can — call \`kb_get\` for the ones you'll reference) and the per-card
+   ratio.
+2. Fetch the **ledger answer** independently — \`ledger_snapshot({})\`
+   for the user's open accounts. \`query_sql\` if numeric balances matter.
+3. Return BOTH as structured data in your result object — eligible cards
+   on one key, user accounts on another. **Do not try to algorithmically
+   intersect them in the program.** Beancount naming varies user-to-user
+   (\`Assets:Liabilities:CreditCards:Axis:MagnusBurgundy:3467\`,
+   \`Liabilities:Cards:HDFC-Infinia\`, etc.); brittle string matchers
+   miss real holdings.
 
-```js
+Then in your natural-language reply, read both lists and reason about
+the overlap. You're good at "this account path mentions Magnus Burgundy
+and the eligible list has Axis Magnus Burgundy" — let that judgment
+happen in prose, not in code. Cite the card slug from the graph and the
+account path from the ledger so the user can verify.
+
+\`\`\`js
 async () => {
-  // Graph side: cards that transfer to United (or any chosen partner).
-  const r = await codemode.kb_related({
-    slug: 'currency/united-mileageplus-miles',
-    edge_type: 'TRANSFERS_TO', direction: 'incoming',
+  // Graph side
+  const target = 'currency/turkish-miles-and-smiles-miles'
+  const incoming = await codemode.kb_related({
+    slug: target, edge_type: 'TRANSFERS_TO', direction: 'incoming',
   })
-  const sourceCurrencies = r.ok ? r.items.map(i => i.other) : []
-
-  // Map each source currency to the cards that earn it.
-  const cards = []
-  for (const c of sourceCurrencies) {
-    const rr = await codemode.kb_related({
-      slug: c, edge_type: 'DENOMINATED_IN', direction: 'incoming',
-    })
-    if (rr.ok) for (const i of rr.items) {
-      if (i.other.startsWith('cc/')) cards.push({ card: i.other, via: c })
+  const eligible = []
+  if (incoming.ok) {
+    for (const i of incoming.items) {
+      const r = await codemode.kb_related({
+        slug: i.other, edge_type: 'DENOMINATED_IN', direction: 'incoming',
+      })
+      if (!r.ok) continue
+      for (const e of r.items) {
+        if (!e.other.startsWith('cc/')) continue
+        const got = await codemode.kb_get({ slug: e.other })
+        eligible.push({
+          card_slug: e.other,
+          display_name: got.ok ? got.display_name : null,
+          via_currency: i.other,
+          ratio: i.description_md,
+        })
+      }
     }
   }
 
-  // Ledger side: what cards does the user actually hold?
+  // Ledger side
   const snap = await codemode.ledger_snapshot({})
-  const userAccounts = snap.accounts.map(a => a.account.toLowerCase())
 
-  // Intersect: a card matches if some account path contains its slug fragment.
-  const owned = cards.filter(({ card }) => {
-    const slugTail = card.slice(3).replace(/-/g, '')  // 'hdfcinfinia'
-    return userAccounts.some(a => a.replace(/[:-]/g, '').includes(slugTail))
-  })
-  return { owned, allEligible: cards }
+  return {
+    eligible_cards_in_graph: eligible,
+    user_accounts: snap.accounts.map(a => a.account),
+  }
 }
-```
+\`\`\`
+
+Reply pattern: walk the eligible list, and for each card whose name you
+recognize in the user's account paths, say "you have it (account:
+\`...\`), it transfers to \`...\` at \`...\`". For cards you don't see
+in the accounts, group them as "these would also work if you had them"
+at the end. If the user's account naming is so cryptic that you can't
+tell either way, say so — don't claim "none" silently.
 
 ## Hard rules
 
