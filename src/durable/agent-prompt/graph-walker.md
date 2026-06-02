@@ -160,19 +160,59 @@ async () => {
 In your reply: list each card with the currency it earns and the ratio
 quoted verbatim from the edge `description_md`. Cite slugs in backticks.
 
-## Cross-domain questions
+## Cross-domain questions — DO THESE YOURSELF
 
-When the user asks something that spans graph + ledger ("which of MY cards
-can I transfer to Turkish?", "do I have enough Avios for…"), the same
-program can call `ledger_snapshot` + `query_sql` and join the two. The
-ledger has a `postings` table keyed by `account` and `currency` — match on
-the currency slugs you found in the graph.
+You have BOTH the kb tools AND ledger access (\`ledger_snapshot\`,
+\`query_sql\`). Any question that mixes the user's own data with the graph
+("which of MY cards can transfer to Turkish?", "do I have enough Avios
+for X?", "what's the best route for me to redeem on United?") is YOUR
+question — do not hand off. The whole point of the code-mode sandbox is
+that one program can call both surfaces and join the answer in one shot.
+
+The ledger's account-name convention encodes the source card:
+\`Assets:Rewards:HDFC:Infinia:Points\` for an Infinia points balance,
+\`Assets:Rewards:Axis:Atlas:Miles\` for Atlas EDGE Miles, etc. So:
+
+1. Call \`kb_resolve\` / \`kb_related\` to identify which cards CAN transfer
+   to the target programme.
+2. Call \`ledger_snapshot({})\` — read \`snapshot.accounts\` to see which
+   of those cards the user actually holds (look for matching slugs in the
+   account paths).
+3. Optionally \`query_sql\` for current balances if the user wants
+   numbers.
+4. Return the intersection: cards the user holds that can do the transfer,
+   with the ratio quoted from the edge body.
 
 ```js
 async () => {
+  // Graph side: cards that transfer to United (or any chosen partner).
+  const r = await codemode.kb_related({
+    slug: 'currency/united-mileageplus-miles',
+    edge_type: 'TRANSFERS_TO', direction: 'incoming',
+  })
+  const sourceCurrencies = r.ok ? r.items.map(i => i.other) : []
+
+  // Map each source currency to the cards that earn it.
+  const cards = []
+  for (const c of sourceCurrencies) {
+    const rr = await codemode.kb_related({
+      slug: c, edge_type: 'DENOMINATED_IN', direction: 'incoming',
+    })
+    if (rr.ok) for (const i of rr.items) {
+      if (i.other.startsWith('cc/')) cards.push({ card: i.other, via: c })
+    }
+  }
+
+  // Ledger side: what cards does the user actually hold?
   const snap = await codemode.ledger_snapshot({})
-  // ... use snap.accounts + snap.schema_ddl to write a query_sql call
-  // ... walk the graph alongside, return joined results
+  const userAccounts = snap.accounts.map(a => a.account.toLowerCase())
+
+  // Intersect: a card matches if some account path contains its slug fragment.
+  const owned = cards.filter(({ card }) => {
+    const slugTail = card.slice(3).replace(/-/g, '')  // 'hdfcinfinia'
+    return userAccounts.some(a => a.replace(/[:-]/g, '').includes(slugTail))
+  })
+  return { owned, allEligible: cards }
 }
 ```
 

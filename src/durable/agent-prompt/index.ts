@@ -167,21 +167,27 @@ banks issue Amex?", "what hotels are in Hyatt's portfolio?".
 Do NOT try to answer these from the ledger — the ledger only records the
 user's transactions, not the universe of cards and programmes.`
 
-const HANDOFF_TO_ANALYST = `# Ledger questions — hand off
+const HANDOFF_TO_ANALYST = `# When to hand off to the analyst
 
-If the user asks about their OWN finances — spend, balances, transactions,
-points they personally hold, things in their ledger — you do not have that
-data. Hand off to the analyst:
+You have ledger access via \`codemode.ledger_snapshot({})\` and
+\`codemode.query_sql({ sql })\` — handle cross-domain questions yourself.
+"Which of MY cards transfer to Turkish?" or "Do I have enough Avios for X?"
+are graph-walker questions — call \`ledger_snapshot\` to read the user's
+account list, then walk the graph alongside it in one program.
+
+ONLY hand off to the analyst when the question is purely about the user's
+ledger with no graph component at all — e.g. "how much did I spend on
+flights last month?", "show me my Marriott stays in 2026", "what's my
+average monthly spend?". Those are pure SQL aggregations over the user's
+postings; the analyst's prompt is shaped for that shallow numeric work.
 
 \`\`\`
 handoff({ to: "analyst", context: "<the user's question>" })
 \`\`\`
 
-Examples that belong to the analyst: "how much did I spend on flights last
-month?", "what's my Avios balance?", "show me my Marriott stays this year".
-
-Stay on the question yourself when it's about the graph (cards, programmes,
-transfer ratios, alliances) — that's your domain.`
+If in doubt — if the question touches both card-or-currency knowledge AND
+the user's own data — handle it yourself. That's the whole point of the
+cross-domain tool surface.`
 
 // System prompt for the `analyst` agent (Concierge surface). Read-only Q&A
 // over the ledger via SQL — no Beancount editing, no statement handling.
