@@ -62,19 +62,61 @@ export function ConciergeChat() {
     agent: 'ConciergeDO',
     basePath: 'api/agents/concierge',
   })
-  const { messages, sendMessage, status, isStreaming, clearHistory } =
-    useAgentChat({
-      agent,
-      autoContinueAfterToolResult: true,
-      getInitialMessages: null,
-    })
+  const {
+    messages,
+    sendMessage,
+    addToolOutput,
+    status,
+    isStreaming,
+    clearHistory,
+  } = useAgentChat({
+    agent,
+    autoContinueAfterToolResult: true,
+    getInitialMessages: null,
+  })
 
   const [text, setText] = useState('')
+
+  // Walk the latest assistant message for a still-pending `ask_user`
+  // dynamic-tool call. If we find one, the next user message resolves
+  // that tool instead of starting a fresh turn — the agent is paused
+  // waiting on the answer.
+  const pendingAskUser = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.role !== 'assistant') continue
+      const parts = (m.parts ?? []) as Part[]
+      for (const p of parts) {
+        if (
+          p.type === 'dynamic-tool' &&
+          p.toolName === 'ask_user' &&
+          (p.state === 'input-available' || p.state === 'input-streaming') &&
+          typeof p.toolCallId === 'string'
+        ) {
+          const question =
+            typeof p.input === 'object' && p.input !== null && 'question' in p.input
+              ? String((p.input as { question?: unknown }).question ?? '')
+              : ''
+          return { toolCallId: p.toolCallId, question }
+        }
+      }
+      // Stop at the most recent assistant message — older ones can't be pending.
+      break
+    }
+    return null
+  })()
 
   function handleSubmit(message: PromptInputMessage) {
     const value = (message.text ?? '').trim()
     if (!value) return
-    void sendMessage({ text: value })
+    if (pendingAskUser) {
+      addToolOutput({
+        toolCallId: pendingAskUser.toolCallId,
+        output: { answer: value },
+      })
+    } else {
+      void sendMessage({ text: value })
+    }
     setText('')
   }
 

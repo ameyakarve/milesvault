@@ -9,6 +9,7 @@ import {
   type ConciergeAgentName,
 } from './agents/registries/concierge'
 import {
+  askUserTool,
   fetchKbAgentsMd,
   kbHttpOverFetch,
   ledgerSnapshotTool,
@@ -107,28 +108,40 @@ export class ConciergeDO
     }
   }
 
-  // Graph-walker runs in code-mode: the LLM writes one async JS program
-  // that calls our tools as functions inside a Cloudflare Dynamic Worker
-  // sandbox. The model sees a single `codemode` tool whose description is
-  // generated from the underlying tool surface. All four kb traversal tools
-  // plus a read-only ledger pair (snapshot + query_sql) are exposed, so a
-  // program can join graph data with the user's actual transactions in one
-  // execute call — no per-hop round-trip.
+  // Graph-walker tool surface — layered. Simple one-hop graph lookups
+  // go through the top-level kb tools; complex multi-hop or cross-domain
+  // walks compose them inside the codemode sandbox; the model asks the
+  // user only when an answer would meaningfully change.
+  //
+  // - `kb_resolve` / `kb_get` / `kb_related` / `kb_list`: same factories
+  //   that codemode wraps internally, exposed at top level for one-shot
+  //   queries (text→slug, slug→node, one edge lookup, one prefix list).
+  // - `codemode`: AI-SDK tool that runs an LLM-written JS program in a
+  //   Cloudflare Dynamic Worker isolate. Inside the program the same kb
+  //   tools plus `ledger_snapshot` and `query_sql` are exposed as
+  //   namespaced functions. Use for joins / conditional multi-hop walks.
+  // - `ask_user`: pure-text suspending tool — model asks a question, the
+  //   user's next chat message becomes the answer. No genUI.
   private graphWalkerTools(): ToolSet {
+    const queryRunner = (sql: string, params: ReadonlyArray<string | number | null>) =>
+      this.ledgerStub().query_sql(sql, params)
+    const snapshotRunner = () => this.ledgerStub().ledger_snapshot()
+
     const kb = makeKbTools(kbHttpOverFetch(this.KB_BASE, this.env.KB))
-    const ledger = {
-      ledger_snapshot: ledgerSnapshotTool(() =>
-        this.ledgerStub().ledger_snapshot(),
-      ),
-      query_sql: querySqlTool((sql, params) =>
-        this.ledgerStub().query_sql(sql, params),
-      ),
+    const sandboxLedger = {
+      ledger_snapshot: ledgerSnapshotTool(snapshotRunner),
+      query_sql: querySqlTool(queryRunner),
     }
     const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
     const codemode = createCodeTool({
-      tools: { ...kb, ...ledger },
+      tools: { ...kb, ...sandboxLedger },
       executor,
     })
-    return { codemode } as ToolSet
+
+    return {
+      ...kb,
+      codemode,
+      ask_user: askUserTool(),
+    } as ToolSet
   }
 }
