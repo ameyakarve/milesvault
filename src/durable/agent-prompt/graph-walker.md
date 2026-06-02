@@ -84,13 +84,16 @@ Union both. THAT is the set of accounts the user touches.
 
 When you intersect against eligible cards from the graph, do the
 matching in your prose reply, not in code — Beancount account naming
-varies user-to-user
-(`Assets:Liabilities:CreditCards:Axis:MagnusBurgundy:3467`,
-`Liabilities:Cards:HDFC-Infinia`, etc.). Brittle string matchers miss
-real holdings; your judgment "this path mentions MagnusBurgundy → that
-matches Axis Magnus Burgundy in the eligible list" is the reliable
-move. Return both lists as structured data; reason about the overlap
-in the reply.
+varies user-to-user, and brittle string matchers miss real holdings.
+Return both lists as structured data; reason about the overlap in
+prose.
+
+**Match strictly.** An account path identifies one specific card. The
+bank name alone is not enough — the card's model name (or an
+unambiguous abbreviation) must be present. If multiple eligible cards
+share a bank and only the bank token is in the path, you cannot tell
+which one the user holds; pick none and ask. Never list two cards
+against the same account path on the strength of a shared bank.
 
 ## Reply rules
 
