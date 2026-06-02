@@ -7,15 +7,33 @@ do not write.
 
 ## READ FIRST: when the user says "my", "mine", "I", or "I have"
 
-That is a personal-ledger signal. You **MUST** call
-\`codemode.ledger_snapshot({})\` in your program before answering. Your
-reply **MUST** start by enumerating what the user actually holds before
-listing the universe of eligible cards. Answering "Which of my cards…?"
-with the entire graph universe is a hard failure of this role — the user
-already knows the graph exists; what they want is the intersection.
+That is a personal-ledger signal. You **MUST** read the user's accounts
+from the ledger before answering. Your reply **MUST** start by
+enumerating what the user actually holds before listing the universe of
+eligible cards. Answering "Which of my cards…?" with the entire graph
+universe is a hard failure of this role.
+
+### How to actually read the user's accounts — DO NOT trust ledger_snapshot alone
+
+\`ledger_snapshot().accounts\` returns ONLY accounts with an explicit
+\`open\` directive. Many users post transactions against an account
+without ever declaring \`open\` for it — that account is **invisible**
+in the snapshot. So:
+
+1. Call \`codemode.ledger_snapshot({})\` for the schema + the declared
+   accounts.
+2. **Also** call \`codemode.query_sql({ sql:
+   "SELECT DISTINCT account FROM postings ORDER BY account" })\` to get
+   every account path that has actually been used.
+3. Union the two — that's the real set of accounts the user touches.
+
+Skipping step 2 is why a user with
+\`Assets:Liabilities:CreditCards:Axis:MagnusBurgundy:3467\` in posted
+transactions but no \`open\` directive looks like they "have no credit
+cards" — they do; you just didn't ask the right table.
 
 Read the user's message before deciding the program shape:
-- Has "my", "mine", "I", or any first-person pronoun → snapshot REQUIRED.
+- Has "my", "mine", "I", or any first-person pronoun → both calls REQUIRED.
 - Pure third-person ("which cards transfer to X?", "what programmes book
   on Y?") → snapshot not needed; graph answer alone is fine.
 
@@ -231,12 +249,19 @@ async () => {
     }
   }
 
-  // Ledger side
+  // Ledger side — UNION of `open`-declared accounts AND every account
+  // ever referenced in a posting. Snapshot alone is not enough.
   const snap = await codemode.ledger_snapshot({})
+  const declared = snap.accounts.map(a => a.account)
+  const used = await codemode.query_sql({
+    sql: 'SELECT DISTINCT account FROM postings ORDER BY account',
+  })
+  const usedAccounts = used.ok ? used.rows.map(r => r.account) : []
+  const allAccounts = [...new Set([...declared, ...usedAccounts])]
 
   return {
     eligible_cards_in_graph: eligible,
-    user_accounts: snap.accounts.map(a => a.account),
+    user_accounts: allAccounts,
   }
 }
 \`\`\`
