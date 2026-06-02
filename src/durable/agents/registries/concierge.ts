@@ -2,15 +2,13 @@ import type { AgentDef, AgentHost, Registry } from '../types'
 
 // Workers AI model ids.
 //
-// The analyst runs Kimi (freeform reasoning over SQL results) at low effort
-// — questions are usually shallow ("how much did I spend on X"), not deep
-// analytic dives.
-//
-// The graph-walker runs Gemma with the thinking trace OFF and a tight step
-// budget. Graph traversal is deterministic ("resolve, get, related, done");
-// reasoning tokens are mostly waste here.
+// Both Concierge agents run Kimi. The analyst does freeform reasoning over
+// SQL results at low effort — questions are usually shallow ("how much did
+// I spend on X"). The graph-walker runs in code-mode (a single sandboxed JS
+// program calls our tools as functions), and Kimi writes code better than
+// Gemma — Gemma-with-thinking-off was unreliable at multi-hop traversal.
 const ANALYST_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
-const GRAPH_WALKER_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
+const GRAPH_WALKER_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
 
 export type ConciergeAgentName = 'analyst' | 'graph-walker'
 
@@ -30,7 +28,10 @@ export function makeConciergeRegistry(
   const graphWalker: AgentDef = {
     name: 'graph-walker',
     canHandoffTo: ['analyst'],
-    model: { id: GRAPH_WALKER_MODEL_ID, reasoning: 'off', maxSteps: 10 },
+    // Code-mode: one well-written execute call usually answers the question.
+    // Allow a few extra steps so the model can recover from a sandbox error
+    // (e.g. a bad slug or a thrown exception inside the program).
+    model: { id: GRAPH_WALKER_MODEL_ID, reasoning: 'low', maxSteps: 5 },
     system: () => host.system('graph-walker'),
     tools: () => host.tools('graph-walker'),
   }
