@@ -123,23 +123,23 @@ export class ConciergeDO
   // - `ask_user`: pure-text suspending tool — model asks a question, the
   //   user's next chat message becomes the answer. No genUI.
   private graphWalkerTools(): ToolSet {
-    const queryRunner = (sql: string, params: ReadonlyArray<string | number | null>) =>
-      this.ledgerStub().query_sql(sql, params)
-    const snapshotRunner = () => this.ledgerStub().ledger_snapshot()
-
     const kb = makeKbTools(kbHttpOverFetch(this.KB_BASE, this.env.KB))
-    const sandboxLedger = {
-      ledger_snapshot: ledgerSnapshotTool(snapshotRunner),
-      query_sql: querySqlTool(queryRunner),
-    }
+    // Ledger access is the `ledger_snapshot` DO RPC only — no raw SQL.
+    // It lists the user's accounts (their card summary). Exposed at TOP
+    // LEVEL so the model can call it directly, AND inside codemode for
+    // cross-domain programs.
+    const ledger_snapshot = ledgerSnapshotTool(() =>
+      this.ledgerStub().ledger_snapshot(),
+    )
     const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
     const codemode = createCodeTool({
-      tools: { ...kb, ...sandboxLedger },
+      tools: { ...kb, ledger_snapshot },
       executor,
     })
 
     return {
       ...kb,
+      ledger_snapshot,
       codemode,
       ask_user: askUserTool(),
     } as ToolSet
