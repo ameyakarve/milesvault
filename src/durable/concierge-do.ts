@@ -10,6 +10,7 @@ import {
 } from './agents/registries/concierge'
 import {
   askUserTool,
+  awardQuoteTool,
   fetchKbAgentsMd,
   kbHttpOverFetch,
   ledgerSnapshotTool,
@@ -131,15 +132,20 @@ export class ConciergeDO
     const ledger_snapshot = ledgerSnapshotTool(() =>
       this.ledgerStub().ledger_snapshot(),
     )
+    // Batch award-chart pricing (stub: returns not_implemented). Top level
+    // for one-shot quotes, and inside codemode so a program can price an
+    // itinerary and pivot to "how do I earn those miles?" in one walk.
+    const award_quote = awardQuoteTool()
     const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
     const codemode = createCodeTool({
-      tools: { ...kb, ledger_snapshot },
+      tools: { ...kb, ledger_snapshot, award_quote },
       executor,
     })
 
     return {
       ...kb,
       ledger_snapshot,
+      award_quote,
       codemode,
       ask_user: askUserTool(),
     } as ToolSet
