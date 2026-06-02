@@ -281,9 +281,38 @@ Reply pattern (in this order — do not skip step 1):
    which cards they map to — can you confirm?"). Do not silently fall
    back to the universe.
 
+### Extracting one ratio from a per-card table
+
+TRANSFERS_TO edge bodies are written as a per-card list because the
+ratio depends on the source card — example body for
+\`currency/edge-rewards → currency/turkish-miles-and-smiles-miles\`:
+
+\`\`\`
+Per-card transfer ratios:
+- Burgundy Private: 5:4
+- Magnus Burgundy: 5:4
+- Reserve / Magnus: 5:2
+- IndianOil Premium: 2:1
+- Select / Privilege / REWARDS / Neo / MY Zone / Samsung Axis: 10:1
+\`\`\`
+
+When the user holds a specific card, **scan this list for the matching
+line and quote ONLY that ratio**. For an owner of Magnus Burgundy, the
+answer is "5:4" — not the whole table. Dumping the full per-card
+breakdown for an owned card is noise; the user already has the card,
+they want their number.
+
+The list may name cards by display name without the bank prefix
+("Magnus Burgundy" not "Axis Magnus Burgundy") and may group several
+cards on one row separated by " / ". Recognise both shapes. If none of
+the rows mention the owned card's name, fall back to whatever the
+TRANSFERS_TO description_md says about defaults, and note the ambiguity
+in the reply.
+
 **Forbidden:** dumping the full eligible-cards list as the primary
 answer when the user said "my". That is an answer to a question they
-did not ask.
+did not ask. Same for dumping the full per-card ratio table when the
+user holds one specific card.
 
 ## Hard rules
 
