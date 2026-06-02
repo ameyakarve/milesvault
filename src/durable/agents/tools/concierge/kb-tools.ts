@@ -36,16 +36,63 @@ export interface KbHttp {
 // The schema briefing (/api/kb/agents.md) is folded into the agent's
 // system prompt, so the agent already knows what prefixes and edge
 // types exist before its first tool call.
+// Output schemas — these are the SHAPES code-mode generates TS types from.
+// Match the milesvault-kb HTTP response shapes verbatim; the LLM reads the
+// generated types and writes sandbox code against them. Wrong shapes here =
+// the model guesses field names and the program crashes at runtime.
+const RESOLVE_OUTPUT = z.object({
+  ok: z.literal(true),
+  items: z.array(
+    z.object({
+      slug: z.string(),
+      display_name: z.string().nullable(),
+      match: z.enum(['exact', 'prefix', 'substring', 'alias', 'content']),
+    }),
+  ),
+})
+
+const GET_OUTPUT = z.object({
+  ok: z.literal(true),
+  slug: z.string(),
+  source_file: z.string(),
+  display_name: z.string().nullable(),
+  content_md: z.string(),
+  aliased_from: z.string().optional(),
+})
+
+const RELATED_OUTPUT = z.object({
+  ok: z.literal(true),
+  items: z.array(
+    z.object({
+      edge_type: z.string(),
+      direction: z.enum(['outgoing', 'incoming']),
+      other: z.string(),
+      description_md: z.string().nullable(),
+    }),
+  ),
+})
+
+const LIST_OUTPUT = z.object({
+  ok: z.literal(true),
+  items: z.array(z.string()),
+})
+
+const ERROR_OUTPUT = z.object({
+  ok: z.literal(false),
+  error: z.string(),
+})
+
 export function makeKbTools(http: KbHttp) {
   return {
     kb_resolve: tool({
       description:
         'Look up a node by free-text — partial display names, slug fragments, ' +
-        'or alias slugs all match. Returns a ranked list of candidates. Pass ' +
-        '`prefix` to restrict to a node type (e.g. `cc`, `program`, `currency`) ' +
-        '— see the schema briefing in the system prompt. Use this FIRST when ' +
-        "the user mentions something by name; you'll need a canonical slug " +
-        'before calling kb_get or kb_related.',
+        'or alias slugs all match. Returns `{ items }` (ranked candidates). ' +
+        'Each item is `{ slug, display_name, match }` where `match` is one of ' +
+        "'exact' | 'prefix' | 'substring' | 'alias' | 'content'. Pass `prefix` " +
+        'to restrict to a node type (e.g. "cc", "program", "currency"). Use ' +
+        "this FIRST when the user mentions something by name — you'll need a " +
+        'canonical slug before calling kb_get or kb_related.',
       inputSchema: z.object({
         text: z.string().min(1).describe('Free text — name, partial name, or slug fragment.'),
         prefix: z
@@ -60,6 +107,7 @@ export function makeKbTools(http: KbHttp) {
           .optional()
           .describe('Max results to return. Defaults to 25, max 100.'),
       }),
+      outputSchema: z.union([RESOLVE_OUTPUT, ERROR_OUTPUT]),
       execute: async ({ text, prefix, limit }) => {
         try {
           return { ok: true as const, ...(await http.resolve(text, { prefix, limit })) as object }
@@ -71,14 +119,17 @@ export function makeKbTools(http: KbHttp) {
 
     kb_get: tool({
       description:
-        "Fetch a node's full content by slug — its display name, markdown body, " +
-        'and (if the slug is an alias) the canonical it redirects to. Use this ' +
-        'for the prose: rate tables, fees, eligibility rules, anything written ' +
-        'in the node body. Slug shape is `<prefix>/<local>` (e.g. ' +
-        '`cc/hdfc-infinia`). Returns null if the slug is unknown.',
+        "Fetch a node's full content by slug. Returns " +
+        '`{ slug, source_file, display_name, content_md, aliased_from? }`. ' +
+        'If the input slug is an alias, `slug` is the canonical and ' +
+        '`aliased_from` is the input. Use this for prose (rate tables, fees, ' +
+        'eligibility rules). Slug shape is `<prefix>/<local>` (e.g. ' +
+        '`cc/hdfc-infinia`). Returns `{ ok: false, error }` if the slug is ' +
+        'unknown.',
       inputSchema: z.object({
         slug: z.string().min(3).describe('Prefixed slug, e.g. `cc/hdfc-infinia`.'),
       }),
+      outputSchema: z.union([GET_OUTPUT, ERROR_OUTPUT]),
       execute: async ({ slug }) => {
         try {
           const result = await http.get(slug)
@@ -94,11 +145,14 @@ export function makeKbTools(http: KbHttp) {
 
     kb_related: tool({
       description:
-        'List edges to/from a node. The core traversal primitive — use this ' +
-        "to walk the graph. Pass `edge_type` to filter (e.g. 'TRANSFERS_TO' " +
-        "for currency transfers, 'ISSUED_BY' for card → bank). Direction " +
-        "defaults to 'both'; pick 'outgoing' or 'incoming' to narrow. Each " +
-        'edge carries a prose `description_md` (rate, cap, timing — read it!).',
+        'List edges to/from a node. Core traversal primitive. Returns ' +
+        '`{ items }` where each item is `{ edge_type, direction, other, ' +
+        "description_md }`. `other` is the slug on the OTHER side of the " +
+        "edge — for an outgoing edge it's the `to_slug`, for incoming it's " +
+        "the `from_slug` (flattened so you don't have to branch). Pass " +
+        "`edge_type` to filter (e.g. 'TRANSFERS_TO', 'BOOKS_ON'). " +
+        "Direction defaults to 'both'; pick 'outgoing' or 'incoming' to " +
+        'narrow. Read `description_md` — it has the ratio, cap, timing.',
       inputSchema: z.object({
         slug: z.string().min(3).describe('Prefixed slug whose edges you want.'),
         edge_type: z
@@ -113,6 +167,7 @@ export function makeKbTools(http: KbHttp) {
           .describe('`outgoing` (slug → other), `incoming` (other → slug), or `both`. Defaults to `both`.'),
         limit: z.number().int().min(1).max(500).optional().describe('Max edges. Default 100.'),
       }),
+      outputSchema: z.union([RELATED_OUTPUT, ERROR_OUTPUT]),
       execute: async ({ slug, edge_type, direction, limit }) => {
         try {
           return {
@@ -127,10 +182,11 @@ export function makeKbTools(http: KbHttp) {
 
     kb_list: tool({
       description:
-        'Enumerate every node under a given prefix. Use this to browse a type ' +
-        "(e.g. prefix='cc' to see every credit card slug, prefix='program' for " +
-        'every loyalty programme). Pair with kb_get for details on specific ' +
-        'entries. Returns slugs in alphabetical order.',
+        'Enumerate every node under a given prefix. Returns `{ items }` ' +
+        'where each item is a slug string (NOT an object). Use this to ' +
+        "browse a type (e.g. prefix='cc' to see every credit card slug, " +
+        "prefix='program' for every loyalty programme). Pair with kb_get " +
+        'for details. Slugs are alphabetical.',
       inputSchema: z.object({
         prefix: z
           .string()
@@ -138,6 +194,7 @@ export function makeKbTools(http: KbHttp) {
           .describe('Slug prefix without trailing slash, e.g. "cc" or "program".'),
         limit: z.number().int().min(1).max(1000).optional().describe('Max slugs. Default 200.'),
       }),
+      outputSchema: z.union([LIST_OUTPUT, ERROR_OUTPUT]),
       execute: async ({ prefix, limit }) => {
         try {
           return { ok: true as const, ...(await http.list(prefix, { limit })) as object }

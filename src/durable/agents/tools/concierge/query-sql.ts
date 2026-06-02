@@ -12,6 +12,18 @@ export type QuerySqlResult = {
 // and DOs. The underlying LedgerDO.query_sql already gates on a leading
 // SELECT/WITH keyword — this tool just hands the string through and surfaces
 // the rows back to the model.
+const QUERY_OUTPUT = z.object({
+  ok: z.literal(true),
+  columns: z.array(z.string()),
+  rows: z.array(z.record(z.string(), z.unknown())),
+  truncated: z.boolean(),
+})
+
+const ERROR_OUTPUT = z.object({
+  ok: z.literal(false),
+  error: z.string(),
+})
+
 export function querySqlTool(
   runQuery: (
     sql: string,
@@ -20,7 +32,7 @@ export function querySqlTool(
 ) {
   return tool({
     description:
-      'Run a single read-only SQL statement against the ledger. Must start with `SELECT` or `WITH`. Use `?` placeholders and pass values via `params` for any user-supplied strings or numbers. Returns `{ columns, rows, truncated }` (rows capped at 1000). Use the schema in the system prompt — do not guess column names.',
+      'Run a single read-only SQL statement against the ledger. Must start with `SELECT` or `WITH`. Use `?` placeholders and pass values via `params` for any user-supplied strings or numbers. Returns `{ columns, rows, truncated }` (rows capped at 1000; each row is keyed by column name). Use the schema from `ledger_snapshot()` — do not guess column names.',
     inputSchema: z.object({
       sql: z
         .string()
@@ -31,6 +43,7 @@ export function querySqlTool(
         .optional()
         .describe('Positional `?` bindings for the SQL, in order.'),
     }),
+    outputSchema: z.union([QUERY_OUTPUT, ERROR_OUTPUT]),
     execute: async ({ sql, params }) => {
       // Belt-and-braces: LedgerDO.query_sql already enforces SELECT/WITH-only,
       // but a tool that wraps a read-only RPC should also enforce read-only
