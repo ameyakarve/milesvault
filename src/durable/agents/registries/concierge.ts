@@ -32,11 +32,11 @@ export function makeConciergeRegistry(
   const graphWalker: AgentDef = {
     name: 'graph-walker',
     canHandoffTo: ['analyst'],
-    // Code-mode: one well-written execute call usually answers the question.
     // Reasoning OFF — Gemma's thinking trace is noise on traversal work, the
-    // typed sandbox surface carries the structure. Allow a few extra steps
-    // so a bad slug or thrown exception inside the program is recoverable.
-    model: { id: GRAPH_WALKER_MODEL_ID, reasoning: 'off', maxSteps: 5 },
+    // typed sandbox surface carries the structure. 10 steps so a multi-hop
+    // walk (resolve → reverse-lookup → snapshot → …) plus recovery from a
+    // bad slug or thrown sandbox exception all fit in one turn.
+    model: { id: GRAPH_WALKER_MODEL_ID, reasoning: 'off', maxSteps: 10 },
     system: () => host.system('graph-walker'),
     tools: () => host.tools('graph-walker'),
   }
