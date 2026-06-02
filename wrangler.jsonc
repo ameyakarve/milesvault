@@ -71,6 +71,9 @@
   "services": [
     { "binding": "KB", "service": "milesvault-kb" },
   ],
+  "worker_loaders": [
+    { "binding": "LOADER" },
+  ],
 
   "env": {
     "staging": {
@@ -121,6 +124,9 @@
       "services": [
         { "binding": "PROD", "service": "milesvault" },
         { "binding": "KB", "service": "milesvault-kb-staging" },
+      ],
+      "worker_loaders": [
+        { "binding": "LOADER" },
       ],
       "r2_buckets": [
         {
