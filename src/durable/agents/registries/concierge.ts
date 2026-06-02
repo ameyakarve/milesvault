@@ -2,13 +2,17 @@ import type { AgentDef, AgentHost, Registry } from '../types'
 
 // Workers AI model ids.
 //
-// Both Concierge agents run Kimi. The analyst does freeform reasoning over
-// SQL results at low effort — questions are usually shallow ("how much did
-// I spend on X"). The graph-walker runs in code-mode (a single sandboxed JS
-// program calls our tools as functions), and Kimi writes code better than
-// Gemma — Gemma-with-thinking-off was unreliable at multi-hop traversal.
+// The analyst runs Kimi at low effort — freeform reasoning over SQL
+// results, questions are usually shallow ("how much did I spend on X").
+//
+// The graph-walker runs Gemma with thinking OFF. In code-mode the work is
+// "write one async program against typed tools, then summarize the result"
+// — Kimi tended to over-fetch, re-resolve, and second-guess itself across
+// retries. Gemma-no-think writes a tighter program, runs it once, and
+// answers; the typed sandbox tools (outputSchema-backed) carry the
+// structure Kimi was burning tokens to recover.
 const ANALYST_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
-const GRAPH_WALKER_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
+const GRAPH_WALKER_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 
 export type ConciergeAgentName = 'analyst' | 'graph-walker'
 
@@ -29,9 +33,10 @@ export function makeConciergeRegistry(
     name: 'graph-walker',
     canHandoffTo: ['analyst'],
     // Code-mode: one well-written execute call usually answers the question.
-    // Allow a few extra steps so the model can recover from a sandbox error
-    // (e.g. a bad slug or a thrown exception inside the program).
-    model: { id: GRAPH_WALKER_MODEL_ID, reasoning: 'low', maxSteps: 5 },
+    // Reasoning OFF — Gemma's thinking trace is noise on traversal work, the
+    // typed sandbox surface carries the structure. Allow a few extra steps
+    // so a bad slug or thrown exception inside the program is recoverable.
+    model: { id: GRAPH_WALKER_MODEL_ID, reasoning: 'off', maxSteps: 5 },
     system: () => host.system('graph-walker'),
     tools: () => host.tools('graph-walker'),
   }
