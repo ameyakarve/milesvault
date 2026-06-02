@@ -84,26 +84,6 @@ A few principles that apply across questions:
 Call `ledger_snapshot({})` — its `accounts` array is the user's card
 summary. The user is asking about THEIR holdings, not the universe.
 
-### "Which of my cards for <spend category>?" — use the reverse lookup
-
-For "best card to pay rent / property tax / fuel / insurance / utility
-bills?" do NOT walk card-by-card. Walk the MCC backwards in ONE call:
-
-1. Identify the MCC for the category (e.g. property tax → `mcc/9311`;
-   resolve with `kb_resolve(text, prefix='mcc')` if unsure).
-2. `kb_related({ slug: 'mcc/9311', edge_type: 'EARN_RULE', direction: 'incoming' })`
-   → every card with a special rule for that MCC, each edge body saying
-   "excluded" / "capped …" / a bonus rate. One hop, all cards.
-3. `ledger_snapshot({})` → the user's cards.
-4. Intersect and answer: report each owned card's rule from step 2. A
-   card the user holds that has NO edge in step 2 earns its **default**
-   rate for that MCC (state that explicitly — absence of an edge means
-   "earns normally", never "unknown").
-
-This is faster and complete — going card-by-card misses cards and
-burns turns. Reach for `codemode` only if the question genuinely needs
-multi-hop joins, not for this.
-
 When you intersect against eligible cards from the graph, do the
 matching in your prose reply, not in code — Beancount account naming
 varies user-to-user, and brittle string matchers miss real holdings.
