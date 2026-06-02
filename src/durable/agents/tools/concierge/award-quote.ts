@@ -6,13 +6,7 @@ import type { OdRoute } from './award-charts'
 const CABINS = ['economy', 'premium', 'business', 'first'] as const
 type Cabin = (typeof CABINS)[number]
 
-// cabin rank (low→high) and the OdRoute column each maps to.
-const CABIN_RANK: Record<Cabin, number> = {
-  economy: 0,
-  premium: 1,
-  business: 2,
-  first: 3,
-}
+// the OdRoute column each cabin maps to.
 const CABIN_COL: Record<Cabin, keyof OdRoute> = {
   economy: 'e',
   premium: 'p',
@@ -41,42 +35,42 @@ export const awardQuoteInputSchema = z.object({
   quotes: z.array(QUOTE).min(1),
 })
 
-const RESULT = z.union([
-  z.object({ uuid: z.string(), ok: z.literal(true), miles_total: z.number() }),
-  z.object({ uuid: z.string(), ok: z.literal(false), error: z.string() }),
-])
-
-const awardQuoteOutputSchema = z.object({ results: z.array(RESULT) })
+const awardQuoteOutputSchema = z.object({
+  results: z.array(
+    z.object({
+      uuid: z.string(),
+      miles_total: z
+        .number()
+        .describe('Total award miles, or -1 if the quote cannot be priced.'),
+    }),
+  ),
+})
 
 type QuoteInput = z.infer<typeof QUOTE>
 
-function priceQuote(q: QuoteInput): number | { error: string } {
+// Returns total award miles, or -1 if the quote can't be priced (unknown
+// program, a leg not on the chart's carrier, an O&D not in the chart, or a
+// cabin not offered on some leg).
+function priceQuote(q: QuoteInput): number {
   const chart = resolveChart(q.program)
-  if (!chart) return { error: 'no_chart_for_program' }
-  if (chart.method !== 'od-table') return { error: 'unsupported_method' }
+  if (!chart || chart.method !== 'od-table') return -1
 
-  // A "self" chart prices only the carrier's own metal — every leg must
-  // be on that carrier.
+  // Air India self awards are additive: each leg is priced as its own
+  // one-way O&D at that leg's cabin, and the total is the sum. (Round
+  // trips / connections = the caller just lists the legs.) A "self" chart
+  // prices only the carrier's own metal, so every leg must be on it.
+  let total = 0
   for (const leg of q.legs) {
-    if (leg.carrier.trim().toUpperCase() !== chart.carrier) {
-      return { error: 'route_not_on_carrier' }
-    }
+    if (leg.carrier.trim().toUpperCase() !== chart.carrier) return -1
+    const from = leg.from.trim().toUpperCase()
+    const to = leg.to.trim().toUpperCase()
+    const route = chart.routes[`${from}-${to}`]
+    if (!route) return -1
+    const miles = route[CABIN_COL[leg.cabin]]
+    if (typeof miles !== 'number') return -1
+    total += miles
   }
-
-  // O&D = first origin → last destination; intermediate routing is free.
-  const from = q.legs[0].from.trim().toUpperCase()
-  const to = q.legs[q.legs.length - 1].to.trim().toUpperCase()
-  const route = chart.routes[`${from}-${to}`]
-  if (!route) return { error: 'no_route' }
-
-  // Price at the highest cabin flown on any leg.
-  const cabin = q.legs.reduce<Cabin>(
-    (hi, leg) => (CABIN_RANK[leg.cabin] > CABIN_RANK[hi] ? leg.cabin : hi),
-    'economy',
-  )
-  const miles = route[CABIN_COL[cabin]]
-  if (typeof miles !== 'number') return { error: 'cabin_unavailable' }
-  return miles
+  return total
 }
 
 // Server tool: batch award-chart pricing. Each quote is a program + ordered
@@ -90,20 +84,17 @@ export function awardQuoteTool() {
       '`program` (FFP whose miles you spend — e.g. "air india"), and ordered ' +
       '`legs` ({ from, to } IATA airports, `carrier` IATA code, `cabin` of ' +
       'economy|premium|business|first). Returns `results` 1:1 by `uuid`: ' +
-      '`{ uuid, ok:true, miles_total }` or `{ uuid, ok:false, error }`. ' +
-      'Currently only Air India own-metal awards are charted.',
+      '`{ uuid, miles_total }`, where `miles_total` is -1 if the quote ' +
+      'cannot be priced. Currently only Air India own-metal awards are charted.',
     inputSchema: awardQuoteInputSchema,
     outputSchema: awardQuoteOutputSchema,
     execute: async ({ quotes }) => {
       return {
         results: quotes.map((q) => {
           try {
-            const priced = priceQuote(q)
-            return typeof priced === 'number'
-              ? { uuid: q.uuid, ok: true as const, miles_total: priced }
-              : { uuid: q.uuid, ok: false as const, error: priced.error }
+            return { uuid: q.uuid, miles_total: priceQuote(q) }
           } catch {
-            return { uuid: q.uuid, ok: false as const, error: 'internal' }
+            return { uuid: q.uuid, miles_total: -1 }
           }
         }),
       }

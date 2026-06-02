@@ -8,9 +8,10 @@ export interface OdRoute {
   f?: number // first
 }
 
-// Direct origin→destination lookup table. The award is priced on the
-// itinerary's O&D (first leg's origin → last leg's destination); routing
-// in between does not change the price. Keyed `${FROM}-${TO}` (IATA, upper).
+// Direct origin→destination lookup table. Each leg is priced as its own
+// one-way O&D at that leg's cabin and the legs are summed (additive). The
+// caller lists every leg; round trips / connections are just more legs.
+// Keyed `${FROM}-${TO}` (IATA, upper).
 export interface OdTableChart {
   method: 'od-table'
   currency: string
