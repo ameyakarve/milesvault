@@ -8,6 +8,8 @@ import {
   makeConciergeRegistry,
   type ConciergeAgentName,
 } from './agents/registries/concierge'
+import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airports-store'
+import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import {
   askUserTool,
   awardQuoteTool,
@@ -51,9 +53,15 @@ export class ConciergeDO
   // Synthetic host for the kb service binding — only the path is used.
   private readonly KB_BASE = 'https://kb'
 
+  // IATA → [lat,lng,cc] over this DO's own SQLite, seeded once. Used by the
+  // award engine to resolve legs.
+  private readonly airportLookup: AirportLookup
+
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
     this.registry = makeConciergeRegistry(this)
+    seedAirports(state.storage.sql)
+    this.airportLookup = makeAirportLookup(state.storage.sql)
   }
 
   private ledgerStub(): DurableObjectStub<LedgerDO> {
@@ -135,7 +143,7 @@ export class ConciergeDO
     // Batch award-chart pricing (stub: returns not_implemented). Top level
     // for one-shot quotes, and inside codemode so a program can price an
     // itinerary and pivot to "how do I earn those miles?" in one walk.
-    const award_quote = awardQuoteTool()
+    const award_quote = awardQuoteTool(this.airportLookup)
     const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
     const codemode = createCodeTool({
       tools: { ...kb, ledger_snapshot, award_quote },

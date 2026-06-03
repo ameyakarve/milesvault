@@ -1,22 +1,14 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import { resolveChart } from './award-charts'
-import type { OdRoute } from './award-charts'
+import { priceProgramme, resolveProgrammeId } from './award-engine'
+import type { AirportLookup, CabinRange, Entry } from './award-engine'
 
 const CABINS = ['economy', 'premium', 'business', 'first'] as const
 type Cabin = (typeof CABINS)[number]
 
-// the OdRoute column each cabin maps to.
-const CABIN_COL: Record<Cabin, keyof OdRoute> = {
-  economy: 'e',
-  premium: 'p',
-  business: 'b',
-  first: 'f',
-}
-
 const LEG = z.object({
-  from: z.string().describe('Origin airport IATA code, e.g. "BOM".'),
-  to: z.string().describe('Destination airport IATA code, e.g. "DEL".'),
+  origin: z.string().describe('Origin airport IATA code, e.g. "BOM".'),
+  destination: z.string().describe('Destination airport IATA code, e.g. "DEL".'),
   cabin: z.enum(CABINS),
   carrier: z.string().describe('Operating carrier IATA code, e.g. "AI".'),
 })
@@ -27,72 +19,103 @@ const QUOTE = z.object({
     .describe('Caller-supplied id; echoed verbatim in the matching result.'),
   program: z
     .string()
-    .describe('FFP whose miles are spent, e.g. "air india" / "maharaja club".'),
-  legs: z.array(LEG).min(1).describe('Ordered flight legs.'),
+    .describe('FFP whose miles are spent, e.g. "air india" / "krisflyer".'),
+  legs: z.array(LEG).min(1).describe('Ordered flight legs (one-way).'),
 })
 
 export const awardQuoteInputSchema = z.object({
   quotes: z.array(QUOTE).min(1),
 })
 
+// Minimal output, three outcomes:
+//   priced       → { uuid, miles_total }   (>= 0)
+//   not priceable → { uuid, miles_total: -1 }
+//   needs input  → { uuid, clarification }  (a short question for the user)
 const awardQuoteOutputSchema = z.object({
   results: z.array(
-    z.object({
-      uuid: z.string(),
-      miles_total: z
-        .number()
-        .describe('Total award miles, or -1 if the quote cannot be priced.'),
-    }),
+    z.union([
+      z.object({ uuid: z.string(), miles_total: z.number() }),
+      z.object({ uuid: z.string(), clarification: z.string() }),
+    ]),
   ),
 })
 
 type QuoteInput = z.infer<typeof QUOTE>
+type QuoteResult =
+  | { uuid: string; miles_total: number }
+  | { uuid: string; clarification: string }
 
-// Returns total award miles, or -1 if the quote can't be priced (unknown
-// program, a leg not on the chart's carrier, an O&D not in the chart, or a
-// cabin not offered on some leg).
-function priceQuote(q: QuoteInput): number {
-  const chart = resolveChart(q.program)
-  if (!chart || chart.method !== 'od-table') return -1
-
-  // Air India self awards are additive: each leg is priced as its own
-  // one-way O&D at that leg's cabin, and the total is the sum. (Round
-  // trips / connections = the caller just lists the legs.) A "self" chart
-  // prices only the carrier's own metal, so every leg must be on it.
-  let total = 0
-  for (const leg of q.legs) {
-    if (leg.carrier.trim().toUpperCase() !== chart.carrier) return -1
-    const from = leg.from.trim().toUpperCase()
-    const to = leg.to.trim().toUpperCase()
-    const route = chart.routes[`${from}-${to}`]
-    if (!route) return -1
-    const miles = route[CABIN_COL[leg.cabin]]
-    if (typeof miles !== 'number') return -1
-    total += miles
-  }
-  return total
+// The Entry field for a requested cabin.
+function cabinRange(entry: Entry, cabin: Cabin): CabinRange {
+  if (cabin === 'premium') return entry.premium_economy
+  return entry[cabin]
 }
 
-// Server tool: batch award-chart pricing. Each quote is a program + ordered
-// legs (IATA airports/carrier/cabin); the result carries `miles_total`,
-// correlated by the caller's `uuid`. Charts are bundled data (no KG round
-// trip). First chart: Air India self (od-table, O&D direct lookup).
-export function awardQuoteTool() {
+function priceQuote(q: QuoteInput, lookup: AirportLookup): QuoteResult {
+  const id = resolveProgrammeId(q.program)
+  if (!id) return { uuid: q.uuid, miles_total: -1 }
+
+  // Whole-itinerary pricing is per-cabin; require a single cabin. Mixed
+  // cabins is the canonical "need more input" case.
+  const cabins = [...new Set(q.legs.map((l) => l.cabin))]
+  if (cabins.length > 1) {
+    return {
+      uuid: q.uuid,
+      clarification: `Mixed cabins (${cabins.join(', ')}) — quote one cabin per itinerary.`,
+    }
+  }
+  const cabin = cabins[0]
+
+  const priced = priceProgramme(
+    id,
+    q.legs.map((l) => ({ origin: l.origin, destination: l.destination, carrier: l.carrier })),
+    lookup,
+  )
+  if ('error' in priced) return { uuid: q.uuid, miles_total: -1 }
+
+  // Collect this cabin's lower bound across every returned scenario
+  // (chart × season). Distinct mins → genuine fork → ask the user.
+  const scenarios: { label: string; min: number }[] = []
+  for (const e of priced.entries) {
+    const range = cabinRange(e, cabin)
+    if (!range) continue
+    scenarios.push({ label: `${e.chart}/${e.season}`, min: range[0] })
+  }
+  if (scenarios.length === 0) return { uuid: q.uuid, miles_total: -1 }
+
+  const distinct = [...new Set(scenarios.map((s) => s.min))]
+  if (distinct.length === 1) return { uuid: q.uuid, miles_total: distinct[0] }
+
+  // Multiple different prices (e.g. peak vs off-peak, own vs partner).
+  const opts = scenarios
+    .map((s) => `${s.label}: ${s.min.toLocaleString()}`)
+    .join('; ')
+  return {
+    uuid: q.uuid,
+    clarification: `${cabin} price depends on chart/season — ${opts}. Which applies?`,
+  }
+}
+
+// Server tool: batch award pricing across the bundled programme engine.
+// Airports resolve against the ConciergeDO SQLite (injected `lookup`).
+export function awardQuoteTool(lookup: AirportLookup) {
   return tool({
     description:
-      'Batch award-chart pricing. Input `quotes`: each has a `uuid`, a ' +
-      '`program` (FFP whose miles you spend — e.g. "air india"), and ordered ' +
-      '`legs` ({ from, to } IATA airports, `carrier` IATA code, `cabin` of ' +
-      'economy|premium|business|first). Returns `results` 1:1 by `uuid`: ' +
-      '`{ uuid, miles_total }`, where `miles_total` is -1 if the quote ' +
-      'cannot be priced. Currently only Air India own-metal awards are charted.',
+      'Batch award-flight pricing across ~45 frequent-flyer programmes. ' +
+      'Input `quotes`: each has a `uuid`, a `program` (FFP whose miles you ' +
+      'spend — e.g. "air india", "krisflyer", "avios"), and ordered one-way ' +
+      '`legs` ({ origin, destination } IATA, `carrier` IATA, `cabin` of ' +
+      'economy|premium|business|first; one cabin per itinerary). Returns ' +
+      '`results` 1:1 by `uuid`: `{ uuid, miles_total }` (miles, or -1 if not ' +
+      'priceable), or `{ uuid, clarification }` when a single number needs a ' +
+      'user choice (e.g. peak vs off-peak).',
     inputSchema: awardQuoteInputSchema,
     outputSchema: awardQuoteOutputSchema,
     execute: async ({ quotes }) => {
       return {
         results: quotes.map((q) => {
           try {
-            return { uuid: q.uuid, miles_total: priceQuote(q) }
+            return priceQuote(q, lookup)
           } catch {
             return { uuid: q.uuid, miles_total: -1 }
           }

@@ -40,6 +40,9 @@ const eslintConfig = [
       'cloudflare-env.d.ts',
       'src/payload-types.ts',
       'src/payload-generated-schema.ts',
+      // Vendored award-pricing engine (ported verbatim, kept re-syncable) +
+      // its generated airports table.
+      'src/durable/agents/tools/concierge/award-engine/',
     ],
   },
 ]
