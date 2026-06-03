@@ -1,22 +1,11 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 import { priceProgramme, resolveProgrammeId } from './award-engine'
-import type { AirportLookup, CabinRange, Entry } from './award-engine'
-
-const CABINS = ['economy', 'premium', 'business', 'first'] as const
-type Cabin = (typeof CABINS)[number]
-
-const CABIN_RANK: Record<Cabin, number> = {
-  economy: 0,
-  premium: 1,
-  business: 2,
-  first: 3,
-}
+import type { AirportLookup } from './award-engine'
 
 const LEG = z.object({
   origin: z.string().describe('Origin airport IATA code, e.g. "BLR".'),
   destination: z.string().describe('Destination airport IATA code, e.g. "NRT".'),
-  cabin: z.enum(CABINS),
   carrier: z.string().describe('Operating carrier IATA code, e.g. "NH".'),
 })
 
@@ -34,31 +23,31 @@ export const awardQuoteInputSchema = z.object({
   quotes: z.array(QUOTE).min(1),
 })
 
-// One freeform line per quote: the award miles for the itinerary, with
-// peak/off-peak and own/partner rates spelled out inline where they differ.
+// One freeform line per quote: every cabin's award miles for the itinerary,
+// with peak/off-peak and own/partner rates spelled out inline where they
+// differ.
 const awardQuoteOutputSchema = z.object({
   results: z.array(z.object({ uuid: z.string(), text: z.string() })),
 })
 
 type QuoteInput = z.infer<typeof QUOTE>
 
-function cabinRange(entry: Entry, cabin: Cabin): CabinRange {
-  if (cabin === 'premium') return entry.premium_economy
-  return entry[cabin]
-}
+// Entry cabin field → display label.
+type CabinField = 'economy' | 'premium_economy' | 'business' | 'first'
+const CABIN_FIELDS: ReadonlyArray<[CabinField, string]> = [
+  ['economy', 'economy'],
+  ['premium_economy', 'premium'],
+  ['business', 'business'],
+  ['first', 'first'],
+]
 
 const fmt = (n: number) => n.toLocaleString('en-US')
-const range = (r: [number, number]) => (r[0] === r[1] ? fmt(r[0]) : `${fmt(r[0])}–${fmt(r[1])}`)
+const range = (r: [number, number]) =>
+  r[0] === r[1] ? fmt(r[0]) : `${fmt(r[0])}–${fmt(r[1])}`
 
 function quoteText(q: QuoteInput, lookup: AirportLookup): string {
   const id = resolveProgrammeId(q.program)
   if (!id) return `no award chart for "${q.program}"`
-
-  // Whole-itinerary pricing is per-cabin; use the highest cabin flown.
-  const cabin = q.legs.reduce<Cabin>(
-    (hi, l) => (CABIN_RANK[l.cabin] > CABIN_RANK[hi] ? l.cabin : hi),
-    'economy',
-  )
 
   const priced = priceProgramme(
     id,
@@ -71,22 +60,29 @@ function quoteText(q: QuoteInput, lookup: AirportLookup): string {
       : 'not priceable'
   }
 
-  const entries = priced.entries.filter((e) => cabinRange(e, cabin))
-  if (entries.length === 0) return `${cabin}: not available on this programme`
+  const entries = priced.entries
+  if (entries.length === 0) return 'not available on this programme'
 
   const multiChart = new Set(entries.map((e) => e.chart)).size > 1
-  const parts = entries.map((e) => {
-    const val = range(cabinRange(e, cabin) as [number, number])
-    const label = [
-      multiChart ? e.chart : '',
-      e.season && e.season !== 'default' ? e.season : '',
-    ]
-      .filter(Boolean)
-      .join(' ')
-    return label ? `${label} ${val}` : val
-  })
-  const uniq = [...new Set(parts)]
-  return `${cabin}: ${uniq.join(' / ')} miles`
+  const lines: string[] = []
+  for (const [field, label] of CABIN_FIELDS) {
+    const parts: string[] = []
+    for (const e of entries) {
+      const r = e[field]
+      if (!r) continue
+      const val = range(r)
+      const tag = [
+        multiChart ? e.chart : '',
+        e.season && e.season !== 'default' ? e.season : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+      parts.push(tag ? `${tag} ${val}` : val)
+    }
+    if (parts.length) lines.push(`${label} ${[...new Set(parts)].join(' / ')}`)
+  }
+  if (lines.length === 0) return 'not available on this programme'
+  return `${lines.join('; ')} miles`
 }
 
 // Server tool: batch award-flight pricing across the bundled ~45-programme
@@ -97,11 +93,11 @@ export function awardQuoteTool(lookup: AirportLookup) {
       'Batch award-flight pricing across ~45 frequent-flyer programmes. ' +
       'Input `quotes`: each has a `uuid`, a `program` (FFP whose miles you ' +
       'spend — e.g. "air india", "krisflyer", "avios"), and ordered one-way ' +
-      '`legs` ({ origin, destination } IATA, `carrier` IATA, `cabin` of ' +
-      'economy|premium|business|first). Takes no date. Returns `results` 1:1 ' +
-      'by `uuid`: `{ uuid, text }`, where `text` is the award miles for the ' +
-      'itinerary — with peak/off-peak and own/partner rates spelled out ' +
-      'inline where they differ, or a short reason if not priceable.',
+      '`legs` ({ origin, destination } IATA, `carrier` IATA). No date, no ' +
+      'cabin. Returns `results` 1:1 by `uuid`: `{ uuid, text }`, where `text` ' +
+      'lists every cabin (economy/premium/business/first) for the itinerary ' +
+      '— with peak/off-peak and own/partner rates spelled out inline where ' +
+      'they differ, or a short reason if not priceable.',
     inputSchema: awardQuoteInputSchema,
     outputSchema: awardQuoteOutputSchema,
     execute: async ({ quotes }) => {

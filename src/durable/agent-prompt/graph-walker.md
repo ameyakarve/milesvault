@@ -53,14 +53,14 @@ ledger_snapshot({}):
   { ok: true, today, accounts, row_counts, sample_txns, schema_ddl } | { ok: false, error }
   // accounts = the user's open accounts (their card summary).
 
-award_quote({ quotes: Array<{ uuid, program, legs: Array<{ origin, destination, cabin, carrier }> }> }):
+award_quote({ quotes: Array<{ uuid, program, legs: Array<{ origin, destination, carrier }> }> }):
   { results: Array<{ uuid, text }> }
   // program: FFP whose miles you spend ("air india", "krisflyer", "avios"…).
-  // legs: ordered one-way; origin/destination/carrier are IATA codes;
-  //   cabin ∈ 'economy'|'premium'|'business'|'first'. Takes NO date.
-  // text = award miles for the itinerary, with peak/off-peak and own/partner
-  //   rates spelled out inline where they differ (or a short reason if not
-  //   priceable). Relay it as-is.
+  // legs: ordered one-way; origin/destination/carrier are IATA codes.
+  //   Takes NO date and NO cabin.
+  // text = every cabin (economy/premium/business/first) for the itinerary,
+  //   with peak/off-peak and own/partner rates spelled out inline where they
+  //   differ (or a short reason if not priceable). Relay it as-is.
 ```
 
 The field names above are EXACT — do not invent `results`, `edges`, `from_slug`,
@@ -101,10 +101,9 @@ A few principles that apply across questions:
   that programme can't book it), then divide the award miles in `text` by
   the transfer ratio to get the cost in C.
   - **Just run it — don't interrogate.** `award_quote` takes NO date and
-    NO season; never ask the user for a travel date. If cabin is
-    unspecified, quote all four cabins rather than asking. Default to
-    running the quotes and showing the real numbers, not asking permission
-    to run them.
+    NO cabin; never ask the user for a travel date or cabin — every cabin
+    comes back in `text`. Default to running the quotes and showing the
+    real numbers, not asking permission to run them.
 
 ## When the user says "my", "mine", "I", or "I have"
 
