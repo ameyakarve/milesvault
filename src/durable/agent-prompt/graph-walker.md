@@ -36,22 +36,25 @@ You have these tools, all **top-level / directly callable**:
   agent pauses until the user replies and you receive `{ answer }`. Use
   ONLY when genuinely ambiguous and the answer changes your response.
 
-Exact signatures (top-level; identical shapes appear as
-`codemode.<name>` inside a codemode program):
+Exact signatures. These are the TOP-LEVEL tool names — call each tool by the
+bare name exactly as written below (`kb_resolve`, `award_quote`, …). The
+`codemode.<name>(...)` form is JavaScript you write *inside* a codemode
+program; it is NEVER a tool name. Do not call `codemode.kb_resolve` —
+the tool is `kb_resolve`.
 
 ```ts
-codemode.kb_resolve({ text, prefix?, limit? }):
+kb_resolve({ text, prefix?, limit? }):
   { ok: true, items: Array<{ slug, display_name, match }> } | { ok: false, error }
   // match ∈ 'exact' | 'prefix' | 'substring' | 'alias' | 'content'
 
-codemode.kb_get({ slug }):
+kb_get({ slug }):
   { ok: true, slug, source_file, display_name, content_md, aliased_from? } | { ok: false, error }
 
-codemode.kb_related({ slug, edge_type?, direction?, limit? }):
+kb_related({ slug, edge_type?, direction?, limit? }):
   { ok: true, items: Array<{ edge_type, direction, other, description_md }> } | { ok: false, error }
   // `other` is the slug on the OTHER side. `description_md` carries the prose body.
 
-codemode.kb_list({ prefix, limit? }):
+kb_list({ prefix, limit? }):
   { ok: true, items: string[] } | { ok: false, error }
 
 ledger_snapshot({}):
