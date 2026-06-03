@@ -25,9 +25,18 @@ export const awardQuoteInputSchema = z.object({
 
 // One freeform line per quote: every cabin's award miles for the itinerary,
 // with peak/off-peak and own/partner rates spelled out inline where they
-// differ.
+// differ. `program` is the programme id we ACTUALLY priced (after resolving
+// the caller's free-text name); when the name doesn't resolve we echo the
+// requested name back verbatim. Either way every result names its programme,
+// so the caller can't mislabel a quote or hide a name→programme mismatch.
 const awardQuoteOutputSchema = z.object({
-  results: z.array(z.object({ uuid: z.string(), text: z.string() })),
+  results: z.array(
+    z.object({
+      uuid: z.string(),
+      program: z.string(),
+      text: z.string(),
+    }),
+  ),
 })
 
 type QuoteInput = z.infer<typeof QUOTE>
@@ -45,9 +54,15 @@ const fmt = (n: number) => n.toLocaleString('en-US')
 const range = (r: [number, number]) =>
   r[0] === r[1] ? fmt(r[0]) : `${fmt(r[0])}–${fmt(r[1])}`
 
-function quoteText(q: QuoteInput, lookup: AirportLookup): string {
+interface QuoteResult {
+  program: string
+  text: string
+}
+
+function quoteText(q: QuoteInput, lookup: AirportLookup): QuoteResult {
   const id = resolveProgrammeId(q.program)
-  if (!id) return `no award chart for "${q.program}"`
+  // Unresolved: echo the requested name so the caller sees what failed.
+  if (!id) return { program: q.program, text: `no award chart for "${q.program}"` }
 
   const priced = priceProgramme(
     id,
@@ -55,13 +70,17 @@ function quoteText(q: QuoteInput, lookup: AirportLookup): string {
     lookup,
   )
   if ('error' in priced) {
-    return priced.error.startsWith('unknown_airport')
-      ? `unknown airport (${priced.error.split(': ')[1] ?? ''})`
-      : 'not priceable'
+    return {
+      program: id,
+      text: priced.error.startsWith('unknown_airport')
+        ? `unknown airport (${priced.error.split(': ')[1] ?? ''})`
+        : 'not priceable',
+    }
   }
 
   const entries = priced.entries
-  if (entries.length === 0) return 'not available on this programme'
+  if (entries.length === 0)
+    return { program: id, text: 'not available on this programme' }
 
   const multiChart = new Set(entries.map((e) => e.chart)).size > 1
   const lines: string[] = []
@@ -81,8 +100,9 @@ function quoteText(q: QuoteInput, lookup: AirportLookup): string {
     }
     if (parts.length) lines.push(`${label} ${[...new Set(parts)].join(' / ')}`)
   }
-  if (lines.length === 0) return 'not available on this programme'
-  return `${lines.join('; ')} miles`
+  if (lines.length === 0)
+    return { program: id, text: 'not available on this programme' }
+  return { program: id, text: `${lines.join('; ')} miles` }
 }
 
 // Server tool: batch award-flight pricing across the bundled ~45-programme
@@ -104,9 +124,10 @@ export function awardQuoteTool(lookup: AirportLookup) {
       return {
         results: quotes.map((q) => {
           try {
-            return { uuid: q.uuid, text: quoteText(q, lookup) }
+            const { program, text } = quoteText(q, lookup)
+            return { uuid: q.uuid, program, text }
           } catch {
-            return { uuid: q.uuid, text: 'not priceable' }
+            return { uuid: q.uuid, program: q.program, text: 'not priceable' }
           }
         }),
       }

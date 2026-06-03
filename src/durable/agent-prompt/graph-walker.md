@@ -70,10 +70,14 @@ ledger_snapshot({}):
   // accounts = the user's open accounts (their card summary).
 
 award_quote({ quotes: Array<{ uuid, program, legs: Array<{ origin, destination, carrier }> }> }):
-  { results: Array<{ uuid, text }> }
-  // program: FFP whose miles you spend ("air india", "krisflyer", "avios"…).
+  { results: Array<{ uuid, program, text }> }
+  // INPUT program: FFP whose miles you spend ("air india", "krisflyer", "avios"…).
   // legs: ordered one-way; origin/destination/carrier are IATA codes.
   //   Takes NO date and NO cabin.
+  // OUTPUT program: the programme the engine ACTUALLY priced after resolving
+  //   your free-text name. ALWAYS label each quote by this returned `program`,
+  //   never by the name you sent — if they differ, your name was ambiguous and
+  //   the miles belong to the returned programme, not the one you intended.
   // text = every cabin (economy/premium/business/first) for the itinerary,
   //   with peak/off-peak and own/partner rates spelled out inline where they
   //   differ (or a short reason if not priceable). Relay it as-is.

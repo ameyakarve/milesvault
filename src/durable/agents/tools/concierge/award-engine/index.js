@@ -113,11 +113,21 @@ const ALIASES = {
 
 export function resolveProgrammeId(text) {
   if (!text) return null
-  const k = String(text).trim().toLowerCase().replace(/\s+/g, ' ')
+  // Normalize hyphens too, so slug forms ("jal-mileage-bank-miles") tokenize.
+  const k = String(text).trim().toLowerCase().replace(/[\s\-]+/g, ' ')
   if (PROGRAMMES[k]) return k
   if (ALIASES[k]) return ALIASES[k]
+  // Fall back to WHOLE-WORD containment only — never match an id/alias inside
+  // a larger word. The old `k.includes(id)` matched "ba" inside "bank", so
+  // "jal mileage bank" resolved to British Airways instead of JAL. Matching on
+  // word boundaries also lets slug forms resolve: "krisflyer miles" → the
+  // `krisflyer` id, "jal mileage bank miles" → the "mileage bank" alias.
+  const word = (needle) => new RegExp(`(^| )${needle}( |$)`).test(k)
   for (const id of Object.keys(PROGRAMMES)) {
-    if (k.includes(id) || id.includes(k)) return id
+    if (word(id)) return id
+  }
+  for (const phrase of Object.keys(ALIASES)) {
+    if (word(phrase)) return ALIASES[phrase]
   }
   return null
 }
