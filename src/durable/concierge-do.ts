@@ -13,7 +13,9 @@ import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import {
   askUserTool,
   awardQuoteTool,
+  ensureRouteCache,
   fetchKbAgentsMd,
+  flightSearchTool,
   kbHttpOverFetch,
   ledgerSnapshotTool,
   makeKbTools,
@@ -57,10 +59,17 @@ export class ConciergeDO
   // award engine to resolve legs.
   private readonly airportLookup: AirportLookup
 
+  // This DO's own SQLite — also backs the 7-day route_cache that
+  // flight_search reads/writes. (Named `routeSql` to avoid the inherited
+  // `sql` tagged-template helper on the Think base class.)
+  private readonly routeSql: SqlStorage
+
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
     this.registry = makeConciergeRegistry(this)
+    this.routeSql = state.storage.sql
     seedAirports(state.storage.sql)
+    ensureRouteCache(state.storage.sql)
     this.airportLookup = makeAirportLookup(state.storage.sql)
   }
 
@@ -144,9 +153,14 @@ export class ConciergeDO
     // for one-shot quotes, and inside codemode so a program can price an
     // itinerary and pivot to "how do I earn those miles?" in one walk.
     const award_quote = awardQuoteTool(this.airportLookup)
+    // Route/connection discovery from real schedules (AeroDataBox, 7-day
+    // cached per airport). Feeds carriers+legs into award_quote. Top level
+    // for one-shot searches and inside codemode so a program can discover a
+    // routing then price it in one walk.
+    const flight_search = flightSearchTool(this.routeSql, this.env.AERODATABOX_API_KEY)
     const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
     const codemode = createCodeTool({
-      tools: { ...kb, ledger_snapshot, award_quote },
+      tools: { ...kb, ledger_snapshot, award_quote, flight_search },
       executor,
     })
 
@@ -154,6 +168,7 @@ export class ConciergeDO
       ...kb,
       ledger_snapshot,
       award_quote,
+      flight_search,
       codemode,
       ask_user: askUserTool(),
     } as ToolSet
