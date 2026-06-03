@@ -54,12 +54,13 @@ ledger_snapshot({}):
   // accounts = the user's open accounts (their card summary).
 
 award_quote({ quotes: Array<{ uuid, program, legs: Array<{ origin, destination, cabin, carrier }> }> }):
-  { results: Array<{ uuid, miles_total } | { uuid, clarification }> }
+  { results: Array<{ uuid, text }> }
   // program: FFP whose miles you spend ("air india", "krisflyer", "avios"…).
   // legs: ordered one-way; origin/destination/carrier are IATA codes;
-  //   cabin ∈ 'economy'|'premium'|'business'|'first' (one cabin per itinerary).
-  // miles_total = award miles, or -1 if that programme can't price/book it.
-  // clarification = a question to relay to the user (e.g. peak vs off-peak).
+  //   cabin ∈ 'economy'|'premium'|'business'|'first'. Takes NO date.
+  // text = award miles for the itinerary, with peak/off-peak and own/partner
+  //   rates spelled out inline where they differ (or a short reason if not
+  //   priceable). Relay it as-is.
 ```
 
 The field names above are EXACT — do not invent `results`, `edges`, `from_slug`,
@@ -96,15 +97,14 @@ A few principles that apply across questions:
   currency C, what are my options to fly A→B": walk `TRANSFERS_TO`
   outgoing from C to get the reachable programmes and their ratios, then
   `award_quote` each programme for the route (one quote per programme;
-  supply the operating carrier as IATA — the tool returns `-1` when that
-  programme can't book it), then divide the returned `miles_total` by the
-  transfer ratio to get the cost in C. A `clarification` result is a
-  question to put back to the user.
+  supply the operating carrier as IATA — `text` says "not available" when
+  that programme can't book it), then divide the award miles in `text` by
+  the transfer ratio to get the cost in C.
   - **Just run it — don't interrogate.** `award_quote` takes NO date and
     NO season; never ask the user for a travel date. If cabin is
-    unspecified, quote all four cabins rather than asking. Only relay a
-    `clarification` the tool itself returns. Default to running the quotes
-    and showing real numbers, not asking permission to run them.
+    unspecified, quote all four cabins rather than asking. Default to
+    running the quotes and showing the real numbers, not asking permission
+    to run them.
 
 ## When the user says "my", "mine", "I", or "I have"
 
