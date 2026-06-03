@@ -36,11 +36,19 @@ You have these tools, all **top-level / directly callable**:
   agent pauses until the user replies and you receive `{ answer }`. Use
   ONLY when genuinely ambiguous and the answer changes your response.
 
-Exact signatures. These are the TOP-LEVEL tool names — call each tool by the
-bare name exactly as written below (`kb_resolve`, `award_quote`, …). The
-`codemode.<name>(...)` form is JavaScript you write *inside* a codemode
-program; it is NEVER a tool name. Do not call `codemode.kb_resolve` —
-the tool is `kb_resolve`.
+Exact signatures below. The SAME tool is called two different ways depending
+on where the call lives — get this right, it is a common mistake:
+
+- **Top-level tool call** (the normal case): use the BARE name exactly as
+  written below — `kb_resolve(...)`, `flight_search(...)`, `award_quote(...)`.
+  NEVER prefix a top-level call with `codemode.` (there is no tool named
+  `codemode.kb_resolve`).
+- **Inside a codemode program** (the JS you write for the `codemode` tool):
+  EVERY tool is a method on the `codemode` object — `codemode.kb_resolve(...)`,
+  `codemode.flight_search(...)`, `codemode.award_quote(...)`. A bare
+  `flight_search(...)` inside codemode is undefined and throws
+  "flight_search is not defined". This applies to ALL tools, flight_search
+  included — there are no exceptions.
 
 ```ts
 kb_resolve({ text, prefix?, limit? }):
