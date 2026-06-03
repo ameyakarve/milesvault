@@ -16,6 +16,33 @@ const TABLE = `CREATE TABLE IF NOT EXISTS route_cache (
 const TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const BASE = 'https://prod.api.market/api/v1/aedbx/aerodatabox'
 
+// Bump whenever the parsed shape of a cached entry changes, so airports
+// cached by an older build are refetched (with the new parser) instead of
+// served with a stale parse. v2: name→IATA fallback for code-less operators.
+const CACHE_VERSION = 2
+
+interface CacheEnvelope {
+  v: number
+  routes: AirportRoute[]
+}
+
+// Return the cached routes only if the row parses AND matches the current
+// cache version; otherwise null (treated as a miss → refetch). Rows written
+// by older builds (a bare array, or an older version) fail this and are
+// refetched, so a parser change self-heals.
+function readEnvelope(json: string | undefined): AirportRoute[] | null {
+  if (!json) return null
+  try {
+    const parsed = JSON.parse(json) as Partial<CacheEnvelope>
+    if (parsed?.v === CACHE_VERSION && Array.isArray(parsed.routes)) {
+      return parsed.routes
+    }
+  } catch {
+    /* fall through */
+  }
+  return null
+}
+
 // One airline operating a route. `iata` can be null — low-frequency or
 // seasonal operators sometimes come back named but without a code (e.g.
 // the sparse JAL BLR–NRT row), so callers keep `name` as a fallback.
@@ -83,22 +110,25 @@ export async function getAirportRoutes(
   const cached = db
     .exec('SELECT json, fetched_at FROM route_cache WHERE iata = ?', code)
     .toArray()[0]
+  const cachedRoutes = readEnvelope(cached?.json as string | undefined)
 
-  if (cached && Date.now() - (cached.fetched_at as number) < TTL_MS) {
-    return JSON.parse(cached.json as string) as AirportRoute[]
+  if (cachedRoutes && Date.now() - (cached.fetched_at as number) < TTL_MS) {
+    return cachedRoutes
   }
 
   try {
     const routes = await fetchRoutes(apiKey, code)
+    const envelope: CacheEnvelope = { v: CACHE_VERSION, routes }
     db.exec(
       'INSERT OR REPLACE INTO route_cache (iata, json, fetched_at) VALUES (?, ?, ?)',
       code,
-      JSON.stringify(routes),
+      JSON.stringify(envelope),
       Date.now(),
     )
     return routes
   } catch (err) {
-    if (cached) return JSON.parse(cached.json as string) as AirportRoute[]
+    // Serve a same-version stale copy rather than failing the search.
+    if (cachedRoutes) return cachedRoutes
     throw err
   }
 }
