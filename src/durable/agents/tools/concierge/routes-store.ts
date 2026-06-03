@@ -1,3 +1,5 @@
+import { lookupAirlineIata } from './airline-names'
+
 // Route data from AeroDataBox (api.market gateway), cached in the
 // ConciergeDO's own SQLite. The unit we cache is one airport's
 // `routes/daily` response — "everywhere you can fly from X, on which
@@ -56,10 +58,14 @@ async function fetchRoutes(apiKey: string, iata: string): Promise<AirportRoute[]
     out.push({
       dest: dest.toUpperCase(),
       avgDaily: r.averageDailyFlights ?? 0,
-      operators: (r.operators ?? []).map((o) => ({
-        iata: o.iata ? o.iata.toUpperCase() : null,
-        name: o.name ?? '',
-      })),
+      operators: (r.operators ?? []).map((o) => {
+        const name = o.name ?? ''
+        // AeroDataBox omits the code on sparse/new routes (e.g. the BLR→NRT
+        // "Japan Airlines" nonstop). Recover it by name for carriers our
+        // charts can price, so the leg stays quotable.
+        const iata = o.iata ? o.iata.toUpperCase() : lookupAirlineIata(name)
+        return { iata, name }
+      }),
     })
   }
   return out
