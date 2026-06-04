@@ -9,21 +9,10 @@ import {
   ConversationContent,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation'
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from '@/components/ai-elements/message'
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-} from '@/components/ai-elements/reasoning'
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-} from '@/components/ai-elements/tool'
+import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning'
+import { Tool, ToolContent, ToolHeader } from '@/components/ai-elements/tool'
+import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import {
   PromptInput,
   PromptInputFooter,
@@ -43,6 +32,7 @@ type Part = {
   output?: unknown
   errorText?: string
   toolName?: string
+  toolCallId?: string
   [k: string]: unknown
 }
 
@@ -51,8 +41,7 @@ function isToolPart(p: Part): boolean {
 }
 
 function toolNameOf(p: Part): string | null {
-  if (p.type === 'dynamic-tool')
-    return typeof p.toolName === 'string' ? p.toolName : null
+  if (p.type === 'dynamic-tool') return typeof p.toolName === 'string' ? p.toolName : null
   if (p.type.startsWith('tool-')) return p.type.slice(5)
   return null
 }
@@ -62,14 +51,7 @@ export function ConciergeChat() {
     agent: 'ConciergeDO',
     basePath: 'api/agents/concierge',
   })
-  const {
-    messages,
-    sendMessage,
-    addToolOutput,
-    status,
-    isStreaming,
-    clearHistory,
-  } = useAgentChat({
+  const { messages, sendMessage, addToolOutput, status, isStreaming, clearHistory } = useAgentChat({
     agent,
     autoContinueAfterToolResult: true,
     getInitialMessages: null,
@@ -120,9 +102,18 @@ export function ConciergeChat() {
     setText('')
   }
 
+  // Generic resolution for a gen-UI tool card that the user dismisses. The
+  // concierge's gen-UI tools are read-only display cards (e.g. award options),
+  // so there is no approve/answer round-trip — reject just unblocks the agent.
+  function handleReject(toolCallId: string) {
+    addToolOutput({
+      toolCallId,
+      output: { ok: false, reason: 'rejected' },
+    })
+  }
+
   const isEmpty = messages.length === 0
-  const busy =
-    status === 'submitted' || status === 'streaming' || isStreaming
+  const busy = status === 'submitted' || status === 'streaming' || isStreaming
 
   return (
     <div className="flex h-full flex-col">
@@ -152,8 +143,8 @@ export function ConciergeChat() {
             <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center text-slate-400">
               <Database className="size-6" />
               <p className="text-sm">
-                Ask a question to get started — e.g. &ldquo;How much did I spend
-                on restaurants last month?&rdquo;
+                Ask a question to get started — e.g. &ldquo;How much did I spend on restaurants last
+                month?&rdquo;
               </p>
             </div>
           ) : null}
@@ -183,15 +174,29 @@ export function ConciergeChat() {
                     }
                     if (isToolPart(p)) {
                       const name = toolNameOf(p) ?? 'tool'
+                      const toolCallId = p.toolCallId ?? `${m.id}-${i}`
+                      const toolState = (p.state as ToolUIPart['state']) ?? 'output-available'
+                      // Gen-UI tools render as a component from the tool-call
+                      // input. Wait for input-available — partial streamed args
+                      // would render a half-formed card. The card self-fetches
+                      // its data, so no output round-trip is needed here.
+                      const card =
+                        isGenUiTool(name) && toolState !== 'input-streaming'
+                          ? renderGenUi(name, p.input, {
+                              status:
+                                toolState === 'output-error'
+                                  ? 'failed'
+                                  : toolState === 'output-available'
+                                    ? 'done'
+                                    : 'idle',
+                              errorMessage: p.errorText,
+                              onReject: () => handleReject(toolCallId),
+                            })
+                          : null
+                      if (card) return <div key={i}>{card}</div>
                       return (
                         <Tool key={i}>
-                          <ToolHeader
-                            type={`tool-${name}`}
-                            state={
-                              (p.state as ToolUIPart['state']) ??
-                              'output-available'
-                            }
-                          />
+                          <ToolHeader type={`tool-${name}`} state={toolState} />
                           <ToolContent>
                             {p.input ? (
                               <pre className="overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-700">
@@ -199,9 +204,7 @@ export function ConciergeChat() {
                               </pre>
                             ) : null}
                             {p.errorText ? (
-                              <p className="text-xs text-red-600">
-                                {p.errorText}
-                              </p>
+                              <p className="text-xs text-red-600">{p.errorText}</p>
                             ) : null}
                           </ToolContent>
                         </Tool>
@@ -233,10 +236,7 @@ export function ConciergeChat() {
           />
           <PromptInputFooter>
             <PromptInputTools />
-            <PromptInputSubmit
-              status={status}
-              disabled={!text.trim() || busy}
-            >
+            <PromptInputSubmit status={status} disabled={!text.trim() || busy}>
               <ArrowUp className="size-4" />
             </PromptInputSubmit>
           </PromptInputFooter>

@@ -4,16 +4,15 @@ import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { buildAnalystSystem, buildGraphWalkerSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
-import {
-  makeConciergeRegistry,
-  type ConciergeAgentName,
-} from './agents/registries/concierge'
+import { makeConciergeRegistry, type ConciergeAgentName } from './agents/registries/concierge'
 import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airports-store'
 import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import {
   askUserTool,
   awardOptionsTool,
   awardQuoteTool,
+  buildAwardPlan,
+  type AwardPlanResult,
   ensureRouteCache,
   fetchKbAgentsMd,
   flightSearchTool,
@@ -21,6 +20,7 @@ import {
   ledgerSnapshotTool,
   makeKbTools,
   querySqlTool,
+  showAwardOptionsTool,
   transferMatrixTool,
 } from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
@@ -122,10 +122,28 @@ export class ConciergeDO
       return this.graphWalkerTools()
     }
     return {
-      query_sql: querySqlTool((sql, params) =>
-        this.ledgerStub().query_sql(sql, params),
-      ),
+      query_sql: querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params)),
     }
+  }
+
+  // Read-only award plan behind the interactive award-options card. Runs the
+  // deterministic pipeline end to end (every routing × programme, priced, then
+  // joined against the transfers graph from `source`) and returns every
+  // combination for the client to filter/sort. Reuses this DO's seeded airport
+  // lookup + 7-day route cache; the data isn't per-user. `source` is a card or
+  // currency name/slug, resolved against the KB. Exposed as a DO RPC method for
+  // the /api/concierge/award-options route.
+  async awardPlan(origin: string, destination: string, source: string): Promise<AwardPlanResult> {
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    return buildAwardPlan(
+      this.airportLookup,
+      this.routeSql,
+      this.env.AERODATABOX_API_KEY,
+      kbHttp,
+      origin,
+      destination,
+      source,
+    )
   }
 
   // Graph-walker tool surface — layered. Simple one-hop graph lookups
@@ -149,9 +167,7 @@ export class ConciergeDO
     // It lists the user's accounts (their card summary). Exposed at TOP
     // LEVEL so the model can call it directly, AND inside codemode for
     // cross-domain programs.
-    const ledger_snapshot = ledgerSnapshotTool(() =>
-      this.ledgerStub().ledger_snapshot(),
-    )
+    const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
     // Batch award-chart pricing (stub: returns not_implemented). Top level
     // for one-shot quotes, and inside codemode so a program can price an
     // itinerary and pivot to "how do I earn those miles?" in one walk.
@@ -196,6 +212,9 @@ export class ConciergeDO
       award_options,
       transfer_matrix,
       codemode,
+      // Display-only gen-UI tool — renders the interactive award-options card.
+      // Top level only (NOT in codemode); the card self-fetches its data.
+      show_award_options: showAwardOptionsTool(),
       ask_user: askUserTool(),
     } as ToolSet
   }

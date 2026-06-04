@@ -2,9 +2,11 @@
 
 import { DraftTransactionBatchCard } from './draft-transaction'
 import { ClarifyCard } from './clarify'
+import { AwardOptionsCard } from './award-options'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
+  showAwardOptionsSchema,
 } from '@/durable/agent-ui-schemas'
 
 export type GenUiProps = {
@@ -44,6 +46,11 @@ const RENDERERS: Record<
         onReject={props.onReject}
       />
     )
+  },
+  show_award_options: (input) => {
+    const parsed = showAwardOptionsSchema.safeParse(input)
+    if (!parsed.success) return null
+    return <AwardOptionsCard input={parsed.data} />
   },
   clarify: (input, props) => {
     const parsed = clarifyInputSchema.safeParse(input)

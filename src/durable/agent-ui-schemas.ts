@@ -78,3 +78,22 @@ export const clarifyOutputSchema = z.object({
 
 export type ClarifyInput = z.infer<typeof clarifyInputSchema>
 export type ClarifyOutput = z.infer<typeof clarifyOutputSchema>
+
+// The agent emits a `show_award_options` tool call with only the city pair and
+// the funding source (a card or currency). The gen-UI card SELF-FETCHES the
+// full, already-costed option set from /api/concierge/award-options and renders
+// an interactive filter/sort table — the agent never sees, trims, or orders the
+// rows. That is the whole design: it cannot drop a routing it didn't compute.
+export const showAwardOptionsSchema = z.object({
+  origin: z.string().describe('Origin airport IATA, e.g. "BLR".'),
+  destination: z.string().describe('Destination airport IATA, e.g. "NRT".'),
+  source: z
+    .string()
+    .describe(
+      'The funding card or currency — a free-text name or a KB slug ' +
+        '(e.g. "Axis Magnus Burgundy" or "currency/edge-rewards-burgundy"). ' +
+        'The per-cabin points cost is computed by transferring from this.',
+    ),
+})
+
+export type ShowAwardOptionsInput = z.infer<typeof showAwardOptionsSchema>

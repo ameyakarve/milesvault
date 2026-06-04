@@ -4,6 +4,8 @@ export { askUserTool, askUserInputSchema } from './ask-user'
 export { awardQuoteTool, awardQuoteInputSchema } from './award-quote'
 export { flightSearchTool } from './flight-search'
 export { awardOptionsTool } from './award-options'
+export { showAwardOptionsTool } from './show-award-options'
+export { buildAwardPlan, type AwardPlanResult, type AwardPlanRow } from './award-plan'
 export {
   transferMatrixTool,
   transferGraph,
