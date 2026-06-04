@@ -106,16 +106,19 @@ flight_search({ origin, destination }):  // IATA codes
 award_options({ origin, destination }):   // O/D IATA — the ONLY inputs
   { origin, destination,
     options: Array<{ programme, programme_currency,   // "krisflyer", "currency/krisflyer-miles"
-                     own_metal, stops,
+                     own_metal, stops, published,
                      routings: Array<{ hub, carriers, distance }>,
                      total_distance,
-                     cabins: { economy, premium_economy, business, first } }>,  // [min,max] PROGRAMME miles | null
+                     cabins: { economy, premium_economy, business, first } }>,
     dests, notes }
   // FLY-SIDE ONLY. options = EXHAUSTIVE — every programme that can book the legs,
   //   priced through real charts; NOT scoped to any card. ALL DIRECTS FIRST, then
   //   one-stops. Identical-price hubs are COLLAPSED; `routings` lists the
-  //   equivalent hubs. stops: 0/1. cabins.<cabin> = [min,max] miles the PROGRAMME
-  //   charges. programme_currency = the currency it prices in (the funding target).
+  //   equivalent hubs. stops: 0/1. programme_currency = the currency it prices in.
+  //   cabins.<cabin> is one of: [min,max] published miles · "dynamic" (bookable
+  //   but NO published rate — show "varies, confirm live", NEVER a number; a
+  //   quoted figure would mislead) · null (cabin not offered). published:false
+  //   means the whole programme is dynamic (all its cabins are "dynamic").
   //   dests = the distinct programme currencies — feed to transfer_matrix to scope
   //   + cost by a card. This tool does NOT know the user's card or points.
 
@@ -179,9 +182,13 @@ A few principles that apply across questions:
     metal** (`own_metal: true`) — usually cheaper / surcharge-free.
   - **Programme**
   - **Economy**, **Premium**, **Business**, **First** (header premium-economy
-    exactly **Premium**). Each cell = the cost the user PAYS = `cabins.<cabin> ×
-    multiplier` (the card's points), with the raw programme miles in parens; `—`
-    if not offered. e.g. `21,900 pts (17.5k mi)`.
+    exactly **Premium**). Per cabin:
+    - `null` → `—` (not offered).
+    - `"dynamic"` (or `published: false`) → **`varies — confirm live`**. NEVER
+      put a number here, and never multiply it — there's no published rate, so
+      any figure would mislead.
+    - `[min,max]` → the cost the user PAYS = `cabins.<cabin> × multiplier` (the
+      card's points), raw programme miles in parens. e.g. `21,900 pts (17.5k mi)`.
   Render a row for EVERY surviving option in its table — don't trim. Note each
   programme's multiplier/ratio once below the tables. THEN a short **summary**:
   best pick + any alternative. Always give both — tables AND summary.

@@ -13,10 +13,13 @@ import type { KbHttp } from './kb-tools'
 // drops programmes the card can't reach, and costs the rest. Keeping this tool
 // card-agnostic is what makes it generic. Directs are listed first.
 
+// A cabin cell: a real published [min,max] range, OR the string "dynamic"
+// (the programme can book it but publishes no chart/bounds — show "varies,
+// confirm live", NEVER a number; a floor here would mislead), OR null (cabin
+// not offered).
 const CABIN = z
-  .tuple([z.number(), z.number()])
-  .nullable()
-  .describe('[min, max] miles the programme charts charge for the cabin, or null if not offered.')
+  .union([z.tuple([z.number(), z.number()]), z.literal('dynamic'), z.null()])
+  .describe('[min,max] published miles, "dynamic" (bookable but no published rate → show "varies"), or null (not offered).')
 
 const CABIN_SET = z.object({
   economy: CABIN,
@@ -50,7 +53,10 @@ const awardOptionsOutputSchema = z.object({
       stops: z.number().describe('0 = nonstop, 1 = one-stop.'),
       routings: z.array(ROUTING).describe('Equivalent routings that price identically (shortest first).'),
       total_distance: z.number().describe('Shortest routing distance.'),
-      cabins: CABIN_SET.describe('Per-cabin [min,max] miles the programme charges.'),
+      published: z
+        .boolean()
+        .describe('False = no published award chart; every cabin is "dynamic" — show "varies, confirm live", never a number.'),
+      cabins: CABIN_SET.describe('Per-cabin published [min,max] miles, "dynamic", or null. See `published`.'),
     }),
   ),
   dests: z
@@ -63,6 +69,25 @@ type AwardOptionsResult = z.infer<typeof awardOptionsOutputSchema>
 type Cabin = 'economy' | 'premium_economy' | 'business' | 'first'
 const CABINS: Cabin[] = ['economy', 'premium_economy', 'business', 'first']
 const MAX_OPTIONS = 80
+
+// A published range, "dynamic" (offered but no published rate), or null.
+type CabinCell = CabinRange | 'dynamic'
+// A programme with no published award chart (revenue/dynamic pricing with no
+// real floor we can quote). The module declares `export const published = false`;
+// when it does, we surface every offered cabin as "dynamic" rather than the
+// misleading chart minimum. Default (flag absent) = published/chart-priced.
+function isPublished(mod: unknown): boolean {
+  return (mod as { published?: boolean }).published !== false
+}
+// Offered cabins → "dynamic" for an unpublished programme; null stays null.
+function asDynamic(cabins: Record<Cabin, CabinRange>): Record<Cabin, CabinCell> {
+  return {
+    economy: cabins.economy ? 'dynamic' : null,
+    premium_economy: cabins.premium_economy ? 'dynamic' : null,
+    business: cabins.business ? 'dynamic' : null,
+    first: cabins.first ? 'dynamic' : null,
+  }
+}
 
 function aggregateCabins(entries: Entry[]): Record<Cabin, CabinRange> {
   const agg: Record<Cabin, CabinRange> = {
@@ -160,7 +185,8 @@ export function awardOptionsTool(lookup: AirportLookup, db: SqlStorage, apiKey: 
         hub: string | null
         carriers: string[]
         distance: number
-        cabins: Record<Cabin, CabinRange>
+        published: boolean
+        cabins: Record<Cabin, CabinCell>
       }
       const flat: Flat[] = []
       const ownMetalCache = new Map<string, Set<string>>()
@@ -205,6 +231,10 @@ export function awardOptionsTool(lookup: AirportLookup, db: SqlStorage, apiKey: 
             const slugA = carrierAirline.get(iata)
             return slugA != null && metal!.has(slugA)
           })
+          // Unpublished programmes: keep the option (it IS bookable) but surface
+          // its cabins as "dynamic", never the chart minimum (which lies low).
+          const published = isPublished(mod)
+          const agg = aggregateCabins(priced.entries)
           flat.push({
             programme: slug,
             own_metal: isOwnMetal,
@@ -212,7 +242,8 @@ export function awardOptionsTool(lookup: AirportLookup, db: SqlStorage, apiKey: 
             hub: routing.hub,
             carriers: chosen,
             distance: Math.round(priced.resolved.total_distance),
-            cabins: aggregateCabins(priced.entries),
+            published,
+            cabins: published ? agg : asDynamic(agg),
           })
         }
       }
@@ -230,7 +261,7 @@ export function awardOptionsTool(lookup: AirportLookup, db: SqlStorage, apiKey: 
       const groups = new Map<string, Opt>()
       for (const f of flat) {
         const c = f.cabins
-        const key = `${f.programme}|${f.stops}|${f.own_metal}|${JSON.stringify([
+        const key = `${f.programme}|${f.stops}|${f.own_metal}|${f.published}|${JSON.stringify([
           c.economy,
           c.premium_economy,
           c.business,
@@ -245,6 +276,7 @@ export function awardOptionsTool(lookup: AirportLookup, db: SqlStorage, apiKey: 
             stops: f.stops,
             routings: [],
             total_distance: f.distance,
+            published: f.published,
             cabins: { economy: c.economy, premium_economy: c.premium_economy, business: c.business, first: c.first },
           }
           groups.set(key, g)
