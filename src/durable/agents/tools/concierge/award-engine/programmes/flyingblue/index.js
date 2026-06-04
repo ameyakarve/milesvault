@@ -80,6 +80,12 @@ function floorKey(r1, r2) {
 
 export const slug = "flying-blue";
 
+// Flying Blue prices awards dynamically (revenue-based) with no published
+// chart or bounds — any chart figure here is a misleading floor. Mark the
+// whole programme unpublished so award_options surfaces its cabins as
+// "dynamic" (varies — confirm live) rather than a number.
+export const published = false;
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {
