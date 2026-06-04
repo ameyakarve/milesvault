@@ -19,7 +19,6 @@ import {
   flightSearchTool,
   kbHttpOverFetch,
   ledgerSnapshotTool,
-  makeAwardReranker,
   makeKbTools,
   querySqlTool,
   transferMatrixTool,
@@ -166,18 +165,11 @@ export class ConciergeDO
     // priced through the engine, own-metal from the KB OWN_METAL edge, ranked
     // direct → distance → own-metal. The deterministic path for "best award
     // options" — the model walks the card's partners then calls this once.
-    // Rerank with the small/fast Gemma model — turns the freeform `intent` +
-    // holdings into a prioritised order over the deterministic fly-options.
-    const rerank = makeAwardReranker(
-      this.buildModel({ id: '@cf/google/gemma-4-26b-a4b-it', reasoning: 'off' }),
-    )
     const award_options = awardOptionsTool(
       this.airportLookup,
       this.routeSql,
       this.env.AERODATABOX_API_KEY,
       kbHttp,
-      () => this.ledgerStub().ledger_snapshot(),
-      rerank,
     )
     // Pure transfers-graph traversal: cost matrix to move points across reward
     // currencies (BFS, ratio-composed). Standalone for "how do my points move"

@@ -10,7 +10,6 @@ export {
   resolveCurrency,
   type TransferCell,
 } from './transfer-graph'
-export { makeAwardReranker, type AwardReranker } from './award-rerank'
 export { ensureRouteCache } from './routes-store'
 export {
   makeKbTools,
