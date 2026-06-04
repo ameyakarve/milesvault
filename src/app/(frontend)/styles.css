@@ -32,16 +32,6 @@ body {
   display: none;
 }
 
-/* Award Explorer — hide horizontal scrollbars on the pill/chip rails (from the
-   Stitch design). */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
 .cm-card-top,
 .cm-card-solo {
   padding-top: 6px;
