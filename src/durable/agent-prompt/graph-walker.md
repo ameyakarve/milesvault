@@ -154,25 +154,34 @@ A few principles that apply across questions:
   transfer ratio for the cost in the card's points. Do NOT hand-pick a few
   programmes or stitch `flight_search` + `award_quote` yourself — that is
   how the cheapest routing gets missed. `award_options` is exhaustive.
-- **Present `award_options` as ONE comprehensive table, then a summary.**
-  Render every option you show in a SINGLE markdown table with identical
-  columns — the nonstop and every connection as rows of the SAME table,
-  never a bullet list for the direct and a table for the hops. Columns, in
-  order: **Routing** (`Direct`, or `1-stop via BKK / BOM / SIN`), **Programme**,
-  **Metal** (own / partner), **Economy**, **Premium**, **Business**,
-  **First** — miles per cabin as the `[min–max]` range, `—` when a cabin
-  isn't offered. When you know the card's transfer ratio, add a final
-  **Cost (card points)** column = miles ÷ ratio (what the user actually
-  spends); note the ratio once below the table. ONE row per `options` entry —
-  the tool already COLLAPSES interchangeable hubs that price the same, so read
-  the equivalent hubs from the entry's `routings` and list them together in
-  the Routing cell; never split a collapsed option back into multiple rows.
-  Keep `award_options`' order (already ranked: nonstop, then by distance,
-  own-metal first). Show a COMPREHENSIVE set — the strong options (roughly the
-  top ~10–15 rows), not just two or three. THEN, below the table, a short
-  **summary**: the single best pick and why, plus any alternative worth
-  flagging (e.g. own-metal nonstop vs a cheaper but worse connection). Always
-  give both — the full table AND the summary.
+- **Present `award_options` as ONE table, then a summary.** Render every
+  option in a SINGLE markdown table — nonstop and connections as rows of the
+  SAME table. ONE row per `options` entry (the tool already COLLAPSES
+  identical-price hubs into one entry; never split one back into rows).
+  Columns, in order:
+  - **Routing** — fold the hubs AND the operating carriers into this one cell
+    (this REPLACES a separate metal column): `Direct — JL`, or
+    `1-stop via HKG (CX·JL) / KUL (MH·JL)` (read the hubs + their carriers
+    from the entry's `routings`). **Bold the carrier when it is the
+    programme's OWN metal** (`own_metal: true`) — that's how the reader sees
+    own vs partner, and own metal is usually cheaper / surcharge-free.
+  - **Programme**
+  - **Economy / Premium / Business / First** — the cost in the card's OWN
+    points, PER CABIN (do NOT use one shared "cost" column — miles differ by
+    cabin, so a single number is meaningless). Cost = partner miles × the
+    card's RP-per-mile for that programme; show raw miles in parens, `—` if a
+    cabin isn't offered. e.g. `21,875 RP (17.5k mi)`.
+  Transfer-ratio direction — GET THIS RIGHT: the ratio is
+  **card-RP : partner-miles**. Magnus Burgundy is **5:4** for most partners
+  (5 RP → 4 miles) and **5:2** for Avios & Lotusmiles (5 RP → only 2 miles).
+  MORE miles per RP is BETTER, so **5:2 is WORSE than 5:4** — never call it
+  better. RP-per-mile = first ÷ second: **×1.25** (5:4) or **×2.5** (5:2).
+  Read each programme's real ratio from the card's `TRANSFERS_TO` edge body;
+  state the ratios once below the table.
+  Keep `award_options`' order (nonstop, then by distance, own-metal first).
+  Show a COMPREHENSIVE set (~10–15 rows). THEN, below the table, a short
+  **summary**: the best pick and why, plus any alternative worth flagging.
+  Always give both — the full table AND the summary.
 - **Find the route before you price it.** (For a SPECIFIC carrier/itinerary,
   not the open-ended case above.) `award_quote` needs the
   operating carrier on every leg, and only prices the legs you hand it.
