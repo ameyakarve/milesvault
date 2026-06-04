@@ -12,6 +12,7 @@ import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airpor
 import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import {
   askUserTool,
+  awardOptionsTool,
   awardQuoteTool,
   ensureRouteCache,
   fetchKbAgentsMd,
@@ -141,7 +142,8 @@ export class ConciergeDO
   // - `ask_user`: pure-text suspending tool — model asks a question, the
   //   user's next chat message becomes the answer. No genUI.
   private graphWalkerTools(): ToolSet {
-    const kb = makeKbTools(kbHttpOverFetch(this.KB_BASE, this.env.KB))
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const kb = makeKbTools(kbHttp)
     // Ledger access is the `ledger_snapshot` DO RPC only — no raw SQL.
     // It lists the user's accounts (their card summary). Exposed at TOP
     // LEVEL so the model can call it directly, AND inside codemode for
@@ -158,9 +160,19 @@ export class ConciergeDO
     // for one-shot searches and inside codemode so a program can discover a
     // routing then price it in one walk.
     const flight_search = flightSearchTool(this.routeSql, this.env.AERODATABOX_API_KEY)
+    // End-to-end award ranking: routings × the card's reachable programmes,
+    // priced through the engine, own-metal from the KB OWN_METAL edge, ranked
+    // direct → distance → own-metal. The deterministic path for "best award
+    // options" — the model walks the card's partners then calls this once.
+    const award_options = awardOptionsTool(
+      this.airportLookup,
+      this.routeSql,
+      this.env.AERODATABOX_API_KEY,
+      kbHttp,
+    )
     const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
     const codemode = createCodeTool({
-      tools: { ...kb, ledger_snapshot, award_quote, flight_search },
+      tools: { ...kb, ledger_snapshot, award_quote, flight_search, award_options },
       executor,
     })
 
@@ -169,6 +181,7 @@ export class ConciergeDO
       ledger_snapshot,
       award_quote,
       flight_search,
+      award_options,
       codemode,
       ask_user: askUserTool(),
     } as ToolSet

@@ -3,6 +3,7 @@ export { ledgerSnapshotTool } from './ledger-snapshot'
 export { askUserTool, askUserInputSchema } from './ask-user'
 export { awardQuoteTool, awardQuoteInputSchema } from './award-quote'
 export { flightSearchTool } from './flight-search'
+export { awardOptionsTool } from './award-options'
 export { ensureRouteCache } from './routes-store'
 export {
   makeKbTools,

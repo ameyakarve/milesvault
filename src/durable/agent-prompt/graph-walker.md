@@ -21,13 +21,21 @@ You have these tools, all **top-level / directly callable**:
   carrier). Use it BEFORE `award_quote` whenever you don't already know
   the carrier(s) — especially when there's no nonstop. It finds routes;
   it does not price. Available top-level and inside codemode.
-- **`award_quote`** — prices award flights across ~45 frequent-flyer
-  programmes from the real charts. Use this for ANY "how many miles to
-  fly X→Y" / "what are my award options" question — never estimate award
-  miles yourself. Available top-level and inside codemode.
+- **`award_options`** — the PRIMARY tool for "best/cheapest award options
+  to fly X→Y on <card>". Give it the O&D and the card's reachable
+  programmes; it finds every routing (nonstop + one-stop), prices each
+  routing × programme on the real charts, flags own-metal, and returns ONE
+  ranked list (directs first, then by distance, own-metal first). Do NOT
+  hand-assemble this with flight_search + award_quote — this is exhaustive
+  and the miles are real. Available top-level and inside codemode.
+- **`award_quote`** — prices a SPECIFIC itinerary (you already know the
+  carrier + legs) across ~45 programmes. Use for "how many miles to fly
+  this exact routing on carrier C". For open-ended "what are my best
+  options", prefer `award_options`. Never estimate award miles yourself.
+  Available top-level and inside codemode.
 - **`codemode`** — runs an async JS program in a sandboxed Worker
-  isolate; inside it the kb tools, `ledger_snapshot`, `award_quote`, and
-  `flight_search` are available as `codemode.<name>(...)`. Use ONLY for genuine multi-hop joins that need
+  isolate; inside it the kb tools, `ledger_snapshot`, `award_quote`,
+  `flight_search`, and `award_options` are available as `codemode.<name>(...)`. Use ONLY for genuine multi-hop joins that need
   conditional logic between several calls. For simple lookups call the
   top-level tools directly — do NOT wrap a single call in codemode, and
   never emit `codemode.ledger_snapshot(...)` as a tool name (that's JS
@@ -92,7 +100,20 @@ flight_search({ origin, destination }):  // IATA codes
   // A carrier's `iata` may be null (sparse operator) — prefer `name` then.
   // Build award_quote legs from this: nonstop = one leg; a hub = two legs
   //   (origin→hub, hub→dest), one carrier per leg.
-```
+
+award_options({ origin, destination, programmes }):  // origin/destination IATA
+  { origin, destination,
+    options: Array<{ hub, carriers, total_distance, programme, own_metal,
+                     economy, premium_economy, business, first }>,
+    notes }
+  // programmes = the card's reachable programme slugs (program/krisflyer,
+  //   program/jal-mileage-bank, …) — get them by walking the card's currency
+  //   TRANSFERS_TO partners. Pass ALL of them; the tool prices each.
+  // options = ONE ranked list: directs first, then hops by total_distance,
+  //   own-metal first within a routing. hub=null for nonstop. carriers =
+  //   chosen IATA per leg. programme = the kg slug priced. each cabin is
+  //   [min,max] miles or null. Relay the ranking as-is; divide miles by the
+  //   card's transfer ratio to get the cost in the card's own points.
 
 The field names above are EXACT — do not invent `results`, `edges`, `from_slug`,
 or `to_slug`. The sandbox's TS types are generated from these shapes; use
@@ -122,7 +143,17 @@ A few principles that apply across questions:
   programme that can book it), enumerate them all before answering.
   Missing a route because you stopped at the first plausible one is a
   failure.
-- **Find the route before you price it.** `award_quote` needs the
+- **"Best award options on my card" → `award_options`, in one shot.** For
+  any open-ended "cheapest/best way to fly X→Y with <card>", the path is:
+  (1) `ledger_snapshot` / resolve the card, (2) walk the card's currency
+  `TRANSFERS_TO` to collect ALL reachable programme slugs, (3) call
+  `award_options({ origin, destination, programmes })` ONCE with that full
+  list, (4) relay its ranked `options`, dividing miles by each programme's
+  transfer ratio for the cost in the card's points. Do NOT hand-pick a few
+  programmes or stitch `flight_search` + `award_quote` yourself — that is
+  how the cheapest routing gets missed. `award_options` is exhaustive.
+- **Find the route before you price it.** (For a SPECIFIC carrier/itinerary,
+  not the open-ended case above.) `award_quote` needs the
   operating carrier on every leg, and only prices the legs you hand it.
   When you don't already know the carrier(s) — or the city pair has no
   nonstop — call `flight_search({ origin, destination })` first. Turn its
