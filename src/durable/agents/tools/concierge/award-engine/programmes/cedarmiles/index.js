@@ -59,6 +59,8 @@ const MEA_OWN = {
   5: [35000, 70000],
 };
 
+export const slug = "cedar-miles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

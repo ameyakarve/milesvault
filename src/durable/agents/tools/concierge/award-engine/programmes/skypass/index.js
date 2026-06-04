@@ -83,6 +83,8 @@ const PTR = {
   [pairKey("EU","EU")]: [25000, 0, 0],
 };
 
+export const slug = "skypass";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

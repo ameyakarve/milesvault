@@ -134,6 +134,8 @@ pt(13, 8, 50000, 100000, 150000); // USA — Europe
 pt(13, 15, 45000, 90000, 0);      // USA — South America
 pt(16, 17, 40000, 80000, 0);      // Hawaii — Australasia
 
+export const slug = "alfursan";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

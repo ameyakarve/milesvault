@@ -14,6 +14,8 @@ import { makeEntry } from "../../shared.js";
 
 const BOOKABLE = new Set(["LA","DL","AM","BA","CX","AY","IB","JL","LH","OS","QF","QR","RJ","LX","VS"]);
 
+export const slug = "latam-pass";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

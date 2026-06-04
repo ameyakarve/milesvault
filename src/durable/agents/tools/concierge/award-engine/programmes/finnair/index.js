@@ -215,6 +215,8 @@ function resolveAS(o, d) {
   return null; // Complex Hawaii/international routing — return null for [0,0]
 }
 
+export const slug = "finnair-plus";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

@@ -100,6 +100,8 @@ const CHARTS = {
   [pk("CA","CA")]: [6000, 12500, 15000, 25000, 0, 0],
 };
 
+export const slug = "lifemiles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

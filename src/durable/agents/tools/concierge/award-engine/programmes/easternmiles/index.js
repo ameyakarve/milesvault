@@ -80,6 +80,8 @@ const PARTNER_JAL_NAM_JP  = [100000, 150000, 200000];
 const PARTNER_CX_HK_SPAC  = [70000, 130000, null];
 const PARTNER_QF_NAM_AU   = [200000, 340000, 420000];
 
+export const slug = "eastern-miles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, totalDistance) {

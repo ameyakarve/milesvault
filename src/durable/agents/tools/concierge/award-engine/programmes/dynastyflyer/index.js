@@ -61,6 +61,8 @@ co("HK", "NAM", 55000, 60000, 80000);
 co("HK", "EU", 55000, 60000, 80000);
 co("ASIA", "AUNZ", 55000, 60000, 80000);
 
+export const slug = "dynasty-flyer";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

@@ -69,6 +69,8 @@ function getRegion(cc1, cc2) {
   return "AM";
 }
 
+export const slug = "atmos-rewards";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, totalDistance) {

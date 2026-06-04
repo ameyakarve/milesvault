@@ -104,6 +104,8 @@ const QR_DEST_ZONE = {
   AU: "OC", NZ: "OC",
 };
 
+export const slug = "qatar-privilege-club";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {

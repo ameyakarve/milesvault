@@ -17,6 +17,8 @@ const ET_PTR = [
 
 const EY_CARRIERS = new Set(["EY"]);
 
+export const slug = "etihad-guest";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, distance) {

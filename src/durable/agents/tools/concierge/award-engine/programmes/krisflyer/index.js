@@ -59,6 +59,8 @@ function getSqZone(cc, airport) {
 // Full 13x13 matrices encoded row by row.
 
 
+export const slug = "krisflyer";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {

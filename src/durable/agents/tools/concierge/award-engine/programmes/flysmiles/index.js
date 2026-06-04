@@ -89,6 +89,8 @@ const PTR_FROM_CMB = {
   10: [30000, null, 50000, null],
 };
 
+export const slug = "flysmiles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

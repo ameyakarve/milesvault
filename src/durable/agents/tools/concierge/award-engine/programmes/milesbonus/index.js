@@ -14,6 +14,8 @@
 // Star Alliance (27 — includes OA as A3 regional partner)
 const BOOKABLE = new Set(["A3","AC","AI","AV","BR","CA","CM","ET","LH","LO","LX","MS","NH","NZ","OA","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VL","ZH"]);
 
+export const slug = "miles-and-bonus";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

@@ -78,6 +78,8 @@ function floorKey(r1, r2) {
   return r1 <= r2 ? `${r1}-${r2}` : `${r2}-${r1}`;
 }
 
+export const slug = "flying-blue";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {

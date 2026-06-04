@@ -86,6 +86,8 @@ const AM_FROM_MX = {
   AUNZ: [128000, 283000, 148000, 326000],
 };
 
+export const slug = "club-premier";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

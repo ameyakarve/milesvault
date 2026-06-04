@@ -75,6 +75,8 @@ cp("H", "C", null, 80000, 105000);
 // USA — Oceania (H–G): —/188K/250K RT → —/94K/125K OW
 cp("H", "G", null, 94000, 125000);
 
+export const slug = "phoenixmiles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

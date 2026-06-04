@@ -25,6 +25,8 @@ const BA_PARTNER = [
 
 const BA_CARRIERS = new Set(["BA", "IB", "EI"]);
 
+export const slug = "avios";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {

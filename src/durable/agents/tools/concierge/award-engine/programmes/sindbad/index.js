@@ -37,6 +37,8 @@ const CHART = [
   [24000, 46000, 55000],
 ];
 
+export const slug = "sindbad";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

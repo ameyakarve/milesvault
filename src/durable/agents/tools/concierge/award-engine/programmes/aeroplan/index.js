@@ -111,6 +111,8 @@ const CHARTS = {
   ],
 };
 
+export const slug = "aeroplan";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, totalDistance) {

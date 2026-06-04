@@ -243,6 +243,8 @@ pp("TW", "TW",          0, 0, 0);  // Domestic handled separately
 pp("EU", "EU",          0, 0, 0);
 pp("N_AM", "N_AM",      0, 0, 0);
 
+export const slug = "infinity-mileagelands";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

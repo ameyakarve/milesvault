@@ -147,6 +147,8 @@ eo("NAM", "SEA",  40000, 63000);
 eo("SAM", "CAC",  15000, 21000);
 eo("SAM", "OC",   20000, 42000);
 
+export const slug = "shebamiles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

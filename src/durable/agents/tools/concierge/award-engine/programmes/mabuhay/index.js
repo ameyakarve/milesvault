@@ -69,6 +69,8 @@ const FROM_PH = {
   OC:     [null, null, null],
 };
 
+export const slug = "mabuhay-miles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

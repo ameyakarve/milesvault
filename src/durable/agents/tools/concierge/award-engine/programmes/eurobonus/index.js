@@ -186,6 +186,8 @@ tp("PAC", "PAC",   25000, 37500, 50000, 70000);
 // Domestic Europe countries
 const DOM_EU_COUNTRIES = new Set(["DK", "NO", "SE", "FR", "ES", "IT"]);
 
+export const slug = "eurobonus";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

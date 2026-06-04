@@ -142,6 +142,8 @@ function afklZoneKey(cc1, cc2) {
   return z1 <= z2 ? `${z1}-${z2}` : `${z2}-${z1}`;
 }
 
+export const slug = "flying-club";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, totalDistance) {

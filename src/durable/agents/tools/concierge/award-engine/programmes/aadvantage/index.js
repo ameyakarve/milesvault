@@ -191,6 +191,8 @@ const AA_FLOORS = {
   "SP": [35000, 60000, 95000],
 };
 
+export const slug = "aadvantage";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

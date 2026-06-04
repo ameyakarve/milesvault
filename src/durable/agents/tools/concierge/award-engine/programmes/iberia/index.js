@@ -41,6 +41,8 @@ const IB_PEAK = [
   [0, 0, 0], // Band 9 unknown
 ];
 
+export const slug = "iberia-plus";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {

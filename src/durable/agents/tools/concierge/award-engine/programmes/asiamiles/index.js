@@ -21,6 +21,8 @@ function isType2(legs) {
   return legs.some((l) => AM_TYPE2_COUNTRIES.has(l.origin_cc) || AM_TYPE2_COUNTRIES.has(l.destination_cc));
 }
 
+export const slug = "asia-miles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, distance) {

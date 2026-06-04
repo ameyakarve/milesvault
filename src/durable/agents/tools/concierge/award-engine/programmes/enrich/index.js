@@ -12,6 +12,8 @@ const CHART = [
   [20000, 35000, 45000], [30000, 55000, 70000], [40000, 70000, 90000],
   [50000, 90000, 120000],
 ];
+export const slug = "enrich";
+
 export const bookable = BOOKABLE;
 export function handle(legs, totalDistance) {
   const carriers = legs.map((l) => l.carrier).filter(Boolean);

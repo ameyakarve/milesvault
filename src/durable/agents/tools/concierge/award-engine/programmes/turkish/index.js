@@ -147,6 +147,8 @@ const TK_DOMESTIC = { economy: 15000, business: 22500, first: 30000 };
 const TK_HAWAII   = { economy: 25000, business: 40000, first: 50000 };
 const TK_CARRIERS = new Set(["TK"]);
 
+export const slug = "turkish-miles-and-smiles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

@@ -125,6 +125,8 @@ a("OC","SAF", 95000, 215000, 330000);
 
 const CHARTS = C;
 
+export const slug = "miles-and-more";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

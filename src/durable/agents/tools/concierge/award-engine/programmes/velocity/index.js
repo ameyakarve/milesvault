@@ -12,6 +12,8 @@ import { makeEntry } from "../../shared.js";
 
 const BOOKABLE = new Set(["AC","HU","HX","NH","QR","SA","SG","SQ","UA","VA","VS"]);
 
+export const slug = "velocity-frequent-flyer";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

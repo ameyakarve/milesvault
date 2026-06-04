@@ -179,6 +179,8 @@ const PTR_FIRST = [
   [1900, 1900, 1900, 1550, 2050, 2500, 2500, 1450, 1020, 1400, 900, 350],
 ];
 
+export const slug = "royal-orchid-plus";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

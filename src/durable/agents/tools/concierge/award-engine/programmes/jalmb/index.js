@@ -32,6 +32,8 @@ const PTR_CHART = [
   [150000, 180000, 210000, 330000],
 ];
 
+export const slug = "jal-mileage-bank";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, totalDistance) {

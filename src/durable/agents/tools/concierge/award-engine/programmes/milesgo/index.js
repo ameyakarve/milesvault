@@ -106,6 +106,8 @@ pt("WAF", "NAM",    70000, 130000, 180000);
 pt("AAF", "NAM",    80000, 140000, 200000);
 pt("WAF", "SAM",    60000, 110000, 160000);
 
+export const slug = "miles-and-go";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

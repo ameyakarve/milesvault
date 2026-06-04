@@ -169,6 +169,8 @@ pt("US_CA","ME", 85000, 160000, 280000);
 pt("US_CA","AU_NZ", 80000, 160000, 260000);
 pt("SA","AU_NZ", 35000, 60000, 80000);
 
+export const slug = "connectmiles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

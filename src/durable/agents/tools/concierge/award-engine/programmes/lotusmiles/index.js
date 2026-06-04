@@ -56,6 +56,8 @@ const VN_OWN = {
   EU:  [null, 85000, 150000],       // Vietnam — Europe
 };
 
+export const slug = "lotusmiles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

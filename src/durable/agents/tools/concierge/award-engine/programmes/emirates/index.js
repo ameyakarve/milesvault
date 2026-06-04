@@ -34,6 +34,8 @@ const DYNAMIC_PARTNERS = new Set(["FZ", "U2", "LS"]);
 
 const EK_CARRIERS = new Set(["EK"]);
 
+export const slug = "emirates-skywards";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, distance) {

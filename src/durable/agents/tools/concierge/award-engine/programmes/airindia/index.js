@@ -7,6 +7,8 @@ const BOOKABLE = new Set(["A3","AC","AI","AV","BR","CA","CM","ET","LH","LO","LX"
 // so we use a custom wrap instead of makeEntry (which only handles single values).
 const wrap = (lo, hi) => (lo === 0 && hi === 0) ? null : [lo, hi];
 
+export const slug = "maharaja-club";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

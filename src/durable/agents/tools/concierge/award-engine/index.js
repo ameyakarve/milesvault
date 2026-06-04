@@ -52,7 +52,11 @@ import * as turkish from './programmes/turkish/index.js'
 import * as united from './programmes/united/index.js'
 import * as velocity from './programmes/velocity/index.js'
 
-export const PROGRAMMES = {
+// Each programme module declares its own milesvault-kg slug (its `slug`
+// export — the switching-basis label). PROGRAMMES is keyed by that slug, so
+// the engine, the KB graph, and the agent all speak one set of programme ids
+// with no translation table: the module owns its id, the map is derived.
+const MODULES = [
   aadvantage, aeroplan, airindia, alfursan, ana, asiamiles, atmos, ba,
   cedarmiles, clubpremier, connectmiles, delta, dynastyflyer, easternmiles,
   egretclub, emirates, enrich, etihad, eurobonus, eva, finnair, flyingblue,
@@ -60,71 +64,76 @@ export const PROGRAMMES = {
   lotusmiles, mabuhay, milesbonus, milesgo, milesmore, phoenixmiles, qantas,
   qatar, royalorchid, shebamiles, shenzhen, sindbad, skypass, turkish, united,
   velocity,
-}
+]
+
+export const PROGRAMMES = Object.fromEntries(MODULES.map((m) => [m.slug, m]))
 
 // Free-text programme name → id. Covers common programme/airline names; the
 // resolver also falls back to substring matching against the ids.
 const ALIASES = {
   american: 'aadvantage', 'american airlines': 'aadvantage', aa: 'aadvantage',
   'air canada': 'aeroplan', ac: 'aeroplan',
-  'air india': 'airindia', ai: 'airindia', maharaja: 'airindia',
-  'maharaja club': 'airindia', 'flying returns': 'airindia',
+  'air india': 'maharaja-club', ai: 'maharaja-club', maharaja: 'maharaja-club',
+  'maharaja club': 'maharaja-club', 'flying returns': 'maharaja-club',
   saudia: 'alfursan', 'al fursan': 'alfursan', sv: 'alfursan',
-  'all nippon': 'ana', 'ana mileage club': 'ana', nh: 'ana',
-  cathay: 'asiamiles', 'cathay pacific': 'asiamiles', 'asia miles': 'asiamiles', cx: 'asiamiles',
-  'british airways': 'ba', avios: 'ba', 'executive club': 'ba',
-  mea: 'cedarmiles', 'middle east airlines': 'cedarmiles', 'cedar miles': 'cedarmiles',
-  aeromexico: 'clubpremier', 'club premier': 'clubpremier', am: 'clubpremier',
+  'all nippon': 'ana-mileage-club', 'ana mileage club': 'ana-mileage-club', nh: 'ana-mileage-club',
+  cathay: 'asia-miles', 'cathay pacific': 'asia-miles', 'asia miles': 'asia-miles', cx: 'asia-miles',
+  'british airways': 'avios', avios: 'avios', 'executive club': 'avios',
+  mea: 'cedar-miles', 'middle east airlines': 'cedar-miles', 'cedar miles': 'cedar-miles',
+  aeromexico: 'club-premier', 'club premier': 'club-premier', am: 'club-premier',
   copa: 'connectmiles', cm: 'connectmiles',
-  skymiles: 'delta', dl: 'delta',
-  'china airlines': 'dynastyflyer', dynasty: 'dynastyflyer', ci: 'dynastyflyer',
-  'china eastern': 'easternmiles', 'eastern miles': 'easternmiles', mu: 'easternmiles',
-  skywards: 'emirates', ek: 'emirates',
+  skymiles: 'delta-skymiles', dl: 'delta-skymiles',
+  'china airlines': 'dynasty-flyer', dynasty: 'dynasty-flyer', ci: 'dynasty-flyer',
+  'china eastern': 'eastern-miles', 'eastern miles': 'eastern-miles', mu: 'eastern-miles',
+  skywards: 'emirates-skywards', ek: 'emirates-skywards',
   'malaysia airlines': 'enrich', mh: 'enrich',
-  'etihad guest': 'etihad', ey: 'etihad',
+  'etihad guest': 'etihad-guest', ey: 'etihad-guest',
   sas: 'eurobonus', sk: 'eurobonus',
-  'eva air': 'eva', 'infinity mileagelands': 'eva', br: 'eva',
-  'finnair plus': 'finnair', ay: 'finnair',
-  'air france': 'flyingblue', klm: 'flyingblue', 'flying blue': 'flyingblue', af: 'flyingblue', kl: 'flyingblue',
-  'virgin atlantic': 'flyingclub', 'flying club': 'flyingclub', vs: 'flyingclub',
+  'eva air': 'infinity-mileagelands', 'infinity mileagelands': 'infinity-mileagelands', br: 'infinity-mileagelands',
+  'finnair plus': 'finnair-plus', ay: 'finnair-plus',
+  'air france': 'flying-blue', klm: 'flying-blue', 'flying blue': 'flying-blue', af: 'flying-blue', kl: 'flying-blue',
+  'virgin atlantic': 'flying-club', 'flying club': 'flying-club', vs: 'flying-club',
   srilankan: 'flysmiles', ul: 'flysmiles',
-  'iberia plus': 'iberia', ib: 'iberia',
-  jal: 'jalmb', 'japan airlines': 'jalmb', 'mileage bank': 'jalmb', jl: 'jalmb',
+  'iberia plus': 'iberia-plus', ib: 'iberia-plus',
+  jal: 'jal-mileage-bank', 'japan airlines': 'jal-mileage-bank', 'mileage bank': 'jal-mileage-bank', jl: 'jal-mileage-bank',
   'singapore airlines': 'krisflyer', sq: 'krisflyer',
-  latam: 'latampass', 'latam pass': 'latampass', la: 'latampass',
+  latam: 'latam-pass', 'latam pass': 'latam-pass', la: 'latam-pass',
   avianca: 'lifemiles', av: 'lifemiles',
   'vietnam airlines': 'lotusmiles', vn: 'lotusmiles',
-  'philippine airlines': 'mabuhay', pr: 'mabuhay',
-  aegean: 'milesbonus', 'miles and bonus': 'milesbonus', a3: 'milesbonus',
-  tap: 'milesgo', 'tap air portugal': 'milesgo', 'miles and go': 'milesgo', tp: 'milesgo',
-  lufthansa: 'milesmore', 'miles and more': 'milesmore', 'miles & more': 'milesmore', lh: 'milesmore',
+  'philippine airlines': 'mabuhay-miles', pr: 'mabuhay-miles',
+  aegean: 'miles-and-bonus', 'miles and bonus': 'miles-and-bonus', a3: 'miles-and-bonus',
+  tap: 'miles-and-go', 'tap air portugal': 'miles-and-go', 'miles and go': 'miles-and-go', tp: 'miles-and-go',
+  lufthansa: 'miles-and-more', 'miles and more': 'miles-and-more', 'miles & more': 'miles-and-more', lh: 'miles-and-more',
   'air china': 'phoenixmiles', ca: 'phoenixmiles',
-  'qantas frequent flyer': 'qantas', qf: 'qantas',
-  'qatar airways': 'qatar', 'privilege club': 'qatar', qr: 'qatar',
-  thai: 'royalorchid', 'thai airways': 'royalorchid', 'royal orchid': 'royalorchid', tg: 'royalorchid',
+  'qantas frequent flyer': 'qantas-frequent-flyer', qf: 'qantas-frequent-flyer',
+  'qatar airways': 'qatar-privilege-club', 'privilege club': 'qatar-privilege-club', qr: 'qatar-privilege-club',
+  thai: 'royal-orchid-plus', 'thai airways': 'royal-orchid-plus', 'royal orchid': 'royal-orchid-plus', tg: 'royal-orchid-plus',
   ethiopian: 'shebamiles', et: 'shebamiles',
-  'shenzhen airlines': 'shenzhen', zh: 'shenzhen',
+  'shenzhen airlines': 'shenzhen-phoenix-miles', zh: 'shenzhen-phoenix-miles',
   'oman air': 'sindbad', wy: 'sindbad',
   'korean air': 'skypass', ke: 'skypass',
-  'turkish airlines': 'turkish', 'miles and smiles': 'turkish', 'miles&smiles': 'turkish', tk: 'turkish',
-  mileageplus: 'united', ua: 'united',
-  'virgin australia': 'velocity', va: 'velocity',
+  'turkish airlines': 'turkish-miles-and-smiles', 'miles and smiles': 'turkish-miles-and-smiles', 'miles&smiles': 'turkish-miles-and-smiles', tk: 'turkish-miles-and-smiles',
+  mileageplus: 'united-mileageplus', ua: 'united-mileageplus',
+  'virgin australia': 'velocity-frequent-flyer', va: 'velocity-frequent-flyer',
 }
 
 export function resolveProgrammeId(text) {
   if (!text) return null
-  // Normalize hyphens too, so slug forms ("jal-mileage-bank-miles") tokenize.
-  const k = String(text).trim().toLowerCase().replace(/[\s\-]+/g, ' ')
+  // Programme keys ARE the milesvault-kg slugs. Accept a full `program/<slug>`
+  // or the bare slug as an exact hit first (hyphens intact).
+  const raw = String(text).trim().toLowerCase().replace(/^program\//, '')
+  if (PROGRAMMES[raw]) return raw
+  // Otherwise treat the input as free text: normalize hyphens/spaces and match
+  // aliases, then WHOLE-WORD containment against programme keys (hyphen →
+  // space) and alias phrases. Word boundaries only — never match an id inside
+  // a larger word (the old substring match sent "jal mileage bank" → "ba"
+  // via "bank"). Re-keying also removed the 2-letter `ba` key entirely.
+  const k = raw.replace(/[\s\-]+/g, ' ')
   if (PROGRAMMES[k]) return k
   if (ALIASES[k]) return ALIASES[k]
-  // Fall back to WHOLE-WORD containment only — never match an id/alias inside
-  // a larger word. The old `k.includes(id)` matched "ba" inside "bank", so
-  // "jal mileage bank" resolved to British Airways instead of JAL. Matching on
-  // word boundaries also lets slug forms resolve: "krisflyer miles" → the
-  // `krisflyer` id, "jal mileage bank miles" → the "mileage bank" alias.
   const word = (needle) => new RegExp(`(^| )${needle}( |$)`).test(k)
   for (const id of Object.keys(PROGRAMMES)) {
-    if (word(id)) return id
+    if (word(id.replace(/-/g, ' '))) return id
   }
   for (const phrase of Object.keys(ALIASES)) {
     if (word(phrase)) return ALIASES[phrase]
@@ -170,6 +179,10 @@ export function priceProgramme(id, legs, lookup) {
   const carriers = r.legs.map((l) => l.carrier).filter(Boolean)
   if (!canBook(mod, carriers)) return { entries: [], resolved: r }
   const entries = mod.handle(r.legs, r.total_distance) || []
+  // Canonicalize the programme label to the key (a milesvault-kg slug) so
+  // entries report the same id everywhere, regardless of the legacy short
+  // name a module hardcodes in makeEntry.
+  for (const e of entries) e.programme = id
   return { entries, resolved: r }
 }
 
@@ -179,9 +192,11 @@ export function priceItinerary(legs, lookup) {
   if (r.error) return { error: r.error }
   const carriers = r.legs.map((l) => l.carrier).filter(Boolean)
   const charts = []
-  for (const mod of Object.values(PROGRAMMES)) {
+  for (const [id, mod] of Object.entries(PROGRAMMES)) {
     if (!canBook(mod, carriers)) continue
-    charts.push(...(mod.handle(r.legs, r.total_distance) || []))
+    const entries = mod.handle(r.legs, r.total_distance) || []
+    for (const e of entries) e.programme = id // canonicalize to the KB slug key
+    charts.push(...entries)
   }
   return { legs: r.legs, total_distance: r.total_distance, charts }
 }

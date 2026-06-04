@@ -227,6 +227,8 @@ ap("Oceania", "Oceania",                  30000,  55000,  90000);
 
 const ANA_CARRIERS = new Set(["NH"]);
 
+export const slug = "ana-mileage-club";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

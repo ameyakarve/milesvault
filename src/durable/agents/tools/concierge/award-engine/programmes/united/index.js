@@ -107,6 +107,8 @@ const FLOORS_NONUS = {
   "JP|OC": [50000, 100000],   // Japan-Oceania
 };
 
+export const slug = "united-mileageplus";
+
 export const bookable = BOOKABLE;
 
 function pairKey(a, b) { return a <= b ? `${a}|${b}` : `${b}|${a}`; }

@@ -103,6 +103,8 @@ function milesToKm(miles) {
   return miles * 1.60934;
 }
 
+export const slug = "egret-club";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

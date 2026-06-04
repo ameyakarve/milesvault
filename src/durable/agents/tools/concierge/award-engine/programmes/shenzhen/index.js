@@ -67,6 +67,8 @@ zp("H", "B", null, 88000, 110000);
 zp("H", "C", null, 80000, 105000);
 zp("H", "G", null, 94000, 125000);
 
+export const slug = "shenzhen-phoenix-miles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

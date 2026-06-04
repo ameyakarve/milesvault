@@ -64,6 +64,8 @@ const FLOORS = {
   OC:  [56000, 50000, 400000],
 };
 
+export const slug = "delta-skymiles";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {

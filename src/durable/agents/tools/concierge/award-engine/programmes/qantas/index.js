@@ -39,6 +39,8 @@ const QF_CARRIERS = new Set(["QF", "AA", "FJ"]);
 const EK_CARRIERS = new Set(["EK"]);
 const JQ_CARRIERS = new Set(["JQ", "GK", "3K"]); // Jetstar variants
 
+export const slug = "qantas-frequent-flyer";
+
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {
