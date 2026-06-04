@@ -4,6 +4,13 @@ export { askUserTool, askUserInputSchema } from './ask-user'
 export { awardQuoteTool, awardQuoteInputSchema } from './award-quote'
 export { flightSearchTool } from './flight-search'
 export { awardOptionsTool } from './award-options'
+export {
+  transferMatrixTool,
+  transferGraph,
+  resolveCurrency,
+  type TransferCell,
+} from './transfer-graph'
+export { makeAwardReranker, type AwardReranker } from './award-rerank'
 export { ensureRouteCache } from './routes-store'
 export {
   makeKbTools,

@@ -68,6 +68,9 @@ const RELATED_OUTPUT = z.object({
       direction: z.enum(['outgoing', 'incoming']),
       other: z.string(),
       description_md: z.string().nullable(),
+      // Typed edge attributes (e.g. TRANSFERS_TO carries
+      // { ratio_source, ratio_dest }). Null when the edge type has none.
+      attrs: z.record(z.string(), z.unknown()).nullable().optional(),
     }),
   ),
 })
