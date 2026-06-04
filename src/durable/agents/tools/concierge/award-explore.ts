@@ -28,6 +28,11 @@ export type AwardExploreResult = {
   source_currency: string | null
   rows: AwardPlanRow[]
   airlines: ExploreAirline[]
+  // slug → display_name, resolved from the KG, for every programme + every
+  // transfer-path currency the rows reference. The UI renders these; it must NOT
+  // hardcode names. Keyed by `row.programme` (bare program slug) and by the full
+  // `currency/...` path slug.
+  names: Record<string, string>
   notes: string[]
 }
 
@@ -52,6 +57,30 @@ async function airlinesFrom(kb: KbHttp, rows: AwardPlanRow[]): Promise<ExploreAi
   )
 }
 
+// Resolve display_name from the KG for every programme + path currency in the
+// rows. The map is keyed by exactly what the UI looks up: the bare programme
+// slug (`row.programme`) and the full `currency/...` path slug.
+async function resolveNames(kb: KbHttp, rows: AwardPlanRow[]): Promise<Record<string, string>> {
+  // node slug → lookup key the UI uses
+  const wanted = new Map<string, string>()
+  for (const r of rows) {
+    wanted.set(`program/${r.programme}`, r.programme)
+    for (const p of r.path) wanted.set(p, p) // p is already `currency/...`
+  }
+  const names: Record<string, string> = {}
+  await Promise.all(
+    [...wanted].map(async ([node, key]) => {
+      try {
+        const n = (await kb.get(node)) as { display_name?: string | null } | null
+        if (n?.display_name) names[key] = n.display_name
+      } catch {
+        /* leave unset — the UI falls back to a prettified slug */
+      }
+    }),
+  )
+  return names
+}
+
 export async function buildAwardExplore(
   lookup: AirportLookup,
   db: SqlStorage,
@@ -61,56 +90,59 @@ export async function buildAwardExplore(
   destination: string,
   source?: string,
 ): Promise<AwardExploreResult> {
-  // Costed path — reuse the full plan join, then enrich with the airline list.
+  // Base = origin/destination/source/rows/notes, from the costed plan join when a
+  // source is given, else the card-agnostic options with cost fields blanked.
+  let base: {
+    origin: string
+    destination: string
+    source: string
+    source_currency: string | null
+    rows: AwardPlanRow[]
+    notes: string[]
+  }
+
   if (source && source.trim()) {
     const plan = await buildAwardPlan(lookup, db, apiKey, kb, origin, destination, source.trim())
-    const airlines = await airlinesFrom(kb, plan.rows)
-    return {
-      origin: plan.origin,
-      destination: plan.destination,
-      source: plan.source,
-      source_currency: plan.source_currency,
-      rows: plan.rows,
-      airlines,
-      notes: plan.notes,
+    base = { ...plan }
+  } else {
+    const opts = await computeAwardOptions(lookup, db, apiKey, kb, origin, destination)
+    const blankCost: AwardPlanRow['cost'] = {
+      economy: null,
+      premium_economy: null,
+      business: null,
+      first: null,
+    }
+    base = {
+      origin: opts.origin,
+      destination: opts.destination,
+      source: '',
+      source_currency: null,
+      notes: opts.notes,
+      rows: opts.options.map(
+        (o): AwardPlanRow => ({
+          programme: o.programme,
+          programme_currency: o.programme_currency,
+          own_metal: o.own_metal,
+          stops: o.stops,
+          routings: o.routings,
+          total_distance: o.total_distance,
+          published: o.published,
+          miles: o.cabins as AwardPlanRow['miles'],
+          reachable: false,
+          multiplier: null,
+          hops: null,
+          path: [],
+          cost: { ...blankCost },
+        }),
+      ),
     }
   }
 
-  // Miles-only path — card-agnostic options with cost/transfer fields blanked.
-  const opts = await computeAwardOptions(lookup, db, apiKey, kb, origin, destination)
-  const blankCost: AwardPlanRow['cost'] = {
-    economy: null,
-    premium_economy: null,
-    business: null,
-    first: null,
-  }
-  const rows: AwardPlanRow[] = opts.options.map(
-    (o): AwardPlanRow => ({
-      programme: o.programme,
-      programme_currency: o.programme_currency,
-      own_metal: o.own_metal,
-      stops: o.stops,
-      routings: o.routings,
-      total_distance: o.total_distance,
-      published: o.published,
-      miles: o.cabins as AwardPlanRow['miles'],
-      reachable: false,
-      multiplier: null,
-      hops: null,
-      path: [],
-      cost: { ...blankCost },
-    }),
-  )
-  const airlines = await airlinesFrom(kb, rows)
-  return {
-    origin: opts.origin,
-    destination: opts.destination,
-    source: '',
-    source_currency: null,
-    rows,
-    airlines,
-    notes: opts.notes,
-  }
+  const [airlines, names] = await Promise.all([
+    airlinesFrom(kb, base.rows),
+    resolveNames(kb, base.rows),
+  ])
+  return { ...base, airlines, names }
 }
 
 // re-exported for callers that only want the cabin constant

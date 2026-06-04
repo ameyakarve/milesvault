@@ -1,0 +1,248 @@
+import type { Meta, StoryObj } from '@storybook/nextjs-vite'
+import { useMemo, useState } from 'react'
+import { Explore, type Cabin, type ExploreStatus, type Stops } from './explore-ui'
+import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
+import type { ExploreAirline } from '@/durable/agents/tools/concierge/award-explore'
+
+const CABINS: Cabin[] = ['economy', 'premium_economy', 'business', 'first']
+type MilesByCabin = Partial<Record<Cabin, [number, number]>>
+
+function mk(
+  programme: string,
+  stops: number,
+  hub: string | null,
+  carriers: string[],
+  milesBy: MilesByCabin,
+  mult: number | null,
+  path: string[],
+  ownMetal = false,
+): AwardPlanRow {
+  const miles = {} as AwardPlanRow['miles']
+  const cost = {} as AwardPlanRow['cost']
+  for (const c of CABINS) {
+    const m = milesBy[c] ?? null
+    miles[c] = m
+    cost[c] = mult != null && m ? [Math.round(m[0] * mult), Math.round(m[1] * mult)] : null
+  }
+  return {
+    programme,
+    programme_currency: `currency/${programme}`,
+    own_metal: ownMetal,
+    stops,
+    routings: [{ hub, carriers, distance: 4164 }],
+    total_distance: 4164,
+    published: true,
+    miles,
+    reachable: mult != null,
+    multiplier: mult,
+    hops: mult != null ? Math.max(0, path.length - 1) : null,
+    path,
+    cost,
+  }
+}
+
+const ROWS: AwardPlanRow[] = [
+  mk(
+    'jal-mileage-bank',
+    0,
+    null,
+    ['JL'],
+    { economy: [17500, 17500], premium_economy: [25000, 25000], business: [40000, 40000] },
+    1.25,
+    ['currency/edge-rewards-burgundy', 'currency/jal-mileage-bank-miles'],
+    true,
+  ),
+  mk(
+    'enrich',
+    0,
+    null,
+    ['JL'],
+    { economy: [20000, 20000], business: [35000, 35000], first: [45000, 45000] },
+    2.0,
+    [
+      'currency/edge-rewards-burgundy',
+      'currency/itc-green-points',
+      'currency/marriott-bonvoy-points',
+      'currency/enrich-miles',
+    ],
+  ),
+  mk(
+    'aadvantage',
+    0,
+    null,
+    ['JL'],
+    {
+      economy: [22500, 22500],
+      premium_economy: [32500, 32500],
+      business: [40000, 40000],
+      first: [50000, 50000],
+    },
+    2.5,
+    [
+      'currency/edge-rewards-burgundy',
+      'currency/itc-green-points',
+      'currency/marriott-bonvoy-points',
+      'currency/aadvantage-miles',
+    ],
+  ),
+  mk(
+    'qantas-frequent-flyer',
+    0,
+    null,
+    ['JL'],
+    {
+      economy: [34700, 34700],
+      premium_economy: [70800, 70800],
+      business: [90000, 90000],
+      first: [129200, 129200],
+    },
+    1.25,
+    ['currency/edge-rewards-burgundy', 'currency/qantas-points'],
+  ),
+  mk(
+    'asia-miles',
+    1,
+    'HKG',
+    ['CX', 'CX'],
+    { economy: [27000, 27000], business: [63000, 63000], first: [100000, 100000] },
+    2.0,
+    [
+      'currency/edge-rewards-burgundy',
+      'currency/itc-green-points',
+      'currency/marriott-bonvoy-points',
+      'currency/asia-miles',
+    ],
+  ),
+  mk(
+    'krisflyer',
+    1,
+    'SIN',
+    ['SQ', 'SQ'],
+    { economy: [45500, 45500], business: [91000, 91000], first: [117000, 117000] },
+    1.25,
+    ['currency/edge-rewards-burgundy', 'currency/krisflyer-miles'],
+  ),
+]
+
+const AIRLINES: ExploreAirline[] = [
+  { iata: 'JL', name: 'Japan Airlines' },
+  { iata: 'CX', name: 'Cathay Pacific' },
+  { iata: 'NH', name: 'ANA' },
+  { iata: 'SQ', name: 'Singapore Airlines' },
+  { iata: 'QF', name: 'Qantas' },
+]
+
+// Stands in for the KG-derived "Transfer from" list (the real one is ~50 items,
+// fetched + cached server-side).
+const SOURCES = [
+  { slug: 'currency/amex-membership-rewards-points', name: 'Amex Membership Rewards India' },
+  { slug: 'currency/bilt-points', name: 'Bilt Rewards Points' },
+  { slug: 'currency/edge-rewards-burgundy', name: 'EDGE Rewards — Burgundy tier' },
+  { slug: 'currency/edge-rewards-reserve-magnus', name: 'EDGE Rewards — Reserve / Magnus tier' },
+  { slug: 'currency/hdfc-reward-points-infinia-dcb', name: 'HDFC Reward Points — Infinia' },
+  { slug: 'currency/icici-reward-points-tier-2', name: 'ICICI Reward Points — Tier 2' },
+  { slug: 'currency/marriott-bonvoy-points', name: 'Marriott Bonvoy Points' },
+  { slug: 'currency/sbi-aurum-reward-points', name: 'SBI Aurum Reward Points' },
+]
+
+// Stands in for the KG-derived `names` map the endpoint returns (slug →
+// display_name). The real page gets this from the graph, never hardcoded.
+const NAMES: Record<string, string> = {
+  'jal-mileage-bank': 'JAL Mileage Bank',
+  enrich: 'Enrich',
+  aadvantage: 'AAdvantage',
+  'qantas-frequent-flyer': 'Qantas Frequent Flyer',
+  'asia-miles': 'Asia Miles',
+  krisflyer: 'KrisFlyer',
+  'currency/edge-rewards-burgundy': 'EDGE Rewards — Burgundy tier',
+  'currency/jal-mileage-bank-miles': 'JAL Mileage Bank miles',
+  'currency/qantas-points': 'Qantas Points',
+  'currency/itc-green-points': 'ITC Green Points',
+  'currency/marriott-bonvoy-points': 'Marriott Bonvoy Points',
+  'currency/enrich-miles': 'Enrich Miles',
+  'currency/aadvantage-miles': 'AAdvantage miles',
+  'currency/asia-miles': 'Asia Miles',
+  'currency/krisflyer-miles': 'KrisFlyer miles',
+}
+
+function primaryValue(row: AwardPlanRow, cabin: Cabin): number {
+  const c = row.cost[cabin]
+  if (Array.isArray(c)) return c[0]
+  const m = row.miles[cabin]
+  if (Array.isArray(m)) return m[0]
+  return Number.POSITIVE_INFINITY
+}
+
+function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus }) {
+  const [origin, setOrigin] = useState('BLR')
+  const [destination, setDestination] = useState('NRT')
+  const [cabin, setCabin] = useState<Cabin>('business')
+  const [source, setSource] = useState('currency/edge-rewards-burgundy')
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
+  const [stops, setStops] = useState<Stops>('all')
+  const [expanded, setExpanded] = useState<Set<string>>(
+    new Set([`${ROWS[3].programme}|0|3`]),
+  )
+
+  const rows = useMemo(() => {
+    let r = ROWS.filter((x) => x.miles[cabin] != null)
+    if (stops !== 'all') r = r.filter((x) => String(x.stops) === stops)
+    if (excluded.size)
+      r = r.filter((x) => !(x.routings[0]?.carriers ?? []).some((c) => excluded.has(c)))
+    return [...r].sort((a, b) => primaryValue(a, cabin) - primaryValue(b, cabin))
+  }, [cabin, stops, excluded])
+
+  return (
+    <div className="h-screen">
+      <Explore
+        origin={origin}
+        destination={destination}
+        onOrigin={setOrigin}
+        onDestination={setDestination}
+        cabin={cabin}
+        onCabin={setCabin}
+        source={source}
+        onSource={setSource}
+        sources={SOURCES}
+        airlines={AIRLINES}
+        excluded={excluded}
+        onToggleAirline={(iata) =>
+          setExcluded((prev) => {
+            const next = new Set(prev)
+            if (next.has(iata)) next.delete(iata)
+            else next.add(iata)
+            return next
+          })
+        }
+        stops={stops}
+        onStops={setStops}
+        status={status === 'ready' ? 'ready' : status}
+        rows={status === 'ready' ? rows : []}
+        names={NAMES}
+        resultOrigin={origin}
+        resultDestination={destination}
+        expanded={expanded}
+        onToggleExpanded={(k) =>
+          setExpanded((prev) => {
+            const next = new Set(prev)
+            if (next.has(k)) next.delete(k)
+            else next.add(k)
+            return next
+          })
+        }
+      />
+    </div>
+  )
+}
+
+const meta: Meta<typeof Harness> = {
+  title: 'Explore/AwardExplorer',
+  component: Harness,
+  parameters: { layout: 'fullscreen' },
+}
+export default meta
+
+type Story = StoryObj<typeof Harness>
+
+export const Loaded: Story = { args: { status: 'ready' } }
+export const Loading: Story = { args: { status: 'loading' } }

@@ -11,6 +11,7 @@ export {
   type AwardExploreResult,
   type ExploreAirline,
 } from './award-explore'
+export { listTransferSources, type TransferSource } from './transfer-sources'
 export {
   transferMatrixTool,
   transferGraph,
