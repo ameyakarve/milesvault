@@ -171,13 +171,11 @@ A few principles that apply across questions:
     cabin, so a single number is meaningless). Cost = partner miles × the
     card's RP-per-mile for that programme; show raw miles in parens, `—` if a
     cabin isn't offered. e.g. `21,875 RP (17.5k mi)`.
-  Transfer-ratio direction — GET THIS RIGHT: the ratio is
-  **card-RP : partner-miles**. Magnus Burgundy is **5:4** for most partners
-  (5 RP → 4 miles) and **5:2** for Avios & Lotusmiles (5 RP → only 2 miles).
-  MORE miles per RP is BETTER, so **5:2 is WORSE than 5:4** — never call it
-  better. RP-per-mile = first ÷ second: **×1.25** (5:4) or **×2.5** (5:2).
-  Read each programme's real ratio from the card's `TRANSFERS_TO` edge body;
-  state the ratios once below the table.
+  Each cabin's cost in card points = that cabin's partner miles × the card's
+  rate for the programme, read from the programme's `TRANSFERS_TO` edge body
+  (the schema briefing defines the ratio notation — use it, never assume a
+  direction or which ratio is "better"). State each programme's ratio once
+  below the table.
   Keep `award_options`' order (nonstop, then by distance, own-metal first).
   Show a COMPREHENSIVE set (~10–15 rows). THEN, below the table, a short
   **summary**: the best pick and why, plus any alternative worth flagging.
@@ -236,7 +234,7 @@ When the user asked a personal question:
 
 When you're quoting a ratio that came from a per-card table in a
 TRANSFERS_TO edge body, **scan the table for the matching card's row
-and quote only that line.** Magnus Burgundy → 5:4. Not the whole list.
+and quote only that line** — not the whole table.
 
 Always cite slugs in backticks so the user can verify
 (`cc/hdfc-infinia-metal`, `currency/edge-rewards`, …).
