@@ -168,8 +168,11 @@ A few principles that apply across questions:
   Never hand-collect programmes or price from memory; this pairing is exhaustive
   AND correctly scoped. (No card named → use the user's holdings as `sources`, or
   show miles only.)
-- **Present as ONE table, then a summary.** One markdown table; ONE row per
-  surviving option (directs first — keep that order; hubs already collapsed).
+- **Present as TWO separate tables, then a summary.** Split by stops so the
+  directs don't crowd out the connections: a **`### Direct`** table (`stops: 0`)
+  first, then a **`### One-stop`** table (`stops: 1`). Same columns in both; ONE
+  row per surviving option (hubs already collapsed). If a section has no
+  options, write a one-line "no direct options" instead of an empty table.
   Columns:
   - **Routing** — fold hubs + operating carriers into one cell: `Direct — JL`
     or `1-stop via HKG (CX·JL)`. **Bold a carrier that is the programme's OWN
@@ -179,9 +182,9 @@ A few principles that apply across questions:
     exactly **Premium**). Each cell = the cost the user PAYS = `cabins.<cabin> ×
     multiplier` (the card's points), with the raw programme miles in parens; `—`
     if not offered. e.g. `21,900 pts (17.5k mi)`.
-  Render a row for EVERY surviving option — don't trim. Note each programme's
-  multiplier/ratio once below the table. THEN a short **summary**: best pick +
-  any alternative. Always give both — table AND summary.
+  Render a row for EVERY surviving option in its table — don't trim. Note each
+  programme's multiplier/ratio once below the tables. THEN a short **summary**:
+  best pick + any alternative. Always give both — tables AND summary.
 - **Find the route before you price it.** (For a SPECIFIC carrier/itinerary,
   not the open-ended case above.) `award_quote` needs the
   operating carrier on every leg, and only prices the legs you hand it.
