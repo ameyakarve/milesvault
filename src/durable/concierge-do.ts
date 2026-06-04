@@ -13,6 +13,8 @@ import {
   awardQuoteTool,
   buildAwardPlan,
   type AwardPlanResult,
+  buildAwardExplore,
+  type AwardExploreResult,
   ensureRouteCache,
   fetchKbAgentsMd,
   flightSearchTool,
@@ -136,6 +138,27 @@ export class ConciergeDO
   async awardPlan(origin: string, destination: string, source: string): Promise<AwardPlanResult> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     return buildAwardPlan(
+      this.airportLookup,
+      this.routeSql,
+      this.env.AERODATABOX_API_KEY,
+      kbHttp,
+      origin,
+      destination,
+      source,
+    )
+  }
+
+  // Data behind the fluid /explore page. Like awardPlan but returns a uniform
+  // rows shape plus the distinct `airlines` for the include/exclude filter;
+  // `source` is optional (miles-only when omitted). RPC for the
+  // /api/concierge/award-explore route.
+  async awardExplore(
+    origin: string,
+    destination: string,
+    source?: string,
+  ): Promise<AwardExploreResult> {
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    return buildAwardExplore(
       this.airportLookup,
       this.routeSql,
       this.env.AERODATABOX_API_KEY,

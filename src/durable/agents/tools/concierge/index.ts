@@ -7,6 +7,11 @@ export { awardOptionsTool } from './award-options'
 export { showAwardOptionsTool } from './show-award-options'
 export { buildAwardPlan, type AwardPlanResult, type AwardPlanRow } from './award-plan'
 export {
+  buildAwardExplore,
+  type AwardExploreResult,
+  type ExploreAirline,
+} from './award-explore'
+export {
   transferMatrixTool,
   transferGraph,
   resolveCurrency,

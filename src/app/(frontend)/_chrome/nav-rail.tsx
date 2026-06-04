@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ChatCircleDots, NotePencil } from '@phosphor-icons/react/dist/ssr'
+import { AirplaneTilt, ChatCircleDots, NotePencil } from '@phosphor-icons/react/dist/ssr'
 
 const ITEMS = [
   { href: '/editor', label: 'Editor', Icon: NotePencil },
   { href: '/concierge', label: 'Concierge', Icon: ChatCircleDots },
+  { href: '/explore', label: 'Award Explorer', Icon: AirplaneTilt },
 ] as const
 
 export function NavRail() {
