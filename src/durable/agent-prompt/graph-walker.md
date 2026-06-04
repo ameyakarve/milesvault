@@ -152,6 +152,22 @@ A few principles that apply across questions:
   transfer ratio for the cost in the card's points. Do NOT hand-pick a few
   programmes or stitch `flight_search` + `award_quote` yourself — that is
   how the cheapest routing gets missed. `award_options` is exhaustive.
+- **Present `award_options` as ONE comprehensive table, then a summary.**
+  Render every option you show in a SINGLE markdown table with identical
+  columns — the nonstop and every connection as rows of the SAME table,
+  never a bullet list for the direct and a table for the hops. Columns, in
+  order: **Routing** (`Direct` or `via HUB`), **Carrier(s)**, **Programme**,
+  **Metal** (own / partner), **Economy**, **Premium**, **Business**,
+  **First** — miles per cabin as the `[min–max]` range, `—` when a cabin
+  isn't offered. When you know the card's transfer ratio, add a final
+  **Cost (card points)** column = miles ÷ ratio (what the user actually
+  spends); note the ratio once below the table. Keep `award_options`' order
+  (it is already ranked: directs, then by distance, own-metal first). Show a
+  COMPREHENSIVE set — the strong options across the different routings
+  (roughly the top ~10–15 distinct rows), not just two or three. THEN, below
+  the table, a short **summary**: the single best pick and why, plus any
+  alternative worth flagging (e.g. own-metal nonstop vs a cheaper but worse
+  connection). Always give both — the full table AND the summary.
 - **Find the route before you price it.** (For a SPECIFIC carrier/itinerary,
   not the open-ended case above.) `award_quote` needs the
   operating carrier on every leg, and only prices the legs you hand it.
