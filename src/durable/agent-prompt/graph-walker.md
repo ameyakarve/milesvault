@@ -103,17 +103,19 @@ flight_search({ origin, destination }):  // IATA codes
 
 award_options({ origin, destination, programmes }):  // origin/destination IATA
   { origin, destination,
-    options: Array<{ hub, carriers, total_distance, programme, own_metal,
-                     economy, premium_economy, business, first }>,
+    options: Array<{ programme, own_metal, stops,
+                     routings: Array<{ hub, carriers, distance }>,
+                     total_distance, economy, premium_economy, business, first }>,
     notes }
   // programmes = the card's reachable programme slugs (program/krisflyer,
   //   program/jal-mileage-bank, …) — get them by walking the card's currency
   //   TRANSFERS_TO partners. Pass ALL of them; the tool prices each.
-  // options = ONE ranked list: directs first, then hops by total_distance,
-  //   own-metal first within a routing. hub=null for nonstop. carriers =
-  //   chosen IATA per leg. programme = the kg slug priced. each cabin is
-  //   [min,max] miles or null. Relay the ranking as-is; divide miles by the
-  //   card's transfer ratio to get the cost in the card's own points.
+  // options = ONE ranked list: nonstop first, then by distance, own-metal
+  //   first. Interchangeable routings that price IDENTICALLY are already
+  //   COLLAPSED into one option — `routings` lists the equivalent hubs (the
+  //   hub is irrelevant at that price). stops: 0 nonstop, 1 one-stop.
+  //   programme = the kg slug priced; each cabin is [min,max] miles or null.
+  //   Divide miles by the card's transfer ratio for the cost in card points.
 
 The field names above are EXACT — do not invent `results`, `edges`, `from_slug`,
 or `to_slug`. The sandbox's TS types are generated from these shapes; use
@@ -156,18 +158,21 @@ A few principles that apply across questions:
   Render every option you show in a SINGLE markdown table with identical
   columns — the nonstop and every connection as rows of the SAME table,
   never a bullet list for the direct and a table for the hops. Columns, in
-  order: **Routing** (`Direct` or `via HUB`), **Carrier(s)**, **Programme**,
+  order: **Routing** (`Direct`, or `1-stop via BKK / BOM / SIN`), **Programme**,
   **Metal** (own / partner), **Economy**, **Premium**, **Business**,
   **First** — miles per cabin as the `[min–max]` range, `—` when a cabin
   isn't offered. When you know the card's transfer ratio, add a final
   **Cost (card points)** column = miles ÷ ratio (what the user actually
-  spends); note the ratio once below the table. Keep `award_options`' order
-  (it is already ranked: directs, then by distance, own-metal first). Show a
-  COMPREHENSIVE set — the strong options across the different routings
-  (roughly the top ~10–15 distinct rows), not just two or three. THEN, below
-  the table, a short **summary**: the single best pick and why, plus any
-  alternative worth flagging (e.g. own-metal nonstop vs a cheaper but worse
-  connection). Always give both — the full table AND the summary.
+  spends); note the ratio once below the table. ONE row per `options` entry —
+  the tool already COLLAPSES interchangeable hubs that price the same, so read
+  the equivalent hubs from the entry's `routings` and list them together in
+  the Routing cell; never split a collapsed option back into multiple rows.
+  Keep `award_options`' order (already ranked: nonstop, then by distance,
+  own-metal first). Show a COMPREHENSIVE set — the strong options (roughly the
+  top ~10–15 rows), not just two or three. THEN, below the table, a short
+  **summary**: the single best pick and why, plus any alternative worth
+  flagging (e.g. own-metal nonstop vs a cheaper but worse connection). Always
+  give both — the full table AND the summary.
 - **Find the route before you price it.** (For a SPECIFIC carrier/itinerary,
   not the open-ended case above.) `award_quote` needs the
   operating carrier on every leg, and only prices the legs you hand it.

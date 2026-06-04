@@ -29,16 +29,24 @@ const awardOptionsInputSchema = z.object({
     ),
 })
 
+const ROUTING = z.object({
+  hub: z.string().nullable().describe('Connecting hub IATA, or null for nonstop.'),
+  carriers: z.array(z.string()).describe('Operating carrier IATA per leg.'),
+  distance: z.number().describe('Great-circle miles for this routing.'),
+})
+
 const awardOptionsOutputSchema = z.object({
   origin: z.string(),
   destination: z.string(),
   options: z.array(
     z.object({
-      hub: z.string().nullable().describe('Connecting hub IATA, or null for nonstop.'),
-      carriers: z.array(z.string()).describe('Chosen operating carrier IATA per leg.'),
-      total_distance: z.number().describe('Great-circle miles flown over the routing.'),
       programme: z.string().describe('milesvault-kg programme slug actually priced.'),
       own_metal: z.boolean().describe('True if every leg flies the programme’s own metal.'),
+      stops: z.number().describe('0 = nonstop, 1 = one-stop.'),
+      // Interchangeable routings that price identically — same programme, same
+      // stop count, same cabins. The hub is irrelevant at this price; pick any.
+      routings: z.array(ROUTING).describe('Equivalent routings (shortest first).'),
+      total_distance: z.number().describe('Shortest routing distance, for ranking.'),
       economy: CABIN,
       premium_economy: CABIN,
       business: CABIN,
@@ -143,7 +151,16 @@ export function awardOptionsTool(lookup: AirportLookup, db: SqlStorage, apiKey: 
       await Promise.all([...slugs].map(async (s) => ownMetal.set(s, await ownMetalSlugs(kb, s))))
 
       type Opt = AwardOptionsResult['options'][number]
-      const options: Opt[] = []
+      type Flat = {
+        programme: string
+        own_metal: boolean
+        stops: number
+        hub: string | null
+        carriers: string[]
+        distance: number
+        cabins: Record<Cabin, CabinRange>
+      }
+      const flat: Flat[] = []
 
       for (const routing of routings) {
         for (const slug of slugs) {
@@ -180,33 +197,63 @@ export function awardOptionsTool(lookup: AirportLookup, db: SqlStorage, apiKey: 
             const slugA = carrierAirline.get(iata)
             return slugA != null && metal.has(slugA)
           })
-          const cabins = aggregateCabins(priced.entries)
-          options.push({
-            hub: routing.hub,
-            carriers: chosen,
-            total_distance: Math.round(priced.resolved.total_distance),
+          flat.push({
             programme: slug,
             own_metal: isOwnMetal,
-            economy: cabins.economy,
-            premium_economy: cabins.premium_economy,
-            business: cabins.business,
-            first: cabins.first,
+            stops: routing.hub === null ? 0 : 1,
+            hub: routing.hub,
+            carriers: chosen,
+            distance: Math.round(priced.resolved.total_distance),
+            cabins: aggregateCabins(priced.entries),
           })
         }
       }
 
-      // Rank: directs first → hops by total distance → own-metal first within a
-      // routing → cheaper economy as a final tiebreak.
+      // Collapse interchangeable routings: same programme, stop count, metal,
+      // and identical cabin pricing → one option that lists the equivalent
+      // hubs. (United via BKK / BOM / SIN at the same 35k/90k is one option.)
+      const groups = new Map<string, Opt>()
+      for (const f of flat) {
+        const c = f.cabins
+        const key = `${f.programme}|${f.stops}|${f.own_metal}|${JSON.stringify([
+          c.economy,
+          c.premium_economy,
+          c.business,
+          c.first,
+        ])}`
+        let g = groups.get(key)
+        if (!g) {
+          g = {
+            programme: f.programme,
+            own_metal: f.own_metal,
+            stops: f.stops,
+            routings: [],
+            total_distance: f.distance,
+            economy: c.economy,
+            premium_economy: c.premium_economy,
+            business: c.business,
+            first: c.first,
+          }
+          groups.set(key, g)
+        }
+        g.routings.push({ hub: f.hub, carriers: f.carriers, distance: f.distance })
+        g.total_distance = Math.min(g.total_distance, f.distance)
+      }
+      const options = [...groups.values()]
+      for (const g of options) g.routings.sort((a, b) => a.distance - b.distance)
+
+      // Rank: nonstop first → by shortest distance → own-metal first → cheaper
+      // economy as a final tiebreak.
       const eco = (x: Opt) => x.economy?.[0] ?? Number.POSITIVE_INFINITY
       options.sort((a, b) => {
-        if ((a.hub === null) !== (b.hub === null)) return a.hub === null ? -1 : 1
+        if (a.stops !== b.stops) return a.stops - b.stops
         if (a.total_distance !== b.total_distance) return a.total_distance - b.total_distance
         if (a.own_metal !== b.own_metal) return a.own_metal ? -1 : 1
         return eco(a) - eco(b)
       })
 
       if (options.length > MAX_OPTIONS) {
-        notes.push(`showing ${MAX_OPTIONS} of ${options.length} priced options`)
+        notes.push(`showing ${MAX_OPTIONS} of ${options.length} options`)
       }
       return { origin: o, destination: d, options: options.slice(0, MAX_OPTIONS), notes }
     },
