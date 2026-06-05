@@ -1,17 +1,22 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowRight, Check, ChevronDown, ChevronsUpDown, SlidersHorizontal } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ChevronsUpDown, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 import { Card } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Command,
@@ -382,12 +387,13 @@ export type ExploreProps = {
   names: Names
   resultOrigin: string
   resultDestination: string
+  onReset: () => void
   expanded: Set<string>
   onToggleExpanded: (k: string) => void
 } & ExploreFilterProps
 
 export function Explore(props: ExploreProps) {
-  const [mobileFilters, setMobileFilters] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const f: ExploreFilterProps = {
     source: props.source,
     onSource: props.onSource,
@@ -398,6 +404,8 @@ export function Explore(props: ExploreProps) {
     stops: props.stops,
     onStops: props.onStops,
   }
+  const activeFilters =
+    (props.source ? 1 : 0) + (props.stops !== 'all' ? 1 : 0) + (props.excluded.size > 0 ? 1 : 0)
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -429,55 +437,70 @@ export function Explore(props: ExploreProps) {
           </TabsList>
         </Tabs>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto md:hidden"
-          onClick={() => setMobileFilters(true)}
-        >
+        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setFiltersOpen(true)}>
           <SlidersHorizontal className="size-3.5" /> Filters
+          {activeFilters > 0 ? (
+            <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
+              {activeFilters}
+            </Badge>
+          ) : null}
         </Button>
       </div>
 
-      {/* Body */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="hidden w-60 shrink-0 overflow-y-auto border-r bg-card px-4 py-4 md:block">
-          <Filters f={f} />
-        </aside>
-        <main className="min-w-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl px-4 py-4">
-            {props.status === 'ready' && props.rows.length > 0 ? (
-              <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  {props.rows.length} option{props.rows.length === 1 ? '' : 's'}
-                </span>
-                <span>cheapest first</span>
-              </div>
-            ) : null}
-            <Results
-              status={props.status}
-              error={props.error}
-              rows={props.rows}
-              cabin={props.cabin}
-              source={props.source}
-              names={props.names}
-              origin={props.resultOrigin}
-              destination={props.resultDestination}
-              expanded={props.expanded}
-              onToggleExpanded={props.onToggleExpanded}
-            />
-          </div>
-        </main>
-      </div>
+      {/* Results (full width) */}
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-3xl px-4 py-4">
+          {props.status === 'ready' && props.rows.length > 0 ? (
+            <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {props.rows.length} option{props.rows.length === 1 ? '' : 's'}
+              </span>
+              <span>cheapest first</span>
+            </div>
+          ) : null}
+          <Results
+            status={props.status}
+            error={props.error}
+            rows={props.rows}
+            cabin={props.cabin}
+            source={props.source}
+            names={props.names}
+            origin={props.resultOrigin}
+            destination={props.resultDestination}
+            expanded={props.expanded}
+            onToggleExpanded={props.onToggleExpanded}
+          />
+        </div>
+      </main>
 
-      {/* Mobile filters */}
-      <Dialog open={mobileFilters} onOpenChange={setMobileFilters}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
+      {/* Full-screen filters modal */}
+      <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <DialogContent
+          showCloseButton={false}
+          className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 rounded-none border-0 p-0 sm:h-[85vh] sm:max-h-[85vh] sm:w-[calc(100%-2rem)] sm:max-w-2xl sm:rounded-xl sm:border"
+        >
+          <DialogHeader className="flex flex-row items-center justify-between border-b px-5 py-3.5">
             <DialogTitle className="text-sm">Filters</DialogTitle>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setFiltersOpen(false)}
+              aria-label="Close filters"
+            >
+              <X className="size-4" />
+            </Button>
           </DialogHeader>
-          <Separator />
-          <Filters f={f} />
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+            <Filters f={f} />
+          </div>
+          <DialogFooter className="flex flex-row items-center justify-between border-t px-5 py-3">
+            <Button variant="ghost" size="sm" onClick={props.onReset} disabled={activeFilters === 0}>
+              Reset
+            </Button>
+            <Button size="sm" onClick={() => setFiltersOpen(false)}>
+              Show {props.rows.length} option{props.rows.length === 1 ? '' : 's'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

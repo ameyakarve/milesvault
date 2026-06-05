@@ -223,6 +223,11 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
         names={NAMES}
         resultOrigin={origin}
         resultDestination={destination}
+        onReset={() => {
+          setSource('')
+          setStops('all')
+          setExcluded(new Set())
+        }}
         expanded={expanded}
         onToggleExpanded={(k) =>
           setExpanded((prev) => {

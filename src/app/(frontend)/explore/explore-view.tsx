@@ -132,6 +132,11 @@ export function ExploreView() {
       return next
     })
   }, [])
+  const onReset = useCallback(() => {
+    setSource('')
+    setStops('all')
+    setExcluded(new Set())
+  }, [])
 
   const rows = useMemo(() => {
     if (!data) return []
@@ -164,6 +169,7 @@ export function ExploreView() {
       names={data?.names ?? {}}
       resultOrigin={data?.origin ?? origin}
       resultDestination={data?.destination ?? destination}
+      onReset={onReset}
       expanded={expanded}
       onToggleExpanded={onToggleExpanded}
     />
