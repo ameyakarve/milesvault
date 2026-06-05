@@ -13,6 +13,8 @@ import {
   type AwardExploreResult,
   buildPointsPaths,
   type PointsPathsResult,
+  listLoyaltyCurrencies,
+  type LoyaltyCurrency,
   ensureRouteCache,
   fetchKbAgentsMd,
   kbHttpOverFetch,
@@ -153,6 +155,13 @@ export class ConciergeDO
   async pointsPaths(target: string, amount?: number): Promise<PointsPathsResult> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     return buildPointsPaths(kbHttp, target, amount)
+  }
+
+  // The searchable target universe for the /points combobox — every loyalty
+  // currency (slug + display name). RPC for /api/concierge/currencies.
+  async loyaltyCurrencies(): Promise<LoyaltyCurrency[]> {
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    return listLoyaltyCurrencies(kbHttp)
   }
 
   // Graph-walker tool surface — layered. Simple one-hop graph lookups

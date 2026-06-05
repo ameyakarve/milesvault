@@ -23,3 +23,4 @@ export {
   fetchKbAgentsMd,
   type KbHttp,
 } from './kb-tools'
+export { listLoyaltyCurrencies, type LoyaltyCurrency } from './loyalty-currencies'

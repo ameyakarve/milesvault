@@ -1,17 +1,40 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Points, type PointsStatus } from './points-ui'
+import { useCallback, useEffect, useState } from 'react'
+import { Points, type PointsStatus, type PointsFilters, type FilterMode } from './points-ui'
 import type { PointsPathsResult } from '@/durable/agents/tools/concierge/points-paths'
+import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-currencies'
 
 // Thin container: holds state + fetches the points-paths endpoint, hands the
 // graph to the presentational <Points>. Backward dual of ExploreView.
 export function PointsView() {
   const [target, setTarget] = useState('')
   const [amount, setAmount] = useState<number | null>(null)
+  const [currencies, setCurrencies] = useState<LoyaltyCurrency[]>([])
+
+  // filters
   const [maxHops, setMaxHops] = useState(3)
-  const [showCards, setShowCards] = useState(true)
   const [bestOnly, setBestOnly] = useState(true)
+  const [cardMode, setCardMode] = useState<FilterMode>('include')
+  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
+  const [currencyMode, setCurrencyMode] = useState<FilterMode>('include')
+  const [selectedCurrencies, setSelectedCurrencies] = useState<Set<string>>(new Set())
+
+  // The searchable target universe — fetched once.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/concierge/currencies')
+      .then((r) =>
+        r.ok
+          ? (r.json() as Promise<{ currencies?: LoyaltyCurrency[] }>)
+          : ({ currencies: [] as LoyaltyCurrency[] }),
+      )
+      .then((d) => !cancelled && setCurrencies(d.currencies ?? []))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // target + amount are URL-synced so the explorer can deep-link in.
   useEffect(() => {
@@ -34,11 +57,7 @@ export function PointsView() {
 
   const ready = target.trim().length >= 2
   const reqKey = `${target.trim()}|${amount ?? ''}`
-  const [result, setResult] = useState<{
-    key: string
-    data?: PointsPathsResult
-    error?: string
-  } | null>(null)
+  const [result, setResult] = useState<{ key: string; data?: PointsPathsResult; error?: string } | null>(null)
 
   useEffect(() => {
     if (!ready) {
@@ -56,11 +75,7 @@ export function PointsView() {
           return (await r.json()) as PointsPathsResult
         })
         .then((d) => !cancelled && setResult({ key: reqKey, data: d }))
-        .catch(
-          (e) =>
-            !cancelled &&
-            setResult({ key: reqKey, error: e instanceof Error ? e.message : String(e) }),
-        )
+        .catch((e) => !cancelled && setResult({ key: reqKey, error: e instanceof Error ? e.message : String(e) }))
     }, 350)
     return () => {
       cancelled = true
@@ -71,27 +86,55 @@ export function PointsView() {
 
   const data = result?.key === reqKey ? result.data : undefined
   const error = result?.key === reqKey ? result.error : undefined
-  const status: PointsStatus = !ready
-    ? 'idle'
-    : !result || result.key !== reqKey
-      ? 'loading'
-      : error
-        ? 'error'
-        : 'ready'
+  const status: PointsStatus = !ready ? 'idle' : !result || result.key !== reqKey ? 'loading' : error ? 'error' : 'ready'
+
+  const toggleSet = (set: React.Dispatch<React.SetStateAction<Set<string>>>, slug: string) =>
+    set((prev) => {
+      const next = new Set(prev)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
+      return next
+    })
+  const onToggleCard = useCallback((slug: string) => toggleSet(setSelectedCards, slug), [])
+  const onToggleCurrency = useCallback((slug: string) => toggleSet(setSelectedCurrencies, slug), [])
+  // toggle a whole bank: if all already selected, clear them; else select all.
+  const onToggleBank = useCallback((slugs: string[]) => {
+    setSelectedCards((prev) => {
+      const next = new Set(prev)
+      const allOn = slugs.every((s) => next.has(s))
+      for (const s of slugs) {
+        if (allOn) next.delete(s)
+        else next.add(s)
+      }
+      return next
+    })
+  }, [])
+
+  // changing the target clears the per-result filters (the options differ)
+  const onTarget = useCallback((slug: string) => {
+    setTarget(slug)
+    setSelectedCards(new Set())
+    setSelectedCurrencies(new Set())
+  }, [])
+
+  const filters: PointsFilters = { maxHops, bestOnly, cardMode, selectedCards, currencyMode, selectedCurrencies }
 
   return (
     <Points
       target={target}
-      onTarget={setTarget}
+      onTarget={onTarget}
+      currencies={currencies}
       status={status}
       data={data}
       error={error}
-      maxHops={maxHops}
+      filters={filters}
       onMaxHops={setMaxHops}
-      showCards={showCards}
-      onShowCards={setShowCards}
-      bestOnly={bestOnly}
       onBestOnly={setBestOnly}
+      onCardMode={setCardMode}
+      onToggleCard={onToggleCard}
+      onToggleBank={onToggleBank}
+      onCurrencyMode={setCurrencyMode}
+      onToggleCurrency={onToggleCurrency}
     />
   )
 }
