@@ -503,15 +503,15 @@ function Results({
   const direct = items.filter((x) => x.row.stops === 0)
   const connecting = items.filter((x) => x.row.stops !== 0)
 
-  // How many rows fit the viewport by default → fill it. Allocate the budget to
-  // Direct first, then Connecting, always leaving the second section ≥1 row.
+  // How many rows fit the viewport by default → fill it. BOTH sections show the
+  // same number of rows (split the budget evenly across the present sections).
   const present = (direct.length > 0 ? 1 : 0) + (connecting.length > 0 ? 1 : 0)
   const overhead = 56 + present * SECTION_CHROME // count/sort row + page padding + sections
   const budget =
-    availableHeight > 0 ? Math.max(3, Math.floor((availableHeight - overhead) / ROW_H)) : 6
-  const reserve = connecting.length > 0 ? 1 : 0
-  const directCap = Math.min(direct.length, Math.max(1, budget - reserve))
-  const connectingCap = Math.min(connecting.length, Math.max(reserve, budget - directCap))
+    availableHeight > 0 ? Math.max(4, Math.floor((availableHeight - overhead) / ROW_H)) : 8
+  const perSection = Math.max(2, Math.floor(budget / Math.max(1, present)))
+  const directCap = Math.min(direct.length, perSection)
+  const connectingCap = Math.min(connecting.length, perSection)
 
   const sectionProps = { cabin, source, names, expanded, onToggleExpanded }
   return (
