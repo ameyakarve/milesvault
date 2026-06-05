@@ -379,15 +379,21 @@ function Results({
                     />
                   </TableCell>
                   <TableCell className="w-full max-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="truncate font-medium text-foreground">
-                        {nameOf(row.programme, names)}
-                      </span>
-                      {row.own_metal ? (
-                        <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
-                          metal
+                    <span className="block truncate font-medium text-foreground">
+                      {nameOf(row.programme, names)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex justify-end gap-1">
+                      {[...new Set(row.routings[0]?.carriers ?? [])].map((c) => (
+                        <Badge
+                          key={c}
+                          variant={row.own_metal ? 'secondary' : 'outline'}
+                          className="h-4 px-1 font-mono text-[10px]"
+                        >
+                          {c}
                         </Badge>
-                      ) : null}
+                      ))}
                     </div>
                   </TableCell>
                   <TableCell className={cn('text-right text-xs', STOP_TEXT(row.stops))}>
@@ -408,7 +414,7 @@ function Results({
                 {open ? (
                   <TableRow className="hover:bg-transparent">
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className="bg-muted/30 py-2 pl-7 text-xs whitespace-normal text-muted-foreground"
                     >
                       <TransferPath row={row} source={source} names={names} />
