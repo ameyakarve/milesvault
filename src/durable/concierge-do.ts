@@ -9,21 +9,17 @@ import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airpor
 import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import {
   askUserTool,
-  awardOptionsTool,
-  awardQuoteTool,
   buildAwardPlan,
   type AwardPlanResult,
   buildAwardExplore,
   type AwardExploreResult,
   ensureRouteCache,
   fetchKbAgentsMd,
-  flightSearchTool,
   kbHttpOverFetch,
   ledgerSnapshotTool,
   makeKbTools,
   querySqlTool,
   showAwardOptionsTool,
-  transferMatrixTool,
 } from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
 
@@ -191,38 +187,11 @@ export class ConciergeDO
     // LEVEL so the model can call it directly, AND inside codemode for
     // cross-domain programs.
     const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
-    // Batch award-chart pricing (stub: returns not_implemented). Top level
-    // for one-shot quotes, and inside codemode so a program can price an
-    // itinerary and pivot to "how do I earn those miles?" in one walk.
-    const award_quote = awardQuoteTool(this.airportLookup)
-    // Route/connection discovery from real schedules (AeroDataBox, 7-day
-    // cached per airport). Feeds carriers+legs into award_quote. Top level
-    // for one-shot searches and inside codemode so a program can discover a
-    // routing then price it in one walk.
-    const flight_search = flightSearchTool(this.routeSql, this.env.AERODATABOX_API_KEY)
-    // End-to-end award ranking: routings × the card's reachable programmes,
-    // priced through the engine, own-metal from the KB OWN_METAL edge, ranked
-    // direct → distance → own-metal. The deterministic path for "best award
-    // options" — the model walks the card's partners then calls this once.
-    const award_options = awardOptionsTool(
-      this.airportLookup,
-      this.routeSql,
-      this.env.AERODATABOX_API_KEY,
-      kbHttp,
-    )
-    // Pure transfers-graph traversal: cost matrix to move points across reward
-    // currencies (BFS, ratio-composed). Standalone for "how do my points move"
-    // questions; also the funding primitive award_options uses internally.
-    const transfer_matrix = transferMatrixTool(kbHttp)
     const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
     const codemode = createCodeTool({
       tools: {
         ...kb,
         ledger_snapshot,
-        award_quote,
-        flight_search,
-        award_options,
-        transfer_matrix,
       },
       executor,
     })
@@ -230,13 +199,10 @@ export class ConciergeDO
     return {
       ...kb,
       ledger_snapshot,
-      award_quote,
-      flight_search,
-      award_options,
-      transfer_matrix,
       codemode,
-      // Display-only gen-UI tool — renders the interactive award-options card.
-      // Top level only (NOT in codemode); the card self-fetches its data.
+      // Display-only gen-UI tool — emits a link to the /explore Award Explorer
+      // page (origin + destination prefilled). All award pricing/ranking now
+      // lives on that page; the agent never costs awards in chat.
       show_award_options: showAwardOptionsTool(),
       ask_user: askUserTool(),
     } as ToolSet

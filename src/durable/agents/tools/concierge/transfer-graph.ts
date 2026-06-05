@@ -1,5 +1,3 @@
-import { tool } from 'ai'
-import { z } from 'zod'
 import type { KbHttp } from './kb-tools'
 
 // Transfers subgraph traversal. Currencies are nodes; TRANSFERS_TO edges
@@ -31,8 +29,6 @@ export type TransferCell = {
 }
 
 type Edge = { to: string; rs: number; rd: number }
-
-const round4 = (n: number) => Math.round(n * 1e4) / 1e4
 
 // Memoised adjacency: a currency's outgoing TRANSFERS_TO edges + ratios.
 function makeNeighbours(kb: KbHttp) {
@@ -159,79 +155,4 @@ export async function resolveCurrency(kb: KbHttp, text: string): Promise<string 
   const card = rc.items?.[0]?.slug
   if (card?.startsWith('cc/')) return currencyOfCard(kb, card)
   return null
-}
-
-const matrixInput = z.object({
-  sources: z
-    .array(z.string())
-    .describe('Currencies (or cards) you transfer FROM — slugs or names; resolved internally.'),
-  dests: z
-    .array(z.string())
-    .describe('Destination currencies you transfer INTO — slugs or names; resolved internally.'),
-})
-
-const matrixOutput = z.object({
-  sources: z.array(z.string()).describe('Resolved source currency slugs, row order.'),
-  dests: z.array(z.string()).describe('Resolved destination currency slugs, column order.'),
-  matrix: z
-    .array(z.array(z.number()))
-    .describe(
-      'matrix[i][j] = SOURCE points needed per 1 DESTINATION point (cost = dest_miles × this), ' +
-        'min over paths up to 3 hops. -1 = unreachable. 1 = you already hold it.',
-    ),
-  paths: z
-    .array(
-      z.object({
-        source: z.string(),
-        dest: z.string(),
-        multiplier: z.number(),
-        hops: z.number().describe('Transfer hops: 1 = direct, 2+ = chained through intermediate currencies.'),
-        path: z
-          .array(z.string())
-          .describe('The currency hops, source → … → dest, e.g. ["currency/edge-rewards-burgundy","currency/avios"].'),
-      }),
-    )
-    .describe('Reachable pairs only (matrix cell ≠ -1), each with the actual transfer PATH and hop count.'),
-  unresolved: z.array(z.string()).describe('Inputs that did not resolve to a currency.'),
-})
-
-// Standalone tool: a numeric cost matrix over the transfers subgraph. Great
-// reranker fuel — "EDGE RP → KrisFlyer 1.25, → Avios 2.5, → Aeroplan -1".
-export function transferMatrixTool(kb: KbHttp) {
-  return tool({
-    description:
-      'Cost matrix for moving points across reward currencies via the transfers graph. ' +
-      'Give the currencies (or cards) you hold as `sources` and the ones you want as `dests`; ' +
-      'returns matrix[i][j] = source points needed per 1 destination point (cheapest path, ≤3 ' +
-      'hops; -1 if unreachable, 1 if already held). Cost of N destination miles = N × the cell. ' +
-      '`paths` gives the actual transfer route (currency hops) + hop count for each reachable pair. ' +
-      "Use it to see which of a card's currencies can fund which programme, how dearly, and via what route.",
-    inputSchema: matrixInput,
-    outputSchema: matrixOutput,
-    execute: async ({ sources, dests }) => {
-      const [rs, rd] = await Promise.all([
-        Promise.all(sources.map((s) => resolveCurrency(kb, s))),
-        Promise.all(dests.map((d) => resolveCurrency(kb, d))),
-      ])
-      const unresolved = [
-        ...sources.filter((_, i) => !rs[i]),
-        ...dests.filter((_, i) => !rd[i]),
-      ]
-      const S = rs.filter((s): s is string => !!s)
-      const D = rd.filter((d): d is string => !!d)
-      const grid = await transferGraph(kb, S, D)
-      const matrix = grid.map((row) => row.map((c) => (c ? round4(c.multiplier) : -1)))
-      const paths = grid
-        .flat()
-        .filter((c): c is NonNullable<typeof c> => c !== null)
-        .map((c) => ({
-          source: c.source,
-          dest: c.dest,
-          multiplier: round4(c.multiplier),
-          hops: c.hops,
-          path: c.path,
-        }))
-      return { sources: S, dests: D, matrix, paths, unresolved }
-    },
-  })
 }

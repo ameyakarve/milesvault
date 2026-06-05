@@ -1,4 +1,3 @@
-import { tool } from 'ai'
 import { z } from 'zod'
 import { PROGRAMMES, priceProgramme } from './award-engine'
 import type { AirportLookup, Entry, CabinRange } from './award-engine'
@@ -30,17 +29,16 @@ const CABIN_SET = z.object({
   first: CABIN,
 })
 
-const awardOptionsInputSchema = z.object({
-  origin: z.string().describe('Origin airport IATA, e.g. "BLR".'),
-  destination: z.string().describe('Destination airport IATA, e.g. "NRT".'),
-})
-
 const ROUTING = z.object({
   hub: z.string().nullable().describe('Connecting hub IATA, or null for nonstop.'),
   carriers: z.array(z.string()).describe('Operating carrier IATA per leg.'),
   distance: z.number().describe('Great-circle miles for this routing.'),
 })
 
+// The canonical shape of a computed result — the `AwardOptionsResult` type is
+// inferred from it (and re-used by award-plan / award-explore). Kept as a zod
+// schema so the shape stays the single source of truth.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const awardOptionsOutputSchema = z.object({
   origin: z.string(),
   destination: z.string(),
@@ -346,26 +344,4 @@ export async function computeAwardOptions(
   )
 
   return { origin: o, destination: d, options, dests, notes }
-}
-
-export function awardOptionsTool(
-  lookup: AirportLookup,
-  db: SqlStorage,
-  apiKey: string,
-  kb: KbHttp,
-) {
-  return tool({
-    description:
-      'Exhaustive award options to fly a city pair — the fly-side only. Give origin + ' +
-      'destination; it discovers every nonstop and one-stop routing, prices EVERY programme ' +
-      'that can actually book each leg through the real charts, and returns one list of ' +
-      'fly-options (per-cabin miles, own-metal vs partner, collapsed equivalent routings) with ' +
-      "each option's funding currency (`programme_currency`). Directs are listed first. It does " +
-      'NOT scope to a card: to answer "with <card>", feed `dests` + the card\'s currency into ' +
-      'transfer_matrix, drop the unreachable (-1) programmes, and cost the rest (miles × ratio).',
-    inputSchema: awardOptionsInputSchema,
-    outputSchema: awardOptionsOutputSchema,
-    execute: ({ origin, destination }): Promise<AwardOptionsResult> =>
-      computeAwardOptions(lookup, db, apiKey, kb, origin, destination),
-  })
 }

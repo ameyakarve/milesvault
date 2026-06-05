@@ -2,7 +2,7 @@
 
 import { DraftTransactionBatchCard } from './draft-transaction'
 import { ClarifyCard } from './clarify'
-import { AwardOptionsCard } from './award-options'
+import { ExploreLinkCard } from './explore-link'
 import {
   clarifyInputSchema,
   draftTransactionBatchSchema,
@@ -50,7 +50,7 @@ const RENDERERS: Record<
   show_award_options: (input) => {
     const parsed = showAwardOptionsSchema.safeParse(input)
     if (!parsed.success) return null
-    return <AwardOptionsCard input={parsed.data} />
+    return <ExploreLinkCard input={parsed.data} />
   },
   clarify: (input, props) => {
     const parsed = clarifyInputSchema.safeParse(input)
