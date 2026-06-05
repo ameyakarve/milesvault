@@ -33,6 +33,9 @@ export type AwardExploreResult = {
   // hardcode names. Keyed by `row.programme` (bare program slug) and by the full
   // `currency/...` path slug.
   names: Record<string, string>
+  // IATA → [lat, lng] for every airport in the routings (origin, destination,
+  // hubs) — used to draw the flight map. From the DO's seeded airport table.
+  airports: Record<string, [number, number]>
   notes: string[]
 }
 
@@ -142,7 +145,17 @@ export async function buildAwardExplore(
     airlinesFrom(kb, base.rows),
     resolveNames(kb, base.rows),
   ])
-  return { ...base, airlines, names }
+
+  // Coordinates for every airport in the routings (origin, destination, hubs).
+  const codes = new Set<string>([base.origin, base.destination])
+  for (const r of base.rows) for (const rt of r.routings) if (rt.hub) codes.add(rt.hub)
+  const airports: Record<string, [number, number]> = {}
+  for (const c of codes) {
+    const a = lookup(c)
+    if (a) airports[c] = [a[0], a[1]]
+  }
+
+  return { ...base, airlines, names, airports }
 }
 
 // re-exported for callers that only want the cabin constant

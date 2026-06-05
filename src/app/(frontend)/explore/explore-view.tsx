@@ -192,6 +192,7 @@ export function ExploreView() {
       error={error}
       rows={rows}
       names={data?.names ?? {}}
+      airports={data?.airports ?? {}}
       resultOrigin={data?.origin ?? origin}
       resultDestination={data?.destination ?? destination}
       onReset={onReset}

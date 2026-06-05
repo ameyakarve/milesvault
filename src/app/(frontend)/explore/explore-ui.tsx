@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -30,6 +31,29 @@ import {
 import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
 import type { ExploreAirline } from '@/durable/agents/tools/concierge/award-explore'
 import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
+import type { MapPoint } from './flight-map'
+
+// Heavy (Observable Plot + world outline) — load it only when a row is expanded.
+const FlightMap = dynamic(() => import('./flight-map').then((m) => m.FlightMap), { ssr: false })
+
+type Airports = Record<string, [number, number]>
+
+// Build the origin → hub(s) → destination points (with coords) for a row's map.
+function routePoints(
+  row: AwardPlanRow,
+  origin: string,
+  destination: string,
+  airports: Airports,
+): MapPoint[] {
+  const seq =
+    row.stops === 0 ? [origin, destination] : [origin, row.routings[0]?.hub ?? '', destination]
+  const pts: MapPoint[] = []
+  for (const iata of seq) {
+    const c = iata ? airports[iata] : undefined
+    if (c) pts.push({ iata, lat: c[0], lng: c[1] })
+  }
+  return pts
+}
 
 export type Cabin = 'economy' | 'premium_economy' | 'business' | 'first'
 export type Stops = 'all' | '0' | '1'
@@ -349,6 +373,9 @@ function ResultSection({
   cabin,
   source,
   names,
+  origin,
+  destination,
+  airports,
   expanded,
   onToggleExpanded,
 }: {
@@ -359,6 +386,9 @@ function ResultSection({
   cabin: Cabin
   source: string
   names: Names
+  origin: string
+  destination: string
+  airports: Airports
   expanded: Set<string>
   onToggleExpanded: (k: string) => void
 }) {
@@ -421,11 +451,22 @@ function ResultSection({
                   </TableRow>
                   {open ? (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell
-                        colSpan={cols}
-                        className="bg-muted/30 py-2 text-xs whitespace-normal text-muted-foreground"
-                      >
-                        <TransferPath row={row} source={source} names={names} />
+                      <TableCell colSpan={cols} className="bg-muted/30 p-3 whitespace-normal">
+                        {(() => {
+                          const pts = routePoints(row, origin, destination, airports)
+                          return (
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                              {pts.length >= 2 ? (
+                                <Card className="shrink-0 self-center p-2 sm:self-start">
+                                  <FlightMap points={pts} size={176} />
+                                </Card>
+                              ) : null}
+                              <div className="min-w-0 flex-1 self-center text-xs text-muted-foreground">
+                                <TransferPath row={row} source={source} names={names} />
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </TableCell>
                     </TableRow>
                   ) : null}
@@ -462,6 +503,7 @@ function Results({
   names,
   origin,
   destination,
+  airports,
   availableHeight,
   expanded,
   onToggleExpanded,
@@ -474,6 +516,7 @@ function Results({
   names: Names
   origin: string
   destination: string
+  airports: Airports
   availableHeight: number
   expanded: Set<string>
   onToggleExpanded: (k: string) => void
@@ -513,7 +556,7 @@ function Results({
   const directCap = Math.min(direct.length, perSection)
   const connectingCap = Math.min(connecting.length, perSection)
 
-  const sectionProps = { cabin, source, names, expanded, onToggleExpanded }
+  const sectionProps = { cabin, source, names, origin, destination, airports, expanded, onToggleExpanded }
   return (
     <div className="space-y-5">
       <ResultSection title="Direct" items={direct} showVia={false} defaultVisible={directCap} {...sectionProps} />
@@ -543,6 +586,7 @@ export type ExploreProps = {
   error?: string
   rows: AwardPlanRow[]
   names: Names
+  airports: Airports
   resultOrigin: string
   resultDestination: string
   sort: SortKey
@@ -673,6 +717,7 @@ export function Explore(props: ExploreProps) {
             names={props.names}
             origin={props.resultOrigin}
             destination={props.resultDestination}
+            airports={props.airports}
             availableHeight={availH}
             expanded={props.expanded}
             onToggleExpanded={props.onToggleExpanded}

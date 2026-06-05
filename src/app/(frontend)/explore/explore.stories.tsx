@@ -192,6 +192,13 @@ const NAMES: Record<string, string> = {
   'currency/latam-pass-miles': 'LATAM Pass miles',
 }
 
+const AIRPORTS: Record<string, [number, number]> = {
+  BLR: [13.1986, 77.7066],
+  NRT: [35.7647, 140.3863],
+  SIN: [1.3592, 103.9894],
+  HKG: [22.308, 113.918],
+}
+
 function primaryValue(row: AwardPlanRow, cabin: Cabin): number {
   const c = row.cost[cabin]
   if (Array.isArray(c)) return c[0]
@@ -257,6 +264,7 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
         status={status === 'ready' ? 'ready' : status}
         rows={status === 'ready' ? rows : []}
         names={NAMES}
+        airports={AIRPORTS}
         resultOrigin={origin}
         resultDestination={destination}
         onReset={() => {
