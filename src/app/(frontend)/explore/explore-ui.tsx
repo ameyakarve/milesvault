@@ -320,6 +320,131 @@ function Filters({ f }: { f: ExploreFilterProps }) {
 
 // ── Results ──
 
+function AirlineChips({ row }: { row: AwardPlanRow }) {
+  const carriers = [...new Set(row.routings[0]?.carriers ?? [])]
+  return (
+    <div className="flex justify-end gap-1">
+      {carriers.map((c) => (
+        <Badge
+          key={c}
+          variant={row.own_metal ? 'secondary' : 'outline'}
+          className="h-4 px-1 font-mono text-[10px]"
+        >
+          {c}
+        </Badge>
+      ))}
+    </div>
+  )
+}
+
+type RowItem = { row: AwardPlanRow; key: string }
+
+// One grouped section (Direct / Connecting), capped at 3 rows with a "show more"
+// toggle. The Direct section drops the Via column (it's always "Direct").
+function ResultSection({
+  title,
+  items,
+  showVia,
+  cabin,
+  source,
+  names,
+  expanded,
+  onToggleExpanded,
+}: {
+  title: string
+  items: RowItem[]
+  showVia: boolean
+  cabin: Cabin
+  source: string
+  names: Names
+  expanded: Set<string>
+  onToggleExpanded: (k: string) => void
+}) {
+  const [showAll, setShowAll] = useState(false)
+  if (items.length === 0) return null
+  const visible = showAll ? items : items.slice(0, 3)
+  const cols = showVia ? 5 : 4
+  return (
+    <section>
+      <div className="mb-1.5 flex items-baseline gap-2 px-1">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+        <span className="text-xs text-muted-foreground">{items.length}</span>
+      </div>
+      <Card className="overflow-hidden p-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Programme</TableHead>
+              <TableHead className="text-right">Airlines</TableHead>
+              {showVia ? <TableHead className="text-right">Via</TableHead> : null}
+              <TableHead className="text-right">
+                {CABIN_TABS.find((c) => c.key === cabin)?.label}
+              </TableHead>
+              <TableHead className="w-0" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visible.map(({ row, key }) => {
+              const open = expanded.has(key)
+              return (
+                <Fragment key={key}>
+                  <TableRow className="cursor-pointer" onClick={() => onToggleExpanded(key)}>
+                    <TableCell className="w-full max-w-0">
+                      <span className="block truncate font-medium text-foreground">
+                        {nameOf(row.programme, names)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <AirlineChips row={row} />
+                    </TableCell>
+                    {showVia ? (
+                      <TableCell className="text-right text-xs text-muted-foreground">
+                        {viaText(row)}
+                      </TableCell>
+                    ) : null}
+                    <TableCell className="text-right">
+                      <CostChip row={row} cabin={cabin} />
+                    </TableCell>
+                    <TableCell className="w-0 pr-2 pl-1">
+                      <ChevronDown
+                        className={cn(
+                          'size-3.5 text-muted-foreground transition-transform',
+                          open && 'rotate-180',
+                        )}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  {open ? (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={cols}
+                        className="bg-muted/30 py-2 text-xs whitespace-normal text-muted-foreground"
+                      >
+                        <TransferPath row={row} source={source} names={names} />
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </Card>
+      {items.length > 3 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-1.5 px-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          {showAll ? 'Show less' : `Show ${items.length - 3} more`}
+        </button>
+      ) : null}
+    </section>
+  )
+}
+
 function Results({
   status,
   error,
@@ -364,74 +489,15 @@ function Results({
       </p>
     )
 
+  const items: RowItem[] = rows.map((row, i) => ({ row, key: rowKey(row, i) }))
+  const direct = items.filter((x) => x.row.stops === 0)
+  const connecting = items.filter((x) => x.row.stops !== 0)
+  const sectionProps = { cabin, source, names, expanded, onToggleExpanded }
   return (
-    <Card className="overflow-hidden p-0">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead>Programme</TableHead>
-            <TableHead className="text-right">Airlines</TableHead>
-            <TableHead className="text-right">Via</TableHead>
-            <TableHead className="text-right">{CABIN_TABS.find((c) => c.key === cabin)?.label}</TableHead>
-            <TableHead className="w-0" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, i) => {
-            const k = rowKey(row, i)
-            const open = expanded.has(k)
-            return (
-              <Fragment key={k}>
-                <TableRow className="cursor-pointer" onClick={() => onToggleExpanded(k)}>
-                  <TableCell className="w-full max-w-0">
-                    <span className="block truncate font-medium text-foreground">
-                      {nameOf(row.programme, names)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      {[...new Set(row.routings[0]?.carriers ?? [])].map((c) => (
-                        <Badge
-                          key={c}
-                          variant={row.own_metal ? 'secondary' : 'outline'}
-                          className="h-4 px-1 font-mono text-[10px]"
-                        >
-                          {c}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right text-xs text-muted-foreground">
-                    {viaText(row)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <CostChip row={row} cabin={cabin} />
-                  </TableCell>
-                  <TableCell className="w-0 pr-2 pl-1">
-                    <ChevronDown
-                      className={cn(
-                        'size-3.5 text-muted-foreground transition-transform',
-                        open && 'rotate-180',
-                      )}
-                    />
-                  </TableCell>
-                </TableRow>
-                {open ? (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell
-                      colSpan={5}
-                      className="bg-muted/30 py-2 text-xs whitespace-normal text-muted-foreground"
-                    >
-                      <TransferPath row={row} source={source} names={names} />
-                    </TableCell>
-                  </TableRow>
-                ) : null}
-              </Fragment>
-            )
-          })}
-        </TableBody>
-      </Table>
-    </Card>
+    <div className="space-y-5">
+      <ResultSection title="Direct" items={direct} showVia={false} {...sectionProps} />
+      <ResultSection title="Connecting" items={connecting} showVia {...sectionProps} />
+    </div>
   )
 }
 
@@ -482,8 +548,8 @@ export function Explore(props: ExploreProps) {
     <div className="flex h-full min-h-0 flex-col bg-background">
       {/* Toolbar — same width/container as the results below */}
       <div className="border-b">
-        <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-3 px-4 py-2.5">
-          <div className="flex items-center gap-1.5 rounded-lg border bg-card px-2 py-1">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-2.5 sm:gap-3">
+          <div className="flex shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2 py-1">
             <Input
               value={props.origin}
               onChange={(e) => props.onOrigin(e.target.value.toUpperCase().slice(0, 3))}
@@ -499,10 +565,14 @@ export function Explore(props: ExploreProps) {
             />
           </div>
 
-          <Tabs value={props.cabin} onValueChange={(v) => props.onCabin(v as Cabin)}>
+          <Tabs
+            value={props.cabin}
+            onValueChange={(v) => props.onCabin(v as Cabin)}
+            className="shrink-0"
+          >
             <TabsList>
               {CABIN_TABS.map((c) => (
-                <TabsTrigger key={c.key} value={c.key} className={cn('font-mono', ACTIVE_TAB)}>
+                <TabsTrigger key={c.key} value={c.key} className={cn('px-2 font-mono', ACTIVE_TAB)}>
                   {c.short}
                 </TabsTrigger>
               ))}
@@ -512,12 +582,13 @@ export function Explore(props: ExploreProps) {
           <Button
             variant="outline"
             size="sm"
-            className="ml-auto"
+            className="ml-auto shrink-0"
             onClick={() => setFiltersOpen(true)}
           >
-            <SlidersHorizontal className="size-3.5" /> Filters
+            <SlidersHorizontal className="size-3.5" />
+            <span className="hidden sm:inline">Filters</span>
             {activeFilters > 0 ? (
-              <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
+              <Badge variant="secondary" className="ml-0.5 h-4 min-w-4 px-1 text-[10px]">
                 {activeFilters}
               </Badge>
             ) : null}
