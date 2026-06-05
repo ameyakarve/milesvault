@@ -99,20 +99,26 @@ function Figure({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
   if (Array.isArray(cost)) {
     const pts = cost[0] === cost[1] ? fmt(cost[0]) : `${fmt(cost[0])}–${fmt(cost[1])}`
     return (
-      <span className="text-right font-mono tabular-nums leading-tight">
+      <span className="whitespace-nowrap font-mono tabular-nums">
         <span className="text-sm font-medium text-foreground">{pts}</span>
         {Array.isArray(miles) ? (
-          <span className="block text-[11px] text-muted-foreground">{fmtK(miles[0])} mi</span>
+          <span className="ml-1.5 text-[11px] text-muted-foreground">{fmtK(miles[0])}</span>
         ) : null}
       </span>
     )
   }
   if (Array.isArray(miles))
     return (
-      <span className="font-mono text-sm tabular-nums text-muted-foreground">{fmtK(miles[0])} mi</span>
+      <span className="font-mono text-sm tabular-nums text-muted-foreground">{fmtK(miles[0])}</span>
     )
   return <span className="text-muted-foreground">—</span>
 }
+
+// Direct = green, one-stop = blue (used for the row's color coding).
+const STOP_DOT = (stops: number) =>
+  stops === 0 ? 'bg-emerald-500' : 'bg-blue-500'
+const STOP_TEXT = (stops: number) =>
+  stops === 0 ? 'text-emerald-700' : 'text-blue-700'
 
 function TransferPath({
   row,
@@ -363,32 +369,34 @@ function Results({
         const open = expanded.has(k)
         return (
           <Collapsible key={k} open={open} onOpenChange={() => onToggleExpanded(k)}>
-            <CollapsibleTrigger className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/40">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-foreground">
-                  {nameOf(row.programme, names)}
-                </div>
-                <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span>{routingText(row)}</span>
-                  {row.own_metal ? (
-                    <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                      own metal
-                    </Badge>
-                  ) : null}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
+            <CollapsibleTrigger className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-muted/40">
+              <span
+                className={cn('size-1.5 shrink-0 rounded-full', STOP_DOT(row.stops))}
+                aria-hidden
+              />
+              <span className="truncate text-sm font-medium text-foreground">
+                {nameOf(row.programme, names)}
+              </span>
+              <span className={cn('shrink-0 text-xs', STOP_TEXT(row.stops))}>
+                {routingText(row)}
+              </span>
+              {row.own_metal ? (
+                <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
+                  metal
+                </Badge>
+              ) : null}
+              <span className="ml-auto shrink-0">
                 <Figure row={row} cabin={cabin} />
-                <ChevronDown
-                  className={cn(
-                    'size-4 text-muted-foreground transition-transform',
-                    open && 'rotate-180',
-                  )}
-                />
-              </div>
+              </span>
+              <ChevronDown
+                className={cn(
+                  'size-3.5 shrink-0 text-muted-foreground transition-transform',
+                  open && 'rotate-180',
+                )}
+              />
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <div className="bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
+              <div className="bg-muted/30 px-3 py-2 pl-7 text-xs text-muted-foreground">
                 <TransferPath row={row} source={source} names={names} />
               </div>
             </CollapsibleContent>
