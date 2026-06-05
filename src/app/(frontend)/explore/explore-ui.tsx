@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -345,6 +345,7 @@ function ResultSection({
   title,
   items,
   showVia,
+  defaultVisible,
   cabin,
   source,
   names,
@@ -354,6 +355,7 @@ function ResultSection({
   title: string
   items: RowItem[]
   showVia: boolean
+  defaultVisible: number
   cabin: Cabin
   source: string
   names: Names
@@ -362,7 +364,8 @@ function ResultSection({
 }) {
   const [showAll, setShowAll] = useState(false)
   if (items.length === 0) return null
-  const visible = showAll ? items : items.slice(0, 3)
+  const cap = Math.max(1, defaultVisible)
+  const visible = showAll ? items : items.slice(0, cap)
   const cols = showVia ? 5 : 4
   return (
     <section>
@@ -432,18 +435,23 @@ function ResultSection({
           </TableBody>
         </Table>
       </Card>
-      {items.length > 3 ? (
+      {items.length > cap ? (
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
           className="mt-1.5 px-1 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
-          {showAll ? 'Show less' : `Show ${items.length - 3} more`}
+          {showAll ? 'Show less' : `Show ${items.length - cap} more`}
         </button>
       ) : null}
     </section>
   )
 }
+
+// Row + section-chrome heights (px) used to estimate how many rows fill the
+// viewport. Rough on purpose — the goal is "basically fills", not pixel exact.
+const ROW_H = 37
+const SECTION_CHROME = 92 // section title + table header + show-more
 
 function Results({
   status,
@@ -454,6 +462,7 @@ function Results({
   names,
   origin,
   destination,
+  availableHeight,
   expanded,
   onToggleExpanded,
 }: {
@@ -465,6 +474,7 @@ function Results({
   names: Names
   origin: string
   destination: string
+  availableHeight: number
   expanded: Set<string>
   onToggleExpanded: (k: string) => void
 }) {
@@ -492,11 +502,28 @@ function Results({
   const items: RowItem[] = rows.map((row, i) => ({ row, key: rowKey(row, i) }))
   const direct = items.filter((x) => x.row.stops === 0)
   const connecting = items.filter((x) => x.row.stops !== 0)
+
+  // How many rows fit the viewport by default → fill it. Allocate the budget to
+  // Direct first, then Connecting, always leaving the second section ≥1 row.
+  const present = (direct.length > 0 ? 1 : 0) + (connecting.length > 0 ? 1 : 0)
+  const overhead = 56 + present * SECTION_CHROME // count/sort row + page padding + sections
+  const budget =
+    availableHeight > 0 ? Math.max(3, Math.floor((availableHeight - overhead) / ROW_H)) : 6
+  const reserve = connecting.length > 0 ? 1 : 0
+  const directCap = Math.min(direct.length, Math.max(1, budget - reserve))
+  const connectingCap = Math.min(connecting.length, Math.max(reserve, budget - directCap))
+
   const sectionProps = { cabin, source, names, expanded, onToggleExpanded }
   return (
     <div className="space-y-5">
-      <ResultSection title="Direct" items={direct} showVia={false} {...sectionProps} />
-      <ResultSection title="Connecting" items={connecting} showVia {...sectionProps} />
+      <ResultSection title="Direct" items={direct} showVia={false} defaultVisible={directCap} {...sectionProps} />
+      <ResultSection
+        title="Connecting"
+        items={connecting}
+        showVia
+        defaultVisible={connectingCap}
+        {...sectionProps}
+      />
     </div>
   )
 }
@@ -527,6 +554,18 @@ export type ExploreProps = {
 
 export function Explore(props: ExploreProps) {
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // Measure the scroll area so the default rows fill the viewport.
+  const mainRef = useRef<HTMLElement>(null)
+  const [availH, setAvailH] = useState(0)
+  useEffect(() => {
+    const el = mainRef.current
+    if (!el) return
+    const update = () => setAvailH(el.clientHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const f: ExploreFilterProps = {
     source: props.source,
     onSource: props.onSource,
@@ -601,7 +640,7 @@ export function Explore(props: ExploreProps) {
       </div>
 
       {/* Results (same container) */}
-      <main className="min-h-0 flex-1 overflow-y-auto">
+      <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 py-4">
           {props.status === 'ready' && props.rows.length > 0 ? (
             <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
@@ -634,6 +673,7 @@ export function Explore(props: ExploreProps) {
             names={props.names}
             origin={props.resultOrigin}
             destination={props.resultDestination}
+            availableHeight={availH}
             expanded={props.expanded}
             onToggleExpanded={props.onToggleExpanded}
           />
