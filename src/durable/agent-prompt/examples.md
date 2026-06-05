@@ -32,6 +32,25 @@ ignore it. Decide by what the reward did to THIS purchase:
 
 ## Account formats (strict)
 
+**Fill `<Issuer>` / `<Card>` / the reward-currency leaf from the knowledge
+graph — don't invent them.** Each bank, card, and loyalty currency carries a
+canonical `beancountName`. When you can recognise the card or programme behind a
+transaction, resolve each piece by name and read `attrs.beancountName` from
+`kb_get`:
+- `<Issuer>` → `kb_resolve(<bank name>, prefix='bank')` → `kb_get(slug)` →
+  `attrs.beancountName` (e.g. "Axis Bank" → `Axis`).
+- `<Card>` → `kb_resolve(<card name>, prefix='cc')` → `kb_get(slug)` →
+  `attrs.beancountName` (e.g. "Magnus Burgundy" → `MagnusBurgundy`), giving
+  `Liabilities:CreditCards:Axis:MagnusBurgundy`.
+- Reward points leaf → `kb_resolve(<currency name>, prefix='currency')` →
+  `kb_get(slug)` → `attrs.beancountName`, used as
+  `Assets:Rewards:Points:<beancountName>` (e.g. `…:Points:Avios`). A
+  `beancountName` of `DummyRewards` means a non-transferable catalogue-only pool.
+
+Prefer an account that already exists in the user's ledger if it clearly matches;
+otherwise use these canonical KG names. Only fall back to a best-guess segment
+when the KG has no match for the card/programme.
+
 - Credit cards: `Liabilities:CreditCards:<Issuer>:<Card>[:<Id>]`
   — e.g. `Liabilities:CreditCards:<Issuer>:<Card>` or
   `Liabilities:CreditCards:<Issuer>:<Card>:<Id>`.

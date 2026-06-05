@@ -57,6 +57,11 @@ const GET_OUTPUT = z.object({
   source_file: z.string(),
   display_name: z.string().nullable(),
   content_md: z.string(),
+  // Typed node attributes. For bank / cc / currency nodes this carries
+  // `beancountName` — the canonical Beancount account segment to use when
+  // writing ledger entries (bank → issuer, cc → product, currency → the
+  // Assets:Rewards:Points leaf). Null when the node's prefix declares none.
+  attrs: z.record(z.string(), z.unknown()).nullable().optional(),
   aliased_from: z.string().optional(),
 })
 
@@ -123,12 +128,13 @@ export function makeKbTools(http: KbHttp) {
     kb_get: tool({
       description:
         "Fetch a node's full content by slug. Returns " +
-        '`{ slug, source_file, display_name, content_md, aliased_from? }`. ' +
+        '`{ slug, source_file, display_name, content_md, attrs?, aliased_from? }`. ' +
         'If the input slug is an alias, `slug` is the canonical and ' +
         '`aliased_from` is the input. Use this for prose (rate tables, fees, ' +
-        'eligibility rules). Slug shape is `<prefix>/<local>` (e.g. ' +
-        '`cc/hdfc-infinia`). Returns `{ ok: false, error }` if the slug is ' +
-        'unknown.',
+        'eligibility rules). `attrs.beancountName` (on bank / cc / currency ' +
+        'nodes) is the canonical Beancount account segment for writing ledger ' +
+        'entries. Slug shape is `<prefix>/<local>` (e.g. `cc/hdfc-infinia`). ' +
+        'Returns `{ ok: false, error }` if the slug is unknown.',
       inputSchema: z.object({
         slug: z.string().min(3).describe('Prefixed slug, e.g. `cc/hdfc-infinia`.'),
       }),

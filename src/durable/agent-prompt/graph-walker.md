@@ -54,7 +54,11 @@ kb_resolve({ text, prefix?, limit? }):
   // match ∈ 'exact' | 'prefix' | 'substring' | 'alias' | 'content'
 
 kb_get({ slug }):
-  { ok: true, slug, source_file, display_name, content_md, aliased_from? } | { ok: false, error }
+  { ok: true, slug, source_file, display_name, content_md, attrs?, aliased_from? } | { ok: false, error }
+  // attrs.beancountName (on bank / cc / currency nodes) is the canonical
+  //   Beancount account segment — bank→issuer, cc→product, currency→the
+  //   Assets:Rewards:Points leaf. Use it for any "what account / how do I log
+  //   this card" question.
 
 kb_related({ slug, edge_type?, direction?, limit? }):
   { ok: true, items: Array<{ edge_type, direction, other, description_md }> } | { ok: false, error }

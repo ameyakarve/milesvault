@@ -13,6 +13,7 @@ import {
   clarifyTool,
   readStatementTool,
 } from './agents/tools/editor'
+import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
 import type { AgentHost, Registry } from './agents/types'
 
 // The chat/agent runtime for the `/editor` surface. Hosts the `ledger ↔
@@ -135,13 +136,19 @@ export class ChatDO
   }
 
   tools(name: EditorAgentName): ToolSet {
+    // Read-only KG lookup so the editor can resolve the canonical Beancount
+    // account segments (bank/cc/currency `beancountName`) for what it writes.
+    const kb = makeKbTools(kbHttpOverFetch('https://kb', this.env.KB))
+    const kbLookup = { kb_resolve: kb.kb_resolve, kb_get: kb.kb_get }
     if (name === 'ledger') {
       return {
+        ...kbLookup,
         draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(),
       }
     }
     return {
+      ...kbLookup,
       draft_transaction: draftTransactionTool(),
       clarify: clarifyTool(),
       read_statement: readStatementTool((id) =>
