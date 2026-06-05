@@ -1,0 +1,1486 @@
+{
+  "target": {
+    "slug": "currency/qantas-points",
+    "display": "Qantas Points",
+    "beancountName": "Qantas"
+  },
+  "amount": 90000,
+  "nodes": [
+    {
+      "id": "currency/qantas-points",
+      "kind": "target",
+      "display": "Qantas Points",
+      "beancountName": "Qantas",
+      "multiplier": 1,
+      "hops": 0
+    },
+    {
+      "id": "currency/edge-rewards-burgundy",
+      "kind": "currency",
+      "display": "EDGE Rewards — Burgundy tier",
+      "beancountName": "EdgeRewardsBurgundyPoints",
+      "multiplier": 1.25,
+      "hops": 1,
+      "path": [
+        "currency/edge-rewards-burgundy",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/edge-rewards-reserve-magnus",
+      "kind": "currency",
+      "display": "EDGE Rewards — Reserve / Magnus tier",
+      "beancountName": "EdgeRewardsReserveMagnusPoints",
+      "multiplier": 2.5,
+      "hops": 1,
+      "path": [
+        "currency/edge-rewards-reserve-magnus",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/edge-rewards-ten-one",
+      "kind": "currency",
+      "display": "EDGE Rewards — Select / Privilege 10:1 tier",
+      "beancountName": "EdgeRewardsTenOnePoints",
+      "multiplier": 7.999999999999999,
+      "hops": 3,
+      "path": [
+        "currency/edge-rewards-ten-one",
+        "currency/itc-green-points",
+        "currency/marriott-bonvoy-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/edge-miles-olympus",
+      "kind": "currency",
+      "display": "EDGE Miles — Olympus tier",
+      "beancountName": "OlympusEdgeMiles",
+      "multiplier": 0.25,
+      "hops": 1,
+      "path": [
+        "currency/edge-miles-olympus",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/edge-miles-atlas",
+      "kind": "currency",
+      "display": "EDGE Miles — Atlas tier",
+      "beancountName": "AtlasEdgeMiles",
+      "multiplier": 0.5,
+      "hops": 1,
+      "path": [
+        "currency/edge-miles-atlas",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/edge-miles-horizon",
+      "kind": "currency",
+      "display": "EDGE Miles — Horizon tier",
+      "beancountName": "HorizonEdgeMiles",
+      "multiplier": 1,
+      "hops": 1,
+      "path": [
+        "currency/edge-miles-horizon",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/edge-miles-indian-oil",
+      "kind": "currency",
+      "display": "EDGE Miles — IndianOil tier",
+      "beancountName": "IndianOilEdgeMiles",
+      "multiplier": 2,
+      "hops": 1,
+      "path": [
+        "currency/edge-miles-indian-oil",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/hsbc-premier-points",
+      "kind": "currency",
+      "display": "HSBC Premier Reward Points",
+      "beancountName": "HsbcPremierPoints",
+      "multiplier": 0.8,
+      "hops": 2,
+      "path": [
+        "currency/hsbc-premier-points",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/hsbc-prive-points",
+      "kind": "currency",
+      "display": "HSBC Privé Reward Points",
+      "beancountName": "HsbcPrivePoints",
+      "multiplier": 0.8,
+      "hops": 2,
+      "path": [
+        "currency/hsbc-prive-points",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/hsbc-travelone-points",
+      "kind": "currency",
+      "display": "HSBC TravelOne Reward Points",
+      "beancountName": "HsbcTravelOnePoints",
+      "multiplier": 0.8,
+      "hops": 2,
+      "path": [
+        "currency/hsbc-travelone-points",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/hsbc-reward-points-platinum",
+      "kind": "currency",
+      "display": "HSBC Reward Points — Platinum tier",
+      "beancountName": "HsbcPlatinumPoints",
+      "multiplier": 1.6,
+      "hops": 2,
+      "path": [
+        "currency/hsbc-reward-points-platinum",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/sbi-travel-credits",
+      "kind": "currency",
+      "display": "SBI Travel Credits",
+      "beancountName": "SbiTravelCredits",
+      "multiplier": 1,
+      "hops": 1,
+      "path": [
+        "currency/sbi-travel-credits",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/all-reward-points",
+      "kind": "currency",
+      "display": "ALL Reward Points",
+      "beancountName": "AllReward",
+      "multiplier": 0.8,
+      "hops": 1,
+      "path": [
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/choice-privileges-points",
+      "kind": "currency",
+      "display": "Choice Privileges Points",
+      "beancountName": "ChoicePrivileges",
+      "multiplier": 2.5,
+      "hops": 1,
+      "path": [
+        "currency/choice-privileges-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/hilton-honors-points",
+      "kind": "currency",
+      "display": "Hilton Honors Points",
+      "beancountName": "HiltonHonors",
+      "multiplier": 6.666666666666667,
+      "hops": 1,
+      "path": [
+        "currency/hilton-honors-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/ihg-one-rewards-points",
+      "kind": "currency",
+      "display": "IHG One Rewards Points",
+      "beancountName": "IhgOneRewards",
+      "multiplier": 5,
+      "hops": 1,
+      "path": [
+        "currency/ihg-one-rewards-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/marriott-bonvoy-points",
+      "kind": "currency",
+      "display": "Marriott Bonvoy Points",
+      "beancountName": "MarriottBonvoy",
+      "multiplier": 2.4,
+      "hops": 1,
+      "path": [
+        "currency/marriott-bonvoy-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/max-miles",
+      "kind": "currency",
+      "display": "Max Miles",
+      "beancountName": "MaxMiles",
+      "multiplier": 0.8,
+      "hops": 2,
+      "path": [
+        "currency/max-miles",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/world-of-hyatt-points",
+      "kind": "currency",
+      "display": "World of Hyatt Points",
+      "beancountName": "WorldOfHyatt",
+      "multiplier": 2.0833333333333335,
+      "hops": 1,
+      "path": [
+        "currency/world-of-hyatt-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/hdfc-reward-points-infinia-dcb",
+      "kind": "currency",
+      "display": "HDFC Reward Points — Infinia / Diners Club Black tier",
+      "beancountName": "SmartbuyInfiniaDcbPoints",
+      "multiplier": 1.6,
+      "hops": 2,
+      "path": [
+        "currency/hdfc-reward-points-infinia-dcb",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/hdfc-reward-points-regalia-gold",
+      "kind": "currency",
+      "display": "HDFC Reward Points — Regalia Gold tier",
+      "beancountName": "SmartbuyRegaliaGoldPoints",
+      "multiplier": 1.6,
+      "hops": 2,
+      "path": [
+        "currency/hdfc-reward-points-regalia-gold",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/kotak-air-miles-tier-1",
+      "kind": "currency",
+      "display": "Kotak Air Miles (Tier 1)",
+      "beancountName": "KotakAirPoints",
+      "multiplier": 1.6,
+      "hops": 2,
+      "path": [
+        "currency/kotak-air-miles-tier-1",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/kotak-air-miles-air-plus",
+      "kind": "currency",
+      "display": "Kotak Air Miles (Air+)",
+      "beancountName": "KotakAirPlusPoints",
+      "multiplier": 1.6,
+      "hops": 2,
+      "path": [
+        "currency/kotak-air-miles-air-plus",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/kotak-air-miles-solitaire",
+      "kind": "currency",
+      "display": "Kotak Air Miles (Solitaire)",
+      "beancountName": "KotakSolitairePoints",
+      "multiplier": 1.6,
+      "hops": 2,
+      "path": [
+        "currency/kotak-air-miles-solitaire",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/bilt-points",
+      "kind": "currency",
+      "display": "Bilt Points",
+      "beancountName": "BiltPoints",
+      "multiplier": 1.2000000000000002,
+      "hops": 2,
+      "path": [
+        "currency/bilt-points",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/rove-miles",
+      "kind": "currency",
+      "display": "Rove Miles",
+      "beancountName": "RoveMiles",
+      "multiplier": 1.2000000000000002,
+      "hops": 2,
+      "path": [
+        "currency/rove-miles",
+        "currency/all-reward-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/amex-membership-rewards-points",
+      "kind": "currency",
+      "display": "Amex Membership Rewards India",
+      "beancountName": "MembershipRewards",
+      "multiplier": 2.4,
+      "hops": 2,
+      "path": [
+        "currency/amex-membership-rewards-points",
+        "currency/marriott-bonvoy-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/itc-green-points",
+      "kind": "currency",
+      "display": "ITC Green Points",
+      "beancountName": "GreenPoints",
+      "multiplier": 1.5999999999999999,
+      "hops": 2,
+      "path": [
+        "currency/itc-green-points",
+        "currency/marriott-bonvoy-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "currency/sbi-aurum-reward-points",
+      "kind": "currency",
+      "display": "SBI AURUM Reward Points",
+      "beancountName": "AurumPoints",
+      "multiplier": 7.999999999999999,
+      "hops": 3,
+      "path": [
+        "currency/sbi-aurum-reward-points",
+        "currency/itc-green-points",
+        "currency/marriott-bonvoy-points",
+        "currency/qantas-points"
+      ]
+    },
+    {
+      "id": "cc/axis-burgundy-private",
+      "kind": "card",
+      "display": "Axis Burgundy Private",
+      "beancountName": "BurgundyPrivate",
+      "issuer": "Axis",
+      "multiplier": 1.25
+    },
+    {
+      "id": "cc/axis-magnus-burgundy",
+      "kind": "card",
+      "display": "Axis Magnus Burgundy",
+      "beancountName": "MagnusBurgundy",
+      "issuer": "Axis",
+      "multiplier": 1.25
+    },
+    {
+      "id": "cc/axis-magnus",
+      "kind": "card",
+      "display": "Axis Magnus",
+      "beancountName": "Magnus",
+      "issuer": "Axis",
+      "multiplier": 2.5
+    },
+    {
+      "id": "cc/axis-reserve",
+      "kind": "card",
+      "display": "Axis Reserve",
+      "beancountName": "Reserve",
+      "issuer": "Axis",
+      "multiplier": 2.5
+    },
+    {
+      "id": "cc/axis-my-zone",
+      "kind": "card",
+      "display": "Axis MY Zone",
+      "beancountName": "MyZone",
+      "issuer": "Axis",
+      "multiplier": 7.999999999999999
+    },
+    {
+      "id": "cc/axis-neo",
+      "kind": "card",
+      "display": "Axis Neo",
+      "beancountName": "Neo",
+      "issuer": "Axis",
+      "multiplier": 7.999999999999999
+    },
+    {
+      "id": "cc/axis-privilege",
+      "kind": "card",
+      "display": "Axis Privilege",
+      "beancountName": "Privilege",
+      "issuer": "Axis",
+      "multiplier": 7.999999999999999
+    },
+    {
+      "id": "cc/axis-rewards",
+      "kind": "card",
+      "display": "Axis REWARDS",
+      "beancountName": "Rewards",
+      "issuer": "Axis",
+      "multiplier": 7.999999999999999
+    },
+    {
+      "id": "cc/axis-select",
+      "kind": "card",
+      "display": "Axis SELECT",
+      "beancountName": "Select",
+      "issuer": "Axis",
+      "multiplier": 7.999999999999999
+    },
+    {
+      "id": "cc/samsung-axis-bank-infinite",
+      "kind": "card",
+      "display": "Samsung Axis Bank Infinite",
+      "beancountName": "SamsungInfinite",
+      "issuer": "Axis",
+      "multiplier": 7.999999999999999
+    },
+    {
+      "id": "cc/samsung-axis-bank-signature",
+      "kind": "card",
+      "display": "Samsung Axis Bank Signature",
+      "beancountName": "SamsungSignature",
+      "issuer": "Axis",
+      "multiplier": 7.999999999999999
+    },
+    {
+      "id": "cc/axis-olympus",
+      "kind": "card",
+      "display": "Axis Olympus",
+      "beancountName": "Olympus",
+      "issuer": "Axis",
+      "multiplier": 0.25
+    },
+    {
+      "id": "cc/axis-atlas",
+      "kind": "card",
+      "display": "Axis Atlas",
+      "beancountName": "Atlas",
+      "issuer": "Axis",
+      "multiplier": 0.5
+    },
+    {
+      "id": "cc/axis-horizon",
+      "kind": "card",
+      "display": "Axis Horizon",
+      "beancountName": "Horizon",
+      "issuer": "Axis",
+      "multiplier": 1
+    },
+    {
+      "id": "cc/axis-indianoil-premium",
+      "kind": "card",
+      "display": "Axis IndianOil Premium",
+      "beancountName": "IndianOilPremium",
+      "issuer": "Axis",
+      "multiplier": 2
+    },
+    {
+      "id": "cc/hsbc-premier",
+      "kind": "card",
+      "display": "HSBC Premier Credit Card",
+      "beancountName": "Premier",
+      "issuer": "HSBC",
+      "multiplier": 0.8
+    },
+    {
+      "id": "cc/hsbc-prive",
+      "kind": "card",
+      "display": "HSBC Privé",
+      "beancountName": "Prive",
+      "issuer": "HSBC",
+      "multiplier": 0.8
+    },
+    {
+      "id": "cc/hsbc-travelone",
+      "kind": "card",
+      "display": "HSBC TravelOne",
+      "beancountName": "TravelOne",
+      "issuer": "HSBC",
+      "multiplier": 0.8
+    },
+    {
+      "id": "cc/hsbc-platinum",
+      "kind": "card",
+      "display": "HSBC Platinum Credit Card",
+      "beancountName": "Platinum",
+      "issuer": "HSBC",
+      "multiplier": 1.6
+    },
+    {
+      "id": "cc/sbi-card-miles",
+      "kind": "card",
+      "display": "SBI Card MILES",
+      "beancountName": "Miles",
+      "issuer": "SBI",
+      "multiplier": 1
+    },
+    {
+      "id": "cc/sbi-card-miles-prime",
+      "kind": "card",
+      "display": "SBI Card MILES Prime",
+      "beancountName": "MilesPrime",
+      "issuer": "SBI",
+      "multiplier": 1
+    },
+    {
+      "id": "cc/sbi-card-miles-elite",
+      "kind": "card",
+      "display": "SBI Card MILES Elite",
+      "beancountName": "MilesElite",
+      "issuer": "SBI",
+      "multiplier": 1
+    },
+    {
+      "id": "cc/hdfc-marriott-bonvoy",
+      "kind": "card",
+      "display": "HDFC Marriott Bonvoy",
+      "beancountName": "MarriottBonvoy",
+      "issuer": "HDFC",
+      "multiplier": 2.4
+    },
+    {
+      "id": "cc/hdfc-diners-club-black",
+      "kind": "card",
+      "display": "HDFC Diners Club Black",
+      "beancountName": "DinersClubBlack",
+      "issuer": "HDFC",
+      "multiplier": 1.6
+    },
+    {
+      "id": "cc/hdfc-infinia-metal",
+      "kind": "card",
+      "display": "HDFC Infinia Metal",
+      "beancountName": "InfiniaMetal",
+      "issuer": "HDFC",
+      "multiplier": 1.6
+    },
+    {
+      "id": "cc/hdfc-regalia-gold",
+      "kind": "card",
+      "display": "HDFC Regalia Gold",
+      "beancountName": "RegaliaGold",
+      "issuer": "HDFC",
+      "multiplier": 1.6
+    },
+    {
+      "id": "cc/kotak-air",
+      "kind": "card",
+      "display": "Kotak Air",
+      "beancountName": "Air",
+      "issuer": "Kotak",
+      "multiplier": 1.6
+    },
+    {
+      "id": "cc/kotak-air-plus",
+      "kind": "card",
+      "display": "Kotak Air+",
+      "beancountName": "AirPlus",
+      "issuer": "Kotak",
+      "multiplier": 1.6
+    },
+    {
+      "id": "cc/kotak-solitaire",
+      "kind": "card",
+      "display": "Kotak Solitaire",
+      "beancountName": "Solitaire",
+      "issuer": "Kotak",
+      "multiplier": 1.6
+    },
+    {
+      "id": "cc/amex-centurion",
+      "kind": "card",
+      "display": "Amex Centurion India",
+      "beancountName": "Centurion",
+      "issuer": "Amex",
+      "multiplier": 2.4
+    },
+    {
+      "id": "cc/amex-gold",
+      "kind": "card",
+      "display": "Amex Gold Card India",
+      "beancountName": "Gold",
+      "issuer": "Amex",
+      "multiplier": 2.4
+    },
+    {
+      "id": "cc/amex-membership-rewards",
+      "kind": "card",
+      "display": "Amex Membership Rewards Card",
+      "beancountName": "MembershipRewards",
+      "issuer": "Amex",
+      "multiplier": 2.4
+    },
+    {
+      "id": "cc/amex-platinum-reserve",
+      "kind": "card",
+      "display": "Amex Platinum Reserve India",
+      "beancountName": "PlatinumReserve",
+      "issuer": "Amex",
+      "multiplier": 2.4
+    },
+    {
+      "id": "cc/amex-platinum-travel",
+      "kind": "card",
+      "display": "Amex Platinum Travel India",
+      "beancountName": "PlatinumTravel",
+      "issuer": "Amex",
+      "multiplier": 2.4
+    },
+    {
+      "id": "cc/amex-platinum",
+      "kind": "card",
+      "display": "Amex Platinum Card India",
+      "beancountName": "Platinum",
+      "issuer": "Amex",
+      "multiplier": 2.4
+    },
+    {
+      "id": "cc/amex-smart-earn",
+      "kind": "card",
+      "display": "Amex Smart Earn",
+      "beancountName": "SmartEarn",
+      "issuer": "Amex",
+      "multiplier": 2.4
+    },
+    {
+      "id": "cc/sbi-aurum",
+      "kind": "card",
+      "display": "SBI AURUM Card",
+      "beancountName": "Aurum",
+      "issuer": "SBI",
+      "multiplier": 7.999999999999999
+    }
+  ],
+  "edges": [
+    {
+      "from": "currency/edge-rewards-burgundy",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 240,
+      "multiplier": 1.25
+    },
+    {
+      "from": "currency/edge-rewards-reserve-magnus",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 120,
+      "multiplier": 2.5
+    },
+    {
+      "from": "currency/edge-rewards-ten-one",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 30,
+      "multiplier": 10
+    },
+    {
+      "from": "currency/edge-miles-olympus",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 2000,
+      "multiplier": 0.25
+    },
+    {
+      "from": "currency/edge-miles-atlas",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 1000,
+      "multiplier": 0.5
+    },
+    {
+      "from": "currency/edge-miles-horizon",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 500,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/edge-miles-indian-oil",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 250,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/hsbc-premier-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-prive-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-travelone-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-reward-points-platinum",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/sbi-travel-credits",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/all-reward-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 2000,
+      "ratio_dest": 2500,
+      "multiplier": 0.8
+    },
+    {
+      "from": "currency/choice-privileges-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 2000,
+      "ratio_dest": 800,
+      "multiplier": 2.5
+    },
+    {
+      "from": "currency/hilton-honors-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 10000,
+      "ratio_dest": 1500,
+      "multiplier": 6.666666666666667
+    },
+    {
+      "from": "currency/ihg-one-rewards-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 10000,
+      "ratio_dest": 2000,
+      "multiplier": 5
+    },
+    {
+      "from": "currency/marriott-bonvoy-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 60000,
+      "ratio_dest": 25000,
+      "multiplier": 2.4
+    },
+    {
+      "from": "currency/max-miles",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/world-of-hyatt-points",
+      "to": "currency/qantas-points",
+      "kind": "transfer",
+      "ratio_source": 1250,
+      "ratio_dest": 600,
+      "multiplier": 2.0833333333333335
+    },
+    {
+      "from": "cc/axis-burgundy-private",
+      "to": "currency/edge-rewards-burgundy",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-magnus-burgundy",
+      "to": "currency/edge-rewards-burgundy",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-magnus",
+      "to": "currency/edge-rewards-reserve-magnus",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-reserve",
+      "to": "currency/edge-rewards-reserve-magnus",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-my-zone",
+      "to": "currency/edge-rewards-ten-one",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-neo",
+      "to": "currency/edge-rewards-ten-one",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-privilege",
+      "to": "currency/edge-rewards-ten-one",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-rewards",
+      "to": "currency/edge-rewards-ten-one",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-select",
+      "to": "currency/edge-rewards-ten-one",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/samsung-axis-bank-infinite",
+      "to": "currency/edge-rewards-ten-one",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/samsung-axis-bank-signature",
+      "to": "currency/edge-rewards-ten-one",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-olympus",
+      "to": "currency/edge-miles-olympus",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-atlas",
+      "to": "currency/edge-miles-atlas",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-horizon",
+      "to": "currency/edge-miles-horizon",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/axis-indianoil-premium",
+      "to": "currency/edge-miles-indian-oil",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/hsbc-premier",
+      "to": "currency/hsbc-premier-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/hsbc-prive",
+      "to": "currency/hsbc-prive-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/hsbc-travelone",
+      "to": "currency/hsbc-travelone-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/hsbc-platinum",
+      "to": "currency/hsbc-reward-points-platinum",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/sbi-card-miles",
+      "to": "currency/sbi-travel-credits",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/sbi-card-miles-prime",
+      "to": "currency/sbi-travel-credits",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/sbi-card-miles-elite",
+      "to": "currency/sbi-travel-credits",
+      "kind": "earn"
+    },
+    {
+      "from": "currency/hdfc-reward-points-infinia-dcb",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 50,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/hdfc-reward-points-regalia-gold",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 50,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/hsbc-premier-points",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-prive-points",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-travelone-points",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-reward-points-platinum",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/kotak-air-miles-tier-1",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/kotak-air-miles-air-plus",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/kotak-air-miles-solitaire",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/sbi-travel-credits",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/bilt-points",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 3,
+      "ratio_dest": 2,
+      "multiplier": 1.5
+    },
+    {
+      "from": "currency/max-miles",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/rove-miles",
+      "to": "currency/all-reward-points",
+      "kind": "transfer",
+      "ratio_source": 3,
+      "ratio_dest": 2,
+      "multiplier": 1.5
+    },
+    {
+      "from": "currency/amex-membership-rewards-points",
+      "to": "currency/hilton-honors-points",
+      "kind": "transfer",
+      "ratio_source": 1000,
+      "ratio_dest": 900,
+      "multiplier": 1.1111111111111112
+    },
+    {
+      "from": "currency/bilt-points",
+      "to": "currency/hilton-honors-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/max-miles",
+      "to": "currency/hilton-honors-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/edge-rewards-burgundy",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 240,
+      "multiplier": 1.25
+    },
+    {
+      "from": "currency/edge-rewards-reserve-magnus",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 120,
+      "multiplier": 2.5
+    },
+    {
+      "from": "currency/edge-rewards-ten-one",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 30,
+      "multiplier": 10
+    },
+    {
+      "from": "currency/edge-miles-olympus",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 2000,
+      "multiplier": 0.25
+    },
+    {
+      "from": "currency/edge-miles-atlas",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 1000,
+      "multiplier": 0.5
+    },
+    {
+      "from": "currency/edge-miles-horizon",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 500,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/edge-miles-indian-oil",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 250,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/hdfc-reward-points-infinia-dcb",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 100,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hdfc-reward-points-regalia-gold",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 50,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/hsbc-premier-points",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-prive-points",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-travelone-points",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-reward-points-platinum",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/sbi-travel-credits",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/bilt-points",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/max-miles",
+      "to": "currency/ihg-one-rewards-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 3,
+      "multiplier": 0.6666666666666666
+    },
+    {
+      "from": "currency/amex-membership-rewards-points",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 100,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hdfc-reward-points-infinia-dcb",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 50,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/hdfc-reward-points-regalia-gold",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 33,
+      "multiplier": 3.0303030303030303
+    },
+    {
+      "from": "currency/hsbc-premier-points",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-prive-points",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-travelone-points",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/hsbc-reward-points-platinum",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/kotak-air-miles-tier-1",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 3,
+      "ratio_dest": 1,
+      "multiplier": 3
+    },
+    {
+      "from": "currency/kotak-air-miles-air-plus",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 3,
+      "ratio_dest": 1,
+      "multiplier": 3
+    },
+    {
+      "from": "currency/kotak-air-miles-solitaire",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 3,
+      "ratio_dest": 1,
+      "multiplier": 3
+    },
+    {
+      "from": "currency/bilt-points",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/itc-green-points",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 3,
+      "multiplier": 0.6666666666666666
+    },
+    {
+      "from": "currency/max-miles",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "cc/hdfc-marriott-bonvoy",
+      "to": "currency/marriott-bonvoy-points",
+      "kind": "earn"
+    },
+    {
+      "from": "currency/bilt-points",
+      "to": "currency/world-of-hyatt-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/max-miles",
+      "to": "currency/world-of-hyatt-points",
+      "kind": "transfer",
+      "ratio_source": 1,
+      "ratio_dest": 1,
+      "multiplier": 1
+    },
+    {
+      "from": "cc/hdfc-diners-club-black",
+      "to": "currency/hdfc-reward-points-infinia-dcb",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/hdfc-infinia-metal",
+      "to": "currency/hdfc-reward-points-infinia-dcb",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/hdfc-regalia-gold",
+      "to": "currency/hdfc-reward-points-regalia-gold",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/kotak-air",
+      "to": "currency/kotak-air-miles-tier-1",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/kotak-air-plus",
+      "to": "currency/kotak-air-miles-air-plus",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/kotak-solitaire",
+      "to": "currency/kotak-air-miles-solitaire",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/amex-centurion",
+      "to": "currency/amex-membership-rewards-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/amex-gold",
+      "to": "currency/amex-membership-rewards-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/amex-membership-rewards",
+      "to": "currency/amex-membership-rewards-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/amex-platinum-reserve",
+      "to": "currency/amex-membership-rewards-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/amex-platinum-travel",
+      "to": "currency/amex-membership-rewards-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/amex-platinum",
+      "to": "currency/amex-membership-rewards-points",
+      "kind": "earn"
+    },
+    {
+      "from": "cc/amex-smart-earn",
+      "to": "currency/amex-membership-rewards-points",
+      "kind": "earn"
+    },
+    {
+      "from": "currency/edge-rewards-burgundy",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 240,
+      "multiplier": 1.25
+    },
+    {
+      "from": "currency/edge-rewards-reserve-magnus",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 120,
+      "multiplier": 2.5
+    },
+    {
+      "from": "currency/edge-rewards-ten-one",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 300,
+      "ratio_dest": 60,
+      "multiplier": 5
+    },
+    {
+      "from": "currency/edge-miles-olympus",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 2000,
+      "multiplier": 0.25
+    },
+    {
+      "from": "currency/edge-miles-atlas",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 1000,
+      "multiplier": 0.5
+    },
+    {
+      "from": "currency/edge-miles-horizon",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 500,
+      "multiplier": 1
+    },
+    {
+      "from": "currency/edge-miles-indian-oil",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 500,
+      "ratio_dest": 250,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/hdfc-reward-points-infinia-dcb",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 50,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/hdfc-reward-points-regalia-gold",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 100,
+      "ratio_dest": 50,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/sbi-travel-credits",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 2,
+      "ratio_dest": 1,
+      "multiplier": 2
+    },
+    {
+      "from": "currency/sbi-aurum-reward-points",
+      "to": "currency/itc-green-points",
+      "kind": "transfer",
+      "ratio_source": 5,
+      "ratio_dest": 1,
+      "multiplier": 5
+    },
+    {
+      "from": "cc/sbi-aurum",
+      "to": "currency/sbi-aurum-reward-points",
+      "kind": "earn"
+    }
+  ],
+  "notes": [
+    "29 feeder currencies, 37 earning cards within 3 transfer hops"
+  ]
+}

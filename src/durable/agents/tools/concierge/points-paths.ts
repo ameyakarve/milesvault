@@ -25,6 +25,12 @@ export type PathNode = {
   // (1 for the target itself). Cards inherit their earned currency's value.
   multiplier?: number
   hops?: number
+  // The cheapest route to the target as a slug sequence (source → … → target).
+  // Lets the UI draw a clean "best routes only" tree instead of every edge.
+  path?: string[]
+  // Set by the "my accounts" step: this card/currency matches an account the
+  // user already holds in their ledger (matched via beancountName).
+  held?: boolean
 }
 
 export type PathEdge = {
@@ -179,6 +185,7 @@ export async function buildPointsPaths(
       beancountName: beancount(fetched.get(c) ?? null),
       multiplier: cell?.multiplier,
       hops: cell?.hops,
+      path: cell?.path,
     })
   }
   // a card's value = the cheapest value of the currency it earns into
