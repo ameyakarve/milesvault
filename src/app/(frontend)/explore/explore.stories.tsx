@@ -1,6 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useMemo, useState } from 'react'
-import { Explore, type Cabin, type ExploreStatus, type Stops } from './explore-ui'
+import {
+  Explore,
+  type AirlineMode,
+  type Cabin,
+  type ExploreStatus,
+  type SortKey,
+  type Stops,
+} from './explore-ui'
 import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
 import type { ExploreAirline } from '@/durable/agents/tools/concierge/award-explore'
 import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
@@ -180,19 +187,26 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
   const [destination, setDestination] = useState('NRT')
   const [cabin, setCabin] = useState<Cabin>('business')
   const [source, setSource] = useState('currency/edge-rewards-burgundy')
-  const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [stops, setStops] = useState<Stops>('all')
-  const [expanded, setExpanded] = useState<Set<string>>(
-    new Set([`${ROWS[3].programme}|0|3`]),
-  )
+  const [sort, setSort] = useState<SortKey>('cost')
+  const [airlineMode, setAirlineMode] = useState<AirlineMode>('include')
+  const [selectedAirlines, setSelectedAirlines] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set([`${ROWS[3].programme}|0|3`]))
 
   const rows = useMemo(() => {
     let r = ROWS.filter((x) => x.miles[cabin] != null)
     if (stops !== 'all') r = r.filter((x) => String(x.stops) === stops)
-    if (excluded.size)
-      r = r.filter((x) => !(x.routings[0]?.carriers ?? []).some((c) => excluded.has(c)))
-    return [...r].sort((a, b) => primaryValue(a, cabin) - primaryValue(b, cabin))
-  }, [cabin, stops, excluded])
+    if (selectedAirlines.size)
+      r = r.filter((x) => {
+        const hit = (x.routings[0]?.carriers ?? []).some((c) => selectedAirlines.has(c))
+        return airlineMode === 'include' ? hit : !hit
+      })
+    return [...r].sort((a, b) => {
+      if (sort === 'stops') return a.stops - b.stops
+      if (sort === 'distance') return a.total_distance - b.total_distance
+      return primaryValue(a, cabin) - primaryValue(b, cabin)
+    })
+  }, [cabin, stops, selectedAirlines, airlineMode, sort])
 
   return (
     <div className="h-screen">
@@ -207,9 +221,11 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
         onSource={setSource}
         sources={SOURCES}
         airlines={AIRLINES}
-        excluded={excluded}
+        airlineMode={airlineMode}
+        onAirlineMode={setAirlineMode}
+        selectedAirlines={selectedAirlines}
         onToggleAirline={(iata) =>
-          setExcluded((prev) => {
+          setSelectedAirlines((prev) => {
             const next = new Set(prev)
             if (next.has(iata)) next.delete(iata)
             else next.add(iata)
@@ -218,6 +234,8 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
         }
         stops={stops}
         onStops={setStops}
+        sort={sort}
+        onSort={setSort}
         status={status === 'ready' ? 'ready' : status}
         rows={status === 'ready' ? rows : []}
         names={NAMES}
@@ -226,7 +244,8 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
         onReset={() => {
           setSource('')
           setStops('all')
-          setExcluded(new Set())
+          setSelectedAirlines(new Set())
+          setAirlineMode('include')
         }}
         expanded={expanded}
         onToggleExpanded={(k) =>

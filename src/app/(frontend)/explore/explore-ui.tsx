@@ -5,6 +5,7 @@ import { ArrowRight, Check, ChevronDown, ChevronsUpDown, SlidersHorizontal, X } 
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
@@ -32,12 +33,20 @@ import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-s
 
 export type Cabin = 'economy' | 'premium_economy' | 'business' | 'first'
 export type Stops = 'all' | '0' | '1'
+export type SortKey = 'cost' | 'stops' | 'distance'
+export type AirlineMode = 'include' | 'exclude'
 
-export const CABIN_TABS: { key: Cabin; label: string }[] = [
-  { key: 'economy', label: 'Economy' },
-  { key: 'premium_economy', label: 'Premium' },
-  { key: 'business', label: 'Business' },
-  { key: 'first', label: 'First' },
+export const CABIN_TABS: { key: Cabin; label: string; short: string }[] = [
+  { key: 'economy', label: 'Economy', short: 'ECO' },
+  { key: 'premium_economy', label: 'Premium', short: 'PRE' },
+  { key: 'business', label: 'Business', short: 'BUS' },
+  { key: 'first', label: 'First', short: 'FST' },
+]
+
+export const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'cost', label: 'Cheapest' },
+  { key: 'stops', label: 'Fewest stops' },
+  { key: 'distance', label: 'Shortest' },
 ]
 
 const STOPS_TABS: { key: Stops; label: string }[] = [
@@ -145,8 +154,11 @@ export type ExploreFilterProps = {
   onSource: (s: string) => void
   // KG-derived "Transfer from" universe (slug → name); empty while it loads.
   sources: TransferSource[]
+  // Carriers on the route (from the KG); the include/exclude target set.
   airlines: ExploreAirline[]
-  excluded: Set<string>
+  airlineMode: AirlineMode
+  onAirlineMode: (m: AirlineMode) => void
+  selectedAirlines: Set<string>
   onToggleAirline: (iata: string) => void
   stops: Stops
   onStops: (s: Stops) => void
@@ -254,20 +266,30 @@ function Filters({ f }: { f: ExploreFilterProps }) {
       </FilterBlock>
 
       <FilterBlock title="Airlines">
+        <Tabs value={f.airlineMode} onValueChange={(v) => f.onAirlineMode(v as AirlineMode)}>
+          <TabsList className="w-full">
+            <TabsTrigger value="include" className={ACTIVE_TAB}>
+              Include
+            </TabsTrigger>
+            <TabsTrigger value="exclude" className={ACTIVE_TAB}>
+              Exclude
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
         {f.airlines.length === 0 ? (
-          <p className="text-xs text-muted-foreground">—</p>
+          <p className="text-xs text-muted-foreground">No carriers for this route.</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {f.airlines.map((a) => {
-              const on = !f.excluded.has(a.iata)
+              const on = f.selectedAirlines.has(a.iata)
               return (
                 <Button
                   key={a.iata}
                   type="button"
                   size="sm"
-                  variant={on ? 'secondary' : 'outline'}
+                  variant={on ? 'default' : 'outline'}
                   onClick={() => f.onToggleAirline(a.iata)}
-                  className={cn('h-7 gap-1 px-2 text-xs', !on && 'text-muted-foreground opacity-60')}
+                  className={cn('h-7 gap-1 px-2 text-xs', !on && 'text-muted-foreground')}
                 >
                   <span className="font-mono">{a.iata}</span>
                   <span className="hidden sm:inline">{a.name}</span>
@@ -276,6 +298,13 @@ function Filters({ f }: { f: ExploreFilterProps }) {
             })}
           </div>
         )}
+        <p className="text-[11px] text-muted-foreground">
+          {f.selectedAirlines.size === 0
+            ? 'None selected — all airlines shown.'
+            : f.airlineMode === 'include'
+              ? 'Showing only flights on the selected airlines.'
+              : 'Hiding flights on the selected airlines.'}
+        </p>
       </FilterBlock>
     </div>
   )
@@ -387,6 +416,8 @@ export type ExploreProps = {
   names: Names
   resultOrigin: string
   resultDestination: string
+  sort: SortKey
+  onSort: (s: SortKey) => void
   onReset: () => void
   expanded: Set<string>
   onToggleExpanded: (k: string) => void
@@ -399,55 +430,66 @@ export function Explore(props: ExploreProps) {
     onSource: props.onSource,
     sources: props.sources,
     airlines: props.airlines,
-    excluded: props.excluded,
+    airlineMode: props.airlineMode,
+    onAirlineMode: props.onAirlineMode,
+    selectedAirlines: props.selectedAirlines,
     onToggleAirline: props.onToggleAirline,
     stops: props.stops,
     onStops: props.onStops,
   }
   const activeFilters =
-    (props.source ? 1 : 0) + (props.stops !== 'all' ? 1 : 0) + (props.excluded.size > 0 ? 1 : 0)
+    (props.source ? 1 : 0) +
+    (props.stops !== 'all' ? 1 : 0) +
+    (props.selectedAirlines.size > 0 ? 1 : 0)
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5">
-        <div className="flex items-center gap-1.5 rounded-lg border bg-card px-2 py-1">
-          <Input
-            value={props.origin}
-            onChange={(e) => props.onOrigin(e.target.value.toUpperCase().slice(0, 3))}
-            placeholder="BLR"
-            className="h-6 w-12 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0"
-          />
-          <ArrowRight className="size-3.5 text-muted-foreground" />
-          <Input
-            value={props.destination}
-            onChange={(e) => props.onDestination(e.target.value.toUpperCase().slice(0, 3))}
-            placeholder="NRT"
-            className="h-6 w-12 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0"
-          />
+      {/* Toolbar — same width/container as the results below */}
+      <div className="border-b">
+        <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-3 px-4 py-2.5">
+          <div className="flex items-center gap-1.5 rounded-lg border bg-card px-2 py-1">
+            <Input
+              value={props.origin}
+              onChange={(e) => props.onOrigin(e.target.value.toUpperCase().slice(0, 3))}
+              placeholder="BLR"
+              className="h-6 w-12 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0"
+            />
+            <ArrowRight className="size-3.5 text-muted-foreground" />
+            <Input
+              value={props.destination}
+              onChange={(e) => props.onDestination(e.target.value.toUpperCase().slice(0, 3))}
+              placeholder="NRT"
+              className="h-6 w-12 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0"
+            />
+          </div>
+
+          <Tabs value={props.cabin} onValueChange={(v) => props.onCabin(v as Cabin)}>
+            <TabsList>
+              {CABIN_TABS.map((c) => (
+                <TabsTrigger key={c.key} value={c.key} className={cn('font-mono', ACTIVE_TAB)}>
+                  {c.short}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto"
+            onClick={() => setFiltersOpen(true)}
+          >
+            <SlidersHorizontal className="size-3.5" /> Filters
+            {activeFilters > 0 ? (
+              <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
+                {activeFilters}
+              </Badge>
+            ) : null}
+          </Button>
         </div>
-
-        <Tabs value={props.cabin} onValueChange={(v) => props.onCabin(v as Cabin)}>
-          <TabsList>
-            {CABIN_TABS.map((c) => (
-              <TabsTrigger key={c.key} value={c.key} className={ACTIVE_TAB}>
-                {c.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <Button variant="outline" size="sm" className="ml-auto" onClick={() => setFiltersOpen(true)}>
-          <SlidersHorizontal className="size-3.5" /> Filters
-          {activeFilters > 0 ? (
-            <Badge variant="secondary" className="ml-1 h-4 min-w-4 px-1 text-[10px]">
-              {activeFilters}
-            </Badge>
-          ) : null}
-        </Button>
       </div>
 
-      {/* Results (full width) */}
+      {/* Results (same container) */}
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 py-4">
           {props.status === 'ready' && props.rows.length > 0 ? (
@@ -455,7 +497,21 @@ export function Explore(props: ExploreProps) {
               <span>
                 {props.rows.length} option{props.rows.length === 1 ? '' : 's'}
               </span>
-              <span>cheapest first</span>
+              <div className="flex items-center gap-1.5">
+                <span>Sort</span>
+                <Select value={props.sort} onValueChange={(v) => props.onSort(v as SortKey)}>
+                  <SelectTrigger size="sm" className="h-7 gap-1 text-xs">
+                    {SORT_OPTIONS.find((o) => o.key === props.sort)?.label ?? 'Cheapest'}
+                  </SelectTrigger>
+                  <SelectContent align="end">
+                    {SORT_OPTIONS.map((o) => (
+                      <SelectItem key={o.key} value={o.key}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           ) : null}
           <Results

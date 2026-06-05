@@ -1,7 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Explore, CABIN_TABS, type Cabin, type Stops } from './explore-ui'
+import {
+  Explore,
+  CABIN_TABS,
+  type AirlineMode,
+  type Cabin,
+  type SortKey,
+  type Stops,
+} from './explore-ui'
 import type { AwardExploreResult } from '@/durable/agents/tools/concierge/award-explore'
 import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
 import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
@@ -24,8 +31,10 @@ export function ExploreView() {
   const [destination, setDestination] = useState('')
   const [source, setSource] = useState('') // '' = miles only; else a currency/* slug
   const [cabin, setCabin] = useState<Cabin>('business')
-  const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [stops, setStops] = useState<Stops>('all')
+  const [sort, setSort] = useState<SortKey>('cost')
+  const [airlineMode, setAirlineMode] = useState<AirlineMode>('include')
+  const [selectedAirlines, setSelectedAirlines] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [sources, setSources] = useState<TransferSource[]>([])
 
@@ -117,7 +126,7 @@ export function ExploreView() {
         : 'ready'
 
   const onToggleAirline = useCallback((iata: string) => {
-    setExcluded((prev) => {
+    setSelectedAirlines((prev) => {
       const next = new Set(prev)
       if (next.has(iata)) next.delete(iata)
       else next.add(iata)
@@ -135,17 +144,29 @@ export function ExploreView() {
   const onReset = useCallback(() => {
     setSource('')
     setStops('all')
-    setExcluded(new Set())
+    setSelectedAirlines(new Set())
+    setAirlineMode('include')
   }, [])
 
   const rows = useMemo(() => {
     if (!data) return []
     let r = data.rows.filter((x) => x.miles[cabin] != null)
     if (stops !== 'all') r = r.filter((x) => String(x.stops) === stops)
-    if (excluded.size)
-      r = r.filter((x) => !(x.routings[0]?.carriers ?? []).some((c) => excluded.has(c)))
-    return [...r].sort((a, b) => primaryValue(a, cabin) - primaryValue(b, cabin))
-  }, [data, cabin, stops, excluded])
+    // Airline include/exclude (over the routing's carriers).
+    if (selectedAirlines.size) {
+      r = r.filter((x) => {
+        const carriers = x.routings[0]?.carriers ?? []
+        const hit = carriers.some((c) => selectedAirlines.has(c))
+        return airlineMode === 'include' ? hit : !hit
+      })
+    }
+    const byCost = (a: AwardPlanRow, b: AwardPlanRow) => primaryValue(a, cabin) - primaryValue(b, cabin)
+    return [...r].sort((a, b) => {
+      if (sort === 'stops') return a.stops - b.stops || byCost(a, b)
+      if (sort === 'distance') return a.total_distance - b.total_distance || byCost(a, b)
+      return byCost(a, b)
+    })
+  }, [data, cabin, stops, selectedAirlines, airlineMode, sort])
 
   return (
     <Explore
@@ -159,10 +180,14 @@ export function ExploreView() {
       onSource={setSource}
       sources={sources}
       airlines={data?.airlines ?? []}
-      excluded={excluded}
+      airlineMode={airlineMode}
+      onAirlineMode={setAirlineMode}
+      selectedAirlines={selectedAirlines}
       onToggleAirline={onToggleAirline}
       stops={stops}
       onStops={setStops}
+      sort={sort}
+      onSort={setSort}
       status={status}
       error={error}
       rows={rows}
