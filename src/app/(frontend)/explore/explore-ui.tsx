@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, ChevronsUpDown, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Card } from '@/components/ui/card'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
@@ -363,46 +363,63 @@ function Results({
     )
 
   return (
-    <Card className="divide-y divide-border overflow-hidden p-0">
-      {rows.map((row, i) => {
-        const k = rowKey(row, i)
-        const open = expanded.has(k)
-        return (
-          <Collapsible key={k} open={open} onOpenChange={() => onToggleExpanded(k)}>
-            <CollapsibleTrigger className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-muted/40">
-              <span
-                className={cn('size-1.5 shrink-0 rounded-full', STOP_DOT(row.stops))}
-                aria-hidden
-              />
-              <span className="truncate text-sm font-medium text-foreground">
-                {nameOf(row.programme, names)}
-              </span>
-              <span className={cn('shrink-0 text-xs', STOP_TEXT(row.stops))}>
-                {routingText(row)}
-              </span>
-              {row.own_metal ? (
-                <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
-                  metal
-                </Badge>
-              ) : null}
-              <span className="ml-auto shrink-0">
-                <Figure row={row} cabin={cabin} />
-              </span>
-              <ChevronDown
-                className={cn(
-                  'size-3.5 shrink-0 text-muted-foreground transition-transform',
-                  open && 'rotate-180',
-                )}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="bg-muted/30 px-3 py-2 pl-7 text-xs text-muted-foreground">
-                <TransferPath row={row} source={source} names={names} />
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        )
-      })}
+    <Card className="overflow-hidden p-0">
+      <Table>
+        <TableBody>
+          {rows.map((row, i) => {
+            const k = rowKey(row, i)
+            const open = expanded.has(k)
+            return (
+              <Fragment key={k}>
+                <TableRow className="cursor-pointer" onClick={() => onToggleExpanded(k)}>
+                  <TableCell className="w-0 pr-0">
+                    <span
+                      className={cn('block size-1.5 rounded-full', STOP_DOT(row.stops))}
+                      aria-hidden
+                    />
+                  </TableCell>
+                  <TableCell className="w-full max-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate font-medium text-foreground">
+                        {nameOf(row.programme, names)}
+                      </span>
+                      {row.own_metal ? (
+                        <Badge variant="secondary" className="h-4 shrink-0 px-1.5 text-[10px]">
+                          metal
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell className={cn('text-right text-xs', STOP_TEXT(row.stops))}>
+                    {routingText(row)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Figure row={row} cabin={cabin} />
+                  </TableCell>
+                  <TableCell className="w-0 pr-2 pl-1">
+                    <ChevronDown
+                      className={cn(
+                        'size-3.5 text-muted-foreground transition-transform',
+                        open && 'rotate-180',
+                      )}
+                    />
+                  </TableCell>
+                </TableRow>
+                {open ? (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell
+                      colSpan={5}
+                      className="bg-muted/30 py-2 pl-7 text-xs whitespace-normal text-muted-foreground"
+                    >
+                      <TransferPath row={row} source={source} names={names} />
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </Fragment>
+            )
+          })}
+        </TableBody>
+      </Table>
     </Card>
   )
 }
