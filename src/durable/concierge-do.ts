@@ -11,6 +11,8 @@ import {
   askUserTool,
   buildAwardExplore,
   type AwardExploreResult,
+  buildPointsPaths,
+  type PointsPathsResult,
   ensureRouteCache,
   fetchKbAgentsMd,
   kbHttpOverFetch,
@@ -141,6 +143,16 @@ export class ConciergeDO
       destination,
       source,
     )
+  }
+
+  // Data behind the /points page — the backward dual of the explorer. Given a
+  // target loyalty currency, returns the React-Flow graph of every way to
+  // accumulate it (currencies that transfer in + the cards that earn them),
+  // each source tagged with its cheapest ratio. RPC for the
+  // /api/concierge/points-paths route.
+  async pointsPaths(target: string, amount?: number): Promise<PointsPathsResult> {
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    return buildPointsPaths(kbHttp, target, amount)
   }
 
   // Graph-walker tool surface — layered. Simple one-hop graph lookups

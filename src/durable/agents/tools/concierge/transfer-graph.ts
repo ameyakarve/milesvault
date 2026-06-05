@@ -131,6 +131,79 @@ export async function transferGraph(
   return rows
 }
 
+// ---- Backward pathfinding: cheapest way to REACH a target currency ----
+
+// One incoming TRANSFERS_TO edge: `from` --(rs:rd)--> the currency we asked
+// about. rs units of `from` buy rd units of that currency.
+type InEdge = { from: string; rs: number; rd: number }
+
+// Memoised reverse adjacency: a currency's INCOMING TRANSFERS_TO edges + ratios.
+function makeIncomingNeighbours(kb: KbHttp) {
+  const cache = new Map<string, InEdge[]>()
+  return async (currency: string): Promise<InEdge[]> => {
+    const hit = cache.get(currency)
+    if (hit) return hit
+    let edges: InEdge[] = []
+    try {
+      const r = (await kb.related(currency, {
+        edge_type: 'TRANSFERS_TO',
+        direction: 'incoming',
+      })) as { items?: Array<{ other: string; attrs?: Record<string, unknown> | null }> }
+      edges = (r.items ?? [])
+        .map((it): InEdge | null => {
+          const rs = Number(it.attrs?.ratio_source)
+          const rd = Number(it.attrs?.ratio_dest)
+          return Number.isFinite(rs) && Number.isFinite(rd) && rs > 0 && rd > 0
+            ? { from: it.other, rs, rd }
+            : null
+        })
+        .filter((e): e is InEdge => e !== null)
+    } catch {
+      edges = []
+    }
+    cache.set(currency, edges)
+    return edges
+  }
+}
+
+export type ReachCell = {
+  // Source currency units required per 1 target unit, minimised over paths.
+  // Cost of N target points = N × multiplier source points.
+  multiplier: number
+  hops: number
+  path: string[] // source → … → target
+}
+
+// Cheapest (min cumulative multiplier) path from every currency that can REACH
+// `target` within MAX_HOPS, in ONE backward pass — the dual of cheapestFrom.
+// Walks incoming edges from the target; the hop bound keeps gain-edges
+// (multiplier < 1) from money-pumping a cheaper-but-fake path.
+export async function cheapestTo(kb: KbHttp, target: string): Promise<Map<string, ReachCell>> {
+  const incoming = makeIncomingNeighbours(kb)
+  type Best = { mult: number; hops: number; path: string[] }
+  const best = new Map<string, Best>([[target, { mult: 1, hops: 0, path: [target] }]])
+  let frontier = [target]
+  for (let depth = 0; depth < MAX_HOPS && frontier.length; depth++) {
+    const next: string[] = []
+    for (const node of frontier) {
+      const cur = best.get(node)!
+      for (const e of await incoming(node)) {
+        if (e.from === target) continue
+        // rs `from` buy rd `node`; 1 node costs rs/rd `from`. Compose toward target.
+        const mult = cur.mult * (e.rs / e.rd)
+        const prev = best.get(e.from)
+        if (!prev || mult < prev.mult) {
+          best.set(e.from, { mult, hops: cur.hops + 1, path: [e.from, ...cur.path] })
+          next.push(e.from)
+        }
+      }
+    }
+    frontier = next
+  }
+  best.delete(target)
+  return new Map([...best].map(([slug, b]) => [slug, { multiplier: b.mult, hops: b.hops, path: b.path }]))
+}
+
 // Resolve free text / a card / a slug to a canonical currency slug. Done
 // HERE (deterministically) so callers never hand the graph un-resolved names.
 async function currencyOfCard(kb: KbHttp, card: string): Promise<string | null> {

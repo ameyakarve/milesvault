@@ -9,7 +9,13 @@ export {
   type ExploreAirline,
 } from './award-explore'
 export { listTransferSources, type TransferSource } from './transfer-sources'
-export { transferGraph, resolveCurrency, type TransferCell } from './transfer-graph'
+export { transferGraph, resolveCurrency, cheapestTo, type TransferCell } from './transfer-graph'
+export {
+  buildPointsPaths,
+  type PointsPathsResult,
+  type PathNode,
+  type PathEdge,
+} from './points-paths'
 export { ensureRouteCache } from './routes-store'
 export {
   makeKbTools,
