@@ -130,6 +130,22 @@ const ROWS: AwardPlanRow[] = [
     1.25,
     ['currency/edge-rewards-burgundy', 'currency/krisflyer-miles'],
   ),
+  // A dynamic / phone-only programme: the chart returns 0 → "varies", never 0.
+  {
+    programme: 'latam-pass',
+    programme_currency: 'currency/latam-pass-miles',
+    own_metal: false,
+    stops: 0,
+    routings: [{ hub: null, carriers: ['JL'], distance: 4164 }],
+    total_distance: 4164,
+    published: true,
+    miles: { economy: 'dynamic', premium_economy: null, business: 'dynamic', first: null },
+    reachable: true,
+    multiplier: 2.5,
+    hops: 1,
+    path: ['currency/edge-rewards-burgundy', 'currency/latam-pass-miles'],
+    cost: { economy: 'dynamic', premium_economy: null, business: 'dynamic', first: null },
+  },
 ]
 
 const AIRLINES: ExploreAirline[] = [
@@ -172,6 +188,8 @@ const NAMES: Record<string, string> = {
   'currency/aadvantage-miles': 'AAdvantage miles',
   'currency/asia-miles': 'Asia Miles',
   'currency/krisflyer-miles': 'KrisFlyer miles',
+  'latam-pass': 'LATAM Pass',
+  'currency/latam-pass-miles': 'LATAM Pass miles',
 }
 
 function primaryValue(row: AwardPlanRow, cabin: Cabin): number {

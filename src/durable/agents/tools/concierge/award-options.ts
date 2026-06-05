@@ -15,12 +15,12 @@ import type { KbHttp } from './kb-tools'
 
 // A cabin cell: a real published [min,max] range, OR the string "dynamic"
 // (the programme can book it but publishes no chart/bounds — show "varies,
-// confirm live", NEVER a number; a floor here would mislead), OR null (cabin
-// not offered).
+// confirm live", NEVER a number; this also covers a chart that returned 0, which
+// is not a real price), OR null (cabin not offered).
 const CABIN = z
   .union([z.tuple([z.number(), z.number()]), z.literal('dynamic'), z.null()])
   .describe(
-    '[min,max] published miles, "dynamic" (bookable but no published rate → show "varies"), or null (not offered).',
+    '[min,max] published miles, "dynamic" (bookable but no published rate / 0 → show "varies"), or null (not offered).',
   )
 
 const CABIN_SET = z.object({
@@ -82,7 +82,8 @@ type Cabin = 'economy' | 'premium_economy' | 'business' | 'first'
 const CABINS: Cabin[] = ['economy', 'premium_economy', 'business', 'first']
 const MAX_OPTIONS = 80
 
-// A published range, "dynamic" (offered but no published rate), or null.
+// A published range, "dynamic" (offered but no published rate / a 0 chart
+// figure), or null.
 type CabinCell = CabinRange | 'dynamic'
 // A programme with no published award chart (revenue/dynamic pricing with no
 // real floor we can quote). The module declares `export const published = false`;
@@ -92,7 +93,7 @@ function isPublished(mod: unknown): boolean {
   return (mod as { published?: boolean }).published !== false
 }
 // Offered cabins → "dynamic" for an unpublished programme; null stays null.
-function asDynamic(cabins: Record<Cabin, CabinRange>): Record<Cabin, CabinCell> {
+function asDynamic(cabins: Record<Cabin, CabinCell>): Record<Cabin, CabinCell> {
   return {
     economy: cabins.economy ? 'dynamic' : null,
     premium_economy: cabins.premium_economy ? 'dynamic' : null,
@@ -101,8 +102,12 @@ function asDynamic(cabins: Record<Cabin, CabinRange>): Record<Cabin, CabinCell> 
   }
 }
 
-function aggregateCabins(entries: Entry[]): Record<Cabin, CabinRange> {
-  const agg: Record<Cabin, CabinRange> = {
+// Merge a programme's entries into one per-cabin set. A chart figure of 0 is not
+// a real price (the dynamic/phone-only modules emit [0,0] to mean "unpublished"),
+// so it collapses to "dynamic" ("varies") rather than a misleading 0 — but a
+// real figure for the same cabin always wins.
+function aggregateCabins(entries: Entry[]): Record<Cabin, CabinCell> {
+  const agg: Record<Cabin, CabinCell> = {
     economy: null,
     premium_economy: null,
     business: null,
@@ -112,8 +117,12 @@ function aggregateCabins(entries: Entry[]): Record<Cabin, CabinRange> {
     for (const c of CABINS) {
       const r = e[c]
       if (!r) continue
+      if (r[0] <= 0) {
+        if (agg[c] == null) agg[c] = 'dynamic'
+        continue
+      }
       const cur = agg[c]
-      agg[c] = cur ? [Math.min(cur[0], r[0]), Math.max(cur[1], r[1])] : [r[0], r[1]]
+      agg[c] = Array.isArray(cur) ? [Math.min(cur[0], r[0]), Math.max(cur[1], r[1])] : [r[0], r[1]]
     }
   }
   return agg
