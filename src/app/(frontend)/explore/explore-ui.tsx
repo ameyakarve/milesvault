@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { Card } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
   Dialog,
   DialogContent,
@@ -85,40 +85,42 @@ function nameOf(slug: string, names: Names): string {
 
 export const rowKey = (r: AwardPlanRow, i: number) => `${r.programme}|${r.stops}|${i}`
 
-function routingText(row: AwardPlanRow): string {
-  const r = row.routings[0]
-  if (!r) return ''
-  return row.stops === 0 ? 'Direct' : `1-stop · ${r.hub ?? '?'}`
-}
+// Direct = green chip, one-stop = blue chip.
+const STOP_CHIP = (stops: number) =>
+  stops === 0
+    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+    : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'
 
-function Figure({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
+// "Via": Direct for nonstop, else the connecting airport IATA.
+const viaText = (row: AwardPlanRow) =>
+  row.stops === 0 ? 'Direct' : (row.routings[0]?.hub ?? '—')
+
+// The per-cabin price as a colored chip (green=direct, blue=one-stop).
+function CostChip({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
   const cost = row.cost[cabin]
   const miles = row.miles[cabin]
-  if (cost === 'dynamic' || miles === 'dynamic')
-    return <span className="font-mono text-sm text-amber-600">varies</span>
-  if (Array.isArray(cost)) {
+  let body: React.ReactNode
+  if (cost === 'dynamic' || miles === 'dynamic') body = 'varies'
+  else if (Array.isArray(cost)) {
     const pts = cost[0] === cost[1] ? fmt(cost[0]) : `${fmt(cost[0])}–${fmt(cost[1])}`
-    return (
-      <span className="whitespace-nowrap font-mono tabular-nums">
-        <span className="text-sm font-medium text-foreground">{pts}</span>
+    body = (
+      <>
+        {pts}
         {Array.isArray(miles) ? (
-          <span className="ml-1.5 text-[11px] text-muted-foreground">{fmtK(miles[0])}</span>
+          <span className="ml-1 font-normal opacity-60">{fmtK(miles[0])}</span>
         ) : null}
-      </span>
+      </>
     )
-  }
-  if (Array.isArray(miles))
-    return (
-      <span className="font-mono text-sm tabular-nums text-muted-foreground">{fmtK(miles[0])}</span>
-    )
-  return <span className="text-muted-foreground">—</span>
+  } else if (Array.isArray(miles)) body = <span className="opacity-70">{fmtK(miles[0])}</span>
+  else return <span className="text-muted-foreground">—</span>
+  return (
+    <Badge
+      className={cn('border-transparent font-mono text-xs font-medium tabular-nums', STOP_CHIP(row.stops))}
+    >
+      {body}
+    </Badge>
+  )
 }
-
-// Direct = green, one-stop = blue (used for the row's color coding).
-const STOP_DOT = (stops: number) =>
-  stops === 0 ? 'bg-emerald-500' : 'bg-blue-500'
-const STOP_TEXT = (stops: number) =>
-  stops === 0 ? 'text-emerald-700' : 'text-blue-700'
 
 function TransferPath({
   row,
@@ -365,6 +367,15 @@ function Results({
   return (
     <Card className="overflow-hidden p-0">
       <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Programme</TableHead>
+            <TableHead className="text-right">Airlines</TableHead>
+            <TableHead className="text-right">Via</TableHead>
+            <TableHead className="text-right">{CABIN_TABS.find((c) => c.key === cabin)?.label}</TableHead>
+            <TableHead className="w-0" />
+          </TableRow>
+        </TableHeader>
         <TableBody>
           {rows.map((row, i) => {
             const k = rowKey(row, i)
@@ -372,12 +383,6 @@ function Results({
             return (
               <Fragment key={k}>
                 <TableRow className="cursor-pointer" onClick={() => onToggleExpanded(k)}>
-                  <TableCell className="w-0 pr-0">
-                    <span
-                      className={cn('block size-1.5 rounded-full', STOP_DOT(row.stops))}
-                      aria-hidden
-                    />
-                  </TableCell>
                   <TableCell className="w-full max-w-0">
                     <span className="block truncate font-medium text-foreground">
                       {nameOf(row.programme, names)}
@@ -396,11 +401,11 @@ function Results({
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className={cn('text-right text-xs', STOP_TEXT(row.stops))}>
-                    {routingText(row)}
+                  <TableCell className="text-right text-xs text-muted-foreground">
+                    {viaText(row)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Figure row={row} cabin={cabin} />
+                    <CostChip row={row} cabin={cabin} />
                   </TableCell>
                   <TableCell className="w-0 pr-2 pl-1">
                     <ChevronDown
@@ -414,8 +419,8 @@ function Results({
                 {open ? (
                   <TableRow className="hover:bg-transparent">
                     <TableCell
-                      colSpan={6}
-                      className="bg-muted/30 py-2 pl-7 text-xs whitespace-normal text-muted-foreground"
+                      colSpan={5}
+                      className="bg-muted/30 py-2 text-xs whitespace-normal text-muted-foreground"
                     >
                       <TransferPath row={row} source={source} names={names} />
                     </TableCell>

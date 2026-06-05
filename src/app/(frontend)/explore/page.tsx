@@ -10,9 +10,9 @@ export default async function ExplorePage() {
   if (!session?.user) redirect('/login?callbackUrl=/explore')
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#fbfbfa]">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-[#fbfbfa]">
       <NavRail />
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <ExploreView />
       </main>
     </div>
