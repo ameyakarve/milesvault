@@ -9,8 +9,6 @@ import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airpor
 import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import {
   askUserTool,
-  buildAwardPlan,
-  type AwardPlanResult,
   buildAwardExplore,
   type AwardExploreResult,
   ensureRouteCache,
@@ -122,26 +120,6 @@ export class ConciergeDO
     return {
       query_sql: querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params)),
     }
-  }
-
-  // Read-only award plan behind the interactive award-options card. Runs the
-  // deterministic pipeline end to end (every routing × programme, priced, then
-  // joined against the transfers graph from `source`) and returns every
-  // combination for the client to filter/sort. Reuses this DO's seeded airport
-  // lookup + 7-day route cache; the data isn't per-user. `source` is a card or
-  // currency name/slug, resolved against the KB. Exposed as a DO RPC method for
-  // the /api/concierge/award-options route.
-  async awardPlan(origin: string, destination: string, source: string): Promise<AwardPlanResult> {
-    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    return buildAwardPlan(
-      this.airportLookup,
-      this.routeSql,
-      this.env.AERODATABOX_API_KEY,
-      kbHttp,
-      origin,
-      destination,
-      source,
-    )
   }
 
   // Data behind the fluid /explore page. Like awardPlan but returns a uniform

@@ -80,10 +80,10 @@ export type ClarifyInput = z.infer<typeof clarifyInputSchema>
 export type ClarifyOutput = z.infer<typeof clarifyOutputSchema>
 
 // The agent emits a `show_award_options` tool call with only the city pair and
-// the funding source (a card or currency). The gen-UI card SELF-FETCHES the
-// full, already-costed option set from /api/concierge/award-options and renders
-// an interactive filter/sort table — the agent never sees, trims, or orders the
-// rows. That is the whole design: it cannot drop a routing it didn't compute.
+// the funding source (a card or currency). The gen-UI renders a link into the
+// chat that opens the /explore Award Explorer with origin + destination
+// prefilled; that page computes and lets the user filter the full option set.
+// The agent never sees, prices, or orders any rows — it only passes these args.
 export const showAwardOptionsSchema = z.object({
   origin: z.string().describe('Origin airport IATA, e.g. "BLR".'),
   destination: z.string().describe('Destination airport IATA, e.g. "NRT".'),
