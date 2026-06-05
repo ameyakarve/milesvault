@@ -15,8 +15,6 @@ import {
   type AwardPlanResult,
   buildAwardExplore,
   type AwardExploreResult,
-  listTransferSources,
-  type TransferSource,
   ensureRouteCache,
   fetchKbAgentsMd,
   flightSearchTool,
@@ -169,38 +167,6 @@ export class ConciergeDO
       destination,
       source,
     )
-  }
-
-  // The KG-derived "Transfer from" universe (currencies with outgoing transfers)
-  // for the explorer's source picker. Computing it touches every currency node,
-  // so it's cached in this DO's SQLite for a day. Hit a SHARED instance (not the
-  // per-user one) so it's computed once globally. RPC for the
-  // /api/concierge/transfer-sources route.
-  async transferSources(): Promise<TransferSource[]> {
-    const db = this.routeSql
-    db.exec(
-      `CREATE TABLE IF NOT EXISTS source_cache (slug TEXT PRIMARY KEY, name TEXT NOT NULL, ord INTEGER NOT NULL)`,
-    )
-    db.exec(
-      `CREATE TABLE IF NOT EXISTS source_cache_meta (id INTEGER PRIMARY KEY CHECK (id = 1), computed_at INTEGER NOT NULL)`,
-    )
-    const TTL_MS = 24 * 60 * 60 * 1000
-    const at = db.exec(`SELECT computed_at FROM source_cache_meta WHERE id = 1`).toArray()[0]
-      ?.computed_at as number | undefined
-    if (at && Date.now() - at < TTL_MS) {
-      const rows = db.exec(`SELECT slug, name FROM source_cache ORDER BY ord`).toArray()
-      if (rows.length)
-        return rows.map((r) => ({ slug: r.slug as string, name: r.name as string }))
-    }
-
-    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    const sources = await listTransferSources(kbHttp)
-    db.exec(`DELETE FROM source_cache`)
-    sources.forEach((s, i) =>
-      db.exec(`INSERT OR REPLACE INTO source_cache (slug, name, ord) VALUES (?, ?, ?)`, s.slug, s.name, i),
-    )
-    db.exec(`INSERT OR REPLACE INTO source_cache_meta (id, computed_at) VALUES (1, ?)`, Date.now())
-    return sources
   }
 
   // Graph-walker tool surface — layered. Simple one-hop graph lookups

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { Explore, type Cabin, type ExploreStatus, type Stops } from './explore-ui'
 import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
 import type { ExploreAirline } from '@/durable/agents/tools/concierge/award-explore'
+import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
 
 const CABINS: Cabin[] = ['economy', 'premium_economy', 'business', 'first']
 type MilesByCabin = Partial<Record<Cabin, [number, number]>>
@@ -132,17 +133,18 @@ const AIRLINES: ExploreAirline[] = [
   { iata: 'QF', name: 'Qantas' },
 ]
 
-// Stands in for the KG-derived "Transfer from" list (the real one is ~50 items,
-// fetched + cached server-side).
-const SOURCES = [
-  { slug: 'currency/amex-membership-rewards-points', name: 'Amex Membership Rewards India' },
-  { slug: 'currency/bilt-points', name: 'Bilt Rewards Points' },
-  { slug: 'currency/edge-rewards-burgundy', name: 'EDGE Rewards — Burgundy tier' },
-  { slug: 'currency/edge-rewards-reserve-magnus', name: 'EDGE Rewards — Reserve / Magnus tier' },
-  { slug: 'currency/hdfc-reward-points-infinia-dcb', name: 'HDFC Reward Points — Infinia' },
-  { slug: 'currency/icici-reward-points-tier-2', name: 'ICICI Reward Points — Tier 2' },
-  { slug: 'currency/marriott-bonvoy-points', name: 'Marriott Bonvoy Points' },
-  { slug: 'currency/sbi-aurum-reward-points', name: 'SBI Aurum Reward Points' },
+// Stands in for the KG-derived "Transfer from" list (cards + transferable
+// currencies; the real one is a few hundred items, computed on demand).
+const SOURCES: TransferSource[] = [
+  { slug: 'cc/axis-magnus', name: 'Axis Bank Magnus', kind: 'card' },
+  { slug: 'cc/axis-reserve', name: 'Axis Bank Reserve', kind: 'card' },
+  { slug: 'cc/hdfc-infinia-metal', name: 'HDFC Infinia (Metal)', kind: 'card' },
+  { slug: 'cc/icici-emeralde', name: 'ICICI Emeralde', kind: 'card' },
+  { slug: 'cc/sbi-aurum', name: 'SBI Aurum', kind: 'card' },
+  { slug: 'currency/amex-membership-rewards-points', name: 'Amex Membership Rewards India', kind: 'currency' },
+  { slug: 'currency/bilt-points', name: 'Bilt Rewards Points', kind: 'currency' },
+  { slug: 'currency/edge-rewards-burgundy', name: 'EDGE Rewards — Burgundy tier', kind: 'currency' },
+  { slug: 'currency/marriott-bonvoy-points', name: 'Marriott Bonvoy Points', kind: 'currency' },
 ]
 
 // Stands in for the KG-derived `names` map the endpoint returns (slug →

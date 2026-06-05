@@ -160,7 +160,24 @@ function SourceCombobox({
 }) {
   const [open, setOpen] = useState(false)
   const selected = sources.find((s) => s.slug === value)
-  const label = value === '' ? 'Miles only' : (selected?.name ?? value.replace(/^currency\//, ''))
+  const label = value === '' ? 'Miles only' : (selected?.name ?? value.replace(/^[a-z]+\//, ''))
+  const cards = sources.filter((s) => s.kind === 'card')
+  const currencies = sources.filter((s) => s.kind === 'currency')
+
+  const item = (slug: string, name: string) => (
+    <CommandItem
+      key={slug}
+      value={`${name} ${slug}`}
+      onSelect={() => {
+        onChange(slug)
+        setOpen(false)
+      }}
+    >
+      <Check className={cn('size-4', value === slug ? 'opacity-100' : 'opacity-0')} />
+      {name}
+    </CommandItem>
+  )
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -171,7 +188,7 @@ function SourceCombobox({
         <span className="truncate">{label}</span>
         <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
       </PopoverTrigger>
-      <PopoverContent className="w-[260px] p-0" align="start">
+      <PopoverContent className="w-[280px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Search cards & points…" />
           <CommandList>
@@ -187,22 +204,15 @@ function SourceCombobox({
                 <Check className={cn('size-4', value === '' ? 'opacity-100' : 'opacity-0')} />
                 Miles only — no card
               </CommandItem>
-              {sources.map((s) => (
-                <CommandItem
-                  key={s.slug}
-                  value={s.name}
-                  onSelect={() => {
-                    onChange(s.slug)
-                    setOpen(false)
-                  }}
-                >
-                  <Check
-                    className={cn('size-4', value === s.slug ? 'opacity-100' : 'opacity-0')}
-                  />
-                  {s.name}
-                </CommandItem>
-              ))}
             </CommandGroup>
+            {cards.length > 0 ? (
+              <CommandGroup heading="Credit cards">{cards.map((s) => item(s.slug, s.name))}</CommandGroup>
+            ) : null}
+            {currencies.length > 0 ? (
+              <CommandGroup heading="Points & miles">
+                {currencies.map((s) => item(s.slug, s.name))}
+              </CommandGroup>
+            ) : null}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -372,7 +382,6 @@ export type ExploreProps = {
   names: Names
   resultOrigin: string
   resultDestination: string
-  unresolvedSource?: boolean
   expanded: Set<string>
   onToggleExpanded: (k: string) => void
 } & ExploreFilterProps
@@ -443,11 +452,6 @@ export function Explore(props: ExploreProps) {
                   {props.rows.length} option{props.rows.length === 1 ? '' : 's'}
                 </span>
                 <span>cheapest first</span>
-              </div>
-            ) : null}
-            {props.unresolvedSource ? (
-              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                Couldn’t match “{props.source}” to a card — showing miles only.
               </div>
             ) : null}
             <Results

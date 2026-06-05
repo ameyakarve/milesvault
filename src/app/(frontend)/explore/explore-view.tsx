@@ -45,6 +45,9 @@ export function ExploreView() {
     }
   }, [])
 
+  // Origin / destination / cabin are URL-synced (shareable). The source currency
+  // is in-session only — it's chosen from the KG picker, so there's no reason to
+  // round-trip it through the URL.
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     const q = new URLSearchParams(window.location.search)
@@ -52,7 +55,6 @@ export function ExploreView() {
     const d = (q.get('destination') ?? '').toUpperCase()
     if (o) setOrigin(o)
     if (d) setDestination(d)
-    if (q.get('source') != null) setSource(q.get('source') as string)
     const c = q.get('cabin') as Cabin | null
     if (c && CABIN_TABS.some((t) => t.key === c)) setCabin(c)
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -62,11 +64,10 @@ export function ExploreView() {
     const q = new URLSearchParams()
     if (origin) q.set('origin', origin)
     if (destination) q.set('destination', destination)
-    if (source) q.set('source', source)
     q.set('cabin', cabin)
     const qs = q.toString()
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
-  }, [origin, destination, source, cabin])
+  }, [origin, destination, cabin])
 
   const ready = isIata(origin) && isIata(destination)
   const reqKey = `${origin}|${destination}|${source}`
@@ -163,7 +164,6 @@ export function ExploreView() {
       names={data?.names ?? {}}
       resultOrigin={data?.origin ?? origin}
       resultDestination={data?.destination ?? destination}
-      unresolvedSource={Boolean(source && data && !data.source_currency)}
       expanded={expanded}
       onToggleExpanded={onToggleExpanded}
     />
