@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as Plot from '@observablehq/plot'
 import { feature } from 'topojson-client'
 import type { Topology } from 'topojson-specification'
@@ -16,16 +16,33 @@ export type MapPoint = { iata: string; lat: number; lng: number }
 // flight path origin → hub(s) → destination. Rendered with Observable Plot.
 export function FlightMap({
   points,
-  size = 220,
+  maxSize = 280,
 }: {
   points: MapPoint[]
-  size?: number
+  // The globe is square and fills its container width, capped at maxSize so it
+  // stays compact on desktop while going edge-to-edge in a full-width mobile card.
+  maxSize?: number
 }) {
-  const ref = useRef<HTMLDivElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const mountRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
+
+  // Track the available width so the globe is responsive (full-width on mobile).
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const update = () => setWidth(el.clientWidth)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
-    const el = ref.current
+    const el = mountRef.current
     if (!el || points.length < 2) return
+    const size = Math.min(width || maxSize, maxSize)
+    if (size < 40) return
 
     // Rotate the globe so the route's midpoint faces us.
     const lngs = points.map((p) => p.lng)
@@ -64,7 +81,11 @@ export function FlightMap({
     return () => {
       chart.remove()
     }
-  }, [points, size])
+  }, [points, width, maxSize])
 
-  return <div ref={ref} className="flex justify-center" aria-label="Flight route map" />
+  return (
+    <div ref={wrapRef} className="w-full" aria-label="Flight route map">
+      <div ref={mountRef} className="flex justify-center" />
+    </div>
+  )
 }

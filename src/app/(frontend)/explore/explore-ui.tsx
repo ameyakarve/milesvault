@@ -146,23 +146,10 @@ function CostChip({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
   )
 }
 
-function TransferPath({
-  row,
-  source,
-  names,
-}: {
-  row: AwardPlanRow
-  source: string
-  names: Names
-}) {
+function TransferPath({ row, names }: { row: AwardPlanRow; names: Names }) {
   if (row.multiplier === 1)
     return <span>{nameOf(row.programme, names)} — you already hold these</span>
-  if (!row.reachable)
-    return (
-      <span className="italic">
-        {source ? 'not reachable from this card' : 'pick a card to cost this in points'}
-      </span>
-    )
+  if (!row.reachable) return <span className="italic">not reachable from this card</span>
   const segs = row.path.map((s) => nameOf(s, names))
   return (
     <span>
@@ -457,13 +444,15 @@ function ResultSection({
                           return (
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                               {pts.length >= 2 ? (
-                                <Card className="shrink-0 self-center p-2 sm:self-start">
-                                  <FlightMap points={pts} size={176} />
+                                <Card className="w-full shrink-0 p-2 sm:w-[220px] sm:self-start">
+                                  <FlightMap points={pts} />
                                 </Card>
                               ) : null}
-                              <div className="min-w-0 flex-1 self-center text-xs text-muted-foreground">
-                                <TransferPath row={row} source={source} names={names} />
-                              </div>
+                              {source ? (
+                                <div className="min-w-0 flex-1 self-center text-xs text-muted-foreground">
+                                  <TransferPath row={row} names={names} />
+                                </div>
+                              ) : null}
                             </div>
                           )
                         })()}
