@@ -548,20 +548,20 @@ export function Explore(props: ExploreProps) {
     <div className="flex h-full min-h-0 flex-col bg-background">
       {/* Toolbar — same width/container as the results below */}
       <div className="border-b">
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-2.5 sm:gap-3">
-          <div className="flex shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2 py-1">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-1.5 px-3 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
+          <div className="flex shrink-0 items-center gap-0.5 rounded-lg border bg-card px-1.5 py-1 sm:gap-1.5 sm:px-2">
             <Input
               value={props.origin}
               onChange={(e) => props.onOrigin(e.target.value.toUpperCase().slice(0, 3))}
               placeholder="BLR"
-              className="h-6 w-12 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0"
+              className="h-6 w-9 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0 sm:w-12"
             />
-            <ArrowRight className="size-3.5 text-muted-foreground" />
+            <ArrowRight className="size-3 shrink-0 text-muted-foreground sm:size-3.5" />
             <Input
               value={props.destination}
               onChange={(e) => props.onDestination(e.target.value.toUpperCase().slice(0, 3))}
               placeholder="NRT"
-              className="h-6 w-12 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0"
+              className="h-6 w-9 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0 sm:w-12"
             />
           </div>
 
@@ -572,7 +572,11 @@ export function Explore(props: ExploreProps) {
           >
             <TabsList>
               {CABIN_TABS.map((c) => (
-                <TabsTrigger key={c.key} value={c.key} className={cn('px-2 font-mono', ACTIVE_TAB)}>
+                <TabsTrigger
+                  key={c.key}
+                  value={c.key}
+                  className={cn('px-1.5 font-mono text-xs sm:px-2 sm:text-sm', ACTIVE_TAB)}
+                >
                   {c.short}
                 </TabsTrigger>
               ))}
