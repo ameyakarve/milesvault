@@ -105,6 +105,7 @@ const nodeTypes = { card: CardNode, currency: CurrencyNode, target: TargetNode }
 
 // ── filter state ────────────────────────────────────────────────────────────
 export type PointsFilters = {
+  mineOnly: boolean // "My points": restrict to accounts the user holds
   maxHops: number // 1 = Direct, 2 = Via 1, 3 = Via 2
   bestOnly: boolean
   cardMode: FilterMode
@@ -114,9 +115,28 @@ export type PointsFilters = {
 }
 
 function toFlow(data: PointsPathsResult, f: PointsFilters) {
+  // "My points": keep held nodes plus the currencies on their cheapest route to
+  // the target, so held sources still connect through intermediate hops.
+  let mineKeep: Set<string> | null = null
+  if (f.mineOnly) {
+    mineKeep = new Set<string>([data.target.slug])
+    const pathOf = new Map(data.nodes.map((n) => [n.id, n.path ?? []]))
+    const addChain = (slug: string) => {
+      mineKeep!.add(slug)
+      for (const s of pathOf.get(slug) ?? []) mineKeep!.add(s)
+    }
+    for (const n of data.nodes) {
+      if (!n.held) continue
+      mineKeep.add(n.id)
+      if (n.kind === 'card') for (const e of data.edges) { if (e.kind === 'earn' && e.from === n.id) addChain(e.to) }
+      else addChain(n.id)
+    }
+  }
+
   // node-level passes
   const pass = (n: PathNode): boolean => {
     if (n.kind === 'target') return true
+    if (mineKeep && !mineKeep.has(n.id)) return false
     if (n.kind === 'currency') {
       if ((n.hops ?? 0) > f.maxHops) return false
       if (f.selectedCurrencies.size) {
@@ -234,6 +254,7 @@ export type PointsProps = {
   data?: PointsPathsResult
   error?: string
   filters: PointsFilters
+  onMineOnly: (v: boolean) => void
   onMaxHops: (n: number) => void
   onBestOnly: (v: boolean) => void
   onCardMode: (m: FilterMode) => void
@@ -273,19 +294,12 @@ export function Points(props: PointsProps) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b bg-white px-4 py-2.5">
         <TargetCombobox value={target} onChange={onTarget} currencies={currencies} />
-        <span className="mx-1 hidden text-xs text-muted-foreground sm:inline">Within</span>
-        <Tabs value={String(filters.maxHops)} onValueChange={(v) => props.onMaxHops(Number(v))}>
+        <Tabs value={filters.mineOnly ? 'mine' : 'all'} onValueChange={(v) => props.onMineOnly(v === 'mine')}>
           <TabsList className="h-8">
-            {HOP_TABS.map((t) => (
-              <TabsTrigger key={t.key} value={String(t.key)} className={cn('px-2.5 text-xs', ACTIVE_TAB)}>
-                {t.label}
-              </TabsTrigger>
-            ))}
+            <TabsTrigger value="mine" className={cn('px-2.5 text-xs', ACTIVE_TAB)}>My points</TabsTrigger>
+            <TabsTrigger value="all" className={cn('px-2.5 text-xs', ACTIVE_TAB)}>All points</TabsTrigger>
           </TabsList>
         </Tabs>
-        <Button size="sm" variant={filters.bestOnly ? 'default' : 'outline'} className="h-8 px-2.5" onClick={() => props.onBestOnly(!filters.bestOnly)}>
-          Best routes
-        </Button>
 
         {/* filters popover */}
         <Popover>
@@ -295,6 +309,27 @@ export function Points(props: PointsProps) {
             {filterCount > 0 ? <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">{filterCount}</span> : null}
           </PopoverTrigger>
           <PopoverContent className="max-h-[70vh] w-[320px] space-y-4 overflow-y-auto p-3" align="end">
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground">Routes</h3>
+              <Tabs value={String(filters.maxHops)} onValueChange={(v) => props.onMaxHops(Number(v))}>
+                <TabsList className="h-8 w-full">
+                  {HOP_TABS.map((t) => (
+                    <TabsTrigger key={t.key} value={String(t.key)} className={cn('flex-1 text-xs', ACTIVE_TAB)}>
+                      {t.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <Button
+                size="sm"
+                variant={filters.bestOnly ? 'default' : 'outline'}
+                className="h-7 w-full"
+                onClick={() => props.onBestOnly(!filters.bestOnly)}
+              >
+                Best routes only
+              </Button>
+            </div>
+
             <div className="space-y-2">
               <h3 className="text-xs font-medium text-muted-foreground">Cards</h3>
               <ModeTabs mode={filters.cardMode} onMode={props.onCardMode} />
