@@ -160,12 +160,8 @@ function PointsPathCard({ row, cabin, names }: { row: AwardPlanRow; cabin: Cabin
   const target = row.programme_currency
   if (!target) return null
   return (
-    <a
-      href={pointsHref(target, row, cabin)}
-      onClick={(e) => e.stopPropagation()}
-      className="group flex shrink-0 items-center gap-2 self-center"
-    >
-      <Card className="flex flex-row items-center gap-2 p-2 transition-colors group-hover:bg-muted/60">
+    <a href={pointsHref(target, row, cabin)} onClick={(e) => e.stopPropagation()} className="group block h-full">
+      <Card className="flex h-full flex-row items-center gap-2 p-3 transition-colors group-hover:bg-muted/60">
         <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
           <Coins className="size-3.5" />
         </span>
@@ -477,16 +473,16 @@ function ResultSection({
                         {(() => {
                           const pts = routePoints(row, origin, destination, airports)
                           return (
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                               {pts.length >= 2 ? (
-                                <Card className="w-full shrink-0 p-2 sm:w-[220px] sm:self-start">
+                                <Card className="flex h-full items-center justify-center p-2">
                                   <FlightMap points={pts} />
                                 </Card>
                               ) : null}
                               {source ? (
-                                <div className="min-w-0 flex-1 self-center text-xs text-muted-foreground">
+                                <Card className="flex h-full items-center p-3 text-xs text-muted-foreground">
                                   <TransferPath row={row} names={names} />
-                                </div>
+                                </Card>
                               ) : null}
                               <PointsPathCard row={row} cabin={cabin} names={names} />
                             </div>
