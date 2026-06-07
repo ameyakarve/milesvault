@@ -13,7 +13,7 @@ export function PointsView() {
   const [currencies, setCurrencies] = useState<LoyaltyCurrency[]>([])
 
   // filters
-  const [mineOnly, setMineOnly] = useState(false)
+  const [mineOnly, setMineOnly] = useState(true)
   const [maxHops, setMaxHops] = useState(3)
   const [bestOnly, setBestOnly] = useState(true)
   const [cardMode, setCardMode] = useState<FilterMode>('include')
