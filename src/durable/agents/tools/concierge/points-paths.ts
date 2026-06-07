@@ -31,6 +31,10 @@ export type PathNode = {
   // Set by the "my accounts" step: this card/currency matches an account the
   // user already holds in their ledger (matched via beancountName).
   held?: boolean
+  // The user's current balance in this node's ledger account (when held).
+  // `balance` is the decimal amount, `balanceCurrency` its commodity code.
+  balance?: number | null
+  balanceCurrency?: string | null
 }
 
 export type PathEdge = {
@@ -216,5 +220,47 @@ export async function buildPointsPaths(
     nodes,
     edges,
     notes,
+  }
+}
+
+// ── ledger holdings overlay ──────────────────────────────────────────────────
+// Match each node's beancountName against the user's ledger accounts to mark
+// what they already hold and attach the current balance. Currencies live under
+// `Assets:Rewards:…:<beancountName>` (matched on the leaf segment); cards live
+// under `Liabilities:CreditCards:<issuer>:<beancountName>[:<id>]`.
+
+export type BalanceRow = { account: string; currency: string; scale: number; balance_scaled: number }
+
+const leafOf = (account: string) => account.slice(account.lastIndexOf(':') + 1)
+
+function matchAccount(node: PathNode, account: string): boolean {
+  if (!node.beancountName) return false
+  const parts = account.split(':')
+  if (node.kind === 'card') {
+    if (parts[0] !== 'Liabilities' || parts[1] !== 'CreditCards') return false
+    if (node.issuer && parts[2] !== node.issuer) return false
+    return parts[3] === node.beancountName
+  }
+  // target / currency: a points (or status) leaf under Assets:Rewards
+  return parts[0] === 'Assets' && parts[1] === 'Rewards' && leafOf(account) === node.beancountName
+}
+
+export function applyHoldings(
+  result: PointsPathsResult,
+  accounts: ReadonlyArray<{ account: string }>,
+  balances: ReadonlyArray<BalanceRow>,
+): void {
+  for (const node of result.nodes) {
+    if (!node.beancountName) continue
+    const held = accounts.some((a) => matchAccount(node, a.account))
+    const rows = balances.filter((b) => matchAccount(node, b.account))
+    if (!held && rows.length === 0) continue
+    node.held = true
+    if (rows.length) {
+      node.balance = rows.reduce((sum, r) => sum + Number(r.balance_scaled) / 10 ** r.scale, 0)
+      node.balanceCurrency = rows[0].currency
+    } else {
+      node.balance = 0
+    }
   }
 }

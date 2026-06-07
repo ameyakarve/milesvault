@@ -12,7 +12,9 @@ import {
   buildAwardExplore,
   type AwardExploreResult,
   buildPointsPaths,
+  applyHoldings,
   type PointsPathsResult,
+  type BalanceRow,
   listLoyaltyCurrencies,
   type LoyaltyCurrency,
   ensureRouteCache,
@@ -154,7 +156,17 @@ export class ConciergeDO
   // /api/concierge/points-paths route.
   async pointsPaths(target: string, amount?: number): Promise<PointsPathsResult> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    return buildPointsPaths(kbHttp, target, amount)
+    const ledger = this.ledgerStub()
+    const [result, snapshot, balances] = await Promise.all([
+      buildPointsPaths(kbHttp, target, amount),
+      ledger.ledger_snapshot().catch((): null => null),
+      ledger
+        .query_sql('SELECT account, currency, scale, balance_scaled FROM balance_totals')
+        .catch((): null => null),
+    ])
+    // Overlay the user's ledger: mark held nodes and attach current balances.
+    applyHoldings(result, snapshot?.accounts ?? [], (balances?.rows ?? []) as BalanceRow[])
+    return result
   }
 
   // The searchable target universe for the /points combobox — every loyalty

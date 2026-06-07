@@ -12,9 +12,11 @@ export { listTransferSources, type TransferSource } from './transfer-sources'
 export { transferGraph, resolveCurrency, cheapestTo, type TransferCell } from './transfer-graph'
 export {
   buildPointsPaths,
+  applyHoldings,
   type PointsPathsResult,
   type PathNode,
   type PathEdge,
+  type BalanceRow,
 } from './points-paths'
 export { ensureRouteCache } from './routes-store'
 export {

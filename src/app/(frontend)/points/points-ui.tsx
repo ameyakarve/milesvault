@@ -30,7 +30,7 @@ const fmtK = (n: number) =>
   n >= 1000 ? `${(n / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}k` : String(Math.round(n))
 
 const W = 196
-const H = 56
+const H = 64
 const ACTIVE_TAB = 'aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:shadow-sm'
 
 type NodeData = PathNode & { amount: number | null }
@@ -54,26 +54,38 @@ function NeedLine({ data }: { data: NodeData }) {
   if (data.amount == null || data.multiplier == null) return null
   return <span className="text-[10px] text-muted-foreground">≈ {fmtK(data.amount * data.multiplier)} needed</span>
 }
+// Current ledger balance, shown only when the user holds this account.
+function HeldLine({ data, className }: { data: NodeData; className?: string }) {
+  if (!data.held) return null
+  return (
+    <span className={cn('truncate text-[10px] font-semibold text-emerald-600', className)}>
+      Balance {fmt(data.balance ?? 0)}
+      {data.balanceCurrency ? ` ${data.balanceCurrency}` : ''}
+    </span>
+  )
+}
 function CardNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[56px] w-[196px] flex-col justify-center rounded-md border bg-white px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-slate-200')}>
+    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-white px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-slate-200')}>
       <div className="truncate text-xs font-semibold text-slate-800">{data.display}</div>
       <div className="flex items-center justify-between">
         <span className="truncate text-[10px] text-muted-foreground">{data.issuer ?? 'card'}</span>
         <NeedLine data={data} />
       </div>
+      <HeldLine data={data} />
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-slate-300" />
     </div>
   )
 }
 function CurrencyNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className="flex h-[56px] w-[196px] flex-col justify-center rounded-md border border-sky-200 bg-sky-50/60 px-3 shadow-sm">
+    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-sky-50/60 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-sky-200')}>
       <div className="truncate text-xs font-medium text-slate-800">{data.display}</div>
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-sky-700">{data.multiplier != null ? `×${data.multiplier.toFixed(2)}` : '—'}</span>
         <NeedLine data={data} />
       </div>
+      <HeldLine data={data} />
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-sky-300" />
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-sky-300" />
     </div>
@@ -81,9 +93,10 @@ function CurrencyNode({ data }: NodeProps<Node<NodeData>>) {
 }
 function TargetNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className="flex h-[56px] w-[196px] flex-col justify-center rounded-md border border-slate-800 bg-slate-900 px-3 text-white shadow">
+    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-slate-900 px-3 text-white shadow', data.held ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-800')}>
       <div className="truncate text-xs font-semibold">{data.display}</div>
       <div className="text-[10px] text-slate-300">{data.amount != null ? `${fmt(data.amount)} needed` : 'target'}</div>
+      <HeldLine data={data} className="text-emerald-400" />
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-slate-500" />
     </div>
   )
