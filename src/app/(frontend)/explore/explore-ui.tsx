@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { ArrowRight, Check, ChevronDown, ChevronsUpDown, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Coins, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -143,6 +143,41 @@ function CostChip({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
     >
       {body}
     </Badge>
+  )
+}
+
+// Link into the /points Paths-to-Points page for this programme's currency —
+// "how do I accumulate the miles this award costs?". Prefills the amount with
+// the per-cabin chart figure (in the programme's own miles) when known.
+function pointsHref(target: string, row: AwardPlanRow, cabin: Cabin): string {
+  const q = new URLSearchParams({ target })
+  const miles = row.miles[cabin]
+  if (Array.isArray(miles) && miles[0] > 0) q.set('amount', String(miles[0]))
+  return `/points?${q.toString()}`
+}
+
+function PointsPathCard({ row, cabin, names }: { row: AwardPlanRow; cabin: Cabin; names: Names }) {
+  const target = row.programme_currency
+  if (!target) return null
+  return (
+    <a
+      href={pointsHref(target, row, cabin)}
+      onClick={(e) => e.stopPropagation()}
+      className="group flex shrink-0 items-center gap-2 self-center"
+    >
+      <Card className="flex flex-row items-center gap-2 p-2 transition-colors group-hover:bg-muted/60">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <Coins className="size-3.5" />
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-xs font-medium text-foreground">
+            How to earn {nameOf(target, names)}
+          </div>
+          <div className="truncate text-[11px] text-muted-foreground">Paths to these points</div>
+        </div>
+        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+      </Card>
+    </a>
   )
 }
 
@@ -453,6 +488,7 @@ function ResultSection({
                                   <TransferPath row={row} names={names} />
                                 </div>
                               ) : null}
+                              <PointsPathCard row={row} cabin={cabin} names={names} />
                             </div>
                           )
                         })()}
