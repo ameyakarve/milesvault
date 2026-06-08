@@ -17,7 +17,6 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
   const [target, setTarget] = useState(FIXTURE.target.slug)
   const [mineOnly, setMineOnly] = useState(false)
   const [maxHops, setMaxHops] = useState(3)
-  const [bestOnly, setBestOnly] = useState(true)
   const [cardMode, setCardMode] = useState<FilterMode>('include')
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
   const [currencyMode, setCurrencyMode] = useState<FilterMode>('include')
@@ -30,7 +29,7 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
       else n.add(slug)
       return n
     })
-  const filters: PointsFilters = { mineOnly, maxHops, bestOnly, cardMode, selectedCards, currencyMode, selectedCurrencies }
+  const filters: PointsFilters = { mineOnly, maxHops, cardMode, selectedCards, currencyMode, selectedCurrencies }
 
   return (
     <div className="h-screen">
@@ -43,7 +42,6 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
         filters={filters}
         onMineOnly={setMineOnly}
         onMaxHops={setMaxHops}
-        onBestOnly={setBestOnly}
         onCardMode={setCardMode}
         onToggleCard={(s) => toggle(setSelectedCards, s)}
         onToggleBank={(slugs) =>

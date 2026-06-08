@@ -130,7 +130,6 @@ const nodeTypes = { card: CardNode, currency: CurrencyNode, target: TargetNode, 
 export type PointsFilters = {
   mineOnly: boolean // "My points": restrict to accounts the user holds
   maxHops: number // 1 = Direct, 2 = Via 1, 3 = Via 2
-  bestOnly: boolean
   cardMode: FilterMode
   selectedCards: Set<string>
   currencyMode: FilterMode
@@ -177,14 +176,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   }
   let kept = new Set(data.nodes.filter(pass).map((n) => n.id))
 
-  const bestTransfer = new Set<string>()
-  if (f.bestOnly) for (const n of data.nodes) if (n.path) for (let i = 0; i < n.path.length - 1; i++) bestTransfer.add(`${n.path[i]}->${n.path[i + 1]}`)
-
-  const candidate = data.edges.filter((e) => {
-    if (!kept.has(e.from) || !kept.has(e.to)) return false
-    if (f.bestOnly && e.kind === 'transfer' && !bestTransfer.has(`${e.from}->${e.to}`)) return false
-    return true
-  })
+  const candidate = data.edges.filter((e) => kept.has(e.from) && kept.has(e.to))
 
   // reachability prune: keep only nodes that can still reach the target
   const back = new Map<string, string[]>()
@@ -290,7 +282,6 @@ export type PointsProps = {
   filters: PointsFilters
   onMineOnly: (v: boolean) => void
   onMaxHops: (n: number) => void
-  onBestOnly: (v: boolean) => void
   onCardMode: (m: FilterMode) => void
   onToggleCard: (slug: string) => void
   onToggleBank: (slugs: string[]) => void
@@ -354,14 +345,6 @@ export function Points(props: PointsProps) {
                   ))}
                 </TabsList>
               </Tabs>
-              <Button
-                size="sm"
-                variant={filters.bestOnly ? 'default' : 'outline'}
-                className="h-7 w-full"
-                onClick={() => props.onBestOnly(!filters.bestOnly)}
-              >
-                Best routes only
-              </Button>
             </div>
 
             <div className="space-y-2">
