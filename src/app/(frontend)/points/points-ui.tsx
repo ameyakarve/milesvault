@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import dagre from '@dagrejs/dagre'
-import { Check, ChevronsUpDown, SlidersHorizontal } from 'lucide-react'
+import { Check, ChevronsUpDown, DollarSign, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -101,7 +101,30 @@ function TargetNode({ data }: NodeProps<Node<NodeData>>) {
     </div>
   )
 }
-const nodeTypes = { card: CardNode, currency: CurrencyNode, target: TargetNode }
+// Fiat source: buying points. multiplier here is CASH minor-units (cents/paise)
+// per 1 target point, so we render a price, not a ×ratio. Always "owned".
+function FiatNode({ data }: NodeProps<Node<NodeData>>) {
+  const code = data.beancountName ?? ''
+  const perK = data.multiplier != null ? `${code} ${(data.multiplier * 10).toFixed(2)}/1k` : '—'
+  const total =
+    data.amount != null && data.multiplier != null
+      ? `≈ ${code} ${fmt((data.amount * data.multiplier) / 100)} to buy`
+      : null
+  return (
+    <div className="flex h-[64px] w-[196px] flex-col justify-center rounded-md border border-emerald-400 bg-emerald-50/70 px-3 shadow-sm ring-1 ring-emerald-200">
+      <div className="flex items-center gap-1">
+        <DollarSign className="size-3 shrink-0 text-emerald-600" />
+        <div className="truncate text-xs font-semibold text-emerald-900">{data.display}</div>
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-medium text-emerald-700">{perK}</span>
+        {total ? <span className="truncate text-[10px] text-emerald-700">{total}</span> : null}
+      </div>
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-emerald-400" />
+    </div>
+  )
+}
+const nodeTypes = { card: CardNode, currency: CurrencyNode, target: TargetNode, fiat: FiatNode }
 
 // ── filter state ────────────────────────────────────────────────────────────
 export type PointsFilters = {
@@ -179,21 +202,32 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   }
   kept = new Set([...kept].filter((id) => reach.has(id)))
 
+  // Fiat sources get their own node type + their outgoing edges are "sales".
+  const fiatIds = new Set(data.nodes.filter((n) => n.fiat).map((n) => n.id))
   const rfNodes: Node<NodeData>[] = data.nodes
     .filter((n) => kept.has(n.id))
-    .map((n) => ({ id: n.id, type: n.kind, position: { x: 0, y: 0 }, data: { ...n, amount: data.amount } }))
+    .map((n) => ({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n, amount: data.amount } }))
   const rfEdges: Edge[] = candidate
     .filter((e) => kept.has(e.from) && kept.has(e.to))
-    .map((e: PathEdge) => ({
-      id: `${e.from}->${e.to}`,
-      source: e.from,
-      target: e.to,
-      label: e.kind === 'transfer' && e.ratio_source != null ? `${e.ratio_source}:${e.ratio_dest}` : undefined,
-      animated: e.kind === 'transfer',
-      style: { stroke: e.kind === 'earn' ? '#cbd5e1' : '#94a3b8', strokeWidth: 1.2 },
-      labelStyle: { fontSize: 9, fill: '#475569' },
-      labelBgStyle: { fill: '#fff', fillOpacity: 0.85 },
-    }))
+    .map((e: PathEdge) => {
+      // A sale edge is a buy: fiat → loyalty currency. ratio_source is cash in
+      // minor units, so label it as a price ($X/1k) and style it distinctly.
+      const sale = fiatIds.has(e.from)
+      const price =
+        sale && e.ratio_source != null && e.ratio_dest
+          ? `$${((e.ratio_source * 10) / e.ratio_dest).toFixed(2)}/1k`
+          : undefined
+      return {
+        id: `${e.from}->${e.to}`,
+        source: e.from,
+        target: e.to,
+        label: sale ? price : e.kind === 'transfer' && e.ratio_source != null ? `${e.ratio_source}:${e.ratio_dest}` : undefined,
+        animated: e.kind === 'transfer',
+        style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? '#cbd5e1' : '#94a3b8', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
+        labelStyle: { fontSize: 9, fill: sale ? '#047857' : '#475569' },
+        labelBgStyle: { fill: '#fff', fillOpacity: 0.85 },
+      }
+    })
   return { nodes: layout(rfNodes, rfEdges), edges: rfEdges }
 }
 
@@ -285,7 +319,7 @@ export function Points(props: PointsProps) {
     return [...by.values()].sort((a, b) => a.issuer.localeCompare(b.issuer))
   }, [data])
   const curOptions = useMemo(
-    () => (data?.nodes ?? []).filter((n) => n.kind === 'currency').sort((a, b) => (a.multiplier ?? 99) - (b.multiplier ?? 99)),
+    () => (data?.nodes ?? []).filter((n) => n.kind === 'currency' && !n.fiat).sort((a, b) => (a.multiplier ?? 99) - (b.multiplier ?? 99)),
     [data],
   )
   const filterCount = filters.selectedCards.size + filters.selectedCurrencies.size

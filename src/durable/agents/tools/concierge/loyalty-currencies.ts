@@ -26,16 +26,21 @@ export async function listLoyaltyCurrencies(kb: KbHttp): Promise<LoyaltyCurrency
   for (let i = 0; i < slugs.length; i += CONC) {
     const batch = slugs.slice(i, i + CONC)
     const got = await Promise.all(
-      batch.map(async (slug): Promise<LoyaltyCurrency> => {
+      batch.map(async (slug): Promise<LoyaltyCurrency | null> => {
         try {
-          const n = (await kb.get(slug)) as { display_name?: string | null }
+          const n = (await kb.get(slug)) as {
+            display_name?: string | null
+            attrs?: Record<string, unknown> | null
+          }
+          // Fiat money (USD, INR, …) lives under currency/ but is never a target.
+          if (n?.attrs?.fiat === true) return null
           return { slug, name: n?.display_name ?? prettySlug(slug) }
         } catch {
           return { slug, name: prettySlug(slug) }
         }
       }),
     )
-    out.push(...got)
+    out.push(...got.filter((c): c is LoyaltyCurrency => c !== null))
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }

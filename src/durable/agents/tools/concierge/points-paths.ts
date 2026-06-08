@@ -28,8 +28,13 @@ export type PathNode = {
   // The cheapest route to the target as a slug sequence (source → … → target).
   // Lets the UI draw a clean "best routes only" tree instead of every edge.
   path?: string[]
+  // True for fiat money (USD, INR, …) sources — buying points is a TRANSFERS_TO
+  // edge from a fiat currency, so the multiplier here is a CASH price (source
+  // currency's minor units per 1 target point), not a points ratio.
+  fiat?: boolean
   // Set by the "my accounts" step: this card/currency matches an account the
-  // user already holds in their ledger (matched via beancountName).
+  // user already holds in their ledger (matched via beancountName). Fiat nodes
+  // are always held — the user can always pay cash.
   held?: boolean
   // The user's current balance in this node's ledger account (when held).
   // `balance` is the decimal amount, `balanceCurrency` its commodity code.
@@ -61,6 +66,7 @@ const beancount = (n: Node | null): string | null => {
   const v = n?.attrs?.beancountName
   return typeof v === 'string' ? v : null
 }
+const isFiat = (n: Node | null): boolean => n?.attrs?.fiat === true
 const prettySlug = (slug: string) =>
   slug
     .replace(/^[a-z]+\//, '')
@@ -181,15 +187,20 @@ export async function buildPointsPaths(
   })
   for (const c of currencies) {
     if (c === target) continue
+    const node = fetched.get(c) ?? null
     const cell = reach.get(c)
+    const fiat = isFiat(node)
     nodes.push({
       id: c,
       kind: 'currency',
       display: nameOf(c),
-      beancountName: beancount(fetched.get(c) ?? null),
+      beancountName: beancount(node),
       multiplier: cell?.multiplier,
       hops: cell?.hops,
       path: cell?.path,
+      fiat,
+      // Fiat is always "owned" — you can always pay cash to buy in.
+      held: fiat ? true : undefined,
     })
   }
   // a card's value = the cheapest value of the currency it earns into
@@ -251,6 +262,7 @@ export function applyHoldings(
   balances: ReadonlyArray<BalanceRow>,
 ): void {
   for (const node of result.nodes) {
+    if (node.fiat) continue // fiat is conceptually held; never a ledger balance
     if (!node.beancountName) continue
     const held = accounts.some((a) => matchAccount(node, a.account))
     const rows = balances.filter((b) => matchAccount(node, b.account))
