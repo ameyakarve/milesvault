@@ -403,7 +403,24 @@ export function Points(props: PointsProps) {
         ) : status === 'error' ? (
           <div className="flex h-full items-center justify-center text-sm text-red-600">{props.error ?? 'Something went wrong.'}</div>
         ) : (
-          <ReactFlow nodes={flow.nodes} edges={flow.edges} nodeTypes={nodeTypes} fitView proOptions={{ hideAttribution: true }} minZoom={0.2} nodesDraggable={false} nodesConnectable={false}>
+          <ReactFlow
+            nodes={flow.nodes}
+            edges={flow.edges}
+            nodeTypes={nodeTypes}
+            fitView
+            proOptions={{ hideAttribution: true }}
+            minZoom={0.2}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            // Fully non-interactive nodes so a one-finger drag that lands on a
+            // node still pans the pane (on mobile the fit graph covers the
+            // screen with nodes, leaving almost no empty pane to grab).
+            elementsSelectable={false}
+            nodesFocusable={false}
+            edgesFocusable={false}
+            panOnDrag
+            zoomOnPinch
+          >
             <Background color="#e2e8f0" gap={20} />
             <Controls showInteractive={false} />
           </ReactFlow>
