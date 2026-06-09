@@ -44,6 +44,17 @@ export function EditorShell() {
   }))
   const filterActive = filter.account != null || filter.date != null
 
+  // Deep links: /editor?tab=journal&account=Assets:… opens the Journal
+  // pre-filtered to that account — the Vault's provenance links. Date filter
+  // drops so the account's full history shows. Runs once after hydration
+  // (nothing is dirty or streaming yet, so switching tabs directly is safe).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const account = p.get('account')
+    if (p.get('tab') === 'journal' || account) setTab('journal')
+    if (account) setFilter({ account, date: null })
+  }, [])
+
   const [filteredRows, setFilteredRows] = useState<EntryRow[]>([])
   const [filteredBuffer, setFilteredBuffer] = useState('')
   const [filteredCursor, setFilteredCursor] = useState<JournalCursor | null>(null)

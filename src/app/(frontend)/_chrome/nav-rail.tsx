@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { type Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { ChatCircleDots, NotePencil } from '@phosphor-icons/react/dist/ssr'
-import { Map, Menu } from 'lucide-react'
+import { Inbox, Map, Menu, Vault } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -16,11 +16,14 @@ const PLAN_ROUTES = ['/explore', '/points', '/status-match']
 type NavItem =
   | { kind: 'link'; href: string; label: string; Icon: PhosphorIcon }
   | { kind: 'plan'; href: string; label: string }
+  | { kind: 'lucide'; href: string; label: string; LIcon: React.FC<{ size?: number; className?: string }> }
 
 const ITEMS: NavItem[] = [
-  { kind: 'link', href: '/editor', label: 'Editor', Icon: NotePencil },
-  { kind: 'link', href: '/concierge', label: 'Concierge', Icon: ChatCircleDots },
+  { kind: 'lucide', href: '/vault', label: 'Vault', LIcon: Vault },
   { kind: 'plan', href: '/explore', label: 'Plan' },
+  { kind: 'lucide', href: '/inbox', label: 'Inbox', LIcon: Inbox },
+  { kind: 'link', href: '/editor', label: 'Journal', Icon: NotePencil },
+  { kind: 'link', href: '/concierge', label: 'Concierge', Icon: ChatCircleDots },
 ]
 
 function Logo() {
@@ -59,6 +62,20 @@ export function NavRail() {
                   className={iconCls}
                 >
                   <Map size={24} />
+                </Link>
+              )
+            }
+            if (item.kind === 'lucide') {
+              const { href, label, LIcon } = item
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-label={label}
+                  title={label}
+                  className={iconCls}
+                >
+                  <LIcon size={24} />
                 </Link>
               )
             }
@@ -114,6 +131,20 @@ export function NavRail() {
                   >
                     <Map size={20} />
                     {item.label}
+                  </Link>
+                )
+              }
+              if (item.kind === 'lucide') {
+                const { href, label, LIcon } = item
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setOpen(false)}
+                    className={linkCls}
+                  >
+                    <LIcon size={20} />
+                    {label}
                   </Link>
                 )
               }
