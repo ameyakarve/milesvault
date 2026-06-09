@@ -4,13 +4,16 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
+  BaseEdge,
   Controls,
   Panel,
   Handle,
   Position,
+  MarkerType,
   type Node,
   type Edge,
   type NodeProps,
+  type EdgeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import ELK from 'elkjs/lib/elk.bundled.js'
@@ -54,6 +57,8 @@ function allianceOf(slug?: string): AllianceKey | null {
 }
 
 // ── ELK layout ───────────────────────────────────────────────────────────────
+type ElkPt = { x: number; y: number }
+type ElkRoutedEdge = { sections?: { startPoint: ElkPt; endPoint: ElkPt; bendPoints?: ElkPt[] }[] }
 const W = 210
 const H = 64
 const elk = new ELK()
@@ -95,23 +100,24 @@ async function computeFlow(data: StatusMatchResult): Promise<{ nodes: Node<NodeD
   }))
   const rfEdges: Edge[] = data.edges.map((e: SmEdge) => {
     const confers = e.matchKind === 'confers'
-    const stroke = confers ? '#cbd5e1' : edgeColorFor(nodeById.get(e.to))
+    const stroke = confers ? '#94a3b8' : edgeColorFor(nodeById.get(e.to))
     return {
       id: `${e.from}->${e.to}`,
       source: e.from,
       target: e.to,
-      type: 'smoothstep',
+      type: 'routed',
       animated: false,
+      markerEnd: { type: MarkerType.ArrowClosed, color: stroke, width: 16, height: 16 },
       style: {
         stroke,
-        strokeWidth: 1.5,
-        strokeOpacity: 0.9,
+        strokeWidth: 1.6,
         // paid matches dashed, conferral dotted, free solid.
         strokeDasharray: confers ? '2 3' : e.paid ? '6 4' : undefined,
       },
     }
   })
   let positions = new Map<string, { x: number; y: number }>()
+  const routes = new Map<string, { x: number; y: number }[]>()
   try {
     const res = await elk.layout({
       id: 'root',
@@ -120,14 +126,31 @@ async function computeFlow(data: StatusMatchResult): Promise<{ nodes: Node<NodeD
       edges: rfEdges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
     })
     positions = new Map((res.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0 }]))
+    for (const e of res.edges ?? []) {
+      const sec = (e as ElkRoutedEdge).sections?.[0]
+      if (sec) routes.set(e.id, [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint])
+    }
   } catch {
     /* fall back to origin if layout fails */
   }
   return {
     nodes: rfNodes.map((n) => ({ ...n, position: positions.get(n.id) ?? { x: 0, y: 0 } })),
-    edges: rfEdges,
+    edges: rfEdges.map((e) => ({ ...e, data: { points: routes.get(e.id) } })),
   }
 }
+
+// Draw each edge along ELK's computed orthogonal route (so parallel edges sit in
+// their own lanes instead of overlapping); arrowhead shows the match direction.
+function RoutedEdge({ id, data, markerEnd, style, sourceX, sourceY, targetX, targetY }: EdgeProps) {
+  const pts = (data?.points as { x: number; y: number }[] | undefined) ?? []
+  const path =
+    pts.length >= 2
+      ? `M${pts[0].x},${pts[0].y}` + pts.slice(1).map((p) => `L${p.x},${p.y}`).join('')
+      : `M${sourceX},${sourceY}L${targetX},${targetY}`
+  return <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
+}
+
+const edgeTypes = { routed: RoutedEdge }
 
 // ── nodes ────────────────────────────────────────────────────────────────────
 function StatusNode({ data }: NodeProps<Node<NodeData>>) {
@@ -161,8 +184,8 @@ function StatusNode({ data }: NodeProps<Node<NodeData>>) {
           </span>
         ) : null}
       </div>
-      <Handle type="target" position={Position.Top} className="!h-1.5 !w-1.5 !bg-slate-400" />
-      <Handle type="source" position={Position.Bottom} className="!h-1.5 !w-1.5 !bg-slate-400" />
+      <Handle type="target" position={Position.Top} className="!h-px !w-px !min-w-0 !border-0 !bg-transparent !opacity-0" />
+      <Handle type="source" position={Position.Bottom} className="!h-px !w-px !min-w-0 !border-0 !bg-transparent !opacity-0" />
     </div>
   )
 }
@@ -182,8 +205,8 @@ function AllianceNode({ data }: NodeProps<Node<NodeData>>) {
       <div className="text-[10px]" style={{ color: pal.text, opacity: 0.75 }}>
         alliance status
       </div>
-      <Handle type="target" position={Position.Top} className="!h-1.5 !w-1.5 !bg-slate-400" />
-      <Handle type="source" position={Position.Bottom} className="!h-1.5 !w-1.5 !bg-slate-400" />
+      <Handle type="target" position={Position.Top} className="!h-px !w-px !min-w-0 !border-0 !bg-transparent !opacity-0" />
+      <Handle type="source" position={Position.Bottom} className="!h-px !w-px !min-w-0 !border-0 !bg-transparent !opacity-0" />
     </div>
   )
 }
@@ -362,6 +385,7 @@ export function StatusMatch(props: SmProps) {
             nodes={flow.nodes}
             edges={flow.edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
             minZoom={0.1}
