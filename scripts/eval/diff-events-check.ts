@@ -63,10 +63,33 @@ const DUP = OLD + '\n' + OLD.split('\n\n')[0] + '\n'
 const dup = diff(entryTexts(DUP), entryTexts(OLD))
 console.log('dedup one   →', dup.added.length, 'added,', dup.removed.length, 'removed (want 0/1)')
 
+// Case 5: full lifecycle — events from successive saves fold back to the
+// final state (the same fold verify_replay_parity uses).
+type Ev = { kind: 'posted' | 'corrected'; text: string }
+const log: Ev[] = []
+const save = (oldBuf: string, newBuf: string) => {
+  const d = diff(entryTexts(oldBuf), entryTexts(newBuf))
+  log.push(...d.removed.map((text): Ev => ({ kind: 'corrected', text })))
+  log.push(...d.added.map((text): Ev => ({ kind: 'posted', text })))
+}
+save('', OLD) // bootstrap-equivalent: everything posted
+save(OLD, NEW_ADD)
+save(NEW_ADD, NEW_ADD.replace('4.50 USD\n  Expenses:Food  4.50', '5.00 USD\n  Expenses:Food  5.00'))
+const fold = new Map<string, number>()
+for (const e of log) fold.set(e.text, (fold.get(e.text) ?? 0) + (e.kind === 'posted' ? 1 : -1))
+const FINAL = NEW_ADD.replace('4.50 USD\n  Expenses:Food  4.50', '5.00 USD\n  Expenses:Food  5.00')
+const finalCounts = new Map<string, number>()
+for (const t of entryTexts(FINAL)) finalCounts.set(t, (finalCounts.get(t) ?? 0) + 1)
+const foldMatches =
+  [...fold].every(([t, n]) => n === (finalCounts.get(t) ?? 0)) &&
+  [...finalCounts].every(([t, n]) => n === (fold.get(t) ?? 0))
+console.log('fold≡final  →', foldMatches, '(want true)')
+
 const ok =
   noop.added.length === 0 && noop.removed.length === 0 &&
   add.added.length === 1 && add.removed.length === 0 &&
   mod.added.length === 1 && mod.removed.length === 1 &&
-  dup.added.length === 0 && dup.removed.length === 1
+  dup.added.length === 0 && dup.removed.length === 1 &&
+  foldMatches
 console.log(ok ? 'ALL OK' : 'MISMATCH')
 process.exit(ok ? 0 : 1)

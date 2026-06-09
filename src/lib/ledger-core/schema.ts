@@ -268,6 +268,14 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     label: 'idx_event_log_kind_seq',
     sql: 'CREATE INDEX IF NOT EXISTS idx_event_log_kind_seq ON event_log(ledger_id, kind, seq)',
   },
+  // Small key/value store for projector bookkeeping (projector_version, …).
+  {
+    label: 'meta',
+    sql: `CREATE TABLE IF NOT EXISTS meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    ) STRICT`,
+  },
   ...RAW_TEXT_TABLES.map((table) => ({
     label: `drop_raw_text_${table}`,
     sql: `ALTER TABLE ${table} DROP COLUMN raw_text`,
