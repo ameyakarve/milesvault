@@ -70,6 +70,9 @@ shape:
 - One-time bootstrap for existing (staging-only) data: synthesize one
   `posted` event per existing transaction/directive in date order, then
   rebuild — the log is complete from day one, no parallel legacy path.
+  The bootstrap **clears and re-synthesizes** the log: any step-1 dual-write
+  events are scaffolding for validating the emission path, not preserved
+  history (acceptable on staging-only data; never again after bootstrap).
 
 ## 5. Vault home v1 (Browse)
 

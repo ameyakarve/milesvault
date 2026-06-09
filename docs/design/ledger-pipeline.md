@@ -222,13 +222,15 @@ per-ledger counter is simpler, sortable, and is itself the ordering authority.
 | `captured` | `source` (`upload\|paste\|email\|invoice`), `artifact` (R2 key or null), `filename?`, `mime?`, `channel?` (email from/subject/message-id) | — |
 | `extracted` | `extractor` ({agent, model}), `confidence` (0–1), `proposal` (`{beancount}` or `{rows}`), `notes?` | the `captured` |
 | `posted` | `entries` (canonical rendered beancount text), `route` (`auto\|confirmed`), `txn_hashes?` | the `extracted`, or — for manual entry |
-| `corrected` | `entries` (reversing beancount text), `reason` | the `posted` being corrected |
+| `corrected` | `removed` (the original entry text being corrected), `reason` | the `posted` being corrected |
 | `dismissed` | `reason?` | the `captured` or `extracted` |
 | `reconciled` | `account`, `through_date`, `matched` (seqs) | the `posted`s matched |
 
 `posted.entries` embeds the fully rendered text rather than referencing any
 mutable state — a projector must never need anything outside the log to
-rebuild (§13.4).
+rebuild (§13.4). `corrected` stores the *original* entry being corrected, not
+a rendered reversal: the original is the lossless fact, the reversal is
+derivable by the projector; the reverse is not true.
 
 ### 13.3 Versioning rule
 

@@ -58,6 +58,8 @@ const DATA_TABLES = [
   'directives_event',
   'balance_totals',
   'daily_balances',
+  // The event log resets only on a full admin clear(); rebuilds never touch it.
+  'event_log',
 ] as const
 
 export type JournalGetResponse = { text: string }
@@ -132,9 +134,18 @@ export type EntryRef2 = {
   expected_updated_at: number
 }
 
+// Who/what caused a write, recorded on the events it emits (ledger-pipeline.md
+// §13.1). Defaults to a user-confirmed edit when omitted.
+export type EventCtx = {
+  actor: 'user' | 'ai' | 'email'
+  actor_detail?: string | null
+  route: 'auto' | 'confirmed'
+}
+
 export type ReplaceBufferRequest = {
   knownIds: EntryRef2[]
   buffer: string
+  event_ctx?: EventCtx
 }
 
 export type ReplaceBufferConflict = {
@@ -981,7 +992,15 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       if (ua !== null) knownIds.push({ kind: 'txn', id, expected_updated_at: ua })
     }
 
-    const result = await this.replaceBuffer({ knownIds, buffer: text })
+    const result = await this.replaceBuffer({
+      knownIds,
+      buffer: text,
+      event_ctx: {
+        actor: 'ai',
+        actor_detail: `proposal:${opts.proposal_id}`,
+        route: 'confirmed',
+      },
+    })
     if ('ok' in result && result.ok === false) {
       if (result.error === 'occ_conflict') {
         return {
@@ -1151,7 +1170,68 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         txnHashes.push(await transactionInputHash(t))
       }
 
-      // 5. Atomic: DELETE the knownIds, INSERT parsed entries.
+      // 4b. Event diff (F1 step 1 dual-write, f1-implementation.md §6):
+      // render the entries this request replaces and the entries it inserts
+      // in the same canonical serialization, multiset-diff on the text, and
+      // reduce to corrected (removed) / posted (added) events. Entries with
+      // identical text on both sides emit nothing, so a no-op Cmd+S stays
+      // silent in the log.
+      const ctx: EventCtx = req.event_ctx ?? { actor: 'user', route: 'confirmed' }
+      type DiffEntry = { text: string; txn_hash: string | null }
+      const oldEntries: DiffEntry[] = []
+      const dirInputsByKind = new Map<DirectiveInput['kind'], Map<number, DirectiveInput>>()
+      for (const ref of req.knownIds) {
+        if (ref.kind === 'txn') {
+          const e = this.readTxnEntry(ref.id)
+          if (!e) continue
+          const hashRow = this.db
+            .exec<{ hash: string | null }>('SELECT hash FROM transactions WHERE id = ?', ref.id)
+            .toArray()[0]
+          oldEntries.push({
+            text: serializeJournal([entryTxnToInput(e)], [], { descending: false }).trimEnd(),
+            txn_hash: hashRow?.hash ?? null,
+          })
+        } else {
+          let m = dirInputsByKind.get(ref.kind)
+          if (!m) {
+            m = new Map(this.readDirectivesByKind(ref.kind).map((r) => [r.id, r.input]))
+            dirInputsByKind.set(ref.kind, m)
+          }
+          const input = m.get(ref.id)
+          if (!input) continue
+          oldEntries.push({
+            text: serializeJournal([], [input], { descending: false }).trimEnd(),
+            txn_hash: null,
+          })
+        }
+      }
+      const newEntries: DiffEntry[] = [
+        ...parsed.transactions.map((t, i) => ({
+          text: serializeJournal([t], [], { descending: false }).trimEnd(),
+          txn_hash: txnHashes[i]!,
+        })),
+        ...parsed.directives.map(
+          (d): DiffEntry => ({
+            text: serializeJournal([], [d], { descending: false }).trimEnd(),
+            txn_hash: null,
+          }),
+        ),
+      ]
+      const oldByText = new Map<string, DiffEntry[]>()
+      for (const e of oldEntries) {
+        const bucket = oldByText.get(e.text)
+        if (bucket) bucket.push(e)
+        else oldByText.set(e.text, [e])
+      }
+      const added: DiffEntry[] = []
+      for (const e of newEntries) {
+        const bucket = oldByText.get(e.text)
+        if (bucket && bucket.length > 0) bucket.pop()
+        else added.push(e)
+      }
+      const removed = [...oldByText.values()].flat()
+
+      // 5. Atomic: DELETE the knownIds, INSERT parsed entries, append events.
       const now = Date.now()
       this.ctx.storage.transactionSync(() => {
         for (const ref of req.knownIds) {
@@ -1163,9 +1243,62 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
           this.insertTxn(t, txnHashes[i]!, now),
         )
         for (const d of parsed.directives) this.insertDirective(d, now)
+        this.appendEventsSync(
+          now,
+          [
+            ...removed.map((e) => ({
+              kind: 'corrected' as const,
+              payload: {
+                removed: e.text,
+                reason: 'journal-edit',
+                ...(e.txn_hash ? { txn_hash: e.txn_hash } : {}),
+              },
+            })),
+            ...added.map((e) => ({
+              kind: 'posted' as const,
+              payload: {
+                entries: e.text,
+                route: ctx.route,
+                ...(e.txn_hash ? { txn_hash: e.txn_hash } : {}),
+              },
+            })),
+          ],
+          ctx,
+        )
       })
 
       return { ok: true, rows: this.listEntriesSync() }
+    })
+  }
+
+  // Append events to event_log; call inside the same transactionSync as the
+  // table writes so log and projection commit together. F1 step-1 dual-write:
+  // the log records every commit, but projections are still fed by the direct
+  // table writes until the F1 cutover (f1-implementation.md §6 step 3). The
+  // DO is single-threaded, so MAX(seq)+1 is race-free.
+  private appendEventsSync(
+    now: number,
+    events: Array<{ kind: 'posted' | 'corrected'; payload: Record<string, unknown> }>,
+    ctx: EventCtx,
+  ): void {
+    if (events.length === 0) return
+    const base =
+      this.db
+        .exec<{ s: number }>(
+          `SELECT COALESCE(MAX(seq), 0) AS s FROM event_log WHERE ledger_id = 'main'`,
+        )
+        .toArray()[0]?.s ?? 0
+    events.forEach((e, i) => {
+      this.db.exec(
+        `INSERT INTO event_log (ledger_id, seq, kind, v, actor, actor_detail, refs, payload, created_at)
+         VALUES ('main', ?, ?, 1, ?, ?, '[]', ?, ?)`,
+        base + 1 + i,
+        e.kind,
+        ctx.actor,
+        ctx.actor_detail ?? null,
+        JSON.stringify(e.payload),
+        now,
+      )
     })
   }
 

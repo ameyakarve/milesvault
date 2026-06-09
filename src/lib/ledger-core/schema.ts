@@ -246,6 +246,28 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     label: 'drop_account_recents',
     sql: 'DROP TABLE IF EXISTS account_recents',
   },
+  // Append-only event log — the F1 spine (ledger-pipeline.md §13.1).
+  // (ledger_id, seq) is the event's identity and the replay order; payload is
+  // JSON shaped per (kind, v). Events are never updated or rewritten.
+  {
+    label: 'event_log',
+    sql: `CREATE TABLE IF NOT EXISTS event_log (
+      ledger_id    TEXT    NOT NULL DEFAULT 'main',
+      seq          INTEGER NOT NULL,
+      kind         TEXT    NOT NULL,
+      v            INTEGER NOT NULL,
+      actor        TEXT    NOT NULL,
+      actor_detail TEXT,
+      refs         TEXT    NOT NULL DEFAULT '[]',
+      payload      TEXT    NOT NULL,
+      created_at   INTEGER NOT NULL,
+      PRIMARY KEY (ledger_id, seq)
+    ) STRICT`,
+  },
+  {
+    label: 'idx_event_log_kind_seq',
+    sql: 'CREATE INDEX IF NOT EXISTS idx_event_log_kind_seq ON event_log(ledger_id, kind, seq)',
+  },
   ...RAW_TEXT_TABLES.map((table) => ({
     label: `drop_raw_text_${table}`,
     sql: `ALTER TABLE ${table} DROP COLUMN raw_text`,
