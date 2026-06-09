@@ -52,6 +52,30 @@ const prettySlug = (slug: string) =>
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
     .join(' ')
 
+// The match-statuses RPC result: the searchable universe plus the tier slugs
+// the user currently holds (from `event "status:<program>" "<tier>"` ledger
+// directives — see experience.md §10; empty when none are recorded).
+export type MatchStatusesResult = { statuses: MatchStatus[]; held: string[] }
+
+// Reduce `status:*` event directive rows (ordered oldest→newest) to the
+// user's current tier slugs: latest value per program wins, empty value
+// clears, and only values naming a real status-tier in `universe` survive.
+// Values may be bare (`united-premier-gold`) or full (`status-tier/...`).
+export function heldStatusSlugs(
+  rows: ReadonlyArray<{ name: string; value: string }>,
+  universe: ReadonlyArray<MatchStatus>,
+): string[] {
+  const latest = new Map<string, string>()
+  for (const r of rows) latest.set(r.name, r.value.trim())
+  const known = new Set(universe.filter((s) => s.kind === 'status-tier').map((s) => s.slug))
+  const held: string[] = []
+  for (const v of latest.values()) {
+    const slug = known.has(v) ? v : known.has(`status-tier/${v}`) ? `status-tier/${v}` : null
+    if (slug && !held.includes(slug)) held.push(slug)
+  }
+  return held
+}
+
 // The searchable from/to universe: every status-tier + alliance-tier.
 export async function listMatchStatuses(kb: KbHttp): Promise<MatchStatus[]> {
   const out: MatchStatus[] = []

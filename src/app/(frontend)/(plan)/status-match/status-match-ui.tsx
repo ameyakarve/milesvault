@@ -263,13 +263,17 @@ function StatusCombobox({
   statuses,
   placeholder,
   allowAny,
+  held,
 }: {
   value: string
   onChange: (slug: string) => void
   statuses: MatchStatus[]
   placeholder: string
   allowAny?: boolean
+  // Tier slugs the user holds (ledger `status:*` events) — tagged in the list.
+  held?: string[]
 }) {
+  const heldSet = useMemo(() => new Set(held ?? []), [held])
   const [open, setOpen] = useState(false)
   const label =
     statuses.find((s) => s.slug === value)?.name ?? (value ? value.replace(/^[a-z-]+\//, '') : placeholder)
@@ -308,7 +312,9 @@ function StatusCombobox({
                 >
                   <Check className={cn('size-4', value === s.slug ? 'opacity-100' : 'opacity-0')} />
                   <span className="truncate">{s.name}</span>
-                  {s.kind === 'alliance-tier' ? (
+                  {heldSet.has(s.slug) ? (
+                    <span className="ml-auto text-[10px] text-emerald-600">you hold</span>
+                  ) : s.kind === 'alliance-tier' ? (
                     <span className="ml-auto text-[10px] text-amber-600">alliance</span>
                   ) : null}
                 </CommandItem>
@@ -328,13 +334,15 @@ export type SmProps = {
   onFrom: (slug: string) => void
   onTo: (slug: string) => void
   statuses: MatchStatus[]
+  // Tier slugs the user holds (ledger `status:*` events); may be empty.
+  held?: string[]
   status: SmStatus
   data?: StatusMatchResult
   error?: string
 }
 
 export function StatusMatch(props: SmProps) {
-  const { from, to, onFrom, onTo, statuses, status, data, error } = props
+  const { from, to, onFrom, onTo, statuses, held, status, data, error } = props
   const [flow, setFlow] = useState<{ nodes: Node<NodeData>[]; edges: Edge[] }>({ nodes: [], edges: [] })
   useEffect(() => {
     if (!data?.found) {
@@ -350,7 +358,13 @@ export function StatusMatch(props: SmProps) {
     }
   }, [data])
   // You can only match FROM a programme status you hold, not an alliance tier.
-  const fromStatuses = useMemo(() => statuses.filter((s) => s.kind !== 'alliance-tier'), [statuses])
+  // The user's held tiers (when recorded in the ledger) sort to the top.
+  const fromStatuses = useMemo(() => {
+    const tiers = statuses.filter((s) => s.kind !== 'alliance-tier')
+    if (!held?.length) return tiers
+    const heldSet = new Set(held)
+    return [...tiers].sort((a, b) => Number(heldSet.has(b.slug)) - Number(heldSet.has(a.slug)))
+  }, [statuses, held])
   const matchCount = data?.found ? data.edges.filter((e) => e.matchKind !== 'confers').length : 0
 
   return (
@@ -358,7 +372,7 @@ export function StatusMatch(props: SmProps) {
       <div className="flex flex-wrap items-center gap-2 border-b bg-white/70 px-3 py-2">
         <span className="text-sm font-semibold text-slate-900">Status Match Merry-Go-Round</span>
         <div className="ml-2 flex items-center gap-2">
-          <StatusCombobox value={from} onChange={onFrom} statuses={fromStatuses} placeholder="From status…" />
+          <StatusCombobox value={from} onChange={onFrom} statuses={fromStatuses} placeholder="From status…" held={held} />
           <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
           <StatusCombobox value={to} onChange={onTo} statuses={statuses} placeholder="To status (optional)…" allowAny />
         </div>

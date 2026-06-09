@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { StatusMatch, type SmStatus } from './status-match-ui'
 import type { StatusMatchResult, MatchStatus } from '@/durable/agents/tools/concierge/status-match-paths'
 
@@ -8,21 +8,40 @@ export function StatusMatchView() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [statuses, setStatuses] = useState<MatchStatus[]>([])
+  const [held, setHeld] = useState<string[]>([])
   const [result, setResult] = useState<{ key: string; data: StatusMatchResult } | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [ready, setReady] = useState(false)
 
-  // Status universe for the from/to comboboxes — loaded once.
+  // Status universe for the from/to comboboxes (+ the user's held tiers) —
+  // loaded once.
   useEffect(() => {
     let cancelled = false
     fetch('/api/concierge/match-statuses')
-      .then((r) => (r.ok ? (r.json() as Promise<{ statuses?: MatchStatus[] }>) : Promise.reject(new Error(String(r.status)))))
-      .then((d) => !cancelled && setStatuses(d.statuses ?? []))
+      .then((r) =>
+        r.ok
+          ? (r.json() as Promise<{ statuses?: MatchStatus[]; held?: string[] }>)
+          : Promise.reject(new Error(String(r.status))),
+      )
+      .then((d) => {
+        if (cancelled) return
+        setStatuses(d.statuses ?? [])
+        setHeld(d.held ?? [])
+      })
       .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [])
+
+  // Seed From with the user's first held tier — once, and only when neither
+  // the URL nor the user has picked one. The blank picker stays available.
+  const seededRef = useRef(false)
+  useEffect(() => {
+    if (!ready || seededRef.current || held.length === 0) return
+    seededRef.current = true
+    if (!from) setFrom(held[0])
+  }, [ready, held, from])
 
   // URL: read once on mount, then keep ?from=&to= in sync.
   useEffect(() => {
@@ -77,6 +96,7 @@ export function StatusMatchView() {
       onFrom={setFrom}
       onTo={setTo}
       statuses={statuses}
+      held={held}
       status={status}
       data={result?.data}
       error={error}

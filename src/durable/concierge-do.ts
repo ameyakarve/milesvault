@@ -18,8 +18,9 @@ import {
   listLoyaltyCurrencies,
   type LoyaltyCurrency,
   listMatchStatuses,
+  heldStatusSlugs,
   buildStatusMatchPaths,
-  type MatchStatus,
+  type MatchStatusesResult,
   type StatusMatchResult,
   ensureRouteCache,
   fetchKbAgentsMd,
@@ -201,10 +202,21 @@ export class ConciergeDO
   }
 
   // The searchable status universe (status-tiers + alliance-tiers) for the
-  // merry-go-round from/to comboboxes. RPC for /api/concierge/match-statuses.
-  async matchStatuses(): Promise<MatchStatus[]> {
+  // merry-go-round from/to comboboxes, plus the tier slugs the user holds
+  // (from `status:*` event directives, newest per program; empty when the
+  // ledger has none). RPC for /api/concierge/match-statuses.
+  async matchStatuses(): Promise<MatchStatusesResult> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    return listMatchStatuses(kbHttp)
+    const [statuses, events] = await Promise.all([
+      listMatchStatuses(kbHttp),
+      this.ledgerStub()
+        .query_sql(
+          "SELECT name, value FROM directives_event WHERE name LIKE 'status:%' ORDER BY date ASC, id ASC",
+        )
+        .catch((): null => null),
+    ])
+    const rows = (events?.rows ?? []) as Array<{ name: string; value: string }>
+    return { statuses, held: heldStatusSlugs(rows, statuses) }
   }
 
   // Graph-walker tool surface — layered. Simple one-hop graph lookups

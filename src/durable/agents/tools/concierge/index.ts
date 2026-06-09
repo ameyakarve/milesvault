@@ -30,8 +30,10 @@ export {
 export { listLoyaltyCurrencies, type LoyaltyCurrency } from './loyalty-currencies'
 export {
   listMatchStatuses,
+  heldStatusSlugs,
   buildStatusMatchPaths,
   type MatchStatus,
+  type MatchStatusesResult,
   type StatusMatchResult,
   type SmNode,
   type SmEdge,
