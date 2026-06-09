@@ -9,13 +9,12 @@ import {
   type SortKey,
   type Stops,
 } from './explore-ui'
-import type { AwardExploreResult } from '@/durable/agents/tools/concierge/award-explore'
-import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
+import type { AwardExploreResult, ExploreRow } from '@/durable/agents/tools/concierge/award-explore'
 import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
 
 const isIata = (s: string) => /^[A-Z]{3}$/.test(s)
 
-function primaryValue(row: AwardPlanRow, cabin: Cabin): number {
+function primaryValue(row: ExploreRow, cabin: Cabin): number {
   const c = row.cost[cabin]
   if (Array.isArray(c)) return c[0]
   const m = row.miles[cabin]
@@ -160,7 +159,7 @@ export function ExploreView() {
         return airlineMode === 'include' ? hit : !hit
       })
     }
-    const byCost = (a: AwardPlanRow, b: AwardPlanRow) => primaryValue(a, cabin) - primaryValue(b, cabin)
+    const byCost = (a: ExploreRow, b: ExploreRow) => primaryValue(a, cabin) - primaryValue(b, cabin)
     return [...r].sort((a, b) => {
       if (sort === 'stops') return a.stops - b.stops || byCost(a, b)
       if (sort === 'distance') return a.total_distance - b.total_distance || byCost(a, b)

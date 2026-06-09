@@ -8,8 +8,7 @@ import {
   type SortKey,
   type Stops,
 } from './explore-ui'
-import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
-import type { ExploreAirline } from '@/durable/agents/tools/concierge/award-explore'
+import type { ExploreAirline, ExploreRow } from '@/durable/agents/tools/concierge/award-explore'
 import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
 
 const CABINS: Cabin[] = ['economy', 'premium_economy', 'business', 'first']
@@ -24,9 +23,9 @@ function mk(
   mult: number | null,
   path: string[],
   ownMetal = false,
-): AwardPlanRow {
-  const miles = {} as AwardPlanRow['miles']
-  const cost = {} as AwardPlanRow['cost']
+): ExploreRow {
+  const miles = {} as ExploreRow['miles']
+  const cost = {} as ExploreRow['cost']
   for (const c of CABINS) {
     const m = milesBy[c] ?? null
     miles[c] = m
@@ -49,7 +48,7 @@ function mk(
   }
 }
 
-const ROWS: AwardPlanRow[] = [
+const ROWS: ExploreRow[] = [
   mk(
     'jal-mileage-bank',
     0,
@@ -199,7 +198,7 @@ const AIRPORTS: Record<string, [number, number]> = {
   HKG: [22.308, 113.918],
 }
 
-function primaryValue(row: AwardPlanRow, cabin: Cabin): number {
+function primaryValue(row: ExploreRow, cabin: Cabin): number {
   const c = row.cost[cabin]
   if (Array.isArray(c)) return c[0]
   const m = row.miles[cabin]

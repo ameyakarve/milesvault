@@ -29,7 +29,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
-import type { ExploreAirline } from '@/durable/agents/tools/concierge/award-explore'
+import type { ExploreAirline, ExploreRow, Afford } from '@/durable/agents/tools/concierge/award-explore'
 import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
 import type { MapPoint } from './flight-map'
 
@@ -107,7 +107,7 @@ function nameOf(slug: string, names: Names): string {
   return names[slug] ?? prettySlug(slug)
 }
 
-export const rowKey = (r: AwardPlanRow, i: number) => `${r.programme}|${r.stops}|${i}`
+export const rowKey = (r: ExploreRow, i: number) => `${r.programme}|${r.stops}|${i}`
 
 // Direct = green chip, one-stop = blue chip.
 const STOP_CHIP = (stops: number) =>
@@ -143,6 +143,58 @@ function CostChip({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
     >
       {body}
     </Badge>
+  )
+}
+
+// Affordability chip shown in the results table (no-source branch only).
+// tier 'hold'     → emerald chip: "You have the points"
+// tier 'transfer' → sky chip:     "Via <src display name>"
+function AffordChip({ afford, names }: { afford: Afford; names: Names }) {
+  if (afford.tier === 'hold') {
+    return (
+      <Badge className="border-transparent text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+        You have the points
+      </Badge>
+    )
+  }
+  return (
+    <Badge className="border-transparent text-[10px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200">
+      Via {nameOf(afford.src, names)}
+    </Badge>
+  )
+}
+
+// Expanded-row detail card: concise have vs need + transfer path for the
+// selected cabin when afford data exists (no-source branch only).
+function AffordDetail({ afford, names }: { afford: Afford; names: Names }) {
+  const srcName = nameOf(afford.src, names)
+  const have = fmt(Math.floor(afford.have))
+  const need = fmt(afford.need)
+  if (afford.tier === 'hold') {
+    return (
+      <span>
+        You hold <strong>{have}</strong> {srcName} — {need} needed for this cabin.
+      </span>
+    )
+  }
+  // Transfer path: [src, …, programme_currency]
+  const segs = afford.path.map((s) => nameOf(s, names))
+  return (
+    <span>
+      Transfer {need} from {srcName} (you hold {have}).
+      {segs.length > 1 ? (
+        <>
+          {' '}
+          Path:{' '}
+          {segs.map((s, i) => (
+            <span key={i}>
+              {i > 0 ? <span className="mx-1 text-muted-foreground/60">→</span> : null}
+              {s}
+            </span>
+          ))}
+        </>
+      ) : null}
+    </span>
   )
 }
 
@@ -379,10 +431,19 @@ function AirlineChips({ row }: { row: AwardPlanRow }) {
   )
 }
 
-type RowItem = { row: AwardPlanRow; key: string }
+type RowItem = { row: ExploreRow; key: string }
+
+// Affordability tier rank for sorting: 'hold' = 0, 'transfer' = 1, none = 2.
+function affordTier(row: ExploreRow, cabin: Cabin): number {
+  const a = row.afford?.[cabin]
+  if (!a) return 2
+  return a.tier === 'hold' ? 0 : 1
+}
 
 // One grouped section (Direct / Connecting), capped at 3 rows with a "show more"
 // toggle. The Direct section drops the Via column (it's always "Direct").
+// When `source` is empty (no-source branch), items are sorted by affordability
+// tier ('hold' first, then 'transfer', then unaffordable) before capping.
 function ResultSection({
   title,
   items,
@@ -412,8 +473,16 @@ function ResultSection({
 }) {
   const [showAll, setShowAll] = useState(false)
   if (items.length === 0) return null
+
+  // Sort by afford tier within the section (no-source only — preserves relative
+  // order within each tier because sort is stable in modern JS).
+  const sorted =
+    !source && items.some((x) => x.row.afford != null)
+      ? [...items].sort((a, b) => affordTier(a.row, cabin) - affordTier(b.row, cabin))
+      : items
+
   const cap = Math.max(1, defaultVisible)
-  const visible = showAll ? items : items.slice(0, cap)
+  const visible = showAll ? sorted : sorted.slice(0, cap)
   const cols = showVia ? 5 : 4
   return (
     <section>
@@ -439,13 +508,19 @@ function ResultSection({
           <TableBody>
             {visible.map(({ row, key }) => {
               const open = expanded.has(key)
+              const afford = row.afford?.[cabin] ?? null
               return (
                 <Fragment key={key}>
                   <TableRow className="cursor-pointer" onClick={() => onToggleExpanded(key)}>
                     <TableCell className="w-full max-w-0">
-                      <span className="block truncate font-medium text-foreground">
-                        {nameOf(row.programme, names)}
-                      </span>
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span className="block truncate font-medium text-foreground">
+                          {nameOf(row.programme, names)}
+                        </span>
+                        {!source && afford ? (
+                          <AffordChip afford={afford} names={names} />
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <AirlineChips row={row} />
@@ -482,6 +557,11 @@ function ResultSection({
                               {source ? (
                                 <Card className="flex h-full items-center p-3 text-xs text-muted-foreground">
                                   <TransferPath row={row} names={names} />
+                                </Card>
+                              ) : null}
+                              {!source && afford ? (
+                                <Card className="flex h-full items-center p-3 text-xs text-muted-foreground">
+                                  <AffordDetail afford={afford} names={names} />
                                 </Card>
                               ) : null}
                               <PointsPathCard row={row} cabin={cabin} names={names} />
@@ -531,7 +611,7 @@ function Results({
 }: {
   status: ExploreStatus
   error?: string
-  rows: AwardPlanRow[]
+  rows: ExploreRow[]
   cabin: Cabin
   source: string
   names: Names
@@ -605,7 +685,7 @@ export type ExploreProps = {
   onCabin: (c: Cabin) => void
   status: ExploreStatus
   error?: string
-  rows: AwardPlanRow[]
+  rows: ExploreRow[]
   names: Names
   airports: Airports
   resultOrigin: string

@@ -7,6 +7,8 @@ export {
   buildAwardExplore,
   type AwardExploreResult,
   type ExploreAirline,
+  type ExploreRow,
+  type Afford,
 } from './award-explore'
 export { listTransferSources, type TransferSource } from './transfer-sources'
 export { transferGraph, resolveCurrency, cheapestTo, type TransferCell } from './transfer-graph'

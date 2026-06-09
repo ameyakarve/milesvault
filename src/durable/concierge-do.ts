@@ -142,6 +142,17 @@ export class ConciergeDO
     source?: string,
   ): Promise<AwardExploreResult> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const ledger = this.ledgerStub()
+    // When no explicit source, join the ledger holdings so rows can be
+    // annotated with affordability. Mirror the pointsPaths() pattern exactly.
+    const [snapshot, balances] = source && source.trim()
+      ? [null, null]
+      : await Promise.all([
+          ledger.ledger_snapshot().catch((): null => null),
+          ledger
+            .query_sql('SELECT account, currency, scale, balance_scaled FROM balance_totals')
+            .catch((): null => null),
+        ])
     return buildAwardExplore(
       this.airportLookup,
       this.routeSql,
@@ -150,6 +161,8 @@ export class ConciergeDO
       origin,
       destination,
       source,
+      snapshot?.accounts ?? null,
+      (balances?.rows ?? null) as unknown as ReadonlyArray<BalanceRow> | null,
     )
   }
 
