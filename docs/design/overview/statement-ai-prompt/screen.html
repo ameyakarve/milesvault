@@ -1,0 +1,471 @@
+<html class="light" lang="en"><head></head><body class="bg-surface font-body text-on-surface overflow-hidden">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Logical Manuscript - Account Editor</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-container": "#fffbff",
+                    "tertiary-fixed-dim": "#ffb59a",
+                    "primary-fixed-dim": "#6bd8cb",
+                    "surface-variant": "#e0e3e5",
+                    "on-background": "#191c1e",
+                    "tertiary-fixed": "#ffdbce",
+                    "on-surface": "#191c1e",
+                    "surface-container-low": "#f2f4f6",
+                    "background": "#f7f9fb",
+                    "primary": "#00685f",
+                    "on-tertiary": "#ffffff",
+                    "on-surface-variant": "#3d4947",
+                    "on-secondary-fixed-variant": "#3a485b",
+                    "secondary-fixed": "#d5e3fc",
+                    "surface-dim": "#d8dadc",
+                    "on-primary-fixed-variant": "#005049",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-fixed": "#370e00",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-fixed-variant": "#773215",
+                    "on-secondary-fixed": "#0d1c2e",
+                    "on-secondary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "primary-container": "#008378",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-primary": "#ffffff",
+                    "surface-container-highest": "#e0e3e5",
+                    "surface": "#f7f9fb",
+                    "secondary-container": "#d5e3fc",
+                    "surface-container-high": "#e6e8ea",
+                    "on-primary-fixed": "#00201d",
+                    "outline": "#6d7a77",
+                    "surface-container": "#eceef0",
+                    "on-secondary-container": "#57657a",
+                    "primary-fixed": "#89f5e7",
+                    "outline-variant": "#bcc9c6",
+                    "inverse-primary": "#6bd8cb",
+                    "surface-tint": "#006a61",
+                    "surface-bright": "#f7f9fb",
+                    "tertiary-container": "#b05e3d",
+                    "on-primary-container": "#f4fffc",
+                    "inverse-surface": "#2d3133",
+                    "secondary": "#515f74",
+                    "error": "#ba1a1a",
+                    "tertiary": "#924628",
+                    "secondary-fixed-dim": "#b9c7df",
+                    "on-error": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "display": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"],
+                    "mono": ["JetBrains Mono"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .gutter-num {
+            user-select: none;
+            text-align: right;
+            padding-right: 12px;
+            color: #bcc9c6;
+        }
+        .editor-container {
+            scrollbar-width: thin;
+            scrollbar-color: #e0e3e5 transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e0e3e5;
+            border-radius: 2px;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<!-- 1. Left Side Rail -->
+<aside class="fixed left-0 top-0 h-screen w-[48px] z-50 bg-[#f2f4f6] dark:bg-slate-900 flex flex-col items-center py-4 space-y-6 border-r border-slate-200">
+<div class="text-[#0D9488] font-black text-xl mb-4">M</div>
+<nav class="flex flex-col items-center space-y-6 flex-1">
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">dashboard</span></button>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">query_stats</span></button>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">lightbulb</span></button>
+<button class="text-[#0D9488] dark:text-teal-400 transition-colors"><span class="material-symbols-outlined">account_balance</span></button>
+</nav>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors mt-auto"><span class="material-symbols-outlined">settings</span></button>
+</aside>
+<!-- Main Content Area Wrapper -->
+<main class="ml-[48px] flex h-screen overflow-hidden pb-[28px]">
+<!-- Left Editor Section -->
+<div class="flex-1 flex flex-col min-w-0">
+<!-- ROW 1 — Context row -->
+<div class="h-[32px] bg-[#ffffff] px-6 flex items-center justify-between border-b border-slate-50 flex-shrink-0">
+<div class="flex items-center space-x-1.5 font-mono text-[11px]">
+<span class="text-slate-500">Liabilities</span>
+<span class="material-symbols-outlined text-[12px] text-slate-300">chevron_right</span>
+<span class="text-slate-500">CreditCard</span>
+<span class="material-symbols-outlined text-[12px] text-slate-300">chevron_right</span>
+<span class="text-slate-500">HDFC</span>
+<span class="material-symbols-outlined text-[12px] text-slate-300">chevron_right</span>
+<span class="text-slate-800 font-bold">DinersBlack</span>
+</div>
+<div class="flex items-center">
+<button class="font-mono text-[11px] text-slate-600 hover:text-primary flex items-center">
+                    INR <span class="material-symbols-outlined text-[14px] ml-0.5">arrow_drop_down</span>
+</button>
+</div>
+</div>
+<!-- ROW 2 — Stats row -->
+<div class="h-[64px] bg-[#ffffff] px-6 flex items-center flex-shrink-0">
+<div class="flex items-center space-x-12 flex-1">
+<div class="flex flex-col">
+<span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Balance</span>
+<span class="font-mono text-2xl font-bold text-slate-900 tracking-tight">₹1,32,450.00</span>
+</div>
+<div class="flex flex-col border-l border-slate-100 pl-8">
+<span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Net In</span>
+<span class="font-mono text-2xl font-bold text-[#00685f] tracking-tight">+₹84,201.00</span>
+</div>
+<div class="flex flex-col border-l border-slate-100 pl-8">
+<span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Net Out</span>
+<span class="font-mono text-2xl font-bold text-rose-600 tracking-tight">−₹52,310.00</span>
+</div>
+</div>
+<button class="font-mono text-[11px] text-slate-600 hover:text-primary flex items-center border border-slate-200 px-2 py-1 rounded">
+                All time <span class="material-symbols-outlined text-[14px] ml-1">arrow_drop_down</span>
+</button>
+</div>
+<!-- ROW 3 — Sub-account leaf strip -->
+<div class="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between flex-shrink-0">
+<div class="flex items-center space-x-2 overflow-x-auto hide-scrollbar flex-1 mr-4">
+<button class="flex items-center space-x-2 px-3 py-1 bg-[#00685f] text-white rounded-full text-[11px] font-bold whitespace-nowrap">
+<span>All</span>
+<span class="opacity-80 font-mono">₹2,42,500.00</span>
+</button>
+<button class="flex items-center space-x-2 px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] whitespace-nowrap transition-colors">
+<span class="font-mono">HDFC:DinersBlack</span>
+<span class="text-slate-400 font-mono">· ₹1,32,450.00</span>
+</button>
+<button class="flex items-center space-x-2 px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] whitespace-nowrap transition-colors">
+<span class="font-mono">HSBC:Cashback:9065</span>
+<span class="text-slate-400 font-mono">· ₹78,200.00</span>
+</button>
+<button class="flex items-center space-x-2 px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] whitespace-nowrap transition-colors">
+<span class="font-mono">Amex:Platinum</span>
+<span class="text-slate-400 font-mono">· ₹31,850.00</span>
+</button>
+<button class="flex items-center space-x-2 px-3 py-1 bg-white border border-slate-200 hover:border-[#00685f]/30 text-slate-600 rounded-full text-[11px] whitespace-nowrap transition-colors">
+<span class="font-mono">ICICI:Coral</span>
+<span class="text-slate-400 font-mono">· ₹0.00</span>
+</button>
+</div>
+<button class="flex items-center space-x-1 text-[11px] font-bold text-[#00685f] hover:underline whitespace-nowrap">
+<span>Explore tree</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+<!-- ROW 4 — Sub-toolbar -->
+<div class="h-[40px] bg-[#eceef0] px-6 flex items-center justify-between border-b border-slate-200 flex-shrink-0">
+<div class="flex items-center h-full text-[11px] font-medium space-x-4">
+<button class="h-full px-2 text-slate-900 border-b-2 border-teal-600 font-bold">Statement</button>
+<button class="h-full px-2 text-slate-500 hover:text-slate-700">Editor</button>
+</div>
+<div class="flex items-center opacity-40">
+<div class="flex items-center space-x-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+<span class="text-[11px] font-medium text-slate-500">Unsaved changes</span>
+</div>
+<div class="h-4 w-[1px] bg-slate-300 mx-3"></div>
+<button class="text-[11px] font-medium text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 rounded-sm px-2 py-1 mr-3 transition-colors">Revert</button>
+<button class="bg-teal-600 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2)] px-3 py-1.5 rounded-sm text-[11px] font-medium flex items-center transition-all duration-200 hover:bg-teal-700">
+<span>Save ⌘S</span>
+</button>
+</div>
+</div>
+<!-- 4. Main Pane (Statement Table) -->
+<div class="flex-1 flex flex-col bg-white overflow-hidden">
+<div class="h-[32px] bg-[#f2f4f6] flex items-center border-b border-slate-200 text-[9px] uppercase tracking-widest text-slate-400 font-bold flex-shrink-0">
+<div class="w-[24px]"></div>
+<div class="w-[96px] px-2">DATE</div>
+<div class="flex-1 px-2">ENTRY</div>
+<div class="w-[120px] px-2 text-right">DEBIT</div>
+<div class="w-[120px] px-2 text-right">CREDIT</div>
+<div class="w-[130px] px-2 text-right border-l border-slate-200 h-full flex items-center justify-end">BALANCE</div>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar flex flex-col pb-8">
+<!-- Row 1 -->
+<div class="flex items-center h-[44px] border-b border-slate-100 bg-white hover:bg-slate-50 group cursor-pointer">
+<div class="w-[24px] flex items-center justify-center text-slate-300 group-hover:text-slate-500">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</div>
+<div class="w-[96px] px-2 font-mono text-[11px] text-slate-700">2023-11-20</div>
+<div class="flex-1 px-2 flex flex-col justify-center overflow-hidden">
+<span class="text-[13px] font-medium text-slate-900 truncate">Amazon India</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="text-[11px] text-slate-500 truncate">Cloud Subscription</span>
+</div>
+</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-700 text-right">1,249.00</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-400 text-right"></div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-slate-900 text-right border-l border-slate-100 h-full flex items-center justify-end">1,31,000.00</div>
+</div>
+<!-- Row 2 -->
+<div class="flex items-center h-[44px] border-b border-slate-100 bg-[#fafaf8] hover:bg-slate-50 group cursor-pointer">
+<div class="w-[24px] flex items-center justify-center text-slate-300 group-hover:text-slate-500">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</div>
+<div class="w-[96px] px-2 font-mono text-[11px] text-slate-700">2023-11-21</div>
+<div class="flex-1 px-2 flex flex-col justify-center overflow-hidden">
+<span class="text-[13px] font-medium text-slate-900 truncate">Starbucks Coffee</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="text-[11px] text-slate-500 truncate">Morning Brew</span>
+</div>
+</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-700 text-right">450.00</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-400 text-right"></div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-slate-900 text-right border-l border-slate-100 h-full flex items-center justify-end">1,30,550.00</div>
+</div>
+<!-- Row 3 (EXPANDED) -->
+<div class="flex flex-col border-b border-slate-200 bg-[#00685f]/5">
+<div class="flex items-center h-[44px] cursor-pointer">
+<div class="w-[24px] flex items-center justify-center text-slate-500">
+<span class="material-symbols-outlined text-[16px]">expand_more</span>
+</div>
+<div class="w-[96px] px-2 font-mono text-[11px] text-slate-700">2023-11-22</div>
+<div class="flex-1 px-2 flex flex-col justify-center overflow-hidden">
+<span class="text-[13px] font-medium text-slate-900 truncate">HDFC Bank</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="text-[11px] text-slate-500 truncate">Interest Credit</span>
+</div>
+</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-400 text-right"></div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-[#00685f] text-right">3,450.00</div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-slate-900 text-right border-l border-slate-200/50 h-full flex items-center justify-end">1,34,000.00</div>
+</div>
+<div class="flex flex-col pb-3"> <div class="pl-[56px] pr-4 py-2 border-t border-slate-200/50 flex items-center text-[10px] font-mono text-slate-400 space-x-2">
+<span>POSTED 2023-11-22</span>
+<span>·</span>
+<span>TXN #ab9c1234</span>
+<span>·</span>
+<span class="text-[#00685f] font-semibold">RECONCILED</span>
+</div>
+<div class="ml-[56px] mr-4 mb-4 bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden flex flex-col">
+<div class="flex">
+<!-- Gutter -->
+<div class="w-[32px] flex-shrink-0 bg-slate-50 border-r border-slate-100 flex flex-col font-mono text-[11px] leading-[22px] py-2 text-slate-300 text-right pr-2">
+<div>1</div>
+<div class="relative text-[#00685f] font-bold">2<div class="absolute right-0 top-0 w-[2px] h-full bg-[#00685f]"></div></div>
+<div>3</div>
+<div>4</div>
+</div>
+<!-- Code Surface -->
+<div class="flex-1 font-mono text-[13px] leading-[22px] py-2 overflow-x-auto">
+<!-- Line 1 -->
+<div class="px-3 whitespace-pre"><span class="text-slate-500">2023-11-22</span> <span class="text-amber-600">*</span> <span class="text-teal-700">"HDFC Bank"</span> <span class="text-slate-500">"Interest Credit"</span></div>
+<!-- Line 2 (Active) -->
+<div class="px-3 whitespace-pre bg-[#fffbe6]"><span class="text-blue-700">Liabilities:CreditCard:HDFC:DinersBlack</span> <span class="text-slate-900 font-medium">3,450.00</span><span class="animate-pulse border-l-2 border-slate-900 ml-[1px] h-4 inline-block align-middle"></span> <span class="text-slate-400">INR</span></div>
+<!-- Line 3 -->
+<div class="px-3 whitespace-pre"><span class="text-blue-700">Income:Interest</span> <span class="text-slate-900 font-medium">-3,450.00</span> <span class="text-slate-400">INR</span></div>
+<!-- Line 4 -->
+<div class="px-3 whitespace-pre"> </div>
+</div>
+</div>
+<!-- AI Prompt Strip -->
+<div class="bg-[#e6f1f0] border-t border-[#c5d9d6] px-4 h-[40px] flex items-center space-x-3 w-full">
+<span class="material-symbols-outlined text-[16px] text-[#00685f]">auto_awesome</span>
+<div class="flex-1 flex items-center">
+<input autofocus="" class="w-full bg-transparent border-none p-0 text-[11px] font-body text-slate-900 placeholder:text-slate-400 focus:ring-0" placeholder="Describe the change… e.g. split ₹450 into Tip" type="text" value="Describe the change… e.g. split ₹450 into Tip"/>
+<span class="w-[1px] h-4 bg-slate-900 ml-[-204px]"></span>
+</div>
+<div class="flex items-center space-x-[12px]">
+<button class="text-[11px] font-medium text-slate-500 hover:text-slate-700 transition-colors whitespace-nowrap">Cancel</button>
+<button class="bg-[#00685f] text-white px-[12px] py-[4px] rounded-[2px] text-[11px] font-bold hover:bg-[#005049] transition-colors whitespace-nowrap">Generate</button>
+</div>
+</div>
+<!-- Action Bar -->
+</div></div>
+</div>
+<!-- Row 4 -->
+<div class="flex items-center h-[44px] border-b border-slate-100 bg-white hover:bg-slate-50 group cursor-pointer">
+<div class="w-[24px] flex items-center justify-center text-slate-300 group-hover:text-slate-500">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</div>
+<div class="w-[96px] px-2 font-mono text-[11px] text-slate-700">2023-11-23</div>
+<div class="flex-1 px-2 flex flex-col justify-center overflow-hidden">
+<span class="text-[13px] font-medium text-slate-900 truncate">Apple Store</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="text-[11px] text-slate-500 truncate">App Store Purchase</span>
+</div>
+</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-700 text-right">199.00</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-400 text-right"></div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-slate-900 text-right border-l border-slate-100 h-full flex items-center justify-end">1,33,801.00</div>
+</div>
+<!-- Row 5 -->
+<div class="flex items-center h-[44px] border-b border-slate-100 bg-[#fafaf8] hover:bg-slate-50 group cursor-pointer">
+<div class="w-[24px] flex items-center justify-center text-slate-300 group-hover:text-slate-500">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</div>
+<div class="w-[96px] px-2 font-mono text-[11px] text-slate-700">2023-11-24</div>
+<div class="flex-1 px-2 flex flex-col justify-center overflow-hidden">
+<span class="text-[13px] font-medium text-slate-900 truncate">Zomato Limited</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="text-[11px] text-slate-500 truncate">Dinner Order</span>
+</div>
+</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-700 text-right">890.00</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-400 text-right"></div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-slate-900 text-right border-l border-slate-100 h-full flex items-center justify-end">1,32,911.00</div>
+</div>
+<!-- Row 6 -->
+<div class="flex items-center h-[44px] border-b border-slate-100 bg-white hover:bg-slate-50 group cursor-pointer">
+<div class="w-[24px] flex items-center justify-center text-slate-300 group-hover:text-slate-500">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</div>
+<div class="w-[96px] px-2 font-mono text-[11px] text-slate-700">2023-11-25</div>
+<div class="flex-1 px-2 flex flex-col justify-center overflow-hidden">
+<span class="text-[13px] font-medium text-slate-900 truncate">Salary Credit</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="text-[11px] text-slate-500 truncate"></span>
+</div>
+</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-400 text-right"></div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-[#00685f] text-right">2,80,000.00</div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-slate-900 text-right border-l border-slate-100 h-full flex items-center justify-end">4,12,911.00</div>
+</div>
+<!-- Row 7 -->
+<div class="flex items-center h-[44px] border-b border-slate-100 bg-[#fafaf8] hover:bg-slate-50 group cursor-pointer">
+<div class="w-[24px] flex items-center justify-center text-slate-300 group-hover:text-slate-500">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</div>
+<div class="w-[96px] px-2 font-mono text-[11px] text-slate-700">2023-11-26</div>
+<div class="flex-1 px-2 flex flex-col justify-center overflow-hidden">
+<span class="text-[13px] font-medium text-slate-900 truncate">BESCOM</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="text-[11px] text-slate-500 truncate"></span>
+</div>
+</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-700 text-right">3,420.00</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-400 text-right"></div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-slate-900 text-right border-l border-slate-100 h-full flex items-center justify-end">4,09,491.00</div>
+</div>
+<!-- Row 8 -->
+<div class="flex items-center h-[44px] border-b border-slate-100 bg-white hover:bg-slate-50 group cursor-pointer">
+<div class="w-[24px] flex items-center justify-center text-slate-300 group-hover:text-slate-500">
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</div>
+<div class="w-[96px] px-2 font-mono text-[11px] text-slate-700">2023-11-28</div>
+<div class="flex-1 px-2 flex flex-col justify-center overflow-hidden">
+<span class="text-[13px] font-medium text-slate-900 truncate">Swiggy</span>
+<div class="flex items-center space-x-2 mt-0.5">
+<span class="text-[11px] text-slate-500 truncate"></span>
+</div>
+</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-700 text-right">1,245.00</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-400 text-right"></div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-slate-900 text-right border-l border-slate-100 h-full flex items-center justify-end">4,08,246.00</div>
+</div>
+</div>
+<!-- Footer row -->
+<div class="h-[44px] bg-[#f2f4f6] flex items-center border-t border-slate-200 mt-auto flex-shrink-0">
+<div class="w-[24px]"></div>
+<div class="w-[96px] px-2"></div>
+<div class="flex-1 px-2 text-[9px] uppercase tracking-widest text-slate-500 font-bold">PERIOD TOTALS</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-700 text-right">7,453.00</div>
+<div class="w-[120px] px-2 font-mono text-[12px] text-slate-700 text-right">2,83,450.00</div>
+<div class="w-[130px] px-2 font-mono text-[12px] text-[#00685f] font-bold text-right border-l border-slate-200 h-full flex items-center justify-end">+2,75,997.00</div>
+</div>
+</div>
+</div>
+<!-- 6. Right Sidebar -->
+<aside class="w-[320px] bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden pb-7">
+<!-- Main Section: AI Manuscript Assistant -->
+<div class="flex-1 flex flex-col min-h-0 bg-slate-50">
+<div class="px-4 py-4 flex items-center space-x-2">
+<span class="material-symbols-outlined text-[16px] text-[#00685f]">auto_awesome</span>
+<h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-900">AI Manuscript Assistant</h2>
+</div>
+<!-- Chat Area -->
+<div class="flex-1 flex flex-col justify-center px-6 text-center">
+<div class="mb-6">
+<p class="text-xs text-secondary leading-relaxed mb-4">
+                            Ask AI to balance a transaction, summarize spending, or rewrite narrations.
+                        </p>
+<div class="flex flex-col space-y-2">
+<button class="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-on-surface-variant hover:border-primary transition-colors text-left flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-2 text-outline-variant">analytics</span>
+                                "Summarize my coffee spending"
+                            </button>
+<button class="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-on-surface-variant hover:border-primary transition-colors text-left flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-2 text-outline-variant">auto_fix</span>
+                                "Clean up payee names in this month"
+                            </button>
+<button class="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-on-surface-variant hover:border-primary transition-colors text-left flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-2 text-outline-variant">balance</span>
+                                "Find unbalanced transactions"
+                            </button>
+</div>
+</div>
+</div>
+<!-- Bottom Input -->
+<div class="p-4 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.02)]">
+<div class="relative bg-slate-50 rounded border border-slate-200 focus-within:border-primary/50 transition-colors">
+<textarea class="w-full bg-transparent border-none rounded p-3 h-24 resize-none text-[13px] text-slate-700 placeholder:text-slate-400 focus:ring-0" placeholder="Ask AI about this ledger..."></textarea>
+<div class="absolute bottom-2 right-2 flex items-center space-x-1">
+<button class="p-1.5 text-slate-400 hover:text-slate-600">
+<span class="material-symbols-outlined text-[20px]">mic</span>
+</button>
+<button class="p-1.5 text-[#00685f] hover:text-primary-container">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1">send</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- 7. Bottom Status Bar -->
+<footer class="fixed bottom-0 left-[48px] right-0 h-[28px] z-40 bg-[#f2f4f6] dark:bg-slate-900 border-t border-slate-200 flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-secondary">
+<div class="flex items-center space-x-6">
+<span class="hover:text-primary transition-colors cursor-default">Ln 24, Col 8</span>
+<span class="text-[#00685f] font-bold flex items-center space-x-1">
+<span class="material-symbols-outlined text-[12px]">check_circle</span>
+<span>Parsed</span>
+</span>
+<span class="hover:text-primary transition-colors cursor-default">12 txns</span>
+</div>
+<div class="flex items-center space-x-4">
+<span class="flex items-center space-x-1">
+<span class="w-2 h-2 rounded-full bg-[#00685f]"></span>
+<span>Ready</span>
+</span>
+<span class="hover:text-primary transition-colors">Beancount v2.3.5</span>
+<span class="material-symbols-outlined text-[14px] hover:text-primary transition-colors cursor-pointer">notifications</span>
+</div>
+</footer>
+</body></html>

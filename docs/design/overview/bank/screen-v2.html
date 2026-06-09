@@ -1,0 +1,408 @@
+<html class="light" lang="en"><head></head><body class="bg-surface font-body text-on-surface overflow-hidden">```html
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Logical Manuscript - Account Overview</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-container": "#fffbff",
+                    "tertiary-fixed-dim": "#ffb59a",
+                    "primary-fixed-dim": "#6bd8cb",
+                    "surface-variant": "#e0e3e5",
+                    "on-background": "#191c1e",
+                    "tertiary-fixed": "#ffdbce",
+                    "on-surface": "#191c1e",
+                    "surface-container-low": "#f2f4f6",
+                    "background": "#f7f9fb",
+                    "primary": "#00685f",
+                    "on-tertiary": "#ffffff",
+                    "on-surface-variant": "#3d4947",
+                    "on-secondary-fixed-variant": "#3a485b",
+                    "secondary-fixed": "#d5e3fc",
+                    "surface-dim": "#d8dadc",
+                    "on-primary-fixed-variant": "#005049",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-fixed": "#370e00",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-fixed-variant": "#773215",
+                    "on-secondary-fixed": "#0d1c2e",
+                    "on-secondary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "primary-container": "#008378",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-primary": "#ffffff",
+                    "surface-container-highest": "#e0e3e5",
+                    "surface": "#f7f9fb",
+                    "secondary-container": "#d5e3fc",
+                    "surface-container-high": "#e6e8ea",
+                    "on-primary-fixed": "#00201d",
+                    "outline": "#6d7a77",
+                    "surface-container": "#eceef0",
+                    "on-secondary-container": "#57657a",
+                    "primary-fixed": "#89f5e7",
+                    "outline-variant": "#bcc9c6",
+                    "inverse-primary": "#6bd8cb",
+                    "surface-tint": "#006a61",
+                    "surface-bright": "#f7f9fb",
+                    "tertiary-container": "#b05e3d",
+                    "on-primary-container": "#f4fffc",
+                    "inverse-surface": "#2d3133",
+                    "secondary": "#515f74",
+                    "error": "#ba1a1a",
+                    "tertiary": "#924628",
+                    "secondary-fixed-dim": "#b9c7df",
+                    "on-error": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "display": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"],
+                    "mono": ["JetBrains Mono"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e0e3e5;
+            border-radius: 2px;
+        }
+    </style>
+<!-- 1. Left Side Rail -->
+<aside class="fixed left-0 top-0 h-screen w-[48px] z-50 bg-[#f2f4f6] dark:bg-slate-900 flex flex-col items-center py-4 space-y-6 border-r border-slate-200">
+<div class="text-[#0D9488] font-black text-xl mb-4">M</div>
+<nav class="flex flex-col items-center space-y-6 flex-1">
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">dashboard</span></button>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">query_stats</span></button>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">lightbulb</span></button>
+<button class="text-[#0D9488] dark:text-teal-400 transition-colors"><span class="material-symbols-outlined">account_balance</span></button>
+</nav>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors mt-auto"><span class="material-symbols-outlined">settings</span></button>
+</aside>
+<!-- Main Content Area Wrapper -->
+<main class="ml-[48px] flex h-screen overflow-hidden pb-[28px]">
+<!-- Left Editor Section -->
+<div class="flex-1 flex flex-col min-w-0">
+<!-- ROW 1 — Context row -->
+<div class="h-[32px] bg-[#ffffff] px-6 flex items-center justify-between border-b border-slate-50 flex-shrink-0">
+<div class="flex items-center space-x-1.5 font-mono text-[11px]">
+<span class="text-slate-500">Assets</span>
+<span class="material-symbols-outlined text-[12px] text-slate-300">chevron_right</span>
+<span class="text-slate-500">Bank</span>
+<span class="material-symbols-outlined text-[12px] text-slate-300">chevron_right</span>
+<span class="text-slate-500">HDFC</span>
+<span class="material-symbols-outlined text-[12px] text-slate-300">chevron_right</span>
+<span class="text-slate-800 font-bold">Savings</span>
+</div>
+<div class="flex items-center">
+<button class="font-mono text-[11px] text-slate-600 hover:text-primary flex items-center">
+                    INR <span class="material-symbols-outlined text-[14px] ml-0.5">arrow_drop_down</span>
+</button>
+</div>
+</div>
+<!-- ROW 2 — Stats row -->
+<div class="h-[64px] bg-[#ffffff] px-6 flex items-center flex-shrink-0">
+<div class="flex items-center space-x-12 flex-1">
+<div class="flex flex-col">
+<span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Balance</span>
+<span class="font-mono text-2xl font-bold text-slate-900 tracking-tight">₹4,82,550.00</span>
+</div>
+<div class="flex flex-col border-l border-slate-100 pl-8">
+<span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Net In</span>
+<span class="font-mono text-2xl font-bold text-[#00685f] tracking-tight">+₹6,12,440.00</span>
+</div>
+<div class="flex flex-col border-l border-slate-100 pl-8">
+<span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Net Out</span>
+<span class="font-mono text-2xl font-bold text-rose-600 tracking-tight">−₹5,00,000.00</span>
+</div>
+</div>
+<button class="font-mono text-[11px] text-slate-600 hover:text-primary flex items-center border border-slate-200 px-2 py-1 rounded">
+                All time <span class="material-symbols-outlined text-[14px] ml-1">arrow_drop_down</span>
+</button>
+</div>
+<!-- ROW 3 — Sub-account leaf strip -->
+<div class="h-[44px] bg-[#f2f4f6] px-6 flex items-center justify-between flex-shrink-0">
+<div class="flex items-center space-x-2 flex-1">
+<button class="flex items-center space-x-2 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-[11px] font-medium">
+<span>All</span>
+<span class="font-mono">· ₹4,82,550.00</span>
+</button>
+</div>
+<button class="flex items-center space-x-1 text-[11px] font-bold text-[#00685f] hover:underline whitespace-nowrap">
+<span>Explore tree</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+<!-- ROW 4 — Tab bar -->
+<div class="h-[40px] bg-[#eceef0] px-6 flex items-center justify-between border-b border-slate-200 flex-shrink-0">
+<div class="flex items-center h-full text-[11px] font-medium space-x-4">
+<button class="h-full px-2 text-slate-900 border-b-2 border-[#00685f] font-bold">Overview</button>
+<button class="h-full px-2 text-slate-500 hover:text-slate-700">Statement</button>
+<button class="h-full px-2 text-slate-500 hover:text-slate-700">Editor</button>
+</div>
+</div>
+<!-- 4. Main Pane (Overview Content) -->
+<div data-overview-root class="flex-1 flex flex-col bg-white overflow-y-auto custom-scrollbar">
+<!-- Sub-toolbar -->
+<div class="px-6 py-2 flex items-center justify-between border-b border-slate-100 flex-shrink-0 bg-white sticky top-0 z-10">
+<div class="text-[11px] text-slate-500 font-medium">Overview · 12 months</div>
+<div class="flex items-center space-x-4">
+<div class="flex bg-slate-100 p-0.5 rounded-full">
+<button class="px-2 py-0.5 text-[9px] font-bold text-slate-500">1M</button>
+<button class="px-2 py-0.5 text-[9px] font-bold text-slate-500">3M</button>
+<button class="px-2 py-0.5 text-[9px] font-bold text-slate-500">YTD</button>
+<button class="px-2 py-0.5 text-[9px] font-bold bg-[#00685f] text-white rounded-full">12M</button>
+<button class="px-2 py-0.5 text-[9px] font-bold text-slate-500">All</button>
+</div>
+<div class="flex items-center space-x-1.5 opacity-60">
+<div class="w-6 h-3 bg-slate-200 rounded-full relative">
+<div class="absolute left-0.5 top-0.5 w-2 h-2 bg-white rounded-full"></div>
+</div>
+<span class="text-[10px] text-slate-500 font-medium whitespace-nowrap">Δ vs prior period</span>
+</div>
+</div>
+</div>
+<div class="p-6 space-y-6">
+<!-- Slot A: KPIs -->
+<div class="grid grid-cols-3 gap-6">
+<div class="bg-white border border-slate-100 rounded-md p-4">
+<div class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">Balance</div>
+<div class="font-mono text-xl font-bold text-slate-900">₹4,82,550.00</div>
+<div class="text-[10px] text-slate-400 mt-1 italic">as of today</div>
+</div>
+<div class="bg-white border border-slate-100 rounded-md p-4">
+<div class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">Net change · 12M</div>
+<div class="flex items-baseline space-x-2">
+<span class="font-mono text-xl font-bold text-[#00685f]">+₹1,12,440.00</span>
+<span class="bg-[#00685f]/10 text-[#00685f] text-[9px] font-bold px-1.5 py-0.5 rounded-full">+18.2% vs prior 12M</span>
+</div>
+</div>
+<div class="bg-white border border-slate-100 rounded-md p-4">
+<div class="text-[10px] uppercase tracking-widest text-slate-400 font-bold mb-2">Avg monthly net</div>
+<div class="font-mono text-xl font-bold text-[#00685f]">+₹9,370.00</div>
+<div class="text-[10px] text-slate-400 mt-1 italic">last 12 months</div>
+</div>
+</div>
+<!-- Slot B & C -->
+<div class="flex space-x-6">
+<!-- Slot B: Primary Trend -->
+<div class="w-[60%] bg-white border border-slate-100 rounded-md p-4 flex flex-col">
+<div class="text-[13px] font-semibold text-slate-900 mb-6">Balance over time</div>
+<div class="flex-1 relative h-48">
+<!-- Dotted Gridlines -->
+<div class="absolute inset-0 flex flex-col justify-between pointer-events-none">
+<div class="border-t border-dotted border-slate-100 w-full"></div>
+<div class="border-t border-dotted border-slate-100 w-full"></div>
+<div class="border-t border-dotted border-slate-100 w-full"></div>
+<div class="border-t border-dotted border-slate-100 w-full"></div>
+<div class="border-t border-dotted border-slate-100 w-full"></div>
+</div>
+<!-- SVG Chart (Occupying ~95% width) -->
+<div class="absolute inset-0 right-[5%] border-l border-b border-slate-100">
+<svg class="h-full w-full overflow-visible" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M0,80 L20,75 L40,65 L60,50 L80,35 L100,20" fill="none" stroke="#00685f" stroke-width="2"></path>
+<!-- Hover guideline -->
+<line stroke="#00685f" stroke-dasharray="2,2" stroke-width="1" x1="100" x2="100" y1="0" y2="100"></line>
+</svg>
+<!-- Hover Tooltip -->
+<div class="absolute right-0 top-0 translate-x-1/2 -translate-y-full mb-2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-20">
+                                    Mar 26 · ₹4,75,320.00
+                                </div>
+</div>
+<!-- Axis Labels -->
+<div class="absolute left-1 inset-y-0 flex flex-col justify-between text-[10px] font-mono text-slate-500">
+<span>5L</span><span>4L</span><span>3L</span><span>2L</span><span>1L</span>
+</div>
+<div class="absolute -bottom-6 left-0 right-[5%] flex justify-between text-[10px] font-mono text-slate-500">
+<span>May 25</span><span>Jul</span><span>Sep</span><span>Nov</span><span>Jan 26</span><span>Mar</span>
+</div>
+</div>
+<div class="mt-8"></div>
+</div>
+<!-- Slot C: Composition -->
+<div class="w-[40%] bg-white border border-slate-100 rounded-md p-4 flex flex-col">
+<div class="text-[13px] font-semibold text-slate-900 mb-4">Top counter-accounts</div>
+<div class="flex-1 space-y-2">
+<!-- Bar 1 (100%) -->
+<div class="relative flex items-center justify-between text-[11px] py-1 px-2 rounded overflow-hidden">
+<div class="absolute inset-0 bg-[#00685f]/[0.08] w-[100%] z-0"></div>
+<span class="relative z-10 truncate pr-4 text-slate-700">Income:Salary:Employer</span>
+<span class="relative z-10 font-mono font-bold text-slate-900">+₹6,00,000.00</span>
+</div>
+<!-- Bar 2 (40%) -->
+<div class="relative flex items-center justify-between text-[11px] py-1 px-2 rounded overflow-hidden">
+<div class="absolute inset-0 bg-[#00685f]/[0.08] w-[40%] z-0"></div>
+<span class="relative z-10 truncate pr-4 text-slate-700">Liabilities:CC:HDFC:Infinia</span>
+<span class="relative z-10 font-mono text-[#e11d48]">−₹2,40,000.00</span>
+</div>
+<!-- Bar 3 (30%) -->
+<div class="relative flex items-center justify-between text-[11px] py-1 px-2 rounded overflow-hidden">
+<div class="absolute inset-0 bg-[#00685f]/[0.08] w-[30%] z-0"></div>
+<span class="relative z-10 truncate pr-4 text-slate-700">Expenses:Housing</span>
+<span class="relative z-10 font-mono text-[#e11d48]">−₹1,80,000.00</span>
+</div>
+<!-- Bar 4 (9%) -->
+<div class="relative flex items-center justify-between text-[11px] py-1 px-2 rounded overflow-hidden">
+<div class="absolute inset-0 bg-[#00685f]/[0.08] w-[9%] z-0"></div>
+<span class="relative z-10 truncate pr-4 text-slate-700">Assets:Loaded:Wallets:Paytm</span>
+<span class="relative z-10 font-mono text-[#e11d48]">−₹52,400.00</span>
+</div>
+<!-- Bar 5 (7%) -->
+<div class="relative flex items-center justify-between text-[11px] py-1 px-2 rounded overflow-hidden">
+<div class="absolute inset-0 bg-[#00685f]/[0.08] w-[7%] z-0"></div>
+<span class="relative z-10 truncate pr-4 text-slate-700">Assets:Investments:Zerodha:Stocks</span>
+<span class="relative z-10 font-mono text-[#e11d48]">−₹40,000.00</span>
+</div>
+<!-- Bar 6 (5%) -->
+<div class="relative flex items-center justify-between text-[11px] py-1 px-2 rounded overflow-hidden">
+<div class="absolute inset-0 bg-[#00685f]/[0.08] w-[5%] z-0"></div>
+<span class="relative z-10 truncate pr-4 text-slate-700">Expenses:Travel</span>
+<span class="relative z-10 font-mono text-[#e11d48]">−₹28,500.00</span>
+</div>
+</div>
+<div class="mt-3 text-[11px] italic text-slate-400 text-right cursor-pointer hover:text-primary transition-colors">+12 more →</div>
+</div>
+</div>
+<!-- Slot D: Notable Events -->
+<div class="bg-white border border-slate-100 rounded-md p-4">
+<div class="text-[13px] font-semibold text-slate-900 mb-4">Notable events</div>
+<div class="divide-y divide-slate-50">
+<!-- Row 1 -->
+<div class="flex items-center h-[40px] border-t border-b border-slate-100 text-[12px]">
+<div class="w-[100px] font-mono text-slate-500">2026-04-30</div>
+<div class="w-[140px] font-medium text-slate-900 truncate">Employer</div>
+<div class="flex-1 text-slate-600 truncate">April salary</div>
+<div class="w-[130px] text-right font-mono text-slate-900">+₹50,000.00</div>
+</div>
+<!-- Row 2 -->
+<div class="flex items-center h-[40px] border-b border-slate-100 text-[12px]">
+<div class="w-[100px] font-mono text-slate-500">2026-04-25</div>
+<div class="w-[140px] font-medium text-slate-900 truncate">HDFC Infinia</div>
+<div class="flex-1 text-slate-600 truncate">Card autopay</div>
+<div class="w-[130px] text-right font-mono text-[#e11d48]">−₹38,420.00</div>
+</div>
+<!-- Row 3 -->
+<div class="flex items-center h-[40px] border-b border-slate-100 text-[12px]">
+<div class="w-[100px] font-mono text-slate-500">2026-04-20</div>
+<div class="w-[140px] font-medium text-slate-900 truncate">Landlord</div>
+<div class="flex-1 text-slate-600 truncate">April rent</div>
+<div class="w-[130px] text-right font-mono text-[#e11d48]">−₹15,000.00</div>
+</div>
+<!-- Row 4 -->
+<div class="flex items-center h-[40px] border-b border-slate-100 text-[12px]">
+<div class="w-[100px] font-mono text-slate-500">2026-03-31</div>
+<div class="w-[140px] font-medium text-slate-900 truncate">Employer</div>
+<div class="flex-1 text-slate-600 truncate">March salary</div>
+<div class="w-[130px] text-right font-mono text-slate-900">+₹50,000.00</div>
+</div>
+<!-- Row 5 -->
+<div class="flex items-center h-[40px] border-b border-slate-100 text-[12px]">
+<div class="w-[100px] font-mono text-slate-500">2026-03-15</div>
+<div class="w-[140px] font-medium text-slate-900 truncate">IRCTC</div>
+<div class="flex-1 text-slate-600 truncate">Goa flights</div>
+<div class="w-[130px] text-right font-mono text-[#e11d48]">−₹22,800.00</div>
+</div>
+</div>
+</div>
+<div class="h-8"></div>
+</div>
+</div>
+</div>
+<!-- 6. Right Sidebar -->
+<aside class="w-[320px] bg-slate-50 border-l border-slate-200 flex flex-col overflow-hidden pb-7">
+<!-- Main Section: AI Manuscript Assistant -->
+<div class="flex-1 flex flex-col min-h-0 bg-slate-50">
+<div class="px-4 py-4 flex items-center space-x-2">
+<span class="material-symbols-outlined text-[16px] text-[#00685f]">auto_awesome</span>
+<h2 class="text-[11px] font-bold uppercase tracking-widest text-slate-900">AI Manuscript Assistant</h2>
+</div>
+<!-- Chat Area -->
+<div class="flex-1 flex flex-col justify-center px-6 text-center">
+<div class="mb-6">
+<p class="text-xs text-secondary leading-relaxed mb-4">
+                            Ask AI to balance a transaction, summarize spending, or rewrite narrations.
+                        </p>
+<div class="flex flex-col space-y-2">
+<button class="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-on-surface-variant hover:border-primary transition-colors text-left flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-2 text-outline-variant">analytics</span>
+                                "Summarize my coffee spending"
+                            </button>
+<button class="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-on-surface-variant hover:border-primary transition-colors text-left flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-2 text-outline-variant">auto_fix</span>
+                                "Clean up payee names in this month"
+                            </button>
+<button class="text-[11px] py-1.5 px-3 bg-white border border-slate-200 rounded text-on-surface-variant hover:border-primary transition-colors text-left flex items-center">
+<span class="material-symbols-outlined text-[14px] mr-2 text-outline-variant">balance</span>
+                                "Find unbalanced transactions"
+                            </button>
+</div>
+</div>
+</div>
+<!-- Bottom Input -->
+<div class="p-4 bg-white border-t border-slate-200 shadow-[0_-4px_12px_rgba(0,0,0,0.02)]">
+<div class="relative bg-slate-50 rounded border border-slate-200 focus-within:border-primary/50 transition-colors">
+<textarea class="w-full bg-transparent border-none rounded p-3 h-24 resize-none text-[13px] text-slate-700 placeholder:text-slate-400 focus:ring-0" placeholder="Ask AI about this ledger..."></textarea>
+<div class="absolute bottom-2 right-2 flex items-center space-x-1">
+<button class="p-1.5 text-slate-400 hover:text-slate-600">
+<span class="material-symbols-outlined text-[20px]">mic</span>
+</button>
+<button class="p-1.5 text-[#00685f] hover:text-primary-container">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1">send</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- 7. Bottom Status Bar -->
+<footer class="fixed bottom-0 left-[48px] right-0 h-[28px] z-40 bg-[#f2f4f6] dark:bg-slate-900 border-t border-slate-200 flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-secondary">
+<div class="flex items-center space-x-6">
+<span class="hover:text-primary transition-colors cursor-default">Ln 24, Col 8</span>
+<span class="text-[#00685f] font-bold flex items-center space-x-1">
+<span class="material-symbols-outlined text-[12px]">check_circle</span>
+<span>Parsed</span>
+</span>
+<span class="hover:text-primary transition-colors cursor-default">12 txns</span>
+</div>
+<div class="flex items-center space-x-4">
+<span class="flex items-center space-x-1">
+<span class="w-2 h-2 rounded-full bg-[#00685f]"></span>
+<span>Ready</span>
+</span>
+<span class="hover:text-primary transition-colors">Beancount v2.3.5</span>
+<span class="material-symbols-outlined text-[14px] hover:text-primary transition-colors cursor-pointer">notifications</span>
+</div>
+</footer>
+```</body></html>
