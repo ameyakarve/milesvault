@@ -205,9 +205,16 @@ user's ledger is the default lens everywhere:
   globe → transfer path → "earn the gap" inline, instead of bouncing to an
   unlisted URL. `/points` keeps its deep-linkable route but is reached through
   Plan, finishing the existing instinct that it's a drill-down, not a peer.
-- **Status Match starts from *your* tiers** (read from
-  `Assets:Rewards:Status:*`), not a blank picker; the blank picker remains for
-  exploration.
+- **Status Match starts from *your* tiers**, not a blank picker; the blank
+  picker remains for exploration. Data note: `Assets:Rewards:Status:*` holds
+  tier-qualifying *counters*, and the taxonomy deliberately keeps tiers
+  ("entity state, not balances") out of accounts. **Proposed convention:**
+  tiers are recorded as beancount event directives —
+  `YYYY-MM-DD event "status:<program-slug>" "<tier-slug>"` — already
+  first-class in the schema (`directives_event`), human-writable in the
+  Journal, and AI-draftable. The latest event per program is the current
+  tier; an empty value clears it. Readers treat the convention as optional:
+  no events → today's blank-picker behavior.
 - Vault home's "with what you hold today" teasers deep-link into Plan with the
   lens pre-applied.
 
