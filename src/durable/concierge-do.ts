@@ -17,6 +17,10 @@ import {
   type BalanceRow,
   listLoyaltyCurrencies,
   type LoyaltyCurrency,
+  listMatchStatuses,
+  buildStatusMatchPaths,
+  type MatchStatus,
+  type StatusMatchResult,
   ensureRouteCache,
   fetchKbAgentsMd,
   kbHttpOverFetch,
@@ -174,6 +178,20 @@ export class ConciergeDO
   async loyaltyCurrencies(): Promise<LoyaltyCurrency[]> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     return listLoyaltyCurrencies(kbHttp)
+  }
+
+  // Status Match Merry-Go-Round: a chain of status matches from one status to
+  // another. RPC for /api/concierge/status-match-paths.
+  async statusMatchPaths(from: string, to: string): Promise<StatusMatchResult> {
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    return buildStatusMatchPaths(kbHttp, from, to)
+  }
+
+  // The searchable status universe (status-tiers + alliance-tiers) for the
+  // merry-go-round from/to comboboxes. RPC for /api/concierge/match-statuses.
+  async matchStatuses(): Promise<MatchStatus[]> {
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    return listMatchStatuses(kbHttp)
   }
 
   // Graph-walker tool surface — layered. Simple one-hop graph lookups

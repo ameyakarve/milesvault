@@ -26,3 +26,12 @@ export {
   type KbHttp,
 } from './kb-tools'
 export { listLoyaltyCurrencies, type LoyaltyCurrency } from './loyalty-currencies'
+export {
+  listMatchStatuses,
+  buildStatusMatchPaths,
+  type MatchStatus,
+  type StatusMatchResult,
+  type SmNode,
+  type SmEdge,
+  type SmKind,
+} from './status-match-paths'

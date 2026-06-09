@@ -1,0 +1,249 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  Handle,
+  Position,
+  type Node,
+  type Edge,
+  type NodeProps,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import dagre from '@dagrejs/dagre'
+import { ArrowRight, Check, ChevronsUpDown, Crown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import { cn } from '@/lib/utils'
+import type {
+  StatusMatchResult,
+  MatchStatus,
+  SmNode,
+  SmEdge,
+} from '@/durable/agents/tools/concierge/status-match-paths'
+
+export type SmStatus = 'idle' | 'loading' | 'ready' | 'error'
+
+type NodeData = SmNode & { role: 'from' | 'to' | 'mid' }
+
+// ── dagre layout ─────────────────────────────────────────────────────────────
+const W = 200
+const H = 56
+function layout(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
+  const g = new dagre.graphlib.Graph()
+  g.setGraph({ rankdir: 'LR', nodesep: 22, ranksep: 96, marginx: 16, marginy: 16 })
+  g.setDefaultEdgeLabel(() => ({}))
+  nodes.forEach((n) => g.setNode(n.id, { width: W, height: H }))
+  edges.forEach((e) => g.setEdge(e.source, e.target))
+  dagre.layout(g)
+  return nodes.map((n) => {
+    const p = g.node(n.id)
+    return { ...n, position: { x: p.x - W / 2, y: p.y - H / 2 } }
+  })
+}
+
+// ── nodes ────────────────────────────────────────────────────────────────────
+function StatusNode({ data }: NodeProps<Node<NodeData>>) {
+  const ring =
+    data.role === 'from'
+      ? 'border-emerald-400 ring-1 ring-emerald-300'
+      : data.role === 'to'
+        ? 'border-slate-900 ring-1 ring-slate-400'
+        : 'border-slate-200'
+  return (
+    <div className={cn('flex h-[56px] w-[200px] flex-col justify-center rounded-md border bg-white px-3 shadow-sm', ring)}>
+      <div className="truncate text-xs font-semibold text-slate-900">{data.display}</div>
+      <div className="text-[10px] text-muted-foreground">
+        {data.role === 'from' ? 'you hold' : data.role === 'to' ? 'target' : 'status match'}
+      </div>
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-slate-400" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-slate-400" />
+    </div>
+  )
+}
+
+function AllianceNode({ data }: NodeProps<Node<NodeData>>) {
+  const ring = data.role === 'to' ? 'ring-1 ring-amber-400' : ''
+  return (
+    <div className={cn('flex h-[56px] w-[200px] flex-col justify-center rounded-md border border-amber-300 bg-amber-50/70 px-3 shadow-sm', ring)}>
+      <div className="flex items-center gap-1">
+        <Crown className="size-3 shrink-0 text-amber-600" />
+        <div className="truncate text-xs font-semibold text-amber-900">{data.display}</div>
+      </div>
+      <div className="text-[10px] text-amber-700">alliance status</div>
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-amber-400" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-amber-400" />
+    </div>
+  )
+}
+
+const nodeTypes = { 'status-tier': StatusNode, 'alliance-tier': AllianceNode }
+
+function toFlow(data: StatusMatchResult): { nodes: Node<NodeData>[]; edges: Edge[] } {
+  if (!data.found) return { nodes: [], edges: [] }
+  const fromId = data.from?.slug
+  const toId = data.to?.slug
+  const rfNodes: Node<NodeData>[] = data.nodes.map((n) => ({
+    id: n.id,
+    type: n.kind,
+    position: { x: 0, y: 0 },
+    data: { ...n, role: n.id === fromId ? 'from' : n.id === toId ? 'to' : 'mid' },
+  }))
+  const rfEdges: Edge[] = data.edges.map((e: SmEdge) => {
+    const confers = e.matchKind === 'confers'
+    const label = confers ? 'confers' : `${e.matchKind}${e.paid ? ' · paid' : ' · free'}`
+    return {
+      id: `${e.from}->${e.to}`,
+      source: e.from,
+      target: e.to,
+      label,
+      animated: !confers,
+      style: {
+        stroke: confers ? '#cbd5e1' : e.paid ? '#f59e0b' : '#14b8a6',
+        strokeWidth: 1.5,
+        strokeDasharray: confers ? '4 3' : undefined,
+      },
+      labelStyle: { fontSize: 9, fill: confers ? '#64748b' : e.paid ? '#b45309' : '#0f766e' },
+      labelBgStyle: { fill: '#fff', fillOpacity: 0.85 },
+    }
+  })
+  return { nodes: layout(rfNodes, rfEdges), edges: rfEdges }
+}
+
+// ── from/to combobox ─────────────────────────────────────────────────────────
+function StatusCombobox({
+  value,
+  onChange,
+  statuses,
+  placeholder,
+}: {
+  value: string
+  onChange: (slug: string) => void
+  statuses: MatchStatus[]
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const label =
+    statuses.find((s) => s.slug === value)?.name ?? (value ? value.replace(/^[a-z-]+\//, '') : placeholder)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger render={<Button variant="outline" size="sm" className="w-60 justify-between font-normal" />}>
+        <span className="truncate">{label}</span>
+        <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
+      </PopoverTrigger>
+      <PopoverContent className="w-[320px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search a status — United Gold, oneworld Sapphire…" />
+          <CommandList>
+            <CommandEmpty>No match.</CommandEmpty>
+            <CommandGroup>
+              {statuses.map((s) => (
+                <CommandItem
+                  key={s.slug}
+                  value={`${s.name} ${s.slug}`}
+                  onSelect={() => {
+                    onChange(s.slug)
+                    setOpen(false)
+                  }}
+                >
+                  <Check className={cn('size-4', value === s.slug ? 'opacity-100' : 'opacity-0')} />
+                  <span className="truncate">{s.name}</span>
+                  {s.kind === 'alliance-tier' ? (
+                    <span className="ml-auto text-[10px] text-amber-600">alliance</span>
+                  ) : null}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+// ── main ─────────────────────────────────────────────────────────────────────
+export type SmProps = {
+  from: string
+  to: string
+  onFrom: (slug: string) => void
+  onTo: (slug: string) => void
+  statuses: MatchStatus[]
+  status: SmStatus
+  data?: StatusMatchResult
+  error?: string
+}
+
+export function StatusMatch(props: SmProps) {
+  const { from, to, onFrom, onTo, statuses, status, data, error } = props
+  const flow = useMemo(() => (data ? toFlow(data) : { nodes: [], edges: [] }), [data])
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex flex-wrap items-center gap-2 border-b bg-white/70 px-3 py-2">
+        <span className="text-sm font-semibold text-slate-900">Status Match Merry-Go-Round</span>
+        <div className="ml-2 flex items-center gap-2">
+          <StatusCombobox value={from} onChange={onFrom} statuses={statuses} placeholder="From status…" />
+          <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+          <StatusCombobox value={to} onChange={onTo} statuses={statuses} placeholder="To status…" />
+        </div>
+        {data?.found ? (
+          <span className="ml-auto text-xs text-muted-foreground">
+            {data.hops} match{data.hops === 1 ? '' : 'es'}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="relative min-h-0 flex-1 bg-[#fbfbfa]">
+        {status === 'idle' ? (
+          <Centered>Pick a <b>from</b> and <b>to</b> status to find a match path.</Centered>
+        ) : status === 'loading' ? (
+          <Centered>Finding a path…</Centered>
+        ) : status === 'error' ? (
+          <Centered className="text-red-600">{error ?? 'Something went wrong.'}</Centered>
+        ) : data && data.found ? (
+          <ReactFlow
+            nodes={flow.nodes}
+            edges={flow.edges}
+            nodeTypes={nodeTypes}
+            fitView
+            proOptions={{ hideAttribution: true }}
+            minZoom={0.2}
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
+            nodesFocusable={false}
+            edgesFocusable={false}
+            panOnDrag
+            zoomOnPinch
+          >
+            <Background color="#e2e8f0" gap={20} />
+            <Controls showInteractive={false} />
+          </ReactFlow>
+        ) : (
+          <Centered>
+            No status-match path from <b>{data?.from?.display ?? from}</b> to{' '}
+            <b>{data?.to?.display ?? to}</b> within 4 matches.
+          </Centered>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Centered({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn('flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground', className)}>
+      <p className="max-w-md">{children}</p>
+    </div>
+  )
+}

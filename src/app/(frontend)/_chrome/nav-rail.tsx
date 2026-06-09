@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { AirplaneTilt, ChatCircleDots, NotePencil } from '@phosphor-icons/react/dist/ssr'
+import { AirplaneTilt, ArrowsClockwise, ChatCircleDots, NotePencil } from '@phosphor-icons/react/dist/ssr'
 import { Menu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ const ITEMS = [
   { href: '/editor', label: 'Editor', Icon: NotePencil },
   { href: '/concierge', label: 'Concierge', Icon: ChatCircleDots },
   { href: '/explore', label: 'Award Explorer', Icon: AirplaneTilt },
+  { href: '/status-match', label: 'Status Match', Icon: ArrowsClockwise },
 ] as const
 
 function Logo() {
