@@ -58,7 +58,7 @@ const W = 210
 const H = 64
 function layout(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'LR', nodesep: 34, ranksep: 130, ranker: 'tight-tree', marginx: 24, marginy: 24 })
+  g.setGraph({ rankdir: 'TB', nodesep: 26, ranksep: 80, ranker: 'tight-tree', marginx: 24, marginy: 24 })
   g.setDefaultEdgeLabel(() => ({}))
   nodes.forEach((n) => g.setNode(n.id, { width: W, height: H }))
   edges.forEach((e) => g.setEdge(e.source, e.target))
@@ -101,8 +101,8 @@ function StatusNode({ data }: NodeProps<Node<NodeData>>) {
           </span>
         ) : null}
       </div>
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-slate-400" />
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-slate-400" />
+      <Handle type="target" position={Position.Top} className="!h-1.5 !w-1.5 !bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} className="!h-1.5 !w-1.5 !bg-slate-400" />
     </div>
   )
 }
@@ -122,8 +122,8 @@ function AllianceNode({ data }: NodeProps<Node<NodeData>>) {
       <div className="text-[10px]" style={{ color: pal.text, opacity: 0.75 }}>
         alliance status
       </div>
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-slate-400" />
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-slate-400" />
+      <Handle type="target" position={Position.Top} className="!h-1.5 !w-1.5 !bg-slate-400" />
+      <Handle type="source" position={Position.Bottom} className="!h-1.5 !w-1.5 !bg-slate-400" />
     </div>
   )
 }
@@ -142,20 +142,18 @@ function toFlow(data: StatusMatchResult): { nodes: Node<NodeData>[]; edges: Edge
   }))
   const rfEdges: Edge[] = data.edges.map((e: SmEdge) => {
     const confers = e.matchKind === 'confers'
-    const label = confers ? 'confers' : `${e.matchKind}${e.paid ? ' · paid' : ' · free'}`
     return {
       id: `${e.from}->${e.to}`,
       source: e.from,
       target: e.to,
-      label,
-      animated: !confers,
+      type: 'smoothstep',
+      animated: false,
       style: {
         stroke: confers ? '#cbd5e1' : e.paid ? '#f59e0b' : '#14b8a6',
         strokeWidth: 1.5,
+        strokeOpacity: 0.85,
         strokeDasharray: confers ? '4 3' : undefined,
       },
-      labelStyle: { fontSize: 9, fill: confers ? '#64748b' : e.paid ? '#b45309' : '#0f766e' },
-      labelBgStyle: { fill: '#fff', fillOpacity: 0.85 },
     }
   })
   return { nodes: layout(rfNodes, rfEdges), edges: rfEdges }
