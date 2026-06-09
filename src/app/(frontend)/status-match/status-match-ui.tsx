@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -13,7 +13,7 @@ import {
   type NodeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import dagre from '@dagrejs/dagre'
+import ELK from 'elkjs/lib/elk.bundled.js'
 import { ArrowRight, Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -53,20 +53,80 @@ function allianceOf(slug?: string): AllianceKey | null {
   return null
 }
 
-// ── dagre layout ─────────────────────────────────────────────────────────────
+// ── ELK layout ───────────────────────────────────────────────────────────────
 const W = 210
 const H = 64
-function layout(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
-  const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'TB', nodesep: 26, ranksep: 80, ranker: 'tight-tree', marginx: 24, marginy: 24 })
-  g.setDefaultEdgeLabel(() => ({}))
-  nodes.forEach((n) => g.setNode(n.id, { width: W, height: H }))
-  edges.forEach((e) => g.setEdge(e.source, e.target))
-  dagre.layout(g)
-  return nodes.map((n) => {
-    const p = g.node(n.id)
-    return { ...n, position: { x: p.x - W / 2, y: p.y - H / 2 } }
+const elk = new ELK()
+const ELK_OPTS = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'DOWN',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '70',
+  'elk.spacing.nodeNode': '30',
+  'elk.spacing.edgeNode': '24',
+  'elk.spacing.edgeEdge': '16',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '16',
+  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+  'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+}
+
+// Edge colour = the alliance the edge leads into (matching node tints), so
+// converging/diverging links read distinctly; neutral when it lands on a
+// non-alliance status.
+function edgeColorFor(target: SmNode | undefined): string {
+  const ak = target
+    ? target.kind === 'alliance-tier'
+      ? allianceOf(target.id)
+      : allianceOf(target.confers?.[0]?.slug)
+    : null
+  return ak ? ALLIANCE[ak].swatch : '#94a3b8'
+}
+
+async function computeFlow(data: StatusMatchResult): Promise<{ nodes: Node<NodeData>[]; edges: Edge[] }> {
+  if (!data.found) return { nodes: [], edges: [] }
+  const fromId = data.from?.slug
+  const toId = data.to?.slug
+  const nodeById = new Map(data.nodes.map((n) => [n.id, n]))
+  const rfNodes: Node<NodeData>[] = data.nodes.map((n) => ({
+    id: n.id,
+    type: n.kind,
+    position: { x: 0, y: 0 },
+    data: { ...n, role: n.id === fromId ? 'from' : n.id === toId ? 'to' : 'mid' },
+  }))
+  const rfEdges: Edge[] = data.edges.map((e: SmEdge) => {
+    const confers = e.matchKind === 'confers'
+    const stroke = confers ? '#cbd5e1' : edgeColorFor(nodeById.get(e.to))
+    return {
+      id: `${e.from}->${e.to}`,
+      source: e.from,
+      target: e.to,
+      type: 'smoothstep',
+      animated: false,
+      style: {
+        stroke,
+        strokeWidth: 1.5,
+        strokeOpacity: 0.9,
+        // paid matches dashed, conferral dotted, free solid.
+        strokeDasharray: confers ? '2 3' : e.paid ? '6 4' : undefined,
+      },
+    }
   })
+  let positions = new Map<string, { x: number; y: number }>()
+  try {
+    const res = await elk.layout({
+      id: 'root',
+      layoutOptions: ELK_OPTS,
+      children: rfNodes.map((n) => ({ id: n.id, width: W, height: H })),
+      edges: rfEdges.map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] })),
+    })
+    positions = new Map((res.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0 }]))
+  } catch {
+    /* fall back to origin if layout fails */
+  }
+  return {
+    nodes: rfNodes.map((n) => ({ ...n, position: positions.get(n.id) ?? { x: 0, y: 0 } })),
+    edges: rfEdges,
+  }
 }
 
 // ── nodes ────────────────────────────────────────────────────────────────────
@@ -130,35 +190,6 @@ function AllianceNode({ data }: NodeProps<Node<NodeData>>) {
 
 const nodeTypes = { 'status-tier': StatusNode, 'alliance-tier': AllianceNode }
 
-function toFlow(data: StatusMatchResult): { nodes: Node<NodeData>[]; edges: Edge[] } {
-  if (!data.found) return { nodes: [], edges: [] }
-  const fromId = data.from?.slug
-  const toId = data.to?.slug
-  const rfNodes: Node<NodeData>[] = data.nodes.map((n) => ({
-    id: n.id,
-    type: n.kind,
-    position: { x: 0, y: 0 },
-    data: { ...n, role: n.id === fromId ? 'from' : n.id === toId ? 'to' : 'mid' },
-  }))
-  const rfEdges: Edge[] = data.edges.map((e: SmEdge) => {
-    const confers = e.matchKind === 'confers'
-    return {
-      id: `${e.from}->${e.to}`,
-      source: e.from,
-      target: e.to,
-      type: 'smoothstep',
-      animated: false,
-      style: {
-        stroke: confers ? '#cbd5e1' : e.paid ? '#f59e0b' : '#14b8a6',
-        strokeWidth: 1.5,
-        strokeOpacity: 0.85,
-        strokeDasharray: confers ? '4 3' : undefined,
-      },
-    }
-  })
-  return { nodes: layout(rfNodes, rfEdges), edges: rfEdges }
-}
-
 // ── legend ───────────────────────────────────────────────────────────────────
 function Legend({ data }: { data: StatusMatchResult }) {
   const present = new Set<AllianceKey>()
@@ -173,7 +204,7 @@ function Legend({ data }: { data: StatusMatchResult }) {
     <div className="rounded-md border bg-white/95 px-2.5 py-2 text-[10px] shadow-sm backdrop-blur">
       {present.size ? (
         <div className="mb-1.5">
-          <div className="mb-1 font-semibold text-slate-700">Confers alliance status</div>
+          <div className="mb-1 font-semibold text-slate-700">Alliance status (node &amp; link)</div>
           <div className="flex flex-col gap-0.5">
             {([...present] as AllianceKey[]).map((ak) => (
               <div key={ak} className="flex items-center gap-1.5">
@@ -187,13 +218,13 @@ function Legend({ data }: { data: StatusMatchResult }) {
       <div className="flex flex-col gap-0.5">
         {hasFree ? (
           <div className="flex items-center gap-1.5">
-            <span className="h-[2px] w-4" style={{ background: '#14b8a6' }} />
+            <span className="w-4" style={{ borderTop: '2px solid #94a3b8' }} />
             <span className="text-slate-600">free match</span>
           </div>
         ) : null}
         {hasPaid ? (
           <div className="flex items-center gap-1.5">
-            <span className="h-[2px] w-4" style={{ background: '#f59e0b' }} />
+            <span className="w-4" style={{ borderTop: '2px dashed #94a3b8' }} />
             <span className="text-slate-600">paid match</span>
           </div>
         ) : null}
@@ -281,7 +312,20 @@ export type SmProps = {
 
 export function StatusMatch(props: SmProps) {
   const { from, to, onFrom, onTo, statuses, status, data, error } = props
-  const flow = useMemo(() => (data ? toFlow(data) : { nodes: [], edges: [] }), [data])
+  const [flow, setFlow] = useState<{ nodes: Node<NodeData>[]; edges: Edge[] }>({ nodes: [], edges: [] })
+  useEffect(() => {
+    if (!data?.found) {
+      setFlow({ nodes: [], edges: [] })
+      return
+    }
+    let cancelled = false
+    computeFlow(data)
+      .then((f) => !cancelled && setFlow(f))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [data])
   // You can only match FROM a programme status you hold, not an alliance tier.
   const fromStatuses = useMemo(() => statuses.filter((s) => s.kind !== 'alliance-tier'), [statuses])
   const matchCount = data?.found ? data.edges.filter((e) => e.matchKind !== 'confers').length : 0
@@ -314,6 +358,7 @@ export function StatusMatch(props: SmProps) {
           <Centered className="text-red-600">{error ?? 'Something went wrong.'}</Centered>
         ) : data && data.found ? (
           <ReactFlow
+            key={`${data.from?.slug ?? ''}|${data.to?.slug ?? ''}|${flow.nodes.length}`}
             nodes={flow.nodes}
             edges={flow.edges}
             nodeTypes={nodeTypes}
