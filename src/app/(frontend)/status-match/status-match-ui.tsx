@@ -5,6 +5,7 @@ import {
   ReactFlow,
   Background,
   Controls,
+  Panel,
   Handle,
   Position,
   type Node,
@@ -13,7 +14,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import dagre from '@dagrejs/dagre'
-import { ArrowRight, Check, ChevronsUpDown, Crown } from 'lucide-react'
+import { ArrowRight, Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
@@ -36,12 +37,28 @@ export type SmStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 type NodeData = SmNode & { role: 'from' | 'to' | 'mid' }
 
+// ── alliance palette ─────────────────────────────────────────────────────────
+type AllianceKey = 'star' | 'oneworld' | 'skyteam'
+const ALLIANCE: Record<AllianceKey, { label: string; bg: string; border: string; text: string; swatch: string }> = {
+  star: { label: 'Star Alliance', bg: '#fffbeb', border: '#fcd34d', text: '#92400e', swatch: '#f59e0b' },
+  oneworld: { label: 'oneworld', bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', swatch: '#3b82f6' },
+  skyteam: { label: 'SkyTeam', bg: '#f5f3ff', border: '#c4b5fd', text: '#6d28d9', swatch: '#8b5cf6' },
+}
+function allianceOf(slug?: string): AllianceKey | null {
+  if (!slug) return null
+  const s = slug.replace(/^[a-z-]+\//, '')
+  if (s.startsWith('star-alliance')) return 'star'
+  if (s.startsWith('oneworld')) return 'oneworld'
+  if (s.startsWith('skyteam')) return 'skyteam'
+  return null
+}
+
 // ── dagre layout ─────────────────────────────────────────────────────────────
-const W = 200
-const H = 56
+const W = 210
+const H = 64
 function layout(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'LR', nodesep: 22, ranksep: 96, marginx: 16, marginy: 16 })
+  g.setGraph({ rankdir: 'LR', nodesep: 34, ranksep: 130, ranker: 'tight-tree', marginx: 24, marginy: 24 })
   g.setDefaultEdgeLabel(() => ({}))
   nodes.forEach((n) => g.setNode(n.id, { width: W, height: H }))
   edges.forEach((e) => g.setEdge(e.source, e.target))
@@ -54,17 +71,35 @@ function layout(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
 
 // ── nodes ────────────────────────────────────────────────────────────────────
 function StatusNode({ data }: NodeProps<Node<NodeData>>) {
+  const conf = data.confers?.[0]
+  const ak = allianceOf(conf?.slug)
+  const pal = ak ? ALLIANCE[ak] : null
   const ring =
     data.role === 'from'
-      ? 'border-emerald-400 ring-1 ring-emerald-300'
+      ? 'ring-2 ring-emerald-400'
       : data.role === 'to'
-        ? 'border-slate-900 ring-1 ring-slate-400'
-        : 'border-slate-200'
+        ? 'ring-2 ring-slate-900'
+        : ''
   return (
-    <div className={cn('flex h-[56px] w-[200px] flex-col justify-center rounded-md border bg-white px-3 shadow-sm', ring)}>
+    <div
+      className={cn('flex h-[64px] w-[210px] flex-col justify-center gap-1 rounded-md border px-3 shadow-sm', ring)}
+      style={{ background: pal?.bg ?? '#fff', borderColor: pal?.border ?? '#e2e8f0' }}
+    >
       <div className="truncate text-xs font-semibold text-slate-900">{data.display}</div>
-      <div className="text-[10px] text-muted-foreground">
-        {data.role === 'from' ? 'you hold' : data.role === 'to' ? 'target' : 'status match'}
+      <div className="flex items-center gap-1.5">
+        {data.role !== 'mid' ? (
+          <span className="text-[10px] font-medium text-muted-foreground">
+            {data.role === 'from' ? 'you hold' : 'target'}
+          </span>
+        ) : null}
+        {conf && pal ? (
+          <span
+            className="truncate rounded-sm px-1 py-px text-[9px] font-semibold"
+            style={{ background: pal.swatch, color: '#fff' }}
+          >
+            {conf.display}
+          </span>
+        ) : null}
       </div>
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-slate-400" />
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-slate-400" />
@@ -73,16 +108,22 @@ function StatusNode({ data }: NodeProps<Node<NodeData>>) {
 }
 
 function AllianceNode({ data }: NodeProps<Node<NodeData>>) {
-  const ring = data.role === 'to' ? 'ring-1 ring-amber-400' : ''
+  const ak = allianceOf(data.id)
+  const pal = ak ? ALLIANCE[ak] : ALLIANCE.star
+  const ring = data.role === 'to' ? 'ring-2 ring-slate-900' : ''
   return (
-    <div className={cn('flex h-[56px] w-[200px] flex-col justify-center rounded-md border border-amber-300 bg-amber-50/70 px-3 shadow-sm', ring)}>
-      <div className="flex items-center gap-1">
-        <Crown className="size-3 shrink-0 text-amber-600" />
-        <div className="truncate text-xs font-semibold text-amber-900">{data.display}</div>
+    <div
+      className={cn('flex h-[64px] w-[210px] flex-col justify-center gap-0.5 rounded-md border px-3 shadow-sm', ring)}
+      style={{ background: pal.bg, borderColor: pal.border }}
+    >
+      <div className="truncate text-xs font-semibold" style={{ color: pal.text }}>
+        {data.display}
       </div>
-      <div className="text-[10px] text-amber-700">alliance status</div>
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-amber-400" />
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-amber-400" />
+      <div className="text-[10px]" style={{ color: pal.text, opacity: 0.75 }}>
+        alliance status
+      </div>
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-slate-400" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-slate-400" />
     </div>
   )
 }
@@ -118,6 +159,49 @@ function toFlow(data: StatusMatchResult): { nodes: Node<NodeData>[]; edges: Edge
     }
   })
   return { nodes: layout(rfNodes, rfEdges), edges: rfEdges }
+}
+
+// ── legend ───────────────────────────────────────────────────────────────────
+function Legend({ data }: { data: StatusMatchResult }) {
+  const present = new Set<AllianceKey>()
+  for (const n of data.nodes) {
+    const ak = n.kind === 'alliance-tier' ? allianceOf(n.id) : allianceOf(n.confers?.[0]?.slug)
+    if (ak) present.add(ak)
+  }
+  const hasFree = data.edges.some((e) => e.matchKind !== 'confers' && !e.paid)
+  const hasPaid = data.edges.some((e) => e.matchKind !== 'confers' && e.paid)
+  if (present.size === 0 && !hasFree && !hasPaid) return null
+  return (
+    <div className="rounded-md border bg-white/95 px-2.5 py-2 text-[10px] shadow-sm backdrop-blur">
+      {present.size ? (
+        <div className="mb-1.5">
+          <div className="mb-1 font-semibold text-slate-700">Confers alliance status</div>
+          <div className="flex flex-col gap-0.5">
+            {([...present] as AllianceKey[]).map((ak) => (
+              <div key={ak} className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm" style={{ background: ALLIANCE[ak].swatch }} />
+                <span className="text-slate-600">{ALLIANCE[ak].label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-0.5">
+        {hasFree ? (
+          <div className="flex items-center gap-1.5">
+            <span className="h-[2px] w-4" style={{ background: '#14b8a6' }} />
+            <span className="text-slate-600">free match</span>
+          </div>
+        ) : null}
+        {hasPaid ? (
+          <div className="flex items-center gap-1.5">
+            <span className="h-[2px] w-4" style={{ background: '#f59e0b' }} />
+            <span className="text-slate-600">paid match</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 // ── from/to combobox ─────────────────────────────────────────────────────────
@@ -248,6 +332,9 @@ export function StatusMatch(props: SmProps) {
           >
             <Background color="#e2e8f0" gap={20} />
             <Controls showInteractive={false} />
+            <Panel position="top-right">
+              <Legend data={data} />
+            </Panel>
           </ReactFlow>
         ) : to ? (
           <Centered>

@@ -10,7 +10,14 @@ import type { KbHttp } from './kb-tools'
 export type SmKind = 'status-tier' | 'alliance-tier'
 export type MatchStatus = { slug: string; name: string; kind: SmKind }
 
-export type SmNode = { id: string; kind: SmKind; display: string }
+export type SmNode = {
+  id: string
+  kind: SmKind
+  display: string
+  // For a status-tier: the alliance status it CONFERS (shown as the node's
+  // colour rather than a separate node), if any.
+  confers?: { slug: string; display: string }[]
+}
 export type SmEdge = {
   from: string
   to: string
@@ -125,22 +132,13 @@ export async function buildStatusMatchPaths(
 
   // Enrich the result graph: for every visible status-tier, surface the
   // alliance status it confers (node + dashed CONFERS edge), so the user sees
-  // e.g. "United Premier Gold → Star Alliance Gold" alongside the matches.
-  const addConfers = async (nodes: SmNode[], edges: SmEdge[]) => {
-    const ids = new Set(nodes.map((n) => n.id))
-    const have = new Set(edges.map((e) => `${e.from}->${e.to}`))
-    for (const s of nodes.filter((n) => n.kind === 'status-tier').map((n) => n.id)) {
-      for (const at of await confersOf(s)) {
-        if (!ids.has(at)) {
-          nodes.push({ id: at, kind: 'alliance-tier', display: display(at) })
-          ids.add(at)
-        }
-        const key = `${s}->${at}`
-        if (!have.has(key)) {
-          edges.push({ from: s, to: at, matchKind: 'confers', paid: false, viaAlliance: null })
-          have.add(key)
-        }
-      }
+  // e.g. "United Premier Gold" is tagged as conferring "Star Alliance Gold",
+  // which the UI shows via the node's colour + a legend (not a separate node).
+  const tagConfers = async (nodes: SmNode[]) => {
+    for (const n of nodes) {
+      if (n.kind !== 'status-tier') continue
+      const ats = await confersOf(n.id)
+      if (ats.length) n.confers = ats.map((at) => ({ slug: at, display: display(at) }))
     }
   }
 
@@ -220,7 +218,7 @@ export async function buildStatusMatchPaths(
     if (!keep.has(to)) nodes.push({ id: to, kind: 'alliance-tier', display: display(to) })
     for (const g of goals) edges.push({ from: g, to, matchKind: 'confers', paid: false, viaAlliance: null })
   }
-  await addConfers(nodes, edges)
+  await tagConfers(nodes)
   const hops = to ? Math.min(...goals.map((g) => depthOf.get(g) ?? Infinity)) : 0
   return { from: base(from), to: to ? base(to) : null, found: true, hops, nodes, edges, notes: [] }
 }
