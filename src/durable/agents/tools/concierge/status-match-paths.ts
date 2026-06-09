@@ -123,6 +123,27 @@ export async function buildStatusMatchPaths(
     return res
   }
 
+  // Enrich the result graph: for every visible status-tier, surface the
+  // alliance status it confers (node + dashed CONFERS edge), so the user sees
+  // e.g. "United Premier Gold → Star Alliance Gold" alongside the matches.
+  const addConfers = async (nodes: SmNode[], edges: SmEdge[]) => {
+    const ids = new Set(nodes.map((n) => n.id))
+    const have = new Set(edges.map((e) => `${e.from}->${e.to}`))
+    for (const s of nodes.filter((n) => n.kind === 'status-tier').map((n) => n.id)) {
+      for (const at of await confersOf(s)) {
+        if (!ids.has(at)) {
+          nodes.push({ id: at, kind: 'alliance-tier', display: display(at) })
+          ids.add(at)
+        }
+        const key = `${s}->${at}`
+        if (!have.has(key)) {
+          edges.push({ from: s, to: at, matchKind: 'confers', paid: false, viaAlliance: null })
+          have.add(key)
+        }
+      }
+    }
+  }
+
   // Has a reached status-tier hit the target? (target may be an alliance-tier,
   // satisfied by any tier that CONFERS it.)
   const reaches = async (t: string): Promise<boolean> => {
@@ -145,6 +166,7 @@ export async function buildStatusMatchPaths(
       nodes.push({ id: grant, kind: isAlliance(grant) ? 'alliance-tier' : 'status-tier', display: display(grant) })
       edges.push({ from, to: grant, matchKind: m.kind, paid: m.paid, viaAlliance: m.via })
     }
+    await addConfers(nodes, edges)
     return { from: base(from), to: null, found: true, hops: 1, nodes, edges, notes: [] }
   }
 
@@ -204,6 +226,7 @@ export async function buildStatusMatchPaths(
     edges.push({ from: foundAt, to, matchKind: 'confers', paid: false, viaAlliance: null })
   }
 
+  await addConfers(nodes, edges)
   return {
     from: base(from),
     to: base(to),
