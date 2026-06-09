@@ -184,3 +184,86 @@ Greenfield foundation-first, detailed in `delivery-plan.md`: F0 decisions
 (this) → F1 event core + projection → F2 capture + blobs → F3 email ingestion →
 F4 reconciliation → F5 multi-ledger + consolidated net worth. The IA spine (§3)
 is not a separate "reskin phase" — it emerges as F1–F5 land on the real model.
+
+## 13. F0.1 addendum — event schema v1 & rebuild strategy
+
+Status: **proposed, pending sign-off.** Closes the two "open before F1
+finalizes" items in `delivery-plan.md`. On sign-off these are F0-grade
+decisions; F1 builds exactly this.
+
+### 13.1 Envelope
+
+One row per event; everything queryable is a column, everything kind-specific
+is in `payload`:
+
+```sql
+event_log (
+  ledger_id    TEXT    NOT NULL,
+  seq          INTEGER NOT NULL,  -- per-ledger, monotonic; THE replay order
+  kind         TEXT    NOT NULL,  -- closed set, §13.2
+  v            INTEGER NOT NULL,  -- per-kind payload schema version
+  actor        TEXT    NOT NULL,  -- 'user' | 'ai' | 'email'
+  actor_detail TEXT,              -- agent name, rule id, email message-id …
+  refs         TEXT    NOT NULL DEFAULT '[]',  -- JSON array of seq (causality)
+  payload      TEXT    NOT NULL,  -- JSON, shaped per (kind, v)
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (ledger_id, seq)
+) STRICT
+```
+
+`(ledger_id, seq)` is the event's identity and address; `refs` point at seqs
+within the same ledger. No UUIDs/ULIDs: the DO is single-threaded, so a gapless
+per-ledger counter is simpler, sortable, and is itself the ordering authority.
+
+### 13.2 Kinds & payloads (all v1)
+
+| Kind | Payload | `refs` |
+|---|---|---|
+| `captured` | `source` (`upload\|paste\|email\|invoice`), `artifact` (R2 key or null), `filename?`, `mime?`, `channel?` (email from/subject/message-id) | — |
+| `extracted` | `extractor` ({agent, model}), `confidence` (0–1), `proposal` (`{beancount}` or `{rows}`), `notes?` | the `captured` |
+| `posted` | `entries` (canonical rendered beancount text), `route` (`auto\|confirmed`), `txn_hashes?` | the `extracted`, or — for manual entry |
+| `corrected` | `entries` (reversing beancount text), `reason` | the `posted` being corrected |
+| `dismissed` | `reason?` | the `captured` or `extracted` |
+| `reconciled` | `account`, `through_date`, `matched` (seqs) | the `posted`s matched |
+
+`posted.entries` embeds the fully rendered text rather than referencing any
+mutable state — a projector must never need anything outside the log to
+rebuild (§13.4).
+
+### 13.3 Versioning rule
+
+- **Additive optional field → no bump.** Rename, type change, semantic change,
+  or new required field → bump `v` for that kind.
+- **Events are never rewritten.** The projector *upcasts on read*: one pure
+  function per (kind, v) to the latest in-memory shape; every historical
+  version supported forever. Cheap at our scale, and the only rule compatible
+  with append-only.
+- **Unknown kind or future `v` → the projector fails loud and refuses to
+  rebuild.** Never skip-and-continue: a silently skipped event is a silently
+  divergent ledger.
+
+### 13.4 Rebuild strategy — full replay, no snapshots
+
+The lean option, per `delivery-plan.md`: projections are disposable.
+
+- All projection tables (transactions, postings, balance materializations,
+  heatmap aggregates) carry zero authority; rebuilt by replaying `event_log`
+  in `(ledger_id, seq)` order through the current projector.
+- A `projector_version` integer is stamped in a meta table. Cold start with a
+  version mismatch — or a failed balance verification — drops the projection
+  tables and replays from zero.
+- **Projector purity is an invariant:** event stream in, tables out. No
+  wall-clock, no randomness, no network, no reads outside the log.
+- **No snapshot+tail in v1.** Personal-finance volume (10³–10⁵ events), local
+  SQLite, single-threaded DO: full replay is milliseconds-to-seconds, and
+  snapshot invalidation is the classic complexity trap.
+- **Escalation trigger, written down now:** if p95 cold-start rebuild exceeds
+  ~2s for real users, add snapshot+tail *then*. A measurement, not a debate.
+
+### 13.5 Relation to existing code
+
+The current `ledger-core` tables (`transactions`, `postings`,
+`balance_totals`, `daily_balances`, directives) survive as projection tables
+and gain `ledger_id` in F1. The `replaceBuffer` delete+insert write path is
+superseded: UI/AI confirmation emits `posted`/`corrected` events and the
+projection follows. Greenfield — no data migration.

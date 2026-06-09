@@ -58,9 +58,10 @@ right thing from all angles" into an unbounded rebuild.
 
 ## Open before F1 finalizes
 
-- Event schema v1 shape (kinds, payload envelope, versioning rule).
-- Projection rebuild strategy (full replay vs. snapshot+tail) — pick the lean
-  option; projections are disposable.
+- Event schema v1 shape (kinds, payload envelope, versioning rule) —
+  **proposed** in `ledger-pipeline.md` §13 (F0.1), pending sign-off.
+- Projection rebuild strategy — **proposed** in `ledger-pipeline.md` §13.4:
+  full replay, no snapshots, written escalation trigger; pending sign-off.
 - Multi-currency consolidated-net-worth valuation policy (rate source, as-of) —
   needed before F5, decided no later than F4.
 
