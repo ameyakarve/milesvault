@@ -43,14 +43,15 @@ export function StatusMatchView() {
   const reqKey = `${from}|${to}`
   useEffect(() => {
     if (!ready) return
-    if (!from || !to) {
+    if (!from) {
       setResult(undefined)
       return
     }
     let cancelled = false
     setError(undefined)
     const handle = setTimeout(() => {
-      const q = new URLSearchParams({ from, to })
+      const q = new URLSearchParams({ from })
+      if (to) q.set('to', to)
       fetch(`/api/concierge/status-match-paths?${q.toString()}`)
         .then((r) => (r.ok ? (r.json() as Promise<StatusMatchResult>) : Promise.reject(new Error(String(r.status)))))
         .then((d) => !cancelled && setResult({ key: reqKey, data: d }))
@@ -64,7 +65,7 @@ export function StatusMatchView() {
 
   const status: SmStatus =
     !ready ? 'idle'
-    : !from || !to ? 'idle'
+    : !from ? 'idle'
     : error ? 'error'
     : !result || result.key !== reqKey ? 'loading'
     : 'ready'

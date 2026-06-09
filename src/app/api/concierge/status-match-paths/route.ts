@@ -15,8 +15,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   const url = new URL(req.url)
   const from = (url.searchParams.get('from') ?? '').trim()
   const to = (url.searchParams.get('to') ?? '').trim()
-  if (!from || !to) {
-    return NextResponse.json({ error: 'both from and to statuses are required' }, { status: 400 })
+  // `to` is optional: with only `from` we return all matches available from it.
+  if (!from) {
+    return NextResponse.json({ error: 'from status is required' }, { status: 400 })
   }
 
   const { env } = await getCloudflareContext({ async: true })

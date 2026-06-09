@@ -81,8 +81,8 @@ export async function buildStatusMatchPaths(
   const to = toText.trim()
   const display = (s: string) => prettySlug(s)
   const base = (slug: string) => ({ slug, display: display(slug) })
-  if (!from || !to) {
-    return { from: null, to: null, found: false, hops: 0, nodes: [], edges: [], notes: ['pick a from and to status'] }
+  if (!from) {
+    return { from: null, to: null, found: false, hops: 0, nodes: [], edges: [], notes: ['pick a from status'] }
   }
 
   const matchesFrom = memoize(async (slug: string): Promise<RelItem[]> => {
@@ -129,6 +129,23 @@ export async function buildStatusMatchPaths(
     if (t === to) return true
     if (isAlliance(to)) return (await confersOf(t)).includes(to)
     return false
+  }
+
+  // "All matches from a status" mode: no target → return every match available
+  // directly from `from` (a star graph), deduped by granted tier.
+  if (!to) {
+    const seen = new Map<string, { kind: string; paid: boolean; via: string | null }>()
+    for (const m of await outMatches(from)) if (!seen.has(m.grant)) seen.set(m.grant, m)
+    if (seen.size === 0) {
+      return { from: base(from), to: null, found: false, hops: 0, nodes: [], edges: [], notes: ['no status matches available from this status'] }
+    }
+    const nodes: SmNode[] = [{ id: from, kind: isAlliance(from) ? 'alliance-tier' : 'status-tier', display: display(from) }]
+    const edges: SmEdge[] = []
+    for (const [grant, m] of seen) {
+      nodes.push({ id: grant, kind: isAlliance(grant) ? 'alliance-tier' : 'status-tier', display: display(grant) })
+      edges.push({ from, to: grant, matchKind: m.kind, paid: m.paid, viaAlliance: m.via })
+    }
+    return { from: base(from), to: null, found: true, hops: 1, nodes, edges, notes: [] }
   }
 
   const parent = new Map<string, { prev: string; kind: string; paid: boolean; via: string | null }>()

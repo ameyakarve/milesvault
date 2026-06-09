@@ -126,11 +126,13 @@ function StatusCombobox({
   onChange,
   statuses,
   placeholder,
+  allowAny,
 }: {
   value: string
   onChange: (slug: string) => void
   statuses: MatchStatus[]
   placeholder: string
+  allowAny?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const label =
@@ -147,6 +149,18 @@ function StatusCombobox({
           <CommandList>
             <CommandEmpty>No match.</CommandEmpty>
             <CommandGroup>
+              {allowAny ? (
+                <CommandItem
+                  value="any all matches"
+                  onSelect={() => {
+                    onChange('')
+                    setOpen(false)
+                  }}
+                >
+                  <Check className={cn('size-4', value === '' ? 'opacity-100' : 'opacity-0')} />
+                  <span className="text-muted-foreground">Any — show all matches</span>
+                </CommandItem>
+              ) : null}
               {statuses.map((s) => (
                 <CommandItem
                   key={s.slug}
@@ -186,26 +200,32 @@ export type SmProps = {
 export function StatusMatch(props: SmProps) {
   const { from, to, onFrom, onTo, statuses, status, data, error } = props
   const flow = useMemo(() => (data ? toFlow(data) : { nodes: [], edges: [] }), [data])
+  // You can only match FROM a programme status you hold, not an alliance tier.
+  const fromStatuses = useMemo(() => statuses.filter((s) => s.kind !== 'alliance-tier'), [statuses])
+  const matchCount = data?.found ? data.edges.filter((e) => e.matchKind !== 'confers').length : 0
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b bg-white/70 px-3 py-2">
         <span className="text-sm font-semibold text-slate-900">Status Match Merry-Go-Round</span>
         <div className="ml-2 flex items-center gap-2">
-          <StatusCombobox value={from} onChange={onFrom} statuses={statuses} placeholder="From status…" />
+          <StatusCombobox value={from} onChange={onFrom} statuses={fromStatuses} placeholder="From status…" />
           <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-          <StatusCombobox value={to} onChange={onTo} statuses={statuses} placeholder="To status…" />
+          <StatusCombobox value={to} onChange={onTo} statuses={statuses} placeholder="To status (optional)…" allowAny />
         </div>
         {data?.found ? (
           <span className="ml-auto text-xs text-muted-foreground">
-            {data.hops} match{data.hops === 1 ? '' : 'es'}
+            {matchCount} match{matchCount === 1 ? '' : 'es'}
+            {to ? '' : ' available'}
           </span>
         ) : null}
       </div>
 
       <div className="relative min-h-0 flex-1 bg-[#fbfbfa]">
         {status === 'idle' ? (
-          <Centered>Pick a <b>from</b> and <b>to</b> status to find a match path.</Centered>
+          <Centered>
+            Pick a <b>from</b> status to see every match available from it — add a <b>to</b> status for a specific path.
+          </Centered>
         ) : status === 'loading' ? (
           <Centered>Finding a path…</Centered>
         ) : status === 'error' ? (
@@ -229,10 +249,14 @@ export function StatusMatch(props: SmProps) {
             <Background color="#e2e8f0" gap={20} />
             <Controls showInteractive={false} />
           </ReactFlow>
-        ) : (
+        ) : to ? (
           <Centered>
             No status-match path from <b>{data?.from?.display ?? from}</b> to{' '}
             <b>{data?.to?.display ?? to}</b> within 4 matches.
+          </Centered>
+        ) : (
+          <Centered>
+            No status matches available from <b>{data?.from?.display ?? from}</b>.
           </Centered>
         )}
       </div>
