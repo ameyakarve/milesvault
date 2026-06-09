@@ -224,10 +224,10 @@ export function StatusMatch(props: SmProps) {
       <div className="relative min-h-0 flex-1 bg-[#fbfbfa]">
         {status === 'idle' ? (
           <Centered>
-            Pick a <b>from</b> status to see every match available from it — add a <b>to</b> status for a specific path.
+            Pick a <b>from</b> status to map every match reachable from it — add a <b>to</b> status to see every way to get there.
           </Centered>
         ) : status === 'loading' ? (
-          <Centered>Finding a path…</Centered>
+          <Centered>Tracing the graph…</Centered>
         ) : status === 'error' ? (
           <Centered className="text-red-600">{error ?? 'Something went wrong.'}</Centered>
         ) : data && data.found ? (
@@ -237,7 +237,7 @@ export function StatusMatch(props: SmProps) {
             nodeTypes={nodeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
-            minZoom={0.2}
+            minZoom={0.1}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable={false}

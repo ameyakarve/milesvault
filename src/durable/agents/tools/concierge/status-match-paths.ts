@@ -144,96 +144,83 @@ export async function buildStatusMatchPaths(
     }
   }
 
-  // Has a reached status-tier hit the target? (target may be an alliance-tier,
-  // satisfied by any tier that CONFERS it.)
-  const reaches = async (t: string): Promise<boolean> => {
-    if (t === to) return true
-    if (isAlliance(to)) return (await confersOf(t)).includes(to)
-    return false
-  }
-
-  // "All matches from a status" mode: no target → return every match available
-  // directly from `from` (a star graph), deduped by granted tier.
-  if (!to) {
-    const seen = new Map<string, { kind: string; paid: boolean; via: string | null }>()
-    for (const m of await outMatches(from)) if (!seen.has(m.grant)) seen.set(m.grant, m)
-    if (seen.size === 0) {
-      return { from: base(from), to: null, found: false, hops: 0, nodes: [], edges: [], notes: ['no status matches available from this status'] }
-    }
-    const nodes: SmNode[] = [{ id: from, kind: isAlliance(from) ? 'alliance-tier' : 'status-tier', display: display(from) }]
-    const edges: SmEdge[] = []
-    for (const [grant, m] of seen) {
-      nodes.push({ id: grant, kind: isAlliance(grant) ? 'alliance-tier' : 'status-tier', display: display(grant) })
-      edges.push({ from, to: grant, matchKind: m.kind, paid: m.paid, viaAlliance: m.via })
-    }
-    await addConfers(nodes, edges)
-    return { from: base(from), to: null, found: true, hops: 1, nodes, edges, notes: [] }
-  }
-
-  const parent = new Map<string, { prev: string; kind: string; paid: boolean; via: string | null }>()
-  const visited = new Set<string>([from])
+  // Forward BFS: build the FULL graph reachable from `from` via status matches
+  // (expanding alliance-sourced matches through CONFERS), bounded by hops + cap.
+  const depthOf = new Map<string, number>([[from, 0]])
+  const adj = new Map<string, Array<{ grant: string; kind: string; paid: boolean; via: string | null }>>()
   let frontier = [from]
-  let foundAt: string | null = null
-  for (let depth = 0; depth < MAX_HOPS && frontier.length && !foundAt && visited.size < NODE_CAP; depth++) {
+  for (let d = 0; d < MAX_HOPS && frontier.length && depthOf.size < NODE_CAP; d++) {
     const next: string[] = []
     for (const node of frontier) {
-      for (const m of await outMatches(node)) {
-        if (visited.has(m.grant)) continue
-        visited.add(m.grant)
-        parent.set(m.grant, { prev: node, kind: m.kind, paid: m.paid, via: m.via })
-        if (await reaches(m.grant)) {
-          foundAt = m.grant
-          break
+      const ms = await outMatches(node)
+      adj.set(node, ms)
+      for (const m of ms) {
+        if (!depthOf.has(m.grant)) {
+          depthOf.set(m.grant, d + 1)
+          next.push(m.grant)
         }
-        next.push(m.grant)
       }
-      if (foundAt) break
     }
     frontier = next
   }
 
-  if (!foundAt) {
-    return {
-      from: base(from),
-      to: base(to),
-      found: false,
-      hops: 0,
-      nodes: [],
-      edges: [],
-      notes: [`no status-match path found within ${MAX_HOPS} hops`],
+  // Every distinct match edge among reached nodes.
+  const allEdges: SmEdge[] = []
+  const seenEdge = new Set<string>()
+  for (const [node, ms] of adj) {
+    for (const m of ms) {
+      const key = `${node}->${m.grant}`
+      if (seenEdge.has(key)) continue
+      seenEdge.add(key)
+      allEdges.push({ from: node, to: m.grant, matchKind: m.kind, paid: m.paid, viaAlliance: m.via })
     }
   }
 
-  // Reconstruct from → foundAt.
-  const edges: SmEdge[] = []
-  const chain: string[] = [foundAt]
-  let cur = foundAt
-  while (parent.has(cur)) {
-    const p = parent.get(cur)!
-    edges.push({ from: p.prev, to: cur, matchKind: p.kind, paid: p.paid, viaAlliance: p.via })
-    chain.push(p.prev)
-    cur = p.prev
+  // Targeted mode: keep only nodes/edges on some path from `from` to the target
+  // (a status-tier, or any reached tier that CONFERS an alliance-tier target).
+  // Untargeted mode: keep the whole reachable graph.
+  let keep: Set<string>
+  const goals: string[] = []
+  if (to) {
+    for (const s of depthOf.keys()) {
+      if (s === to) goals.push(s)
+      else if (isAlliance(to) && (await confersOf(s)).includes(to)) goals.push(s)
+    }
+    if (goals.length === 0) {
+      return { from: base(from), to: base(to), found: false, hops: 0, nodes: [], edges: [], notes: [`no status-match path found within ${MAX_HOPS} hops`] }
+    }
+    const rev = new Map<string, string[]>()
+    for (const e of allEdges) (rev.get(e.to) ?? rev.set(e.to, []).get(e.to)!).push(e.from)
+    keep = new Set(goals)
+    const stack = [...goals]
+    while (stack.length) {
+      const cur = stack.pop()!
+      for (const prev of rev.get(cur) ?? []) {
+        if (!keep.has(prev)) {
+          keep.add(prev)
+          stack.push(prev)
+        }
+      }
+    }
+    if (!keep.has(from)) {
+      return { from: base(from), to: base(to), found: false, hops: 0, nodes: [], edges: [], notes: [`no status-match path found within ${MAX_HOPS} hops`] }
+    }
+  } else {
+    keep = new Set(depthOf.keys())
   }
-  chain.reverse()
-  edges.reverse()
 
-  const nodeIds = new Set(chain)
-  const nodes: SmNode[] = chain.map((s) => ({ id: s, kind: isAlliance(s) ? 'alliance-tier' : 'status-tier', display: display(s) }))
-  // If the target is an alliance-tier reached via a conferring status-tier, show
-  // the final CONFERS link to the alliance-tier node.
-  if (isAlliance(to) && foundAt !== to) {
-    if (!nodeIds.has(to)) nodes.push({ id: to, kind: 'alliance-tier', display: display(to) })
-    edges.push({ from: foundAt, to, matchKind: 'confers', paid: false, viaAlliance: null })
+  if (allEdges.filter((e) => keep.has(e.from) && keep.has(e.to)).length === 0) {
+    return { from: base(from), to: to ? base(to) : null, found: false, hops: 0, nodes: [], edges: [], notes: ['no status matches available from this status'] }
   }
 
+  const nodes: SmNode[] = [...keep].map((s) => ({ id: s, kind: isAlliance(s) ? 'alliance-tier' : 'status-tier', display: display(s) }))
+  const edges: SmEdge[] = allEdges.filter((e) => keep.has(e.from) && keep.has(e.to))
+  // Alliance-tier target: show the final CONFERS link from each goal tier.
+  if (to && isAlliance(to)) {
+    if (!keep.has(to)) nodes.push({ id: to, kind: 'alliance-tier', display: display(to) })
+    for (const g of goals) edges.push({ from: g, to, matchKind: 'confers', paid: false, viaAlliance: null })
+  }
   await addConfers(nodes, edges)
-  return {
-    from: base(from),
-    to: base(to),
-    found: true,
-    hops: edges.filter((e) => e.matchKind !== 'confers').length,
-    nodes,
-    edges,
-    notes: [],
-  }
+  const hops = to ? Math.min(...goals.map((g) => depthOf.get(g) ?? Infinity)) : 0
+  return { from: base(from), to: to ? base(to) : null, found: true, hops, nodes, edges, notes: [] }
 }
