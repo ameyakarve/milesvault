@@ -19,10 +19,22 @@ export function cardGuideTool(kb: KbHttp) {
     }),
     execute: async ({ card }) => {
       try {
-        const r = (await kb.resolve(card, { prefix: 'cc', limit: 3 })) as {
-          items?: Array<{ slug: string; display_name: string | null }>
+        // Resolution is literal display-name matching, and statements name
+        // cards with filler the KG nodes omit ("Axis BANK Magnus Burgundy
+        // CREDIT CARD" vs node "Axis Magnus Burgundy"). Retry with filler
+        // stripped before giving up — a missed resolve silently costs the
+        // user every reward accrual in the batch.
+        const FILLER = /\b(bank|credit|card|cards|ltd|limited|the)\b/gi
+        const stripped = card.replace(FILLER, ' ').replace(/\s+/g, ' ').trim()
+        const candidates = [...new Set([card, stripped])].filter(Boolean)
+        let top: { slug: string; display_name: string | null } | undefined
+        for (const q of candidates) {
+          const r = (await kb.resolve(q, { prefix: 'cc', limit: 3 })) as {
+            items?: Array<{ slug: string; display_name: string | null }>
+          }
+          top = r.items?.[0]
+          if (top) break
         }
-        const top = r.items?.[0]
         if (!top) return { ok: false as const, error: 'card_not_found' as const }
 
         const node = (await kb.get(top.slug)) as {
