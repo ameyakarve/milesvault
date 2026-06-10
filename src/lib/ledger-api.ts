@@ -52,6 +52,16 @@ export type LedgerClient = {
     rows_written: number
   }>
   list_entries(): Promise<ListEntriesResponse>
+  list_captures(): Promise<{
+    rows: Array<{
+      id: string
+      source: string
+      artifact: string | null
+      filename: string | null
+      state: string
+      created_at: number
+    }>
+  }>
   replace_buffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse>
   clear(): Promise<{ ok: true }>
   put_statement(opts: {
@@ -170,6 +180,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
         throw new LedgerInputError(['sql must be a non-empty string.'])
       }
       return stub.exec_sql(sql, params)
+    },
+
+    async list_captures() {
+      return stub.list_captures()
     },
 
     async list_entries() {

@@ -58,6 +58,7 @@ const DATA_TABLES = [
   'directives_event',
   'balance_totals',
   'daily_balances',
+  'capture_items',
   // The event log resets only on a full admin clear(); rebuilds never touch it.
   'event_log',
 ] as const
@@ -218,6 +219,41 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     super(state, env)
     this.db = state.storage.sql
     this.migrate()
+    // Post-cutover only (meta event_source_of_truth=true): if the projection
+    // was built by older projector code, rebuild it from the log before
+    // serving anything (f1-implementation.md §3). A rebuild failure logs and
+    // leaves the previous projection in place rather than bricking reads.
+    state.blockConcurrencyWhile(async () => {
+      try {
+        if (this.readMeta('event_source_of_truth') !== 'true') return
+        if (this.readMeta('projector_version') === String(PROJECTOR_VERSION)) return
+        const r = await this.rebuildFromEventsInner()
+        if (r.ok === false) {
+          console.error('[projector] cold-start rebuild failed', { error: r.error })
+          this.writeMeta('projector_rebuild_error', r.error)
+        } else {
+          this.writeMeta('projector_rebuild_error', '')
+        }
+      } catch (e) {
+        console.error('[projector] cold-start rebuild threw', { err: String(e) })
+      }
+    })
+  }
+
+  private readMeta(key: string): string | null {
+    const row = this.db
+      .exec<{ value: string }>(`SELECT value FROM meta WHERE key = ?`, key)
+      .toArray()[0]
+    return row ? row.value : null
+  }
+
+  private writeMeta(key: string, value: string): void {
+    this.db.exec(
+      `INSERT INTO meta (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      key,
+      value,
+    )
   }
 
   // ---- Statement-blob storage ----
@@ -232,16 +268,73 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     filename: string
     text: string
   }): Promise<{ ok: true }> {
-    this.db.exec(
-      `INSERT OR REPLACE INTO statements (id, owner_email, filename, text, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-      opts.id,
-      opts.ownerEmail,
-      opts.filename,
-      opts.text,
-      Date.now(),
-    )
+    const now = Date.now()
+    this.ctx.storage.transactionSync(() => {
+      this.db.exec(
+        `INSERT OR REPLACE INTO statements (id, owner_email, filename, text, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
+        opts.id,
+        opts.ownerEmail,
+        opts.filename,
+        opts.text,
+        now,
+      )
+      // F2 step 1: a statement upload IS a capture (ledger-pipeline.md §2).
+      // Dual-write the capture item + the captured event, same pattern as
+      // posted/corrected: tables now, log alongside, atomically.
+      this.db.exec(
+        `INSERT OR REPLACE INTO capture_items (id, source, artifact, filename, state, created_at, updated_at)
+         VALUES (?, 'upload', ?, ?, 'captured', ?, ?)`,
+        opts.id,
+        `stmt:${opts.id}`,
+        opts.filename,
+        now,
+        now,
+      )
+      this.appendEventsSync(
+        now,
+        [
+          {
+            kind: 'captured',
+            payload: {
+              id: opts.id,
+              source: 'upload',
+              artifact: `stmt:${opts.id}`,
+              filename: opts.filename,
+            },
+          },
+        ],
+        { actor: 'user', actor_detail: 'statement-upload', route: 'confirmed' },
+      )
+    })
     return { ok: true }
+  }
+
+  // Capture items for the Inbox, newest first.
+  async list_captures(): Promise<{
+    rows: Array<{
+      id: string
+      source: string
+      artifact: string | null
+      filename: string | null
+      state: string
+      created_at: number
+    }>
+  }> {
+    const rows = this.db
+      .exec<{
+        id: string
+        source: string
+        artifact: string | null
+        filename: string | null
+        state: string
+        created_at: number
+      }>(
+        `SELECT id, source, artifact, filename, state, created_at
+         FROM capture_items ORDER BY created_at DESC, id DESC LIMIT 200`,
+      )
+      .toArray()
+    return { rows }
   }
 
   async get_statement(
@@ -1286,7 +1379,7 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
   // DO is single-threaded, so MAX(seq)+1 is race-free.
   private appendEventsSync(
     now: number,
-    events: Array<{ kind: 'posted' | 'corrected'; payload: Record<string, unknown> }>,
+    events: Array<{ kind: 'posted' | 'corrected' | 'captured'; payload: Record<string, unknown> }>,
     ctx: EventCtx,
   ): void {
     if (events.length === 0) return
@@ -1373,9 +1466,10 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     const bump = (t: string, d: number) => counts.set(t, (counts.get(t) ?? 0) + d)
     try {
       for (const e of events) {
-        if (e.v !== 1 || (e.kind !== 'posted' && e.kind !== 'corrected')) {
+        if (e.v !== 1 || !['posted', 'corrected', 'captured'].includes(e.kind)) {
           throw new Error(`unknown event kind/version at seq ${e.seq}: ${e.kind} v${e.v}`)
         }
+        if (e.kind === 'captured') continue // no entry-multiset effect
         const payload = JSON.parse(e.payload) as Record<string, unknown>
         const text = String((e.kind === 'posted' ? payload.entries : payload.removed) ?? '')
         const parsed = parseJournalStrict(text)
@@ -1440,7 +1534,13 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
   async rebuild_from_events(): Promise<
     { ok: true; events: number; inserted: number; removed: number } | { ok: false; error: string }
   > {
-    return this.ctx.blockConcurrencyWhile(async () => {
+    return this.ctx.blockConcurrencyWhile(async () => this.rebuildFromEventsInner())
+  }
+
+  private async rebuildFromEventsInner(): Promise<
+    { ok: true; events: number; inserted: number; removed: number } | { ok: false; error: string }
+  > {
+    {
       const events = this.db
         .exec<{ seq: number; kind: string; v: number; payload: string; created_at: number }>(
           `SELECT seq, kind, v, payload, created_at FROM event_log WHERE ledger_id = 'main' ORDER BY seq ASC`,
@@ -1451,11 +1551,31 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         | { op: 'insert-dir'; d: DirectiveInput; at: number }
         | { op: 'remove-txn'; hash: string; seq: number }
         | { op: 'remove-dir'; kind: DirectiveInput['kind']; text: string; seq: number }
+        | { op: 'capture'; id: string; source: string; artifact: string | null; filename: string | null; at: number }
       const ops: Op[] = []
       try {
         for (const e of events) {
-          if (e.v !== 1 || (e.kind !== 'posted' && e.kind !== 'corrected')) {
+          if (e.v !== 1 || !['posted', 'corrected', 'captured'].includes(e.kind)) {
             throw new Error(`unknown event kind/version at seq ${e.seq}: ${e.kind} v${e.v}`)
+          }
+          if (e.kind === 'captured') {
+            const p = JSON.parse(e.payload) as Record<string, unknown>
+            const artifact = typeof p.artifact === 'string' ? p.artifact : null
+            // Capture identity: explicit payload id, else derived from the
+            // artifact ref, else the event seq.
+            const id =
+              typeof p.id === 'string' && p.id
+                ? p.id
+                : (artifact ?? `capture-${e.seq}`).replace(/^stmt:/, '')
+            ops.push({
+              op: 'capture',
+              id,
+              source: typeof p.source === 'string' ? p.source : 'upload',
+              artifact,
+              filename: typeof p.filename === 'string' ? p.filename : null,
+              at: e.created_at,
+            })
+            continue
           }
           const payload = JSON.parse(e.payload) as Record<string, unknown>
           const text = String((e.kind === 'posted' ? payload.entries : payload.removed) ?? '')
@@ -1497,6 +1617,18 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
             } else if (op.op === 'insert-dir') {
               this.insertDirective(op.d, op.at)
               inserted++
+            } else if (op.op === 'capture') {
+              this.db.exec(
+                `INSERT OR REPLACE INTO capture_items (id, source, artifact, filename, state, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, 'captured', ?, ?)`,
+                op.id,
+                op.source,
+                op.artifact,
+                op.filename,
+                op.at,
+                op.at,
+              )
+              inserted++
             } else if (op.op === 'remove-txn') {
               const row = this.db
                 .exec<{ id: number }>(
@@ -1528,7 +1660,24 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         return { ok: false as const, error: String(err) }
       }
       return { ok: true as const, events: events.length, inserted, removed }
-    })
+    }
+  }
+
+  // Flip the log to source-of-truth — only if replay parity holds right now.
+  // After this, a projector version bump triggers a cold-start rebuild from
+  // the log (constructor). The gate is the whole point: cutover is impossible
+  // while the log and the live tables disagree.
+  async cutover_to_events(): Promise<
+    | { ok: true; parity: Awaited<ReturnType<LedgerDO['verify_replay_parity']>> }
+    | { ok: false; error: string; parity: Awaited<ReturnType<LedgerDO['verify_replay_parity']>> }
+  > {
+    const parity = await this.verify_replay_parity()
+    if (!parity.match) {
+      return { ok: false as const, error: 'replay parity failed — fix before cutover', parity }
+    }
+    this.writeMeta('event_source_of_truth', 'true')
+    this.writeMeta('projector_version', String(PROJECTOR_VERSION))
+    return { ok: true as const, parity }
   }
 
   private readUpdatedAt(kind: EntryKind, id: number): number | null {

@@ -12,6 +12,8 @@ export const dynamic = 'force-dynamic'
 //                                 from the live entries (one-time, pre-cutover).
 //   POST {"action":"rebuild"}   → destructive full replay of the projection
 //                                 tables from the log. Run parity first.
+//   POST {"action":"cutover"}   → flip the log to source of truth — refused
+//                                 unless parity passes at that moment.
 
 async function stubFor(email: string) {
   const { env } = await getCloudflareContext({ async: true })
@@ -43,5 +45,8 @@ export async function POST(req: Request): Promise<Response> {
   }
   if (action === 'bootstrap') return NextResponse.json(await stub.bootstrap_event_log())
   if (action === 'rebuild') return NextResponse.json(await stub.rebuild_from_events())
-  return new NextResponse('unknown action — use "bootstrap" or "rebuild"', { status: 400 })
+  if (action === 'cutover') return NextResponse.json(await stub.cutover_to_events())
+  return new NextResponse('unknown action — use "bootstrap", "rebuild" or "cutover"', {
+    status: 400,
+  })
 }

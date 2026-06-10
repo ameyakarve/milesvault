@@ -276,6 +276,21 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
       value TEXT NOT NULL
     ) STRICT`,
   },
+  // Capture-item projection (ledger-pipeline.md §2): one row per thing that
+  // arrived from a source, in a lifecycle state. Fed by `captured` (and later
+  // `extracted`/`dismissed`) events; rebuilt by replay like every projection.
+  {
+    label: 'capture_items',
+    sql: `CREATE TABLE IF NOT EXISTS capture_items (
+      id         TEXT PRIMARY KEY,
+      source     TEXT NOT NULL,
+      artifact   TEXT,
+      filename   TEXT,
+      state      TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    ) STRICT`,
+  },
   ...RAW_TEXT_TABLES.map((table) => ({
     label: `drop_raw_text_${table}`,
     sql: `ALTER TABLE ${table} DROP COLUMN raw_text`,
