@@ -11,6 +11,7 @@ import {
   type EditorAgentName,
 } from './agents/registries/editor'
 import {
+  cardGuideTool,
   draftTransactionTool,
   clarifyTool,
   readStatementTool,
@@ -173,17 +174,23 @@ ${opts.text}`,
   tools(name: EditorAgentName): ToolSet {
     // Read-only KG lookup so the editor can resolve the canonical Beancount
     // account segments (bank/cc/currency `beancountName`) for what it writes.
-    const kb = makeKbTools(kbHttpOverFetch('https://kb', this.env.KB))
+    const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
+    const kb = makeKbTools(kbHttp)
     const kbLookup = { kb_resolve: kb.kb_resolve, kb_get: kb.kb_get }
+    // The card drafting guide (earn rules + worked examples) — both agents
+    // draft card transactions, so both get it.
+    const card_guide = cardGuideTool(kbHttp)
     if (name === 'ledger') {
       return {
         ...kbLookup,
+        card_guide,
         draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(),
       }
     }
     return {
       ...kbLookup,
+      card_guide,
       draft_transaction: draftTransactionTool(),
       clarify: clarifyTool(),
       read_statement: readStatementTool(async (id) => {

@@ -30,3 +30,21 @@ If the user message has multiple statement references, read each id and draft
 its batch. You can call `read_statement` again at any time if you need to
 re-check the source text — the statement stays available for the whole
 conversation.
+
+
+## Reward accrual on card statements
+
+Before drafting a card statement's transactions, call `card_guide` ONCE with
+the card's name and follow its `logging_guide` examples exactly — accounts,
+commodity tickers, `:Pending` accruals.
+
+- Do NOT add per-transaction points legs on statement imports.
+- If the statement states the points earned this cycle, use that number:
+  one accrual entry to the pool's `:Pending` child with `Equity:Void`
+  contra, tagged `#reward-accrual`.
+- Otherwise estimate from the guide's base rate over ELIGIBLE spend
+  (apply the guide's exclusions — fuel, rent, wallet loads, etc. — judged
+  from merchant names) and say so in the narration, e.g.
+  "Apr cycle points — est. 12/200 on ₹61,400 eligible (fuel excluded)".
+- If `card_guide` returns no guide and no usable rate, skip the accrual and
+  tell the user you did, rather than inventing a rate.
