@@ -272,19 +272,22 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         opts.text,
         now,
       )
-      // A statement upload IS a capture (ledger-pipeline.md §2): one row in
-      // the Inbox's capture_items, atomically with the blob.
-      this.db.exec(
-        `INSERT OR REPLACE INTO capture_items (id, source, artifact, filename, state, prompt, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'captured', ?, ?, ?)`,
-        opts.id,
-        source,
-        `stmt:${opts.id}`,
-        opts.filename,
-        opts.prompt ?? null,
-        now,
-        now,
-      )
+      // Only ASYNC arrivals become Inbox captures (owner call): a forwarded
+      // email queues for review; a statement uploaded in chat is being
+      // processed right now and never enters the Inbox.
+      if (source === 'email') {
+        this.db.exec(
+          `INSERT OR REPLACE INTO capture_items (id, source, artifact, filename, state, prompt, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'captured', ?, ?, ?)`,
+          opts.id,
+          source,
+          `stmt:${opts.id}`,
+          opts.filename,
+          opts.prompt ?? null,
+          now,
+          now,
+        )
+      }
     })
     return { ok: true }
   }
