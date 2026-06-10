@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { FileText, Loader2 } from 'lucide-react'
 import {
   loadStatement,
@@ -59,19 +59,13 @@ function hasFiles(e: DragEvent): boolean {
 }
 
 export function GlobalCapture() {
-  const pathname = usePathname()
   const router = useRouter()
   const { isDragging, onDragEnter, onDragLeave, reset } = useDragOver()
   const [overlay, setOverlay] = useState<OverlayState>({ kind: 'idle' })
   const processingRef = useRef(false)
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Suppress entirely on /editor — the chat tab has its own attach flow and
-  // the auto-send ?statement= param would conflict with an in-progress chat.
-  const suppress = !!pathname?.startsWith('/editor')
-
   useEffect(() => {
-    if (suppress) return
 
     function handleDragEnter(e: DragEvent) {
       e.preventDefault()
@@ -89,6 +83,7 @@ export function GlobalCapture() {
 
     function handleDrop(e: DragEvent) {
       e.preventDefault()
+      e.stopPropagation()
       reset()
       if (processingRef.current) return
       const files = e.dataTransfer?.files
@@ -108,18 +103,21 @@ export function GlobalCapture() {
       void processFile(file)
     }
 
-    window.addEventListener('dragenter', handleDragEnter)
-    window.addEventListener('dragover', handleDragOver)
-    window.addEventListener('dragleave', handleDragLeave)
-    window.addEventListener('drop', handleDrop)
+    // Capture phase: this runs before any bubbling listener inside the page
+    // (the chat form attaches its own drop handlers), so a statement drop is
+    // ALWAYS an Inbox capture — on every page, the editor included.
+    window.addEventListener('dragenter', handleDragEnter, true)
+    window.addEventListener('dragover', handleDragOver, true)
+    window.addEventListener('dragleave', handleDragLeave, true)
+    window.addEventListener('drop', handleDrop, true)
     return () => {
-      window.removeEventListener('dragenter', handleDragEnter)
-      window.removeEventListener('dragover', handleDragOver)
-      window.removeEventListener('dragleave', handleDragLeave)
-      window.removeEventListener('drop', handleDrop)
+      window.removeEventListener('dragenter', handleDragEnter, true)
+      window.removeEventListener('dragover', handleDragOver, true)
+      window.removeEventListener('dragleave', handleDragLeave, true)
+      window.removeEventListener('drop', handleDrop, true)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [suppress])
+  }, [])
 
   // Sync drag-counter state into overlay.
   useEffect(() => {
