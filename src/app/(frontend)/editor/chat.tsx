@@ -402,6 +402,17 @@ export function Chat({
     const filename = p.get('filename') ?? 'statement.pdf'
     // A matched email rule's prompt rides the Inbox link (experience.md §9).
     const rulePrompt = p.get('prompt')?.trim()
+    // Vault empty-cluster CTAs send a guided starter straight to the agent.
+    const prefill = p.get('prefill')?.trim()
+    if (prefill && !stmtId) {
+      const clean = window.location.pathname
+      history.replaceState(null, '', clean)
+      if (autoSentStatementRef.current !== `prefill:${prefill}`) {
+        autoSentStatementRef.current = `prefill:${prefill}`
+        void sendMessage({ text: prefill })
+      }
+      return
+    }
     if (!stmtId) return
     // Strip params from the URL so a reload doesn't re-trigger.
     const cleanUrl =

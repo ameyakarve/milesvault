@@ -141,10 +141,11 @@ export function VaultView() {
   // ── hierarchy: rewards are the product (hero cards, clustered by the
   // taxonomy's minting-source subtrees), credit cards second, everything
   // else compact. :Pending children fold into their programme.
+  // Everything under Assets:Rewards except Status is programme holdings —
+  // accounts outside the Miles/Points/Cards subtrees surface in an explicit
+  // "Unclassified" cluster (instead of vanishing into the compact lists).
   const isRewardish = (a: string) =>
-    a.startsWith('Assets:Rewards:Miles:') ||
-    a.startsWith('Assets:Rewards:Points:') ||
-    a.startsWith('Assets:Rewards:Cards:')
+    a.startsWith('Assets:Rewards:') && !a.startsWith('Assets:Rewards:Status:')
   const rewardRows = rows.filter((r) => isRewardish(r.account))
   const holdings = foldPending(rewardRows)
   const cardRows = rows
@@ -182,8 +183,9 @@ export function VaultView() {
       {/* ── headline strip: numbers that mean something ───────────────────── */}
       {stats ? <HeadlineStrip stats={stats} /> : null}
 
-      {/* ── rewards: the hero, clustered by minting source ────────────────── */}
-      {holdings.length > 0 ? <RewardsSections holdings={holdings} names={names} /> : null}
+      {/* ── rewards: the hero, clustered by minting source (clusters always
+          render — empty ones invite their first programme) ────────────────── */}
+      <RewardsSections holdings={holdings} names={names} />
 
       {/* ── credit cards ──────────────────────────────────────────────────── */}
       {cardRows.length > 0 ? (
@@ -376,10 +378,25 @@ function SpendingBreakdown({ stats }: { stats: VaultStats }) {
 
 // Structural clusters straight off the account paths (the taxonomy's
 // minting-source subtrees) — no KG round-trip needed.
-const REWARD_CLUSTERS: Array<{ prefix: string; label: string }> = [
-  { prefix: 'Assets:Rewards:Miles:', label: 'Airline programmes' },
-  { prefix: 'Assets:Rewards:Points:', label: 'Hotel & other programmes' },
-  { prefix: 'Assets:Rewards:Cards:', label: 'Card programmes' },
+const REWARD_CLUSTERS: Array<{ prefix: string; label: string; cta: string; seed: string }> = [
+  {
+    prefix: 'Assets:Rewards:Miles:',
+    label: 'Airline programmes',
+    cta: 'No airline programmes yet',
+    seed: 'I want to track an airline frequent-flyer programme. Ask me which one and how many miles I hold, then open Assets:Rewards:Miles:<Programme> with the right ticker and record the balance.',
+  },
+  {
+    prefix: 'Assets:Rewards:Points:',
+    label: 'Hotel & other programmes',
+    cta: 'No hotel programmes yet',
+    seed: 'I want to track a hotel loyalty programme. Ask me which one and how many points I hold, then open Assets:Rewards:Points:<Programme> with the right ticker and record the balance.',
+  },
+  {
+    prefix: 'Assets:Rewards:Cards:',
+    label: 'Card programmes',
+    cta: 'No card reward pools yet',
+    seed: 'I want to track my credit-card reward points. Ask me which cards/pools and the balances, then open Assets:Rewards:Cards:<Issuer>:<Pool> accounts with the right tickers and record them.',
+  },
 ]
 
 // Fold :Pending children into their programme: one Holding per
@@ -399,22 +416,52 @@ function foldPending(rows: AccountSummaryRow[]): Holding[] {
 }
 
 function RewardsSections({ holdings, names }: { holdings: Holding[]; names: Names }) {
+  const claimed = new Set<string>()
   return (
     <>
-      {REWARD_CLUSTERS.map(({ prefix, label }) => {
+      {REWARD_CLUSTERS.map(({ prefix, label, cta, seed }) => {
         const cluster = holdings.filter((h) => h.account.startsWith(prefix))
-        if (cluster.length === 0) return null
+        cluster.forEach((h) => claimed.add(`${h.account}|${h.currency}`))
         return (
           <section key={prefix} className="space-y-3">
             <SectionLabel>{label}</SectionLabel>
+            {cluster.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {cluster.map((h) => (
+                  <ProgrammeCard key={`${h.account}|${h.currency}`} holding={h} names={names} />
+                ))}
+              </div>
+            ) : (
+              <Link
+                href={`/editor?prefill=${encodeURIComponent(seed)}`}
+                className="flex items-center justify-between rounded-xl border border-dashed border-border px-5 py-4 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+              >
+                <span>{cta}</span>
+                <span className="shrink-0 text-xs">Add in the Ledger chat →</span>
+              </Link>
+            )}
+          </section>
+        )
+      })}
+      {(() => {
+        const legacy = holdings.filter((h) => !claimed.has(`${h.account}|${h.currency}`))
+        if (legacy.length === 0) return null
+        return (
+          <section className="space-y-3">
+            <div className="flex items-baseline justify-between">
+              <SectionLabel>Unclassified rewards</SectionLabel>
+              <span className="text-xs text-muted-foreground">
+                move under Rewards:Miles / Points / Cards to classify
+              </span>
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {cluster.map((h) => (
+              {legacy.map((h) => (
                 <ProgrammeCard key={`${h.account}|${h.currency}`} holding={h} names={names} />
               ))}
             </div>
           </section>
         )
-      })}
+      })()}
     </>
   )
 }
