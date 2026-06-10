@@ -13,7 +13,7 @@ export function readStatementTool(
 ) {
   return tool({
     description:
-      'Read the full text of a previously-uploaded statement. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message. Returns `{ ok: true, filename, text }` with the raw statement text inline — extract the transactions from it and call `draft_transaction` in this same turn. Returns `{ ok: false, error: "not_found" }` if the id is unknown (tell the user briefly and stop).',
+      'Read the full text of a previously-uploaded statement. Pass the exact `statement_id` from the `<statement id="STMT-…" filename="…" />` reference in the user message. Returns `{ ok: true, filename, text }` with the raw statement text inline — for a card statement, call `card_guide` next, then call `draft_transaction` in this same turn with the extracted entries PLUS one final #reward-accrual entry per the guide (the batch is incomplete without it). Returns `{ ok: false, error: "not_found" }` if the id is unknown (tell the user briefly and stop).',
     inputSchema: z.object({
       statement_id: z
         .string()
