@@ -108,8 +108,16 @@ function StatementChip({
           Reading…
         </span>
       ) : state.kind === 'captured' ? (
-        <span className="text-emerald-700 dark:text-emerald-400">
-          In your Inbox — drafting in the background
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="text-emerald-700 dark:text-emerald-400">
+            Captured — drafting in the background
+          </span>
+          <Link
+            href="/inbox"
+            className="shrink-0 font-medium text-foreground underline underline-offset-4 hover:no-underline"
+          >
+            Open Inbox →
+          </Link>
         </span>
       ) : state.kind === 'error' ? (
         <span className="truncate text-destructive">{state.message}</span>
@@ -338,10 +346,9 @@ export function Chat({
       // confirms and fades. The password (if any) was used in-browser only.
       await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text })
       window.dispatchEvent(new CustomEvent('mv:captured'))
+      // The chip is the receipt — it stays until dismissed (or another
+      // attach) and links to the Inbox where the drafts will appear.
       setStatement({ kind: 'captured', file })
-      setTimeout(() => {
-        setStatement((s) => (s?.kind === 'captured' && s.file === file ? null : s))
-      }, 5000)
     } catch (e) {
       if (e instanceof StatementExtractError) {
         if (e.detail.kind === 'need_password') {
