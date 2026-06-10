@@ -262,7 +262,7 @@ export class ConciergeDO
   // to the user's Assets:Rewards account with its live balance. Cards the KG
   // doesn't know, or currencies without a held account, degrade gracefully
   // (name without link, or no entry). RPC for /api/concierge/card-links.
-  async cardLinks(): Promise<{
+  async cardLinks(debug = false): Promise<{
     links: Array<{
       card: string
       rewards_account: string | null
@@ -270,6 +270,7 @@ export class ConciergeDO
       rewards_currency: string | null
       rewards_balance: number | null
     }>
+    trace?: Array<Record<string, unknown>>
   }> {
     const ledger = this.ledgerStub()
     const [snapshot, balances] = await Promise.all([
@@ -301,10 +302,34 @@ export class ConciergeDO
       rewards_balance: number | null
     }> = []
 
+    const trace: Array<Record<string, unknown>> = []
     await Promise.all(
       cards.map(async ({ account }) => {
         const parts = kgLookupParts(account)
         if (!parts || parts.kind !== 'card') return
+        const t: Record<string, unknown> = { card: account }
+        if (debug) {
+          t.query = `${parts.issuer} ${parts.product}`
+          t.expected_beancountName = parts.product
+          try {
+            const raw = (await kbHttp.resolve(`${parts.issuer} ${parts.product}`, {
+              prefix: 'cc',
+              limit: 4,
+            })) as { items?: Array<{ slug: string }> }
+            t.resolve_candidates = (raw.items ?? []).map((i) => i.slug)
+            t.candidate_attrs = await Promise.all(
+              (raw.items ?? []).slice(0, 4).map(async (i) => {
+                const n = (await kbHttp.get(i.slug).catch(() => null)) as {
+                  attrs?: Record<string, unknown> | null
+                } | null
+                return { slug: i.slug, beancountName: n?.attrs?.beancountName ?? null }
+              }),
+            )
+          } catch (e) {
+            t.resolve_error = String(e)
+          }
+          trace.push(t)
+        }
         try {
           const hit = await resolveByBeancountName(
             kbHttp,
@@ -312,6 +337,7 @@ export class ConciergeDO
             'cc',
             parts.product,
           )
+          if (debug) t.verified_slug = hit?.slug ?? null
           if (!hit) return
           const rel = (await kbHttp.related(hit.slug, {
             edge_type: 'DENOMINATED_IN',
@@ -320,6 +346,7 @@ export class ConciergeDO
           const currencySlugs = (rel.items ?? [])
             .map((i) => i.other)
             .filter((o) => o.startsWith('currency/'))
+          if (debug) t.denominated_in = currencySlugs
           for (const slug of currencySlugs) {
             const node = (await kbHttp.get(slug)) as CurrencyNode | null
             const bn = node?.attrs?.beancountName
@@ -359,7 +386,7 @@ export class ConciergeDO
         }
       }),
     )
-    return { links }
+    return debug ? { links, trace } : { links }
   }
 
   // Headless one-shot turn for text-only channels (Telegram, WhatsApp …):

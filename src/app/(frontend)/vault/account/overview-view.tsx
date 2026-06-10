@@ -237,6 +237,19 @@ export function AccountOverviewView() {
 
   const { data } = state
 
+  // No postings at all → say so, instead of a grid of zeros.
+  if (data.currency === null) {
+    return (
+      <>
+        {header}
+        <CenteredState action={{ label: 'Open the Ledger chat', href: '/editor' }}>
+          No transactions on this account yet — log one in the Ledger chat, or upload a
+          statement, and this page fills in.
+        </CenteredState>
+      </>
+    )
+  }
+
   return (
     <>
       {header}
