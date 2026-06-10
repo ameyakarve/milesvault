@@ -39,10 +39,10 @@ The atoms are strong. The molecule is tool-shaped.
   have?" — the first question of any points user — has no surface. Balances
   exist only as journal text or graph overlays.
 - **Two AI brains.** The user must know that `/editor` chat edits and
-  `/concierge` chat answers. The split has a real rationale — concierge-style
-  Q&A is meant to be reachable over bot channels that can't render gen-UI
-  (§7, Channels) — but on the *web* it leaks routing onto the user; the
-  handoff machinery already exists to hide it there.
+  `/concierge` chat answers. Resolved (§7, decided): the split *stays* — by
+  capability envelope, not topic — and becomes legible instead of hidden: a
+  Ledger chat that writes (gen-UI, web) and an Assistant that answers and
+  captures (text/image, channel-portable).
 - **Three disconnected graph tools.** Explore, Points, and Status Match are
   three views of one question ("what can my points become?") that barely know
   about each other or about the ledger. `/points` isn't even in the nav.
@@ -128,44 +128,29 @@ it — provenance is the trust feature, one tap away, never the landing page.
 (Net-worth valuation policy is the open F4/F5 question in `delivery-plan.md`;
 until decided, the headline tile shows points totals without ₹ estimate.)
 
-## 7. One Assistant
+## 7. Two assistant surfaces — DECIDED (2026-06-10, owner call)
 
-Merge the two chat surfaces into a single omnipresent assistant (persistent
-side panel on desktop, sheet on mobile, `Cmd+K` anywhere). Internally it is the
-existing registries — `ledger`/`statement`/`graph-walker`/`analyst` — behind
-one entry point; the user never picks a brain. Requirements:
+Originally drafted as a single merged assistant; superseded. The split
+between the two chats *stays*, redrawn along **capability envelopes, not
+topics** (full rationale and the superseded merge options:
+`assistant-merge.md`):
 
-- **Context injection.** The active screen's state (account in view, O&D pair,
-  target currency) is part of the turn context. On a card's page, "log my
-  March statement" needs no clarify round-trip; on Explore with BLR→NRT open,
-  "can I afford this?" reads the screen.
-- **Same trust contract.** Draft cards, clarify cards, approve/reject — all
-  unchanged, just available everywhere.
-- **Registry note:** this is a registry merge / router-agent addition in
-  `agent-registries.md` terms — an experience decision, not an architecture
-  change; DO topology stays as is.
-
-**Channels (owner constraint, recorded 2026-06-10).** Parts of the assistant
-must be reachable over WhatsApp / Telegram / Discord bots — which cannot
-render gen-UI. This was a rationale behind the original editor/concierge
-split, and it survives the merge as a sharper rule:
-
-- **One brain, capability-aware channels.** "One Assistant" means one entry
-  point and one router — not one surface. Each channel declares a capability
-  envelope (web: full gen-UI; bots: text + attachments), and the agent's
-  tools render per envelope.
-- **Gen-UI is progressive enhancement over a text protocol, never the
-  protocol itself.** Every interactive affordance needs a text-degradable
-  equivalent: a draft transaction renders as fenced beancount + "reply 1 to
-  approve, 2 to reject"; a clarify card becomes numbered options; the
-  Explore link card becomes a plain URL. The trust contract (explicit
-  approval before any write) survives as a reply protocol.
-- **Bots are also capture sources.** A statement PDF sent to the bot is a
-  capture (`source: 'bot'`), landing in the same Inbox as uploads and
-  forwarded email.
-- **Likely staging:** bots ship read-only first (concierge-grade Q&A — the
-  part that degrades to text natively), text-protocol approvals second, once
-  account↔bot pairing (§15) is solved.
+- **Ledger chat** — full gen-UI, web only, lives with the Journal. Everything
+  that *writes*: drafting, statement processing, approve/reject. The trust
+  contract's interactive moments belong here, where they can be rich.
+- **Assistant** — text + image, channel-portable, today's `/concierge`
+  (rename candidate: "Assistant"). Q&A over the knowledge graph *and* the
+  ledger (the analyst is read-only), planning, capture intake. Because it is
+  text/image by construction it runs **identically on web and
+  WhatsApp/Telegram/Discord** — the surface is the envelope; no per-channel
+  degradation logic.
+- **The bridge is the Inbox.** The Assistant (and any bot) never commits:
+  whatever should become a ledger write lands as a capture
+  (`source: 'bot' | 'email' | 'upload'`) and "Review in chat" carries it
+  into the Ledger chat for approval. Bot-side writes, if ever, arrive later
+  as a reply protocol; they are not required for the surfaces to be useful.
+- **Context injection** (active screen state → turn context) applies to each
+  surface independently and survives this decision unchanged.
 
 ## 8. Capture feels like forwarding, not filing
 

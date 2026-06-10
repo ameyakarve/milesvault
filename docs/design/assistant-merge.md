@@ -1,62 +1,64 @@
-# Assistant merge — implementation options (decision needed)
+# Assistant surfaces — DECIDED: two surfaces, split by capability envelope
 
-Status: **proposed, needs an owner call.** Executes `experience.md` §7 ("One
-Assistant" / "one brain, capability-aware channels"). The *what* is decided —
-one entry point, the user never picks a brain, gen-UI degrades to a text
-protocol for bot channels. This note decides the *where*: which DO hosts the
-brains.
+Status: **decided (owner call, 2026-06-10).** Supersedes the merge options
+below and amends `experience.md` §7. The original "One Assistant" merge is
+dropped in favour of two deliberately distinct surfaces.
 
-## Current state
+## The model
 
-| Surface | DO | Agents | Notes |
+Split by **capability envelope, not topic**:
+
+| Surface | Envelope | Lives | Does |
 |---|---|---|---|
-| `/editor` chat | `ChatDO` | `ledger` ↔ `statement` | gen-UI: draft/clarify cards, statement uploads |
-| `/concierge` | `ConciergeDO` | `graph-walker` ↔ `analyst` | KB tools, codemode sandbox, ask_user |
+| **Ledger chat** | Full gen-UI, web only | with the Journal (`/editor`), on `ChatDO` (`ledger` ↔ `statement`) | everything that *writes*: drafting, statement processing, approve/reject. The trust contract's interactive moments belong here. |
+| **Assistant** | Text + image, channel-portable | `/concierge` today (rename candidate: "Assistant"), on `ConciergeDO` (`graph-walker` ↔ `analyst`) | Q&A over the knowledge graph *and* the ledger (analyst is read-only SQL), planning, capture intake. |
 
-Handoffs work *within* a DO's registry; there is no cross-DO handoff.
+Because the Assistant is text/image by construction, it runs **identically on
+web and WhatsApp/Telegram/Discord** — no per-channel degradation logic; the
+surface is the envelope. A bot adapter is a thin transport in front of the
+same ConciergeDO chat.
 
-## Options
+## The bridge
 
-**A. ChatDO hosts all four agents (recommended).**
-The concierge agents' tools are already shared modules
-(`src/durable/agents/tools/concierge/*`), and ChatDO already has the `KB`
-service binding (it uses `kbHttpOverFetch` for account-name lookups) and the
-worker env carries `LOADER` for codemode. Move `graph-walker` + `analyst`
-into the `editor` registry, extend the handoff graph, and make the entry
-agent a cheap router (or extend `ledger`'s handoff targets — likely enough,
-since handoff is how routing already happens). `ConciergeDO` **stays** as the
-data layer: award-engine RPCs, route cache, airport store keep serving
-`/explore`, `/points`, `/status-match` — only its *chat* moves out.
-`/concierge` then redirects into the assistant.
-- Cost: registry wiring + prompt adjustments + one DO holding longer mixed
-  histories. No new bindings, no data migration.
-- Risk: low — agents and tools are unchanged; only the registry/handoff
-  topology changes.
+The Assistant (and any bot) **never commits**. Anything that should become a
+ledger write lands as a **capture in the Inbox** (image/PDF/text →
+`capture_items`, source `bot`/`email`/`upload`), and "Review in chat" carries
+it into the Ledger chat for approval. Writes-over-bots, if ever, arrive later
+as a reply protocol — they are not needed for the surfaces to be useful.
 
-**B. Cross-DO routing (front agent proxies to ConciergeDO).**
-Keep both DOs and add either a router that forwards turns or cross-DO
-handoff support to the agent framework. Rejected: builds framework machinery
-(streaming proxy, split history, two sockets) to preserve a split that has no
-data-locality reason — the concierge agents' state is conversation state, not
-ConciergeDO's SQLite.
+## Why this beats the merge
 
-**C. UI-only unification (one panel, user-invisible tab switch).**
-One surface that silently swaps between the two sockets by classifying the
-user's message client-side. Rejected: the classification belongs to the
-agents (handoff), not a client heuristic; mid-conversation brain switches
-lose context exactly when the user mixes concerns ("can I afford this?" after
-logging a statement).
+- The old confusion ("which chat do I use?") was a *legibility* problem: two
+  surfaces that both looked like generic chat. Making one clearly the
+  ledger workbench and the other clearly the portable ask-anything assistant
+  resolves it without a router.
+- Zero agent-architecture change: DOs, registries, handoffs all stay as-is.
+- The bot channel ships against today's ConciergeDO with no migration later.
 
-## Bot-channel fit (experience.md §7, Channels)
+## What follows (in rough order)
 
-Option A composes cleanly: the bot adapter talks to the same ChatDO entry
-with a `channel: 'text'` capability envelope; tools render text-protocol
-equivalents (reply-to-approve) instead of gen-UI. Until the merge lands, a
-read-only bot can still ship against ConciergeDO's chat as-is — the merge
-moves its home later without changing the bot protocol.
+1. Framing pass: rename `/concierge` → Assistant in nav/copy; the Ledger
+   chat is presented as part of the Journal, not a peer chat.
+2. Assistant capture intake: send an image/PDF to the Assistant → capture
+   (needs image support in the concierge surface; pairs with R2 raw-artifact
+   work).
+3. Bot adapter (read-only Q&A first), account↔bot pairing per
+   `experience.md` §15.
+4. Context injection (screen state → turn context) applies to each surface
+   independently and survives this decision unchanged.
 
-## Decision needed
+---
 
-Bless option A (or amend). On approval the sequence is: extend the `editor`
-registry + handoff graph → context injection from the active screen → fold
-`/concierge` into the assistant surface → persistent panel/Cmd+K shell.
+## Appendix — the superseded merge options (for the record)
+
+**A. ChatDO hosts all four agents.** Was the recommendation before the
+owner call: shared tool modules + existing KB binding made it cheap. Rejected
+in favour of the two-surface model: the merge solved brain-picking with a
+router, the split solves it with legibility, and the split is what the bot
+constraint actually wants.
+
+**B. Cross-DO routing.** Framework machinery (streaming proxy, split
+history) to preserve a split that has no data-locality reason. Rejected.
+
+**C. UI-only unification.** Client-side classification of which socket to
+use; loses context exactly when the user mixes concerns. Rejected.
