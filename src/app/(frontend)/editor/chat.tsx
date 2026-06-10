@@ -394,6 +394,8 @@ export function Chat({
     const p = new URLSearchParams(window.location.search)
     const stmtId = p.get('statement')
     const filename = p.get('filename') ?? 'statement.pdf'
+    // A matched email rule's prompt rides the Inbox link (experience.md §9).
+    const rulePrompt = p.get('prompt')?.trim()
     if (!stmtId) return
     // Strip params from the URL so a reload doesn't re-trigger.
     const cleanUrl =
@@ -402,6 +404,7 @@ export function Chat({
         ? (() => {
             p.delete('statement')
             p.delete('filename')
+            p.delete('prompt')
             const rest = p.toString()
             return rest ? `?${rest}` : ''
           })()
@@ -423,7 +426,8 @@ export function Chat({
     if (alreadyInHistory) return
     // Set the ref so approve/reject can advance the capture row to 'posted'.
     lastStatementIdRef.current = stmtId
-    const text = `Process the attached statement and draft transactions.\n\n<statement id="${stmtId}" filename="${filename}" />`
+    const instruction = rulePrompt || 'Process the attached statement and draft transactions.'
+    const text = `${instruction}\n\n<statement id="${stmtId}" filename="${filename}" />`
     void sendMessage({ text })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

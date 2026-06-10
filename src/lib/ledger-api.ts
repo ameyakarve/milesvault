@@ -63,9 +63,15 @@ export type LedgerClient = {
       artifact: string | null
       filename: string | null
       state: string
+      prompt: string | null
       created_at: number
     }>
   }>
+  list_email_rules(): ReturnType<LedgerDO['list_email_rules']>
+  save_email_rule(
+    rule: Parameters<LedgerDO['save_email_rule']>[0],
+  ): ReturnType<LedgerDO['save_email_rule']>
+  delete_email_rule(id: number): ReturnType<LedgerDO['delete_email_rule']>
   replace_buffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse>
   clear(): Promise<{ ok: true }>
   put_statement(opts: {
@@ -192,6 +198,18 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async set_capture_state(id, state) {
       return stub.set_capture_state(id, state)
+    },
+
+    async list_email_rules() {
+      return stub.list_email_rules()
+    },
+
+    async save_email_rule(rule) {
+      return stub.save_email_rule(rule)
+    },
+
+    async delete_email_rule(id) {
+      return stub.delete_email_rule(id)
     },
 
     async list_entries() {

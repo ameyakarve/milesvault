@@ -9,6 +9,7 @@ type CaptureRow = {
   artifact: string | null
   filename: string | null
   state: string
+  prompt: string | null
   created_at: number
 }
 
@@ -101,7 +102,7 @@ export function InboxView() {
   }
   const addressLine = address ? (
     <p className="text-xs text-slate-400">
-      Forward statement emails to{' '}
+      Forward transaction emails (alerts, receipts — no attachments) to{' '}
       <button
         type="button"
         onClick={copyAddress}
@@ -111,6 +112,10 @@ export function InboxView() {
         {address}
       </button>
       {copied ? <span className="ml-1 text-emerald-600">copied</span> : null}
+      {' · '}
+      <Link href="/inbox/rules" className="text-teal-600 hover:underline">
+        Rules
+      </Link>
     </p>
   ) : null
 
@@ -149,7 +154,7 @@ export function InboxView() {
                 {r.state}
               </span>
               <Link
-                href={`/editor?statement=${encodeURIComponent(r.id)}&filename=${encodeURIComponent(r.filename ?? r.id)}`}
+                href={`/editor?statement=${encodeURIComponent(r.id)}&filename=${encodeURIComponent(r.filename ?? r.id)}${r.prompt ? `&prompt=${encodeURIComponent(r.prompt)}` : ''}`}
                 className="text-xs text-teal-600 hover:text-teal-700 whitespace-nowrap"
               >
                 Review in chat →
@@ -166,7 +171,7 @@ export function InboxView() {
         ))}
       </ul>
       <p className="text-xs text-slate-400">
-        Statements you upload in chat are captured here.
+        Uploads and forwarded transaction emails are captured here.
         {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
       </p>
       {addressLine}

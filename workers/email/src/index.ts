@@ -18,8 +18,17 @@ type LedgerStub = {
     filename: string
     text: string
     source: 'upload' | 'email'
+    prompt?: string | null
   }): Promise<{ ok: true }>
+  match_email_rule(headers: { from: string; subject: string }): Promise<{
+    action: 'capture' | 'ignore'
+    prompt: string | null
+    rule_id: number | null
+  }>
 }
+
+// Transaction-alert emails are short; cap pathological bodies.
+const MAX_BODY_CHARS = 20_000
 
 export interface Env {
   LEDGER_DO: DurableObjectNamespace
@@ -59,28 +68,45 @@ export default {
       return
     }
 
+    // Transaction emails only: text body, attachments ignored entirely.
     const parsed = await PostalMime.parse(message.raw)
-    const body = (parsed.text?.trim() || htmlToText(parsed.html ?? '')).trim()
-    const attachmentNote = parsed.attachments?.length
-      ? `\n\n[${parsed.attachments.length} attachment(s) not ingested: ${parsed.attachments
-          .map((a) => a.filename ?? a.mimeType)
-          .join(', ')} — attachment extraction lands with R2 capture]`
-      : ''
-    if (!body && !attachmentNote) {
+    const body = (parsed.text?.trim() || htmlToText(parsed.html ?? ''))
+      .trim()
+      .slice(0, MAX_BODY_CHARS)
+    if (!body) {
       message.setReject('empty message')
       return
     }
 
     const subject = parsed.subject?.trim() || 'forwarded email'
     const from = parsed.from?.address ?? message.from
-    const id = `STMT-${crypto.randomUUID()}`
     const stub = env.LEDGER_DO.get(env.LEDGER_DO.idFromName(row.email)) as unknown as LedgerStub
+
+    // User-configured rules (experience.md §9): first enabled match wins.
+    // 'ignore' = accept-and-drop (explicit user intent — OTPs, promos);
+    // anything else captures, carrying the rule's prompt for review.
+    const rule = await stub
+      .match_email_rule({ from: from ?? '', subject })
+      .catch(
+        (): { action: 'capture'; prompt: string | null; rule_id: number | null } => ({
+          action: 'capture',
+          prompt: null,
+          rule_id: null,
+        }),
+      )
+    if (rule.action === 'ignore') {
+      console.log('[email] ignored by rule', { rule_id: rule.rule_id })
+      return
+    }
+
+    const id = `STMT-${crypto.randomUUID()}`
     await stub.put_statement({
       id,
       ownerEmail: row.email,
       filename: subject,
-      text: `Forwarded email\nFrom: ${from}\nSubject: ${subject}\n\n${body}${attachmentNote}`,
+      text: `Forwarded transaction email\nFrom: ${from}\nSubject: ${subject}\n\n${body}`,
       source: 'email',
+      prompt: rule.prompt,
     })
   },
 } satisfies ExportedHandler<Env>

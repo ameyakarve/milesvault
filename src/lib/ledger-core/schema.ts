@@ -246,6 +246,27 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     label: 'drop_account_recents',
     sql: 'DROP TABLE IF EXISTS account_recents',
   },
+  {
+    label: 'capture_items_add_prompt',
+    sql: 'ALTER TABLE capture_items ADD COLUMN prompt TEXT',
+    allowFail: true,
+  },
+  // Email ingestion rules (experience.md §9): matcher + action + prompt.
+  // First enabled match wins (created order). 'ignore' drops the email
+  // without a capture; 'capture' attaches the prompt to the capture item.
+  {
+    label: 'email_rules',
+    sql: `CREATE TABLE IF NOT EXISTS email_rules (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_match   TEXT,
+      subject_match TEXT,
+      action       TEXT NOT NULL DEFAULT 'capture',
+      prompt       TEXT,
+      enabled      INTEGER NOT NULL DEFAULT 1,
+      created_at   INTEGER NOT NULL,
+      updated_at   INTEGER NOT NULL
+    ) STRICT`,
+  },
   // Event-sourcing experiment (June 2026) — reversed: the beancount journal
   // is the single source of truth; no event log. Drop the short-lived tables.
   { label: 'drop_event_log', sql: 'DROP TABLE IF EXISTS event_log' },
