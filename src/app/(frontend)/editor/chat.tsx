@@ -785,6 +785,12 @@ export function Chat({
                                 : cardStatus === 'submitting'
                                   ? 'input-available'
                                   : ((p.state as ToolUIPart['state'] | undefined) ?? 'input-streaming')
+                          // A part whose args never finished streaming can only
+                          // complete during a live turn. In history it is a
+                          // fossil (interrupted stream / corrupt tool JSON) —
+                          // render it dead, not as an eternal "Preparing…".
+                          const isLiveTurn = status === 'streaming' || status === 'submitted'
+                          const isDead = toolState === 'input-streaming' && !isLiveTurn
                           // Don't render the card from partial input: while the
                           // tool-call args still stream (input-streaming), p.input
                           // is incomplete JSON, so the draft/clarify card would
@@ -815,10 +821,15 @@ export function Chat({
                               <ToolHeader
                                 title={toolName ?? undefined}
                                 type={p.type as ToolUIPart['type']}
-                                state={toolState}
+                                state={isDead ? 'output-error' : toolState}
                               />
                               <ToolContent>
-                                {rendered ? (
+                                {isDead ? (
+                                  <div className="p-4 text-xs text-muted-foreground">
+                                    Interrupted — this call never completed. Re-send the
+                                    request if you still need it.
+                                  </div>
+                                ) : rendered ? (
                                   <div className="p-2">{rendered}</div>
                                 ) : (
                                   <div className="p-4 text-xs text-muted-foreground">
