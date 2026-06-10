@@ -31,7 +31,7 @@ function fmtDate(ms: number): string {
 // from a source, newest first. Statement uploads land here today; email and
 // paste captures join as F2/F3 fill out.
 export function InboxView() {
-  const [rows, setRows] = useState<CaptureRow[] | null>(null)
+  const [allRows, setAllRows] = useState<CaptureRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,12 +40,29 @@ export function InboxView() {
       .then((r) =>
         r.ok ? (r.json() as Promise<{ rows: CaptureRow[] }>) : Promise.reject(new Error(String(r.status))),
       )
-      .then((d) => !cancelled && setRows(d.rows ?? []))
+      .then((d) => !cancelled && setAllRows(d.rows ?? []))
       .catch((e) => !cancelled && setError(String(e)))
     return () => {
       cancelled = true
     }
   }, [])
+
+  const rows = allRows?.filter((r) => r.state !== 'dismissed') ?? null
+  const dismissedCount = (allRows?.length ?? 0) - (rows?.length ?? 0)
+
+  function dismiss(id: string) {
+    // Optimistic: flip locally, revert on failure.
+    setAllRows((prev) => prev?.map((r) => (r.id === id ? { ...r, state: 'dismissed' } : r)) ?? prev)
+    fetch('/api/ledger/captures', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, action: 'dismiss' }),
+    })
+      .then((r) => (r.ok ? null : Promise.reject(new Error(String(r.status)))))
+      .catch(() => {
+        setAllRows((prev) => prev?.map((r) => (r.id === id ? { ...r, state: 'captured' } : r)) ?? prev)
+      })
+  }
 
   if (error) {
     return (
@@ -100,6 +117,13 @@ export function InboxView() {
               >
                 Review in chat →
               </Link>
+              <button
+                type="button"
+                onClick={() => dismiss(r.id)}
+                className="text-xs text-slate-400 hover:text-slate-600 whitespace-nowrap"
+              >
+                Dismiss
+              </button>
             </div>
           </li>
         ))}
@@ -107,6 +131,7 @@ export function InboxView() {
       <p className="text-xs text-slate-400">
         Statements you upload in chat are captured here. Email forwarding and review workflows
         are on the way.
+        {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
       </p>
     </div>
   )

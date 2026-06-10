@@ -52,6 +52,10 @@ export type LedgerClient = {
     rows_written: number
   }>
   list_entries(): Promise<ListEntriesResponse>
+  set_capture_state(
+    id: string,
+    state: 'captured' | 'extracted' | 'posted' | 'dismissed',
+  ): Promise<{ ok: boolean }>
   list_captures(): Promise<{
     rows: Array<{
       id: string
@@ -184,6 +188,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async list_captures() {
       return stub.list_captures()
+    },
+
+    async set_capture_state(id, state) {
+      return stub.set_capture_state(id, state)
     },
 
     async list_entries() {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { type Icon as PhosphorIcon } from '@phosphor-icons/react'
@@ -26,6 +26,41 @@ const ITEMS: NavItem[] = [
   { kind: 'link', href: '/concierge', label: 'Concierge', Icon: ChatCircleDots },
 ]
 
+// Pending Inbox work (captured/extracted, not yet posted or dismissed) for
+// the nav badge. One fetch per mount; failures read as zero.
+function usePendingCaptures(): number {
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/ledger/captures')
+      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string }> }>) : null))
+      .then((d) => {
+        if (cancelled || !d) return
+        const rows = d.rows ?? []
+        setN(rows.filter((r) => r.state === 'captured' || r.state === 'extracted').length)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return n
+}
+
+function InboxBadge({ count, className }: { count: number; className?: string }) {
+  if (count === 0) return null
+  return (
+    <span
+      className={
+        'flex h-4 min-w-4 items-center justify-center rounded-full bg-teal-500 px-1 text-[9px] font-bold text-white ' +
+        (className ?? '')
+      }
+    >
+      {count > 9 ? '9+' : count}
+    </span>
+  )
+}
+
 function Logo() {
   return (
     <div className="flex size-8 items-center justify-center rounded-[6px] bg-teal-500 text-lg font-black text-white">
@@ -37,6 +72,7 @@ function Logo() {
 export function NavRail() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const pending = usePendingCaptures()
 
   function isActive(item: NavItem): boolean {
     if (item.kind === 'plan') return PLAN_ROUTES.some((r) => pathname?.startsWith(r))
@@ -73,9 +109,12 @@ export function NavRail() {
                   href={href}
                   aria-label={label}
                   title={label}
-                  className={iconCls}
+                  className={cn(iconCls, 'relative')}
                 >
                   <LIcon size={24} />
+                  {href === '/inbox' ? (
+                    <InboxBadge count={pending} className="absolute right-0 top-0" />
+                  ) : null}
                 </Link>
               )
             }
@@ -145,6 +184,7 @@ export function NavRail() {
                   >
                     <LIcon size={20} />
                     {label}
+                    {href === '/inbox' ? <InboxBadge count={pending} className="ml-auto" /> : null}
                   </Link>
                 )
               }

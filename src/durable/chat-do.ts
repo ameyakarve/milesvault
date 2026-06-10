@@ -151,9 +151,14 @@ export class ChatDO
       ...kbLookup,
       draft_transaction: draftTransactionTool(),
       clarify: clarifyTool(),
-      read_statement: readStatementTool((id) =>
-        this.ledgerStub().get_statement(id),
-      ),
+      read_statement: readStatementTool(async (id) => {
+        const stub = this.ledgerStub()
+        const blob = await stub.get_statement(id)
+        // The agent reading the statement is the extraction step starting —
+        // advance the Inbox capture state (best-effort; reads must not fail).
+        if (blob) await stub.set_capture_state(id, 'extracted').catch(() => {})
+        return blob
+      }),
     }
   }
 

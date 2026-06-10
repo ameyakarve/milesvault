@@ -240,6 +240,20 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     return { ok: true }
   }
 
+  // Advance a capture item's lifecycle state (ledger-pipeline.md §2).
+  async set_capture_state(
+    id: string,
+    state: 'captured' | 'extracted' | 'posted' | 'dismissed',
+  ): Promise<{ ok: boolean }> {
+    const cursor = this.db.exec(
+      `UPDATE capture_items SET state = ?, updated_at = ? WHERE id = ?`,
+      state,
+      Date.now(),
+      id,
+    )
+    return { ok: cursor.rowsWritten > 0 }
+  }
+
   // Capture items for the Inbox, newest first.
   async list_captures(): Promise<{
     rows: Array<{

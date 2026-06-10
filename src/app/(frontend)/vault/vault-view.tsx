@@ -71,6 +71,22 @@ type FetchState =
 
 export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
+  const [pendingCaptures, setPendingCaptures] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/ledger/captures')
+      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string }> }>) : null))
+      .then((d) => {
+        if (cancelled || !d) return
+        const all = d.rows ?? []
+        setPendingCaptures(all.filter((c) => c.state === 'captured' || c.state === 'extracted').length)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -144,6 +160,19 @@ export function VaultView() {
 
   return (
     <div className="px-6 py-6 max-w-4xl mx-auto w-full space-y-8">
+      {/* ── needs review lane ─────────────────────────────────────────────── */}
+      {pendingCaptures > 0 ? (
+        <Link
+          href="/inbox"
+          className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100"
+        >
+          <span className="text-sm text-amber-800">
+            Needs review: {pendingCaptures} captured item{pendingCaptures === 1 ? '' : 's'}
+          </span>
+          <span className="text-sm font-medium text-amber-700">Open Inbox →</span>
+        </Link>
+      ) : null}
+
       {/* ── headline strip ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatTile
