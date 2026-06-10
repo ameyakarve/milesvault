@@ -96,6 +96,141 @@ export class ChatDO
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
     this.registry = makeEditorRegistry(this)
+    // Structured tool-invocation log — the observability loop for tuning the
+    // editor agents. Server-tool executions land here (client tools like
+    // draft_transaction live in message history); /api/debug/tool-log reads it.
+    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS tool_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts INTEGER NOT NULL,
+      agent TEXT NOT NULL,
+      tool TEXT NOT NULL,
+      input TEXT,
+      output TEXT,
+      ok INTEGER NOT NULL,
+      error TEXT,
+      ms INTEGER NOT NULL
+    )`)
+  }
+
+  private logTool(entry: {
+    agent: string
+    tool: string
+    input: unknown
+    output: unknown
+    ok: boolean
+    error?: string | null
+    ms: number
+  }): void {
+    const trim = (v: unknown): string | null => {
+      if (v === undefined) return null
+      try {
+        const s = JSON.stringify(v)
+        return s.length > 4000 ? s.slice(0, 4000) + '…' : s
+      } catch {
+        return String(v).slice(0, 4000)
+      }
+    }
+    try {
+      this.ctx.storage.sql.exec(
+        `INSERT INTO tool_log (ts, agent, tool, input, output, ok, error, ms)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        Date.now(),
+        entry.agent,
+        entry.tool,
+        trim(entry.input),
+        trim(entry.output),
+        entry.ok ? 1 : 0,
+        entry.error ?? null,
+        entry.ms,
+      )
+      // Keep the log bounded.
+      this.ctx.storage.sql.exec(
+        `DELETE FROM tool_log WHERE id <= (SELECT MAX(id) FROM tool_log) - 2000`,
+      )
+    } catch (e) {
+      console.warn('[tool-log] write failed', { err: String(e) })
+    }
+  }
+
+  // Wrap every server tool's execute with timing + logging. Suspending
+  // client tools (no execute) pass through untouched. read_statement output
+  // is redacted to its size — the blob is large and private.
+  private withToolLog(agent: string, tools: ToolSet): ToolSet {
+    const out: ToolSet = {}
+    for (const [name, t] of Object.entries(tools)) {
+      const exec = (t as { execute?: (input: unknown, opts: unknown) => Promise<unknown> }).execute
+      if (typeof exec !== 'function') {
+        out[name] = t
+        continue
+      }
+      out[name] = {
+        ...(t as object),
+        execute: async (input: unknown, opts: unknown) => {
+          const t0 = Date.now()
+          try {
+            const result = await exec(input, opts)
+            const logged =
+              name === 'read_statement' &&
+              result &&
+              typeof result === 'object' &&
+              'text' in (result as Record<string, unknown>)
+                ? {
+                    ...(result as Record<string, unknown>),
+                    text: `[${String((result as Record<string, unknown>).text).length} chars]`,
+                  }
+                : result
+            this.logTool({ agent, tool: name, input, output: logged, ok: true, ms: Date.now() - t0 })
+            return result
+          } catch (e) {
+            this.logTool({
+              agent,
+              tool: name,
+              input,
+              output: null,
+              ok: false,
+              error: String(e),
+              ms: Date.now() - t0,
+            })
+            throw e
+          }
+        },
+      } as ToolSet[string]
+    }
+    return out
+  }
+
+  // Read API for /api/debug/tool-log.
+  async list_tool_log(limit = 100): Promise<{
+    rows: Array<{
+      id: number
+      ts: number
+      agent: string
+      tool: string
+      input: string | null
+      output: string | null
+      ok: number
+      error: string | null
+      ms: number
+    }>
+  }> {
+    const rows = this.ctx.storage.sql
+      .exec<{
+        id: number
+        ts: number
+        agent: string
+        tool: string
+        input: string | null
+        output: string | null
+        ok: number
+        error: string | null
+        ms: number
+      }>(
+        `SELECT id, ts, agent, tool, input, output, ok, error, ms
+         FROM tool_log ORDER BY id DESC LIMIT ?`,
+        Math.min(Math.max(limit, 1), 500),
+      )
+      .toArray()
+    return { rows }
   }
 
   // Headless dry run for the rules playground (experience.md §9): run the
@@ -181,14 +316,14 @@ ${opts.text}`,
     // draft card transactions, so both get it.
     const card_guide = cardGuideTool(kbHttp)
     if (name === 'ledger') {
-      return {
+      return this.withToolLog(name, {
         ...kbLookup,
         card_guide,
         draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(),
-      }
+      })
     }
-    return {
+    return this.withToolLog(name, {
       ...kbLookup,
       card_guide,
       draft_transaction: draftTransactionTool(),
@@ -201,7 +336,7 @@ ${opts.text}`,
         if (blob) await stub.set_capture_state(id, 'extracted').catch(() => {})
         return blob
       }),
-    }
+    })
   }
 
   // ---- History hygiene: redact heavy statement-text outputs ----
