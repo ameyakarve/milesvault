@@ -226,7 +226,7 @@ function HoldingsCard({ title, rows }: { title: string; rows: AccountSummaryRow[
         {rows.map((r) => (
           <li key={`${r.account}|${r.currency}`}>
             <Link
-              href={`/editor?tab=journal&account=${encodeURIComponent(r.account)}`}
+              href={`/vault/account?account=${encodeURIComponent(r.account)}&ccy=${encodeURIComponent(r.currency)}`}
               className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-slate-50 group"
             >
               <span className="text-sm text-slate-700 truncate group-hover:text-teal-600">

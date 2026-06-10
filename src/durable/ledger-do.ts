@@ -133,6 +133,24 @@ export type EntryRef2 = {
   expected_updated_at: number
 }
 
+// Data for the per-account overview tab (docs/design/overview-tab.md):
+// KPIs, balance series, counterpart composition, notable transactions —
+// one currency at a time, all decimal-converted.
+export type AccountOverview = {
+  account: string
+  currencies: string[]
+  currency: string | null
+  current: number
+  period: { from: number; to: number }
+  inflow: number
+  outflow: number
+  txn_count: number
+  series: Array<{ date: number; balance: number }>
+  monthly: Array<{ month: number; net: number }>
+  composition: Array<{ account: string; total: number }>
+  notable: Array<{ date: number; payee: string; narration: string; amount: number }>
+}
+
 export type EmailRule = {
   id: number
   from_match: string | null
@@ -257,6 +275,184 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       )
     })
     return { ok: true }
+  }
+
+  // The overview tab's data (docs/design/overview-tab.md). Balance math
+  // stays in integer space per (currency, scale) until the end — balances
+  // are materialized per scale and mixing them in SQL would corrupt sums.
+  // Series is reconstructed backward from the CURRENT balance minus window
+  // deltas, so it is exact for windows ending today (the only windows the
+  // chips produce).
+  async account_overview(opts: {
+    account: string
+    currency?: string | null
+    fromInt: number
+    toInt: number
+  }): Promise<AccountOverview> {
+    const { account, fromInt, toInt } = opts
+    const currencies = this.db
+      .exec<{ currency: string }>(
+        `SELECT DISTINCT currency FROM postings WHERE account = ? ORDER BY currency`,
+        account,
+      )
+      .toArray()
+      .map((r) => r.currency)
+    const currency =
+      opts.currency && currencies.includes(opts.currency) ? opts.currency : (currencies[0] ?? null)
+    const empty: AccountOverview = {
+      account,
+      currencies,
+      currency,
+      current: 0,
+      period: { from: fromInt, to: toInt },
+      inflow: 0,
+      outflow: 0,
+      txn_count: 0,
+      series: [],
+      monthly: [],
+      composition: [],
+      notable: [],
+    }
+    if (!currency) return empty
+
+    const toDec = (scaled: number, scale: number) => scaled / 10 ** scale
+
+    // Current balance, per scale.
+    const curByScale = new Map<number, number>()
+    for (const r of this.db
+      .exec<{ scale: number; balance_scaled: number }>(
+        `SELECT scale, balance_scaled FROM balance_totals WHERE account = ? AND currency = ?`,
+        account,
+        currency,
+      )
+      .toArray()) {
+      curByScale.set(r.scale, r.balance_scaled)
+    }
+    const current = [...curByScale.entries()].reduce((sum, [sc, v]) => sum + toDec(v, sc), 0)
+
+    // Window deltas per (date, scale) — feeds series, monthly and KPIs.
+    const deltas = this.db
+      .exec<{ date: number; scale: number; pos: number; neg: number }>(
+        `SELECT date, scale,
+                SUM(CASE WHEN amount_scaled > 0 THEN amount_scaled ELSE 0 END) AS pos,
+                SUM(CASE WHEN amount_scaled < 0 THEN amount_scaled ELSE 0 END) AS neg
+         FROM postings
+         WHERE account = ? AND currency = ? AND date >= ? AND date <= ?
+         GROUP BY date, scale ORDER BY date ASC`,
+        account,
+        currency,
+        fromInt,
+        toInt,
+      )
+      .toArray()
+
+    let inflow = 0
+    let outflow = 0
+    const windowSumByScale = new Map<number, number>()
+    const byDate = new Map<number, Map<number, number>>()
+    const monthlyMap = new Map<number, number>()
+    for (const d of deltas) {
+      inflow += toDec(d.pos, d.scale)
+      outflow += toDec(-d.neg, d.scale)
+      const net = d.pos + d.neg
+      windowSumByScale.set(d.scale, (windowSumByScale.get(d.scale) ?? 0) + net)
+      let m = byDate.get(d.date)
+      if (!m) byDate.set(d.date, (m = new Map()))
+      m.set(d.scale, (m.get(d.scale) ?? 0) + net)
+      const month = Math.floor(d.date / 100)
+      monthlyMap.set(month, (monthlyMap.get(month) ?? 0) + toDec(net, d.scale))
+    }
+
+    // Walk forward from the reconstructed window-start balance.
+    const runByScale = new Map<number, number>()
+    const scales = new Set<number>([...curByScale.keys(), ...windowSumByScale.keys()])
+    for (const sc of scales) {
+      runByScale.set(sc, (curByScale.get(sc) ?? 0) - (windowSumByScale.get(sc) ?? 0))
+    }
+    const startBalance = [...runByScale.entries()].reduce((sum, [sc, v]) => sum + toDec(v, sc), 0)
+    const series: Array<{ date: number; balance: number }> = [
+      { date: fromInt, balance: startBalance },
+    ]
+    for (const [date, perScale] of [...byDate.entries()].sort((a, b) => a[0] - b[0])) {
+      for (const [sc, net] of perScale) runByScale.set(sc, (runByScale.get(sc) ?? 0) + net)
+      series.push({
+        date,
+        balance: [...runByScale.entries()].reduce((sum, [sc, v]) => sum + toDec(v, sc), 0),
+      })
+    }
+
+    const txn_count =
+      this.db
+        .exec<{ n: number }>(
+          `SELECT COUNT(DISTINCT txn_id) AS n FROM postings
+           WHERE account = ? AND currency = ? AND date >= ? AND date <= ?`,
+          account,
+          currency,
+          fromInt,
+          toInt,
+        )
+        .toArray()[0]?.n ?? 0
+
+    // Composition: where the flow went/came from — counterpart legs of the
+    // transactions touching this account, same currency, by their own sums.
+    const compRows = this.db
+      .exec<{ cp: string; scale: number; s: number }>(
+        `SELECT p2.account AS cp, p2.scale AS scale, SUM(p2.amount_scaled) AS s
+         FROM postings p1
+         JOIN postings p2 ON p2.txn_id = p1.txn_id AND p2.account != p1.account
+         WHERE p1.account = ? AND p1.currency = ? AND p2.currency = ?
+           AND p1.date >= ? AND p1.date <= ?
+         GROUP BY p2.account, p2.scale`,
+        account,
+        currency,
+        currency,
+        fromInt,
+        toInt,
+      )
+      .toArray()
+    const compMap = new Map<string, number>()
+    for (const r of compRows) compMap.set(r.cp, (compMap.get(r.cp) ?? 0) + toDec(r.s, r.scale))
+    const composition = [...compMap.entries()]
+      .map(([acct, total]) => ({ account: acct, total }))
+      .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
+      .slice(0, 8)
+
+    const notableRows = this.db
+      .exec<{ date: number; payee: string; narration: string; amount_scaled: number; scale: number }>(
+        `SELECT t.date AS date, t.payee AS payee, t.narration AS narration,
+                p.amount_scaled AS amount_scaled, p.scale AS scale
+         FROM postings p JOIN transactions t ON t.id = p.txn_id
+         WHERE p.account = ? AND p.currency = ? AND p.date >= ? AND p.date <= ?
+         ORDER BY ABS(p.amount_scaled) DESC LIMIT 200`,
+        account,
+        currency,
+        fromInt,
+        toInt,
+      )
+      .toArray()
+    const notable = notableRows
+      .map((r) => ({
+        date: r.date,
+        payee: r.payee,
+        narration: r.narration,
+        amount: toDec(r.amount_scaled, r.scale),
+      }))
+      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+      .slice(0, 6)
+
+    return {
+      ...empty,
+      current,
+      inflow,
+      outflow,
+      txn_count,
+      series,
+      monthly: [...monthlyMap.entries()]
+        .map(([month, net]) => ({ month, net }))
+        .sort((a, b) => a.month - b.month),
+      composition,
+      notable,
+    }
   }
 
   // Advance a capture item's lifecycle state (ledger-pipeline.md §2).

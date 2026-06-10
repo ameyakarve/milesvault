@@ -73,6 +73,9 @@ export type LedgerClient = {
     subject: string
   }): ReturnType<LedgerDO['match_email_rule']>
   list_ingest_log(): ReturnType<LedgerDO['list_ingest_log']>
+  account_overview(
+    opts: Parameters<LedgerDO['account_overview']>[0],
+  ): ReturnType<LedgerDO['account_overview']>
   save_email_rule(
     rule: Parameters<LedgerDO['save_email_rule']>[0],
   ): ReturnType<LedgerDO['save_email_rule']>
@@ -215,6 +218,13 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async list_ingest_log() {
       return stub.list_ingest_log()
+    },
+
+    async account_overview(opts) {
+      if (typeof opts.account !== 'string' || opts.account.length === 0) {
+        throw new LedgerInputError(['account must be a non-empty string.'])
+      }
+      return stub.account_overview(opts)
     },
 
     async save_email_rule(rule) {
