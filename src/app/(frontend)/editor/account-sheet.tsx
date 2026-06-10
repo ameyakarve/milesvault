@@ -93,41 +93,41 @@ export function AccountSheet({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex bg-slate-950/30"
+      className="fixed inset-0 z-40 flex bg-black/40"
       onClick={onClose}
     >
       <aside
-        className="flex h-full w-full max-w-sm flex-col bg-white shadow-xl sm:max-w-md"
+        className="flex h-full w-full max-w-sm flex-col bg-background shadow-xl sm:max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center gap-2 border-b border-slate-200/60 px-4 py-3">
-          <h2 className="flex-1 text-[14px] font-semibold text-slate-900">
+        <header className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <h2 className="flex-1 text-[14px] font-semibold text-foreground">
             Accounts
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100"
+            className="rounded-full p-1.5 text-muted-foreground hover:bg-muted"
             aria-label="Close"
           >
             <X className="size-4" />
           </button>
         </header>
-        <div className="border-b border-slate-200/60 px-4 py-2.5">
-          <label className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
-            <Search className="size-4 text-slate-400" />
+        <div className="border-b border-border px-4 py-2.5">
+          <label className="flex items-center gap-2 rounded-full bg-muted px-3 py-1.5">
+            <Search className="size-4 text-muted-foreground" />
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search accounts"
-              className="flex-1 bg-transparent text-[13px] placeholder:text-slate-400 focus:outline-none"
+              className="flex-1 bg-transparent text-[13px] placeholder:text-muted-foreground focus:outline-none"
             />
           </label>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <p className="px-4 py-6 text-center text-[13px] text-slate-400">
+            <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">
               No accounts found.
             </p>
           ) : (
@@ -170,14 +170,14 @@ function Row({
   return (
     <li>
       <div
-        className="flex items-center gap-1 hover:bg-slate-50"
+        className="flex items-center gap-1 hover:bg-muted/50"
         style={{ paddingLeft: 8 + depth * 12 }}
       >
         {hasChildren ? (
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={open ? 'Collapse' : 'Expand'}
           >
             <ChevronRight
@@ -190,7 +190,7 @@ function Row({
         <button
           type="button"
           onClick={() => onSelect(node.full)}
-          className="flex-1 truncate py-1.5 pr-3 text-left text-[13px] text-slate-700 hover:text-slate-900"
+          className="flex-1 truncate py-1.5 pr-3 text-left text-[13px] text-foreground/80 hover:text-foreground"
           title={node.full}
         >
           {node.name}

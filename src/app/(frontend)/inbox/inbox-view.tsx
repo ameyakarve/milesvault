@@ -2,6 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 type CaptureRow = {
   id: string
@@ -11,13 +20,6 @@ type CaptureRow = {
   state: string
   prompt: string | null
   created_at: number
-}
-
-const STATE_STYLE: Record<string, string> = {
-  captured: 'bg-amber-50 text-amber-700 border-amber-200',
-  extracted: 'bg-sky-50 text-sky-700 border-sky-200',
-  posted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  dismissed: 'bg-slate-50 text-slate-500 border-slate-200',
 }
 
 function fmtDate(ms: number): string {
@@ -36,6 +38,7 @@ export function InboxView() {
   const [error, setError] = useState<string | null>(null)
   const [address, setAddress] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [rotateOpen, setRotateOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -69,6 +72,14 @@ export function InboxView() {
     }
   }, [])
 
+  function doRotate() {
+    fetch('/api/ledger/forwarding-address', { method: 'POST' })
+      .then((r) => (r.ok ? (r.json() as Promise<{ address?: string }>) : null))
+      .then((d) => d?.address && setAddress(d.address))
+      .catch(() => {})
+      .finally(() => setRotateOpen(false))
+  }
+
   const rows = allRows?.filter((r) => r.state !== 'dismissed') ?? null
   const dismissedCount = (allRows?.length ?? 0) - (rows?.length ?? 0)
 
@@ -86,48 +97,42 @@ export function InboxView() {
       })
   }
 
+  // Chip tone mapping: captured→pending, extracted→active, posted→positive, dismissed→neutral
+  function chipTone(state: string) {
+    if (state === 'captured') return 'pending' as const
+    if (state === 'extracted') return 'active' as const
+    if (state === 'posted') return 'positive' as const
+    return 'neutral' as const
+  }
+
   if (error) {
-    return (
-      <div className="flex flex-1 items-center justify-center px-6 text-center">
-        <p className="text-sm text-red-600">Could not load the inbox: {error}</p>
-      </div>
-    )
+    return <CenteredState tone="error">Could not load the inbox: {error}</CenteredState>
   }
   if (rows === null) {
-    return (
-      <div className="flex flex-1 items-center justify-center px-6 text-center">
-        <p className="text-sm text-slate-400">Loading…</p>
-      </div>
-    )
+    return <CenteredState>Loading…</CenteredState>
   }
+
   const addressLine = address ? (
-    <p className="text-xs text-slate-400">
+    <p className="text-xs text-muted-foreground">
       Forward transaction emails (alerts, receipts — no attachments) to{' '}
       <button
         type="button"
         onClick={copyAddress}
         title="Copy address"
-        className="font-mono text-slate-600 hover:text-teal-600"
+        className="font-mono text-foreground hover:underline underline-offset-4"
       >
         {address}
       </button>
-      {copied ? <span className="ml-1 text-emerald-600">copied</span> : null}
+      {copied ? <span className="ml-1 text-foreground font-medium">copied</span> : null}
       {' · '}
-      <Link href="/inbox/rules" className="text-teal-600 hover:underline">
+      <Link href="/inbox/rules" className="text-foreground underline underline-offset-4 hover:no-underline">
         Rules
       </Link>
       {' · '}
       <button
         type="button"
-        onClick={() => {
-          if (!window.confirm('Rotate the address? The current one stops working immediately.'))
-            return
-          fetch('/api/ledger/forwarding-address', { method: 'POST' })
-            .then((r) => (r.ok ? (r.json() as Promise<{ address?: string }>) : null))
-            .then((d) => d?.address && setAddress(d.address))
-            .catch(() => {})
-        }}
-        className="text-slate-400 hover:text-slate-600"
+        onClick={() => setRotateOpen(true)}
+        className="text-muted-foreground hover:text-foreground"
         title="Burn this address and mint a new one"
       >
         Rotate
@@ -137,60 +142,90 @@ export function InboxView() {
 
   if (rows.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-slate-500 text-sm max-w-xs">
+      <>
+        <CenteredState>
           Nothing to review. Captured statements and forwarded emails will queue here.
-        </p>
-        {addressLine}
-      </div>
+        </CenteredState>
+        {address ? (
+          <div className="mx-auto w-full max-w-2xl px-4 pb-6 text-center">
+            {addressLine}
+          </div>
+        ) : null}
+        <RotateDialog open={rotateOpen} onClose={() => setRotateOpen(false)} onConfirm={doRotate} />
+      </>
     )
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-6 space-y-3">
-      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">
-        Captured ({rows.length})
-      </p>
-      <ul className="space-y-2">
-        {rows.map((r) => (
-          <li
-            key={r.id}
-            className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm text-slate-700">{r.filename ?? r.id}</p>
-              <p className="text-xs text-slate-400">
-                {r.source} · {fmtDate(r.created_at)}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATE_STYLE[r.state] ?? STATE_STYLE.captured}`}
-              >
-                {r.state}
-              </span>
-              <Link
-                href={`/editor?statement=${encodeURIComponent(r.id)}&filename=${encodeURIComponent(r.filename ?? r.id)}${r.prompt ? `&prompt=${encodeURIComponent(r.prompt)}` : ''}`}
-                className="text-xs text-teal-600 hover:text-teal-700 whitespace-nowrap"
-              >
-                Review in chat →
-              </Link>
-              <button
-                type="button"
-                onClick={() => dismiss(r.id)}
-                className="text-xs text-slate-400 hover:text-slate-600 whitespace-nowrap"
-              >
-                Dismiss
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-slate-400">
-        Uploads and forwarded transaction emails are captured here.
-        {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
-      </p>
-      {addressLine}
-    </div>
+    <>
+      <div className="mx-auto w-full max-w-2xl px-4 py-6 space-y-3">
+        <SectionLabel>Captured ({rows.length})</SectionLabel>
+        <ul className="space-y-2">
+          {rows.map((r) => (
+            <li
+              key={r.id}
+              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm text-foreground">{r.filename ?? r.id}</p>
+                <p className="text-xs text-muted-foreground">
+                  {r.source} · {fmtDate(r.created_at)}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <StateChip tone={chipTone(r.state)}>{r.state}</StateChip>
+                <Link
+                  href={`/editor?statement=${encodeURIComponent(r.id)}&filename=${encodeURIComponent(r.filename ?? r.id)}${r.prompt ? `&prompt=${encodeURIComponent(r.prompt)}` : ''}`}
+                  className="text-xs text-foreground underline underline-offset-4 hover:no-underline whitespace-nowrap"
+                >
+                  Review in chat →
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => dismiss(r.id)}
+                  className="text-muted-foreground whitespace-nowrap"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-muted-foreground">
+          Uploads and forwarded transaction emails are captured here.
+          {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
+        </p>
+        {addressLine}
+      </div>
+      <RotateDialog open={rotateOpen} onClose={() => setRotateOpen(false)} onConfirm={doRotate} />
+    </>
+  )
+}
+
+function RotateDialog({
+  open,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Rotate forwarding address?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          The current address stops working immediately. Any emails sent to the old address will be lost.
+        </p>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm}>Rotate address</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

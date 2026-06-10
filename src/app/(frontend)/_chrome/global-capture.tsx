@@ -167,28 +167,28 @@ export function GlobalCapture() {
   if (overlay.kind === 'idle') return null
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/40">
-      <div className="flex w-72 flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-white/60 bg-white/95 p-8 shadow-2xl text-center">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-foreground/20">
+      <div className="flex w-72 flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-border bg-card/95 p-8 shadow-2xl text-center">
         {overlay.kind === 'dragging' ? (
           <>
-            <FileText className="size-8 text-teal-500" />
-            <p className="text-[15px] font-semibold text-slate-800">
+            <FileText className="size-8 text-foreground" />
+            <p className="text-[15px] font-semibold text-foreground">
               Drop a statement PDF to capture it
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               We'll extract it and open the Journal chat
             </p>
           </>
         ) : overlay.kind === 'processing' ? (
           <>
-            <Loader2 className="size-8 animate-spin text-teal-500" />
-            <p className="text-[15px] font-semibold text-slate-800">
+            <Loader2 className="size-8 animate-spin text-foreground" />
+            <p className="text-[15px] font-semibold text-foreground">
               Reading {overlay.filename}…
             </p>
           </>
         ) : overlay.kind === 'error' ? (
           <>
-            <p className="text-[15px] font-semibold text-rose-700">
+            <p className="text-[15px] font-semibold text-destructive">
               {overlay.message}
             </p>
           </>

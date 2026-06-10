@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AccountOverview } from '@/durable/ledger-do'
 import { accountLabel } from '@/lib/ledger-core/account-display'
+import { SectionLabel, StatTile, CenteredState } from '@/components/shared'
+import { Button } from '@/components/ui/button'
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -97,19 +99,11 @@ export function AccountOverviewView() {
   }, [ready, account, ccy, range])
 
   if (!ready || (state.status === 'loading' && !account)) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-slate-400 text-sm">
-        Loading…
-      </div>
-    )
+    return <CenteredState>Loading…</CenteredState>
   }
 
   if (!account) {
-    return (
-      <div className="flex flex-1 items-center justify-center text-slate-400 text-sm">
-        No account specified.
-      </div>
-    )
+    return <CenteredState>No account specified.</CenteredState>
   }
 
   // Header (shown during load/error/ok)
@@ -120,21 +114,21 @@ export function AccountOverviewView() {
   const displayName = names[account] ?? pathLabel
 
   const header = (
-    <div className="flex flex-col gap-2 border-b border-slate-200 bg-white px-6 py-4">
+    <div className="flex flex-col gap-2 border-b border-border bg-background px-6 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-base font-semibold text-slate-900 truncate">
+          <span className="text-base font-semibold text-foreground truncate">
             {displayName}
             {suffix ? (
-              <span className="ml-1.5 font-mono text-xs font-normal text-slate-400">
+              <span className="ml-1.5 font-mono text-xs font-normal text-muted-foreground">
                 ··{suffix}
               </span>
             ) : null}
           </span>
-          <span className="font-mono text-[11px] text-slate-400 break-all">{account}</span>
+          <span className="font-mono text-[11px] text-muted-foreground break-all">{account}</span>
           <Link
             href={`/editor?tab=journal&account=${encodeURIComponent(account)}`}
-            className="text-xs text-teal-600 hover:underline"
+            className="text-xs text-foreground underline underline-offset-4 hover:no-underline"
           >
             Open in Journal →
           </Link>
@@ -142,22 +136,19 @@ export function AccountOverviewView() {
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Currency chips — only shown when >1 currency */}
           {currencies.length > 1 && currencies.map((c) => (
-            <button
+            <Button
               key={c}
               type="button"
               onClick={() => setCcy(c)}
-              className={[
-                'rounded-full px-2.5 py-0.5 text-[11px] font-mono font-medium border transition',
-                c === activeCcy
-                  ? 'bg-teal-600 text-white border-teal-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-teal-400',
-              ].join(' ')}
+              variant={c === activeCcy ? 'default' : 'outline'}
+              size="xs"
+              className="font-mono"
             >
               {c}
-            </button>
+            </Button>
           ))}
           {/* Time-range chips — right side, above slot A per contract rule 5 */}
-          <div className="flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5">
+          <div className="flex items-center gap-0.5 rounded-full bg-muted p-0.5">
             {RANGE_LABELS.map(({ key, label }) => (
               <button
                 key={key}
@@ -166,8 +157,8 @@ export function AccountOverviewView() {
                 className={[
                   'rounded-full px-2.5 py-0.5 text-[11px] font-medium transition',
                   range === key
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-800',
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 ].join(' ')}
               >
                 {label}
@@ -183,9 +174,7 @@ export function AccountOverviewView() {
     return (
       <>
         {header}
-        <div className="flex flex-1 items-center justify-center text-slate-400 text-sm">
-          Loading…
-        </div>
+        <CenteredState>Loading…</CenteredState>
       </>
     )
   }
@@ -194,9 +183,7 @@ export function AccountOverviewView() {
     return (
       <>
         {header}
-        <div className="flex flex-1 items-center justify-center text-rose-500 text-sm">
-          Failed to load: {state.message}
-        </div>
+        <CenteredState tone="error">Failed to load: {state.message}</CenteredState>
       </>
     )
   }
@@ -206,31 +193,28 @@ export function AccountOverviewView() {
   return (
     <>
       {header}
-      <div className="px-6 py-6 max-w-5xl mx-auto w-full space-y-4">
+      <div className="px-6 py-6 max-w-4xl mx-auto w-full space-y-4">
         {/* ── A: KPI strip ─────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiTile
+          <StatTile
             label="Balance"
             value={fmt(data.current)}
-            currency={data.currency ?? undefined}
+            sub={data.currency ?? undefined}
             negative={data.current < 0}
           />
-          <KpiTile
+          <StatTile
             label="In"
             value={fmt(data.inflow)}
-            currency={data.currency ?? undefined}
-            negative={false}
+            sub={data.currency ?? undefined}
           />
-          <KpiTile
+          <StatTile
             label="Out"
             value={fmt(data.outflow)}
-            currency={data.currency ?? undefined}
-            negative={false}
+            sub={data.currency ?? undefined}
           />
-          <KpiTile
+          <StatTile
             label="Transactions"
             value={String(data.txn_count)}
-            negative={false}
           />
         </div>
 
@@ -276,41 +260,12 @@ export function AccountOverviewView() {
   )
 }
 
-// ── KPI tile ──────────────────────────────────────────────────────────────────
-
-function KpiTile({
-  label,
-  value,
-  currency,
-  negative,
-}: {
-  label: string
-  value: string
-  currency?: string
-  negative: boolean
-}) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 space-y-1">
-      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">{label}</p>
-      <p className={[
-        'text-xl font-mono font-semibold leading-none',
-        negative ? 'text-rose-600' : 'text-slate-800',
-      ].join(' ')}>
-        {value}
-      </p>
-      {currency ? (
-        <p className="text-[10px] font-mono text-slate-400">{currency}</p>
-      ) : null}
-    </div>
-  )
-}
-
 // ── Slot card wrapper ─────────────────────────────────────────────────────────
 
 function SlotCard({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 flex flex-col gap-2 h-full">
-      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">{label}</p>
+    <div className="rounded-xl border border-border bg-card p-4 flex flex-col gap-2 h-full">
+      <SectionLabel>{label}</SectionLabel>
       {children}
     </div>
   )
@@ -320,7 +275,7 @@ function SlotCard({ label, children }: { label: string; children: React.ReactNod
 
 function EmptySlot() {
   return (
-    <div className="flex flex-1 items-center justify-center py-8 text-[12px] text-slate-400">
+    <div className="flex flex-1 items-center justify-center py-8 text-[12px] text-muted-foreground">
       Not enough data yet
     </div>
   )
@@ -331,7 +286,7 @@ function EmptySlot() {
 // Layout: the SVG uses a fixed viewBox (600 × 200). The balance line occupies
 // the top ~68% of the height (0..136 px in viewBox units). Monthly net bars
 // are rendered in the bottom strip (136..200) as small bars centred on their
-// month's midpoint date. A subtle teal area fill goes under the line. Only
+// month's midpoint date. A subtle area fill goes under the line. Only
 // min/max/current labels and first/last date labels are shown — no axes grid.
 
 const VB_W = 600
@@ -341,10 +296,6 @@ const LINE_AREA_BOT = 140    // bottom of the line zone (before bar zone)
 const BAR_TOP = 148          // top of the bar strip
 const BAR_BOT = 192          // bottom of the bar strip
 const MONO_FONT = '"JetBrains Mono", monospace'
-const TEAL = '#00685f'
-const TEAL_LIGHT = 'rgba(0,104,95,0.12)'
-const ROSE = '#e11d48'
-const SLATE_MID = '#94a3b8'
 
 function TrendChart({
   series,
@@ -400,17 +351,18 @@ function TrendChart({
   const maxBalPt = series.reduce((a, b) => (b.balance > a.balance ? b : a))
 
   return (
+    // text-foreground drives currentColor for line + area
     <svg
       viewBox={`0 0 ${VB_W} ${VB_H}`}
-      className="w-full"
+      className="w-full text-foreground"
       aria-label="Balance trend chart"
       style={{ fontFamily: MONO_FONT }}
     >
-      {/* Area fill */}
-      <path d={area} fill={TEAL_LIGHT} />
+      {/* Area fill — currentColor at low opacity */}
+      <path d={area} fill="currentColor" opacity="0.08" />
 
-      {/* Balance line */}
-      <path d={points} fill="none" stroke={TEAL} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      {/* Balance line — currentColor */}
+      <path d={points} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
 
       {/* Monthly net bars */}
       {showBars && monthly.map((m) => {
@@ -429,8 +381,9 @@ function TrendChart({
             y={positive ? (BAR_BOT - h).toFixed(1) : String(BAR_TOP)}
             width={barW.toFixed(1)}
             height={h.toFixed(1)}
-            fill={positive ? TEAL_LIGHT : 'rgba(225,29,72,0.15)'}
-            stroke={positive ? TEAL : ROSE}
+            fill={positive ? 'currentColor' : 'rgba(225,29,72,0.15)'}
+            stroke={positive ? 'currentColor' : '#e11d48'}
+            opacity={positive ? 0.15 : 1}
             strokeWidth="0.75"
           />
         )
@@ -441,7 +394,7 @@ function TrendChart({
         x={xOf(minBalPt.date).toFixed(1)}
         y={(yOf(minBalPt.balance) + 12).toFixed(1)}
         fontSize="9"
-        fill={SLATE_MID}
+        fill="var(--muted-foreground)"
         textAnchor="middle"
       >
         {fmt(minBalPt.balance, 0)}
@@ -452,18 +405,18 @@ function TrendChart({
         x={xOf(maxBalPt.date).toFixed(1)}
         y={(yOf(maxBalPt.balance) - 4).toFixed(1)}
         fontSize="9"
-        fill={SLATE_MID}
+        fill="var(--muted-foreground)"
         textAnchor="middle"
       >
         {fmt(maxBalPt.balance, 0)}
       </text>
 
-      {/* Current label — at the last point, right-aligned */}
+      {/* Current label — at the last point, right-aligned, foreground */}
       <text
         x={Math.min(xOf(maxDate) - 2, VB_W - 2).toFixed(1)}
         y={(yOf(currentBal) - 4).toFixed(1)}
         fontSize="9"
-        fill={TEAL}
+        fill="currentColor"
         textAnchor="end"
         fontWeight="600"
       >
@@ -471,12 +424,12 @@ function TrendChart({
       </text>
 
       {/* First date label */}
-      <text x="0" y={VB_H - 1} fontSize="9" fill={SLATE_MID} textAnchor="start">
+      <text x="0" y={VB_H - 1} fontSize="9" fill="var(--muted-foreground)" textAnchor="start">
         {fmtDateShort(minDate)}
       </text>
 
       {/* Last date label */}
-      <text x={VB_W} y={VB_H - 1} fontSize="9" fill={SLATE_MID} textAnchor="end">
+      <text x={VB_W} y={VB_H - 1} fontSize="9" fill="var(--muted-foreground)" textAnchor="end">
         {fmtDateShort(maxDate)}
       </text>
     </svg>
@@ -504,21 +457,21 @@ function CompositionBars({
             <div className="flex items-center justify-between gap-2">
               <Link
                 href={`/vault/account?account=${encodeURIComponent(row.account)}`}
-                className="text-[11px] text-slate-600 truncate min-w-0 hover:text-teal-600"
+                className="text-[11px] text-muted-foreground truncate min-w-0 hover:text-foreground underline-offset-4 hover:underline"
                 title={row.account}
               >
                 {accountLabel(row.account).label}
               </Link>
               <span className={[
                 'text-[11px] font-mono shrink-0',
-                negative ? 'text-rose-600' : 'text-slate-700',
+                negative ? 'text-rose-600 dark:text-rose-400' : 'text-foreground',
               ].join(' ')}>
                 {negative ? '−' : '+'}{fmt(Math.abs(row.total))}{currency ? ` ${currency}` : ''}
               </span>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-slate-100">
+            <div className="h-1.5 w-full rounded-full bg-muted">
               <div
-                className={['h-1.5 rounded-full', negative ? 'bg-rose-400' : 'bg-teal-500'].join(' ')}
+                className={['h-1.5 rounded-full', negative ? 'bg-rose-400 dark:bg-rose-500' : 'bg-foreground/80'].join(' ')}
                 style={{ width: `${pct.toFixed(1)}%` }}
               />
             </div>
@@ -541,7 +494,7 @@ function NotableList({
   account: string
 }) {
   return (
-    <div className="flex flex-col divide-y divide-slate-100">
+    <div className="flex flex-col divide-y divide-border">
       {notable.map((row, i) => {
         const negative = row.amount < 0
         const label = [row.payee, row.narration].filter(Boolean).join(' — ')
@@ -550,19 +503,19 @@ function NotableList({
           <Link
             key={i}
             href={`/editor?tab=journal&account=${encodeURIComponent(account)}&from=${ymd}&to=${ymd}`}
-            className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0 hover:bg-slate-50 rounded px-1 -mx-1"
+            className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0 hover:bg-muted rounded px-1 -mx-1"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="font-mono text-[11px] text-slate-400 whitespace-nowrap shrink-0">
+              <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
                 {fmtDateShort(row.date)}
               </span>
-              <span className="text-[12px] text-slate-700 truncate" title={label}>
+              <span className="text-[12px] text-foreground truncate" title={label}>
                 {label || '—'}
               </span>
             </div>
             <span className={[
               'text-[12px] font-mono shrink-0 whitespace-nowrap',
-              negative ? 'text-rose-600' : 'text-slate-700',
+              negative ? 'text-rose-600 dark:text-rose-400' : 'text-foreground',
             ].join(' ')}>
               {negative ? '−' : '+'}{fmt(Math.abs(row.amount))}{currency ? ` ${currency}` : ''}
             </span>

@@ -10,7 +10,7 @@ export default async function InboxPage() {
   if (!session?.user) redirect('/login?callbackUrl=/inbox')
 
   return (
-    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-[#fbfbfa]">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-background">
       <NavRail />
       <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
         <InboxView />

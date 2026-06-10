@@ -4,7 +4,7 @@ import { PlanTabs } from '../_chrome/plan-tabs'
 
 export default function PlanLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-[#fbfbfa]">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-background">
       <NavRail />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <PlanTabs />

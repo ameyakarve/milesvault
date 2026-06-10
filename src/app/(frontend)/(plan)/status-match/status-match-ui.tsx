@@ -41,11 +41,13 @@ export type SmStatus = 'idle' | 'loading' | 'ready' | 'error'
 type NodeData = SmNode & { role: 'from' | 'to' | 'mid' }
 
 // ── alliance palette ─────────────────────────────────────────────────────────
+// Using translucent rgba backgrounds + mid-tone text so nodes read on both
+// light and dark canvases without needing separate dark: variants on inline styles.
 type AllianceKey = 'star' | 'oneworld' | 'skyteam'
 const ALLIANCE: Record<AllianceKey, { label: string; bg: string; border: string; text: string; swatch: string }> = {
-  star: { label: 'Star Alliance', bg: '#fffbeb', border: '#fcd34d', text: '#92400e', swatch: '#f59e0b' },
-  oneworld: { label: 'oneworld', bg: '#eff6ff', border: '#93c5fd', text: '#1d4ed8', swatch: '#3b82f6' },
-  skyteam: { label: 'SkyTeam', bg: '#f5f3ff', border: '#c4b5fd', text: '#6d28d9', swatch: '#8b5cf6' },
+  star:     { label: 'Star Alliance', bg: 'rgba(245,158,11,0.10)', border: 'rgba(245,158,11,0.45)', text: '#b45309', swatch: '#f59e0b' },
+  oneworld: { label: 'oneworld',      bg: 'rgba(59,130,246,0.10)', border: 'rgba(59,130,246,0.45)', text: '#2563eb', swatch: '#3b82f6' },
+  skyteam:  { label: 'SkyTeam',       bg: 'rgba(139,92,246,0.10)', border: 'rgba(139,92,246,0.45)', text: '#7c3aed', swatch: '#8b5cf6' },
 }
 function allianceOf(slug?: string): AllianceKey | null {
   if (!slug) return null
@@ -84,7 +86,7 @@ function edgeColorFor(target: SmNode | undefined): string {
       ? allianceOf(target.id)
       : allianceOf(target.confers?.[0]?.slug)
     : null
-  return ak ? ALLIANCE[ak].swatch : '#94a3b8'
+  return ak ? ALLIANCE[ak].swatch : 'var(--muted-foreground)'
 }
 
 async function computeFlow(data: StatusMatchResult): Promise<{ nodes: Node<NodeData>[]; edges: Edge[] }> {
@@ -100,7 +102,7 @@ async function computeFlow(data: StatusMatchResult): Promise<{ nodes: Node<NodeD
   }))
   const rfEdges: Edge[] = data.edges.map((e: SmEdge) => {
     const confers = e.matchKind === 'confers'
-    const stroke = confers ? '#94a3b8' : edgeColorFor(nodeById.get(e.to))
+    const stroke = confers ? 'var(--muted-foreground)' : edgeColorFor(nodeById.get(e.to))
     return {
       id: `${e.from}->${e.to}`,
       source: e.from,
@@ -161,14 +163,14 @@ function StatusNode({ data }: NodeProps<Node<NodeData>>) {
     data.role === 'from'
       ? 'ring-2 ring-emerald-400'
       : data.role === 'to'
-        ? 'ring-2 ring-slate-900'
+        ? 'ring-2 ring-foreground/60'
         : ''
   return (
     <div
       className={cn('flex h-[64px] w-[210px] flex-col justify-center gap-1 rounded-md border px-3 shadow-sm', ring)}
-      style={{ background: pal?.bg ?? '#fff', borderColor: pal?.border ?? '#e2e8f0' }}
+      style={{ background: pal?.bg ?? 'var(--card)', borderColor: pal?.border ?? 'var(--border)' }}
     >
-      <div className="truncate text-xs font-semibold text-slate-900">{data.display}</div>
+      <div className="truncate text-xs font-semibold text-foreground">{data.display}</div>
       <div className="flex items-center gap-1.5">
         {data.role !== 'mid' ? (
           <span className="text-[10px] font-medium text-muted-foreground">
@@ -193,7 +195,7 @@ function StatusNode({ data }: NodeProps<Node<NodeData>>) {
 function AllianceNode({ data }: NodeProps<Node<NodeData>>) {
   const ak = allianceOf(data.id)
   const pal = ak ? ALLIANCE[ak] : ALLIANCE.star
-  const ring = data.role === 'to' ? 'ring-2 ring-slate-900' : ''
+  const ring = data.role === 'to' ? 'ring-2 ring-foreground/60' : ''
   return (
     <div
       className={cn('flex h-[64px] w-[210px] flex-col justify-center gap-0.5 rounded-md border px-3 shadow-sm', ring)}
@@ -224,15 +226,15 @@ function Legend({ data }: { data: StatusMatchResult }) {
   const hasPaid = data.edges.some((e) => e.matchKind !== 'confers' && e.paid)
   if (present.size === 0 && !hasFree && !hasPaid) return null
   return (
-    <div className="rounded-md border bg-white/95 px-2.5 py-2 text-[10px] shadow-sm backdrop-blur">
+    <div className="rounded-md border border-border bg-card/95 px-2.5 py-2 text-[10px] shadow-sm backdrop-blur">
       {present.size ? (
         <div className="mb-1.5">
-          <div className="mb-1 font-semibold text-slate-700">Alliance status (node &amp; link)</div>
+          <div className="mb-1 font-semibold text-foreground">Alliance status (node &amp; link)</div>
           <div className="flex flex-col gap-0.5">
             {([...present] as AllianceKey[]).map((ak) => (
               <div key={ak} className="flex items-center gap-1.5">
                 <span className="size-2.5 rounded-sm" style={{ background: ALLIANCE[ak].swatch }} />
-                <span className="text-slate-600">{ALLIANCE[ak].label}</span>
+                <span className="text-muted-foreground">{ALLIANCE[ak].label}</span>
               </div>
             ))}
           </div>
@@ -241,14 +243,14 @@ function Legend({ data }: { data: StatusMatchResult }) {
       <div className="flex flex-col gap-0.5">
         {hasFree ? (
           <div className="flex items-center gap-1.5">
-            <span className="w-4" style={{ borderTop: '2px solid #94a3b8' }} />
-            <span className="text-slate-600">free match</span>
+            <span className="w-4" style={{ borderTop: '2px solid var(--muted-foreground)' }} />
+            <span className="text-muted-foreground">free match</span>
           </div>
         ) : null}
         {hasPaid ? (
           <div className="flex items-center gap-1.5">
-            <span className="w-4" style={{ borderTop: '2px dashed #94a3b8' }} />
-            <span className="text-slate-600">paid match</span>
+            <span className="w-4" style={{ borderTop: '2px dashed var(--muted-foreground)' }} />
+            <span className="text-muted-foreground">paid match</span>
           </div>
         ) : null}
       </div>
@@ -369,8 +371,8 @@ export function StatusMatch(props: SmProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b bg-white/70 px-3 py-2">
-        <span className="text-sm font-semibold text-slate-900">Status Match Merry-Go-Round</span>
+      <div className="flex flex-wrap items-center gap-2 border-b bg-card/80 px-3 py-2">
+        <span className="text-sm font-semibold text-foreground">Status Match Merry-Go-Round</span>
         <div className="ml-2 flex items-center gap-2">
           <StatusCombobox value={from} onChange={onFrom} statuses={fromStatuses} placeholder="From status…" held={held} />
           <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
@@ -384,7 +386,7 @@ export function StatusMatch(props: SmProps) {
         ) : null}
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-[#fbfbfa]">
+      <div className="relative min-h-0 flex-1 bg-background">
         {status === 'idle' ? (
           <Centered>
             Pick a <b>from</b> status to map every match reachable from it — add a <b>to</b> status to see every way to get there.
@@ -392,7 +394,7 @@ export function StatusMatch(props: SmProps) {
         ) : status === 'loading' ? (
           <Centered>Tracing the graph…</Centered>
         ) : status === 'error' ? (
-          <Centered className="text-red-600">{error ?? 'Something went wrong.'}</Centered>
+          <Centered className="text-destructive">{error ?? 'Something went wrong.'}</Centered>
         ) : data && data.found ? (
           <ReactFlow
             key={`${data.from?.slug ?? ''}|${data.to?.slug ?? ''}|${flow.nodes.length}`}
@@ -411,7 +413,7 @@ export function StatusMatch(props: SmProps) {
             panOnDrag
             zoomOnPinch
           >
-            <Background color="#e2e8f0" gap={20} />
+            <Background color="var(--border)" gap={20} />
             <Controls showInteractive={false} />
             <Panel position="top-right">
               <Legend data={data} />

@@ -31,7 +31,7 @@ const fmtK = (n: number) =>
 
 const W = 196
 const H = 64
-const ACTIVE_TAB = 'aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:shadow-sm'
+const ACTIVE_TAB = 'aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm'
 
 type NodeData = PathNode & { amount: number | null }
 
@@ -66,38 +66,38 @@ function HeldLine({ data, className }: { data: NodeData; className?: string }) {
 }
 function CardNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-white px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-slate-200')}>
-      <div className="truncate text-xs font-semibold text-slate-800">{data.display}</div>
+    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-card px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
+      <div className="truncate text-xs font-semibold text-foreground">{data.display}</div>
       <div className="flex items-center justify-between">
         <span className="truncate text-[10px] text-muted-foreground">{data.issuer ?? 'card'}</span>
         <NeedLine data={data} />
       </div>
       <HeldLine data={data} />
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-slate-300" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-muted-foreground/50" />
     </div>
   )
 }
 function CurrencyNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-sky-50/60 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200' : 'border-sky-200')}>
-      <div className="truncate text-xs font-medium text-slate-800">{data.display}</div>
+    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-sky-50/60 px-3 shadow-sm dark:bg-sky-950/30', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-sky-200/60 dark:border-sky-800/60')}>
+      <div className="truncate text-xs font-medium text-foreground">{data.display}</div>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-sky-700">{data.multiplier != null ? `×${data.multiplier.toFixed(2)}` : '—'}</span>
+        <span className="text-[10px] text-sky-600 dark:text-sky-400">{data.multiplier != null ? `×${data.multiplier.toFixed(2)}` : '—'}</span>
         <NeedLine data={data} />
       </div>
       <HeldLine data={data} />
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-sky-300" />
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-sky-300" />
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-sky-400/60" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-sky-400/60" />
     </div>
   )
 }
 function TargetNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-slate-900 px-3 text-white shadow', data.held ? 'border-emerald-400 ring-1 ring-emerald-300' : 'border-slate-800')}>
+    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-foreground px-3 text-background shadow', data.held ? 'border-emerald-400 ring-1 ring-emerald-300/60' : 'border-foreground/80')}>
       <div className="truncate text-xs font-semibold">{data.display}</div>
-      <div className="text-[10px] text-slate-300">{data.amount != null ? `${fmt(data.amount)} needed` : 'target'}</div>
+      <div className="text-[10px] opacity-60">{data.amount != null ? `${fmt(data.amount)} needed` : 'target'}</div>
       <HeldLine data={data} className="text-emerald-400" />
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-slate-500" />
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-background/50" />
     </div>
   )
 }
@@ -111,16 +111,16 @@ function FiatNode({ data }: NodeProps<Node<NodeData>>) {
       ? `≈ ${code} ${fmt((data.amount * data.multiplier) / 100)} to buy`
       : null
   return (
-    <div className="flex h-[64px] w-[196px] flex-col justify-center rounded-md border border-emerald-400 bg-emerald-50/70 px-3 shadow-sm ring-1 ring-emerald-200">
+    <div className="flex h-[64px] w-[196px] flex-col justify-center rounded-md border border-emerald-400/60 bg-emerald-50/60 px-3 shadow-sm ring-1 ring-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-700/60 dark:ring-emerald-800/40">
       <div className="flex items-center gap-1">
-        <DollarSign className="size-3 shrink-0 text-emerald-600" />
-        <div className="truncate text-xs font-semibold text-emerald-900">{data.display}</div>
+        <DollarSign className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <div className="truncate text-xs font-semibold text-emerald-900 dark:text-emerald-200">{data.display}</div>
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium text-emerald-700">{perK}</span>
-        {total ? <span className="truncate text-[10px] text-emerald-700">{total}</span> : null}
+        <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400">{perK}</span>
+        {total ? <span className="truncate text-[10px] text-emerald-700 dark:text-emerald-400">{total}</span> : null}
       </div>
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-emerald-400" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-emerald-400/60" />
     </div>
   )
 }
@@ -215,9 +215,9 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
         target: e.to,
         label: sale ? price : e.kind === 'transfer' && e.ratio_source != null ? `${e.ratio_source}:${e.ratio_dest}` : undefined,
         animated: e.kind === 'transfer',
-        style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? '#cbd5e1' : '#94a3b8', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
-        labelStyle: { fontSize: 9, fill: sale ? '#047857' : '#475569' },
-        labelBgStyle: { fill: '#fff', fillOpacity: 0.85 },
+        style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? 'var(--border)' : 'var(--muted-foreground)', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
+        labelStyle: { fontSize: 9, fill: sale ? '#047857' : 'var(--muted-foreground)' },
+        labelBgStyle: { fill: 'var(--card)', fillOpacity: 0.9 },
       }
     })
   return { nodes: layout(rfNodes, rfEdges), edges: rfEdges }
@@ -317,7 +317,7 @@ export function Points(props: PointsProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b bg-white px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 border-b bg-card px-4 py-2.5">
         <TargetCombobox value={target} onChange={onTarget} currencies={currencies} />
         <Tabs value={filters.mineOnly ? 'mine' : 'all'} onValueChange={(v) => props.onMineOnly(v === 'mine')}>
           <TabsList className="h-8">
@@ -361,7 +361,7 @@ export function Points(props: PointsProps) {
                       <button
                         type="button"
                         onClick={() => props.onToggleBank(slugs)}
-                        className="text-[11px] font-semibold text-slate-700 hover:underline"
+                        className="text-[11px] font-semibold text-foreground hover:underline"
                       >
                         {b.issuer} {sel ? `(${sel}/${slugs.length})` : ''}
                       </button>
@@ -395,13 +395,13 @@ export function Points(props: PointsProps) {
         {data ? <span className="ml-auto text-xs text-muted-foreground">{flow.nodes.length} nodes · {flow.edges.length} routes</span> : null}
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-[#fbfbfa]">
+      <div className="relative min-h-0 flex-1 bg-background">
         {status === 'loading' ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Computing paths…</div>
         ) : status === 'idle' ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Choose the points you want to reach.</div>
         ) : status === 'error' ? (
-          <div className="flex h-full items-center justify-center text-sm text-red-600">{props.error ?? 'Something went wrong.'}</div>
+          <div className="flex h-full items-center justify-center text-sm text-destructive">{props.error ?? 'Something went wrong.'}</div>
         ) : (
           <ReactFlow
             nodes={flow.nodes}
@@ -421,7 +421,7 @@ export function Points(props: PointsProps) {
             panOnDrag
             zoomOnPinch
           >
-            <Background color="#e2e8f0" gap={20} />
+            <Background color="var(--border)" gap={20} />
             <Controls showInteractive={false} />
           </ReactFlow>
         )}

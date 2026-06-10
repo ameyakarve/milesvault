@@ -59,12 +59,12 @@ const beancountLang = LRLanguage.define({
 })
 
 const HIGHLIGHT = HighlightStyle.define([
-  { tag: t.literal, color: '#00685f' },
-  { tag: t.operator, color: '#191c1e', fontWeight: '700' },
-  { tag: t.string, color: '#57657a' },
-  { tag: t.variableName, color: '#191c1e' },
-  { tag: t.number, color: '#3d4947', fontWeight: '700' },
-  { tag: t.unit, color: '#515f74' },
+  { tag: t.literal, color: 'var(--cm-accent)' },
+  { tag: t.operator, color: 'var(--cm-text)', fontWeight: '700' },
+  { tag: t.string, color: 'var(--cm-muted)' },
+  { tag: t.variableName, color: 'var(--cm-text)' },
+  { tag: t.number, color: 'var(--cm-number)', fontWeight: '700' },
+  { tag: t.unit, color: 'var(--cm-unit)' },
 ])
 
 const THEME = EditorView.theme({
@@ -73,11 +73,11 @@ const THEME = EditorView.theme({
     fontSize: '12.5px',
     fontFamily: "'JetBrains Mono', monospace",
   },
-  '.cm-content': { padding: '8px 0', caretColor: '#00685f' },
+  '.cm-content': { padding: '8px 0', caretColor: 'var(--cm-caret)' },
   '.cm-line': { padding: '0 12px', lineHeight: '22px' },
   '.cm-focused': { outline: 'none' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
-    { backgroundColor: 'rgba(0, 104, 95, 0.2)' },
+    { backgroundColor: 'var(--cm-selection)' },
 })
 
 type Validation =
@@ -244,7 +244,7 @@ export function DraftTransactionBatchCard({
       <Card size="sm">
         <CardContent className="flex items-center justify-between gap-3 py-2.5 text-sm">
           {done ? (
-            <span className="flex items-center gap-1.5 text-emerald-700">
+            <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
               <Check size={14} weight="bold" />
               {isBatch ? `Committed ${approvedCount} of ${total}` : 'Committed'}
               {skippedCount > 0 && isBatch ? (
@@ -258,7 +258,7 @@ export function DraftTransactionBatchCard({
             <button
               type="button"
               onClick={() => onShowInJournal(range)}
-              className="shrink-0 text-xs font-medium text-teal-600 hover:text-teal-700"
+              className="shrink-0 text-xs font-medium text-foreground underline underline-offset-4 hover:no-underline"
             >
               View in Journal →
             </button>
@@ -288,7 +288,7 @@ export function DraftTransactionBatchCard({
 
       <CardContent className="p-0">
         {isBatch ? (
-          <div className="divide-y divide-slate-100 border-y bg-white">
+          <div className="divide-y divide-border border-y bg-card">
             {texts.map((text, i) => {
               const v = validations[i]
               const sum = summaryOf(text)
@@ -303,7 +303,7 @@ export function DraftTransactionBatchCard({
                       onChange={() =>
                         setIncluded((arr) => arr.map((x, j) => (j === i ? !x : x)))
                       }
-                      className="size-3.5 accent-teal-600"
+                      className="size-3.5 accent-foreground"
                       aria-label={`Include entry ${i + 1}`}
                     />
                     <button
@@ -312,18 +312,18 @@ export function DraftTransactionBatchCard({
                       className={`flex min-w-0 flex-1 items-center gap-2 text-left ${included[i] ? '' : 'opacity-40'}`}
                     >
                       <ValidityDot ok={v.kind === 'ok'} />
-                      <span className="font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                      <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
                         {sum.date}
                       </span>
-                      <span className="truncate text-[12px] text-slate-700">{sum.rest}</span>
-                      <span className="ml-auto shrink-0 text-[11px] text-slate-400">
+                      <span className="truncate text-[12px] text-foreground/80">{sum.rest}</span>
+                      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
                         {isOpen ? 'close' : 'edit'}
                       </span>
                     </button>
                   </div>
                   {isOpen ? (
-                    <div className="border-t border-slate-100 bg-slate-50/50 px-2 pb-2 pt-1">
-                      <div className="overflow-hidden rounded-md border bg-white">
+                    <div className="border-t border-border bg-muted/30 px-2 pb-2 pt-1">
+                      <div className="overflow-hidden rounded-md border bg-background">
                         <CodeMirror
                           value={text}
                           onChange={(next) => updateAt(i, next)}
@@ -349,7 +349,7 @@ export function DraftTransactionBatchCard({
             })}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-md border bg-white">
+          <div className="overflow-hidden rounded-md border bg-background">
             <CodeMirror
               value={texts[0] ?? ''}
               onChange={(next) => updateAt(0, next)}

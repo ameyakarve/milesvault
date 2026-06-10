@@ -79,12 +79,9 @@ const STOPS_TABS: { key: Stops; label: string }[] = [
   { key: '1', label: '1-stop' },
 ]
 
-// This theme's --muted and --background are near-identical, so the default
-// (white-on-muted) active tab is invisible. Use the dark `primary` fill instead,
-// keyed on aria-selected (a built-in Tailwind variant; base-ui sets it on the
-// active tab).
+// Active tab: use background/foreground so it works on both light and dark.
 const ACTIVE_TAB =
-  'aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:shadow-sm'
+  'aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm'
 
 const fmt = (n: number) => n.toLocaleString('en-US')
 const fmtK = (n: number) =>
@@ -109,11 +106,11 @@ function nameOf(slug: string, names: Names): string {
 
 export const rowKey = (r: ExploreRow, i: number) => `${r.programme}|${r.stops}|${i}`
 
-// Direct = green chip, one-stop = blue chip.
+// Direct = emerald chip, one-stop = sky chip (muted, dark-mode safe).
 const STOP_CHIP = (stops: number) =>
   stops === 0
-    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-    : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'
+    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
+    : 'bg-sky-50 text-sky-700 border border-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60'
 
 // "Via": Direct for nonstop, else the connecting airport IATA.
 const viaText = (row: AwardPlanRow) =>
@@ -152,13 +149,13 @@ function CostChip({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
 function AffordChip({ afford, names }: { afford: Afford; names: Names }) {
   if (afford.tier === 'hold') {
     return (
-      <Badge className="border-transparent text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">
+      <Badge className="text-[10px] font-medium bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60">
         You have the points
       </Badge>
     )
   }
   return (
-    <Badge className="border-transparent text-[10px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200">
+    <Badge className="text-[10px] font-medium bg-sky-50 text-sky-700 border-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60">
       Via {nameOf(afford.src, names)}
     </Badge>
   )

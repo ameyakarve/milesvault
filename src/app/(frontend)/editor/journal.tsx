@@ -28,12 +28,12 @@ const beancountLang = LRLanguage.define({
 })
 
 const HIGHLIGHT = HighlightStyle.define([
-  { tag: t.literal, color: '#00685f' },
-  { tag: t.operator, color: '#191c1e', fontWeight: '700' },
-  { tag: t.string, color: '#57657a' },
-  { tag: t.variableName, color: '#191c1e' },
-  { tag: t.number, color: '#3d4947', fontWeight: '700' },
-  { tag: t.unit, color: '#515f74' },
+  { tag: t.literal, color: 'var(--cm-accent)' },
+  { tag: t.operator, color: 'var(--cm-text)', fontWeight: '700' },
+  { tag: t.string, color: 'var(--cm-muted)' },
+  { tag: t.variableName, color: 'var(--cm-text)' },
+  { tag: t.number, color: 'var(--cm-number)', fontWeight: '700' },
+  { tag: t.unit, color: 'var(--cm-unit)' },
 ])
 
 const THEME = EditorView.theme({
@@ -47,20 +47,20 @@ const THEME = EditorView.theme({
     fontFamily: "'JetBrains Mono', monospace",
     overflow: 'auto',
   },
-  '.cm-content': { padding: '12px 0', caretColor: '#00685f' },
+  '.cm-content': { padding: '12px 0', caretColor: 'var(--cm-caret)' },
   '.cm-line': { padding: '0 16px', lineHeight: '24px' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
-    { backgroundColor: 'rgba(0, 104, 95, 0.2)' },
-  '.cm-activeLine': { backgroundColor: 'rgba(0, 104, 95, 0.04)' },
+    { backgroundColor: 'var(--cm-selection)' },
+  '.cm-activeLine': { backgroundColor: 'var(--cm-active-line)' },
   '.cm-activeLineGutter': {
-    backgroundColor: 'rgba(0, 104, 95, 0.06)',
-    color: '#475569',
+    backgroundColor: 'var(--cm-active-gutter)',
+    color: 'var(--cm-gutter-fg)',
   },
   '.cm-focused': { outline: 'none' },
   '.cm-gutters': {
-    backgroundColor: '#f5f5f4',
-    borderRight: '1px solid rgba(226, 232, 240, 0.6)',
-    color: '#a8a29e',
+    backgroundColor: 'var(--cm-gutter-bg)',
+    borderRight: '1px solid var(--cm-gutter-border)',
+    color: 'var(--cm-gutter-fg)',
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: '11px',
     lineHeight: '24px',
@@ -116,7 +116,7 @@ export function Journal({
   )
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-white">
+    <section className="flex min-h-0 flex-1 flex-col bg-background">
       <CodeMirror
         value={text}
         onChange={onChange}

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import { ArrowUp, Database, Loader2, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   Conversation,
   ConversationContent,
@@ -117,30 +118,31 @@ export function ConciergeChat() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-3">
+      <header className="flex items-start justify-between gap-4 border-b border-border bg-card px-6 py-3">
         <div>
-          <h1 className="text-sm font-semibold text-slate-700">Concierge</h1>
-          <p className="text-xs text-slate-500">
+          <h1 className="text-sm font-semibold text-foreground">Concierge</h1>
+          <p className="text-xs text-muted-foreground">
             Ask anything about your ledger — spending, balances, trends.
           </p>
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => clearHistory()}
           disabled={messages.length === 0 || busy}
           title="Clear conversation"
           aria-label="Clear conversation"
-          className="flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:text-slate-500"
         >
           <Trash2 className="size-3.5" />
           Clear
-        </button>
+        </Button>
       </header>
 
       <Conversation className="flex-1">
         <ConversationContent className="mx-auto w-full max-w-3xl px-4">
           {isEmpty ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center text-slate-400">
+            <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
               <Database className="size-6" />
               <p className="text-sm">
                 Ask a question to get started — e.g. &ldquo;How much did I spend on restaurants last
@@ -200,12 +202,12 @@ export function ConciergeChat() {
                           <ToolHeader type={`tool-${name}`} state={toolState} />
                           <ToolContent>
                             {p.input ? (
-                              <pre className="overflow-x-auto rounded bg-slate-50 p-2 text-xs text-slate-700">
+                              <pre className="overflow-x-auto rounded bg-muted p-2 text-xs text-foreground">
                                 {JSON.stringify(p.input, null, 2)}
                               </pre>
                             ) : null}
                             {p.errorText ? (
-                              <p className="text-xs text-red-600">{p.errorText}</p>
+                              <p className="text-xs text-destructive">{p.errorText}</p>
                             ) : null}
                           </ToolContent>
                         </Tool>
@@ -219,7 +221,7 @@ export function ConciergeChat() {
           })}
 
           {busy ? (
-            <div className="flex items-center gap-2 px-2 py-3 text-xs text-slate-400">
+            <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
               thinking…
             </div>
@@ -254,8 +256,8 @@ function TelegramPairHint() {
   const [busy, setBusy] = useState(false)
   if (command) {
     return (
-      <p className="text-xs text-slate-400">
-        Send <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-slate-600">{command}</code>{' '}
+      <p className="text-xs text-muted-foreground">
+        Send <code className="rounded bg-muted px-1 py-0.5 font-mono text-foreground">{command}</code>{' '}
         to the MilesVault Telegram bot within 15 minutes to link this account.
       </p>
     )
@@ -272,7 +274,7 @@ function TelegramPairHint() {
           .catch(() => {})
           .finally(() => setBusy(false))
       }}
-      className="text-xs text-teal-600 hover:text-teal-700 disabled:opacity-50"
+      className="text-xs text-foreground underline underline-offset-4 hover:no-underline disabled:opacity-50"
     >
       Use me on Telegram →
     </button>

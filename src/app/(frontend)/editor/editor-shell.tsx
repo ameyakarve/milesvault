@@ -16,6 +16,16 @@ import {
   isReplaceBufferError,
 } from '@/lib/ledger-client-browser'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { StateChip } from '@/components/shared'
 
 // Desktop (lg+) shows chat and journal side by side — the workbench; the
 // tab switch remains the mobile layout.
@@ -272,7 +282,7 @@ export function EditorShell() {
 
   return (
     <>
-      <header className="flex items-center justify-between gap-3 border-b border-slate-200/60 px-4 py-3 sm:px-6">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
         <div className="w-[60px] sm:w-[120px]" />
         <div className="lg:hidden">
           <SegmentedTabs
@@ -281,34 +291,34 @@ export function EditorShell() {
             lockJournal={chatBusy}
           />
         </div>
-        <div className="hidden text-[12px] font-medium text-slate-400 lg:block">
+        <div className="hidden text-[12px] font-medium text-muted-foreground lg:block">
           Ledger chat · Journal
         </div>
         <div className="flex w-[60px] items-center justify-end gap-2 sm:w-[120px] lg:w-auto">
           {journalVisible && entries.loaded && !filterActive ? (
             <>
               <SavedChip dirty={isDirty} saving={entries.saving} />
-              <button
+              <Button
                 type="button"
+                size="sm"
                 onClick={() => void save()}
                 disabled={!isDirty || entries.saving}
-                className="rounded-full bg-slate-900 px-3 py-1 text-[12px] font-medium text-white transition hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
               >
                 Save
-              </button>
+              </Button>
             </>
           ) : null}
           {journalVisible && filterActive && filteredEditable ? (
             <>
               <SavedChip dirty={filteredDirty} saving={filteredSaving} />
-              <button
+              <Button
                 type="button"
+                size="sm"
                 onClick={() => void saveFiltered()}
                 disabled={!filteredDirty || filteredSaving}
-                className="rounded-full bg-slate-900 px-3 py-1 text-[12px] font-medium text-white transition hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
               >
                 Save
-              </button>
+              </Button>
             </>
           ) : null}
           {(tab === 'chat' || isLg) && chatClear.canClear ? (
@@ -318,7 +328,7 @@ export function EditorShell() {
               disabled={chatBusy}
               title="Clear conversation"
               aria-label="Clear conversation"
-              className="rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+              className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
             >
               <Eraser className="size-3.5" />
             </button>
@@ -329,7 +339,7 @@ export function EditorShell() {
         <section
           className={cn(
             tab === 'chat' ? 'flex' : 'hidden',
-            'min-h-0 flex-1 flex-col lg:flex lg:max-w-[46%] lg:border-r lg:border-slate-200/60',
+            'min-h-0 flex-1 flex-col lg:flex lg:max-w-[46%] lg:border-r lg:border-border',
           )}
         >
           {mounted ? (
@@ -355,23 +365,23 @@ export function EditorShell() {
             />
           ) : null}
           {(saveError || entries.loadError) ? (
-            <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-[12px] text-rose-700 sm:px-6">
+            <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-[12px] text-destructive sm:px-6">
               {saveError || entries.loadError}
             </div>
           ) : null}
           {filteredError ? (
-            <div className="border-b border-rose-200 bg-rose-50 px-4 py-2 text-[12px] text-rose-700 sm:px-6">
+            <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-[12px] text-destructive sm:px-6">
               {filteredError}
             </div>
           ) : null}
           {!entries.loaded ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
               Loading…
             </div>
           ) : filterActive ? (
             <div className="flex flex-1 flex-col overflow-hidden">
               {filteredLoading && !filteredBuffer ? (
-                <div className="flex flex-1 items-center justify-center text-sm text-slate-400">
+                <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                   Loading…
                 </div>
               ) : (
@@ -386,12 +396,12 @@ export function EditorShell() {
                 />
               )}
               {filteredCursor ? (
-                <div className="border-t border-slate-200/60 px-4 py-2 text-center sm:px-6">
+                <div className="border-t border-border px-4 py-2 text-center sm:px-6">
                   <button
                     type="button"
                     onClick={() => void loadMore()}
                     disabled={filteredLoading}
-                    className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
+                    className="rounded-full bg-muted px-3 py-1 text-[12px] font-medium text-foreground hover:bg-muted/80 disabled:opacity-50"
                   >
                     {filteredLoading ? 'Loading…' : 'Load older'}
                   </button>
@@ -411,14 +421,13 @@ export function EditorShell() {
           )}
         </section>
       </div>
-      {pendingTab !== null ? (
-        <UnsavedModal
-          saving={entries.saving || filteredSaving}
-          onCancel={() => setPendingTab(null)}
-          onDiscard={confirmDiscard}
-          onSave={() => void confirmSaveAndSwitch()}
-        />
-      ) : null}
+      <UnsavedModal
+        open={pendingTab !== null}
+        saving={entries.saving || filteredSaving}
+        onCancel={() => setPendingTab(null)}
+        onDiscard={confirmDiscard}
+        onSave={() => void confirmSaveAndSwitch()}
+      />
     </>
   )
 }
@@ -460,75 +469,63 @@ function extractDate(rawText: string): string | null {
 }
 
 function UnsavedModal({
+  open,
   saving,
   onCancel,
   onDiscard,
   onSave,
 }: {
+  open: boolean
   saving: boolean
   onCancel: () => void
   onDiscard: () => void
   onSave: () => void
 }) {
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/30 p-4"
-      onClick={onCancel}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-[15px] font-semibold text-slate-900">
-          Unsaved changes
-        </h2>
-        <p className="mt-1.5 text-[13px] leading-5 text-slate-600">
-          You have unsaved journal edits. Save them before leaving, or discard
-          to lose your changes.
-        </p>
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel() }}>
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Unsaved changes</DialogTitle>
+          <DialogDescription>
+            You have unsaved journal edits. Save them before leaving, or discard
+            to lose your changes.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={onCancel}
-            className="rounded-full px-3.5 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-100"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="destructive"
+            size="sm"
             onClick={onDiscard}
-            className="rounded-full border border-slate-200 px-3.5 py-1.5 text-[13px] font-medium text-rose-700 hover:bg-rose-50"
           >
             Discard
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="sm"
             onClick={onSave}
             disabled={saving}
-            className="rounded-full bg-slate-900 px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-slate-800 disabled:bg-slate-300"
           >
             {saving ? 'Saving…' : 'Save & switch'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 function SavedChip({ dirty, saving }: { dirty: boolean; saving: boolean }) {
   const label = saving ? 'Saving…' : dirty ? 'Unsaved' : 'Saved'
-  const cls = saving
-    ? 'bg-slate-100 text-slate-500'
-    : dirty
-      ? 'bg-amber-100 text-amber-800'
-      : 'bg-emerald-100 text-emerald-800'
-  return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}
-    >
-      {label}
-    </span>
-  )
+  const tone = saving ? 'neutral' : dirty ? 'pending' : 'positive'
+  return <StateChip tone={tone}>{label}</StateChip>
 }
 
 function SegmentedTabs({
@@ -541,7 +538,7 @@ function SegmentedTabs({
   lockJournal?: boolean
 }) {
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 p-0.5">
+    <div className="inline-flex items-center gap-0.5 rounded-full bg-muted p-0.5">
       {(['chat', 'journal'] as const).map((t) => {
         const active = value === t
         const disabled = t === 'journal' && lockJournal && !active
@@ -556,10 +553,10 @@ function SegmentedTabs({
             className={[
               'relative rounded-full px-3.5 py-1 text-[13px] font-medium transition',
               active
-                ? 'bg-white text-slate-900 shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                ? 'bg-background text-foreground shadow-sm'
                 : disabled
-                  ? 'cursor-not-allowed text-slate-300'
-                  : 'text-slate-600 hover:text-slate-900',
+                  ? 'cursor-not-allowed text-muted-foreground/40'
+                  : 'text-muted-foreground hover:text-foreground',
             ].join(' ')}
           >
             {t === 'chat' ? 'Chat' : 'Journal'}

@@ -8,7 +8,7 @@ export default async function ConciergePage() {
   if (!session?.user) redirect('/login?callbackUrl=/concierge')
 
   return (
-    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-[#fbfbfa]">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-background">
       <NavRail />
       <main className="flex flex-1 flex-col">
         <ConciergeChat />

@@ -94,24 +94,24 @@ function StatementChip({
     if (pw) onPassword(pw)
   }
   return (
-    <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
-      <FileText className="size-4 shrink-0 text-slate-500" />
-      <span className="min-w-0 truncate font-medium text-slate-700">
+    <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1.5 text-xs">
+      <FileText className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 truncate font-medium text-foreground">
         {state.file.name}
       </span>
-      <span className="text-slate-400">·</span>
+      <span className="text-muted-foreground">·</span>
       {state.kind === 'extracting' ? (
-        <span className="flex items-center gap-1 text-slate-500">
+        <span className="flex items-center gap-1 text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
           Reading…
         </span>
       ) : state.kind === 'ready' ? (
-        <span className="text-emerald-600">Ready</span>
+        <span className="text-emerald-700 dark:text-emerald-400">Ready</span>
       ) : state.kind === 'error' ? (
-        <span className="truncate text-rose-600">{state.message}</span>
+        <span className="truncate text-destructive">{state.message}</span>
       ) : (
         <div className="flex items-center gap-1">
-          <Lock className="size-3 text-slate-500" />
+          <Lock className="size-3 text-muted-foreground" />
           <input
             type="password"
             value={pw}
@@ -128,13 +128,13 @@ function StatementChip({
             }}
             placeholder={state.wrong ? 'Wrong password — try again' : 'Password'}
             autoFocus
-            className="h-6 w-40 rounded border border-slate-300 bg-white px-2 text-xs focus:border-slate-400 focus:outline-none"
+            className="h-6 w-40 rounded border border-border bg-background px-2 text-xs focus:border-foreground/40 focus:outline-none"
           />
           <button
             type="button"
             onClick={submitPw}
             disabled={!pw}
-            className="rounded bg-slate-900 px-2 py-0.5 text-xs text-white disabled:opacity-40"
+            className="rounded bg-foreground px-2 py-0.5 text-xs text-background disabled:opacity-40"
           >
             Unlock
           </button>
@@ -144,7 +144,7 @@ function StatementChip({
         type="button"
         onClick={onRemove}
         aria-label="Remove attachment"
-        className="ml-auto flex size-5 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-900"
+        className="ml-auto flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-border hover:text-foreground"
       >
         <X className="size-3.5" />
       </button>
@@ -229,9 +229,9 @@ function parseStatementRefs(text: string): {
 // separate server-side extraction status to surface.
 function SentStatementChip({ filename }: { filename: string }) {
   return (
-    <div className="my-1 flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
-      <FileText className="size-4 shrink-0 text-slate-500" />
-      <span className="min-w-0 truncate font-medium text-slate-700">
+    <div className="my-1 flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1.5 text-xs">
+      <FileText className="size-4 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 truncate font-medium text-foreground">
         {filename}
       </span>
     </div>
@@ -252,13 +252,13 @@ const AGENT_LABELS: Record<string, string> = {
 function HandoffChip({ to }: { to: string }) {
   const label = AGENT_LABELS[to] ?? to
   return (
-    <div className="my-3 flex items-center gap-2 text-xs text-slate-400">
-      <span className="h-px flex-1 bg-slate-200" />
-      <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-medium text-slate-500">
+    <div className="my-3 flex items-center gap-2 text-xs text-muted-foreground">
+      <span className="h-px flex-1 bg-border" />
+      <span className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 font-medium text-muted-foreground">
         <ArrowRightLeft className="size-3" />
         {label}
       </span>
-      <span className="h-px flex-1 bg-slate-200" />
+      <span className="h-px flex-1 bg-border" />
     </div>
   )
 }
@@ -873,7 +873,7 @@ function CopyMessageButton({ text }: { text: string }) {
       onClick={onClick}
       aria-label={copied ? 'Copied' : 'Copy message'}
       title={copied ? 'Copied' : 'Copy message'}
-      className="flex h-7 w-7 items-center justify-center rounded-md text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-900 group-[.is-user]:ml-auto focus-visible:opacity-100"
+      className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:bg-muted hover:text-foreground group-[.is-user]:ml-auto focus-visible:opacity-100"
     >
       {copied ? (
         <Check className="size-3.5" />
@@ -889,7 +889,7 @@ function CopyMessageButton({ text }: { text: string }) {
 function StarterChips({ onAttachClick }: { onAttachClick: () => void }) {
   const controller = usePromptInputController()
   const chipCls =
-    'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 hover:border-teal-300 hover:text-teal-700'
+    'rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground'
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
       <button
@@ -952,7 +952,7 @@ function PendingCapturesHint() {
   return (
     <Link
       href="/inbox"
-      className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800 hover:bg-amber-100"
+      className="rounded-full border border-amber-200/60 bg-amber-50 px-3 py-1 text-xs text-amber-800 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/60"
     >
       {pending} item{pending === 1 ? '' : 's'} waiting in the Inbox →
     </Link>

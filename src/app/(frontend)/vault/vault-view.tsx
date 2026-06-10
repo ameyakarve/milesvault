@@ -9,6 +9,7 @@ import {
   groupRank,
   isHolding,
 } from '@/lib/ledger-core/account-display'
+import { SectionLabel, StatTile, CenteredState } from '@/components/shared'
 
 // KG display names (cards, points) fetched once and overlaid on the
 // path-derived labels — account path → display name.
@@ -106,18 +107,14 @@ export function VaultView() {
   }, [])
 
   if (state.status === 'loading') {
-    return (
-      <div className="flex flex-1 items-center justify-center text-slate-400 text-sm">
-        Loading…
-      </div>
-    )
+    return <CenteredState>Loading…</CenteredState>
   }
 
   if (state.status === 'error') {
     return (
-      <div className="flex flex-1 items-center justify-center text-red-500 text-sm">
+      <CenteredState tone="error">
         Failed to load vault: {state.message}
-      </div>
+      </CenteredState>
     )
   }
 
@@ -127,17 +124,11 @@ export function VaultView() {
 
   if (rows.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-slate-500 text-sm max-w-xs">
-          Your vault is empty — tell the Assistant about a card you hold, or drop a statement.
-        </p>
-        <Link
-          href="/editor"
-          className="text-teal-600 text-sm font-medium hover:underline"
-        >
-          Open the Journal
-        </Link>
-      </div>
+      <CenteredState
+        action={{ label: 'Open the Journal', href: '/editor' }}
+      >
+        Your vault is empty — tell the Assistant about a card you hold, or drop a statement.
+      </CenteredState>
     )
   }
 
@@ -164,12 +155,12 @@ export function VaultView() {
       {pendingCaptures > 0 ? (
         <Link
           href="/inbox"
-          className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 hover:bg-amber-100"
+          className="flex items-center justify-between rounded-xl border border-amber-200/60 bg-amber-50 px-4 py-3 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
         >
-          <span className="text-sm text-amber-800">
+          <span className="text-sm text-amber-800 dark:text-amber-300">
             Needs review: {pendingCaptures} captured item{pendingCaptures === 1 ? '' : 's'}
           </span>
-          <span className="text-sm font-medium text-amber-700">Open Inbox →</span>
+          <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Open Inbox →</span>
         </Link>
       ) : null}
 
@@ -206,16 +197,6 @@ export function VaultView() {
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
-function StatTile({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 space-y-1">
-      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">{label}</p>
-      <p className="text-2xl font-mono font-semibold text-slate-800 leading-none">{value}</p>
-      <p className="text-xs text-slate-500 font-mono">{sub}</p>
-    </div>
-  )
-}
-
 function HoldingsCard({
   title,
   rows,
@@ -226,8 +207,8 @@ function HoldingsCard({
   names: Names
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 space-y-2">
-      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">{title}</p>
+    <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-2">
+      <SectionLabel>{title}</SectionLabel>
       <ul className="space-y-1">
         {rows.map((r) => {
           const { label, suffix } = accountLabel(r.account)
@@ -236,17 +217,17 @@ function HoldingsCard({
             <li key={`${r.account}|${r.currency}`}>
               <Link
                 href={`/vault/account?account=${encodeURIComponent(r.account)}&ccy=${encodeURIComponent(r.currency)}`}
-                className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-slate-50 group"
+                className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-muted group"
               >
-                <span className="text-sm text-slate-700 truncate group-hover:text-teal-600">
+                <span className="text-sm text-foreground truncate group-hover:underline group-hover:underline-offset-4">
                   {display}
                   {suffix ? (
-                    <span className="ml-1 font-mono text-[10px] text-slate-400">··{suffix}</span>
+                    <span className="ml-1 font-mono text-[10px] text-muted-foreground">··{suffix}</span>
                   ) : null}
                 </span>
-                <span className="text-xs font-mono text-slate-500 whitespace-nowrap shrink-0">
+                <span className="text-xs font-mono text-muted-foreground whitespace-nowrap shrink-0">
                   {formatBalance(r.balance_scaled, r.scale)}{' '}
-                  <span className="text-slate-400">{r.currency}</span>
+                  <span className="text-muted-foreground/70">{r.currency}</span>
                 </span>
               </Link>
             </li>

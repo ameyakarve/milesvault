@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { GlobalCapture } from './global-capture'
+import { ThemeToggle } from './theme-toggle'
 
 // Routes that belong to the Plan zone — the Plan nav item is active for any of these.
 const PLAN_ROUTES = ['/explore', '/points', '/status-match']
@@ -54,10 +55,10 @@ function InboxBadge({ count, className }: { count: number; className?: string })
   if (count === 0) return null
   return (
     <span
-      className={
-        'flex h-4 min-w-4 items-center justify-center rounded-full bg-teal-500 px-1 text-[9px] font-bold text-white ' +
-        (className ?? '')
-      }
+      className={cn(
+        'flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-background',
+        className,
+      )}
     >
       {count > 9 ? '9+' : count}
     </span>
@@ -89,12 +90,12 @@ export function NavRail() {
           nothing on /editor where the chat tab has its own attach flow. */}
       <GlobalCapture />
       {/* Desktop: slim side rail */}
-      <nav className="hidden h-screen w-[48px] shrink-0 flex-col items-center gap-6 border-r border-slate-200 bg-white py-4 md:flex">
+      <nav className="hidden h-screen w-[48px] shrink-0 flex-col items-center gap-6 border-r border-border bg-background py-4 md:flex">
         <Logo />
         <div className="flex flex-col gap-4">
           {ITEMS.map((item) => {
             const active = isActive(item)
-            const iconCls = cn('p-2', active ? 'text-teal-500' : 'text-slate-400 hover:text-slate-600')
+            const iconCls = cn('p-2', active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')
             if (item.kind === 'plan') {
               return (
                 <Link
@@ -139,10 +140,11 @@ export function NavRail() {
             )
           })}
         </div>
+        <ThemeToggle className="mt-auto p-2 text-muted-foreground hover:text-foreground" />
       </nav>
 
       {/* Mobile: top bar with a hamburger */}
-      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 md:hidden">
+      <header className="flex items-center gap-2 border-b border-border bg-background px-3 py-2 md:hidden">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -165,7 +167,7 @@ export function NavRail() {
               const active = isActive(item)
               const linkCls = cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
-                active ? 'bg-slate-100 font-medium text-teal-600' : 'text-slate-600 hover:bg-slate-50',
+                active ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )
               if (item.kind === 'plan') {
                 return (
@@ -209,6 +211,9 @@ export function NavRail() {
               )
             })}
           </nav>
+          <div className="border-t border-border pt-2">
+            <ThemeToggle className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground w-full" />
+          </div>
         </DialogContent>
       </Dialog>
     </>

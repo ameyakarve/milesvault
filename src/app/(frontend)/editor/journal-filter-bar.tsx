@@ -100,7 +100,7 @@ export function JournalFilterBar({
   const [acctOpen, setAcctOpen] = useState(false)
 
   return (
-    <div className="flex items-center gap-1.5 border-b border-slate-200/60 px-3 py-2 sm:px-6">
+    <div className="flex items-center gap-1.5 border-b border-border px-3 py-2 sm:px-6">
       <Popover open={dateOpen} onOpenChange={setDateOpen}>
         <PopoverTrigger className={chipCls(dateActive)}>
           <Calendar className="size-3.5" />
@@ -155,7 +155,7 @@ export function JournalFilterBar({
           onClick={() =>
             onChange({ account: null, date: null })
           }
-          className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+          className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <X className="size-3" />
           Reset
@@ -169,8 +169,8 @@ function chipCls(active: boolean): string {
   return cn(
     'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition',
     active
-      ? 'border-slate-900 bg-slate-900 text-white'
-      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+      ? 'border-foreground bg-foreground text-background'
+      : 'border-border bg-background text-foreground hover:bg-muted',
   )
 }
 
@@ -208,12 +208,12 @@ function DatePicker({
                 type="button"
                 onClick={() => onPick(p.range)}
                 className={cn(
-                  'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-slate-100',
-                  isActive ? 'font-medium text-slate-900' : 'text-slate-700',
+                  'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-muted',
+                  isActive ? 'font-medium text-foreground' : 'text-foreground/80',
                 )}
               >
                 <span>{p.label}</span>
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-muted-foreground">
                   {formatDateLabel(p.range)}
                 </span>
               </button>
@@ -221,27 +221,27 @@ function DatePicker({
           )
         })}
       </ul>
-      <div className="mt-2 border-t border-slate-200/60 pt-2">
-        <p className="px-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+      <div className="mt-2 border-t border-border pt-2">
+        <p className="px-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
           Custom
         </p>
         <div className="mt-1 flex flex-col gap-1.5 px-2 pb-1">
           <label className="flex items-center gap-2">
-            <span className="w-8 text-[11px] text-slate-500">From</span>
+            <span className="w-8 text-[11px] text-muted-foreground">From</span>
             <input
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-[12px]"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-1 text-[12px]"
             />
           </label>
           <label className="flex items-center gap-2">
-            <span className="w-8 text-[11px] text-slate-500">To</span>
+            <span className="w-8 text-[11px] text-muted-foreground">To</span>
             <input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-slate-200 px-1.5 py-1 text-[12px]"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-1 text-[12px]"
             />
           </label>
         </div>
@@ -249,7 +249,7 @@ function DatePicker({
           <button
             type="button"
             onClick={onClear}
-            className="rounded-md px-2 py-1 text-[12px] text-slate-500 hover:bg-slate-100"
+            className="rounded-md px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted"
           >
             All time
           </button>
@@ -257,7 +257,7 @@ function DatePicker({
             type="button"
             disabled={!customFrom || !customTo || customFrom > customTo}
             onClick={() => onPick({ from: customFrom, to: customTo })}
-            className="rounded-md bg-slate-900 px-2.5 py-1 text-[12px] font-medium text-white hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400"
+            className="rounded-md bg-foreground px-2.5 py-1 text-[12px] font-medium text-background hover:bg-foreground/90 disabled:bg-muted disabled:text-muted-foreground"
           >
             Apply
           </button>
@@ -322,21 +322,21 @@ function AccountPicker({
 
   return (
     <div className="flex max-h-[60vh] flex-col">
-      <div className="border-b border-slate-200/60 p-2">
-        <label className="flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1.5">
-          <Search className="size-3.5 text-slate-400" />
+      <div className="border-b border-border p-2">
+        <label className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5">
+          <Search className="size-3.5 text-muted-foreground" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search accounts"
-            className="flex-1 bg-transparent text-[13px] placeholder:text-slate-400 focus:outline-none"
+            className="flex-1 bg-transparent text-[13px] placeholder:text-muted-foreground focus:outline-none"
           />
         </label>
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         {filtered.length === 0 ? (
-          <p className="px-3 py-6 text-center text-[12px] text-slate-400">
+          <p className="px-3 py-6 text-center text-[12px] text-muted-foreground">
             No accounts found.
           </p>
         ) : (
@@ -355,11 +355,11 @@ function AccountPicker({
         )}
       </div>
       {selected ? (
-        <div className="border-t border-slate-200/60 p-2">
+        <div className="border-t border-border p-2">
           <button
             type="button"
             onClick={onClear}
-            className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-slate-500 hover:bg-slate-100"
+            className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground hover:bg-muted"
           >
             Clear account filter
           </button>
@@ -394,8 +394,8 @@ function AccountRow({
     <li>
       <div
         className={cn(
-          'flex items-center gap-1 hover:bg-slate-50',
-          isSelected && 'bg-slate-100',
+          'flex items-center gap-1 hover:bg-muted/50',
+          isSelected && 'bg-muted',
         )}
         style={{ paddingLeft: 8 + depth * 12 }}
       >
@@ -403,7 +403,7 @@ function AccountRow({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             aria-label={open ? 'Collapse' : 'Expand'}
           >
             <ChevronRight
@@ -416,7 +416,7 @@ function AccountRow({
         <button
           type="button"
           onClick={() => onPick(node.full)}
-          className="flex-1 truncate py-1.5 pr-3 text-left text-[13px] text-slate-700 hover:text-slate-900"
+          className="flex-1 truncate py-1.5 pr-3 text-left text-[13px] text-foreground/80 hover:text-foreground"
           title={node.full}
         >
           {node.name}
