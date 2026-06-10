@@ -77,7 +77,9 @@ function toolNameOf(p: Part): string | null {
 type StatementAttachment =
   | { kind: 'extracting'; file: File }
   | { kind: 'needs_password'; file: File; wrong?: boolean }
-  | { kind: 'ready'; file: File; text: string }
+  // Stored + captured to the Inbox (owner decree: statement content NEVER
+  // enters chat context — the chip just confirms where it went).
+  | { kind: 'captured'; file: File }
   | { kind: 'error'; file: File; message: string }
 
 function StatementChip({
@@ -105,8 +107,10 @@ function StatementChip({
           <Loader2 className="size-3 animate-spin" />
           Reading…
         </span>
-      ) : state.kind === 'ready' ? (
-        <span className="text-emerald-700 dark:text-emerald-400">Ready</span>
+      ) : state.kind === 'captured' ? (
+        <span className="text-emerald-700 dark:text-emerald-400">
+          In your Inbox — drafting in the background
+        </span>
       ) : state.kind === 'error' ? (
         <span className="truncate text-destructive">{state.message}</span>
       ) : (
@@ -169,8 +173,10 @@ function Composer({
   onRemoveStatement: () => void
   onProvidePassword: (pw: string) => void
 }) {
-  const submitBlocked =
-    statement !== null && statement.kind !== 'ready'
+  // The attachment never rides a chat message anymore — text submits are
+  // independent of it; only block while a password prompt is pending so an
+  // Enter doesn't race the unlock.
+  const submitBlocked = statement?.kind === 'needs_password'
   return (
     <PromptInput onSubmit={onSubmit}>
       <PromptInputTextarea placeholder="Ask anything" />
@@ -308,11 +314,6 @@ export function Chat({
   const [clarifyAnswers, setClarifyAnswers] = useState<Record<string, string[]>>({})
   const [accounts, setAccounts] = useState<string[]>([])
   const [statement, setStatement] = useState<StatementAttachment | null>(null)
-  // The most recent statement id sent into the conversation. When the draft
-  // batch it produced is approved (or rejected), the Inbox capture advances
-  // to 'posted' (or stays for manual dismissal) — best-effort linkage; a
-  // reload between upload and approve just leaves the capture 'extracted'.
-  const lastStatementIdRef = useRef<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   // Guards handleSubmit against re-entry. attachStatement is an async network
   // round-trip; until sendMessage runs, `status` is still idle and the submit
@@ -332,7 +333,15 @@ export function Chat({
     try {
       const { doc } = await loadStatement(file, password)
       const text = await extractStatementText(doc)
-      setStatement({ kind: 'ready', file, text })
+      // Straight to the Inbox: store + capture + background draft. Statement
+      // content NEVER enters this chat's context (owner decree); the chip
+      // confirms and fades. The password (if any) was used in-browser only.
+      await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text })
+      window.dispatchEvent(new CustomEvent('mv:captured'))
+      setStatement({ kind: 'captured', file })
+      setTimeout(() => {
+        setStatement((s) => (s?.kind === 'captured' && s.file === file ? null : s))
+      }, 5000)
     } catch (e) {
       if (e instanceof StatementExtractError) {
         if (e.detail.kind === 'need_password') {
@@ -448,40 +457,10 @@ export function Chat({
 
   async function handleSubmit(message: PromptInputMessage) {
     const userText = message.text.trim()
-    const stmt = statement?.kind === 'ready' ? statement : null
-    // Allow a statement-only submit (no typed note) — the prompt block alone
-    // is enough signal for the agent.
-    if (!userText && !stmt) return
-    if (statement && !stmt) return // statement attached but not ready
+    if (!userText) return
     if (submittingRef.current) return // re-entry guard (see ref decl)
     submittingRef.current = true
     try {
-      // Upload statement bytes to DO side-storage before sending. The user's
-      // chat message carries only a reference, so the bytes never enter the
-      // chat agent's history (or its inference context).
-      let stmtId: string | null = null
-      if (stmt) {
-        try {
-          const { id } = await ledgerClient.attachStatement({
-            filename: stmt.file.name,
-            text: stmt.text,
-          })
-          stmtId = id
-          lastStatementIdRef.current = id
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e)
-          setStatement({ kind: 'error', file: stmt.file, message: msg })
-          return
-        }
-      }
-
-      const refTag =
-        stmt && stmtId
-          ? `<statement id="${stmtId}" filename="${stmt.file.name}" />`
-          : ''
-      const text = stmt
-        ? `${userText || 'Process the attached statement and draft transactions.'}\n\n${refTag}`
-        : userText
       // Any tool cards still awaiting a decision get superseded by the new
       // message — otherwise the agent stays stuck waiting on them.
       for (const m of messages) {
@@ -498,8 +477,7 @@ export function Chat({
           })
         }
       }
-      void sendMessage({ text })
-      setStatement(null)
+      void sendMessage({ text: userText })
     } finally {
       submittingRef.current = false
     }
@@ -541,15 +519,6 @@ export function Chat({
           ...(meta && meta.skipped > 0 ? { skipped_by_user: meta.skipped } : {}),
         },
       })
-      const stmtId = lastStatementIdRef.current
-      if (stmtId) {
-        lastStatementIdRef.current = null
-        void fetch('/api/ledger/captures', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ id: stmtId, action: 'post' }),
-        }).catch(() => {})
-      }
       void refreshAccounts()
       onAppended?.()
     } catch (e) {
@@ -566,7 +535,6 @@ export function Chat({
   }
 
   function handleReject(toolCallId: string) {
-    lastStatementIdRef.current = null
     addToolOutput({
       toolCallId,
       output: { ok: false, reason: 'rejected' },
