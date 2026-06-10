@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import { InboxThreadChat } from './thread-chat'
+import { StatementUploadModal } from '@/components/statement-upload-modal'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -56,6 +57,7 @@ export function InboxView() {
   // Inline draft review (async ingestion): which capture is expanded, and
   // per-capture approve state.
   const [openId, setOpenId] = useState<string | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [approveBusy, setApproveBusy] = useState<string | null>(null)
   const [approveError, setApproveError] = useState<Record<string, string>>({})
 
@@ -223,13 +225,19 @@ export function InboxView() {
     return (
       <>
         <CenteredState>
-          Nothing to review. Forwarded transaction emails queue here.
+          <span className="flex flex-col items-center gap-3">
+            <span>Nothing to review. Statements and forwarded emails queue here.</span>
+            <Button size="xs" onClick={() => setUploadOpen(true)}>
+              Upload statement
+            </Button>
+          </span>
         </CenteredState>
         {address ? (
           <div className="mx-auto w-full max-w-2xl px-4 pb-6 text-center">
             {addressLine}
           </div>
         ) : null}
+        <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
         <RotateDialog open={rotateOpen} onClose={() => setRotateOpen(false)} onConfirm={doRotate} />
       </>
     )
@@ -238,7 +246,12 @@ export function InboxView() {
   return (
     <>
       <div className="mx-auto w-full max-w-2xl px-4 py-6 space-y-3">
-        <SectionLabel>Captured ({rows.length})</SectionLabel>
+        <div className="flex items-center justify-between">
+          <SectionLabel>Captured ({rows.length})</SectionLabel>
+          <Button size="xs" variant="ghost" onClick={() => setUploadOpen(true)}>
+            Upload statement
+          </Button>
+        </div>
         <ul className="space-y-2">
           {rows.map((r) => {
             const entries = parseDrafts(r.drafts)
@@ -337,6 +350,7 @@ export function InboxView() {
         </p>
         {addressLine}
       </div>
+      <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
       <RotateDialog open={rotateOpen} onClose={() => setRotateOpen(false)} onConfirm={doRotate} />
     </>
   )

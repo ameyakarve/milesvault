@@ -1,14 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowRightLeft, ArrowUp, Check, Copy, FileText, Loader2, Lock, Paperclip, X } from 'lucide-react'
-import {
-  loadStatement,
-  extractStatementText,
-  StatementExtractError,
-} from '@/lib/pdf/extract'
+import { ArrowRightLeft, ArrowUp, Check, Copy, FileText, Paperclip } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -43,6 +38,7 @@ import {
 } from '@/components/ai-elements/prompt-input'
 import Link from 'next/link'
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
+import { StatementUploadModal } from '@/components/statement-upload-modal'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import type { ToolUIPart } from 'ai'
 import type { ChatDOState } from '@/durable/chat-do'
@@ -74,143 +70,33 @@ function toolNameOf(p: Part): string | null {
   return null
 }
 
-type StatementAttachment =
-  | { kind: 'extracting'; file: File }
-  | { kind: 'needs_password'; file: File; wrong?: boolean }
-  // Stored + captured to the Inbox (owner decree: statement content NEVER
-  // enters chat context — the chip just confirms where it went).
-  | { kind: 'captured'; file: File }
-  | { kind: 'error'; file: File; message: string }
-
-function StatementChip({
-  state,
-  onRemove,
-  onPassword,
-}: {
-  state: StatementAttachment
-  onRemove: () => void
-  onPassword: (pw: string) => void
-}) {
-  const [pw, setPw] = useState('')
-  const submitPw = () => {
-    if (pw) onPassword(pw)
-  }
-  return (
-    <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-border bg-muted px-2 py-1.5 text-xs">
-      <FileText className="size-4 shrink-0 text-muted-foreground" />
-      <span className="min-w-0 truncate font-medium text-foreground">
-        {state.file.name}
-      </span>
-      <span className="text-muted-foreground">·</span>
-      {state.kind === 'extracting' ? (
-        <span className="flex items-center gap-1 text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" />
-          Reading…
-        </span>
-      ) : state.kind === 'captured' ? (
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="text-emerald-700 dark:text-emerald-400">
-            Captured — drafting in the background
-          </span>
-          <Link
-            href="/inbox"
-            className="shrink-0 font-medium text-foreground underline underline-offset-4 hover:no-underline"
-          >
-            Open Inbox →
-          </Link>
-        </span>
-      ) : state.kind === 'error' ? (
-        <span className="truncate text-destructive">{state.message}</span>
-      ) : (
-        <div className="flex items-center gap-1">
-          <Lock className="size-3 text-muted-foreground" />
-          <input
-            type="password"
-            value={pw}
-            onChange={(e) => setPw(e.target.value)}
-            onKeyDown={(e) => {
-              // Nested <form> elements aren't allowed in HTML — pressing
-              // Enter would bubble to the outer PromptInput form and submit
-              // a half-attached statement (or reload). Intercept here.
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                e.stopPropagation()
-                submitPw()
-              }
-            }}
-            placeholder={state.wrong ? 'Wrong password — try again' : 'Password'}
-            autoFocus
-            className="h-6 w-40 rounded border border-border bg-background px-2 text-xs focus:border-foreground/40 focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={submitPw}
-            disabled={!pw}
-            className="rounded bg-foreground px-2 py-0.5 text-xs text-background disabled:opacity-40"
-          >
-            Unlock
-          </button>
-        </div>
-      )}
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="Remove attachment"
-        className="ml-auto flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-border hover:text-foreground"
-      >
-        <X className="size-3.5" />
-      </button>
-    </div>
-  )
-}
-
 function Composer({
   onSubmit,
   status,
   onStop,
-  statement,
   onAttachClick,
-  onRemoveStatement,
-  onProvidePassword,
 }: {
   onSubmit: (m: PromptInputMessage) => void
   status: ReturnType<typeof useAgentChat>['status']
   onStop: () => void
-  statement: StatementAttachment | null
+  // Opens the statement upload modal — statements are Inbox items; the
+  // composer carries text only.
   onAttachClick: () => void
-  onRemoveStatement: () => void
-  onProvidePassword: (pw: string) => void
 }) {
-  // The attachment never rides a chat message anymore — text submits are
-  // independent of it; only block while a password prompt is pending so an
-  // Enter doesn't race the unlock.
-  const submitBlocked = statement?.kind === 'needs_password'
   return (
     <PromptInput onSubmit={onSubmit}>
       <PromptInputTextarea placeholder="Ask anything" />
-      {statement ? (
-        <StatementChip
-          state={statement}
-          onRemove={onRemoveStatement}
-          onPassword={onProvidePassword}
-        />
-      ) : null}
       <PromptInputFooter>
         <PromptInputTools>
           <PromptInputButton
             type="button"
             onClick={onAttachClick}
-            tooltip="Attach statement (PDF)"
-            disabled={statement !== null}
+            tooltip="Upload statement (PDF) — goes to your Inbox"
           >
             <Paperclip className="size-4" />
           </PromptInputButton>
         </PromptInputTools>
-        <PromptInputSubmit
-          status={status}
-          onStop={onStop}
-          disabled={submitBlocked}
-        >
+        <PromptInputSubmit status={status} onStop={onStop}>
           <ArrowUp className="size-4" strokeWidth={2.5} />
         </PromptInputSubmit>
       </PromptInputFooter>
@@ -321,8 +207,7 @@ export function Chat({
   const [submitError, setSubmitError] = useState<Record<string, string>>({})
   const [clarifyAnswers, setClarifyAnswers] = useState<Record<string, string[]>>({})
   const [accounts, setAccounts] = useState<string[]>([])
-  const [statement, setStatement] = useState<StatementAttachment | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
   // Guards handleSubmit against re-entry. attachStatement is an async network
   // round-trip; until sendMessage runs, `status` is still idle and the submit
   // button isn't disabled, so a second Enter/click would fire a second upload
@@ -335,62 +220,6 @@ export function Chat({
   // effect fires exactly once per page load. The ref prevents a second send if
   // React ever re-runs effects in strict mode.
   const autoSentStatementRef = useRef<string | null>(null)
-
-  async function tryExtract(file: File, password?: string) {
-    setStatement({ kind: 'extracting', file })
-    try {
-      const { doc } = await loadStatement(file, password)
-      const text = await extractStatementText(doc)
-      // Straight to the Inbox: store + capture + background draft. Statement
-      // content NEVER enters this chat's context (owner decree); the chip
-      // confirms and fades. The password (if any) was used in-browser only.
-      await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text })
-      window.dispatchEvent(new CustomEvent('mv:captured'))
-      // The chip is the receipt — it stays until dismissed (or another
-      // attach) and links to the Inbox where the drafts will appear.
-      setStatement({ kind: 'captured', file })
-    } catch (e) {
-      if (e instanceof StatementExtractError) {
-        if (e.detail.kind === 'need_password') {
-          setStatement({ kind: 'needs_password', file })
-          return
-        }
-        if (e.detail.kind === 'wrong_password') {
-          setStatement({ kind: 'needs_password', file, wrong: true })
-          return
-        }
-        if (e.detail.kind === 'image_only') {
-          setStatement({
-            kind: 'error',
-            file,
-            message: 'Image-only PDF — text extraction not supported yet.',
-          })
-          return
-        }
-        setStatement({ kind: 'error', file, message: e.detail.message })
-        return
-      }
-      const msg = e instanceof Error ? e.message : 'Failed to read PDF'
-      setStatement({ kind: 'error', file, message: msg })
-    }
-  }
-
-  function onAttachClick() {
-    fileInputRef.current?.click()
-  }
-
-  function onFileChosen(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = '' // allow re-selecting the same file later
-    if (!file) return
-    void tryExtract(file)
-  }
-
-  function onProvidePassword(pw: string) {
-    if (statement && (statement.kind === 'needs_password')) {
-      void tryExtract(statement.file, pw)
-    }
-  }
 
   useEffect(() => {
     const ac = new AbortController()
@@ -580,13 +409,7 @@ export function Chat({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="application/pdf"
-        className="hidden"
-        onChange={onFileChosen}
-      />
+      <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
       {isEmpty ? (
         <div className="flex flex-1 items-center justify-center px-4">
           <div className="flex w-full max-w-3xl -translate-y-8 flex-col items-center gap-7">
@@ -599,12 +422,9 @@ export function Chat({
                   onSubmit={handleSubmit}
                   status={status}
                   onStop={stop}
-                  statement={statement}
-                  onAttachClick={onAttachClick}
-                  onRemoveStatement={() => setStatement(null)}
-                  onProvidePassword={onProvidePassword}
+                  onAttachClick={() => setUploadOpen(true)}
                 />
-                <StarterChips onAttachClick={onAttachClick} />
+                <StarterChips onAttachClick={() => setUploadOpen(true)} />
               </div>
             </PromptInputProvider>
             <PendingCapturesHint />
@@ -805,10 +625,7 @@ export function Chat({
               onSubmit={handleSubmit}
               status={status}
               onStop={stop}
-              statement={statement}
-              onAttachClick={onAttachClick}
-              onRemoveStatement={() => setStatement(null)}
-              onProvidePassword={onProvidePassword}
+              onAttachClick={() => setUploadOpen(true)}
             />
             <p className="mt-2 text-center text-xs text-muted-foreground">
               MilesVault can make mistakes. Check important info.
