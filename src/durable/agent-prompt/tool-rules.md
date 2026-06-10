@@ -61,7 +61,7 @@ tool-error: `Invalid input for tool draft_transaction: <zod issues
 as JSON>`. Each issue has a `path` like `["transactions", N]` (N is
 0-based into the `transactions` array you sent) and a `message`
 identifying the entry by date / payee plus what's wrong — e.g.
-`entry 3 (2026-04-17 "ASH CRADLE,BANGALORE"): unbalanced — RWD_PTS
+`entry 3 (2026-04-17 "CROMA,BANGALORE"): unbalanced — RWD_PTS
 sums to 48 (missing the Equity:Void contra)`.
 
 When that happens: fix the listed entries and call `draft_transaction`
