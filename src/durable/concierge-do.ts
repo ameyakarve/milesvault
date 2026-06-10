@@ -276,9 +276,16 @@ export class ConciergeDO
           }
           const hit = await resolveByBeancountName(
             kbHttp,
-            [camelSpace(parts.leaf), parts.leaf],
+            parts.issuer
+              ? [
+                  `${parts.issuer} ${camelSpace(parts.leaf)}`,
+                  camelSpace(parts.leaf),
+                  parts.leaf,
+                ]
+              : [camelSpace(parts.leaf), parts.leaf],
             'currency',
             parts.leaf,
+            parts.issuer ? { displayMustContain: parts.issuer } : {},
           )
           if (hit?.display_name) names[account] = hit.display_name
           return

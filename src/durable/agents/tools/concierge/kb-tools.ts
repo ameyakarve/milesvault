@@ -244,12 +244,20 @@ export async function resolveByBeancountName(
   texts: string | string[],
   prefix: string,
   beancountName: string,
+  opts: {
+    // When set, a verified hit's display_name must contain this token
+    // (case-insensitive) — disambiguates generic pool names ("RewardPoints"
+    // is shared by a dozen banks) using issuer context from the path.
+    displayMustContain?: string
+  } = {},
 ): Promise<{ slug: string; display_name: string | null } | null> {
   const queries = [...new Set(Array.isArray(texts) ? texts : [texts])]
   const tried = new Set<string>()
+  const verified: Array<{ slug: string; display_name: string | null }> = []
+  const want = opts.displayMustContain?.toLowerCase()
   for (const text of queries) {
     try {
-      const r = (await kb.resolve(text, { prefix, limit: 4 })) as {
+      const r = (await kb.resolve(text, { prefix, limit: 6 })) as {
         items?: Array<{ slug: string }>
       }
       for (const item of r.items ?? []) {
@@ -260,9 +268,9 @@ export async function resolveByBeancountName(
             display_name?: string | null
             attrs?: Record<string, unknown> | null
           } | null
-          if (node?.attrs?.beancountName === beancountName) {
-            return { slug: item.slug, display_name: node.display_name ?? null }
-          }
+          if (node?.attrs?.beancountName !== beancountName) continue
+          if (want && !(node.display_name ?? '').toLowerCase().includes(want)) continue
+          verified.push({ slug: item.slug, display_name: node.display_name ?? null })
         } catch {
           /* try the next candidate */
         }
@@ -271,7 +279,9 @@ export async function resolveByBeancountName(
       /* this query failed — try the next */
     }
   }
-  return null
+  // Exactly one verified hit or nothing — a generic name matching several
+  // nodes is ambiguous, and a wrong name is worse than no name.
+  return verified.length === 1 ? verified[0] : null
 }
 
 // Resolve a Beancount commodity ticker to its currency node — exact, via the

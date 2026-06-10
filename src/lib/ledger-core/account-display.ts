@@ -100,7 +100,10 @@ export function accountLabel(account: string): { label: string; suffix: string |
 // for points/status — mirrors matchAccount in points-paths.ts.
 export function kgLookupParts(
   account: string,
-): { kind: 'card'; issuer: string; product: string } | { kind: 'currency'; leaf: string } | null {
+):
+  | { kind: 'card'; issuer: string; product: string }
+  | { kind: 'currency'; leaf: string; issuer: string | null }
+  | null {
   const parts = account.split(':')
   if (account.startsWith('Liabilities:CreditCards:') && parts.length >= 4) {
     const last = parts[parts.length - 1]
@@ -109,7 +112,15 @@ export function kgLookupParts(
   }
   if (account.startsWith('Assets:Rewards:') && parts.length >= 4) {
     const base = baseAccount(account).split(':')
-    return { kind: 'currency', leaf: base[base.length - 1] }
+    const leaf = base[base.length - 1]
+    // Issuer context when present: Cards:<Issuer>:<Pool>, or the legacy
+    // shape Assets:Rewards:<Issuer>:<Pool>. Disambiguates generic leaves.
+    const SUBTREES = new Set(['Points', 'Miles', 'Cards', 'Status'])
+    let issuer: string | null = null
+    if (base.length >= 5 && base[2] === 'Cards') issuer = base[3]
+    else if (base.length >= 4 && !SUBTREES.has(base[2]) && base.length > 3 && base[2] !== leaf)
+      issuer = base[2]
+    return { kind: 'currency', leaf, issuer }
   }
   return null
 }
