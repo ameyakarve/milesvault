@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
+import type { VaultStats } from '@/durable/ledger-do'
 import {
   currencyRedundant,
   displayName,
@@ -21,33 +22,15 @@ function formatBalance(balanceScaled: string, scale: number): string {
   return val.toLocaleString('en-IN', { maximumFractionDigits: scale > 0 ? 2 : 0 })
 }
 
-// ── stat helpers ─────────────────────────────────────────────────────────────
-
-function totalPoints(rows: AccountSummaryRow[]): { total: number; currencies: Set<string> } {
-  const currencies = new Set<string>()
-  let total = 0
-  for (const r of rows) {
-    if (r.account.startsWith('Assets:Rewards:Points:')) {
-      total += Number(r.balance_scaled) / Math.pow(10, r.scale)
-      currencies.add(r.currency)
-    }
-  }
-  return { total, currencies }
+// Primary = the currency with the largest absolute amount; the rest noted.
+function primaryOf<T extends { currency: string; total: number }>(
+  rows: T[],
+): { main: T | null; others: number } {
+  return { main: rows[0] ?? null, others: Math.max(0, rows.length - 1) }
 }
 
-function countCreditCards(rows: AccountSummaryRow[]): number {
-  const cards = new Set<string>()
-  for (const r of rows) {
-    if (r.account.startsWith('Liabilities:CreditCards:')) {
-      cards.add(r.account)
-    }
-  }
-  return cards.size
-}
-
-function countOpenAccounts(rows: AccountSummaryRow[]): number {
-  return new Set(rows.map((r) => r.account)).size
-}
+const fmtAmt = (n: number) =>
+  n.toLocaleString('en-IN', { maximumFractionDigits: Math.abs(n) >= 1000 ? 0 : 2 })
 
 // ── component ─────────────────────────────────────────────────────────────────
 
@@ -60,6 +43,18 @@ export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
   const [names, setNames] = useState<Names>({})
+  const [stats, setStats] = useState<VaultStats | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/ledger/vault-stats')
+      .then((r) => (r.ok ? (r.json() as Promise<VaultStats>) : null))
+      .then((d) => !cancelled && d && setStats(d))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -133,11 +128,6 @@ export function VaultView() {
     )
   }
 
-  // ── stats ───────────────────────────────────────────────────────────────
-  const pts = totalPoints(rows)
-  const cardCount = countCreditCards(rows)
-  const acctCount = countOpenAccounts(rows)
-
   // ── hierarchy: points are the product (hero cards), credit cards second
   // (medium cards), everything else compact lists grouped by taxonomy.
   const pointRows = rows
@@ -177,24 +167,8 @@ export function VaultView() {
         </Link>
       ) : null}
 
-      {/* ── headline strip ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatTile
-          label="Total Points"
-          value={`${pts.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })} pts`}
-          sub={`across ${pts.currencies.size} ${pts.currencies.size === 1 ? 'currency' : 'currencies'}`}
-        />
-        <StatTile
-          label="Credit Cards"
-          value={String(cardCount)}
-          sub={cardCount === 1 ? 'card' : 'cards'}
-        />
-        <StatTile
-          label="Accounts"
-          value={String(acctCount)}
-          sub="open"
-        />
-      </div>
+      {/* ── headline strip: numbers that mean something ───────────────────── */}
+      {stats ? <HeadlineStrip stats={stats} /> : null}
 
       {/* ── points: the hero ──────────────────────────────────────────────── */}
       {pointRows.length > 0 ? (
@@ -218,6 +192,11 @@ export function VaultView() {
             ))}
           </div>
         </section>
+      ) : null}
+
+      {/* ── spending this month ───────────────────────────────────────────── */}
+      {stats && stats.expense_categories.length > 0 ? (
+        <SpendingBreakdown stats={stats} />
       ) : null}
 
       {/* ── everything else, compact ──────────────────────────────────────── */}
@@ -337,5 +316,82 @@ function HoldingsCard({
         })}
       </ul>
     </div>
+  )
+}
+
+// The three headline numbers (per primary currency; extra currencies noted):
+// what you owe on cards, what you've spent this month, what's in the bank.
+function HeadlineStrip({ stats }: { stats: VaultStats }) {
+  const cards = primaryOf(stats.card_outstanding)
+  const spend = primaryOf(stats.expense_total)
+  const bank = primaryOf(stats.bank_total)
+  // Liabilities are negative in beancount — owed is the flipped sign.
+  const owed = cards.main ? -cards.main.total : 0
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <StatTile
+        label="Outstanding on cards"
+        value={cards.main ? `${fmtAmt(owed)} ${cards.main.currency}` : '—'}
+        sub={
+          cards.main
+            ? `${cards.main.accounts} card${cards.main.accounts === 1 ? '' : 's'}${cards.others ? ` · +${cards.others} ${cards.others === 1 ? 'currency' : 'currencies'}` : ''}`
+            : 'no cards yet'
+        }
+        negative={owed > 0}
+      />
+      <StatTile
+        label="Spent this month"
+        value={spend.main ? `${fmtAmt(spend.main.total)} ${spend.main.currency}` : '0'}
+        sub={spend.others ? `+${spend.others} more ${spend.others === 1 ? 'currency' : 'currencies'}` : 'month to date'}
+      />
+      <StatTile
+        label="In the bank"
+        value={bank.main ? `${fmtAmt(bank.main.total)} ${bank.main.currency}` : '—'}
+        sub={bank.others ? `+${bank.others} more ${bank.others === 1 ? 'currency' : 'currencies'}` : 'across bank accounts'}
+      />
+    </div>
+  )
+}
+
+// Month-to-date expenses by category, horizontal bars, each row drilling
+// into that category's own overview page.
+function SpendingBreakdown({ stats }: { stats: VaultStats }) {
+  const main = stats.expense_total[0]
+  if (!main) return null
+  const cats = stats.expense_categories.filter((c) => c.currency === main.currency).slice(0, 8)
+  const max = Math.max(...cats.map((c) => Math.abs(c.total)), 1)
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <SectionLabel>Spending this month</SectionLabel>
+        <span className="font-mono text-xs text-muted-foreground">
+          {fmtAmt(main.total)} {main.currency}
+        </span>
+      </div>
+      <div className="space-y-2 rounded-xl border border-border bg-card p-5">
+        {cats.map((c) => (
+          <Link
+            key={c.category}
+            href={`/vault/account?account=${encodeURIComponent(`Expenses:${c.category}`)}&ccy=${encodeURIComponent(c.currency)}`}
+            className="group block space-y-1"
+          >
+            <div className="flex items-baseline justify-between gap-2 text-sm">
+              <span className="text-foreground group-hover:underline group-hover:underline-offset-4">
+                {c.category}
+              </span>
+              <span className="font-mono text-xs text-muted-foreground">
+                {fmtAmt(c.total)} {c.currency}
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-foreground/70"
+                style={{ width: `${Math.max(2, (Math.abs(c.total) / max) * 100)}%` }}
+              />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
   )
 }

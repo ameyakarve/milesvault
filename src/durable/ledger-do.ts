@@ -133,6 +133,18 @@ export type EntryRef2 = {
   expected_updated_at: number
 }
 
+// Headline numbers for the Vault home (owner ask): per-currency aggregates
+// that are actually meaningful — what you owe on cards, what you spent this
+// period and on what, what's in the bank. Points balances live on the hero
+// cards, never summed across currencies.
+export type VaultStats = {
+  period: { from: number; to: number }
+  card_outstanding: Array<{ currency: string; total: number; accounts: number }>
+  bank_total: Array<{ currency: string; total: number }>
+  expense_total: Array<{ currency: string; total: number }>
+  expense_categories: Array<{ category: string; currency: string; total: number }>
+}
+
 // Data for the per-account overview tab (docs/design/overview-tab.md):
 // KPIs, balance series, counterpart composition, notable transactions —
 // one currency at a time, all decimal-converted.
@@ -275,6 +287,75 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       )
     })
     return { ok: true }
+  }
+
+  async vault_stats(opts: { fromInt: number; toInt: number }): Promise<VaultStats> {
+    const toDec = (scaled: number, scale: number) => scaled / 10 ** scale
+
+    const sumByCurrency = (prefix: string) => {
+      const rows = this.db
+        .exec<{ currency: string; scale: number; s: number; n: number }>(
+          `SELECT currency, scale, SUM(balance_scaled) AS s, COUNT(DISTINCT account) AS n
+           FROM balance_totals WHERE account LIKE ? GROUP BY currency, scale`,
+          `${prefix}%`,
+        )
+        .toArray()
+      const byCcy = new Map<string, { total: number; accounts: number }>()
+      for (const r of rows) {
+        const cur = byCcy.get(r.currency) ?? { total: 0, accounts: 0 }
+        cur.total += toDec(r.s, r.scale)
+        cur.accounts = Math.max(cur.accounts, r.n)
+        byCcy.set(r.currency, cur)
+      }
+      return [...byCcy.entries()].map(([currency, v]) => ({ currency, ...v }))
+    }
+
+    const card_outstanding = sumByCurrency('Liabilities:CreditCards:').sort(
+      (a, b) => Math.abs(b.total) - Math.abs(a.total),
+    )
+    const bank_total = sumByCurrency('Assets:Bank:')
+      .map(({ currency, total }) => ({ currency, total }))
+      .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
+
+    // Period spending by category — Expenses:<Category> second segment;
+    // Expenses:Void is the system plug (expiry/forfeit), not user spending.
+    const expRows = this.db
+      .exec<{ account: string; currency: string; scale: number; s: number }>(
+        `SELECT account, currency, scale, SUM(amount_scaled) AS s
+         FROM postings
+         WHERE account LIKE 'Expenses:%' AND account NOT LIKE 'Expenses:Void%'
+           AND date >= ? AND date <= ?
+         GROUP BY account, currency, scale`,
+        opts.fromInt,
+        opts.toInt,
+      )
+      .toArray()
+    const catMap = new Map<string, number>() // `${category}|${currency}`
+    const totalMap = new Map<string, number>()
+    for (const r of expRows) {
+      const category = r.account.split(':')[1] ?? 'Misc'
+      const v = toDec(r.s, r.scale)
+      const key = `${category}|${r.currency}`
+      catMap.set(key, (catMap.get(key) ?? 0) + v)
+      totalMap.set(r.currency, (totalMap.get(r.currency) ?? 0) + v)
+    }
+    const expense_categories = [...catMap.entries()]
+      .map(([key, total]) => {
+        const [category, currency] = key.split('|')
+        return { category, currency, total }
+      })
+      .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
+    const expense_total = [...totalMap.entries()]
+      .map(([currency, total]) => ({ currency, total }))
+      .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
+
+    return {
+      period: { from: opts.fromInt, to: opts.toInt },
+      card_outstanding,
+      bank_total,
+      expense_total,
+      expense_categories,
+    }
   }
 
   // The overview tab's data (docs/design/overview-tab.md). Balance math

@@ -76,6 +76,9 @@ export type LedgerClient = {
   account_overview(
     opts: Parameters<LedgerDO['account_overview']>[0],
   ): ReturnType<LedgerDO['account_overview']>
+  vault_stats(
+    opts: Parameters<LedgerDO['vault_stats']>[0],
+  ): ReturnType<LedgerDO['vault_stats']>
   save_email_rule(
     rule: Parameters<LedgerDO['save_email_rule']>[0],
   ): ReturnType<LedgerDO['save_email_rule']>
@@ -218,6 +221,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async list_ingest_log() {
       return stub.list_ingest_log()
+    },
+
+    async vault_stats(opts) {
+      return stub.vault_stats(opts)
     },
 
     async account_overview(opts) {
