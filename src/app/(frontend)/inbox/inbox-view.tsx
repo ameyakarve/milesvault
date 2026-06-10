@@ -249,7 +249,6 @@ export function InboxView() {
                     <p className="truncate text-sm text-foreground">{r.filename ?? r.id}</p>
                     <p className="text-xs text-muted-foreground">
                       {r.source} · {fmtDate(r.created_at)}
-                      {r.state === 'captured' ? ' · drafting…' : ''}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
@@ -312,8 +311,8 @@ export function InboxView() {
           })}
         </ul>
         <p className="text-xs text-muted-foreground">
-          Dropped statements and forwarded transaction emails are captured here
-          and drafted in the background.
+          Dropped statements and forwarded transaction emails wait here until
+          you review them.
           {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
         </p>
         {addressLine}

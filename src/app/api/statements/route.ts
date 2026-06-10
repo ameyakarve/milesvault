@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { auth } from '@/auth'
 import { getLedgerClient } from '@/lib/ledger-api'
-import type { ChatDO } from '@/durable/chat-do'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,9 +26,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     return NextResponse.json({ errors: ['text required'] }, { status: 400 })
   }
 
-  // mode 'inbox' (global drop): create a capture row and draft in the
-  // background — the user reviews from the Inbox, nothing blocks.
-  // Default (chat paperclip): pure storage, interactive flow unchanged.
+  // mode 'inbox' (global drop): create a capture row — the statement waits
+  // in the Inbox until the user reviews it. NO processing happens at drop
+  // time (owner call). Default (chat paperclip): pure storage, interactive
+  // flow unchanged.
   const inbox = body.mode === 'inbox'
   const client = await getLedgerClient(email)
   const id = `STMT-${crypto.randomUUID()}`
@@ -41,21 +40,5 @@ export async function POST(req: NextRequest): Promise<Response> {
     text: body.text,
     capture: inbox,
   })
-  if (inbox) {
-    const { env, ctx } = await getCloudflareContext({ async: true })
-    const ns = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO> | undefined
-    if (ns) {
-      ctx.waitUntil(
-        ns
-          .get(ns.idFromName(email))
-          .draftStatementAsync(id)
-          .then((): undefined => undefined)
-          .catch((e): undefined => {
-            console.error('[statements] async draft failed', { id, err: String(e) })
-            return undefined
-          }),
-      )
-    }
-  }
   return NextResponse.json({ id })
 }
