@@ -232,31 +232,44 @@ const DEFAULT_FETCHER: FetchLike = { fetch: (input, init) => fetch(input, init) 
 // resolve() items carry no attrs (see RESOLVE_OUTPUT), so each candidate is
 // confirmed via get() — the bug class this prevents: silently matching the
 // wrong card/currency, or matching nothing at all.
+// Ledger segments are PascalCase ("SmartEarn", "MembershipRewards") while KG
+// display names are spaced ("Amex Smart Earn") — and kb_resolve matches the
+// literal text, so the camel form alone finds nothing. Split it for querying.
+export function camelSpace(s: string): string {
+  return s.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ')
+}
+
 export async function resolveByBeancountName(
   kb: KbHttp,
-  text: string,
+  texts: string | string[],
   prefix: string,
   beancountName: string,
 ): Promise<{ slug: string; display_name: string | null } | null> {
-  try {
-    const r = (await kb.resolve(text, { prefix, limit: 4 })) as {
-      items?: Array<{ slug: string }>
-    }
-    for (const item of r.items ?? []) {
-      try {
-        const node = (await kb.get(item.slug)) as {
-          display_name?: string | null
-          attrs?: Record<string, unknown> | null
-        } | null
-        if (node?.attrs?.beancountName === beancountName) {
-          return { slug: item.slug, display_name: node.display_name ?? null }
-        }
-      } catch {
-        /* try the next candidate */
+  const queries = [...new Set(Array.isArray(texts) ? texts : [texts])]
+  const tried = new Set<string>()
+  for (const text of queries) {
+    try {
+      const r = (await kb.resolve(text, { prefix, limit: 4 })) as {
+        items?: Array<{ slug: string }>
       }
+      for (const item of r.items ?? []) {
+        if (tried.has(item.slug)) continue
+        tried.add(item.slug)
+        try {
+          const node = (await kb.get(item.slug)) as {
+            display_name?: string | null
+            attrs?: Record<string, unknown> | null
+          } | null
+          if (node?.attrs?.beancountName === beancountName) {
+            return { slug: item.slug, display_name: node.display_name ?? null }
+          }
+        } catch {
+          /* try the next candidate */
+        }
+      }
+    } catch {
+      /* this query failed — try the next */
     }
-  } catch {
-    /* resolve failed — caller falls back */
   }
   return null
 }

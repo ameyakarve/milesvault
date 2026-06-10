@@ -25,6 +25,7 @@ export {
   makeKbTools,
   kbHttpOverFetch,
   resolveByBeancountName,
+  camelSpace,
   fetchKbAgentsMd,
   type KbHttp,
 } from './kb-tools'

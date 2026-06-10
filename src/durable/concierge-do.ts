@@ -33,6 +33,7 @@ import {
   makeKbTools,
   querySqlTool,
   resolveByBeancountName,
+  camelSpace,
   showAwardOptionsTool,
 } from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
@@ -243,10 +244,19 @@ export class ConciergeDO
         if (!parts) return
         const hit =
           parts.kind === 'currency'
-            ? await resolveByBeancountName(kbHttp, parts.leaf, 'currency', parts.leaf)
+            ? await resolveByBeancountName(
+                kbHttp,
+                [camelSpace(parts.leaf), parts.leaf],
+                'currency',
+                parts.leaf,
+              )
             : await resolveByBeancountName(
                 kbHttp,
-                `${parts.issuer} ${parts.product}`,
+                [
+                  `${parts.issuer} ${camelSpace(parts.product)}`,
+                  camelSpace(parts.product),
+                  `${parts.issuer} ${parts.product}`,
+                ],
                 'cc',
                 parts.product,
               )
@@ -319,7 +329,7 @@ export class ConciergeDO
             t.resolve_candidates = (raw.items ?? []).map((i) => i.slug)
             t.candidate_attrs = await Promise.all(
               (raw.items ?? []).slice(0, 4).map(async (i) => {
-                const n = (await kbHttp.get(i.slug).catch(() => null)) as {
+                const n = (await kbHttp.get(i.slug).catch((): null => null)) as {
                   attrs?: Record<string, unknown> | null
                 } | null
                 return { slug: i.slug, beancountName: n?.attrs?.beancountName ?? null }
@@ -333,7 +343,11 @@ export class ConciergeDO
         try {
           const hit = await resolveByBeancountName(
             kbHttp,
-            `${parts.issuer} ${parts.product}`,
+            [
+              `${parts.issuer} ${camelSpace(parts.product)}`,
+              camelSpace(parts.product),
+              `${parts.issuer} ${parts.product}`,
+            ],
             'cc',
             parts.product,
           )
@@ -348,12 +362,26 @@ export class ConciergeDO
             .filter((o) => o.startsWith('currency/'))
           if (debug) t.denominated_in = currencySlugs
           for (const slug of currencySlugs) {
-            const node = (await kbHttp.get(slug)) as CurrencyNode | null
+            // Dangling DENOMINATED_IN targets exist in the corpus — a missing
+            // node still yields a name-only banner from the slug.
+            const node = (await kbHttp.get(slug).catch((): null => null)) as CurrencyNode | null
             const bn = node?.attrs?.beancountName
-            const name = node?.display_name ?? null
+            const name =
+              node?.display_name ??
+              slug
+                .replace(/^currency\//, '')
+                .split('-')
+                .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+                .join(' ')
             if (typeof bn !== 'string' || !bn) {
-              if (name) links.push({ card: account, rewards_account: null, rewards_name: name, rewards_currency: null, rewards_balance: null })
-              continue
+              links.push({
+                card: account,
+                rewards_account: null,
+                rewards_name: name,
+                rewards_currency: null,
+                rewards_balance: null,
+              })
+              break
             }
             const rewardsAccount =
               accounts.find(

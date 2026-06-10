@@ -3,7 +3,7 @@ import type { KbHttp } from './kb-tools'
 import { computeAwardOptions } from './award-options'
 import { buildAwardPlan, type AwardPlanRow } from './award-plan'
 import { transferGraph, type TransferCell } from './transfer-graph'
-import { resolveByBeancountName } from './kb-tools'
+import { camelSpace, resolveByBeancountName } from './kb-tools'
 import type { BalanceRow } from './points-paths'
 
 // The data layer for the fluid award EXPLORER page. Primary inputs are the city
@@ -103,7 +103,7 @@ async function buildHeldBalances(
   const results: HeldBalance[] = []
   await Promise.all(
     [...leafBalances.entries()].map(async ([leaf, balance]) => {
-      const match = await resolveByBeancountName(kb, leaf, 'currency', leaf)
+      const match = await resolveByBeancountName(kb, [camelSpace(leaf), leaf], 'currency', leaf)
       if (match) results.push({ slug: match.slug, balance })
     }),
   )
