@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AccountOverview } from '@/durable/ledger-do'
 import { accountLabel, displayName as resolveName, prettyLeaf } from '@/lib/ledger-core/account-display'
-import { SectionLabel, StatTile, CenteredState } from '@/components/shared'
+import { SectionLabel, StatTile, CenteredState, Monogram } from '@/components/shared'
+import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 // ── types ─────────────────────────────────────────────────────────────────────
@@ -112,10 +113,53 @@ export function AccountOverviewView() {
 
   const { name: displayName, suffix } = resolveName(account, names)
 
+  // Kind-aware language (overview-tab.md per-kind fill): a credit card owes
+  // and spends; a points programme earns and redeems.
+  const isCard = account.startsWith('Liabilities:CreditCards:')
+  const isPoints = account.startsWith('Assets:Rewards:Points:')
+  const kpiLabels = isCard
+    ? { bal: 'Owed', inflow: 'Payments', outflow: 'Spend' }
+    : isPoints
+      ? { bal: 'Balance', inflow: 'Earned', outflow: 'Redeemed' }
+      : { bal: 'Balance', inflow: 'In', outflow: 'Out' }
+
+  // KG linkage: the rewards programme this card earns into (credit cards only).
+  type CardLink = {
+    card: string
+    rewards_account: string | null
+    rewards_name: string | null
+    rewards_currency: string | null
+    rewards_balance: number | null
+  }
+  const [cardLink, setCardLink] = useState<CardLink | null>(null)
+  useEffect(() => {
+    if (!isCard) return
+    let cancelled = false
+    fetch('/api/concierge/card-links')
+      .then((r) => (r.ok ? (r.json() as Promise<{ links?: CardLink[] }>) : null))
+      .then((d) => {
+        if (cancelled || !d) return
+        setCardLink(d.links?.find((l) => l.card === account) ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [account, isCard])
+
   const header = (
     <div className="flex flex-col gap-2 border-b border-border bg-background px-6 py-4">
+      <Link
+        href="/vault"
+        className="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" />
+        Vault
+      </Link>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-0.5 min-w-0">
+        <div className="flex min-w-0 items-start gap-3">
+          <Monogram name={displayName} size="lg" className="mt-0.5" />
+          <div className="flex flex-col gap-0.5 min-w-0">
           <span className="text-base font-semibold text-foreground truncate">
             {displayName}
             {suffix ? (
@@ -131,6 +175,7 @@ export function AccountOverviewView() {
           >
             Open in Journal →
           </Link>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {/* Currency chips — only shown when >1 currency */}
@@ -196,18 +241,18 @@ export function AccountOverviewView() {
         {/* ── A: KPI strip ─────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatTile
-            label="Balance"
+            label={kpiLabels.bal}
             value={fmt(data.current)}
             sub={data.currency ?? undefined}
             negative={data.current < 0}
           />
           <StatTile
-            label="In"
+            label={kpiLabels.inflow}
             value={fmt(data.inflow)}
             sub={data.currency ?? undefined}
           />
           <StatTile
-            label="Out"
+            label={kpiLabels.outflow}
             value={fmt(data.outflow)}
             sub={data.currency ?? undefined}
           />
@@ -216,6 +261,36 @@ export function AccountOverviewView() {
             value={String(data.txn_count)}
           />
         </div>
+
+        {/* ── Earns: KG-linked rewards programme (credit cards) ─────────────── */}
+        {isCard && cardLink?.rewards_name ? (
+          cardLink.rewards_account ? (
+            <Link
+              href={`/vault/account?account=${encodeURIComponent(cardLink.rewards_account)}${cardLink.rewards_currency ? `&ccy=${encodeURIComponent(cardLink.rewards_currency)}` : ''}`}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-foreground/25"
+            >
+              <Monogram name={cardLink.rewards_name} />
+              <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                Earns <span className="font-medium">{cardLink.rewards_name}</span>
+              </span>
+              {cardLink.rewards_balance != null ? (
+                <span className="shrink-0 font-mono text-lg font-semibold text-foreground">
+                  {cardLink.rewards_balance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">pts</span>
+                </span>
+              ) : null}
+              <span className="shrink-0 text-xs text-muted-foreground">View rewards →</span>
+            </Link>
+          ) : (
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-border px-4 py-3">
+              <Monogram name={cardLink.rewards_name} />
+              <span className="text-sm text-muted-foreground">
+                Earns <span className="font-medium text-foreground">{cardLink.rewards_name}</span> — no
+                rewards account in your ledger yet
+              </span>
+            </div>
+          )
+        ) : null}
 
         {/* ── B+C row ───────────────────────────────────────────────────────── */}
         <div className="flex flex-col md:flex-row gap-4">

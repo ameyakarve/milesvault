@@ -267,6 +267,113 @@ export class ConciergeDO
     return { names }
   }
 
+  // Card → rewards linkage for the per-account page (owner ask): each held
+  // credit card resolved in the KG (same beancountName verification as
+  // accountNames), then DENOMINATED_IN → the currency it earns, matched back
+  // to the user's Assets:Rewards account with its live balance. Cards the KG
+  // doesn't know, or currencies without a held account, degrade gracefully
+  // (name without link, or no entry). RPC for /api/concierge/card-links.
+  async cardLinks(): Promise<{
+    links: Array<{
+      card: string
+      rewards_account: string | null
+      rewards_name: string | null
+      rewards_currency: string | null
+      rewards_balance: number | null
+    }>
+  }> {
+    const ledger = this.ledgerStub()
+    const [snapshot, balances] = await Promise.all([
+      ledger.ledger_snapshot().catch((): null => null),
+      ledger
+        .query_sql('SELECT account, currency, scale, balance_scaled FROM balance_totals')
+        .catch((): null => null),
+    ])
+    const accounts = (snapshot?.accounts ?? []) as ReadonlyArray<{ account: string }>
+    const balRows = (balances?.rows ?? []) as Array<{
+      account: string
+      currency: string
+      scale: number
+      balance_scaled: number
+    }>
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    type ResolveItems = {
+      items?: Array<{ slug: string; attrs?: Record<string, unknown> | null }>
+    }
+    type RelItems = { items?: Array<{ other: string }> }
+    type CurrencyNode = {
+      display_name?: string | null
+      attrs?: Record<string, unknown> | null
+    }
+
+    const cards = accounts.filter((a) => a.account.startsWith('Liabilities:CreditCards:'))
+    const links: Array<{
+      card: string
+      rewards_account: string | null
+      rewards_name: string | null
+      rewards_currency: string | null
+      rewards_balance: number | null
+    }> = []
+
+    await Promise.all(
+      cards.map(async ({ account }) => {
+        const parts = kgLookupParts(account)
+        if (!parts || parts.kind !== 'card') return
+        try {
+          const r = (await kbHttp.resolve(`${parts.issuer} ${parts.product}`, {
+            prefix: 'cc',
+          })) as ResolveItems
+          const hit = r.items?.find((it) => it.attrs?.beancountName === parts.product)
+          if (!hit) return
+          const rel = (await kbHttp.related(hit.slug, {
+            edge_type: 'DENOMINATED_IN',
+            direction: 'outgoing',
+          })) as RelItems
+          const currencySlugs = (rel.items ?? [])
+            .map((i) => i.other)
+            .filter((o) => o.startsWith('currency/'))
+          for (const slug of currencySlugs) {
+            const node = (await kbHttp.get(slug)) as CurrencyNode | null
+            const bn = node?.attrs?.beancountName
+            const name = node?.display_name ?? null
+            if (typeof bn !== 'string' || !bn) {
+              if (name) links.push({ card: account, rewards_account: null, rewards_name: name, rewards_currency: null, rewards_balance: null })
+              continue
+            }
+            const rewardsAccount =
+              accounts.find(
+                (a) =>
+                  a.account.startsWith('Assets:Rewards:') &&
+                  a.account.split(':').pop() === bn,
+              )?.account ?? null
+            let balance: number | null = null
+            let currency: string | null = null
+            if (rewardsAccount) {
+              const rows = balRows.filter((b) => b.account === rewardsAccount)
+              if (rows.length) {
+                balance = rows.reduce((sum, b) => sum + Number(b.balance_scaled) / 10 ** b.scale, 0)
+                currency = rows[0].currency
+              } else {
+                balance = 0
+              }
+            }
+            links.push({
+              card: account,
+              rewards_account: rewardsAccount,
+              rewards_name: name ?? bn,
+              rewards_currency: currency,
+              rewards_balance: balance,
+            })
+            break // first earning currency is the card's programme
+          }
+        } catch {
+          /* KG miss — no link for this card */
+        }
+      }),
+    )
+    return { links }
+  }
+
   // Headless one-shot turn for text-only channels (Telegram, WhatsApp …):
   // the graph-walker's brain and read tools, minus everything interactive —
   // ask_user suspends, show_award_options is gen-UI, handoff needs the chat
