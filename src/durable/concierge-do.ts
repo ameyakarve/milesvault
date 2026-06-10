@@ -32,6 +32,7 @@ import {
   ledgerSnapshotTool,
   makeKbTools,
   querySqlTool,
+  resolveByBeancountName,
   showAwardOptionsTool,
 } from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
@@ -235,33 +236,21 @@ export class ConciergeDO
       .catch((): null => null)
     const accounts = (snapshot?.accounts ?? []) as ReadonlyArray<{ account: string }>
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    type ResolveItems = {
-      items?: Array<{
-        slug: string
-        display_name?: string | null
-        attrs?: Record<string, unknown> | null
-      }>
-    }
     const names: Record<string, string> = {}
     await Promise.all(
       accounts.map(async ({ account }) => {
         const parts = kgLookupParts(account)
         if (!parts) return
-        try {
-          if (parts.kind === 'currency') {
-            const r = (await kbHttp.resolve(parts.leaf, { prefix: 'currency' })) as ResolveItems
-            const hit = r.items?.find((it) => it.attrs?.beancountName === parts.leaf)
-            if (hit?.display_name) names[account] = hit.display_name
-          } else {
-            const r = (await kbHttp.resolve(`${parts.issuer} ${parts.product}`, {
-              prefix: 'cc',
-            })) as ResolveItems
-            const hit = r.items?.find((it) => it.attrs?.beancountName === parts.product)
-            if (hit?.display_name) names[account] = hit.display_name
-          }
-        } catch {
-          /* leave unset — UI falls back to the path label */
-        }
+        const hit =
+          parts.kind === 'currency'
+            ? await resolveByBeancountName(kbHttp, parts.leaf, 'currency', parts.leaf)
+            : await resolveByBeancountName(
+                kbHttp,
+                `${parts.issuer} ${parts.product}`,
+                'cc',
+                parts.product,
+              )
+        if (hit?.display_name) names[account] = hit.display_name
       }),
     )
     return { names }
@@ -297,9 +286,6 @@ export class ConciergeDO
       balance_scaled: number
     }>
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    type ResolveItems = {
-      items?: Array<{ slug: string; attrs?: Record<string, unknown> | null }>
-    }
     type RelItems = { items?: Array<{ other: string }> }
     type CurrencyNode = {
       display_name?: string | null
@@ -320,10 +306,12 @@ export class ConciergeDO
         const parts = kgLookupParts(account)
         if (!parts || parts.kind !== 'card') return
         try {
-          const r = (await kbHttp.resolve(`${parts.issuer} ${parts.product}`, {
-            prefix: 'cc',
-          })) as ResolveItems
-          const hit = r.items?.find((it) => it.attrs?.beancountName === parts.product)
+          const hit = await resolveByBeancountName(
+            kbHttp,
+            `${parts.issuer} ${parts.product}`,
+            'cc',
+            parts.product,
+          )
           if (!hit) return
           const rel = (await kbHttp.related(hit.slug, {
             edge_type: 'DENOMINATED_IN',

@@ -228,6 +228,39 @@ const DEFAULT_FETCHER: FetchLike = { fetch: (input, init) => fetch(input, init) 
 // default uses the global `fetch` over `baseUrl` (public URL); pass a
 // Cloudflare service-binding Fetcher as `fetcher` to route in-process
 // (host part of `baseUrl` is then irrelevant — only the path is used).
+// Resolve free text to a node VERIFIED by its beancountName attribute.
+// resolve() items carry no attrs (see RESOLVE_OUTPUT), so each candidate is
+// confirmed via get() — the bug class this prevents: silently matching the
+// wrong card/currency, or matching nothing at all.
+export async function resolveByBeancountName(
+  kb: KbHttp,
+  text: string,
+  prefix: string,
+  beancountName: string,
+): Promise<{ slug: string; display_name: string | null } | null> {
+  try {
+    const r = (await kb.resolve(text, { prefix, limit: 4 })) as {
+      items?: Array<{ slug: string }>
+    }
+    for (const item of r.items ?? []) {
+      try {
+        const node = (await kb.get(item.slug)) as {
+          display_name?: string | null
+          attrs?: Record<string, unknown> | null
+        } | null
+        if (node?.attrs?.beancountName === beancountName) {
+          return { slug: item.slug, display_name: node.display_name ?? null }
+        }
+      } catch {
+        /* try the next candidate */
+      }
+    }
+  } catch {
+    /* resolve failed — caller falls back */
+  }
+  return null
+}
+
 export function kbHttpOverFetch(
   baseUrl: string,
   fetcher: FetchLike = DEFAULT_FETCHER,

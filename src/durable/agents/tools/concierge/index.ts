@@ -24,6 +24,7 @@ export { ensureRouteCache } from './routes-store'
 export {
   makeKbTools,
   kbHttpOverFetch,
+  resolveByBeancountName,
   fetchKbAgentsMd,
   type KbHttp,
 } from './kb-tools'

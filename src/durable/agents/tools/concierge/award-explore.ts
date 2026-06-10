@@ -3,6 +3,7 @@ import type { KbHttp } from './kb-tools'
 import { computeAwardOptions } from './award-options'
 import { buildAwardPlan, type AwardPlanRow } from './award-plan'
 import { transferGraph, type TransferCell } from './transfer-graph'
+import { resolveByBeancountName } from './kb-tools'
 import type { BalanceRow } from './points-paths'
 
 // The data layer for the fluid award EXPLORER page. Primary inputs are the city
@@ -97,23 +98,13 @@ async function buildHeldBalances(
   }
   if (leafBalances.size === 0) return []
 
-  // Resolve each leaf to a currency slug via KB.
+  // Resolve each leaf to a currency slug via KB (verified on beancountName —
+  // resolve() items carry no attrs, so candidates are confirmed via get()).
   const results: HeldBalance[] = []
   await Promise.all(
     [...leafBalances.entries()].map(async ([leaf, balance]) => {
-      try {
-        const r = (await kb.resolve(leaf, { prefix: 'currency' })) as {
-          items?: Array<{ slug: string; attrs?: Record<string, unknown> | null }>
-        }
-        const match = r.items?.find((it) => {
-          // Verify the resolved node's attrs.beancountName matches this leaf exactly.
-          const bn = it.attrs?.beancountName
-          return typeof bn === 'string' && bn === leaf
-        })
-        if (match?.slug) results.push({ slug: match.slug, balance })
-      } catch {
-        // drop unresolvable leaf with no note — silent degradation
-      }
+      const match = await resolveByBeancountName(kb, leaf, 'currency', leaf)
+      if (match) results.push({ slug: match.slug, balance })
     }),
   )
   return results
