@@ -11,7 +11,7 @@ import {
 } from '@codemirror/language'
 import { styleTags, tags as t } from '@lezer/highlight'
 import { parser as beancountParser } from 'lezer-beancount'
-import { CaretLeft, CaretRight, Check } from '@phosphor-icons/react'
+import { Check } from '@phosphor-icons/react'
 import {
   Card,
   CardAction,
@@ -36,8 +36,11 @@ export type DraftTransactionBatchCardProps = {
   accounts?: string[]
   status?: CardStatus
   errorMessage?: string
-  onApprove: (finalText: string) => void
+  onApprove: (finalText: string, meta: { approved: number; skipped: number }) => void
   onReject: () => void
+  // Opens the Journal filtered to a date range (split pane on desktop, tab
+  // switch on mobile) — the "view what I just committed" loop-closer.
+  onShowInJournal?: (range: { from: string; to: string } | null) => void
 }
 
 const beancountLang = LRLanguage.define({
@@ -158,27 +161,62 @@ function StatusBadge({ v }: { v: Validation }) {
   )
 }
 
+// Date range spanned by a set of entry texts (each starts YYYY-MM-DD).
+function rangeOf(texts: string[]): { from: string; to: string } | null {
+  const dates = texts
+    .map((t) => /^(\d{4}-\d{2}-\d{2})/.exec(t.trim())?.[1])
+    .filter((d): d is string => !!d)
+    .sort()
+  if (dates.length === 0) return null
+  return { from: dates[0], to: dates[dates.length - 1] }
+}
+
+// First line of an entry, split into date and the rest, for the list rows.
+function summaryOf(text: string): { date: string; rest: string } {
+  const line = text.trim().split('\n')[0] ?? ''
+  const m = /^(\d{4}-\d{2}-\d{2})\s*(.*)$/.exec(line)
+  if (!m) return { date: '', rest: line }
+  return { date: m[1], rest: m[2].replace(/^[*!]\s*/, '').replace(/"/g, '') }
+}
+
+function ValidityDot({ ok }: { ok: boolean }) {
+  return (
+    <span
+      className={`inline-block size-1.5 shrink-0 rounded-full ${ok ? 'bg-emerald-500' : 'bg-rose-500'}`}
+      title={ok ? 'balanced' : 'needs attention'}
+    />
+  )
+}
+
 export function DraftTransactionBatchCard({
   input,
   status = 'idle',
   errorMessage,
   onApprove,
   onReject,
+  onShowInJournal,
 }: DraftTransactionBatchCardProps) {
   const [texts, setTexts] = useState<string[]>(() =>
     input.transactions.map((s) => s.trim()),
   )
-  const [page, setPage] = useState(0)
+  // Per-entry decisions: excluded rows are skipped at approval — one bad row
+  // never blocks the rest of a statement.
+  const [included, setIncluded] = useState<boolean[]>(() =>
+    input.transactions.map(() => true),
+  )
+  // Which row's editor is open. Single entries are always expanded.
+  const [expanded, setExpanded] = useState<number | null>(
+    input.transactions.length === 1 ? 0 : null,
+  )
 
   const total = texts.length
-  const safePage = Math.min(page, total - 1)
-  const current = texts[safePage] ?? ''
-
-  const currentValidation = useMemo(() => validate(current), [current])
-  const allValid = useMemo(
-    () => texts.every((t) => validate(t).kind === 'ok'),
-    [texts],
-  )
+  const isBatch = total > 1
+  const validations = useMemo(() => texts.map((t) => validate(t)), [texts])
+  const includedIdx = texts.map((_, i) => i).filter((i) => included[i])
+  const approvedCount = includedIdx.length
+  const skippedCount = total - approvedCount
+  const allIncludedValid = includedIdx.every((i) => validations[i].kind === 'ok')
+  const canApprove = approvedCount > 0 && allIncludedValid
 
   const done = status === 'done'
   const rejected = status === 'rejected'
@@ -194,79 +232,141 @@ export function DraftTransactionBatchCard({
     [],
   )
 
-  const updateCurrent = (next: string) => {
-    setTexts((arr) => arr.map((t, i) => (i === safePage ? next : t)))
+  const updateAt = (idx: number, next: string) => {
+    setTexts((arr) => arr.map((t, i) => (i === idx ? next : t)))
   }
 
-  const isBatch = total > 1
-  const title = isBatch ? 'Proposed transactions' : 'Proposed transaction'
+  // Resolved cards collapse to a one-line summary — history stays readable
+  // and the committed state closes the loop with a Journal link.
+  if (done || rejected) {
+    const range = rangeOf(texts)
+    return (
+      <Card size="sm">
+        <CardContent className="flex items-center justify-between gap-3 py-2.5 text-sm">
+          {done ? (
+            <span className="flex items-center gap-1.5 text-emerald-700">
+              <Check size={14} weight="bold" />
+              {isBatch ? `Committed ${approvedCount} of ${total}` : 'Committed'}
+              {skippedCount > 0 && isBatch ? (
+                <span className="text-muted-foreground">· {skippedCount} skipped</span>
+              ) : null}
+            </span>
+          ) : (
+            <span className="italic text-muted-foreground">Rejected</span>
+          )}
+          {done && onShowInJournal ? (
+            <button
+              type="button"
+              onClick={() => onShowInJournal(range)}
+              className="shrink-0 text-xs font-medium text-teal-600 hover:text-teal-700"
+            >
+              View in Journal →
+            </button>
+          ) : null}
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card size="sm">
       <CardHeader>
         <CardTitle>
-          {title}
+          {isBatch ? 'Proposed transactions' : 'Proposed transaction'}
           {isBatch ? (
             <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {safePage + 1} of {total}
+              {approvedCount} of {total} selected
             </span>
           ) : null}
         </CardTitle>
-        <CardAction>
-          <StatusBadge v={currentValidation} />
-        </CardAction>
+        {!isBatch ? (
+          <CardAction>
+            <StatusBadge v={validations[0]} />
+          </CardAction>
+        ) : null}
       </CardHeader>
 
       <CardContent className="p-0">
-        <div className="overflow-hidden rounded-md border bg-white">
-          <CodeMirror
-            key={safePage}
-            value={current}
-            onChange={updateCurrent}
-            extensions={extensions}
-            basicSetup={{
-              lineNumbers: false,
-              foldGutter: false,
-              highlightActiveLine: false,
-              highlightActiveLineGutter: false,
-              highlightSelectionMatches: false,
-              searchKeymap: false,
-            }}
-            readOnly={disabled}
-          />
-        </div>
+        {isBatch ? (
+          <div className="divide-y divide-slate-100 border-y bg-white">
+            {texts.map((text, i) => {
+              const v = validations[i]
+              const sum = summaryOf(text)
+              const isOpen = expanded === i
+              return (
+                <div key={i}>
+                  <div className="flex items-center gap-2 px-3 py-1.5">
+                    <input
+                      type="checkbox"
+                      checked={included[i]}
+                      disabled={disabled}
+                      onChange={() =>
+                        setIncluded((arr) => arr.map((x, j) => (j === i ? !x : x)))
+                      }
+                      className="size-3.5 accent-teal-600"
+                      aria-label={`Include entry ${i + 1}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isOpen ? null : i)}
+                      className={`flex min-w-0 flex-1 items-center gap-2 text-left ${included[i] ? '' : 'opacity-40'}`}
+                    >
+                      <ValidityDot ok={v.kind === 'ok'} />
+                      <span className="font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                        {sum.date}
+                      </span>
+                      <span className="truncate text-[12px] text-slate-700">{sum.rest}</span>
+                      <span className="ml-auto shrink-0 text-[11px] text-slate-400">
+                        {isOpen ? 'close' : 'edit'}
+                      </span>
+                    </button>
+                  </div>
+                  {isOpen ? (
+                    <div className="border-t border-slate-100 bg-slate-50/50 px-2 pb-2 pt-1">
+                      <div className="overflow-hidden rounded-md border bg-white">
+                        <CodeMirror
+                          value={text}
+                          onChange={(next) => updateAt(i, next)}
+                          extensions={extensions}
+                          basicSetup={{
+                            lineNumbers: false,
+                            foldGutter: false,
+                            highlightActiveLine: false,
+                            highlightActiveLineGutter: false,
+                            highlightSelectionMatches: false,
+                            searchKeymap: false,
+                          }}
+                          readOnly={disabled}
+                        />
+                      </div>
+                      <div className="pt-1">
+                        <StatusBadge v={v} />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-md border bg-white">
+            <CodeMirror
+              value={texts[0] ?? ''}
+              onChange={(next) => updateAt(0, next)}
+              extensions={extensions}
+              basicSetup={{
+                lineNumbers: false,
+                foldGutter: false,
+                highlightActiveLine: false,
+                highlightActiveLineGutter: false,
+                highlightSelectionMatches: false,
+                searchKeymap: false,
+              }}
+              readOnly={disabled}
+            />
+          </div>
+        )}
       </CardContent>
-
-      {isBatch ? (
-        <>
-          <Separator />
-          <CardContent className="flex items-center justify-between py-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={safePage === 0}
-            >
-              <CaretLeft size={14} weight="bold" />
-              Prev
-            </Button>
-            <span className="text-xs text-muted-foreground">
-              {safePage + 1} / {total}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(total - 1, p + 1))}
-              disabled={safePage === total - 1}
-            >
-              Next
-              <CaretRight size={14} weight="bold" />
-            </Button>
-          </CardContent>
-        </>
-      ) : null}
 
       {status === 'failed' && errorMessage ? (
         <>
@@ -277,47 +377,37 @@ export function DraftTransactionBatchCard({
         </>
       ) : null}
 
-      {rejected ? (
-        <>
-          <Separator />
-          <CardContent className="text-sm text-muted-foreground italic">
-            Rejected
-          </CardContent>
-        </>
-      ) : null}
-
-      {done || rejected ? null : (
-        <CardFooter className="justify-between">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onReject}
-            disabled={disabled}
-          >
-            Reject
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => onApprove(texts.map((s) => s.trim()).join('\n\n'))}
-            disabled={disabled || !allValid}
-            title={
-              !allValid
-                ? isBatch
-                  ? 'All rows must parse and balance'
-                  : 'Must parse and balance'
-                : undefined
-            }
-          >
-            {status === 'submitting'
-              ? 'Saving…'
-              : isBatch
-                ? `Approve ${total}`
-                : 'Approve'}
-          </Button>
-        </CardFooter>
-      )}
+      <CardFooter className="justify-between">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onReject}
+          disabled={disabled}
+        >
+          Reject
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() =>
+            onApprove(
+              includedIdx.map((i) => texts[i].trim()).join('\n\n'),
+              { approved: approvedCount, skipped: skippedCount },
+            )
+          }
+          disabled={disabled || !canApprove}
+          title={
+            !canApprove
+              ? approvedCount === 0
+                ? 'Select at least one entry'
+                : 'Selected entries must parse and balance — fix or untick them'
+              : undefined
+          }
+        >
+          {isBatch ? `Approve ${approvedCount} of ${total}` : 'Approve'}
+        </Button>
+      </CardFooter>
     </Card>
   )
 }

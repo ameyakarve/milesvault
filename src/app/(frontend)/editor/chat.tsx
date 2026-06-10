@@ -34,11 +34,14 @@ import {
   PromptInput,
   PromptInputButton,
   PromptInputFooter,
+  PromptInputProvider,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
+  usePromptInputController,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
+import Link from 'next/link'
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import type { ToolUIPart } from 'ai'
@@ -264,10 +267,13 @@ export function Chat({
   onBusyChange,
   onClearableChange,
   onAppended,
+  onShowInJournal,
 }: {
   onBusyChange?: (busy: boolean) => void
   onClearableChange?: (state: { canClear: boolean; clear: () => void }) => void
   onAppended?: () => void
+  // Opens the Journal filtered to a date range (split pane / tab switch).
+  onShowInJournal?: (range: { from: string; to: string } | null) => void
 } = {}) {
   const agent = useAgent<ChatDOState>({ agent: 'ChatDO', basePath: 'api/agents/editor' })
   const {
@@ -523,7 +529,11 @@ export function Chat({
     }
   }
 
-  async function handleApprove(toolCallId: string, finalText: string) {
+  async function handleApprove(
+    toolCallId: string,
+    finalText: string,
+    meta?: { approved: number; skipped: number },
+  ) {
     setSubmitStatus((s) => ({ ...s, [toolCallId]: 'submitting' }))
     setSubmitError((s) => {
       const { [toolCallId]: _drop, ...rest } = s
@@ -549,7 +559,11 @@ export function Chat({
       setSubmitStatus((s) => ({ ...s, [toolCallId]: 'done' }))
       addToolOutput({
         toolCallId,
-        output: { ok: true, committed: finalText.trim() },
+        output: {
+          ok: true,
+          committed: finalText.trim(),
+          ...(meta && meta.skipped > 0 ? { skipped_by_user: meta.skipped } : {}),
+        },
       })
       const stmtId = lastStatementIdRef.current
       if (stmtId) {
@@ -628,17 +642,21 @@ export function Chat({
             <h1 className="text-3xl font-semibold tracking-tight">
               How can I help?
             </h1>
-            <div className="w-full">
-              <Composer
-                onSubmit={handleSubmit}
-                status={status}
-                onStop={stop}
-                statement={statement}
-                onAttachClick={onAttachClick}
-                onRemoveStatement={() => setStatement(null)}
-                onProvidePassword={onProvidePassword}
-              />
-            </div>
+            <PromptInputProvider>
+              <div className="flex w-full flex-col gap-3">
+                <Composer
+                  onSubmit={handleSubmit}
+                  status={status}
+                  onStop={stop}
+                  statement={statement}
+                  onAttachClick={onAttachClick}
+                  onRemoveStatement={() => setStatement(null)}
+                  onProvidePassword={onProvidePassword}
+                />
+                <StarterChips onAttachClick={onAttachClick} />
+              </div>
+            </PromptInputProvider>
+            <PendingCapturesHint />
           </div>
         </div>
       ) : (
@@ -770,8 +788,9 @@ export function Chat({
                                   errorMessage:
                                     submitError[toolCallId] ?? p.errorText,
                                   resolvedAnswers: clarifyAnswers[toolCallId],
-                                  onApprove: (final) =>
-                                    void handleApprove(toolCallId, final),
+                                  onApprove: (final, meta) =>
+                                    void handleApprove(toolCallId, final, meta),
+                                  onShowInJournal,
                                   onAnswer: (answers) =>
                                     handleClarifyAnswer(toolCallId, answers),
                                   onReject: () => handleReject(toolCallId),
@@ -862,5 +881,80 @@ function CopyMessageButton({ text }: { text: string }) {
         <Copy className="size-3.5" />
       )}
     </button>
+  )
+}
+
+// Teach the empty state: chips prefill the composer with editable templates
+// (via the PromptInput controller), the last one opens the statement picker.
+function StarterChips({ onAttachClick }: { onAttachClick: () => void }) {
+  const controller = usePromptInputController()
+  const chipCls =
+    'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 hover:border-teal-300 hover:text-teal-700'
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      <button
+        type="button"
+        className={chipCls}
+        onClick={() =>
+          controller.textInput.setInput('Log: dinner 1,450 INR on my Axis Magnus yesterday')
+        }
+      >
+        Log a transaction
+      </button>
+      <button
+        type="button"
+        className={chipCls}
+        onClick={() =>
+          controller.textInput.setInput(
+            'I got a new credit card: HDFC Infinia. Set it up with an opening balance of 0.',
+          )
+        }
+      >
+        Add a card
+      </button>
+      <button
+        type="button"
+        className={chipCls}
+        onClick={() =>
+          controller.textInput.setInput(
+            'I have 80,000 Amex Membership Rewards points. Record them.',
+          )
+        }
+      >
+        Record points I hold
+      </button>
+      <button type="button" className={chipCls} onClick={onAttachClick}>
+        Process a statement (PDF)
+      </button>
+    </div>
+  )
+}
+
+// Returning users with Inbox work get pointed at it from the empty chat.
+function PendingCapturesHint() {
+  const [pending, setPending] = useState(0)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/ledger/captures')
+      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string }> }>) : null))
+      .then((d) => {
+        if (cancelled || !d) return
+        setPending(
+          (d.rows ?? []).filter((c) => c.state === 'captured' || c.state === 'extracted').length,
+        )
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  if (pending === 0) return null
+  return (
+    <Link
+      href="/inbox"
+      className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-800 hover:bg-amber-100"
+    >
+      {pending} item{pending === 1 ? '' : 's'} waiting in the Inbox →
+    </Link>
   )
 }

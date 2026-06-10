@@ -15,12 +15,28 @@ import {
   ledgerClient,
   isReplaceBufferError,
 } from '@/lib/ledger-client-browser'
+import { cn } from '@/lib/utils'
+
+// Desktop (lg+) shows chat and journal side by side — the workbench; the
+// tab switch remains the mobile layout.
+function useIsLg(): boolean {
+  const [isLg, setIsLg] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const update = () => setIsLg(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return isLg
+}
 import type { EntryRow, JournalCursor } from '@/durable/ledger-do'
 
 type Tab = 'chat' | 'journal'
 
 export function EditorShell() {
   const [tab, setTab] = useState<Tab>('chat')
+  const isLg = useIsLg()
   const [pendingTab, setPendingTab] = useState<Tab | null>(null)
   // Chat opens a WebSocket via useAgent/useAgentChat; its first render depends
   // on live socket state that can't exist during SSR, so server HTML and the
@@ -87,8 +103,10 @@ export function EditorShell() {
   // Refetch filtered view whenever filter or unfiltered save bumps the
   // entries snapshot. We piggyback on entries.rows so any global change
   // (chat append, unfiltered save) refreshes the filtered slice.
+  const journalVisible = tab === 'journal' || isLg
+
   useEffect(() => {
-    if (tab !== 'journal') return
+    if (!journalVisible) return
     if (!filterActive) return
     let alive = true
     setFilteredLoading(true)
@@ -124,7 +142,7 @@ export function EditorShell() {
     return () => {
       alive = false
     }
-  }, [tab, filterActive, filter.account, filter.date, entries.rows])
+  }, [journalVisible, filterActive, filter.account, filter.date, entries.rows])
 
   const loadMore = useCallback(async () => {
     // Pagination on the filtered view is read-only: it brings in further
@@ -209,6 +227,17 @@ export function EditorShell() {
     [tab, isDirty, filteredDirty, chatBusy],
   )
 
+  // Draft cards call this after committing: focus the Journal on the
+  // committed entries' dates. On desktop the pane is already visible; on
+  // mobile it switches tabs (through the dirty-check guard).
+  const showInJournal = useCallback(
+    (range: { from: string; to: string } | null) => {
+      if (range) setFilter({ account: null, date: range })
+      requestTab('journal')
+    },
+    [requestTab],
+  )
+
   const confirmDiscard = useCallback(() => {
     if (pendingTab === null) return
     entries.setBuffer(entries.baseline)
@@ -245,13 +274,18 @@ export function EditorShell() {
     <>
       <header className="flex items-center justify-between gap-3 border-b border-slate-200/60 px-4 py-3 sm:px-6">
         <div className="w-[60px] sm:w-[120px]" />
-        <SegmentedTabs
-          value={tab}
-          onChange={requestTab}
-          lockJournal={chatBusy}
-        />
-        <div className="flex w-[60px] items-center justify-end gap-2 sm:w-[120px]">
-          {tab === 'journal' && entries.loaded && !filterActive ? (
+        <div className="lg:hidden">
+          <SegmentedTabs
+            value={tab}
+            onChange={requestTab}
+            lockJournal={chatBusy}
+          />
+        </div>
+        <div className="hidden text-[12px] font-medium text-slate-400 lg:block">
+          Ledger chat · Journal
+        </div>
+        <div className="flex w-[60px] items-center justify-end gap-2 sm:w-[120px] lg:w-auto">
+          {journalVisible && entries.loaded && !filterActive ? (
             <>
               <SavedChip dirty={isDirty} saving={entries.saving} />
               <button
@@ -264,7 +298,7 @@ export function EditorShell() {
               </button>
             </>
           ) : null}
-          {tab === 'journal' && filterActive && filteredEditable ? (
+          {journalVisible && filterActive && filteredEditable ? (
             <>
               <SavedChip dirty={filteredDirty} saving={filteredSaving} />
               <button
@@ -277,7 +311,7 @@ export function EditorShell() {
               </button>
             </>
           ) : null}
-          {tab === 'chat' && chatClear.canClear ? (
+          {(tab === 'chat' || isLg) && chatClear.canClear ? (
             <button
               type="button"
               onClick={chatClear.clear}
@@ -291,16 +325,28 @@ export function EditorShell() {
           ) : null}
         </div>
       </header>
-      {tab === 'chat' ? (
-        mounted ? (
-          <Chat
-            onBusyChange={setChatBusy}
-            onClearableChange={setChatClear}
-            onAppended={() => void entries.refetch()}
-          />
-        ) : null
-      ) : (
-        <>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <section
+          className={cn(
+            tab === 'chat' ? 'flex' : 'hidden',
+            'min-h-0 flex-1 flex-col lg:flex lg:max-w-[46%] lg:border-r lg:border-slate-200/60',
+          )}
+        >
+          {mounted ? (
+            <Chat
+              onBusyChange={setChatBusy}
+              onClearableChange={setChatClear}
+              onAppended={() => void entries.refetch()}
+              onShowInJournal={showInJournal}
+            />
+          ) : null}
+        </section>
+        <section
+          className={cn(
+            tab === 'journal' ? 'flex' : 'hidden',
+            'min-h-0 flex-1 flex-col lg:flex',
+          )}
+        >
           {entries.loaded ? (
             <JournalFilterBar
               accounts={accounts}
@@ -363,8 +409,8 @@ export function EditorShell() {
               }}
             />
           )}
-        </>
-      )}
+        </section>
+      </div>
       {pendingTab !== null ? (
         <UnsavedModal
           saving={entries.saving || filteredSaving}

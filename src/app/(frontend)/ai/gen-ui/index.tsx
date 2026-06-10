@@ -15,7 +15,8 @@ export type GenUiProps = {
   status?: 'idle' | 'submitting' | 'done' | 'failed' | 'rejected'
   errorMessage?: string
   // For draft_transaction
-  onApprove?: (finalText: string) => void
+  onApprove?: (finalText: string, meta: { approved: number; skipped: number }) => void
+  onShowInJournal?: (range: { from: string; to: string } | null) => void
   // For clarify
   resolvedAnswers?: string[]
   onAnswer?: (answers: string[]) => void
@@ -44,6 +45,7 @@ const RENDERERS: Record<
         errorMessage={props.errorMessage}
         onApprove={props.onApprove ?? noop}
         onReject={props.onReject}
+        onShowInJournal={props.onShowInJournal}
       />
     )
   },
