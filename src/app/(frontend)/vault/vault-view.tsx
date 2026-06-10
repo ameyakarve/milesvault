@@ -16,6 +16,7 @@ import { SectionLabel, StatTile, CenteredState, Monogram } from '@/components/sh
 // KG display names (cards, points) fetched once and overlaid on the
 // path-derived labels — account path → display name.
 type Names = Record<string, string>
+type Kinds = Record<string, 'card' | 'airline' | 'program'>
 
 function formatBalance(balanceScaled: string, scale: number): string {
   const val = Number(balanceScaled) / Math.pow(10, scale)
@@ -43,6 +44,7 @@ export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
   const [names, setNames] = useState<Names>({})
+  const [kinds, setKinds] = useState<Kinds>({})
   const [stats, setStats] = useState<VaultStats | null>(null)
 
   useEffect(() => {
@@ -59,8 +61,12 @@ export function VaultView() {
   useEffect(() => {
     let cancelled = false
     fetch('/api/concierge/account-names')
-      .then((r) => (r.ok ? (r.json() as Promise<{ names?: Names }>) : null))
-      .then((d) => !cancelled && d?.names && setNames(d.names))
+      .then((r) => (r.ok ? (r.json() as Promise<{ names?: Names; kinds?: Kinds }>) : null))
+      .then((d) => {
+        if (cancelled || !d) return
+        if (d.names) setNames(d.names)
+        if (d.kinds) setKinds(d.kinds)
+      })
       .catch(() => {})
     return () => {
       cancelled = true
@@ -170,16 +176,9 @@ export function VaultView() {
       {/* ── headline strip: numbers that mean something ───────────────────── */}
       {stats ? <HeadlineStrip stats={stats} /> : null}
 
-      {/* ── points: the hero ──────────────────────────────────────────────── */}
+      {/* ── points: the hero, grouped by what the graph says they are ─────── */}
       {pointRows.length > 0 ? (
-        <section className="space-y-3">
-          <SectionLabel>Points</SectionLabel>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {pointRows.map((r) => (
-              <ProgrammeCard key={`${r.account}|${r.currency}`} row={r} names={names} />
-            ))}
-          </div>
-        </section>
+        <PointsSections rows={pointRows} names={names} kinds={kinds} />
       ) : null}
 
       {/* ── credit cards ──────────────────────────────────────────────────── */}
@@ -393,5 +392,64 @@ function SpendingBreakdown({ stats }: { stats: VaultStats }) {
         ))}
       </div>
     </section>
+  )
+}
+
+// KG-derived clusters: FFPs first (the product's heart), then hotel/other
+// programmes, then bank/card pools, then anything the graph can't place.
+const POINT_GROUPS: Array<{ key: 'airline' | 'program' | 'card' | 'other'; label: string }> = [
+  { key: 'airline', label: 'Airline programmes' },
+  { key: 'program', label: 'Hotel & other programmes' },
+  { key: 'card', label: 'Card programmes' },
+  { key: 'other', label: 'Other points' },
+]
+
+function PointsSections({
+  rows,
+  names,
+  kinds,
+}: {
+  rows: AccountSummaryRow[]
+  names: Names
+  kinds: Kinds
+}) {
+  const buckets = new Map<string, AccountSummaryRow[]>()
+  for (const r of rows) {
+    const k = kinds[r.account] ?? 'other'
+    const bucket = buckets.get(k) ?? []
+    bucket.push(r)
+    buckets.set(k, bucket)
+  }
+  // With no classification at all (KG unreachable), keep the single section.
+  const classified = rows.some((r) => kinds[r.account])
+  if (!classified) {
+    return (
+      <section className="space-y-3">
+        <SectionLabel>Points</SectionLabel>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((r) => (
+            <ProgrammeCard key={`${r.account}|${r.currency}`} row={r} names={names} />
+          ))}
+        </div>
+      </section>
+    )
+  }
+  return (
+    <>
+      {POINT_GROUPS.map(({ key, label }) => {
+        const groupRows = buckets.get(key)
+        if (!groupRows || groupRows.length === 0) return null
+        return (
+          <section key={key} className="space-y-3">
+            <SectionLabel>{label}</SectionLabel>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {groupRows.map((r) => (
+                <ProgrammeCard key={`${r.account}|${r.currency}`} row={r} names={names} />
+              ))}
+            </div>
+          </section>
+        )
+      })}
+    </>
   )
 }

@@ -231,13 +231,46 @@ export class ConciergeDO
   // the same verification matchAccount/applyHoldings use). Accounts the KG
   // doesn't know stay unset; the UI falls back to path-derived labels.
   // RPC for /api/concierge/account-names.
-  async accountNames(): Promise<{ names: Record<string, string> }> {
+  async accountNames(): Promise<{
+    names: Record<string, string>
+    // KG-derived programme kind per points/status account: a currency earned
+    // by a cc/ is a card programme; one denominated by a program/ with
+    // BOOKS_ON/OWN_METAL edges is an airline FFP; a program/ without airline
+    // edges is a hotel/other programme. (Hotel links are prose-only in the
+    // corpus, so 'program' is the honest bucket.)
+    kinds: Record<string, 'card' | 'airline' | 'program'>
+  }> {
     const snapshot = await this.ledgerStub()
       .ledger_snapshot()
       .catch((): null => null)
     const accounts = (snapshot?.accounts ?? []) as ReadonlyArray<{ account: string }>
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const names: Record<string, string> = {}
+    const kinds: Record<string, 'card' | 'airline' | 'program'> = {}
+    type RelItems = { items?: Array<{ edge_type: string; other: string }> }
+
+    const classifyCurrency = async (slug: string): Promise<'card' | 'airline' | 'program' | null> => {
+      try {
+        const rel = (await kbHttp.related(slug, {
+          edge_type: 'DENOMINATED_IN',
+          direction: 'incoming',
+        })) as RelItems
+        const others = (rel.items ?? []).map((i) => i.other)
+        const program = others.find((o) => o.startsWith('program/'))
+        if (program) {
+          const pr = (await kbHttp.related(program, { direction: 'outgoing' })) as RelItems
+          const airline = (pr.items ?? []).some(
+            (i) => i.edge_type === 'BOOKS_ON' || i.edge_type === 'OWN_METAL',
+          )
+          return airline ? 'airline' : 'program'
+        }
+        if (others.some((o) => o.startsWith('cc/'))) return 'card'
+      } catch {
+        /* unclassified */
+      }
+      return null
+    }
+
     await Promise.all(
       accounts.map(async ({ account }) => {
         const parts = kgLookupParts(account)
@@ -261,9 +294,13 @@ export class ConciergeDO
                 parts.product,
               )
         if (hit?.display_name) names[account] = hit.display_name
+        if (parts.kind === 'currency' && hit) {
+          const kind = await classifyCurrency(hit.slug)
+          if (kind) kinds[account] = kind
+        }
       }),
     )
-    return { names }
+    return { names, kinds }
   }
 
   // Card → rewards linkage for the per-account page (owner ask): each held

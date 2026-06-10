@@ -76,6 +76,14 @@ export function accountLabel(account: string): { label: string; suffix: string |
     // <root>:<group>:<institution>:<name…> → "Institution · Name"
     return { label: `${parts[2]} · ${parts.slice(3).join(':')}`, suffix }
   }
+  // Rewards with an issuer level (Assets:Rewards:Points:HSBC:RewardPoints):
+  // the bare leaf collides across issuers — qualify it.
+  if (
+    (account.startsWith('Assets:Rewards:Points:') || account.startsWith('Assets:Rewards:Status:')) &&
+    parts.length >= 5
+  ) {
+    return { label: `${parts[3]} · ${parts.slice(4).join(':')}`, suffix }
+  }
   return { label: parts[parts.length - 1] ?? account, suffix }
 }
 
