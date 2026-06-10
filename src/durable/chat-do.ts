@@ -344,6 +344,42 @@ ${opts.text}`,
   override async onChatResponse(result: ChatResponseResult): Promise<void> {
     await super.onChatResponse(result)
 
+    // Observability: record the fate of every draft_transaction part this
+    // turn — the suspending client tool never executes server-side, so this
+    // is the only place to see whether the model's batch survived schema
+    // parsing and what the client will render (state, entry count, whether
+    // the reward accrual made it).
+    try {
+      const msgs = await this.syncMessagesFromStorage()
+      const last = msgs[msgs.length - 1]
+      const parts = Array.isArray(last?.parts) ? (last.parts as Array<Record<string, unknown>>) : []
+      for (const part of parts) {
+        const type = String(part.type ?? '')
+        const isDraft =
+          type === 'tool-draft_transaction' ||
+          (type === 'dynamic-tool' && part.toolName === 'draft_transaction')
+        if (!isDraft) continue
+        const input = part.input as { transactions?: unknown[] } | undefined
+        const txns = Array.isArray(input?.transactions) ? input.transactions : null
+        this.logTool({
+          agent: 'turn-audit',
+          tool: 'draft_transaction.part',
+          input: {
+            state: part.state ?? null,
+            entries: txns ? txns.length : null,
+            has_accrual: txns
+              ? txns.some((t) => typeof t === 'string' && t.includes('#reward-accrual'))
+              : null,
+          },
+          output: part.errorText ?? null,
+          ok: part.state !== 'output-error',
+          ms: 0,
+        })
+      }
+    } catch (e) {
+      console.warn('[turn-audit] failed', { err: String(e) })
+    }
+
     // Redact the raw statement text that read_statement injected into history.
     // The model has used it this turn; leaving the full blob (often tens of KB)
     // re-pays its token cost on every subsequent turn. The blob still lives in LedgerDO storage, so the model
