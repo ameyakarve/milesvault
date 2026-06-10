@@ -19,12 +19,14 @@ type NavItem =
   | { kind: 'plan'; href: string; label: string }
   | { kind: 'lucide'; href: string; label: string; LIcon: React.FC<{ size?: number; className?: string }> }
 
+// Daily-flow order: glance (Vault) → clear the queue (Inbox) → plan → ask
+// (Assistant) → audit (Journal, the power-user terminus).
 const ITEMS: NavItem[] = [
   { kind: 'lucide', href: '/vault', label: 'Vault', LIcon: Vault },
-  { kind: 'plan', href: '/explore', label: 'Plan' },
   { kind: 'lucide', href: '/inbox', label: 'Inbox', LIcon: Inbox },
-  { kind: 'link', href: '/editor', label: 'Journal', Icon: NotePencil },
+  { kind: 'plan', href: '/explore', label: 'Plan' },
   { kind: 'link', href: '/concierge', label: 'Assistant', Icon: ChatCircleDots },
+  { kind: 'link', href: '/editor', label: 'Journal', Icon: NotePencil },
 ]
 
 // Pending Inbox work (captured/extracted, not yet posted or dismissed) for

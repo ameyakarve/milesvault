@@ -51,12 +51,14 @@ The atoms are strong. The molecule is tool-shaped.
 
 ## 4. The experience spine
 
-NavRail reads as four honest words, with the Assistant floating over all of
-them:
+NavRail reads as five honest words:
 
 ```
-Vault · Plan · Inbox · Journal          [Assistant: persistent panel / Cmd+K]
+Vault · Inbox · Plan · Assistant · Journal
 ```
+
+(Daily-flow order: glance → clear the queue → plan → ask → audit. The
+Assistant is a nav peer, not a floating panel — see §7, two surfaces.)
 
 Mapping to the decided pipeline IA (`ledger-pipeline.md` §3):
 
