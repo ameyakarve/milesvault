@@ -35,6 +35,7 @@ import {
   showAwardOptionsTool,
 } from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
+import { kgLookupParts } from '@/lib/ledger-core/account-display'
 
 // The chat/agent runtime for the `/concierge` surface. Read-only Q&A — over
 // the user's ledger (`analyst`) and the milesvault knowledge graph
@@ -221,6 +222,49 @@ export class ConciergeDO
     ])
     const rows = (events?.rows ?? []) as Array<{ name: string; value: string }>
     return { statuses, held: heldStatusSlugs(rows, statuses) }
+  }
+
+  // KG display names for the user's held accounts (cards via cc/ resolve
+  // verified on attrs.beancountName, points/status via currency/ resolve —
+  // the same verification matchAccount/applyHoldings use). Accounts the KG
+  // doesn't know stay unset; the UI falls back to path-derived labels.
+  // RPC for /api/concierge/account-names.
+  async accountNames(): Promise<{ names: Record<string, string> }> {
+    const snapshot = await this.ledgerStub()
+      .ledger_snapshot()
+      .catch((): null => null)
+    const accounts = (snapshot?.accounts ?? []) as ReadonlyArray<{ account: string }>
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    type ResolveItems = {
+      items?: Array<{
+        slug: string
+        display_name?: string | null
+        attrs?: Record<string, unknown> | null
+      }>
+    }
+    const names: Record<string, string> = {}
+    await Promise.all(
+      accounts.map(async ({ account }) => {
+        const parts = kgLookupParts(account)
+        if (!parts) return
+        try {
+          if (parts.kind === 'currency') {
+            const r = (await kbHttp.resolve(parts.leaf, { prefix: 'currency' })) as ResolveItems
+            const hit = r.items?.find((it) => it.attrs?.beancountName === parts.leaf)
+            if (hit?.display_name) names[account] = hit.display_name
+          } else {
+            const r = (await kbHttp.resolve(`${parts.issuer} ${parts.product}`, {
+              prefix: 'cc',
+            })) as ResolveItems
+            const hit = r.items?.find((it) => it.attrs?.beancountName === parts.product)
+            if (hit?.display_name) names[account] = hit.display_name
+          }
+        } catch {
+          /* leave unset — UI falls back to the path label */
+        }
+      }),
+    )
+    return { names }
   }
 
   // Headless one-shot turn for text-only channels (Telegram, WhatsApp …):

@@ -51,8 +51,10 @@ export function EditorShell() {
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     const account = p.get('account')
+    const from = p.get('from')
+    const to = p.get('to')
     if (p.get('tab') === 'journal' || account) setTab('journal')
-    if (account) setFilter({ account, date: null })
+    if (account) setFilter({ account, date: from && to ? { from, to } : null })
   }, [])
 
   const [filteredRows, setFilteredRows] = useState<EntryRow[]>([])

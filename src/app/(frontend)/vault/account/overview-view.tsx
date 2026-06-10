@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AccountOverview } from '@/durable/ledger-do'
+import { accountLabel } from '@/lib/ledger-core/account-display'
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -15,9 +16,9 @@ type FetchState =
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function leafName(account: string): string {
-  const parts = account.split(':')
-  return parts[parts.length - 1] ?? account
+function intToYmd(d: number): string {
+  const s = String(d)
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`
 }
 
 function fmt(n: number, decimals = 2): string {
@@ -48,6 +49,18 @@ export function AccountOverviewView() {
   const [ccy, setCcy] = useState<string | null>(null)
   const [range, setRange] = useState<Range>('3m')
   const [state, setState] = useState<FetchState>({ status: 'loading' })
+  const [names, setNames] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/concierge/account-names')
+      .then((r) => (r.ok ? (r.json() as Promise<{ names?: Record<string, string> }>) : null))
+      .then((d) => !cancelled && d?.names && setNames(d.names))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [ready, setReady] = useState(false)
 
   // Read params from URL on mount (client-only, like status-match-view.tsx)
@@ -103,11 +116,22 @@ export function AccountOverviewView() {
   const currencies = state.status === 'ok' ? state.data.currencies : (ccy ? [ccy] : [])
   const activeCcy = state.status === 'ok' ? (state.data.currency ?? ccy) : ccy
 
+  const { label: pathLabel, suffix } = accountLabel(account)
+  const displayName = names[account] ?? pathLabel
+
   const header = (
     <div className="flex flex-col gap-2 border-b border-slate-200 bg-white px-6 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-1 min-w-0">
-          <span className="font-mono text-sm text-slate-800 break-all">{account}</span>
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span className="text-base font-semibold text-slate-900 truncate">
+            {displayName}
+            {suffix ? (
+              <span className="ml-1.5 font-mono text-xs font-normal text-slate-400">
+                ··{suffix}
+              </span>
+            ) : null}
+          </span>
+          <span className="font-mono text-[11px] text-slate-400 break-all">{account}</span>
           <Link
             href={`/editor?tab=journal&account=${encodeURIComponent(account)}`}
             className="text-xs text-teal-600 hover:underline"
@@ -240,7 +264,11 @@ export function AccountOverviewView() {
           {data.notable.length === 0 ? (
             <EmptySlot />
           ) : (
-            <NotableList notable={data.notable} currency={data.currency ?? undefined} />
+            <NotableList
+              notable={data.notable}
+              currency={data.currency ?? undefined}
+              account={account}
+            />
           )}
         </SlotCard>
       </div>
@@ -474,9 +502,13 @@ function CompositionBars({
         return (
           <div key={row.account} className="flex flex-col gap-0.5">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-slate-600 truncate min-w-0" title={row.account}>
-                {leafName(row.account)}
-              </span>
+              <Link
+                href={`/vault/account?account=${encodeURIComponent(row.account)}`}
+                className="text-[11px] text-slate-600 truncate min-w-0 hover:text-teal-600"
+                title={row.account}
+              >
+                {accountLabel(row.account).label}
+              </Link>
               <span className={[
                 'text-[11px] font-mono shrink-0',
                 negative ? 'text-rose-600' : 'text-slate-700',
@@ -502,19 +534,23 @@ function CompositionBars({
 function NotableList({
   notable,
   currency,
+  account,
 }: {
   notable: Array<{ date: number; payee: string; narration: string; amount: number }>
   currency?: string
+  account: string
 }) {
   return (
     <div className="flex flex-col divide-y divide-slate-100">
       {notable.map((row, i) => {
         const negative = row.amount < 0
         const label = [row.payee, row.narration].filter(Boolean).join(' — ')
+        const ymd = intToYmd(row.date)
         return (
-          <div
+          <Link
             key={i}
-            className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0"
+            href={`/editor?tab=journal&account=${encodeURIComponent(account)}&from=${ymd}&to=${ymd}`}
+            className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0 hover:bg-slate-50 rounded px-1 -mx-1"
           >
             <div className="flex items-center gap-3 min-w-0">
               <span className="font-mono text-[11px] text-slate-400 whitespace-nowrap shrink-0">
@@ -530,7 +566,7 @@ function NotableList({
             ].join(' ')}>
               {negative ? '−' : '+'}{fmt(Math.abs(row.amount))}{currency ? ` ${currency}` : ''}
             </span>
-          </div>
+          </Link>
         )
       })}
     </div>

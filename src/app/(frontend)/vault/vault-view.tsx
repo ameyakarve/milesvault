@@ -3,31 +3,16 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
+import {
+  accountLabel,
+  groupLabel,
+  groupRank,
+  isHolding,
+} from '@/lib/ledger-core/account-display'
 
-// ── taxonomy helpers ────────────────────────────────────────────────────────
-
-type GroupKey = 'Points' | 'Status' | 'Credit Cards' | 'Loaded' | 'Bank' | 'Other'
-
-const GROUP_PREFIXES: { key: GroupKey; prefix: string }[] = [
-  { key: 'Points', prefix: 'Assets:Rewards:Points:' },
-  { key: 'Status', prefix: 'Assets:Rewards:Status:' },
-  { key: 'Credit Cards', prefix: 'Liabilities:CreditCards:' },
-  { key: 'Loaded', prefix: 'Assets:Loaded:' },
-  { key: 'Bank', prefix: 'Assets:Bank:' },
-]
-
-function groupKey(account: string): GroupKey {
-  for (const { key, prefix } of GROUP_PREFIXES) {
-    if (account.startsWith(prefix)) return key
-  }
-  return 'Other'
-}
-
-// Leaf = last segment of the account path
-function leafName(account: string): string {
-  const parts = account.split(':')
-  return parts[parts.length - 1]
-}
+// KG display names (cards, points) fetched once and overlaid on the
+// path-derived labels — account path → display name.
+type Names = Record<string, string>
 
 function formatBalance(balanceScaled: string, scale: number): string {
   const val = Number(balanceScaled) / Math.pow(10, scale)
@@ -72,6 +57,18 @@ type FetchState =
 export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
+  const [names, setNames] = useState<Names>({})
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/concierge/account-names')
+      .then((r) => (r.ok ? (r.json() as Promise<{ names?: Names }>) : null))
+      .then((d) => !cancelled && d?.names && setNames(d.names))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -124,7 +121,9 @@ export function VaultView() {
     )
   }
 
-  const { rows } = state
+  // Holdings only: Assets + Liabilities. Flow accounts (Income/Expenses) and
+  // Equity plumbing never belong on the dashboard.
+  const rows = state.rows.filter((r) => isHolding(r.account))
 
   if (rows.length === 0) {
     return (
@@ -147,16 +146,17 @@ export function VaultView() {
   const cardCount = countCreditCards(rows)
   const acctCount = countOpenAccounts(rows)
 
-  // ── group rows ──────────────────────────────────────────────────────────
-  const grouped = new Map<GroupKey, AccountSummaryRow[]>()
+  // ── group rows by the taxonomy (deepest node label wins) ─────────────────
+  const grouped = new Map<string, AccountSummaryRow[]>()
   for (const r of rows) {
-    const k = groupKey(r.account)
+    const k = groupLabel(r.account)
     const bucket = grouped.get(k) ?? []
     bucket.push(r)
     grouped.set(k, bucket)
   }
-
-  const GROUP_ORDER: GroupKey[] = ['Points', 'Status', 'Credit Cards', 'Loaded', 'Bank', 'Other']
+  const orderedGroups = [...grouped.keys()].sort(
+    (a, b) => groupRank(a) - groupRank(b) || a.localeCompare(b),
+  )
 
   return (
     <div className="px-6 py-6 max-w-4xl mx-auto w-full space-y-8">
@@ -194,12 +194,10 @@ export function VaultView() {
 
       {/* ── holdings groups ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {GROUP_ORDER.map((key) => {
+        {orderedGroups.map((key) => {
           const groupRows = grouped.get(key)
           if (!groupRows || groupRows.length === 0) return null
-          return (
-            <HoldingsCard key={key} title={key} rows={groupRows} />
-          )
+          return <HoldingsCard key={key} title={key} rows={groupRows} names={names} />
         })}
       </div>
     </div>
@@ -218,27 +216,42 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub: st
   )
 }
 
-function HoldingsCard({ title, rows }: { title: string; rows: AccountSummaryRow[] }) {
+function HoldingsCard({
+  title,
+  rows,
+  names,
+}: {
+  title: string
+  rows: AccountSummaryRow[]
+  names: Names
+}) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 space-y-2">
       <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">{title}</p>
       <ul className="space-y-1">
-        {rows.map((r) => (
-          <li key={`${r.account}|${r.currency}`}>
-            <Link
-              href={`/vault/account?account=${encodeURIComponent(r.account)}&ccy=${encodeURIComponent(r.currency)}`}
-              className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-slate-50 group"
-            >
-              <span className="text-sm text-slate-700 truncate group-hover:text-teal-600">
-                {leafName(r.account)}
-              </span>
-              <span className="text-xs font-mono text-slate-500 whitespace-nowrap shrink-0">
-                {formatBalance(r.balance_scaled, r.scale)}{' '}
-                <span className="text-slate-400">{r.currency}</span>
-              </span>
-            </Link>
-          </li>
-        ))}
+        {rows.map((r) => {
+          const { label, suffix } = accountLabel(r.account)
+          const display = names[r.account] ?? label
+          return (
+            <li key={`${r.account}|${r.currency}`}>
+              <Link
+                href={`/vault/account?account=${encodeURIComponent(r.account)}&ccy=${encodeURIComponent(r.currency)}`}
+                className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-slate-50 group"
+              >
+                <span className="text-sm text-slate-700 truncate group-hover:text-teal-600">
+                  {display}
+                  {suffix ? (
+                    <span className="ml-1 font-mono text-[10px] text-slate-400">··{suffix}</span>
+                  ) : null}
+                </span>
+                <span className="text-xs font-mono text-slate-500 whitespace-nowrap shrink-0">
+                  {formatBalance(r.balance_scaled, r.scale)}{' '}
+                  <span className="text-slate-400">{r.currency}</span>
+                </span>
+              </Link>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )
