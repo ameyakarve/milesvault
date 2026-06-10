@@ -183,10 +183,6 @@ export function VaultView() {
       {/* ── headline strip: numbers that mean something ───────────────────── */}
       {stats ? <HeadlineStrip stats={stats} /> : null}
 
-      {/* ── rewards: the hero, clustered by minting source (clusters always
-          render — empty ones invite their first programme) ────────────────── */}
-      <RewardsSections holdings={holdings} names={names} />
-
       {/* ── credit cards ──────────────────────────────────────────────────── */}
       {cardRows.length > 0 ? (
         <section className="space-y-3">
@@ -198,6 +194,10 @@ export function VaultView() {
           </div>
         </section>
       ) : null}
+
+      {/* ── rewards: the hero, clustered by minting source (clusters always
+          render — empty ones invite their first programme) ────────────────── */}
+      <RewardsSections holdings={holdings} names={names} />
 
       {/* ── spending this month ───────────────────────────────────────────── */}
       {stats && stats.expense_categories.length > 0 ? (
