@@ -19,21 +19,36 @@ export function cardGuideTool(kb: KbHttp) {
     }),
     execute: async ({ card }) => {
       try {
-        // Resolution is literal display-name matching, and statements name
-        // cards with filler the KG nodes omit ("Axis BANK Magnus Burgundy
-        // CREDIT CARD" vs node "Axis Magnus Burgundy"). Retry with filler
-        // stripped before giving up — a missed resolve silently costs the
-        // user every reward accrual in the batch.
-        const FILLER = /\b(bank|credit|card|cards|ltd|limited|the)\b/gi
-        const stripped = card.replace(FILLER, ' ').replace(/\s+/g, ' ').trim()
-        const candidates = [...new Set([card, stripped])].filter(Boolean)
-        let top: { slug: string; display_name: string | null } | undefined
-        for (const q of candidates) {
-          const r = (await kb.resolve(q, { prefix: 'cc', limit: 3 })) as {
-            items?: Array<{ slug: string; display_name: string | null }>
+        type Item = { slug: string; display_name: string | null }
+        const resolve = async (q: string): Promise<Item[]> => {
+          const r = (await kb.resolve(q, { prefix: 'cc', limit: 5 })) as {
+            items?: Item[]
           }
-          top = r.items?.[0]
-          if (top) break
+          return r.items ?? []
+        }
+        // Resolution is literal display-name matching; statements add filler
+        // the KG nodes omit ("Axis BANK Magnus Burgundy CREDIT CARD"). No
+        // hardcoded vocabulary: on a miss, gather candidates by per-token
+        // recall and let the MODEL choose — a single hit is used directly,
+        // multiple hits go back as options to re-call with.
+        let top: Item | undefined = (await resolve(card))[0]
+        if (!top) {
+          const seen = new Map<string, Item>()
+          for (const token of card.split(/\s+/)) {
+            if (token.length < 4) continue
+            for (const it of await resolve(token)) seen.set(it.slug, it)
+            if (seen.size >= 6) break
+          }
+          const cands = [...seen.values()]
+          if (cands.length === 1) top = cands[0]
+          else if (cands.length > 1) {
+            return {
+              ok: false as const,
+              error: 'card_not_found' as const,
+              candidates: cands.map((c) => ({ slug: c.slug, name: c.display_name })),
+              hint: 'Pick the matching card and call card_guide again with its exact `name`.',
+            }
+          }
         }
         if (!top) return { ok: false as const, error: 'card_not_found' as const }
 

@@ -304,10 +304,11 @@ ${stmt.text}`,
         // Same output budget as the interactive agent (the 4096 default
         // truncates chunks that carry the 4-posting reward legs — the slim
         // 2-posting form then survives validation and points silently
-        // vanish). Step headroom covers card_guide + 3-4 chunked draft
-        // calls + a retry or two.
+        // vanish). Step ceiling covers card_guide with candidate retries
+        // (ambiguous names go back to the model to pick), 3-4 chunked
+        // draft calls, validation retries, and the closing note.
         maxOutputTokens: 16384,
-        stopWhen: stepCountIs(12),
+        stopWhen: stepCountIs(16),
         experimental_repairToolCall: draftTransactionRepair,
       })
       if (recorded.length > 0) {
