@@ -2,8 +2,9 @@ import type { AgentDef, AgentHost, Registry } from '../types'
 
 // Workers AI model ids.
 //
-// The analyst runs Kimi at low effort — freeform reasoning over SQL
-// results, questions are usually shallow ("how much did I spend on X").
+// Both agents run Gemma with thinking OFF (owner call, 2026-06-10: one
+// model across all AI workflows). The analyst previously ran Kimi at low
+// effort for freeform reasoning over SQL results.
 //
 // The graph-walker runs Gemma with thinking OFF. In code-mode the work is
 // "write one async program against typed tools, then summarize the result"
@@ -11,7 +12,7 @@ import type { AgentDef, AgentHost, Registry } from '../types'
 // retries. Gemma-no-think writes a tighter program, runs it once, and
 // answers; the typed sandbox tools (outputSchema-backed) carry the
 // structure Kimi was burning tokens to recover.
-const ANALYST_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
+const ANALYST_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 // Exported for the headless text-channel turn (ConciergeDO.answerText).
 export const GRAPH_WALKER_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 
@@ -26,7 +27,7 @@ export function makeConciergeRegistry(
   const analyst: AgentDef = {
     name: 'analyst',
     canHandoffTo: ['graph-walker'],
-    model: { id: ANALYST_MODEL_ID, reasoning: 'low' },
+    model: { id: ANALYST_MODEL_ID, reasoning: 'off' },
     system: () => host.system('analyst'),
     tools: () => host.tools('analyst'),
   }

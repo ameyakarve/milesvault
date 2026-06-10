@@ -1,9 +1,11 @@
 import type { AgentDef, AgentHost, Registry } from '../types'
 
-// Workers AI model ids. The ledger agent runs Kimi (freeform reasoning over
+// Workers AI model ids. Everything runs Gemma with thinking OFF (owner call,
+// 2026-06-10: one model across all AI workflows). Previously the ledger agent
+// ran Kimi (freeform reasoning over
 // edits); the statement specialist runs Gemma (cheap, fast, reasoning-off
 // extraction — the shape the extractor evals were tuned on).
-const LEDGER_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
+const LEDGER_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 // Exported for the headless rules-playground preview (ChatDO.previewDrafts).
 export const STATEMENT_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 
@@ -22,7 +24,7 @@ export function makeEditorRegistry(host: AgentHost<EditorAgentName>): Registry {
   const ledger: AgentDef = {
     name: 'ledger',
     canHandoffTo: ['statement'],
-    model: { id: LEDGER_MODEL_ID, reasoning: 'low' },
+    model: { id: LEDGER_MODEL_ID, reasoning: 'off' },
     system: () => host.system('ledger'),
     tools: () => host.tools('ledger'),
   }

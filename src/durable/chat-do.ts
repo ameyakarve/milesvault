@@ -204,8 +204,7 @@ ${opts.text}`,
 
     // Redact the raw statement text that read_statement injected into history.
     // The model has used it this turn; leaving the full blob (often tens of KB)
-    // re-pays its token cost on every subsequent turn (Kimi's reasoning trace
-    // amplifies that). The blob still lives in LedgerDO storage, so the model
+    // re-pays its token cost on every subsequent turn. The blob still lives in LedgerDO storage, so the model
     // can simply call read_statement again if it genuinely needs it.
     const messages = await this.syncMessagesFromStorage()
     for (const msg of messages) {
