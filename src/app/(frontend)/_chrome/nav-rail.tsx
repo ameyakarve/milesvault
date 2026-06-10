@@ -143,7 +143,17 @@ export function NavRail() {
             )
           })}
         </div>
-        <ThemeToggle className="mt-auto p-2 text-muted-foreground hover:text-foreground" />
+        <div className="mt-auto flex flex-col items-center gap-1">
+          <ThemeToggle className="p-2 text-muted-foreground hover:text-foreground" />
+          {/* Which client bundle is this tab actually running? Settles every
+              "is my tab stale?" debugging loop in one glance. */}
+          <span
+            className="font-mono text-[9px] leading-none text-muted-foreground/60"
+            title="build"
+          >
+            {(process.env.NEXT_PUBLIC_BUILD_ID ?? 'dev').slice(0, 7)}
+          </span>
+        </div>
       </nav>
 
       {/* Mobile: top bar with a hamburger */}
