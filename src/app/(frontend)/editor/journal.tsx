@@ -38,7 +38,7 @@ const HIGHLIGHT = HighlightStyle.define([
 
 const THEME = EditorView.theme({
   '&': {
-    backgroundColor: 'transparent',
+    backgroundColor: 'var(--cm-bg)',
     fontSize: '13px',
     fontFamily: "'JetBrains Mono', monospace",
     height: '100%',
