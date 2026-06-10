@@ -475,6 +475,13 @@ export function Chat({
       // handoff — activeAgent persists server-side and a message-only clear
       // would otherwise leave us stuck on the statement specialist.
       clear: () => {
+        // Abort any live (or zombie) turn first — clearing must never be
+        // hostage to a stream that won't end.
+        try {
+          stop()
+        } catch {
+          /* no active stream */
+        }
         void ledgerClient.resetAgent().catch(() => {})
         clearHistoryRef.current()
       },

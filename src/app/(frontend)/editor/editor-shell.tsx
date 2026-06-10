@@ -325,8 +325,7 @@ export function EditorShell() {
             <button
               type="button"
               onClick={chatClear.clear}
-              disabled={chatBusy}
-              title="Clear conversation"
+              title="Clear conversation (stops any active run)"
               aria-label="Clear conversation"
               className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
             >
