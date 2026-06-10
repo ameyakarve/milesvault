@@ -23,6 +23,10 @@ export function RulesView() {
   const [saving, setSaving] = useState(false)
   // add-form state
   const [fromMatch, setFromMatch] = useState('')
+  // Playground seed (set by the activity log's replay buttons); bumping the
+  // key remounts the playground with the new values.
+  const [seed, setSeed] = useState<PlaygroundSeed | null>(null)
+  const [seedKey, setSeedKey] = useState(0)
   const [subjectMatch, setSubjectMatch] = useState('')
   const [action, setAction] = useState<'capture' | 'ignore'>('capture')
   const [prompt, setPrompt] = useState('')
@@ -204,10 +208,19 @@ export function RulesView() {
         </button>
       </div>
 
-      <Playground inputCls={inputCls} />
+      <Playground inputCls={inputCls} seed={seed} key={seedKey} />
+
+      <ActivityLog
+        onReplay={(s) => {
+          setSeed(s)
+          setSeedKey((k) => k + 1)
+        }}
+      />
     </div>
   )
 }
+
+type PlaygroundSeed = { from: string; subject: string; text: string }
 
 type TestResult = {
   match: { action: string; prompt: string | null; rule_id: number | null }
@@ -217,10 +230,10 @@ type TestResult = {
 // Dry-run a pasted email against the rules (experience.md §9): shows which
 // rule fires, and optionally what the agent would draft. Nothing is captured
 // or committed.
-function Playground({ inputCls }: { inputCls: string }) {
-  const [from, setFrom] = useState('')
-  const [subject, setSubject] = useState('')
-  const [text, setText] = useState('')
+function Playground({ inputCls, seed }: { inputCls: string; seed?: PlaygroundSeed | null }) {
+  const [from, setFrom] = useState(seed?.from ?? '')
+  const [subject, setSubject] = useState(seed?.subject ?? '')
+  const [text, setText] = useState(seed?.text ?? '')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<TestResult | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -305,6 +318,94 @@ function Playground({ inputCls }: { inputCls: string }) {
           ) : null}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+type IngestRow = {
+  id: number
+  from_addr: string | null
+  subject: string | null
+  outcome: string
+  rule_id: number | null
+  capture_id: string | null
+  body_excerpt: string | null
+  created_at: number
+}
+
+const OUTCOME_STYLE: Record<string, string> = {
+  captured: 'bg-teal-50 text-teal-700 border-teal-200',
+  ignored: 'bg-slate-50 text-slate-500 border-slate-200',
+  rejected: 'bg-red-50 text-red-600 border-red-200',
+}
+
+// The automation log (experience.md §9): every inbound email and what
+// happened to it. Replay loads it into the playground above.
+function ActivityLog({ onReplay }: { onReplay: (seed: PlaygroundSeed) => void }) {
+  const [rows, setRows] = useState<IngestRow[] | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/ledger/ingest-log')
+      .then((r) => (r.ok ? (r.json() as Promise<{ rows: IngestRow[] }>) : null))
+      .then((d) => !cancelled && d && setRows(d.rows ?? []))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (rows === null || rows.length === 0) return null
+
+  return (
+    <div className="space-y-2">
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">
+        Activity ({rows.length})
+      </p>
+      <ul className="space-y-1.5">
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm text-slate-700">{r.subject ?? '(no subject)'}</p>
+              <p className="truncate text-xs text-slate-400">
+                {r.from_addr ?? 'unknown sender'} ·{' '}
+                {new Date(r.created_at).toLocaleString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+                {r.rule_id != null ? ` · rule #${r.rule_id}` : ' · no rule'}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${OUTCOME_STYLE[r.outcome] ?? OUTCOME_STYLE.ignored}`}
+              >
+                {r.outcome}
+              </span>
+              {r.body_excerpt ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onReplay({
+                      from: r.from_addr ?? '',
+                      subject: r.subject ?? '',
+                      text: r.body_excerpt ?? '',
+                    })
+                  }
+                  className="text-xs text-teal-600 hover:text-teal-700 whitespace-nowrap"
+                >
+                  Test in playground
+                </button>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

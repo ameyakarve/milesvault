@@ -25,6 +25,14 @@ type LedgerStub = {
     prompt: string | null
     rule_id: number | null
   }>
+  record_ingest(entry: {
+    from_addr: string | null
+    subject: string | null
+    outcome: 'captured' | 'ignored' | 'rejected'
+    rule_id?: number | null
+    capture_id?: string | null
+    body_excerpt?: string | null
+  }): Promise<{ ok: true }>
 }
 
 // Transaction-alert emails are short; cap pathological bodies.
@@ -73,14 +81,17 @@ export default {
     const body = (parsed.text?.trim() || htmlToText(parsed.html ?? ''))
       .trim()
       .slice(0, MAX_BODY_CHARS)
-    if (!body) {
-      message.setReject('empty message')
-      return
-    }
-
     const subject = parsed.subject?.trim() || 'forwarded email'
     const from = parsed.from?.address ?? message.from
     const stub = env.LEDGER_DO.get(env.LEDGER_DO.idFromName(row.email)) as unknown as LedgerStub
+    const log = (entry: Parameters<LedgerStub['record_ingest']>[0]) =>
+      stub.record_ingest(entry).catch(() => {})
+
+    if (!body) {
+      await log({ from_addr: from ?? null, subject, outcome: 'rejected' })
+      message.setReject('empty message')
+      return
+    }
 
     // User-configured rules (experience.md §9): first enabled match wins.
     // 'ignore' = accept-and-drop (explicit user intent — OTPs, promos);
@@ -95,7 +106,13 @@ export default {
         }),
       )
     if (rule.action === 'ignore') {
-      console.log('[email] ignored by rule', { rule_id: rule.rule_id })
+      await log({
+        from_addr: from ?? null,
+        subject,
+        outcome: 'ignored',
+        rule_id: rule.rule_id,
+        body_excerpt: body.slice(0, 2000),
+      })
       return
     }
 
@@ -107,6 +124,14 @@ export default {
       text: `Forwarded transaction email\nFrom: ${from}\nSubject: ${subject}\n\n${body}`,
       source: 'email',
       prompt: rule.prompt,
+    })
+    await log({
+      from_addr: from ?? null,
+      subject,
+      outcome: 'captured',
+      rule_id: rule.rule_id,
+      capture_id: id,
+      body_excerpt: body.slice(0, 2000),
     })
   },
 } satisfies ExportedHandler<Env>

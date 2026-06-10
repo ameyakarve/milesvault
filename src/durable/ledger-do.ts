@@ -390,6 +390,59 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     return { action: 'capture', prompt: null, rule_id: null }
   }
 
+  // Record an inbound email's outcome (experience.md §9 automation log).
+  async record_ingest(entry: {
+    from_addr: string | null
+    subject: string | null
+    outcome: 'captured' | 'ignored' | 'rejected'
+    rule_id?: number | null
+    capture_id?: string | null
+    body_excerpt?: string | null
+  }): Promise<{ ok: true }> {
+    this.db.exec(
+      `INSERT INTO ingest_log (from_addr, subject, outcome, rule_id, capture_id, body_excerpt, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      entry.from_addr,
+      entry.subject,
+      entry.outcome,
+      entry.rule_id ?? null,
+      entry.capture_id ?? null,
+      entry.body_excerpt ?? null,
+      Date.now(),
+    )
+    return { ok: true }
+  }
+
+  async list_ingest_log(): Promise<{
+    rows: Array<{
+      id: number
+      from_addr: string | null
+      subject: string | null
+      outcome: string
+      rule_id: number | null
+      capture_id: string | null
+      body_excerpt: string | null
+      created_at: number
+    }>
+  }> {
+    const rows = this.db
+      .exec<{
+        id: number
+        from_addr: string | null
+        subject: string | null
+        outcome: string
+        rule_id: number | null
+        capture_id: string | null
+        body_excerpt: string | null
+        created_at: number
+      }>(
+        `SELECT id, from_addr, subject, outcome, rule_id, capture_id, body_excerpt, created_at
+         FROM ingest_log ORDER BY id DESC LIMIT 50`,
+      )
+      .toArray()
+    return { rows }
+  }
+
   async get_statement(
     id: string,
   ): Promise<{ filename: string; text: string; ownerEmail: string } | null> {

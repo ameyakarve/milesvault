@@ -72,6 +72,7 @@ export type LedgerClient = {
     from: string
     subject: string
   }): ReturnType<LedgerDO['match_email_rule']>
+  list_ingest_log(): ReturnType<LedgerDO['list_ingest_log']>
   save_email_rule(
     rule: Parameters<LedgerDO['save_email_rule']>[0],
   ): ReturnType<LedgerDO['save_email_rule']>
@@ -210,6 +211,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async match_email_rule(headers) {
       return stub.match_email_rule(headers)
+    },
+
+    async list_ingest_log() {
+      return stub.list_ingest_log()
     },
 
     async save_email_rule(rule) {

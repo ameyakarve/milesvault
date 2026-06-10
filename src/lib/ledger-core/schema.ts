@@ -267,6 +267,22 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
       updated_at   INTEGER NOT NULL
     ) STRICT`,
   },
+  // Email automation log (experience.md §9): one row per inbound email,
+  // whatever the outcome — the answer to "what did the robot do while I was
+  // away". body_excerpt feeds the playground's replay.
+  {
+    label: 'ingest_log',
+    sql: `CREATE TABLE IF NOT EXISTS ingest_log (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_addr    TEXT,
+      subject      TEXT,
+      outcome      TEXT NOT NULL,
+      rule_id      INTEGER,
+      capture_id   TEXT,
+      body_excerpt TEXT,
+      created_at   INTEGER NOT NULL
+    ) STRICT`,
+  },
   // Event-sourcing experiment (June 2026) — reversed: the beancount journal
   // is the single source of truth; no event log. Drop the short-lived tables.
   { label: 'drop_event_log', sql: 'DROP TABLE IF EXISTS event_log' },
