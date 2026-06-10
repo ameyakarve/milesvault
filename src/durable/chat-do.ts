@@ -1,11 +1,13 @@
 import type { ChatResponseResult } from '@cloudflare/think'
-import type { ToolCallRepairFunction, ToolSet } from 'ai'
+import { generateText, stepCountIs, tool, type ToolCallRepairFunction, type ToolSet } from 'ai'
+import { draftTransactionBatchSchema } from './agent-ui-schemas'
 import { repairDraftBatch } from '@/lib/beancount/repair-draft-batch'
 import { buildLedgerSystem, buildStatementAgentSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
 import {
   makeEditorRegistry,
+  STATEMENT_MODEL_ID,
   type EditorAgentName,
 } from './agents/registries/editor'
 import {
@@ -93,6 +95,39 @@ export class ChatDO
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
     this.registry = makeEditorRegistry(this)
+  }
+
+  // Headless dry run for the rules playground (experience.md §9): run the
+  // statement agent's brain over a pasted email with a rule's prompt, record
+  // what draft_transaction WOULD propose, commit nothing. Same system prompt
+  // and model as the live agent; the recording tool replaces the suspending
+  // client tool so the loop completes without a user.
+  async previewDrafts(opts: {
+    text: string
+    instruction?: string | null
+  }): Promise<{ entries: string[]; note: string }> {
+    const snapshot = await this.ledgerStub().ledger_snapshot()
+    const recorded: string[] = []
+    const draft_transaction = tool({
+      description:
+        'Propose one or more beancount transactions (dry run — they are recorded for preview, not committed).',
+      inputSchema: draftTransactionBatchSchema,
+      execute: async ({ transactions }) => {
+        recorded.push(...transactions)
+        return { ok: true, recorded: transactions.length }
+      },
+    })
+    const result = await generateText({
+      model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+      system: buildStatementAgentSystem(snapshot),
+      prompt: `${opts.instruction?.trim() || 'Extract the transaction(s) from this forwarded email and draft journal entries.'}
+
+--- forwarded email ---
+${opts.text}`,
+      tools: { draft_transaction },
+      stopWhen: stepCountIs(4),
+    })
+    return { entries: recorded, note: result.text.trim() }
   }
 
   private ledgerStub(): DurableObjectStub<LedgerDO> {

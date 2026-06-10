@@ -116,6 +116,22 @@ export function InboxView() {
       <Link href="/inbox/rules" className="text-teal-600 hover:underline">
         Rules
       </Link>
+      {' · '}
+      <button
+        type="button"
+        onClick={() => {
+          if (!window.confirm('Rotate the address? The current one stops working immediately.'))
+            return
+          fetch('/api/ledger/forwarding-address', { method: 'POST' })
+            .then((r) => (r.ok ? (r.json() as Promise<{ address?: string }>) : null))
+            .then((d) => d?.address && setAddress(d.address))
+            .catch(() => {})
+        }}
+        className="text-slate-400 hover:text-slate-600"
+        title="Burn this address and mint a new one"
+      >
+        Rotate
+      </button>
     </p>
   ) : null
 

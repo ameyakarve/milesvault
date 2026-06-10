@@ -203,6 +203,108 @@ export function RulesView() {
           Add rule
         </button>
       </div>
+
+      <Playground inputCls={inputCls} />
+    </div>
+  )
+}
+
+type TestResult = {
+  match: { action: string; prompt: string | null; rule_id: number | null }
+  preview: { entries: string[]; note: string } | null
+}
+
+// Dry-run a pasted email against the rules (experience.md §9): shows which
+// rule fires, and optionally what the agent would draft. Nothing is captured
+// or committed.
+function Playground({ inputCls }: { inputCls: string }) {
+  const [from, setFrom] = useState('')
+  const [subject, setSubject] = useState('')
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<TestResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  function run(preview: boolean) {
+    setBusy(true)
+    setError(null)
+    fetch('/api/ledger/email-rules/test', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ from, subject, text, preview }),
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<TestResult>) : Promise.reject(new Error(String(r.status)))))
+      .then(setResult)
+      .catch((e) => setError(String(e)))
+      .finally(() => setBusy(false))
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-4 py-4 space-y-3">
+      <p className="text-[10px] uppercase tracking-wider text-slate-400 font-mono">Playground</p>
+      <p className="text-xs text-slate-500">
+        Paste a transaction email to see which rule fires — and what the agent would draft.
+        Nothing is captured or committed.
+      </p>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <input value={from} onChange={(e) => setFrom(e.target.value)} placeholder="From" className={inputCls} />
+        <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className={inputCls} />
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={5}
+        placeholder="Email body…"
+        className={inputCls}
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => run(false)}
+          className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          Which rule fires?
+        </button>
+        <button
+          type="button"
+          disabled={busy || !text.trim()}
+          onClick={() => run(true)}
+          className="rounded-md bg-teal-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-50"
+        >
+          {busy ? 'Running…' : 'Preview drafts'}
+        </button>
+      </div>
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {result ? (
+        <div className="space-y-2 rounded-md bg-slate-50 px-3 py-2 text-sm">
+          <p className="text-slate-600">
+            {result.match.rule_id != null ? (
+              <>
+                Rule #{result.match.rule_id} fires → <strong>{result.match.action}</strong>
+                {result.match.prompt ? (
+                  <span className="block text-xs text-slate-500 whitespace-pre-wrap">
+                    {result.match.prompt}
+                  </span>
+                ) : null}
+              </>
+            ) : (
+              <>No rule matches → captured as-is (the safe default).</>
+            )}
+          </p>
+          {result.preview ? (
+            result.preview.entries.length ? (
+              <pre className="overflow-x-auto rounded bg-white p-2 font-mono text-xs text-slate-700">
+                {result.preview.entries.join('\n\n')}
+              </pre>
+            ) : (
+              <p className="text-xs text-slate-500">
+                The agent proposed no entries{result.preview.note ? ` — ${result.preview.note}` : '.'}
+              </p>
+            )
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

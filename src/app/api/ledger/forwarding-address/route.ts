@@ -46,3 +46,25 @@ export async function GET(): Promise<Response> {
     .run()
   return NextResponse.json({ address: `ingest+${token}@milesvault.com` })
 }
+
+// Rotate: burn every existing token for this user and mint a fresh one. The
+// old address stops working at SMTP immediately (unknown-token reject) —
+// the escape hatch for a leaked/spammed address.
+export async function POST(): Promise<Response> {
+  const session = await auth()
+  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  const email = session.user.email
+
+  const { env } = await getCloudflareContext({ async: true })
+  const db = (env as Cloudflare.Env).D1 as D1Database | undefined
+  if (!db) return new NextResponse('D1 binding missing', { status: 500 })
+
+  const token = crypto.randomUUID().replace(/-/g, '')
+  await db.batch([
+    db.prepare('DELETE FROM ingest_tokens WHERE email = ?').bind(email),
+    db
+      .prepare('INSERT INTO ingest_tokens (token, email, created_at) VALUES (?, ?, ?)')
+      .bind(token, email, Date.now()),
+  ])
+  return NextResponse.json({ address: `ingest+${token}@milesvault.com`, rotated: true })
+}
