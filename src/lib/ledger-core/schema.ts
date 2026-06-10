@@ -251,6 +251,14 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     sql: 'ALTER TABLE capture_items ADD COLUMN prompt TEXT',
     allowFail: true,
   },
+  // Async ingestion (owner call): the background statement agent stores its
+  // proposed entries here (JSON array of beancount strings); the Inbox
+  // renders them for review. state moves captured -> extracted when set.
+  {
+    label: 'capture_items_drafts',
+    sql: 'ALTER TABLE capture_items ADD COLUMN drafts TEXT',
+    allowFail: true,
+  },
   // Email ingestion rules (experience.md §9): matcher + action + prompt.
   // First enabled match wins (created order). 'ignore' drops the email
   // without a capture; 'capture' attaches the prompt to the capture item.

@@ -90,6 +90,7 @@ export type LedgerClient = {
     ownerEmail: string
     filename: string
     text: string
+    capture?: boolean
   }): Promise<{ ok: true }>
   ledger_snapshot(): Promise<{
     today: number

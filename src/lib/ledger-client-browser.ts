@@ -53,6 +53,7 @@ export const ledgerClient = {
     return getJSON('/api/ledger/accounts', opts)
   },
   attachStatement(body: {
+    mode?: 'inbox'
     filename: string
     text: string
   }): Promise<{ id: string }> {

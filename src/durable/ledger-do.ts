@@ -259,6 +259,10 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     // Set by a matched email rule (experience.md §9): the instruction the
     // chat uses when this capture is reviewed.
     prompt?: string | null
+    // Create an Inbox capture row (async ingestion). Email arrivals always
+    // capture; uploads capture only when the client asks (global drop —
+    // the chat paperclip is interactive and stays out of the Inbox).
+    capture?: boolean
   }): Promise<{ ok: true }> {
     const now = Date.now()
     const source = opts.source ?? 'upload'
@@ -272,10 +276,10 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         opts.text,
         now,
       )
-      // Only ASYNC arrivals become Inbox captures (owner call): a forwarded
-      // email queues for review; a statement uploaded in chat is being
-      // processed right now and never enters the Inbox.
-      if (source === 'email') {
+      // Async arrivals become Inbox captures: forwarded email always, an
+      // upload when the client opted in (global drop). The chat paperclip
+      // is interactive and never enters the Inbox.
+      if (source === 'email' || opts.capture) {
         this.db.exec(
           `INSERT OR REPLACE INTO capture_items (id, source, artifact, filename, state, prompt, created_at, updated_at)
            VALUES (?, ?, ?, ?, 'captured', ?, ?, ?)`,
@@ -553,6 +557,20 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     return { ok: cursor.rowsWritten > 0 }
   }
 
+  // Background statement agent's proposal lands here: entries as a JSON
+  // array of beancount strings; the capture flips to 'extracted' so the
+  // Inbox offers review. Empty entries leave the row untouched.
+  async set_capture_drafts(id: string, entries: string[]): Promise<{ ok: boolean }> {
+    if (entries.length === 0) return { ok: false }
+    const cursor = this.db.exec(
+      `UPDATE capture_items SET drafts = ?, state = 'extracted', updated_at = ? WHERE id = ?`,
+      JSON.stringify(entries),
+      Date.now(),
+      id,
+    )
+    return { ok: cursor.rowsWritten > 0 }
+  }
+
   // Capture items for the Inbox, newest first.
   async list_captures(): Promise<{
     rows: Array<{
@@ -562,6 +580,7 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       filename: string | null
       state: string
       prompt: string | null
+      drafts: string | null
       created_at: number
     }>
   }> {
@@ -573,9 +592,10 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         filename: string | null
         state: string
         prompt: string | null
+        drafts: string | null
         created_at: number
       }>(
-        `SELECT id, source, artifact, filename, state, prompt, created_at
+        `SELECT id, source, artifact, filename, state, prompt, drafts, created_at
          FROM capture_items ORDER BY created_at DESC, id DESC LIMIT 200`,
       )
       .toArray()

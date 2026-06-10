@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
+import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -19,7 +20,18 @@ type CaptureRow = {
   filename: string | null
   state: string
   prompt: string | null
+  drafts: string | null
   created_at: number
+}
+
+function parseDrafts(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const v = JSON.parse(raw) as unknown
+    return Array.isArray(v) ? v.filter((e): e is string => typeof e === 'string') : []
+  } catch {
+    return []
+  }
 }
 
 function fmtDate(ms: number): string {
@@ -39,6 +51,11 @@ export function InboxView() {
   const [address, setAddress] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [rotateOpen, setRotateOpen] = useState(false)
+  // Inline draft review (async ingestion): which capture is expanded, and
+  // per-capture approve state.
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [approveBusy, setApproveBusy] = useState<string | null>(null)
+  const [approveError, setApproveError] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -95,6 +112,40 @@ export function InboxView() {
       .catch(() => {
         setAllRows((prev) => prev?.map((r) => (r.id === id ? { ...r, state: 'captured' } : r)) ?? prev)
       })
+  }
+
+  async function approveDrafts(row: CaptureRow) {
+    const entries = parseDrafts(row.drafts)
+    if (entries.length === 0) return
+    setApproveBusy(row.id)
+    setApproveError((s) => {
+      const { [row.id]: _drop, ...rest } = s
+      return rest
+    })
+    try {
+      // Append-only commit, same contract as chat approval.
+      const r = await ledgerClient.replaceBuffer([], entries.join('\n\n'))
+      if (isReplaceBufferError(r)) {
+        setApproveError((s) => ({ ...s, [row.id]: 'message' in r ? r.message : 'Save conflict' }))
+        return
+      }
+      const post = await fetch('/api/ledger/captures', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: row.id, action: 'post' }),
+      }).catch((): null => null)
+      if (!post?.ok) {
+        // The entries ARE in the journal; only the lifecycle update failed.
+        setApproveError((s) => ({
+          ...s,
+          [row.id]: 'Posted to the journal, but the Inbox state update failed — refresh.',
+        }))
+      }
+      setAllRows((prev) => prev?.map((x) => (x.id === row.id ? { ...x, state: 'posted' } : x)) ?? prev)
+      setOpenId(null)
+    } finally {
+      setApproveBusy(null)
+    }
   }
 
   // Chip tone mapping: captured→pending, extracted→active, posted→positive, dismissed→neutral
@@ -161,39 +212,84 @@ export function InboxView() {
       <div className="mx-auto w-full max-w-2xl px-4 py-6 space-y-3">
         <SectionLabel>Captured ({rows.length})</SectionLabel>
         <ul className="space-y-2">
-          {rows.map((r) => (
-            <li
-              key={r.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm text-foreground">{r.filename ?? r.id}</p>
-                <p className="text-xs text-muted-foreground">
-                  {r.source} · {fmtDate(r.created_at)}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <StateChip tone={chipTone(r.state)}>{r.state}</StateChip>
-                <Link
-                  href={`/editor?statement=${encodeURIComponent(r.id)}&filename=${encodeURIComponent(r.filename ?? r.id)}${r.prompt ? `&prompt=${encodeURIComponent(r.prompt)}` : ''}`}
-                  className="text-xs text-foreground underline underline-offset-4 hover:no-underline whitespace-nowrap"
-                >
-                  Review in chat →
-                </Link>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => dismiss(r.id)}
-                  className="text-muted-foreground whitespace-nowrap"
-                >
-                  Dismiss
-                </Button>
-              </div>
-            </li>
-          ))}
+          {rows.map((r) => {
+            const entries = parseDrafts(r.drafts)
+            const reviewable = entries.length > 0 && r.state === 'extracted'
+            return (
+              <li
+                key={r.id}
+                className="rounded-xl border border-border bg-card px-4 py-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-foreground">{r.filename ?? r.id}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {r.source} · {fmtDate(r.created_at)}
+                      {r.state === 'captured' ? ' · drafting…' : ''}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <StateChip tone={chipTone(r.state)}>{r.state}</StateChip>
+                    {reviewable ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setOpenId(openId === r.id ? null : r.id)}
+                        className="text-foreground whitespace-nowrap"
+                      >
+                        {openId === r.id ? 'Collapse' : `Review drafts (${entries.length})`}
+                      </Button>
+                    ) : null}
+                    <Link
+                      href={`/editor?statement=${encodeURIComponent(r.id)}&filename=${encodeURIComponent(r.filename ?? r.id)}${r.prompt ? `&prompt=${encodeURIComponent(r.prompt)}` : ''}`}
+                      className="text-xs text-foreground underline underline-offset-4 hover:no-underline whitespace-nowrap"
+                    >
+                      Review in chat →
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => dismiss(r.id)}
+                      className="text-muted-foreground whitespace-nowrap"
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+                {openId === r.id && reviewable ? (
+                  <div className="mt-3 space-y-2 border-t border-border pt-3">
+                    {entries.map((e, i) => (
+                      <pre
+                        key={i}
+                        className="overflow-x-auto rounded-lg bg-muted/50 px-3 py-2 font-mono text-xs leading-5 text-foreground"
+                      >
+                        {e}
+                      </pre>
+                    ))}
+                    {approveError[r.id] ? (
+                      <p className="text-xs text-destructive">{approveError[r.id]}</p>
+                    ) : null}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="xs"
+                        onClick={() => void approveDrafts(r)}
+                        disabled={approveBusy === r.id}
+                      >
+                        {approveBusy === r.id ? 'Posting…' : `Approve all (${entries.length})`}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Edits? Use “Review in chat” instead.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            )
+          })}
         </ul>
         <p className="text-xs text-muted-foreground">
-          Uploads and forwarded transaction emails are captured here.
+          Dropped statements and forwarded transaction emails are captured here
+          and drafted in the background.
           {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
         </p>
         {addressLine}

@@ -14,6 +14,7 @@ type OverlayState =
   | { kind: 'idle' }
   | { kind: 'dragging' }
   | { kind: 'processing'; filename: string }
+  | { kind: 'captured'; filename: string }
   | { kind: 'error'; message: string }
 
 // How long to show error notices before auto-dismissing.
@@ -142,8 +143,13 @@ export function GlobalCapture() {
     try {
       const { doc } = await loadStatement(file)
       const text = await extractStatementText(doc)
-      const { id } = await ledgerClient.attachStatement({ filename: file.name, text })
-      router.push(`/editor?statement=${encodeURIComponent(id)}&filename=${encodeURIComponent(file.name)}`)
+      // Async ingestion (owner call): capture to the Inbox and draft in the
+      // background — never block the user on a statement.
+      await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text })
+      setOverlay({ kind: 'captured', filename: file.name })
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
+      errorTimerRef.current = setTimeout(() => setOverlay({ kind: 'idle' }), ERROR_DISMISS_MS)
+      router.refresh()
     } catch (e) {
       if (e instanceof StatementExtractError) {
         if (e.detail.kind === 'need_password' || e.detail.kind === 'wrong_password') {
@@ -176,7 +182,7 @@ export function GlobalCapture() {
               Drop a statement PDF to capture it
             </p>
             <p className="text-xs text-muted-foreground">
-              We'll extract it and open the Journal chat
+              We’ll draft it in the background — review from the Inbox
             </p>
           </>
         ) : overlay.kind === 'processing' ? (
@@ -184,6 +190,16 @@ export function GlobalCapture() {
             <Loader2 className="size-8 animate-spin text-foreground" />
             <p className="text-[15px] font-semibold text-foreground">
               Reading {overlay.filename}…
+            </p>
+          </>
+        ) : overlay.kind === 'captured' ? (
+          <>
+            <FileText className="size-8 text-foreground" />
+            <p className="text-[15px] font-semibold text-foreground">
+              {overlay.filename} captured
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Drafting in the background — it’ll appear in your Inbox
             </p>
           </>
         ) : overlay.kind === 'error' ? (

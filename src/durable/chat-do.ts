@@ -266,6 +266,66 @@ ${opts.text}`,
     return { entries: recorded, note: result.text.trim() }
   }
 
+  // Async ingestion (owner call): draft a captured statement in the
+  // background — same brain as the live statement agent (system prompt,
+  // model, card_guide, strict batch validation), recording tool instead of
+  // the suspending client tool. Proposed entries land on the capture row;
+  // the Inbox offers review. Fired via waitUntil from the upload route and
+  // the email worker — never blocks the user.
+  async draftStatementAsync(statementId: string): Promise<{ ok: boolean; entries: number }> {
+    const ledger = this.ledgerStub()
+    const t0 = Date.now()
+    try {
+      const stmt = await ledger.get_statement(statementId)
+      if (!stmt) return { ok: false, entries: 0 }
+      const capture = (await ledger.list_captures()).rows.find((r) => r.id === statementId)
+      const snapshot = await ledger.ledger_snapshot()
+      const recorded: string[] = []
+      const draft_transaction = tool({
+        description:
+          'Propose one or more beancount transactions for this statement (recorded for Inbox review, not committed).',
+        inputSchema: draftTransactionBatchSchema,
+        execute: async ({ transactions }) => {
+          recorded.push(...transactions)
+          return { ok: true, recorded: transactions.length }
+        },
+      })
+      const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
+      const result = await generateText({
+        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+        system: buildStatementAgentSystem(snapshot),
+        prompt: `${capture?.prompt?.trim() || 'Process this statement into journal entries.'}
+
+--- statement: ${stmt.filename} ---
+${stmt.text}`,
+        tools: { card_guide: cardGuideTool(kbHttp), draft_transaction },
+        stopWhen: stepCountIs(8),
+        experimental_repairToolCall: draftTransactionRepair,
+      })
+      if (recorded.length > 0) await ledger.set_capture_drafts(statementId, recorded)
+      this.logTool({
+        agent: 'async-ingest',
+        tool: 'draft_statement',
+        input: { statement_id: statementId, filename: stmt.filename },
+        output: { entries: recorded.length, note: result.text.trim().slice(0, 300) },
+        ok: recorded.length > 0,
+        ms: Date.now() - t0,
+      })
+      return { ok: recorded.length > 0, entries: recorded.length }
+    } catch (e) {
+      this.logTool({
+        agent: 'async-ingest',
+        tool: 'draft_statement',
+        input: { statement_id: statementId },
+        output: null,
+        ok: false,
+        error: String(e),
+        ms: Date.now() - t0,
+      })
+      return { ok: false, entries: 0 }
+    }
+  }
+
   private ledgerStub(): DurableObjectStub<LedgerDO> {
     const ns = this.env.LEDGER_DO as unknown as DurableObjectNamespace<LedgerDO>
     return ns.get(ns.idFromName(this.name))
