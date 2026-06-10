@@ -33,11 +33,12 @@ import {
   makeKbTools,
   querySqlTool,
   resolveByBeancountName,
+  resolveByTicker,
   camelSpace,
   showAwardOptionsTool,
 } from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
-import { kgLookupParts } from '@/lib/ledger-core/account-display'
+import { baseAccount, isPending, kgLookupParts } from '@/lib/ledger-core/account-display'
 
 // The chat/agent runtime for the `/concierge` surface. Read-only Q&A — over
 // the user's ledger (`analyst`) and the milesvault knowledge graph
@@ -231,76 +232,71 @@ export class ConciergeDO
   // the same verification matchAccount/applyHoldings use). Accounts the KG
   // doesn't know stay unset; the UI falls back to path-derived labels.
   // RPC for /api/concierge/account-names.
-  async accountNames(): Promise<{
-    names: Record<string, string>
-    // KG-derived programme kind per points/status account: a currency earned
-    // by a cc/ is a card programme; one denominated by a program/ with
-    // BOOKS_ON/OWN_METAL edges is an airline FFP; a program/ without airline
-    // edges is a hotel/other programme. (Hotel links are prose-only in the
-    // corpus, so 'program' is the honest bucket.)
-    kinds: Record<string, 'card' | 'airline' | 'program'>
-  }> {
-    const snapshot = await this.ledgerStub()
-      .ledger_snapshot()
-      .catch((): null => null)
-    const accounts = (snapshot?.accounts ?? []) as ReadonlyArray<{ account: string }>
+  // KG display names for held accounts. Currencies match by COMMODITY
+  // ticker (the registry key — exact), falling back to beancountName text
+  // resolution for accounts without a known commodity; cards match by
+  // issuer+product name verified on beancountName. RPC for
+  // /api/concierge/account-names.
+  async accountNames(): Promise<{ names: Record<string, string> }> {
+    const ledger = this.ledgerStub()
+    const [snapshot, balances] = await Promise.all([
+      ledger.ledger_snapshot().catch((): null => null),
+      ledger
+        .query_sql('SELECT account, currency FROM balance_totals')
+        .catch((): null => null),
+    ])
+    const accounts = (snapshot?.accounts ?? []) as ReadonlyArray<{
+      account: string
+      currencies?: string[]
+    }>
+    const balRows = (balances?.rows ?? []) as Array<{ account: string; currency: string }>
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const names: Record<string, string> = {}
-    const kinds: Record<string, 'card' | 'airline' | 'program'> = {}
-    type RelItems = { items?: Array<{ edge_type: string; other: string }> }
 
-    const classifyCurrency = async (slug: string): Promise<'card' | 'airline' | 'program' | null> => {
-      try {
-        const rel = (await kbHttp.related(slug, {
-          edge_type: 'DENOMINATED_IN',
-          direction: 'incoming',
-        })) as RelItems
-        const others = (rel.items ?? []).map((i) => i.other)
-        const program = others.find((o) => o.startsWith('program/'))
-        if (program) {
-          const pr = (await kbHttp.related(program, { direction: 'outgoing' })) as RelItems
-          const airline = (pr.items ?? []).some(
-            (i) => i.edge_type === 'BOOKS_ON' || i.edge_type === 'OWN_METAL',
-          )
-          return airline ? 'airline' : 'program'
-        }
-        if (others.some((o) => o.startsWith('cc/'))) return 'card'
-      } catch {
-        /* unclassified */
-      }
-      return null
+    // account → candidate commodities (open-directive constraints + balances)
+    const commoditiesOf = (account: string): string[] => {
+      const out = new Set<string>()
+      for (const a of accounts) if (a.account === account) for (const c of a.currencies ?? []) out.add(c)
+      for (const b of balRows) if (b.account === account) out.add(b.currency)
+      return [...out]
     }
 
     await Promise.all(
       accounts.map(async ({ account }) => {
+        if (isPending(account)) return // folds into its parent everywhere
         const parts = kgLookupParts(account)
         if (!parts) return
-        const hit =
-          parts.kind === 'currency'
-            ? await resolveByBeancountName(
-                kbHttp,
-                [camelSpace(parts.leaf), parts.leaf],
-                'currency',
-                parts.leaf,
-              )
-            : await resolveByBeancountName(
-                kbHttp,
-                [
-                  `${parts.issuer} ${camelSpace(parts.product)}`,
-                  camelSpace(parts.product),
-                  `${parts.issuer} ${parts.product}`,
-                ],
-                'cc',
-                parts.product,
-              )
-        if (hit?.display_name) names[account] = hit.display_name
-        if (parts.kind === 'currency' && hit) {
-          const kind = await classifyCurrency(hit.slug)
-          if (kind) kinds[account] = kind
+        if (parts.kind === 'currency') {
+          for (const ticker of commoditiesOf(account)) {
+            const byTicker = await resolveByTicker(kbHttp, ticker)
+            if (byTicker?.display_name) {
+              names[account] = byTicker.display_name
+              return
+            }
+          }
+          const hit = await resolveByBeancountName(
+            kbHttp,
+            [camelSpace(parts.leaf), parts.leaf],
+            'currency',
+            parts.leaf,
+          )
+          if (hit?.display_name) names[account] = hit.display_name
+          return
         }
+        const hit = await resolveByBeancountName(
+          kbHttp,
+          [
+            `${parts.issuer} ${camelSpace(parts.product)}`,
+            camelSpace(parts.product),
+            `${parts.issuer} ${parts.product}`,
+          ],
+          'cc',
+          parts.product,
+        )
+        if (hit?.display_name) names[account] = hit.display_name
       }),
     )
-    return { names, kinds }
+    return { names }
   }
 
   // Card → rewards linkage for the per-account page (owner ask): each held
@@ -402,6 +398,7 @@ export class ConciergeDO
             // Dangling DENOMINATED_IN targets exist in the corpus — a missing
             // node still yields a name-only banner from the slug.
             const node = (await kbHttp.get(slug).catch((): null => null)) as CurrencyNode | null
+            const ticker = node?.attrs?.ticker
             const bn = node?.attrs?.beancountName
             const name =
               node?.display_name ??
@@ -410,22 +407,44 @@ export class ConciergeDO
                 .split('-')
                 .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
                 .join(' ')
-            if (typeof bn !== 'string' || !bn) {
+            // Primary match: the user's account holding this COMMODITY
+            // (ticker registry). Fallback: path-leaf === beancountName hint.
+            const byTicker =
+              typeof ticker === 'string' && ticker
+                ? (accounts.find(
+                    (a) =>
+                      a.account.startsWith('Assets:Rewards:') &&
+                      !isPending(a.account) &&
+                      ((a as { currencies?: string[] }).currencies ?? []).includes(ticker),
+                  )?.account ??
+                  balRows.find(
+                    (b) =>
+                      b.account.startsWith('Assets:Rewards:') &&
+                      !isPending(b.account) &&
+                      b.currency === ticker,
+                  )?.account ??
+                  null)
+                : null
+            const byLeaf =
+              typeof bn === 'string' && bn
+                ? (accounts.find(
+                    (a) =>
+                      a.account.startsWith('Assets:Rewards:') &&
+                      !isPending(a.account) &&
+                      baseAccount(a.account).split(':').pop() === bn,
+                  )?.account ?? null)
+                : null
+            const rewardsAccount = (byTicker ? baseAccount(byTicker) : null) ?? byLeaf
+            if (!rewardsAccount) {
               links.push({
                 card: account,
                 rewards_account: null,
                 rewards_name: name,
-                rewards_currency: null,
+                rewards_currency: typeof ticker === 'string' ? ticker : null,
                 rewards_balance: null,
               })
               break
             }
-            const rewardsAccount =
-              accounts.find(
-                (a) =>
-                  a.account.startsWith('Assets:Rewards:') &&
-                  a.account.split(':').pop() === bn,
-              )?.account ?? null
             let balance: number | null = null
             let currency: string | null = null
             if (rewardsAccount) {
@@ -440,7 +459,7 @@ export class ConciergeDO
             links.push({
               card: account,
               rewards_account: rewardsAccount,
-              rewards_name: name ?? bn,
+              rewards_name: name,
               rewards_currency: currency,
               rewards_balance: balance,
             })

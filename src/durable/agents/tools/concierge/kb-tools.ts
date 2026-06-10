@@ -274,6 +274,35 @@ export async function resolveByBeancountName(
   return null
 }
 
+// Resolve a Beancount commodity ticker to its currency node — exact, via the
+// ticker registry (every currency carries attrs.ticker + a ticker alias).
+export async function resolveByTicker(
+  kb: KbHttp,
+  ticker: string,
+): Promise<{ slug: string; display_name: string | null; attrs: Record<string, unknown> | null } | null> {
+  try {
+    const r = (await kb.resolve(ticker, { prefix: 'currency', limit: 4 })) as {
+      items?: Array<{ slug: string }>
+    }
+    for (const item of r.items ?? []) {
+      try {
+        const node = (await kb.get(item.slug)) as {
+          display_name?: string | null
+          attrs?: Record<string, unknown> | null
+        } | null
+        if (node?.attrs?.ticker === ticker) {
+          return { slug: item.slug, display_name: node.display_name ?? null, attrs: node.attrs ?? null }
+        }
+      } catch {
+        /* next candidate */
+      }
+    }
+  } catch {
+    /* resolve failed */
+  }
+  return null
+}
+
 export function kbHttpOverFetch(
   baseUrl: string,
   fetcher: FetchLike = DEFAULT_FETCHER,

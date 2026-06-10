@@ -32,6 +32,9 @@ export type PathNode = {
   // edge from a fiat currency, so the multiplier here is a CASH price (source
   // currency's minor units per 1 target point), not a points ratio.
   fiat?: boolean
+  // The Beancount commodity (KG ticker registry) — the identity used to match
+  // the user's holdings.
+  ticker?: string | null
   // Set by the "my accounts" step: this card/currency matches an account the
   // user already holds in their ledger (matched via beancountName). Fiat nodes
   // are always held — the user can always pay cash.
@@ -64,6 +67,10 @@ type Node = { slug: string; display_name: string | null; attrs?: Record<string, 
 
 const beancount = (n: Node | null): string | null => {
   const v = n?.attrs?.beancountName
+  return typeof v === 'string' ? v : null
+}
+const tickerOf = (n: Node | null): string | null => {
+  const v = n?.attrs?.ticker
   return typeof v === 'string' ? v : null
 }
 const isFiat = (n: Node | null): boolean => n?.attrs?.fiat === true
@@ -182,6 +189,7 @@ export async function buildPointsPaths(
     kind: 'target',
     display: nameOf(target),
     beancountName: beancount(fetched.get(target) ?? null),
+    ticker: tickerOf(fetched.get(target) ?? null),
     multiplier: 1,
     hops: 0,
   })
@@ -195,6 +203,7 @@ export async function buildPointsPaths(
       kind: 'currency',
       display: nameOf(c),
       beancountName: beancount(node),
+      ticker: tickerOf(node),
       multiplier: cell?.multiplier,
       hops: cell?.hops,
       path: cell?.path,
@@ -252,7 +261,7 @@ function matchAccount(node: PathNode, account: string): boolean {
     if (node.issuer && parts[2] !== node.issuer) return false
     return parts[3] === node.beancountName
   }
-  // target / currency: a points (or status) leaf under Assets:Rewards
+  // target / currency fallback: a rewards leaf matching the beancountName hint
   return parts[0] === 'Assets' && parts[1] === 'Rewards' && leafOf(account) === node.beancountName
 }
 
@@ -261,12 +270,25 @@ export function applyHoldings(
   accounts: ReadonlyArray<{ account: string }>,
   balances: ReadonlyArray<BalanceRow>,
 ): void {
+  const pending = (account: string) => account.endsWith(':Pending')
   for (const node of result.nodes) {
     if (node.fiat) continue // fiat is conceptually held; never a ledger balance
-    if (!node.beancountName) continue
-    const held = accounts.some((a) => matchAccount(node, a.account))
-    const rows = balances.filter((b) => matchAccount(node, b.account))
-    if (!held && rows.length === 0) continue
+    // Primary: COMMODITY identity — any rewards balance row in this node's
+    // ticker (spendable only: :Pending excluded). Fallback: beancountName leaf.
+    const tickerRows = node.ticker
+      ? balances.filter(
+          (b) =>
+            b.account.startsWith('Assets:Rewards:') && !pending(b.account) && b.currency === node.ticker,
+        )
+      : []
+    const leafHeld = node.beancountName
+      ? accounts.some((a) => !pending(a.account) && matchAccount(node, a.account))
+      : false
+    const leafRows = node.beancountName
+      ? balances.filter((b) => !pending(b.account) && matchAccount(node, b.account))
+      : []
+    const rows = tickerRows.length ? tickerRows : leafRows
+    if (!rows.length && !leafHeld) continue
     node.held = true
     if (rows.length) {
       node.balance = rows.reduce((sum, r) => sum + Number(r.balance_scaled) / 10 ** r.scale, 0)

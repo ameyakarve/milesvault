@@ -63,7 +63,9 @@ export const TAXONOMY: ReadonlyArray<TaxonomyNode> = [
         label: 'Rewards',
         kind: 'Assets',
         children: [
+          { prefix: 'Assets:Rewards:Miles', label: 'Airline miles', kind: 'Assets' },
           { prefix: 'Assets:Rewards:Points', label: 'Points', kind: 'Assets' },
+          { prefix: 'Assets:Rewards:Cards', label: 'Card rewards', kind: 'Assets' },
           { prefix: 'Assets:Rewards:Status', label: 'Status', kind: 'Assets' },
         ],
       },

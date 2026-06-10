@@ -42,10 +42,15 @@ transaction, resolve each piece by name and read `attrs.beancountName` from
 - `<Card>` → `kb_resolve(<card name>, prefix='cc')` → `kb_get(slug)` →
   `attrs.beancountName` (e.g. "Magnus Burgundy" → `MagnusBurgundy`), giving
   `Liabilities:CreditCards:Axis:MagnusBurgundy`.
-- Reward points leaf → `kb_resolve(<currency name>, prefix='currency')` →
-  `kb_get(slug)` → `attrs.beancountName`, used as
-  `Assets:Rewards:Points:<beancountName>` (e.g. `…:Points:Avios`). A
-  `beancountName` of `DummyRewards` means a non-transferable catalogue-only pool.
+- Reward currency → `kb_resolve(<currency name or ticker>, prefix='currency')`
+  → `kb_get(slug)`. Two attrs matter: `ticker` is the Beancount COMMODITY
+  (always use it for the point amounts — `HDFC-RP`, `AXIS-EDGE`, `MR`,
+  `KRISFLYER`), and `beancountName` is the account leaf. The account path
+  depends on the programme's kind:
+  - airline FFP → `Assets:Rewards:Miles:<beancountName>`
+  - hotel / other programme → `Assets:Rewards:Points:<beancountName>`
+  - bank/card pool → `Assets:Rewards:Cards:<bank.beancountName>:<beancountName>`
+  Below, `<RewardsAcct>` stands for that full programme account.
 
 Prefer an account that already exists in the user's ledger if it clearly matches;
 otherwise use these canonical KG names. Only fall back to a best-guess segment
@@ -54,14 +59,13 @@ when the KG has no match for the card/programme.
 - Credit cards: `Liabilities:CreditCards:<Issuer>:<Card>[:<Id>]`
   — e.g. `Liabilities:CreditCards:<Issuer>:<Card>` or
   `Liabilities:CreditCards:<Issuer>:<Card>:<Id>`.
-- Accrued-but-not-posted rewards (cash *or* points the issuer owes you,
-  not yet on a statement / not yet in your point balance):
-  `Assets:Receivable:<Issuer>` — singular `Receivable`, then the issuer
-  (NOT the card name, NOT `Cashback`, NOT plural). Use this for earned
-  cashback awaiting a statement credit AND for points/miles earned on a
-  purchase that haven't posted yet.
-- Posted points / miles balance (the issuer has already credited them
-  to your account; you can redeem them today): `Assets:Rewards:<Issuer>`.
+- Earned-but-not-credited POINTS/MILES (purchase points before statement
+  close, flight miles before the airline posts): the programme account's
+  `:Pending` child — `<RewardsAcct>:Pending`, same point currency. NOT
+  `Assets:Receivable` (that is for CASH owed: cashback awaiting a
+  statement credit stays `Assets:Receivable:<Issuer>` in INR).
+- Posted points / miles balance (credited; redeemable today):
+  `<RewardsAcct>` itself.
 - Prepaid cards (food wallets, forex cards, store wallets — anything
   you've already loaded with money): `Assets:Prepaid:<Issuer>:<Card>` —
   e.g. `Assets:Prepaid:Sodexo:Meal`, `Assets:Prepaid:HDFC:Forex:Multi`.
@@ -91,11 +95,10 @@ receivable accrues ₹3.70.
 
 **Two-step lifecycle.** Points earned on a purchase are NOT in your
 balance yet — the issuer owes them to you until the next statement
-posts. Earn goes to `Assets:Receivable:<Issuer>`. Only when the issuer
-actually credits the points to your account does the balance move to
-`Assets:Rewards:<Issuer>`. Never write earn-on-purchase straight to
-`Assets:Rewards` — that skips the receivable step the user explicitly
-wants tracked.
+posts. Earn goes to `<RewardsAcct>:Pending`. Only when the issuer
+actually credits the points does the balance move to the parent
+`<RewardsAcct>`. Never write earn-on-purchase straight to the parent —
+that skips the pending step the user explicitly wants tracked.
 
 ### Earn (on a purchase)
 Multi-currency single transaction: purchase legs in INR/USD, points
@@ -106,29 +109,29 @@ points' cash value isn't fixed at earn time.
 2026-05-21 * "Taj" "Dinner — 250 reward points"
   Expenses:Food:Restaurants                  2500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>   -2500.00 INR
-  Assets:Receivable:<Issuer>                      250 RWD_PTS
+  <RewardsAcct>:Pending                           250 RWD_PTS
   Equity:Void                                    -250 RWD_PTS
 ```
 
 Each currency balances on its own. **The point currency MUST sum to
-zero too** — the `Assets:Receivable` leg ALWAYS needs its `Equity:Void`
+zero too** — the `:Pending` leg ALWAYS needs its `Equity:Void`
 contra with the equal-and-opposite amount in the SAME point currency.
 A three-posting variant with only the points leg and no contra is
-rejected by the parser. Replace `RWD_PTS` with the program's actual
-ticker (e.g. `EDGE_PTS`, `RP`, `MR`); never emit `RWD_PTS` literally,
+rejected by the parser. Replace `RWD_PTS` with the KG currency node's
+`ticker` (e.g. `HDFC-RP`, `AXIS-EDGE`, `MR`); never emit `RWD_PTS` literally,
 and never emit angle-bracket currencies like `<EdgeRewards>` —
 Beancount has no such syntax.
 
 ### Landing (issuer posts the points to your balance)
 Pure shuffle between two of your own accounts. No expense, no income,
-no `Equity:Void` — receivable down, rewards up, in the same point
+no `Equity:Void` — pending down, posted up, in the same point
 currency. Use the statement-close date (or whatever date the issuer
 posted them).
 
 ```
 2026-06-01 * "Statement close" "Posted Apr–May reward points"
-  Assets:Rewards:<Issuer>            1850 RWD_PTS
-  Assets:Receivable:<Issuer>        -1850 RWD_PTS
+  <RewardsAcct>                      1850 RWD_PTS
+  <RewardsAcct>:Pending             -1850 RWD_PTS
 ```
 
 ### Computing earn from a stated rate
@@ -459,33 +462,34 @@ rows are two separate refunds, each `−877.82` expense / `+877.82` card.
 Moving points from one program to another at a defined rate — always a
 conversion, so the rate lives in `@@`. The ratio (1:1, 1:1.3, 1:2,
 whatever bonus is running) doesn't change the shape; it just changes
-the two numbers. `<Src>` / `SRC_PTS` is the program you transfer from,
-`<Dest>` / `DST_PTS` the one you transfer to. Replace both names with
-the real programs (e.g. `Axis`/`EDGE_PTS` → `Marriott`/`BONVOY`); never
-emit `SRC_PTS`/`DST_PTS` literally in output.
+the two numbers. `<SrcAcct>` / `SRC_PTS` is the programme account you
+transfer from, `<DestAcct>` / `DST_PTS` the one you transfer to. Replace
+both with the real programme accounts and KG tickers (e.g.
+`Assets:Rewards:Cards:Axis:EdgeRewards`/`AXIS-EDGE` →
+`Assets:Rewards:Points:Marriott`/`MARRIOTTBONVOY`); never emit
+`SRC_PTS`/`DST_PTS` literally in output.
 
 ### Instant landing (points show up in the destination right away)
 ```
 2026-05-27 * "Transfer" "10000 source pts → 13000 dest (30% bonus)"
-  Assets:Rewards:<Dest>     13000 DST_PTS @@ 10000 SRC_PTS
-  Assets:Rewards:<Src>     -10000 SRC_PTS
+  <DestAcct>                13000 DST_PTS @@ 10000 SRC_PTS
+  <SrcAcct>                -10000 SRC_PTS
 ```
 
 ### Pending (transfer initiated but points haven't landed yet)
-Mirror of the cashback-vs-discount split: until the destination program
-posts the points, they're owed by that program — sit them in a
-receivable.
+Until the destination programme posts the points, they sit in the
+destination's `:Pending` child.
 ```
 2026-05-27 * "Transfer" "10000 source pts → 13000 dest (pending)"
-  Assets:Receivable:<Dest>     13000 DST_PTS @@ 10000 SRC_PTS
-  Assets:Rewards:<Src>        -10000 SRC_PTS
+  <DestAcct>:Pending           13000 DST_PTS @@ 10000 SRC_PTS
+  <SrcAcct>        -10000 SRC_PTS
 ```
 
 When the points land, settle the receivable:
 ```
 2026-05-30 * "Transfer credited" "Dest program posted the points"
-  Assets:Rewards:<Dest>        13000 DST_PTS
-  Assets:Receivable:<Dest>    -13000 DST_PTS
+  <DestAcct>        13000 DST_PTS
+  <DestAcct>:Pending    -13000 DST_PTS
 ```
 
 ## Redemptions — always associate a cash value
@@ -510,7 +514,7 @@ the value is already in INR.)
 The statement-credit amount IS the cash value.
 ```
 2026-05-31 * "Statement credit" "Redeem 1000 pts → ₹250 statement credit"
-  Assets:Rewards:<Issuer>                  -1000 RWD_PTS @@ 250.00 INR
+  <RewardsAcct>                  -1000 RWD_PTS @@ 250.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>   250.00 INR
 ```
 
@@ -520,12 +524,12 @@ redemptions (points + card).
 ```
 2026-05-27 * "Amazon" "Headphones — paid 2500 pts"
   Expenses:Shopping:Electronics       500.00 INR
-  Assets:Rewards:<Issuer>            -2500 RWD_PTS @@ 500.00 INR
+  <RewardsAcct>            -2500 RWD_PTS @@ 500.00 INR
 ```
 ```
 2026-05-27 * "Amazon" "Headphones — 2500 pts + ₹500 on card"
   Expenses:Shopping:Electronics            1000.00 INR
-  Assets:Rewards:<Issuer>                  -2500 RWD_PTS @@ 500.00 INR
+  <RewardsAcct>                  -2500 RWD_PTS @@ 500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -500.00 INR
 ```
 
@@ -539,7 +543,7 @@ is ₹100k → miles' cash value is ₹95k (100k − 5k).
 ```
 2026-05-27 * "Airline" "Award DEL-SFO — 75k miles + ₹5k taxes (₹100k cash fare)"
   Expenses:Travel:Flights                  100000.00 INR
-  Assets:Rewards:<Issuer>                   -75000 RWD_PTS @@ 95000.00 INR
+  <RewardsAcct>                   -75000 RWD_PTS @@ 95000.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>    -5000.00 INR
 ```
 
@@ -549,7 +553,7 @@ Resort fee / taxes hit the card.
 ```
 2026-05-27 * "Hotel" "Award night — 40k pts + ₹500 resort fee (₹15k cash rate)"
   Expenses:Travel:Hotels                    15000.00 INR
-  Assets:Rewards:<Issuer>                   -40000 RWD_PTS @@ 14500.00 INR
+  <RewardsAcct>                   -40000 RWD_PTS @@ 14500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>    -500.00 INR
 ```
 
@@ -560,7 +564,7 @@ what it actually paid. Below, ₹6k cash fare, 15k points cover ₹5.5k,
 ```
 2026-05-27 * "Airline" "DEL-BLR — 15k pts + ₹500 fee (₹6k cash fare)"
   Expenses:Travel:Flights                   6000.00 INR
-  Assets:Rewards:<Issuer>                   -15000 RWD_PTS @@ 5500.00 INR
+  <RewardsAcct>                   -15000 RWD_PTS @@ 5500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>   -500.00 INR
 ```
 
@@ -568,28 +572,28 @@ what it actually paid. Below, ₹6k cash fare, 15k points cover ₹5.5k,
 
 Earn / write-off events without a conversion rate. Single-currency,
 contra is `Equity:Void`. Same two-step lifecycle as the Points pattern:
-the **announcement / qualifying event** hits `Assets:Receivable`; the
-**posting** moves it to `Assets:Rewards`. Welcome bonuses, anniversary
+the **announcement / qualifying event** hits `<RewardsAcct>:Pending`; the
+**posting** moves it to the parent. Welcome bonuses, anniversary
 bonuses, referral bonuses, milestone bonuses all follow this — they're
 promised on a date, posted later. Expiry sweeps and clawbacks hit
-`Assets:Rewards` directly (they're removing posted balance), not
-receivable.
+`<RewardsAcct>` directly (they're removing posted balance), not
+pending.
 
 ```
 2026-05-27 * "Welcome bonus" "100k welcome bonus — qualifying spend hit"
-  Assets:Receivable:<Issuer>     100000 RWD_PTS
+  <RewardsAcct>:Pending          100000 RWD_PTS
   Equity:Void                   -100000 RWD_PTS
 ```
 When it posts to the balance:
 ```
 2026-06-15 * "Welcome bonus posted" "100k welcome bonus credited"
-  Assets:Rewards:<Issuer>        100000 RWD_PTS
-  Assets:Receivable:<Issuer>    -100000 RWD_PTS
+  <RewardsAcct>                  100000 RWD_PTS
+  <RewardsAcct>:Pending         -100000 RWD_PTS
 ```
-Expiry sweep (removes already-posted balance — no receivable involved):
+Expiry sweep (removes already-posted balance — no pending involved):
 ```
 2026-12-31 * "Points expiry" "Expired 2024 vintage points"
-  Assets:Rewards:<Issuer>     -3500 RWD_PTS
+  <RewardsAcct>               -3500 RWD_PTS
   Equity:Void                  3500 RWD_PTS
 ```
 
@@ -599,9 +603,9 @@ Shape depends on what the reward actually is. If it's **cash** (lands in
 a bank, a wallet, or as a statement credit), the credit side is
 `Income:Referrals` because realized cash value is changing hands. If
 it's **points / miles**, it's the same two-step lifecycle as the
-Points pattern — accrue to `Assets:Receivable:<Issuer>` with
+Points pattern — accrue to `<RewardsAcct>:Pending` with
 `Equity:Void` contra, then a separate landing entry moves the balance
-to `Assets:Rewards:<Issuer>`.
+to `<RewardsAcct>`.
 
 ### Cash referral credited to bank
 ```
@@ -631,14 +635,14 @@ any other receivable payout.
 ### Points referral (announced)
 ```
 2026-05-27 * "Referral bonus" "15000 pts for referring Aman"
-  Assets:Receivable:<Issuer>     15000 RWD_PTS
+  <RewardsAcct>:Pending          15000 RWD_PTS
   Equity:Void                   -15000 RWD_PTS
 ```
 When the points post to your balance:
 ```
 2026-06-15 * "Referral bonus posted" "15000 pts credited"
-  Assets:Rewards:<Issuer>        15000 RWD_PTS
-  Assets:Receivable:<Issuer>    -15000 RWD_PTS
+  <RewardsAcct>                  15000 RWD_PTS
+  <RewardsAcct>:Pending         -15000 RWD_PTS
 ```
 
 ## Buying points with cash
@@ -649,12 +653,12 @@ into a different asset (points).
 
 ```
 2026-05-27 * "Buy points" "Bought 10000 pts for ₹3000"
-  Assets:Rewards:<Issuer>    10000 RWD_PTS @@ 3000.00 INR
+  <RewardsAcct>    10000 RWD_PTS @@ 3000.00 INR
   Assets:Bank:HDFC:Savings  -3000.00 INR
 ```
 ```
 2026-05-27 * "Buy points" "Bought 10000 pts for ₹3000 on card"
-  Assets:Rewards:<Issuer>                  10000 RWD_PTS @@ 3000.00 INR
+  <RewardsAcct>                  10000 RWD_PTS @@ 3000.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -3000.00 INR
 ```
 
@@ -668,14 +672,14 @@ redemption was booked at.
 ```
 2026-05-27 * "Airline" "Cancelled DEL-SFO — miles + taxes refunded"
   Expenses:Travel:Flights                  -100000.00 INR
-  Assets:Rewards:<Issuer>                    75000 RWD_PTS @@ 95000.00 INR
+  <RewardsAcct>                    75000 RWD_PTS @@ 95000.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>     5000.00 INR
 ```
 
 ### Statement-credit redemption reversed
 ```
 2026-05-27 * "Statement credit" "Statement-credit redemption reversed"
-  Assets:Rewards:<Issuer>                   1000 RWD_PTS @@ 250.00 INR
+  <RewardsAcct>                   1000 RWD_PTS @@ 250.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -250.00 INR
 ```
 
@@ -690,12 +694,12 @@ redemption was booked at.
   hybrid cash-and-points fares.)
 - **Accrual / write-off** — point balance changes without a conversion
   rate: use `Equity:Void` as the point-side contra. (Examples: earning
-  points on a purchase → hits `Assets:Receivable`; welcome bonuses,
+  points on a purchase → hits `<RewardsAcct>:Pending`; welcome bonuses,
   anniversary bonuses, referral bonuses, milestone bonuses → also
-  `Assets:Receivable`; expiry sweeps and clawbacks → `Assets:Rewards`.)
-- **Landing** — issuer posts already-accrued points from receivable
-  into your balance: no `Equity:Void`, no `@@` — just receivable down,
-  `Assets:Rewards` up in the same currency. It's a transfer between
+  `:Pending`; expiry sweeps and clawbacks → `<RewardsAcct>`.)
+- **Landing** — issuer posts already-accrued points from pending
+  into your balance: no `Equity:Void`, no `@@` — just `:Pending` down,
+  `<RewardsAcct>` up in the same currency. It's a transfer between
   two of your own accounts.
 
 ## Balance assertions and pad

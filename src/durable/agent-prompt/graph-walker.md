@@ -57,7 +57,7 @@ kb_get({ slug }):
   { ok: true, slug, source_file, display_name, content_md, attrs?, aliased_from? } | { ok: false, error }
   // attrs.beancountName (on bank / cc / currency nodes) is the canonical
   //   Beancount account segment — bank→issuer, cc→product, currency→the
-  //   Assets:Rewards:Points leaf. Use it for any "what account / how do I log
+  //   Assets:Rewards:{Miles,Points,Cards} account leaf. Use it for any "what account / how do I log
   //   this card" question.
 
 kb_related({ slug, edge_type?, direction?, limit? }):

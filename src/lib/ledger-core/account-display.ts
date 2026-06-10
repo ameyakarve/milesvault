@@ -25,7 +25,9 @@ export function groupLabel(account: string): string {
 // Vault group order — rewards first (the product), then spend instruments,
 // then the balance-sheet rest. Unknown groups sort after, alphabetically.
 const GROUP_ORDER = [
+  'Airline miles',
   'Points',
+  'Card rewards',
   'Status',
   'Credit cards',
   'Bank',
@@ -52,6 +54,15 @@ export function groupRank(label: string): number {
   return i === -1 ? GROUP_ORDER.length : i
 }
 
+// Pending children (docs/accounts-taxonomy.md): earned-but-not-credited
+// balances live in `<programme>:Pending`. Views fold them into the parent.
+export function isPending(account: string): boolean {
+  return account.endsWith(':Pending')
+}
+export function baseAccount(account: string): string {
+  return isPending(account) ? account.slice(0, -':Pending'.length) : account
+}
+
 // Trailing numeric segments are card/account ids per the taxonomy
 // (`Liabilities:CreditCards:<issuer>:<product>[:<id>]`) — shown as a
 // de-emphasized suffix, never as the name.
@@ -76,12 +87,10 @@ export function accountLabel(account: string): { label: string; suffix: string |
     // <root>:<group>:<institution>:<name…> → "Institution · Name"
     return { label: `${parts[2]} · ${parts.slice(3).join(':')}`, suffix }
   }
-  // Rewards with an issuer level (Assets:Rewards:Points:HSBC:RewardPoints):
-  // the bare leaf collides across issuers — qualify it.
-  if (
-    (account.startsWith('Assets:Rewards:Points:') || account.startsWith('Assets:Rewards:Status:')) &&
-    parts.length >= 5
-  ) {
+  // Card reward pools carry an issuer level (Assets:Rewards:Cards:HDFC:RewardPoints)
+  // — the bare leaf collides across issuers, qualify it. Same for any rewards
+  // subtree with an extra level.
+  if (account.startsWith('Assets:Rewards:') && parts.length >= 5) {
     return { label: `${parts[3]} · ${parts.slice(4).join(':')}`, suffix }
   }
   return { label: parts[parts.length - 1] ?? account, suffix }
@@ -99,7 +108,8 @@ export function kgLookupParts(
     return { kind: 'card', issuer: parts[2], product }
   }
   if (account.startsWith('Assets:Rewards:') && parts.length >= 4) {
-    return { kind: 'currency', leaf: parts[parts.length - 1] }
+    const base = baseAccount(account).split(':')
+    return { kind: 'currency', leaf: base[base.length - 1] }
   }
   return null
 }

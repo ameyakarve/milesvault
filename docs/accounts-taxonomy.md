@@ -186,12 +186,48 @@ Validation rules enforced at account creation and transaction posting.
 
 ## Rewards
 
-Two kinds for reward commodities. Both live under `Assets:Rewards:*` and carry non-fiat commodities (airline miles, hotel points, bank points, tier points, elite nights).
+The `Assets:Rewards:*` tree splits by **minting source** (decided 2026-06-10).
+Identity lives in the **commodity ticker** (globally unique, registered as
+`ticker` on the KG's currency nodes); the account path is organization.
 
-| kind | beancount type | path prefix | commodity class | purpose |
-|---|---|---|---|---|
-| `loyalty-points` | Assets | `Assets:Rewards:Points:*` | `points` | redeemable balance (miles, hotel points, bank points) |
-| `status-progress` | Assets | `Assets:Rewards:Status:*` | `status` | tier-qualifying counter (tier points, elite nights) |
+| subtree | holds | example |
+|---|---|---|
+| `Assets:Rewards:Miles:<Programme>` | airline FFP miles | `Assets:Rewards:Miles:KrisFlyer` → `KRISFLYER` |
+| `Assets:Rewards:Points:<Programme>` | hotel + other programme points (rail, car-rental file here too) | `Assets:Rewards:Points:Marriott` → `MARRIOTTBONVOY` |
+| `Assets:Rewards:Cards:<Issuer>:<Pool>` | bank/card reward pools (issuer level avoids leaf collisions) | `Assets:Rewards:Cards:HDFC:RewardPoints` → `HDFC-RP` |
+| `Assets:Rewards:Status:<Programme>` | tier-qualifying counters | `Assets:Rewards:Status:Marriott` → `MAR-NIGHTS` |
+
+### Tickers (commodity = primary key)
+
+- Bank pools are issuer-prefixed: `HDFC-RP`, `AXIS-EDGE`, `SBI-RP`
+  (`MR` grandfathered for Amex). Programme currencies use their entrenched
+  code: `KRISFLYER`, `AVIOS`. The KG's ticker registry is the source of
+  truth; apps match holdings to the graph by commodity, never by path.
+- Pool variants with different values (HDFC Infinia-DCB vs Regalia points)
+  are distinct KG currencies → distinct commodities (`HDFC-RP-INFINIA`) →
+  distinct accounts. When ambiguous, the agent asks which card earned them.
+
+### Pending — immediate vs future credit
+
+Any programme account may have a `:Pending` child (same commodity) holding
+earned-but-not-yet-credited balances — card points before statement close,
+miles before the airline posts them:
+
+```
+2026-06-01 * "SQ423 BLR-SIN" "miles accrue on flying"   #reward-accrual
+  Assets:Rewards:Miles:KrisFlyer:Pending   2400 KRISFLYER
+  Income:Void
+
+2026-07-10 * "KrisFlyer" "miles credited"
+  Assets:Rewards:Miles:KrisFlyer:Pending  -2400 KRISFLYER
+  Assets:Rewards:Miles:KrisFlyer           2400 KRISFLYER
+```
+
+A never-credited accrual is a one-line reversal of the Pending posting.
+Beancount's tree arithmetic gives both views: the parent rolls up to
+total-including-pending, the split shows what's actually spendable.
+Spendable reads (award affordability, transfer planning) exclude
+`:Pending`; instant-credit programmes simply never use the child.
 
 ### Out of scope (v1)
 - Lounge visit counters, insurance/concierge perks — not tracked as commodities.
@@ -239,7 +275,7 @@ Points earned alongside a spend:
 2026-04-16 * "BA" "LHR-BOM flight" #reward-accrual
   Liabilities:CreditCards:HDFC:Infinia  -50000.00 INR
   Expenses:Travel:Flights                50000.00 INR
-  Assets:Rewards:Points:Avios              500.00 AVIOS
+  Assets:Rewards:Miles:Avios              500.00 AVIOS
   Income:Void                             -500.00 AVIOS
 ```
 
@@ -257,8 +293,8 @@ Status earned from a stay:
 SmartBuy → Avios at 1:1.5:
 ```beancount
 2026-04-20 * "HDFC SmartBuy" "transfer to Avios"
-  Assets:Rewards:Points:SmartBuy     -10000.00 SMARTBUY
-  Assets:Rewards:Points:Avios         15000.00 AVIOS @@ 10000.00 SMARTBUY
+  Assets:Rewards:Cards:HDFC:SmartBuy     -10000.00 SMARTBUY
+  Assets:Rewards:Miles:Avios         15000.00 AVIOS @@ 10000.00 SMARTBUY
 ```
 
 ### Redemption — flows to real expense, no sink
@@ -266,7 +302,7 @@ SmartBuy → Avios at 1:1.5:
 Award flight (points + cash for taxes):
 ```beancount
 2026-06-01 * "BA" "award flight"
-  Assets:Rewards:Points:Avios           -20000.00 AVIOS
+  Assets:Rewards:Miles:Avios           -20000.00 AVIOS
   Liabilities:CreditCards:HDFC:Infinia   -2500.00 INR
   Expenses:Travel:Flights                20000.00 AVIOS
   Expenses:Travel:Flights                 2500.00 INR
@@ -275,7 +311,7 @@ Award flight (points + cash for taxes):
 Card-locked redemption into a voucher:
 ```beancount
 2026-05-10 * "SBI Rewards" "Amazon voucher"
-  Assets:Rewards:Points:SBI         -4000.00 SBI-RP
+  Assets:Rewards:Cards:SBI:RewardPoints         -4000.00 SBI-RP
   Assets:Loaded:GiftCards:Amazon     1000.00 INR @@ 4000.00 SBI-RP
 ```
 
@@ -284,7 +320,7 @@ Card-locked redemption into a voucher:
 Points expire unused:
 ```beancount
 2026-12-31 * "Avios" "annual expiry" #reward-expiry
-  Assets:Rewards:Points:Avios  -2000.00 AVIOS
+  Assets:Rewards:Miles:Avios  -2000.00 AVIOS
   Expenses:Void                 2000.00 AVIOS
 ```
 

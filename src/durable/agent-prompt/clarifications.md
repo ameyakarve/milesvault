@@ -26,7 +26,7 @@ deferred), ask which. Call `clarify` with these arguments:
 If the user didn't say whether the transfer landed instantly in the
 destination program or is still pending, ask. Chips like "Landed
 instantly" / "Still pending" are enough — the two shapes are different
-(`Assets:Rewards:<dest>` vs `Assets:Receivable:<dest>`).
+(posted `<RewardsAcct>` vs `<RewardsAcct>:Pending`).
 
 ## Redemption cash value
 

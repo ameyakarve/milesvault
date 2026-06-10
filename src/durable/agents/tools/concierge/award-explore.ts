@@ -3,7 +3,7 @@ import type { KbHttp } from './kb-tools'
 import { computeAwardOptions } from './award-options'
 import { buildAwardPlan, type AwardPlanRow } from './award-plan'
 import { transferGraph, type TransferCell } from './transfer-graph'
-import { camelSpace, resolveByBeancountName } from './kb-tools'
+import { resolveByTicker } from './kb-tools'
 import type { BalanceRow } from './points-paths'
 
 // The data layer for the fluid award EXPLORER page. Primary inputs are the city
@@ -67,43 +67,31 @@ export type AwardExploreResult = {
 
 // ---- Holdings overlay (no-source branch) ------------------------------------
 //
-// Map ledger balance rows (Assets:Rewards:…:<leaf>) to currency slugs by
-// checking the KB node's attrs.beancountName. Users typically hold very few
-// loyalty currencies (< 20) so we resolve each leaf individually rather than
-// paging the entire currency list.
+// The commodity IS the identity (ticker registry): sum spendable balances
+// per commodity under Assets:Rewards — excluding :Pending children, which
+// are earned-but-not-credited — and resolve each ticker to its KG node.
 
 type HeldBalance = { slug: string; balance: number }
 
 async function buildHeldBalances(
   kb: KbHttp,
-  accounts: ReadonlyArray<{ account: string }>,
+  _accounts: ReadonlyArray<{ account: string }>,
   balances: ReadonlyArray<BalanceRow>,
 ): Promise<HeldBalance[]> {
-  // Collect leaves of accounts under Assets:Rewards that carry a balance.
-  const leafBalances = new Map<string, number>() // leaf → summed balance
+  const byTicker = new Map<string, number>()
   for (const b of balances) {
-    const parts = b.account.split(':')
-    if (parts[0] !== 'Assets' || parts[1] !== 'Rewards') continue
+    if (!b.account.startsWith('Assets:Rewards:')) continue
+    if (b.account.endsWith(':Pending')) continue // not spendable yet
     if (b.balance_scaled === 0) continue
-    const leaf = parts[parts.length - 1]
     const val = Number(b.balance_scaled) / 10 ** b.scale
-    leafBalances.set(leaf, (leafBalances.get(leaf) ?? 0) + val)
+    byTicker.set(b.currency, (byTicker.get(b.currency) ?? 0) + val)
   }
-  // Also include accounts in snapshot that have no balance rows (balance 0).
-  for (const a of accounts) {
-    const parts = a.account.split(':')
-    if (parts[0] !== 'Assets' || parts[1] !== 'Rewards') continue
-    const leaf = parts[parts.length - 1]
-    if (!leafBalances.has(leaf)) leafBalances.set(leaf, 0)
-  }
-  if (leafBalances.size === 0) return []
+  if (byTicker.size === 0) return []
 
-  // Resolve each leaf to a currency slug via KB (verified on beancountName —
-  // resolve() items carry no attrs, so candidates are confirmed via get()).
   const results: HeldBalance[] = []
   await Promise.all(
-    [...leafBalances.entries()].map(async ([leaf, balance]) => {
-      const match = await resolveByBeancountName(kb, [camelSpace(leaf), leaf], 'currency', leaf)
+    [...byTicker.entries()].map(async ([ticker, balance]) => {
+      const match = await resolveByTicker(kb, ticker)
       if (match) results.push({ slug: match.slug, balance })
     }),
   )

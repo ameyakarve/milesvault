@@ -5,18 +5,27 @@ import Link from 'next/link'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
 import type { VaultStats } from '@/durable/ledger-do'
 import {
+  baseAccount,
   currencyRedundant,
   displayName,
   groupLabel,
   groupRank,
   isHolding,
+  isPending,
 } from '@/lib/ledger-core/account-display'
 import { SectionLabel, StatTile, CenteredState, Monogram } from '@/components/shared'
 
 // KG display names (cards, points) fetched once and overlaid on the
 // path-derived labels — account path → display name.
 type Names = Record<string, string>
-type Kinds = Record<string, 'card' | 'airline' | 'program'>
+
+// A programme with its :Pending child folded in (docs/accounts-taxonomy.md).
+type Holding = {
+  account: string
+  currency: string
+  posted: number
+  pending: number
+}
 
 function formatBalance(balanceScaled: string, scale: number): string {
   const val = Number(balanceScaled) / Math.pow(10, scale)
@@ -44,7 +53,6 @@ export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
   const [names, setNames] = useState<Names>({})
-  const [kinds, setKinds] = useState<Kinds>({})
   const [stats, setStats] = useState<VaultStats | null>(null)
 
   useEffect(() => {
@@ -61,12 +69,8 @@ export function VaultView() {
   useEffect(() => {
     let cancelled = false
     fetch('/api/concierge/account-names')
-      .then((r) => (r.ok ? (r.json() as Promise<{ names?: Names; kinds?: Kinds }>) : null))
-      .then((d) => {
-        if (cancelled || !d) return
-        if (d.names) setNames(d.names)
-        if (d.kinds) setKinds(d.kinds)
-      })
+      .then((r) => (r.ok ? (r.json() as Promise<{ names?: Names }>) : null))
+      .then((d) => !cancelled && d?.names && setNames(d.names))
       .catch(() => {})
     return () => {
       cancelled = true
@@ -134,18 +138,20 @@ export function VaultView() {
     )
   }
 
-  // ── hierarchy: points are the product (hero cards), credit cards second
-  // (medium cards), everything else compact lists grouped by taxonomy.
-  const pointRows = rows
-    .filter((r) => r.account.startsWith('Assets:Rewards:Points:'))
-    .sort((a, b) => balanceOf(b) - balanceOf(a))
+  // ── hierarchy: rewards are the product (hero cards, clustered by the
+  // taxonomy's minting-source subtrees), credit cards second, everything
+  // else compact. :Pending children fold into their programme.
+  const isRewardish = (a: string) =>
+    a.startsWith('Assets:Rewards:Miles:') ||
+    a.startsWith('Assets:Rewards:Points:') ||
+    a.startsWith('Assets:Rewards:Cards:')
+  const rewardRows = rows.filter((r) => isRewardish(r.account))
+  const holdings = foldPending(rewardRows)
   const cardRows = rows
     .filter((r) => r.account.startsWith('Liabilities:CreditCards:'))
     .sort((a, b) => a.account.localeCompare(b.account))
   const restRows = rows.filter(
-    (r) =>
-      !r.account.startsWith('Assets:Rewards:Points:') &&
-      !r.account.startsWith('Liabilities:CreditCards:'),
+    (r) => !isRewardish(r.account) && !r.account.startsWith('Liabilities:CreditCards:'),
   )
   const grouped = new Map<string, AccountSummaryRow[]>()
   for (const r of restRows) {
@@ -176,10 +182,8 @@ export function VaultView() {
       {/* ── headline strip: numbers that mean something ───────────────────── */}
       {stats ? <HeadlineStrip stats={stats} /> : null}
 
-      {/* ── points: the hero, grouped by what the graph says they are ─────── */}
-      {pointRows.length > 0 ? (
-        <PointsSections rows={pointRows} names={names} kinds={kinds} />
-      ) : null}
+      {/* ── rewards: the hero, clustered by minting source ────────────────── */}
+      {holdings.length > 0 ? <RewardsSections holdings={holdings} names={names} /> : null}
 
       {/* ── credit cards ──────────────────────────────────────────────────── */}
       {cardRows.length > 0 ? (
@@ -221,31 +225,6 @@ function accountHref(r: AccountSummaryRow): string {
 }
 
 // Hero card: one loyalty programme — monogram, resolved name, big balance.
-function ProgrammeCard({ row, names }: { row: AccountSummaryRow; names: Names }) {
-  const { name } = displayName(row.account, names)
-  return (
-    <Link
-      href={accountHref(row)}
-      className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/25"
-    >
-      <div className="flex items-center gap-3">
-        <Monogram name={name} size="lg" />
-        <span className="truncate text-sm font-medium text-foreground">{name}</span>
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="font-mono text-3xl font-semibold leading-none text-foreground">
-          {formatBalance(row.balance_scaled, row.scale)}
-        </span>
-        {!currencyRedundant(name, row.currency) ? (
-          <span className="font-mono text-xs text-muted-foreground">{row.currency}</span>
-        ) : (
-          <span className="font-mono text-xs text-muted-foreground">pts</span>
-        )}
-      </div>
-    </Link>
-  )
-}
-
 // Medium card: a credit card — monogram, issuer-qualified name, balance owed.
 function CreditCardCard({ row, names }: { row: AccountSummaryRow; names: Names }) {
   const { name, suffix } = displayName(row.account, names)
@@ -395,56 +374,42 @@ function SpendingBreakdown({ stats }: { stats: VaultStats }) {
   )
 }
 
-// KG-derived clusters: FFPs first (the product's heart), then hotel/other
-// programmes, then bank/card pools, then anything the graph can't place.
-const POINT_GROUPS: Array<{ key: 'airline' | 'program' | 'card' | 'other'; label: string }> = [
-  { key: 'airline', label: 'Airline programmes' },
-  { key: 'program', label: 'Hotel & other programmes' },
-  { key: 'card', label: 'Card programmes' },
-  { key: 'other', label: 'Other points' },
+// Structural clusters straight off the account paths (the taxonomy's
+// minting-source subtrees) — no KG round-trip needed.
+const REWARD_CLUSTERS: Array<{ prefix: string; label: string }> = [
+  { prefix: 'Assets:Rewards:Miles:', label: 'Airline programmes' },
+  { prefix: 'Assets:Rewards:Points:', label: 'Hotel & other programmes' },
+  { prefix: 'Assets:Rewards:Cards:', label: 'Card programmes' },
 ]
 
-function PointsSections({
-  rows,
-  names,
-  kinds,
-}: {
-  rows: AccountSummaryRow[]
-  names: Names
-  kinds: Kinds
-}) {
-  const buckets = new Map<string, AccountSummaryRow[]>()
+// Fold :Pending children into their programme: one Holding per
+// (programme account, commodity) with posted and pending split out.
+function foldPending(rows: AccountSummaryRow[]): Holding[] {
+  const map = new Map<string, Holding>()
   for (const r of rows) {
-    const k = kinds[r.account] ?? 'other'
-    const bucket = buckets.get(k) ?? []
-    bucket.push(r)
-    buckets.set(k, bucket)
+    const base = baseAccount(r.account)
+    const key = `${base}|${r.currency}`
+    const h = map.get(key) ?? { account: base, currency: r.currency, posted: 0, pending: 0 }
+    const val = Number(r.balance_scaled) / 10 ** r.scale
+    if (isPending(r.account)) h.pending += val
+    else h.posted += val
+    map.set(key, h)
   }
-  // With no classification at all (KG unreachable), keep the single section.
-  const classified = rows.some((r) => kinds[r.account])
-  if (!classified) {
-    return (
-      <section className="space-y-3">
-        <SectionLabel>Points</SectionLabel>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map((r) => (
-            <ProgrammeCard key={`${r.account}|${r.currency}`} row={r} names={names} />
-          ))}
-        </div>
-      </section>
-    )
-  }
+  return [...map.values()].sort((a, b) => b.posted + b.pending - (a.posted + a.pending))
+}
+
+function RewardsSections({ holdings, names }: { holdings: Holding[]; names: Names }) {
   return (
     <>
-      {POINT_GROUPS.map(({ key, label }) => {
-        const groupRows = buckets.get(key)
-        if (!groupRows || groupRows.length === 0) return null
+      {REWARD_CLUSTERS.map(({ prefix, label }) => {
+        const cluster = holdings.filter((h) => h.account.startsWith(prefix))
+        if (cluster.length === 0) return null
         return (
-          <section key={key} className="space-y-3">
+          <section key={prefix} className="space-y-3">
             <SectionLabel>{label}</SectionLabel>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {groupRows.map((r) => (
-                <ProgrammeCard key={`${r.account}|${r.currency}`} row={r} names={names} />
+              {cluster.map((h) => (
+                <ProgrammeCard key={`${h.account}|${h.currency}`} holding={h} names={names} />
               ))}
             </div>
           </section>
@@ -453,3 +418,35 @@ function PointsSections({
     </>
   )
 }
+
+// Hero card: one programme — monogram, resolved name, posted balance big,
+// pending called out when present.
+function ProgrammeCard({ holding, names }: { holding: Holding; names: Names }) {
+  const { name } = displayName(holding.account, names)
+  const fmtPts = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
+  return (
+    <Link
+      href={`/vault/account?account=${encodeURIComponent(holding.account)}&ccy=${encodeURIComponent(holding.currency)}`}
+      className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/25"
+    >
+      <div className="flex items-center gap-3">
+        <Monogram name={name} size="lg" />
+        <span className="truncate text-sm font-medium text-foreground">{name}</span>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="font-mono text-3xl font-semibold leading-none text-foreground">
+          {fmtPts(holding.posted)}
+        </span>
+        <span className="font-mono text-xs text-muted-foreground">
+          {currencyRedundant(name, holding.currency) ? 'pts' : holding.currency}
+        </span>
+        {holding.pending > 0 ? (
+          <span className="ml-auto font-mono text-xs text-muted-foreground">
+            +{fmtPts(holding.pending)} pending
+          </span>
+        ) : null}
+      </div>
+    </Link>
+  )
+}
+
