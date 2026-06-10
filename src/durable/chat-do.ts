@@ -261,6 +261,7 @@ export class ChatDO
 --- forwarded email ---
 ${opts.text}`,
       tools: { draft_transaction },
+      maxOutputTokens: 16384,
       stopWhen: stepCountIs(4),
     })
     return { entries: recorded, note: result.text.trim() }
@@ -300,7 +301,13 @@ ${opts.text}`,
 --- statement: ${stmt.filename} ---
 ${stmt.text}`,
         tools: { card_guide: cardGuideTool(kbHttp), draft_transaction },
-        stopWhen: stepCountIs(8),
+        // Same output budget as the interactive agent (the 4096 default
+        // truncates chunks that carry the 4-posting reward legs — the slim
+        // 2-posting form then survives validation and points silently
+        // vanish). Step headroom covers card_guide + 3-4 chunked draft
+        // calls + a retry or two.
+        maxOutputTokens: 16384,
+        stopWhen: stepCountIs(12),
         experimental_repairToolCall: draftTransactionRepair,
       })
       if (recorded.length > 0) {
