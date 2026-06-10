@@ -76,16 +76,40 @@ export function InboxView() {
     })
   }
 
+  // Live list: load on mount, reload when the global drop captures something
+  // or the tab regains focus, and poll while anything is still drafting so
+  // captured → extracted appears without a manual reload.
   useEffect(() => {
     let cancelled = false
-    fetch('/api/ledger/captures')
-      .then((r) =>
-        r.ok ? (r.json() as Promise<{ rows: CaptureRow[] }>) : Promise.reject(new Error(String(r.status))),
-      )
-      .then((d) => !cancelled && setAllRows(d.rows ?? []))
-      .catch((e) => !cancelled && setError(String(e)))
+    const load = () => {
+      fetch('/api/ledger/captures')
+        .then((r) =>
+          r.ok ? (r.json() as Promise<{ rows: CaptureRow[] }>) : Promise.reject(new Error(String(r.status))),
+        )
+        .then((d) => {
+          if (cancelled) return
+          setAllRows(d.rows ?? [])
+          setError(null)
+        })
+        .catch((e) => !cancelled && setError(String(e)))
+    }
+    load()
+    const onCaptured = () => load()
+    const onFocus = () => load()
+    window.addEventListener('mv:captured', onCaptured)
+    window.addEventListener('focus', onFocus)
+    const interval = setInterval(() => {
+      // Only poll while a background draft is pending.
+      setAllRows((prev) => {
+        if (prev?.some((r) => r.state === 'captured')) load()
+        return prev
+      })
+    }, 8000)
     return () => {
       cancelled = true
+      window.removeEventListener('mv:captured', onCaptured)
+      window.removeEventListener('focus', onFocus)
+      clearInterval(interval)
     }
   }, [])
 

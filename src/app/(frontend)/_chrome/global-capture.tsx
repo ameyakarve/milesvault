@@ -14,6 +14,7 @@ type OverlayState =
   | { kind: 'idle' }
   | { kind: 'dragging' }
   | { kind: 'processing'; filename: string }
+  | { kind: 'needs_password'; file: File; wrong: boolean }
   | { kind: 'captured'; filename: string }
   | { kind: 'error'; message: string }
 
@@ -137,23 +138,30 @@ export function GlobalCapture() {
     }, ERROR_DISMISS_MS)
   }
 
-  async function processFile(file: File) {
+  async function processFile(file: File, password?: string) {
     processingRef.current = true
     setOverlay({ kind: 'processing', filename: file.name })
     try {
-      const { doc } = await loadStatement(file)
+      const { doc } = await loadStatement(file, password)
       const text = await extractStatementText(doc)
       // Async ingestion (owner call): capture to the Inbox and draft in the
       // background — never block the user on a statement.
       await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text })
       setOverlay({ kind: 'captured', filename: file.name })
+      window.dispatchEvent(new CustomEvent('mv:captured'))
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
       errorTimerRef.current = setTimeout(() => setOverlay({ kind: 'idle' }), ERROR_DISMISS_MS)
       router.refresh()
     } catch (e) {
       if (e instanceof StatementExtractError) {
         if (e.detail.kind === 'need_password' || e.detail.kind === 'wrong_password') {
-          showError('This PDF needs a password — use the paperclip in the Journal chat.')
+          // Decryption happens in-browser; the password is used once by
+          // pdf.js and never stored or sent — the server sees text only.
+          setOverlay({
+            kind: 'needs_password',
+            file,
+            wrong: e.detail.kind === 'wrong_password',
+          })
           return
         }
         if (e.detail.kind === 'image_only') {
@@ -192,6 +200,48 @@ export function GlobalCapture() {
               Reading {overlay.filename}…
             </p>
           </>
+        ) : overlay.kind === 'needs_password' ? (
+          <form
+            className="flex w-full flex-col items-center gap-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const input = e.currentTarget.elements.namedItem('pdf-password') as HTMLInputElement | null
+              const pw = input?.value ?? ''
+              if (!pw) return
+              const file = overlay.file
+              void processFile(file, pw)
+            }}
+          >
+            <FileText className="size-8 text-foreground" />
+            <p className="text-[15px] font-semibold text-foreground">
+              {overlay.file.name} is locked
+            </p>
+            <input
+              name="pdf-password"
+              type="password"
+              autoFocus
+              placeholder={overlay.wrong ? 'Wrong password — try again' : 'PDF password'}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-foreground/40"
+            />
+            <p className="text-xs text-muted-foreground">
+              Decrypted in your browser — only the text is sent. The password is never stored.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background"
+              >
+                Unlock & capture
+              </button>
+              <button
+                type="button"
+                onClick={() => setOverlay({ kind: 'idle' })}
+                className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
         ) : overlay.kind === 'captured' ? (
           <>
             <FileText className="size-8 text-foreground" />
