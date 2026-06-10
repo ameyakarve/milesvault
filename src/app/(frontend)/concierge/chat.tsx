@@ -146,6 +146,7 @@ export function ConciergeChat() {
                 Ask a question to get started — e.g. &ldquo;How much did I spend on restaurants last
                 month?&rdquo;
               </p>
+              <TelegramPairHint />
             </div>
           ) : null}
 
@@ -243,5 +244,37 @@ export function ConciergeChat() {
         </PromptInput>
       </div>
     </div>
+  )
+}
+
+// Pair this account with the Telegram bot (docs/design/assistant-merge.md):
+// mints a single-use code and shows the /start command to send to the bot.
+function TelegramPairHint() {
+  const [command, setCommand] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (command) {
+    return (
+      <p className="text-xs text-slate-400">
+        Send <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-slate-600">{command}</code>{' '}
+        to the MilesVault Telegram bot within 15 minutes to link this account.
+      </p>
+    )
+  }
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => {
+        setBusy(true)
+        fetch('/api/bot/pairing-code', { method: 'POST' })
+          .then((r) => (r.ok ? (r.json() as Promise<{ command?: string }>) : null))
+          .then((d) => d?.command && setCommand(d.command))
+          .catch(() => {})
+          .finally(() => setBusy(false))
+      }}
+      className="text-xs text-teal-600 hover:text-teal-700 disabled:opacity-50"
+    >
+      Use me on Telegram →
+    </button>
   )
 }

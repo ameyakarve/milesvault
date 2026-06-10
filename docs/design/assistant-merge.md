@@ -39,9 +39,8 @@ as a reply protocol — they are not needed for the surfaces to be useful.
 
 1. Framing pass: rename `/concierge` → Assistant in nav/copy; the Ledger
    chat is presented as part of the Journal, not a peer chat.
-2. Assistant capture intake: send an image/PDF to the Assistant → capture
-   (needs image support in the concierge surface; pairs with R2 raw-artifact
-   work).
+2. ~~Assistant capture intake (image/PDF → capture)~~ — **parked**
+   (owner call, 2026-06-10); pairs with R2 raw-artifact work when revived.
 3. Bot adapter (read-only Q&A first), account↔bot pairing per
    `experience.md` §15.
 4. Context injection (screen state → turn context) applies to each surface

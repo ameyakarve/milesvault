@@ -27,7 +27,8 @@ the `milesvault.com` zone:
    email to it — it should appear as a `captured` item within seconds.
 
 Current limitations (v1, deliberate): text body only — PDF attachments are
-noted but not extracted (R2 raw-artifact capture is the next slice);
-production ledgers only (staging has no email entry point); no auto-post and
-no trusted-source gate yet — everything lands as `needs review`, which is the
-trust contract's safe default.
+noted but not extracted (R2 raw-artifact capture is the next slice); targets
+the **staging** app worker for now (production is stale — flip `script_name`
+in wrangler.jsonc when prod is deployed); no auto-post and no trusted-source
+gate yet — everything lands as `needs review`, which is the trust contract's
+safe default.

@@ -1,10 +1,14 @@
-import type { ToolSet } from 'ai'
+import { generateText, stepCountIs, type ToolSet } from 'ai'
 import { createCodeTool } from '@cloudflare/codemode/ai'
 import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { buildAnalystSystem, buildGraphWalkerSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
-import { makeConciergeRegistry, type ConciergeAgentName } from './agents/registries/concierge'
+import {
+  makeConciergeRegistry,
+  GRAPH_WALKER_MODEL_ID,
+  type ConciergeAgentName,
+} from './agents/registries/concierge'
 import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airports-store'
 import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import {
@@ -217,6 +221,33 @@ export class ConciergeDO
     ])
     const rows = (events?.rows ?? []) as Array<{ name: string; value: string }>
     return { statuses, held: heldStatusSlugs(rows, statuses) }
+  }
+
+  // Headless one-shot turn for text-only channels (Telegram, WhatsApp …):
+  // the graph-walker's brain and read tools, minus everything interactive —
+  // ask_user suspends, show_award_options is gen-UI, handoff needs the chat
+  // loop. Stateless by design: each bot message is one self-contained turn,
+  // separate from the web chat's history. RPC for the bot adapter workers.
+  async answerText(question: string): Promise<{ text: string }> {
+    const briefing = await fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch(() => '')
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const kb = makeKbTools(kbHttp)
+    const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
+    const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
+    const codemode = createCodeTool({ tools: { ...kb, ledger_snapshot }, executor })
+    const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
+    const system =
+      buildGraphWalkerSystem(briefing) +
+      '\n\nChannel: plain-text chat (a messaging app). Reply concisely in plain text — no markdown tables, no in-app links. For questions about the user\'s own balances or history, use ledger_snapshot / query_sql.'
+    const result = await generateText({
+      model: this.buildModel({ id: GRAPH_WALKER_MODEL_ID, reasoning: 'off' }),
+      system,
+      prompt: question,
+      tools: { ...kb, ledger_snapshot, query_sql, codemode } as ToolSet,
+      stopWhen: stepCountIs(10),
+    })
+    const text = result.text.trim()
+    return { text: text || 'Sorry — I could not work out an answer to that.' }
   }
 
   // Graph-walker tool surface — layered. Simple one-hop graph lookups

@@ -1,0 +1,28 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "milesvault-telegram",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-13",
+  "compatibility_flags": ["nodejs_compat"],
+  // Read-only Telegram adapter for the Assistant surface
+  // (docs/design/assistant-merge.md): pairs a chat to a user via a short
+  // code, then answers messages through ConciergeDO.answerText. Never writes
+  // to the ledger. Secrets (wrangler secret put): TELEGRAM_BOT_TOKEN,
+  // TELEGRAM_WEBHOOK_SECRET.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CONCIERGE_DO",
+        "class_name": "ConciergeDO",
+        "script_name": "milesvault-staging",
+      },
+    ],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_id": "c5e6c9e1-6020-4772-a568-714a57e0bf0f",
+      "database_name": "milesvault",
+    },
+  ],
+}

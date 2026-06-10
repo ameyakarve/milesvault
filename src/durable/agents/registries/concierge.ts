@@ -12,7 +12,8 @@ import type { AgentDef, AgentHost, Registry } from '../types'
 // answers; the typed sandbox tools (outputSchema-backed) carry the
 // structure Kimi was burning tokens to recover.
 const ANALYST_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
-const GRAPH_WALKER_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
+// Exported for the headless text-channel turn (ConciergeDO.answerText).
+export const GRAPH_WALKER_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 
 export type ConciergeAgentName = 'analyst' | 'graph-walker'
 

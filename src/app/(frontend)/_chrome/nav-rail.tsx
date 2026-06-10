@@ -24,7 +24,7 @@ const ITEMS: NavItem[] = [
   { kind: 'plan', href: '/explore', label: 'Plan' },
   { kind: 'lucide', href: '/inbox', label: 'Inbox', LIcon: Inbox },
   { kind: 'link', href: '/editor', label: 'Journal', Icon: NotePencil },
-  { kind: 'link', href: '/concierge', label: 'Concierge', Icon: ChatCircleDots },
+  { kind: 'link', href: '/concierge', label: 'Assistant', Icon: ChatCircleDots },
 ]
 
 // Pending Inbox work (captured/extracted, not yet posted or dismissed) for

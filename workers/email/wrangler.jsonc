@@ -7,13 +7,14 @@
   // The ingest@milesvault.com Email Routing rule points at this worker
   // (ledger-pipeline.md §5). It validates the +token, resolves it to a user
   // via D1, and stashes the message as a statement capture in that user's
-  // LedgerDO (cross-script binding into the production app worker).
+  // LedgerDO (cross-script binding; targets the staging app worker while
+  // production is stale — flip script_name when prod is current).
   "durable_objects": {
     "bindings": [
       {
         "name": "LEDGER_DO",
         "class_name": "LedgerDO",
-        "script_name": "milesvault",
+        "script_name": "milesvault-staging",
       },
     ],
   },
