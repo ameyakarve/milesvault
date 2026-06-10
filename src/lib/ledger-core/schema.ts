@@ -246,39 +246,13 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     label: 'drop_account_recents',
     sql: 'DROP TABLE IF EXISTS account_recents',
   },
-  // Append-only event log — the F1 spine (ledger-pipeline.md §13.1).
-  // (ledger_id, seq) is the event's identity and the replay order; payload is
-  // JSON shaped per (kind, v). Events are never updated or rewritten.
-  {
-    label: 'event_log',
-    sql: `CREATE TABLE IF NOT EXISTS event_log (
-      ledger_id    TEXT    NOT NULL DEFAULT 'main',
-      seq          INTEGER NOT NULL,
-      kind         TEXT    NOT NULL,
-      v            INTEGER NOT NULL,
-      actor        TEXT    NOT NULL,
-      actor_detail TEXT,
-      refs         TEXT    NOT NULL DEFAULT '[]',
-      payload      TEXT    NOT NULL,
-      created_at   INTEGER NOT NULL,
-      PRIMARY KEY (ledger_id, seq)
-    ) STRICT`,
-  },
-  {
-    label: 'idx_event_log_kind_seq',
-    sql: 'CREATE INDEX IF NOT EXISTS idx_event_log_kind_seq ON event_log(ledger_id, kind, seq)',
-  },
-  // Small key/value store for projector bookkeeping (projector_version, …).
-  {
-    label: 'meta',
-    sql: `CREATE TABLE IF NOT EXISTS meta (
-      key   TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    ) STRICT`,
-  },
-  // Capture-item projection (ledger-pipeline.md §2): one row per thing that
-  // arrived from a source, in a lifecycle state. Fed by `captured` (and later
-  // `extracted`/`dismissed`) events; rebuilt by replay like every projection.
+  // Event-sourcing experiment (June 2026) — reversed: the beancount journal
+  // is the single source of truth; no event log. Drop the short-lived tables.
+  { label: 'drop_event_log', sql: 'DROP TABLE IF EXISTS event_log' },
+  { label: 'drop_meta', sql: 'DROP TABLE IF EXISTS meta' },
+  // Capture items (ledger-pipeline.md §2): one row per thing that arrived
+  // from a source, in a lifecycle state. Statement uploads write here today;
+  // email/paste captures join as those sources land.
   {
     label: 'capture_items',
     sql: `CREATE TABLE IF NOT EXISTS capture_items (

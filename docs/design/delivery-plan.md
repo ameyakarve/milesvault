@@ -51,23 +51,23 @@ right thing from all angles" into an unbounded rebuild.
 ## Foundational decisions locked (from `ledger-pipeline.md`)
 
 - **Topology:** one `LedgerDO` per user; books as `ledger_id` namespace (§8).
-- **Source of truth:** append-only event log; `ledger-core` is a projection
-  (§9). Corrections are reversing events; posted entries never mutate (§4).
+- ~~**Source of truth:** append-only event log; `ledger-core` is a projection
+  (§9).~~ **Reversed 2026-06-10** (`ledger-pipeline.md` §9): the beancount
+  journal is the single source of truth. The §4 invariant stands as reversing
+  *journal entries*; capture state is a plain table.
 - **Email:** forwarding-only, single `ingest@` rule + plus-token, §4 gate (§5).
 - **Raw docs/invoices:** R2 blobs, DO holds refs only (§10).
 
 ## Open before F1 finalizes
 
-- Event schema v1 shape (kinds, payload envelope, versioning rule) —
-  **proposed** in `ledger-pipeline.md` §13 (F0.1), pending sign-off.
-- Projection rebuild strategy — **proposed** in `ledger-pipeline.md` §13.4:
-  full replay, no snapshots, written escalation trigger; pending sign-off.
+- ~~Event schema v1 / projection rebuild strategy~~ — moot after the §9
+  reversal (no event log).
 - Multi-currency consolidated-net-worth valuation policy (rate source, as-of) —
   needed before F5, decided no later than F4.
 
 ## Acceptance per slice (summary)
 
 Each slice ships with: the decided data shapes (no shortcut schemas), working
-empty/loading/error states, projections rebuildable from the log, and no
+empty/loading/error states, balances rebuildable from the journal, and no
 scope-bleed into the next slice's "must not." F0's acceptance is simply: these
 two docs are internally consistent and the keystone decisions are unambiguous.

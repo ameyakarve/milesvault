@@ -1,7 +1,12 @@
 # F1 — Implementation Plan (event core + projection + Vault home)
 
-Status: **design only.** Executes slice F1 of `delivery-plan.md` on the shapes
-decided in `ledger-pipeline.md` §13 (F0.1). Companion to `experience.md`
+Status: **superseded (2026-06-10).** The event log this plan was built
+around was implemented and then removed (`ledger-pipeline.md` §9 reversal):
+the journal is the single source of truth and no event machinery remains.
+What survives from this plan, all shipped: the Vault home + nav spine (§5),
+journal provenance deep-links, and `capture_items` + the Inbox (as a plain
+table, no events). Kept for the record. Originally: executes slice F1 of
+`delivery-plan.md` on the shapes decided in `ledger-pipeline.md` §13 (F0.1). Companion to `experience.md`
 (Vault home, §6; nav spine, §4).
 
 ## 0. What F1 must end with

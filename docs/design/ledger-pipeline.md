@@ -132,7 +132,18 @@ Open sub-problem: a consolidated net-worth figure across **multi-currency**
 books needs a valuation policy (rate source, as-of date). Tracked in §11; it's
 part of the promise and must not be hand-waved.
 
-## 9. Event model — DECIDED
+## 9. Event model — REVERSED (2026-06-10)
+
+> **Reversal.** Event sourcing was built (write-path emission, projector,
+> replay parity) and then removed as speculative complexity — owner call.
+> The **beancount journal is the single source of truth**; tables and
+> balances are projections of it, already rebuildable. The §4 trust contract
+> stands without an event store: auto-posted entries are never silently
+> mutated — corrections are *reversing journal entries*, and capture state
+> lives in a plain `capture_items` table. The section below is kept for the
+> record.
+
+## 9-old. Event model — original decision (superseded)
 
 **Append-only event log per user (scoped by `ledger_id`) is the source of
 truth. `ledger-core`/beancount becomes a projection rebuilt from it** —
@@ -187,7 +198,8 @@ is not a separate "reskin phase" — it emerges as F1–F5 land on the real mode
 
 ## 13. F0.1 addendum — event schema v1 & rebuild strategy
 
-Status: **proposed, pending sign-off.** Closes the two "open before F1
+Status: **superseded by the §9 reversal (2026-06-10)** — kept for the record.
+Originally: **proposed, pending sign-off.** Closes the two "open before F1
 finalizes" items in `delivery-plan.md`. On sign-off these are F0-grade
 decisions; F1 builds exactly this.
 

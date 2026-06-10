@@ -189,8 +189,8 @@ Trust posture: the rule prompt is user-authored and trusted; the **email body
 is untrusted input** and is treated as data, never as instructions — the
 ingestion agent must be hardened against emails that try to steer it
 (instruction-shaped text in a statement, a forwarded phish). Auto-posted
-results remain append-only events; a bad rule run is corrected by reversing
-events, never by mutation, so autonomy never erodes the audit trail.
+entries are never silently mutated; a bad rule run is corrected by reversing
+journal entries, so autonomy never erodes the audit trail.
 
 ## 10. Plan — holdings-first, one zone
 

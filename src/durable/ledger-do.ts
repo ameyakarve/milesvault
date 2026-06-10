@@ -59,17 +59,7 @@ const DATA_TABLES = [
   'balance_totals',
   'daily_balances',
   'capture_items',
-  // The event log resets only on a full admin clear(); rebuilds never touch it.
-  'event_log',
 ] as const
-
-// Tables the projector owns — everything replay rebuilds. The event log is
-// the source it replays FROM, never a projection.
-const PROJECTION_TABLES = DATA_TABLES.filter((t) => t !== 'event_log')
-
-// Bump on any change to how events project into tables; a stored mismatch
-// means the projection was built by older code (f1-implementation.md §3).
-const PROJECTOR_VERSION = 1
 
 export type JournalGetResponse = { text: string }
 export type JournalCursor = { date: string; id: number }
@@ -143,18 +133,9 @@ export type EntryRef2 = {
   expected_updated_at: number
 }
 
-// Who/what caused a write, recorded on the events it emits (ledger-pipeline.md
-// §13.1). Defaults to a user-confirmed edit when omitted.
-export type EventCtx = {
-  actor: 'user' | 'ai' | 'email'
-  actor_detail?: string | null
-  route: 'auto' | 'confirmed'
-}
-
 export type ReplaceBufferRequest = {
   knownIds: EntryRef2[]
   buffer: string
-  event_ctx?: EventCtx
 }
 
 export type ReplaceBufferConflict = {
@@ -219,41 +200,6 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     super(state, env)
     this.db = state.storage.sql
     this.migrate()
-    // Post-cutover only (meta event_source_of_truth=true): if the projection
-    // was built by older projector code, rebuild it from the log before
-    // serving anything (f1-implementation.md §3). A rebuild failure logs and
-    // leaves the previous projection in place rather than bricking reads.
-    state.blockConcurrencyWhile(async () => {
-      try {
-        if (this.readMeta('event_source_of_truth') !== 'true') return
-        if (this.readMeta('projector_version') === String(PROJECTOR_VERSION)) return
-        const r = await this.rebuildFromEventsInner()
-        if (r.ok === false) {
-          console.error('[projector] cold-start rebuild failed', { error: r.error })
-          this.writeMeta('projector_rebuild_error', r.error)
-        } else {
-          this.writeMeta('projector_rebuild_error', '')
-        }
-      } catch (e) {
-        console.error('[projector] cold-start rebuild threw', { err: String(e) })
-      }
-    })
-  }
-
-  private readMeta(key: string): string | null {
-    const row = this.db
-      .exec<{ value: string }>(`SELECT value FROM meta WHERE key = ?`, key)
-      .toArray()[0]
-    return row ? row.value : null
-  }
-
-  private writeMeta(key: string, value: string): void {
-    this.db.exec(
-      `INSERT INTO meta (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      key,
-      value,
-    )
   }
 
   // ---- Statement-blob storage ----
@@ -279,9 +225,8 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         opts.text,
         now,
       )
-      // F2 step 1: a statement upload IS a capture (ledger-pipeline.md §2).
-      // Dual-write the capture item + the captured event, same pattern as
-      // posted/corrected: tables now, log alongside, atomically.
+      // A statement upload IS a capture (ledger-pipeline.md §2): one row in
+      // the Inbox's capture_items, atomically with the blob.
       this.db.exec(
         `INSERT OR REPLACE INTO capture_items (id, source, artifact, filename, state, created_at, updated_at)
          VALUES (?, 'upload', ?, ?, 'captured', ?, ?)`,
@@ -290,21 +235,6 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         opts.filename,
         now,
         now,
-      )
-      this.appendEventsSync(
-        now,
-        [
-          {
-            kind: 'captured',
-            payload: {
-              id: opts.id,
-              source: 'upload',
-              artifact: `stmt:${opts.id}`,
-              filename: opts.filename,
-            },
-          },
-        ],
-        { actor: 'user', actor_detail: 'statement-upload', route: 'confirmed' },
       )
     })
     return { ok: true }
@@ -1093,15 +1023,7 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       if (ua !== null) knownIds.push({ kind: 'txn', id, expected_updated_at: ua })
     }
 
-    const result = await this.replaceBuffer({
-      knownIds,
-      buffer: text,
-      event_ctx: {
-        actor: 'ai',
-        actor_detail: `proposal:${opts.proposal_id}`,
-        route: 'confirmed',
-      },
-    })
+    const result = await this.replaceBuffer({ knownIds, buffer: text })
     if ('ok' in result && result.ok === false) {
       if (result.error === 'occ_conflict') {
         return {
@@ -1271,68 +1193,7 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         txnHashes.push(await transactionInputHash(t))
       }
 
-      // 4b. Event diff (F1 step 1 dual-write, f1-implementation.md §6):
-      // render the entries this request replaces and the entries it inserts
-      // in the same canonical serialization, multiset-diff on the text, and
-      // reduce to corrected (removed) / posted (added) events. Entries with
-      // identical text on both sides emit nothing, so a no-op Cmd+S stays
-      // silent in the log.
-      const ctx: EventCtx = req.event_ctx ?? { actor: 'user', route: 'confirmed' }
-      type DiffEntry = { text: string; txn_hash: string | null }
-      const oldEntries: DiffEntry[] = []
-      const dirInputsByKind = new Map<DirectiveInput['kind'], Map<number, DirectiveInput>>()
-      for (const ref of req.knownIds) {
-        if (ref.kind === 'txn') {
-          const e = this.readTxnEntry(ref.id)
-          if (!e) continue
-          const hashRow = this.db
-            .exec<{ hash: string | null }>('SELECT hash FROM transactions WHERE id = ?', ref.id)
-            .toArray()[0]
-          oldEntries.push({
-            text: serializeJournal([entryTxnToInput(e)], [], { descending: false }).trimEnd(),
-            txn_hash: hashRow?.hash ?? null,
-          })
-        } else {
-          let m = dirInputsByKind.get(ref.kind)
-          if (!m) {
-            m = new Map(this.readDirectivesByKind(ref.kind).map((r) => [r.id, r.input]))
-            dirInputsByKind.set(ref.kind, m)
-          }
-          const input = m.get(ref.id)
-          if (!input) continue
-          oldEntries.push({
-            text: serializeJournal([], [input], { descending: false }).trimEnd(),
-            txn_hash: null,
-          })
-        }
-      }
-      const newEntries: DiffEntry[] = [
-        ...parsed.transactions.map((t, i) => ({
-          text: serializeJournal([t], [], { descending: false }).trimEnd(),
-          txn_hash: txnHashes[i]!,
-        })),
-        ...parsed.directives.map(
-          (d): DiffEntry => ({
-            text: serializeJournal([], [d], { descending: false }).trimEnd(),
-            txn_hash: null,
-          }),
-        ),
-      ]
-      const oldByText = new Map<string, DiffEntry[]>()
-      for (const e of oldEntries) {
-        const bucket = oldByText.get(e.text)
-        if (bucket) bucket.push(e)
-        else oldByText.set(e.text, [e])
-      }
-      const added: DiffEntry[] = []
-      for (const e of newEntries) {
-        const bucket = oldByText.get(e.text)
-        if (bucket && bucket.length > 0) bucket.pop()
-        else added.push(e)
-      }
-      const removed = [...oldByText.values()].flat()
-
-      // 5. Atomic: DELETE the knownIds, INSERT parsed entries, append events.
+      // 5. Atomic: DELETE the knownIds, INSERT parsed entries.
       const now = Date.now()
       this.ctx.storage.transactionSync(() => {
         for (const ref of req.knownIds) {
@@ -1344,340 +1205,10 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
           this.insertTxn(t, txnHashes[i]!, now),
         )
         for (const d of parsed.directives) this.insertDirective(d, now)
-        this.appendEventsSync(
-          now,
-          [
-            ...removed.map((e) => ({
-              kind: 'corrected' as const,
-              payload: {
-                removed: e.text,
-                reason: 'journal-edit',
-                ...(e.txn_hash ? { txn_hash: e.txn_hash } : {}),
-              },
-            })),
-            ...added.map((e) => ({
-              kind: 'posted' as const,
-              payload: {
-                entries: e.text,
-                route: ctx.route,
-                ...(e.txn_hash ? { txn_hash: e.txn_hash } : {}),
-              },
-            })),
-          ],
-          ctx,
-        )
       })
 
       return { ok: true, rows: this.listEntriesSync() }
     })
-  }
-
-  // Append events to event_log; call inside the same transactionSync as the
-  // table writes so log and projection commit together. F1 step-1 dual-write:
-  // the log records every commit, but projections are still fed by the direct
-  // table writes until the F1 cutover (f1-implementation.md §6 step 3). The
-  // DO is single-threaded, so MAX(seq)+1 is race-free.
-  private appendEventsSync(
-    now: number,
-    events: Array<{ kind: 'posted' | 'corrected' | 'captured'; payload: Record<string, unknown> }>,
-    ctx: EventCtx,
-  ): void {
-    if (events.length === 0) return
-    const base =
-      this.db
-        .exec<{ s: number }>(
-          `SELECT COALESCE(MAX(seq), 0) AS s FROM event_log WHERE ledger_id = 'main'`,
-        )
-        .toArray()[0]?.s ?? 0
-    events.forEach((e, i) => {
-      this.db.exec(
-        `INSERT INTO event_log (ledger_id, seq, kind, v, actor, actor_detail, refs, payload, created_at)
-         VALUES ('main', ?, ?, 1, ?, ?, '[]', ?, ?)`,
-        base + 1 + i,
-        e.kind,
-        ctx.actor,
-        ctx.actor_detail ?? null,
-        JSON.stringify(e.payload),
-        now,
-      )
-    })
-  }
-
-  // ── F1 step 2: projector (f1-implementation.md §3, §6) ─────────────────────
-
-  // One-time bootstrap (§4): clear the log and synthesize one `posted` event
-  // per existing entry, oldest first, so the log is complete from day one.
-  // Pre-bootstrap dual-write events are emission-path scaffolding and are
-  // discarded by design; never run again after cutover.
-  async bootstrap_event_log(): Promise<{ ok: true; events: number }> {
-    return this.ctx.blockConcurrencyWhile(async () => {
-      const rows = this.listEntriesSync() // newest-first; reverse for date order
-      const hashById = new Map<number, string | null>()
-      for (const r of this.db
-        .exec<{ id: number; hash: string | null }>('SELECT id, hash FROM transactions')
-        .toArray()) {
-        hashById.set(r.id, r.hash)
-      }
-      const oldestFirst = [...rows].reverse()
-      const now = Date.now()
-      this.ctx.storage.transactionSync(() => {
-        this.db.exec(`DELETE FROM event_log WHERE ledger_id = 'main'`)
-        this.appendEventsSync(
-          now,
-          oldestFirst.map((r) => ({
-            kind: 'posted' as const,
-            payload: {
-              entries: r.raw_text,
-              route: 'confirmed',
-              ...(r.kind === 'txn' && hashById.get(r.id)
-                ? { txn_hash: hashById.get(r.id)! }
-                : {}),
-            },
-          })),
-          { actor: 'user', actor_detail: 'bootstrap', route: 'confirmed' },
-        )
-      })
-      return { ok: true as const, events: oldestFirst.length }
-    })
-  }
-
-  // Non-destructive parity gate (§6 step 2): fold the event log into the
-  // multiset of entry texts it implies and compare against the live tables'
-  // canonical texts. Touches nothing; rebuild_from_events() is the
-  // destructive counterpart. `missing` = implied by the log but absent live;
-  // `extra` = live but not implied; `over_removed` = corrected events whose
-  // target the log never posted. All three must be zero for a match.
-  async verify_replay_parity(): Promise<{
-    match: boolean
-    events: number
-    live_entries: number
-    folded_entries: number
-    over_removed: number
-    missing: string[]
-    extra: string[]
-    error?: string
-  }> {
-    const events = this.db
-      .exec<{ seq: number; kind: string; v: number; payload: string }>(
-        `SELECT seq, kind, v, payload FROM event_log WHERE ledger_id = 'main' ORDER BY seq ASC`,
-      )
-      .toArray()
-    const counts = new Map<string, number>()
-    const bump = (t: string, d: number) => counts.set(t, (counts.get(t) ?? 0) + d)
-    try {
-      for (const e of events) {
-        if (e.v !== 1 || !['posted', 'corrected', 'captured'].includes(e.kind)) {
-          throw new Error(`unknown event kind/version at seq ${e.seq}: ${e.kind} v${e.v}`)
-        }
-        if (e.kind === 'captured') continue // no entry-multiset effect
-        const payload = JSON.parse(e.payload) as Record<string, unknown>
-        const text = String((e.kind === 'posted' ? payload.entries : payload.removed) ?? '')
-        const parsed = parseJournalStrict(text)
-        if (isStrictParseErr(parsed)) {
-          throw new Error(`payload parse failed at seq ${e.seq}: ${parsed.message}`)
-        }
-        const d = e.kind === 'posted' ? 1 : -1
-        for (const t of parsed.transactions) {
-          bump(serializeJournal([t], [], { descending: false }).trimEnd(), d)
-        }
-        for (const dir of parsed.directives) {
-          bump(serializeJournal([], [dir], { descending: false }).trimEnd(), d)
-        }
-      }
-    } catch (err) {
-      return {
-        match: false,
-        events: events.length,
-        live_entries: 0,
-        folded_entries: 0,
-        over_removed: 0,
-        missing: [],
-        extra: [],
-        error: String(err),
-      }
-    }
-    const live = new Map<string, number>()
-    for (const r of this.listEntriesSync()) live.set(r.raw_text, (live.get(r.raw_text) ?? 0) + 1)
-    const missing: string[] = []
-    const extra: string[] = []
-    let foldedTotal = 0
-    let overRemoved = 0
-    for (const [t, n] of counts) {
-      if (n > 0) foldedTotal += n
-      if (n < 0) overRemoved += -n
-      const l = live.get(t) ?? 0
-      if (n > l) for (let i = 0; i < n - l && missing.length < 5; i++) missing.push(t)
-    }
-    let liveTotal = 0
-    for (const [t, l] of live) {
-      liveTotal += l
-      const n = counts.get(t) ?? 0
-      if (l > n) for (let i = 0; i < l - n && extra.length < 5; i++) extra.push(t)
-    }
-    return {
-      match: missing.length === 0 && extra.length === 0 && overRemoved === 0 && foldedTotal === liveTotal,
-      events: events.length,
-      live_entries: liveTotal,
-      folded_entries: foldedTotal,
-      over_removed: overRemoved,
-      missing,
-      extra,
-    }
-  }
-
-  // Destructive full replay (§13.4: no snapshots): clear the projection
-  // tables and rebuild them from the event log in seq order. Fails loud
-  // BEFORE mutating — every event is parsed and every txn hash recomputed
-  // first; any unknown kind/version or parse failure aborts untouched. A
-  // failure inside the apply transaction rolls the whole rebuild back.
-  // Event timestamps become row timestamps.
-  async rebuild_from_events(): Promise<
-    { ok: true; events: number; inserted: number; removed: number } | { ok: false; error: string }
-  > {
-    return this.ctx.blockConcurrencyWhile(async () => this.rebuildFromEventsInner())
-  }
-
-  private async rebuildFromEventsInner(): Promise<
-    { ok: true; events: number; inserted: number; removed: number } | { ok: false; error: string }
-  > {
-    {
-      const events = this.db
-        .exec<{ seq: number; kind: string; v: number; payload: string; created_at: number }>(
-          `SELECT seq, kind, v, payload, created_at FROM event_log WHERE ledger_id = 'main' ORDER BY seq ASC`,
-        )
-        .toArray()
-      type Op =
-        | { op: 'insert-txn'; t: TransactionInput; hash: string; at: number }
-        | { op: 'insert-dir'; d: DirectiveInput; at: number }
-        | { op: 'remove-txn'; hash: string; seq: number }
-        | { op: 'remove-dir'; kind: DirectiveInput['kind']; text: string; seq: number }
-        | { op: 'capture'; id: string; source: string; artifact: string | null; filename: string | null; at: number }
-      const ops: Op[] = []
-      try {
-        for (const e of events) {
-          if (e.v !== 1 || !['posted', 'corrected', 'captured'].includes(e.kind)) {
-            throw new Error(`unknown event kind/version at seq ${e.seq}: ${e.kind} v${e.v}`)
-          }
-          if (e.kind === 'captured') {
-            const p = JSON.parse(e.payload) as Record<string, unknown>
-            const artifact = typeof p.artifact === 'string' ? p.artifact : null
-            // Capture identity: explicit payload id, else derived from the
-            // artifact ref, else the event seq.
-            const id =
-              typeof p.id === 'string' && p.id
-                ? p.id
-                : (artifact ?? `capture-${e.seq}`).replace(/^stmt:/, '')
-            ops.push({
-              op: 'capture',
-              id,
-              source: typeof p.source === 'string' ? p.source : 'upload',
-              artifact,
-              filename: typeof p.filename === 'string' ? p.filename : null,
-              at: e.created_at,
-            })
-            continue
-          }
-          const payload = JSON.parse(e.payload) as Record<string, unknown>
-          const text = String((e.kind === 'posted' ? payload.entries : payload.removed) ?? '')
-          const parsed = parseJournalStrict(text)
-          if (isStrictParseErr(parsed)) {
-            throw new Error(`payload parse failed at seq ${e.seq}: ${parsed.message}`)
-          }
-          if (e.kind === 'posted') {
-            for (const t of parsed.transactions) {
-              ops.push({ op: 'insert-txn', t, hash: await transactionInputHash(t), at: e.created_at })
-            }
-            for (const d of parsed.directives) ops.push({ op: 'insert-dir', d, at: e.created_at })
-          } else {
-            for (const t of parsed.transactions) {
-              ops.push({ op: 'remove-txn', hash: await transactionInputHash(t), seq: e.seq })
-            }
-            for (const d of parsed.directives) {
-              ops.push({
-                op: 'remove-dir',
-                kind: d.kind,
-                text: serializeJournal([], [d], { descending: false }).trimEnd(),
-                seq: e.seq,
-              })
-            }
-          }
-        }
-      } catch (err) {
-        return { ok: false as const, error: String(err) }
-      }
-      let inserted = 0
-      let removed = 0
-      try {
-        this.ctx.storage.transactionSync(() => {
-          for (const t of PROJECTION_TABLES) this.db.exec(`DELETE FROM ${t}`)
-          for (const op of ops) {
-            if (op.op === 'insert-txn') {
-              this.insertTxn(op.t, op.hash, op.at)
-              inserted++
-            } else if (op.op === 'insert-dir') {
-              this.insertDirective(op.d, op.at)
-              inserted++
-            } else if (op.op === 'capture') {
-              this.db.exec(
-                `INSERT OR REPLACE INTO capture_items (id, source, artifact, filename, state, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, 'captured', ?, ?)`,
-                op.id,
-                op.source,
-                op.artifact,
-                op.filename,
-                op.at,
-                op.at,
-              )
-              inserted++
-            } else if (op.op === 'remove-txn') {
-              const row = this.db
-                .exec<{ id: number }>(
-                  `SELECT id FROM transactions WHERE hash = ? ORDER BY id LIMIT 1`,
-                  op.hash,
-                )
-                .toArray()[0]
-              if (!row) throw new Error(`replay: corrected at seq ${op.seq} matches no live transaction`)
-              this.db.exec(`DELETE FROM transactions WHERE id = ?`, row.id)
-              removed++
-            } else {
-              const hit = this.readDirectivesByKind(op.kind).find(
-                (r) => serializeJournal([], [r.input], { descending: false }).trimEnd() === op.text,
-              )
-              if (!hit) {
-                throw new Error(`replay: corrected at seq ${op.seq} matches no live ${op.kind} directive`)
-              }
-              this.db.exec(`DELETE FROM ${DIRECTIVE_TABLE[op.kind]} WHERE id = ?`, hit.id)
-              removed++
-            }
-          }
-          this.db.exec(
-            `INSERT INTO meta (key, value) VALUES ('projector_version', ?)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-            String(PROJECTOR_VERSION),
-          )
-        })
-      } catch (err) {
-        return { ok: false as const, error: String(err) }
-      }
-      return { ok: true as const, events: events.length, inserted, removed }
-    }
-  }
-
-  // Flip the log to source-of-truth — only if replay parity holds right now.
-  // After this, a projector version bump triggers a cold-start rebuild from
-  // the log (constructor). The gate is the whole point: cutover is impossible
-  // while the log and the live tables disagree.
-  async cutover_to_events(): Promise<
-    | { ok: true; parity: Awaited<ReturnType<LedgerDO['verify_replay_parity']>> }
-    | { ok: false; error: string; parity: Awaited<ReturnType<LedgerDO['verify_replay_parity']>> }
-  > {
-    const parity = await this.verify_replay_parity()
-    if (!parity.match) {
-      return { ok: false as const, error: 'replay parity failed — fix before cutover', parity }
-    }
-    this.writeMeta('event_source_of_truth', 'true')
-    this.writeMeta('projector_version', String(PROJECTOR_VERSION))
-    return { ok: true as const, parity }
   }
 
   private readUpdatedAt(kind: EntryKind, id: number): number | null {
