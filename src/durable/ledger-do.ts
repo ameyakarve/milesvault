@@ -213,8 +213,12 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     ownerEmail: string
     filename: string
     text: string
+    // Where the statement arrived from (ledger-pipeline.md §2). 'upload' is
+    // the in-app paperclip/drop flow; 'email' is the ingest+token@ worker.
+    source?: 'upload' | 'email'
   }): Promise<{ ok: true }> {
     const now = Date.now()
+    const source = opts.source ?? 'upload'
     this.ctx.storage.transactionSync(() => {
       this.db.exec(
         `INSERT OR REPLACE INTO statements (id, owner_email, filename, text, created_at)
@@ -229,8 +233,9 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       // the Inbox's capture_items, atomically with the blob.
       this.db.exec(
         `INSERT OR REPLACE INTO capture_items (id, source, artifact, filename, state, created_at, updated_at)
-         VALUES (?, 'upload', ?, ?, 'captured', ?, ?)`,
+         VALUES (?, ?, ?, ?, 'captured', ?, ?)`,
         opts.id,
+        source,
         `stmt:${opts.id}`,
         opts.filename,
         now,

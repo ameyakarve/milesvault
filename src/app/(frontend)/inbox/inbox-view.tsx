@@ -33,6 +33,27 @@ function fmtDate(ms: number): string {
 export function InboxView() {
   const [allRows, setAllRows] = useState<CaptureRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [address, setAddress] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/ledger/forwarding-address')
+      .then((r) => (r.ok ? (r.json() as Promise<{ address?: string }>) : null))
+      .then((d) => !cancelled && d?.address && setAddress(d.address))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  function copyAddress() {
+    if (!address) return
+    void navigator.clipboard.writeText(address).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -78,12 +99,28 @@ export function InboxView() {
       </div>
     )
   }
+  const addressLine = address ? (
+    <p className="text-xs text-slate-400">
+      Forward statement emails to{' '}
+      <button
+        type="button"
+        onClick={copyAddress}
+        title="Copy address"
+        className="font-mono text-slate-600 hover:text-teal-600"
+      >
+        {address}
+      </button>
+      {copied ? <span className="ml-1 text-emerald-600">copied</span> : null}
+    </p>
+  ) : null
+
   if (rows.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center px-6 text-center">
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
         <p className="text-slate-500 text-sm max-w-xs">
           Nothing to review. Captured statements and forwarded emails will queue here.
         </p>
+        {addressLine}
       </div>
     )
   }
@@ -112,7 +149,7 @@ export function InboxView() {
                 {r.state}
               </span>
               <Link
-                href="/editor"
+                href={`/editor?statement=${encodeURIComponent(r.id)}&filename=${encodeURIComponent(r.filename ?? r.id)}`}
                 className="text-xs text-teal-600 hover:text-teal-700 whitespace-nowrap"
               >
                 Review in chat →
@@ -129,10 +166,10 @@ export function InboxView() {
         ))}
       </ul>
       <p className="text-xs text-slate-400">
-        Statements you upload in chat are captured here. Email forwarding and review workflows
-        are on the way.
+        Statements you upload in chat are captured here.
         {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
       </p>
+      {addressLine}
     </div>
   )
 }

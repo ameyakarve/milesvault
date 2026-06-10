@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "milesvault-email",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-05-13",
+  "compatibility_flags": ["nodejs_compat"],
+  // The ingest@milesvault.com Email Routing rule points at this worker
+  // (ledger-pipeline.md §5). It validates the +token, resolves it to a user
+  // via D1, and stashes the message as a statement capture in that user's
+  // LedgerDO (cross-script binding into the production app worker).
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "LEDGER_DO",
+        "class_name": "LedgerDO",
+        "script_name": "milesvault",
+      },
+    ],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_id": "c5e6c9e1-6020-4772-a568-714a57e0bf0f",
+      "database_name": "milesvault",
+    },
+  ],
+}
