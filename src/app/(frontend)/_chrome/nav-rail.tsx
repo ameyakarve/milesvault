@@ -9,6 +9,7 @@ import { Inbox, Map, Menu, Vault } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { GlobalCapture } from './global-capture'
 
 // Routes that belong to the Plan zone — the Plan nav item is active for any of these.
 const PLAN_ROUTES = ['/explore', '/points', '/status-match']
@@ -81,6 +82,10 @@ export function NavRail() {
 
   return (
     <>
+      {/* Global drag-and-drop capture overlay — mounted here because NavRail
+          is the single shared mount point across every authed page. It renders
+          nothing on /editor where the chat tab has its own attach flow. */}
+      <GlobalCapture />
       {/* Desktop: slim side rail */}
       <nav className="hidden h-screen w-[48px] shrink-0 flex-col items-center gap-6 border-r border-slate-200 bg-white py-4 md:flex">
         <Logo />

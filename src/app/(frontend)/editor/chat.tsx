@@ -315,6 +315,11 @@ export function Chat({
   // collides with the first's pending draft_transaction tool call and wedges
   // the turn (AI_MissingToolResultsError).
   const submittingRef = useRef(false)
+  // Run-once guard for the ?statement= auto-send path. The Chat component
+  // mounts after hydration (EditorShell delays with `mounted` state), so this
+  // effect fires exactly once per page load. The ref prevents a second send if
+  // React ever re-runs effects in strict mode.
+  const autoSentStatementRef = useRef<string | null>(null)
 
   async function tryExtract(file: File, password?: string) {
     setStatement({ kind: 'extracting', file })
@@ -372,6 +377,55 @@ export function Chat({
       .then((r) => setAccounts(r.accounts))
       .catch(() => {})
     return () => ac.abort()
+  }, [])
+
+  // Auto-send a statement message when the page was reached via the global
+  // drop-target (?statement=STMT-…&filename=…). The capture row already exists
+  // server-side; we just need to send the message that kicks off processing.
+  //
+  // Guard logic (three layers):
+  //   1. autoSentStatementRef — run-once per component lifetime; prevents a
+  //      double-send if React re-runs effects in strict mode.
+  //   2. Check messages already contain the statement id — handles a page
+  //      reload while the same conversation is still in the DO's history.
+  //   3. history.replaceState strips the params immediately so refreshes don't
+  //      re-trigger (and the URL stays clean for the user).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const stmtId = p.get('statement')
+    const filename = p.get('filename') ?? 'statement.pdf'
+    if (!stmtId) return
+    // Strip params from the URL so a reload doesn't re-trigger.
+    const cleanUrl =
+      window.location.pathname +
+      (p.toString()
+        ? (() => {
+            p.delete('statement')
+            p.delete('filename')
+            const rest = p.toString()
+            return rest ? `?${rest}` : ''
+          })()
+        : '')
+    history.replaceState(null, '', cleanUrl)
+    // Already sent for this id in this session.
+    if (autoSentStatementRef.current === stmtId) return
+    autoSentStatementRef.current = stmtId
+    // Already present in the existing conversation (e.g. replayed from DO history).
+    const alreadyInHistory = messages.some((m) => {
+      const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
+      return parts.some(
+        (p) =>
+          p.type === 'text' &&
+          typeof p.text === 'string' &&
+          p.text.includes(`id="${stmtId}"`),
+      )
+    })
+    if (alreadyInHistory) return
+    // Set the ref so approve/reject can advance the capture row to 'posted'.
+    lastStatementIdRef.current = stmtId
+    const text = `Process the attached statement and draft transactions.\n\n<statement id="${stmtId}" filename="${filename}" />`
+    void sendMessage({ text })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function refreshAccounts() {
