@@ -32,6 +32,7 @@ import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
 import type { ExploreAirline, ExploreRow, Afford } from '@/durable/agents/tools/concierge/award-explore'
 import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
 import type { MapPoint } from './flight-map'
+import { PlanToolbar, TAB_ACTIVE } from '../plan-toolbar'
 
 // Heavy (Observable Plot + world outline) — load it only when a row is expanded.
 const FlightMap = dynamic(() => import('./flight-map').then((m) => m.FlightMap), { ssr: false })
@@ -80,9 +81,6 @@ const STOPS_TABS: { key: Stops; label: string }[] = [
 ]
 
 // Active tab: use background/foreground so it works on both light and dark.
-const ACTIVE_TAB =
-  'aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm'
-
 const fmt = (n: number) => n.toLocaleString('en-US')
 const fmtK = (n: number) =>
   n >= 1000 ? `${(n / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}k` : String(n)
@@ -356,7 +354,7 @@ function Filters({ f }: { f: ExploreFilterProps }) {
         <Tabs value={f.stops} onValueChange={(v) => f.onStops(v as Stops)}>
           <TabsList className="w-full">
             {STOPS_TABS.map((s) => (
-              <TabsTrigger key={s.key} value={s.key} className={ACTIVE_TAB}>
+              <TabsTrigger key={s.key} value={s.key} className={TAB_ACTIVE}>
                 {s.label}
               </TabsTrigger>
             ))}
@@ -367,10 +365,10 @@ function Filters({ f }: { f: ExploreFilterProps }) {
       <FilterBlock title="Airlines">
         <Tabs value={f.airlineMode} onValueChange={(v) => f.onAirlineMode(v as AirlineMode)}>
           <TabsList className="w-full">
-            <TabsTrigger value="include" className={ACTIVE_TAB}>
+            <TabsTrigger value="include" className={TAB_ACTIVE}>
               Include
             </TabsTrigger>
-            <TabsTrigger value="exclude" className={ACTIVE_TAB}>
+            <TabsTrigger value="exclude" className={TAB_ACTIVE}>
               Exclude
             </TabsTrigger>
           </TabsList>
@@ -727,9 +725,7 @@ export function Explore(props: ExploreProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
-      {/* Toolbar — same width/container as the results below */}
-      <div className="border-b">
-        <div className="mx-auto flex w-full max-w-3xl items-center gap-1.5 px-3 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
+      <PlanToolbar>
           <div className="flex shrink-0 items-center gap-0.5 rounded-lg border bg-card px-1.5 py-1 sm:gap-1.5 sm:px-2">
             <Input
               value={props.origin}
@@ -756,7 +752,7 @@ export function Explore(props: ExploreProps) {
                 <TabsTrigger
                   key={c.key}
                   value={c.key}
-                  className={cn('px-1.5 font-mono text-xs sm:px-2 sm:text-sm', ACTIVE_TAB)}
+                  className={cn('px-1.5 font-mono text-xs sm:px-2 sm:text-sm', TAB_ACTIVE)}
                 >
                   {c.short}
                 </TabsTrigger>
@@ -778,10 +774,9 @@ export function Explore(props: ExploreProps) {
               </Badge>
             ) : null}
           </Button>
-        </div>
-      </div>
+      </PlanToolbar>
 
-      {/* Results (same container) */}
+      {/* Results */}
       <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 py-4">
           {props.status === 'ready' && props.rows.length > 0 ? (

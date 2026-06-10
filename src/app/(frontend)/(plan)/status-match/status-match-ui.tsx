@@ -29,6 +29,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
+import { PlanToolbar } from '../plan-toolbar'
 import type {
   StatusMatchResult,
   MatchStatus,
@@ -371,20 +372,20 @@ export function StatusMatch(props: SmProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b bg-card/80 px-3 py-2">
-        <span className="text-sm font-semibold text-foreground">Status Match Merry-Go-Round</span>
-        <div className="ml-2 flex items-center gap-2">
-          <StatusCombobox value={from} onChange={onFrom} statuses={fromStatuses} placeholder="From status…" held={held} />
-          <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-          <StatusCombobox value={to} onChange={onTo} statuses={statuses} placeholder="To status (optional)…" allowAny />
-        </div>
-        {data?.found ? (
-          <span className="ml-auto text-xs text-muted-foreground">
-            {matchCount} match{matchCount === 1 ? '' : 'es'}
-            {to ? '' : ' available'}
-          </span>
-        ) : null}
-      </div>
+      <PlanToolbar
+        meta={
+          data?.found ? (
+            <>
+              {matchCount} match{matchCount === 1 ? '' : 'es'}
+              {to ? '' : ' available'}
+            </>
+          ) : null
+        }
+      >
+        <StatusCombobox value={from} onChange={onFrom} statuses={fromStatuses} placeholder="From status…" held={held} />
+        <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+        <StatusCombobox value={to} onChange={onTo} statuses={statuses} placeholder="To status (optional)…" allowAny />
+      </PlanToolbar>
 
       <div className="relative min-h-0 flex-1 bg-background">
         {status === 'idle' ? (

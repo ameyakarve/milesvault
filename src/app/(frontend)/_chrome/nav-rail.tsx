@@ -67,7 +67,7 @@ function InboxBadge({ count, className }: { count: number; className?: string })
 
 function Logo() {
   return (
-    <div className="flex size-8 items-center justify-center rounded-[6px] bg-teal-500 text-lg font-black text-white">
+    <div className="flex size-8 items-center justify-center rounded-lg bg-foreground text-lg font-black text-background">
       M
     </div>
   )
@@ -95,7 +95,10 @@ export function NavRail() {
         <div className="flex flex-col gap-4">
           {ITEMS.map((item) => {
             const active = isActive(item)
-            const iconCls = cn('p-2', active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')
+            const iconCls = cn(
+      'rounded-lg p-2',
+      active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+    )
             if (item.kind === 'plan') {
               return (
                 <Link

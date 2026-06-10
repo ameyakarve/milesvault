@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { PlanToolbar, TAB_ACTIVE } from '../plan-toolbar'
 import type { PointsPathsResult, PathNode, PathEdge } from '@/durable/agents/tools/concierge/points-paths'
 import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-currencies'
 
@@ -31,7 +32,6 @@ const fmtK = (n: number) =>
 
 const W = 196
 const H = 64
-const ACTIVE_TAB = 'aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm'
 
 type NodeData = PathNode & { amount: number | null }
 
@@ -257,8 +257,8 @@ function ModeTabs({ mode, onMode }: { mode: FilterMode; onMode: (m: FilterMode) 
   return (
     <Tabs value={mode} onValueChange={(v) => onMode(v as FilterMode)}>
       <TabsList className="h-7 w-full">
-        <TabsTrigger value="include" className={cn('text-xs', ACTIVE_TAB)}>Include</TabsTrigger>
-        <TabsTrigger value="exclude" className={cn('text-xs', ACTIVE_TAB)}>Exclude</TabsTrigger>
+        <TabsTrigger value="include" className={cn('text-xs', TAB_ACTIVE)}>Include</TabsTrigger>
+        <TabsTrigger value="exclude" className={cn('text-xs', TAB_ACTIVE)}>Exclude</TabsTrigger>
       </TabsList>
     </Tabs>
   )
@@ -317,12 +317,12 @@ export function Points(props: PointsProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b bg-card px-4 py-2.5">
+      <PlanToolbar>
         <TargetCombobox value={target} onChange={onTarget} currencies={currencies} />
         <Tabs value={filters.mineOnly ? 'mine' : 'all'} onValueChange={(v) => props.onMineOnly(v === 'mine')}>
           <TabsList className="h-8">
-            <TabsTrigger value="mine" className={cn('px-2.5 text-xs', ACTIVE_TAB)}>My points</TabsTrigger>
-            <TabsTrigger value="all" className={cn('px-2.5 text-xs', ACTIVE_TAB)}>All points</TabsTrigger>
+            <TabsTrigger value="mine" className={cn('px-2.5 text-xs', TAB_ACTIVE)}>My points</TabsTrigger>
+            <TabsTrigger value="all" className={cn('px-2.5 text-xs', TAB_ACTIVE)}>All points</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -339,7 +339,7 @@ export function Points(props: PointsProps) {
               <Tabs value={String(filters.maxHops)} onValueChange={(v) => props.onMaxHops(Number(v))}>
                 <TabsList className="h-8 w-full">
                   {HOP_TABS.map((t) => (
-                    <TabsTrigger key={t.key} value={String(t.key)} className={cn('flex-1 text-xs', ACTIVE_TAB)}>
+                    <TabsTrigger key={t.key} value={String(t.key)} className={cn('flex-1 text-xs', TAB_ACTIVE)}>
                       {t.label}
                     </TabsTrigger>
                   ))}
@@ -393,7 +393,7 @@ export function Points(props: PointsProps) {
         </Popover>
 
         {data ? <span className="ml-auto text-xs text-muted-foreground">{flow.nodes.length} nodes · {flow.edges.length} routes</span> : null}
-      </div>
+      </PlanToolbar>
 
       <div className="relative min-h-0 flex-1 bg-background">
         {status === 'loading' ? (
