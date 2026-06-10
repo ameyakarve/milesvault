@@ -114,9 +114,20 @@ export default {
       }
       const email = await __resolveEmail(request, env)
       if (!email) return new Response("unauthorized", { status: 401 })
-      const id = ns.idFromName(email)
+      // Optional per-item thread (Inbox chat): ?thread=<captureId> selects a
+      // dedicated DO instance named "<email>::<id>". The email always comes
+      // from the session, so a user can only ever reach their own threads.
+      const thread = url.searchParams.get("thread")
+      let name = email
+      if (thread) {
+        if (!/^[A-Za-z0-9_-]{1,80}$/.test(thread)) {
+          return new Response("invalid thread id", { status: 400 })
+        }
+        name = email + "::" + thread
+      }
+      const id = ns.idFromName(name)
       const stub = ns.get(id)
-      await stub.setName(email)
+      await stub.setName(name)
       return stub.fetch(request)
     }
     return __openNextHandler.fetch(request, env, ctx)

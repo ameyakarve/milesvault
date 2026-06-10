@@ -259,6 +259,12 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     sql: 'ALTER TABLE capture_items ADD COLUMN drafts TEXT',
     allowFail: true,
   },
+  // Why the last background draft produced nothing (shown in the Inbox).
+  {
+    label: 'capture_items_draft_error',
+    sql: 'ALTER TABLE capture_items ADD COLUMN draft_error TEXT',
+    allowFail: true,
+  },
   // Email ingestion rules (experience.md §9): matcher + action + prompt.
   // First enabled match wins (created order). 'ignore' drops the email
   // without a capture; 'capture' attaches the prompt to the capture item.

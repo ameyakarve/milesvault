@@ -279,6 +279,7 @@ ${opts.text}`,
       const stmt = await ledger.get_statement(statementId)
       if (!stmt) return { ok: false, entries: 0 }
       const capture = (await ledger.list_captures()).rows.find((r) => r.id === statementId)
+      await ledger.set_capture_state(statementId, 'processing')
       const snapshot = await ledger.ledger_snapshot()
       const recorded: string[] = []
       const draft_transaction = tool({
@@ -302,7 +303,14 @@ ${stmt.text}`,
         stopWhen: stepCountIs(8),
         experimental_repairToolCall: draftTransactionRepair,
       })
-      if (recorded.length > 0) await ledger.set_capture_drafts(statementId, recorded)
+      if (recorded.length > 0) {
+        await ledger.set_capture_drafts(statementId, recorded)
+      } else {
+        await ledger.set_capture_error(
+          statementId,
+          result.text.trim().slice(0, 300) || 'background draft produced no entries',
+        )
+      }
       this.logTool({
         agent: 'async-ingest',
         tool: 'draft_statement',
@@ -313,6 +321,9 @@ ${stmt.text}`,
       })
       return { ok: recorded.length > 0, entries: recorded.length }
     } catch (e) {
+      await this.ledgerStub()
+        .set_capture_error(statementId, String(e).slice(0, 300))
+        .catch((): undefined => undefined)
       this.logTool({
         agent: 'async-ingest',
         tool: 'draft_statement',
@@ -326,9 +337,30 @@ ${stmt.text}`,
     }
   }
 
+  // Instance names: "<email>" (the main editor chat) or "<email>::<captureId>"
+  // (a per-Inbox-item thread). The ledger is always the user's — parse the
+  // email off the left.
+  private ownerEmail(): string {
+    return this.name.split('::')[0]!
+  }
+
+  // The capture id when this instance is an Inbox thread, else null.
+  private threadCaptureId(): string | null {
+    const i = this.name.indexOf('::')
+    return i === -1 ? null : this.name.slice(i + 2)
+  }
+
   private ledgerStub(): DurableObjectStub<LedgerDO> {
     const ns = this.env.LEDGER_DO as unknown as DurableObjectNamespace<LedgerDO>
-    return ns.get(ns.idFromName(this.name))
+    return ns.get(ns.idFromName(this.ownerEmail()))
+  }
+
+  // Cost hygiene: when an Inbox item is posted or dismissed, its thread DO is
+  // destroyed — storage wiped, alarms cleared, nothing left to bill.
+  async destroyThread(): Promise<{ ok: true }> {
+    await this.ctx.storage.deleteAlarm()
+    await this.ctx.storage.deleteAll()
+    return { ok: true }
   }
 
   private snapshot(): Snapshot {
@@ -358,12 +390,29 @@ ${stmt.text}`,
   // ---- AgentHost<EditorAgentName> ----
 
   system(name: EditorAgentName): string {
-    if (name === 'ledger') {
-      return buildLedgerSystem(this.snapshot()) + this.handoffContextBlock()
-    }
-    return (
-      buildStatementAgentSystem(this.snapshot()) + this.handoffContextBlock()
-    )
+    const base =
+      name === 'ledger'
+        ? buildLedgerSystem(this.snapshot())
+        : buildStatementAgentSystem(this.snapshot())
+    return base + this.threadContextBlock() + this.handoffContextBlock()
+  }
+
+  // Inbox-item threads are anchored to one statement: tell the agent which
+  // one, so "why is row 7 categorized like that?" works without the user
+  // pasting ids. Drafts proposed by the background run (if any) are on the
+  // capture row — the user sees them above this chat.
+  private threadContextBlock(): string {
+    const captureId = this.threadCaptureId()
+    if (!captureId) return ''
+    return `
+
+## This thread
+This conversation is scoped to ONE Inbox item: statement id "${captureId}".
+Use read_statement({ statement_id: "${captureId}" }) to read its text when
+the user asks about its contents. A background run may already have proposed
+draft entries for it (shown to the user above this chat) — do not re-draft
+the whole statement unless the user asks; answer questions, adjust specific
+entries, or draft corrections.`
   }
 
   tools(name: EditorAgentName): ToolSet {

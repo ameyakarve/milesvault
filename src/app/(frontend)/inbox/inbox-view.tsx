@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
+import { InboxThreadChat } from './thread-chat'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -21,6 +22,7 @@ type CaptureRow = {
   state: string
   prompt: string | null
   drafts: string | null
+  draft_error: string | null
   created_at: number
 }
 
@@ -101,7 +103,7 @@ export function InboxView() {
     const interval = setInterval(() => {
       // Only poll while a background draft is pending.
       setAllRows((prev) => {
-        if (prev?.some((r) => r.state === 'captured')) load()
+        if (prev?.some((r) => r.state === 'captured' || r.state === 'processing')) load()
         return prev
       })
     }, 8000)
@@ -172,9 +174,11 @@ export function InboxView() {
     }
   }
 
-  // Chip tone mapping: captured→pending, extracted→active, posted→positive, dismissed→neutral
+  // Chip tone mapping: captured→neutral (queued), processing→pending,
+  // extracted→active (ready to review), posted→positive
   function chipTone(state: string) {
-    if (state === 'captured') return 'pending' as const
+    if (state === 'captured') return 'neutral' as const
+    if (state === 'processing') return 'pending' as const
     if (state === 'extracted') return 'active' as const
     if (state === 'posted') return 'positive' as const
     return 'neutral' as const
@@ -238,7 +242,8 @@ export function InboxView() {
         <ul className="space-y-2">
           {rows.map((r) => {
             const entries = parseDrafts(r.drafts)
-            const reviewable = entries.length > 0 && r.state === 'extracted'
+            const open = openId === r.id
+            const openable = r.state === 'extracted' || r.state === 'captured'
             return (
               <li
                 key={r.id}
@@ -249,26 +254,28 @@ export function InboxView() {
                     <p className="truncate text-sm text-foreground">{r.filename ?? r.id}</p>
                     <p className="text-xs text-muted-foreground">
                       {r.source} · {fmtDate(r.created_at)}
+                      {r.state === 'processing' ? ' · drafting…' : ''}
                     </p>
+                    {r.draft_error ? (
+                      <p className="mt-0.5 text-xs text-destructive">
+                        Background draft failed: {r.draft_error}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <StateChip tone={chipTone(r.state)}>{r.state}</StateChip>
-                    {reviewable ? (
+                    <StateChip tone={chipTone(r.state)}>
+                      {r.state === 'processing' ? 'drafting' : r.state}
+                    </StateChip>
+                    {openable ? (
                       <Button
                         variant="ghost"
                         size="xs"
-                        onClick={() => setOpenId(openId === r.id ? null : r.id)}
+                        onClick={() => setOpenId(open ? null : r.id)}
                         className="text-foreground whitespace-nowrap"
                       >
-                        {openId === r.id ? 'Collapse' : `Review drafts (${entries.length})`}
+                        {open ? 'Close' : entries.length > 0 ? `Open (${entries.length})` : 'Open'}
                       </Button>
                     ) : null}
-                    <Link
-                      href={`/editor?statement=${encodeURIComponent(r.id)}&filename=${encodeURIComponent(r.filename ?? r.id)}${r.prompt ? `&prompt=${encodeURIComponent(r.prompt)}` : ''}`}
-                      className="text-xs text-foreground underline underline-offset-4 hover:no-underline whitespace-nowrap"
-                    >
-                      Review in chat →
-                    </Link>
                     <Button
                       variant="ghost"
                       size="xs"
@@ -279,7 +286,7 @@ export function InboxView() {
                     </Button>
                   </div>
                 </div>
-                {openId === r.id && reviewable ? (
+                {open && openable ? (
                   <div className="mt-3 space-y-2 border-t border-border pt-3">
                     {entries.map((e, i) => (
                       <pre
@@ -292,18 +299,31 @@ export function InboxView() {
                     {approveError[r.id] ? (
                       <p className="text-xs text-destructive">{approveError[r.id]}</p>
                     ) : null}
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="xs"
-                        onClick={() => void approveDrafts(r)}
-                        disabled={approveBusy === r.id}
-                      >
-                        {approveBusy === r.id ? 'Posting…' : `Approve all (${entries.length})`}
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        Edits? Use “Review in chat” instead.
-                      </p>
-                    </div>
+                    {entries.length > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="xs"
+                          onClick={() => void approveDrafts(r)}
+                          disabled={approveBusy === r.id}
+                        >
+                          {approveBusy === r.id ? 'Posting…' : `Approve all (${entries.length})`}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          Edits or questions? Chat below — it knows this statement.
+                        </p>
+                      </div>
+                    ) : null}
+                    <InboxThreadChat
+                      captureId={r.id}
+                      onPosted={() => {
+                        setAllRows(
+                          (prev) =>
+                            prev?.map((x) => (x.id === r.id ? { ...x, state: 'posted' } : x)) ??
+                            prev,
+                        )
+                        setOpenId(null)
+                      }}
+                    />
                   </div>
                 ) : null}
               </li>
@@ -311,8 +331,8 @@ export function InboxView() {
           })}
         </ul>
         <p className="text-xs text-muted-foreground">
-          Dropped statements and forwarded transaction emails wait here until
-          you review them.
+          Dropped statements and forwarded transaction emails are drafted in
+          the background and reviewed here.
           {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
         </p>
         {addressLine}

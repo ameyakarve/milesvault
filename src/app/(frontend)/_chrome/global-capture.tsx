@@ -190,7 +190,7 @@ export function GlobalCapture() {
               Drop a statement PDF to capture it
             </p>
             <p className="text-xs text-muted-foreground">
-              It goes to your Inbox — review when ready
+              We’ll draft it in the background — review from the Inbox
             </p>
           </>
         ) : overlay.kind === 'processing' ? (
@@ -249,7 +249,7 @@ export function GlobalCapture() {
               {overlay.filename} captured
             </p>
             <p className="text-xs text-muted-foreground">
-              In your Inbox — review when you’re ready
+              Drafting in the background — it’ll appear in your Inbox
             </p>
           </>
         ) : overlay.kind === 'error' ? (

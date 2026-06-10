@@ -546,7 +546,7 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
   // Advance a capture item's lifecycle state (ledger-pipeline.md §2).
   async set_capture_state(
     id: string,
-    state: 'captured' | 'extracted' | 'posted' | 'dismissed',
+    state: 'captured' | 'processing' | 'extracted' | 'posted' | 'dismissed',
   ): Promise<{ ok: boolean }> {
     const cursor = this.db.exec(
       `UPDATE capture_items SET state = ?, updated_at = ? WHERE id = ?`,
@@ -563,8 +563,20 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
   async set_capture_drafts(id: string, entries: string[]): Promise<{ ok: boolean }> {
     if (entries.length === 0) return { ok: false }
     const cursor = this.db.exec(
-      `UPDATE capture_items SET drafts = ?, state = 'extracted', updated_at = ? WHERE id = ?`,
+      `UPDATE capture_items SET drafts = ?, draft_error = NULL, state = 'extracted', updated_at = ? WHERE id = ?`,
       JSON.stringify(entries),
+      Date.now(),
+      id,
+    )
+    return { ok: cursor.rowsWritten > 0 }
+  }
+
+  // Background drafting failed: back to 'captured' with the reason visible —
+  // the item stays fully reviewable in its thread.
+  async set_capture_error(id: string, error: string): Promise<{ ok: boolean }> {
+    const cursor = this.db.exec(
+      `UPDATE capture_items SET draft_error = ?, state = 'captured', updated_at = ? WHERE id = ?`,
+      error.slice(0, 500),
       Date.now(),
       id,
     )
@@ -581,6 +593,7 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       state: string
       prompt: string | null
       drafts: string | null
+      draft_error: string | null
       created_at: number
     }>
   }> {
@@ -593,9 +606,10 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         state: string
         prompt: string | null
         drafts: string | null
+        draft_error: string | null
         created_at: number
       }>(
-        `SELECT id, source, artifact, filename, state, prompt, drafts, created_at
+        `SELECT id, source, artifact, filename, state, prompt, drafts, draft_error, created_at
          FROM capture_items ORDER BY created_at DESC, id DESC LIMIT 200`,
       )
       .toArray()
