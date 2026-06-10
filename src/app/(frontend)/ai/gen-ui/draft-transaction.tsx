@@ -73,7 +73,7 @@ const THEME = EditorView.theme({
     fontSize: '12.5px',
     fontFamily: "'JetBrains Mono', monospace",
   },
-  '.cm-content': { padding: '8px 0', caretColor: 'var(--cm-caret)' },
+  '.cm-content': { padding: '8px 0', caretColor: 'var(--cm-caret)', color: 'var(--cm-text)' },
   '.cm-line': { padding: '0 12px', lineHeight: '22px' },
   '.cm-focused': { outline: 'none' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
@@ -325,6 +325,7 @@ export function DraftTransactionBatchCard({
                     <div className="border-t border-border bg-muted/30 px-2 pb-2 pt-1">
                       <div className="overflow-hidden rounded-md border bg-background">
                         <CodeMirror
+          theme="none"
                           value={text}
                           onChange={(next) => updateAt(i, next)}
                           extensions={extensions}
@@ -351,6 +352,7 @@ export function DraftTransactionBatchCard({
         ) : (
           <div className="overflow-hidden rounded-md border bg-background">
             <CodeMirror
+          theme="none"
               value={texts[0] ?? ''}
               onChange={(next) => updateAt(0, next)}
               extensions={extensions}

@@ -47,7 +47,7 @@ const THEME = EditorView.theme({
     fontFamily: "'JetBrains Mono', monospace",
     overflow: 'auto',
   },
-  '.cm-content': { padding: '12px 0', caretColor: 'var(--cm-caret)' },
+  '.cm-content': { padding: '12px 0', caretColor: 'var(--cm-caret)', color: 'var(--cm-text)' },
   '.cm-line': { padding: '0 16px', lineHeight: '24px' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
     { backgroundColor: 'var(--cm-selection)' },
@@ -118,6 +118,7 @@ export function Journal({
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
       <CodeMirror
+          theme="none"
         value={text}
         onChange={onChange}
         extensions={extensions}
