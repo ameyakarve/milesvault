@@ -95,3 +95,33 @@ export function kgLookupParts(
   }
   return null
 }
+
+// Title-case an all-caps commodity-style leaf for display ("KRISFLYER" →
+// "Krisflyer", "HDFC-SMARTBUY" → "Hdfc Smartbuy") — but leave short codes
+// ("MR", "AVIOS"… ≤4 chars) untouched: "Mr" would be worse than "MR". The KG
+// display name, when resolved, always wins over this fallback.
+export function prettyLeaf(leaf: string): string {
+  if (leaf.length <= 4 || leaf !== leaf.toUpperCase()) return leaf
+  return leaf
+    .split(/[-_]/)
+    .map((w) => (w ? w[0] + w.slice(1).toLowerCase() : w))
+    .join(' ')
+}
+
+// One resolution chain for what to call an account, everywhere:
+// KG display name → convention-aware path label (prettified).
+export function displayName(
+  account: string,
+  kgNames: Record<string, string>,
+): { name: string; suffix: string | null } {
+  const kg = kgNames[account]
+  const { label, suffix } = accountLabel(account)
+  return { name: kg ?? prettyLeaf(label), suffix }
+}
+
+// True when showing the currency code next to this name would just repeat it
+// ("KrisFlyer · 18,000 KRISFLYER").
+export function currencyRedundant(name: string, currency: string): boolean {
+  const norm = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  return norm(name) === norm(currency) || norm(name).includes(norm(currency))
+}

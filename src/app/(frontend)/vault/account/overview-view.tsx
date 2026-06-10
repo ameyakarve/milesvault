@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AccountOverview } from '@/durable/ledger-do'
-import { accountLabel } from '@/lib/ledger-core/account-display'
+import { accountLabel, displayName as resolveName, prettyLeaf } from '@/lib/ledger-core/account-display'
 import { SectionLabel, StatTile, CenteredState } from '@/components/shared'
 import { Button } from '@/components/ui/button'
 
@@ -110,8 +110,7 @@ export function AccountOverviewView() {
   const currencies = state.status === 'ok' ? state.data.currencies : (ccy ? [ccy] : [])
   const activeCcy = state.status === 'ok' ? (state.data.currency ?? ccy) : ccy
 
-  const { label: pathLabel, suffix } = accountLabel(account)
-  const displayName = names[account] ?? pathLabel
+  const { name: displayName, suffix } = resolveName(account, names)
 
   const header = (
     <div className="flex flex-col gap-2 border-b border-border bg-background px-6 py-4">
@@ -460,7 +459,7 @@ function CompositionBars({
                 className="text-[11px] text-muted-foreground truncate min-w-0 hover:text-foreground underline-offset-4 hover:underline"
                 title={row.account}
               >
-                {accountLabel(row.account).label}
+                {prettyLeaf(accountLabel(row.account).label)}
               </Link>
               <span className={[
                 'text-[11px] font-mono shrink-0',

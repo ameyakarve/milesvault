@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
 import {
-  accountLabel,
+  currencyRedundant,
+  displayName,
   groupLabel,
   groupRank,
   isHolding,
 } from '@/lib/ledger-core/account-display'
-import { SectionLabel, StatTile, CenteredState } from '@/components/shared'
+import { SectionLabel, StatTile, CenteredState, Monogram } from '@/components/shared'
 
 // KG display names (cards, points) fetched once and overlaid on the
 // path-derived labels — account path → display name.
@@ -137,9 +138,21 @@ export function VaultView() {
   const cardCount = countCreditCards(rows)
   const acctCount = countOpenAccounts(rows)
 
-  // ── group rows by the taxonomy (deepest node label wins) ─────────────────
+  // ── hierarchy: points are the product (hero cards), credit cards second
+  // (medium cards), everything else compact lists grouped by taxonomy.
+  const pointRows = rows
+    .filter((r) => r.account.startsWith('Assets:Rewards:Points:'))
+    .sort((a, b) => balanceOf(b) - balanceOf(a))
+  const cardRows = rows
+    .filter((r) => r.account.startsWith('Liabilities:CreditCards:'))
+    .sort((a, b) => a.account.localeCompare(b.account))
+  const restRows = rows.filter(
+    (r) =>
+      !r.account.startsWith('Assets:Rewards:Points:') &&
+      !r.account.startsWith('Liabilities:CreditCards:'),
+  )
   const grouped = new Map<string, AccountSummaryRow[]>()
-  for (const r of rows) {
+  for (const r of restRows) {
     const k = groupLabel(r.account)
     const bucket = grouped.get(k) ?? []
     bucket.push(r)
@@ -150,7 +163,7 @@ export function VaultView() {
   )
 
   return (
-    <div className="px-6 py-6 max-w-4xl mx-auto w-full space-y-8">
+    <div className="px-6 py-8 max-w-5xl mx-auto w-full space-y-10">
       {/* ── needs review lane ─────────────────────────────────────────────── */}
       {pendingCaptures > 0 ? (
         <Link
@@ -183,15 +196,103 @@ export function VaultView() {
         />
       </div>
 
-      {/* ── holdings groups ───────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {orderedGroups.map((key) => {
-          const groupRows = grouped.get(key)
-          if (!groupRows || groupRows.length === 0) return null
-          return <HoldingsCard key={key} title={key} rows={groupRows} names={names} />
-        })}
-      </div>
+      {/* ── points: the hero ──────────────────────────────────────────────── */}
+      {pointRows.length > 0 ? (
+        <section className="space-y-3">
+          <SectionLabel>Points</SectionLabel>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {pointRows.map((r) => (
+              <ProgrammeCard key={`${r.account}|${r.currency}`} row={r} names={names} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* ── credit cards ──────────────────────────────────────────────────── */}
+      {cardRows.length > 0 ? (
+        <section className="space-y-3">
+          <SectionLabel>Credit cards</SectionLabel>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {cardRows.map((r) => (
+              <CreditCardCard key={`${r.account}|${r.currency}`} row={r} names={names} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {/* ── everything else, compact ──────────────────────────────────────── */}
+      {orderedGroups.length > 0 ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {orderedGroups.map((key) => {
+            const groupRows = grouped.get(key)
+            if (!groupRows || groupRows.length === 0) return null
+            return <HoldingsCard key={key} title={key} rows={groupRows} names={names} />
+          })}
+        </div>
+      ) : null}
     </div>
+  )
+}
+
+function balanceOf(r: AccountSummaryRow): number {
+  return Number(r.balance_scaled) / 10 ** r.scale
+}
+
+function accountHref(r: AccountSummaryRow): string {
+  return `/vault/account?account=${encodeURIComponent(r.account)}&ccy=${encodeURIComponent(r.currency)}`
+}
+
+// Hero card: one loyalty programme — monogram, resolved name, big balance.
+function ProgrammeCard({ row, names }: { row: AccountSummaryRow; names: Names }) {
+  const { name } = displayName(row.account, names)
+  return (
+    <Link
+      href={accountHref(row)}
+      className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/25"
+    >
+      <div className="flex items-center gap-3">
+        <Monogram name={name} size="lg" />
+        <span className="truncate text-sm font-medium text-foreground">{name}</span>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className="font-mono text-3xl font-semibold leading-none text-foreground">
+          {formatBalance(row.balance_scaled, row.scale)}
+        </span>
+        {!currencyRedundant(name, row.currency) ? (
+          <span className="font-mono text-xs text-muted-foreground">{row.currency}</span>
+        ) : (
+          <span className="font-mono text-xs text-muted-foreground">pts</span>
+        )}
+      </div>
+    </Link>
+  )
+}
+
+// Medium card: a credit card — monogram, issuer-qualified name, balance owed.
+function CreditCardCard({ row, names }: { row: AccountSummaryRow; names: Names }) {
+  const { name, suffix } = displayName(row.account, names)
+  const bal = balanceOf(row)
+  return (
+    <Link
+      href={accountHref(row)}
+      className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/25"
+    >
+      <Monogram name={name} />
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+        {name}
+        {suffix ? (
+          <span className="ml-1.5 font-mono text-[10px] font-normal text-muted-foreground">
+            ··{suffix}
+          </span>
+        ) : null}
+      </span>
+      <span
+        className={`shrink-0 font-mono text-lg font-semibold ${bal < 0 ? 'text-foreground' : 'text-muted-foreground'}`}
+      >
+        {formatBalance(row.balance_scaled, row.scale)}
+        <span className="ml-1 text-xs font-normal text-muted-foreground">{row.currency}</span>
+      </span>
+    </Link>
   )
 }
 
@@ -211,12 +312,11 @@ function HoldingsCard({
       <SectionLabel>{title}</SectionLabel>
       <ul className="space-y-1">
         {rows.map((r) => {
-          const { label, suffix } = accountLabel(r.account)
-          const display = names[r.account] ?? label
+          const { name: display, suffix } = displayName(r.account, names)
           return (
             <li key={`${r.account}|${r.currency}`}>
               <Link
-                href={`/vault/account?account=${encodeURIComponent(r.account)}&ccy=${encodeURIComponent(r.currency)}`}
+                href={accountHref(r)}
                 className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-muted group"
               >
                 <span className="text-sm text-foreground truncate group-hover:underline group-hover:underline-offset-4">
@@ -226,8 +326,10 @@ function HoldingsCard({
                   ) : null}
                 </span>
                 <span className="text-xs font-mono text-muted-foreground whitespace-nowrap shrink-0">
-                  {formatBalance(r.balance_scaled, r.scale)}{' '}
-                  <span className="text-muted-foreground/70">{r.currency}</span>
+                  {formatBalance(r.balance_scaled, r.scale)}
+                  {!currencyRedundant(display, r.currency) ? (
+                    <span className="ml-1 text-muted-foreground/70">{r.currency}</span>
+                  ) : null}
                 </span>
               </Link>
             </li>

@@ -113,3 +113,51 @@ export function CenteredState({
     </div>
   )
 }
+
+// Identity monogram for programmes/cards — a quiet deterministic tint per
+// name (low saturation, dark-aware). Flip MONOGRAM_TONES to the single
+// neutral entry to go fully monochrome.
+const MONOGRAM_TONES = [
+  'bg-slate-200/70 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200',
+  'bg-amber-100/80 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+  'bg-emerald-100/80 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+  'bg-sky-100/80 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
+  'bg-violet-100/80 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
+  'bg-rose-100/80 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
+]
+
+function hashStr(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+export function Monogram({
+  name,
+  size = 'md',
+  className,
+}: {
+  name: string
+  size?: 'md' | 'lg'
+  className?: string
+}) {
+  const initials = name
+    .split(/[\s·]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('')
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'flex shrink-0 select-none items-center justify-center rounded-full font-semibold',
+        size === 'lg' ? 'size-10 text-sm' : 'size-8 text-xs',
+        MONOGRAM_TONES[hashStr(name) % MONOGRAM_TONES.length],
+        className,
+      )}
+    >
+      {initials || '·'}
+    </span>
+  )
+}
