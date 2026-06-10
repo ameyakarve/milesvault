@@ -39,8 +39,10 @@ The atoms are strong. The molecule is tool-shaped.
   have?" — the first question of any points user — has no surface. Balances
   exist only as journal text or graph overlays.
 - **Two AI brains.** The user must know that `/editor` chat edits and
-  `/concierge` chat answers. That is the agent registry leaking into the UX;
-  the handoff machinery already exists to hide it.
+  `/concierge` chat answers. The split has a real rationale — concierge-style
+  Q&A is meant to be reachable over bot channels that can't render gen-UI
+  (§7, Channels) — but on the *web* it leaks routing onto the user; the
+  handoff machinery already exists to hide it there.
 - **Three disconnected graph tools.** Explore, Points, and Status Match are
   three views of one question ("what can my points become?") that barely know
   about each other or about the ledger. `/points` isn't even in the nav.
@@ -142,6 +144,28 @@ one entry point; the user never picks a brain. Requirements:
 - **Registry note:** this is a registry merge / router-agent addition in
   `agent-registries.md` terms — an experience decision, not an architecture
   change; DO topology stays as is.
+
+**Channels (owner constraint, recorded 2026-06-10).** Parts of the assistant
+must be reachable over WhatsApp / Telegram / Discord bots — which cannot
+render gen-UI. This was a rationale behind the original editor/concierge
+split, and it survives the merge as a sharper rule:
+
+- **One brain, capability-aware channels.** "One Assistant" means one entry
+  point and one router — not one surface. Each channel declares a capability
+  envelope (web: full gen-UI; bots: text + attachments), and the agent's
+  tools render per envelope.
+- **Gen-UI is progressive enhancement over a text protocol, never the
+  protocol itself.** Every interactive affordance needs a text-degradable
+  equivalent: a draft transaction renders as fenced beancount + "reply 1 to
+  approve, 2 to reject"; a clarify card becomes numbered options; the
+  Explore link card becomes a plain URL. The trust contract (explicit
+  approval before any write) survives as a reply protocol.
+- **Bots are also capture sources.** A statement PDF sent to the bot is a
+  capture (`source: 'bot'`), landing in the same Inbox as uploads and
+  forwarded email.
+- **Likely staging:** bots ship read-only first (concierge-grade Q&A — the
+  part that degrades to text natively), text-protocol approvals second, once
+  account↔bot pairing (§15) is solved.
 
 ## 8. Capture feels like forwarding, not filing
 
@@ -273,3 +297,7 @@ in parallel.
 - Rule failure handling: a rule whose prompt errors or times out should
   degrade to plain `needs_review` capture, never drop the email — confirm
   this is an invariant, not a setting.
+- Bot channels (§7): which platform first (WhatsApp vs Telegram vs Discord);
+  account↔bot identity pairing (token-based linking, like the email
+  plus-token?); whether write actions (text-protocol approvals) are allowed
+  from day one or gated behind read-only.
