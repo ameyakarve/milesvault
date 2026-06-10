@@ -52,17 +52,16 @@ Follow these rules when building that array.
    a purchase: negative expense leg, positive card leg. Keep each `Cr`
    row as its own transaction — never net two together or fold a refund
    into a receivable.
-8. **The LAST element is the reward accrual.** For a credit-card
-   statement, after the spend entries, append ONE final entry: the cycle's
-   reward accrual, built from the `card_guide` result —
-   `pool.account` + `:Pending` for the points leg, `Equity:Void` contra,
-   `pool.ticker` as the commodity, `#reward-accrual` tag. Use the
-   statement's stated points-earned figure when printed; otherwise compute
-   `floor(eligible_spend / per) * points` from the base rate
-   (exclude fuel / rent / wallet loads / government rows from eligible
-   spend) and say "est." with the rate in the narration. A batch with no
-   accrual entry is INCOMPLETE unless the guide gave you no rate at all —
-   and then you must tell the user you skipped it.
+8. **Every eligible spend carries its points legs.** For a credit-card
+   statement, each spend entry follows the card guide's earn example:
+   expense leg + card leg + `pool.account`:Pending points leg +
+   `Equity:Void` contra, points = `floor(amount / per) * points` from the
+   guide's base rate, commodity = `pool.ticker`, tag `#reward-accrual`.
+   Excluded categories per the guide (fuel, rent, wallet loads,
+   government/tax) get the plain two-posting form — no points legs.
+   Refunds reverse their points too. A spend entry missing its points legs
+   is INCOMPLETE unless the guide gave you no rate at all — and then you
+   must tell the user you skipped accruals.
 9. **One transaction per element.** Each entry is a complete Beancount
    block — header line plus 2+ postings, no leading/trailing blank
    lines, no comments narrating what the row is for. The postings

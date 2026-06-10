@@ -38,18 +38,13 @@ Before drafting a card statement's transactions, call `card_guide` ONCE with
 the card's name and follow its `logging_guide` examples exactly — accounts,
 commodity tickers, `:Pending` accruals.
 
-- Do NOT add per-transaction points legs on statement imports.
-- If the statement states the points earned this cycle, use that number:
-  one accrual entry to the pool's `:Pending` child with `Equity:Void`
-  contra, tagged `#reward-accrual`.
-- Otherwise estimate from the guide's base rate over ELIGIBLE spend
-  (apply the guide's exclusions — fuel, rent, wallet loads, etc. — judged
-  from merchant names) and say so in the narration, e.g.
-  "Apr cycle points — est. 12/200 on ₹61,400 eligible (fuel excluded)".
+- EVERY eligible spend entry carries its own points legs (the guide's
+  earn example): `pool.account`:Pending + `Equity:Void` contra in
+  `pool.ticker`, points = floor(amount / per) × points at the base rate.
+- Excluded categories per the guide (fuel, rent, wallet loads,
+  government/tax — judged from merchant names) get NO points legs.
 - A null `logging_guide` does NOT mean skip: if `pool.rate_notes` states a
-  base rate (e.g. "12 EDGE RPs / ₹200"), still add the single estimated
-  accrual entry using `pool.account` + `:Pending` and `pool.ticker` as the
-  commodity.
-- Only when there is no guide AND no usable rate anywhere do you skip the
-  accrual — and then tell the user you skipped it, rather than inventing a
-  rate.
+  base rate (e.g. "12 EDGE RPs / ₹200"), apply it the same way.
+- Only when there is no guide AND no usable rate anywhere do you draft
+  plain spends — and then tell the user you skipped accruals, rather than
+  inventing a rate.
