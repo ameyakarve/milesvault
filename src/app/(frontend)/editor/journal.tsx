@@ -64,7 +64,10 @@ const THEME = EditorView.theme({
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: '11px',
     lineHeight: '24px',
-    padding: '12px 8px 12px 0',
+    // No vertical padding here: CM6 offsets the first gutter element to
+    // match .cm-content's own top padding — padding the container too
+    // double-shifts every number 12px below its line.
+    padding: '0 8px 0 0',
   },
   '.cm-lineNumbers .cm-gutterElement': {
     display: 'flex',
