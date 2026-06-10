@@ -21,7 +21,11 @@ Follow these rules when building that array.
    - Payment received / auto-debit credits to the card
    - Interest charged, finance charges, late fees the issuer levies
    - Statement balance / minimum due / credit limit summary rows
-   - Reward-point accrual / redemption summaries
+   - Reward-point accrual / redemption summaries — skip as TRANSACTIONS,
+     but if the statement states the points earned this cycle, REMEMBER
+     that number: it feeds the single accrual entry described in
+     "Reward accrual on card statements" (statement-stated points always
+     beat your own estimate).
 
    A **forex-markup fee** and its **GST** that follow a foreign-currency
    charge are NOT noise and are NOT standalone transactions — fold them
