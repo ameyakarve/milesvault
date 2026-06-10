@@ -28,8 +28,17 @@ export function cardGuideTool(kb: KbHttp) {
         const node = (await kb.get(top.slug)) as {
           display_name?: string | null
           content_md?: string
+          source_file?: string
         } | null
-        const content = node?.content_md ?? ''
+        // The ::node block holds only the title — the card's prose sections
+        // (## Logging, ## Fees…) live in the FILE body, so fetch that.
+        let content = node?.content_md ?? ''
+        if (node?.source_file) {
+          const file = (await kb.getFile(node.source_file).catch((): null => null)) as {
+            content_md?: string
+          } | null
+          if (file?.content_md) content = file.content_md
+        }
         const logging = /## Logging[\s\S]*?(?=\n## |$)/.exec(content)?.[0] ?? null
 
         const rel = (await kb.related(top.slug, { direction: 'outgoing' })) as {

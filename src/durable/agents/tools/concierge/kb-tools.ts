@@ -22,6 +22,9 @@ export interface KbHttp {
     },
   ): Promise<unknown>
   list(prefix: string, opts: { limit?: number }): Promise<unknown>
+  // Whole source file (path from a node's `source_file`) — markdown sections
+  // outside the ::node block (e.g. a card's "## Logging") live only here.
+  getFile(path: string): Promise<unknown>
 }
 
 // Build the four traversal tools. They map 1:1 to the kb HTTP endpoints
@@ -339,6 +342,11 @@ export function kbHttpOverFetch(
       if (opts.direction) u.searchParams.set('direction', opts.direction)
       if (opts.edge_type) u.searchParams.set('edge_type', opts.edge_type)
       if (opts.limit !== undefined) u.searchParams.set('limit', String(opts.limit))
+      return (await fetcher.fetch(u)).json()
+    },
+    async getFile(path) {
+      const u = new URL(`${trimmed}/api/kb/file`)
+      u.searchParams.set('path', path)
       return (await fetcher.fetch(u)).json()
     },
     async list(prefix, opts) {

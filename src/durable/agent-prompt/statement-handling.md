@@ -46,5 +46,10 @@ commodity tickers, `:Pending` accruals.
   (apply the guide's exclusions — fuel, rent, wallet loads, etc. — judged
   from merchant names) and say so in the narration, e.g.
   "Apr cycle points — est. 12/200 on ₹61,400 eligible (fuel excluded)".
-- If `card_guide` returns no guide and no usable rate, skip the accrual and
-  tell the user you did, rather than inventing a rate.
+- A null `logging_guide` does NOT mean skip: if `pool.rate_notes` states a
+  base rate (e.g. "12 EDGE RPs / ₹200"), still add the single estimated
+  accrual entry using `pool.account` + `:Pending` and `pool.ticker` as the
+  commodity.
+- Only when there is no guide AND no usable rate anywhere do you skip the
+  accrual — and then tell the user you skipped it, rather than inventing a
+  rate.
