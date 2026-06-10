@@ -385,67 +385,25 @@ export function Chat({
     return () => ac.abort()
   }, [])
 
-  // Auto-send a statement message when the page was reached via the global
-  // drop-target (?statement=STMT-…&filename=…). The capture row already exists
-  // server-side; we just need to send the message that kicks off processing.
-  //
-  // Guard logic (three layers):
-  //   1. autoSentStatementRef — run-once per component lifetime; prevents a
-  //      double-send if React re-runs effects in strict mode.
-  //   2. Check messages already contain the statement id — handles a page
-  //      reload while the same conversation is still in the DO's history.
-  //   3. history.replaceState strips the params immediately so refreshes don't
-  //      re-trigger (and the URL stays clean for the user).
+  // ?statement= MUST NEVER start a run (owner decree, learned the hard way:
+  // browser autocomplete resurrects old editor?statement= URLs from history,
+  // and the in-history guard raced hydration — every address-bar visit
+  // re-processed the statement). The params are stripped and IGNORED. The
+  // paperclip (explicit attach + send) is the only interactive entry;
+  // statements otherwise live in the Inbox. ?prefill= (Vault CTAs — plain
+  // text, no statement semantics) is the one allowed auto-send.
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
-    const stmtId = p.get('statement')
-    const filename = p.get('filename') ?? 'statement.pdf'
-    // A matched email rule's prompt rides the Inbox link (experience.md §9).
-    const rulePrompt = p.get('prompt')?.trim()
-    // Vault empty-cluster CTAs send a guided starter straight to the agent.
     const prefill = p.get('prefill')?.trim()
-    if (prefill && !stmtId) {
-      const clean = window.location.pathname
-      history.replaceState(null, '', clean)
+    if (p.has('statement') || p.has('filename') || p.has('prompt') || p.has('prefill')) {
+      history.replaceState(null, '', window.location.pathname)
+    }
+    if (prefill && !p.has('statement')) {
       if (autoSentStatementRef.current !== `prefill:${prefill}`) {
         autoSentStatementRef.current = `prefill:${prefill}`
         void sendMessage({ text: prefill })
       }
-      return
     }
-    if (!stmtId) return
-    // Strip params from the URL so a reload doesn't re-trigger.
-    const cleanUrl =
-      window.location.pathname +
-      (p.toString()
-        ? (() => {
-            p.delete('statement')
-            p.delete('filename')
-            p.delete('prompt')
-            const rest = p.toString()
-            return rest ? `?${rest}` : ''
-          })()
-        : '')
-    history.replaceState(null, '', cleanUrl)
-    // Already sent for this id in this session.
-    if (autoSentStatementRef.current === stmtId) return
-    autoSentStatementRef.current = stmtId
-    // Already present in the existing conversation (e.g. replayed from DO history).
-    const alreadyInHistory = messages.some((m) => {
-      const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
-      return parts.some(
-        (p) =>
-          p.type === 'text' &&
-          typeof p.text === 'string' &&
-          p.text.includes(`id="${stmtId}"`),
-      )
-    })
-    if (alreadyInHistory) return
-    // Set the ref so approve/reject can advance the capture row to 'posted'.
-    lastStatementIdRef.current = stmtId
-    const instruction = rulePrompt || 'Process the attached statement and draft transactions.'
-    const text = `${instruction}\n\n<statement id="${stmtId}" filename="${filename}" />`
-    void sendMessage({ text })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
