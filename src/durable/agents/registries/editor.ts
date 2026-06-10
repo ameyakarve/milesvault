@@ -24,7 +24,7 @@ export function makeEditorRegistry(host: AgentHost<EditorAgentName>): Registry {
   const ledger: AgentDef = {
     name: 'ledger',
     canHandoffTo: ['statement'],
-    model: { id: LEDGER_MODEL_ID, reasoning: 'off' },
+    model: { id: LEDGER_MODEL_ID, reasoning: 'off', maxOutputTokens: 16384 },
     system: () => host.system('ledger'),
     tools: () => host.tools('ledger'),
   }
@@ -33,7 +33,7 @@ export function makeEditorRegistry(host: AgentHost<EditorAgentName>): Registry {
     canHandoffTo: ['ledger'],
     // Gemma with reasoning OFF — the extractor evals were tuned on this; the
     // thinking trace mostly added latency, not accuracy.
-    model: { id: STATEMENT_MODEL_ID, reasoning: 'off' },
+    model: { id: STATEMENT_MODEL_ID, reasoning: 'off', maxOutputTokens: 16384 },
     system: () => host.system('statement'),
     tools: () => host.tools('statement'),
   }

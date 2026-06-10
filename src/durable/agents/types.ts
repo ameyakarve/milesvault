@@ -5,6 +5,10 @@ import type { ToolSet } from 'ai'
 // thinking trace (the host translates this to the model's chat-template flag,
 // since reasoning_effort:null is a no-op on Kimi/GLM).
 export interface ModelConfig {
+  /** Per-turn output-token budget. The default (~4096) truncates large
+   *  statement batches mid-JSON, which the validation gate then bounces
+   *  forever — set this high for agents that emit big tool payloads. */
+  readonly maxOutputTokens?: number
   readonly id: string
   readonly reasoning: 'low' | 'medium' | 'high' | 'off'
   // Per-agent override on the per-turn step cap. Think's default is 10;
