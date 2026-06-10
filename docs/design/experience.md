@@ -156,8 +156,10 @@ topics** (full rationale and the superseded merge options:
 
 ## 8. Capture feels like forwarding, not filing
 
-Fluidity test: *drag a PDF onto any screen, see a badge appear, approve a batch
-in under ten seconds.*
+Fluidity test: *drag a PDF onto any screen and be approving its drafts in the
+chat within seconds; forward an email and find it waiting in the Inbox.*
+(Owner call, 2026-06-10: interactive uploads process directly in chat and
+never enter the Inbox — the Inbox is for asynchronous arrivals only.)
 
 - Global drop target (whole viewport, any route) → capture item → Inbox.
 - Inbox badge in the nav; batch review with per-row toggles instead of

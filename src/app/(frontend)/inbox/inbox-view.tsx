@@ -30,9 +30,9 @@ function fmtDate(ms: number): string {
   })
 }
 
-// The capture lifecycle view (ledger-pipeline.md §2): everything that arrived
-// from a source, newest first. Statement uploads land here today; email and
-// paste captures join as F2/F3 fill out.
+// The capture lifecycle view (ledger-pipeline.md §2): ASYNC arrivals only —
+// forwarded transaction emails queue here for review. Chat uploads are
+// processed interactively and never enter the Inbox (owner call).
 export function InboxView() {
   const [allRows, setAllRows] = useState<CaptureRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -144,7 +144,7 @@ export function InboxView() {
     return (
       <>
         <CenteredState>
-          Nothing to review. Captured statements and forwarded emails will queue here.
+          Nothing to review. Forwarded transaction emails queue here.
         </CenteredState>
         {address ? (
           <div className="mx-auto w-full max-w-2xl px-4 pb-6 text-center">
