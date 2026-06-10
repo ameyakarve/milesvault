@@ -45,6 +45,14 @@ const RANGE_LABELS: { key: Range; label: string }[] = [
   { key: 'all', label: 'All' },
 ]
 
+type CardLink = {
+  card: string
+  rewards_account: string | null
+  rewards_name: string | null
+  rewards_currency: string | null
+  rewards_balance: number | null
+}
+
 // ── root component ─────────────────────────────────────────────────────────────
 
 export function AccountOverviewView() {
@@ -73,6 +81,34 @@ export function AccountOverviewView() {
     setCcy(p.get('ccy') ?? null)
     setReady(true)
   }, [])
+
+  // Kind-aware language (overview-tab.md per-kind fill): a credit card owes
+  // and spends; a points programme earns and redeems. Hooks live ABOVE every
+  // early return — `account` is null on the first render.
+  const isCard = !!account?.startsWith('Liabilities:CreditCards:')
+  const isPoints = !!account?.startsWith('Assets:Rewards:Points:')
+  const kpiLabels = isCard
+    ? { bal: 'Owed', inflow: 'Payments', outflow: 'Spend' }
+    : isPoints
+      ? { bal: 'Balance', inflow: 'Earned', outflow: 'Redeemed' }
+      : { bal: 'Balance', inflow: 'In', outflow: 'Out' }
+
+  // KG linkage: the rewards programme this card earns into (credit cards only).
+  const [cardLink, setCardLink] = useState<CardLink | null>(null)
+  useEffect(() => {
+    if (!account || !isCard) return
+    let cancelled = false
+    fetch('/api/concierge/card-links')
+      .then((r) => (r.ok ? (r.json() as Promise<{ links?: CardLink[] }>) : null))
+      .then((d) => {
+        if (cancelled || !d) return
+        setCardLink(d.links?.find((l) => l.card === account) ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [account, isCard])
 
   // Fetch overview whenever account / ccy / range changes
   useEffect(() => {
@@ -113,39 +149,6 @@ export function AccountOverviewView() {
 
   const { name: displayName, suffix } = resolveName(account, names)
 
-  // Kind-aware language (overview-tab.md per-kind fill): a credit card owes
-  // and spends; a points programme earns and redeems.
-  const isCard = account.startsWith('Liabilities:CreditCards:')
-  const isPoints = account.startsWith('Assets:Rewards:Points:')
-  const kpiLabels = isCard
-    ? { bal: 'Owed', inflow: 'Payments', outflow: 'Spend' }
-    : isPoints
-      ? { bal: 'Balance', inflow: 'Earned', outflow: 'Redeemed' }
-      : { bal: 'Balance', inflow: 'In', outflow: 'Out' }
-
-  // KG linkage: the rewards programme this card earns into (credit cards only).
-  type CardLink = {
-    card: string
-    rewards_account: string | null
-    rewards_name: string | null
-    rewards_currency: string | null
-    rewards_balance: number | null
-  }
-  const [cardLink, setCardLink] = useState<CardLink | null>(null)
-  useEffect(() => {
-    if (!isCard) return
-    let cancelled = false
-    fetch('/api/concierge/card-links')
-      .then((r) => (r.ok ? (r.json() as Promise<{ links?: CardLink[] }>) : null))
-      .then((d) => {
-        if (cancelled || !d) return
-        setCardLink(d.links?.find((l) => l.card === account) ?? null)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [account, isCard])
 
   const header = (
     <div className="flex flex-col gap-2 border-b border-border bg-background px-6 py-4">
