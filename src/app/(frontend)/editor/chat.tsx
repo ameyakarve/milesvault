@@ -302,6 +302,11 @@ export function Chat({
   const [clarifyAnswers, setClarifyAnswers] = useState<Record<string, string[]>>({})
   const [accounts, setAccounts] = useState<string[]>([])
   const [statement, setStatement] = useState<StatementAttachment | null>(null)
+  // The most recent statement id sent into the conversation. When the draft
+  // batch it produced is approved (or rejected), the Inbox capture advances
+  // to 'posted' (or stays for manual dismissal) — best-effort linkage; a
+  // reload between upload and approve just leaves the capture 'extracted'.
+  const lastStatementIdRef = useRef<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   // Guards handleSubmit against re-entry. attachStatement is an async network
   // round-trip; until sendMessage runs, `status` is still idle and the submit
@@ -422,6 +427,7 @@ export function Chat({
             text: stmt.text,
           })
           stmtId = id
+          lastStatementIdRef.current = id
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e)
           setStatement({ kind: 'error', file: stmt.file, message: msg })
@@ -487,6 +493,15 @@ export function Chat({
         toolCallId,
         output: { ok: true, committed: finalText.trim() },
       })
+      const stmtId = lastStatementIdRef.current
+      if (stmtId) {
+        lastStatementIdRef.current = null
+        void fetch('/api/ledger/captures', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id: stmtId, action: 'post' }),
+        }).catch(() => {})
+      }
       void refreshAccounts()
       onAppended?.()
     } catch (e) {
@@ -503,6 +518,7 @@ export function Chat({
   }
 
   function handleReject(toolCallId: string) {
+    lastStatementIdRef.current = null
     addToolOutput({
       toolCallId,
       output: { ok: false, reason: 'rejected' },
