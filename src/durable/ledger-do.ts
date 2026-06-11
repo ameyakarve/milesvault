@@ -1450,9 +1450,13 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       try {
         currencies = JSON.parse(r.constraint_currencies) as string[]
       } catch {}
-      for (const c of currencies) {
+      // Unconstrained opens (multi-ticker wallets) still surface as a
+      // zero row so a freshly created programme shows on the Vault.
+      const list = currencies.length > 0 ? currencies : ['']
+      for (const c of list) {
         const key = `${r.account}|${c}`
-        if (!map.has(key)) {
+        const already = [...map.keys()].some((k) => k.startsWith(`${r.account}|`))
+        if (!map.has(key) && (c !== '' || !already)) {
           map.set(key, { account: r.account, currency: c, sumScaled12: 0n, lastActivity: r.date })
         }
       }
@@ -1779,6 +1783,34 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       }
 
       // 5. Atomic: DELETE the knownIds, INSERT parsed entries.
+      // Owner ruling: creating a card account implies its linked rewards
+      // programme exists. The wallet is convention-derived
+      // (Assets:Rewards:<Issuer>, account-first taxonomy) and multi-ticker,
+      // so an UNCONSTRAINED open is the correct creation. Only when neither
+      // the ledger nor this batch already has it.
+      for (const d of [...parsed.directives]) {
+        if (d.kind !== 'open') continue
+        const parts = d.account.split(':')
+        if (parts[0] !== 'Liabilities' || parts[1] !== 'CreditCards' || !parts[2]) continue
+        const wallet = `Assets:Rewards:${parts[2]}`
+        const inBatch = parsed.directives.some(
+          (x) => x.kind === 'open' && x.account === wallet,
+        )
+        if (inBatch) continue
+        const inLedger =
+          (this.db
+            .exec<{ c: number }>(
+              `SELECT
+                (SELECT COUNT(*) FROM directives_open WHERE account = ?)
+              + (SELECT COUNT(*) FROM postings WHERE account = ?) AS c`,
+              wallet,
+              wallet,
+            )
+            .toArray()[0]?.c ?? 0) > 0
+        if (inLedger) continue
+        parsed.directives.push({ kind: 'open', date: d.date, account: wallet })
+      }
+
       const now = Date.now()
       let assertionFailures: ReturnType<LedgerDO['rematerializePlugs']> = []
       try {
