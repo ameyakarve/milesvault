@@ -53,3 +53,9 @@ signs, categories, exclusions, noise):
   POSITIVE; opening dated the period's first day, closing the day AFTER the
   period ends. For a stated reward-points balance use `"currency": "POINTS"`
   with any placeholder account — resolved downstream.
+- REWARD-POINTS BALANCE: if the statement states a closing reward/loyalty
+  points balance (often a small summary like "Reward Points … Opening / Earned
+  / Redeemed / Closing", or a single "Points Balance" figure), emit ONE
+  `balance` entry with `"currency": "POINTS"` and the CLOSING points number,
+  dated the statement's closing date. This is points, NOT rupees — never put a
+  points figure on an INR balance. If no points balance is stated, omit it.

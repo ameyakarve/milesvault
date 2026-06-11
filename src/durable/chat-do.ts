@@ -310,7 +310,7 @@ ${opts.text}`,
           content: [
             {
               type: 'text',
-              text: 'Transcribe ALL text visible on these credit-card statement pages, exactly as printed — every label, number, date and merchant, preserving line structure. Output only the transcription, nothing else.',
+              text: 'Transcribe ALL text visible on these credit-card statement pages, exactly as printed — every label, number, date and merchant, preserving line structure. Pay special attention to the reward / loyalty POINTS summary (opening, earned, redeemed, closing points) and transcribe it WITH its label so the closing points balance is unambiguous. Output only the transcription, nothing else.',
             },
             ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
           ],
