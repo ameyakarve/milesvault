@@ -1,73 +1,138 @@
 import { z } from 'zod'
 import { fetchCardGuide, type CardGuideResult } from '../agents/tools/editor/card-guide'
 import type { KbHttp } from '../agents/tools/concierge/kb-tools'
+import type { TransactionInput, DirectiveInput } from '../ledger-types'
+import { serializeTransactionInput, serializeJournal } from '@/lib/beancount/ast'
+import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 
-// Deterministic statement-ingest pipeline (owner decision after the agent-loop
-// background drafter kept failing in model-shaped ways: runaway generations,
-// tool-calls leaking as text, arithmetic bouncing off validation).
+// Deterministic statement-ingest pipeline.
 //
 //   model CLASSIFIES, code COMPUTES.
 //
-// Two small JSON-only model calls (no tools, no streaming bulk payloads):
-//   1. extract  — statement text → structured rows + stated balances
-//   2. classify — merchants → expense accounts + exclusion flags (+ card acct)
-// Everything load-bearing is code: beancount rendering, points math
-// (floor blocks), refund mirroring, pad+balance bookends, sign conventions.
+// The IR is beancount itself (owner decision): the model emits an array of
+// entry objects — transactions as top line + postings, stated balances as
+// balance directives whose `plug_account` subsumes the pad — accepted by
+// LOOSE zod schemas that `.transform()` into the canonical zod-first types
+// in src/durable/ledger-types.ts. One definition of what an entry is; no
+// drifting mirrors. Forex prices, multi-leg fees and tags stay expressible.
+//
+// Code is the arbiter of everything load-bearing:
+//   - the card leg's amount is COMPUTED by code as −(sum of INR weights,
+//     @@ prices included) — whatever the model claimed is discarded, so
+//     model arithmetic can never unbalance an entry (forex included);
+//   - reward-point legs are stripped and recomputed (floor blocks) from
+//     the KG rate; refunds claw back with mirrored negative legs;
+//   - accounts sanitized; balance directives default plug
+//     Equity:Opening-Balances; "POINTS" currency sentinel lands on the
+//     pool wallet in its ticker;
+//   - rendering via the canonical serializer (same formatting as saves).
 
-// ---- Extraction schema -------------------------------------------------------
+// ---- Code arbiters -------------------------------------------------------------
+
+// Beancount account segments start with uppercase or digit (…:3467 is legal).
+const SEGMENT_RE = /^[A-Z0-9][A-Za-z0-9-]*$/
+
+export function sanitizeAccount(account: string, fallback: string): string {
+  const parts = account
+    .split(':')
+    .map((p) => p.replace(/[^A-Za-z0-9-]/g, '').replace(/^([a-z])/, (c) => c.toUpperCase()))
+  if (parts.length < 2 || !parts.every((p) => SEGMENT_RE.test(p))) return fallback
+  return parts.join(':')
+}
+
+function num(v: string | number | null | undefined): number | null {
+  if (v == null) return null
+  const n = typeof v === 'number' ? v : Number(String(v).replace(/,/g, ''))
+  return Number.isFinite(n) ? n : null
+}
+
+function fmt(n: number): string {
+  return n.toFixed(2)
+}
+
+// ---- Loose acceptors → canonical types -----------------------------------------
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const ZAmount = z.union([z.string(), z.number()])
 
-const ExtractedTxn = z.object({
-  date: z.string().regex(DATE_RE),
-  merchant: z.string().min(1).max(120),
-  // true when the row is a credit TO the card (refund/reversal) — not a spend.
-  credit: z.boolean(),
-  amount: z.number().positive(),
-  note: z.string().max(160).optional(),
-})
+// Accepts what a model plausibly emits; outputs a canonical PostingInput.
+const ZLoosePosting = z
+  .object({
+    account: z.string().min(3),
+    amount: ZAmount.nullable().optional(),
+    currency: z.string().max(24).nullable().optional(),
+    price_at_signs: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+    price_amount: ZAmount.nullable().optional(),
+    price_currency: z.string().max(24).nullable().optional(),
+  })
+  .transform((p) => {
+    const amount = num(p.amount)
+    const priceAmount = num(p.price_amount)
+    return {
+      account: p.account,
+      amount: amount === null ? null : fmt(amount),
+      currency: p.currency ?? (amount === null ? null : 'INR'),
+      ...(p.price_at_signs && priceAmount !== null
+        ? {
+            price_at_signs: p.price_at_signs,
+            price_amount: fmt(priceAmount),
+            price_currency: p.price_currency ?? 'INR',
+          }
+        : {}),
+    }
+  })
 
-const StatedBalance = z.object({
-  amount: z.number(),
-  // credit balance — the bank owes the user → POSITIVE liability sign.
-  cr: z.boolean().optional(),
-  // true → a reward-points balance (asserted on the points wallet in the
-  // pool's commodity); false/absent → fiat on the card account.
-  points: z.boolean().optional(),
-  // The date the statement states the balance for. Opening balances are
-  // as-of the day before the period starts; closing as-of the period end.
-  // Defaults to the period end when omitted.
-  as_of: z.string().regex(DATE_RE).optional(),
-})
+const ZLooseTxn = z
+  .object({
+    kind: z.literal('transaction'),
+    date: z.string().regex(DATE_RE),
+    flag: z.enum(['*', '!']).optional(),
+    payee: z.string().max(120).optional(),
+    narration: z.string().max(200).optional(),
+    tags: z.array(z.string().max(40)).optional(),
+    postings: z.array(ZLoosePosting).min(2).max(8),
+  })
+  .transform(
+    (t): { kind: 'transaction'; txn: TransactionInput } => ({
+      kind: 'transaction',
+      txn: {
+        date: t.date,
+        flag: t.flag ?? '*',
+        payee: t.payee ?? '',
+        narration: t.narration ?? '',
+        tags: (t.tags ?? []).map((x) => x.replace(/^#/, '')),
+        postings: t.postings,
+      },
+    }),
+  )
 
-const ExtractedStatement = z.object({
+// Balance directive — `plug_account` IS the pad (canonical schema's design).
+// currency "POINTS" is the reward-points sentinel, resolved downstream.
+const ZLooseBalance = z
+  .object({
+    kind: z.literal('balance'),
+    date: z.string().regex(DATE_RE),
+    account: z.string().min(3),
+    amount: ZAmount,
+    currency: z.string().max(24),
+    plug_account: z.string().optional(),
+  })
+  .transform((b) => ({
+    kind: 'balance' as const,
+    date: b.date,
+    account: b.account,
+    amount: String(b.amount),
+    currency: b.currency,
+    plug_account: b.plug_account ?? 'Equity:Opening-Balances',
+  }))
+
+const ZStatement = z.object({
   card_name: z.string().min(2).max(80),
-  period: z.object({ from: z.string().regex(DATE_RE), to: z.string().regex(DATE_RE) }),
-  // Whatever balances the statement states — zero or more; fiat and points
-  // are the same construct, just different accounts (owner convention).
-  balances: z.array(StatedBalance).max(8).optional(),
-  transactions: z.array(ExtractedTxn).min(1).max(200),
+  entries: z.array(z.discriminatedUnion('kind', [ZLooseTxn, ZLooseBalance])).min(1).max(250),
 })
-export type Extracted = z.infer<typeof ExtractedStatement>
+export type ExtractedStatement = z.infer<typeof ZStatement>
 
-const Classification = z.object({
-  // Liability account for this card — an existing ledger account when one
-  // matches, else a canonical Liabilities:CreditCards:<Issuer>:<Card> path.
-  card_account: z.string().min(8),
-  merchants: z
-    .array(
-      z.object({
-        merchant: z.string(),
-        account: z.string().min(8),
-        // Earn-excluded per card rules (fuel, rent, wallet loads, government/tax).
-        excluded: z.boolean(),
-      }),
-    )
-    .min(1),
-})
-export type Classified = z.infer<typeof Classification>
-
-// ---- JSON-only model calls ---------------------------------------------------
+// ---- JSON-only model call ------------------------------------------------------
 
 export type GenFn = (system: string, prompt: string, maxTokens: number) => Promise<string>
 
@@ -76,15 +141,15 @@ function firstJsonBlock(text: string): string | null {
   if (start === -1) return null
   let depth = 0
   let inStr = false
-  let esc = false
+  let escNext = false
   for (let i = start; i < text.length; i++) {
     const c = text[i]
-    if (esc) {
-      esc = false
+    if (escNext) {
+      escNext = false
       continue
     }
     if (c === '\\') {
-      esc = inStr
+      escNext = inStr
       continue
     }
     if (c === '"') inStr = !inStr
@@ -130,7 +195,7 @@ async function genJson<T>(
   return { value: null, error: lastError }
 }
 
-// ---- Rate parsing (code, not model) ------------------------------------------
+// ---- Rate parsing (code, not model) --------------------------------------------
 
 // "Base 12 EDGE RPs / ₹200", "Base earn: 5 RP / ₹150", "1 MR / ₹50" …
 export function parseBaseRate(guide: CardGuideResult): { pts: number; per: number } | null {
@@ -148,162 +213,187 @@ export function parseBaseRate(guide: CardGuideResult): { pts: number; per: numbe
   return null
 }
 
-// ---- Rendering (pure code) ---------------------------------------------------
+// ---- Code as arbiter: canonicalize, points, sentinel resolution ---------------
 
-function money(n: number): string {
-  return n.toFixed(2)
-}
+const EXCLUDED_TAG = 'earn-excluded'
 
-const SEGMENT_RE = /^[A-Z0-9][A-Za-z0-9-]*$/
-
-export function sanitizeAccount(account: string, fallback: string): string {
-  const parts = account.split(':').map((p) =>
-    p
-      .replace(/[^A-Za-z0-9-]/g, '')
-      .replace(/^([a-z])/, (c) => c.toUpperCase()),
-  )
-
-  if (parts.length < 2 || !parts.every((p) => SEGMENT_RE.test(p))) return fallback
-  return parts.join(':')
-}
-
-function addDays(ymd: string, days: number): string {
-  const [y, m, d] = ymd.split('-').map(Number)
-  const dt = new Date(Date.UTC(y!, m! - 1, d! + days))
-  return dt.toISOString().slice(0, 10)
-}
-
-function esc(s: string): string {
-  return s.replace(/"/g, "'")
-}
-
-export function renderEntries(opts: {
-  extracted: Extracted
-  classified: Classified
+export function toLedgerEntries(opts: {
+  extracted: ExtractedStatement
   rate: { pts: number; per: number } | null
   pool: { ticker: string | null; account: string | null } | null
-}): string[] {
-  const { extracted, classified, rate, pool } = opts
-  const cardAccount = sanitizeAccount(
-    classified.card_account,
-    'Liabilities:CreditCards:Unknown',
-  )
-  const byMerchant = new Map(
-    classified.merchants.map((m) => [m.merchant.toLowerCase(), m]),
-  )
+}): { transactions: TransactionInput[]; directives: DirectiveInput[] } {
+  const { extracted, rate, pool } = opts
   const canEarn = rate !== null && pool?.ticker != null && pool?.account != null
-  const pending = canEarn ? `${pool!.account}:Pending` : null
+  const pendingAcct = canEarn ? `${pool!.account}:Pending` : null
 
-  const entries: string[] = []
+  const transactions: TransactionInput[] = []
+  const directives: DirectiveInput[] = []
 
-  // Stated balances: one uniform treatment — pad absorbs drift, assertion
-  // pins the statement's figure. Assertions check the START of day, so the
-  // assert date is as_of + 1 with the pad on as_of. Fiat lands on the card
-  // account (Cr → positive); points on the pool wallet in its commodity
-  // (skipped when the pool is unknown).
-  for (const bal of extracted.balances ?? []) {
-    const asOf = bal.as_of ?? extracted.period.to
-    if (bal.points) {
-      if (!pool?.account || !pool?.ticker) continue
-      entries.push(
-        `${asOf} pad ${pool.account} Equity:Opening-Balances\n` +
-          `${addDays(asOf, 1)} balance ${pool.account}  ${Math.round(bal.amount)} ${pool.ticker}`,
-      )
-    } else {
-      const signed = bal.cr ? bal.amount : -bal.amount
-      entries.push(
-        `${asOf} pad ${cardAccount} Equity:Opening-Balances\n` +
-          `${addDays(asOf, 1)} balance ${cardAccount}  ${money(signed)} INR`,
-      )
+  for (const e of extracted.entries) {
+    if (e.kind === 'balance') {
+      const isPoints = e.currency.toUpperCase() === 'POINTS'
+      if (isPoints && !canEarn) continue
+      const amount = num(e.amount)
+      if (amount === null) continue
+      directives.push({
+        kind: 'balance',
+        date: e.date,
+        account: isPoints
+          ? pool!.account!
+          : sanitizeAccount(e.account, 'Liabilities:CreditCards:Unknown'),
+        amount: isPoints ? String(Math.round(amount)) : fmt(amount),
+        currency: isPoints ? pool!.ticker! : e.currency,
+        plug_account: sanitizeAccount(e.plug_account, 'Equity:Opening-Balances'),
+      })
+      continue
     }
-  }
 
-  for (const t of extracted.transactions) {
-    const cls = byMerchant.get(t.merchant.toLowerCase())
-    const expense = sanitizeAccount(cls?.account ?? 'Expenses:Misc', 'Expenses:Misc')
-    const excluded = cls?.excluded ?? false
-    const sign = t.credit ? -1 : 1
-    const narration = t.credit ? `Refund — ${esc(t.note ?? '')}`.trim() : esc(t.note ?? '')
+    const txn = e.txn
+    const tags = txn.tags ?? []
+    const excluded = tags.includes(EXCLUDED_TAG)
 
-    const lines = [
-      `${t.date} * "${esc(t.merchant)}" "${narration}"`,
-      `  ${expense}  ${money(sign * t.amount)} INR`,
-      `  ${cardAccount}  ${money(-sign * t.amount)} INR`,
-    ]
-    if (canEarn && !excluded) {
-      const pts = Math.floor(t.amount / rate!.per) * rate!.pts
+    // Strip any model-emitted points legs (code owns those); sanitize
+    // accounts; blank the card leg's amount → beancount auto-balances it.
+    let inrTotal = 0
+    const postings = txn.postings
+      .filter(
+        (p) =>
+          !(pool?.account && p.account.startsWith(pool.account)) &&
+          p.account !== 'Equity:Void',
+      )
+      .map((p) => {
+        const isCard = p.account.startsWith('Liabilities:CreditCards')
+        const amt = num(p.amount)
+        if (!isCard && amt !== null) {
+          if (p.price_at_signs === 2) {
+            const total = num(p.price_amount)
+            if (total !== null) inrTotal += Math.sign(amt) * Math.abs(total)
+          } else if (p.price_at_signs === 1) {
+            const per = num(p.price_amount)
+            if (per !== null) inrTotal += amt * per
+          } else if ((p.currency ?? 'INR') === 'INR') {
+            inrTotal += amt
+          }
+        }
+        return {
+          ...p,
+          account: sanitizeAccount(
+            p.account,
+            isCard ? 'Liabilities:CreditCards:Unknown' : 'Expenses:Misc',
+          ),
+          ...(isCard ? { amount: null, currency: null } : {}),
+        }
+      })
+
+    // Code computes the card leg: −(sum of INR weights, @@ prices included).
+    // The model's own figure was discarded above — deterministic arithmetic,
+    // explicit in review, and the draft validator sees a balanced entry.
+    const cardLeg = postings.find((p) => p.account.startsWith('Liabilities:CreditCards'))
+    if (cardLeg) {
+      cardLeg.amount = fmt(-inrTotal)
+      cardLeg.currency = 'INR'
+    }
+
+    const out: TransactionInput = { ...txn, postings }
+
+    if (canEarn && !excluded && inrTotal !== 0) {
+      const sign = inrTotal > 0 ? 1 : -1 // negative total = refund → claw back
+      const pts = Math.floor(Math.abs(inrTotal) / rate!.per) * rate!.pts
       if (pts > 0) {
-        lines[0] += '  #reward-accrual'
-        lines.push(`  ${pending}  ${sign * pts} ${pool!.ticker}`)
-        lines.push(`  Equity:Void  ${-sign * pts} ${pool!.ticker}`)
+        out.postings.push(
+          { account: pendingAcct!, amount: String(sign * pts), currency: pool!.ticker! },
+          { account: 'Equity:Void', amount: String(-sign * pts), currency: pool!.ticker! },
+        )
+        if (!out.tags!.includes('reward-accrual')) out.tags!.push('reward-accrual')
       }
     }
-    entries.push(lines.join('\n'))
+
+    transactions.push(out)
   }
 
-  return entries
+  return { transactions, directives }
 }
 
-// ---- Prompts -----------------------------------------------------------------
+// Serialize each entry standalone via the canonical serializer — identical
+// formatting to journal saves; the drafts contract is one string per entry.
+export function serializeEntries(parts: {
+  transactions: TransactionInput[]
+  directives: DirectiveInput[]
+}): string[] {
+  const out: string[] = []
+  for (const t of parts.transactions) out.push(serializeTransactionInput(t).trim())
+  for (const d of parts.directives) out.push(serializeJournal([], [d]).trim())
+  return out
+}
 
-const EXTRACT_SYSTEM = `You extract credit-card statements into JSON. Output ONLY a JSON object, no prose, matching:
+// ---- Prompts -------------------------------------------------------------------
+
+const CARD_SYSTEM = `Identify the credit card a statement belongs to. Output ONLY: {"card_name": "issuer + card name as printed"}`
+const ZCard = z.object({ card_name: z.string().min(2).max(80) })
+
+const EXTRACT_SYSTEM = `You convert credit-card statements into beancount-shaped JSON. Output ONLY a JSON object:
 {
   "card_name": "issuer + card name as printed",
-  "period": { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" },
-  "balances": [ { "amount": 123.45, "cr": false, "points": false, "as_of": "YYYY-MM-DD" } ],
-  "transactions": [
-    { "date": "YYYY-MM-DD", "merchant": "as printed", "credit": false, "amount": 123.45, "note": "short category hint" }
+  "entries": [
+    {
+      "kind": "transaction",
+      "date": "YYYY-MM-DD",
+      "payee": "merchant as printed",
+      "narration": "short note",
+      "tags": [],
+      "postings": [
+        { "account": "Expenses:...", "amount": 123.45, "currency": "INR" },
+        { "account": "Liabilities:CreditCards:..." }
+      ]
+    },
+    {
+      "kind": "balance",
+      "date": "YYYY-MM-DD",
+      "account": "Liabilities:CreditCards:...",
+      "amount": -16754.09,
+      "currency": "INR"
+    }
   ]
 }
 Rules:
-- amount is ALWAYS positive; "credit": true marks refunds/reversals TO the card.
-- balances: every balance the statement STATES, zero or more. "cr": true when marked Cr (credit balance — the bank owes the user). "points": true for reward-point balances. "as_of": the date the figure is stated for — opening balances are as-of the day BEFORE the period starts, closing as-of the period end.
-- Copy stated amounts digit-for-digit. Normalize all dates to YYYY-MM-DD.
-- SKIP noise rows: payments received, reward-point summaries, interest/late fees, GST-on-fee lines, promotional text.
-- Include every purchase and every refund/credit row.`
+- One "transaction" per purchase/refund row. The expense posting carries the amount; the card (liability) posting carries NO amount — it auto-balances.
+- Refunds/credits TO the card: NEGATIVE expense amount.
+- Forex rows: amount in the foreign currency plus "price_at_signs": 2, "price_amount": <INR total as printed>, "price_currency": "INR".
+- Use existing ledger accounts when one fits (expense AND the card liability account); otherwise a sensible canonical path.
+- Tag "earn-excluded" on transactions the card earns NO points for per the card rules (fuel, rent, wallet loads, government/tax).
+- One "balance" entry per balance the statement STATES. Liability owed → NEGATIVE amount; "Cr" (credit balance — the bank owes the user) → POSITIVE. Opening balance → dated the period's first day; closing → dated the day AFTER the period ends (assertions check the start of day).
+- A stated reward-points balance: "currency": "POINTS", the points count as amount, any placeholder account (resolved downstream).
+- Copy printed figures digit-for-digit. Normalize dates to YYYY-MM-DD.
+- SKIP noise rows: payments received, reward-point summaries, interest/late fees, GST-on-fees, promotions.
+- Do NOT add reward-point postings to transactions — computed downstream.`
 
-function extractPrompt(statementText: string, instruction?: string | null): string {
-  return `${instruction?.trim() ? `User instruction: ${instruction.trim()}\n\n` : ''}--- statement ---\n${statementText}`
-}
-
-const CLASSIFY_SYSTEM = `You map credit-card merchants to ledger expense accounts. Output ONLY a JSON object:
-{
-  "card_account": "Liabilities:CreditCards:...",
-  "merchants": [ { "merchant": "...", "account": "Expenses:...", "excluded": false } ]
-}
-Rules:
-- card_account: pick the EXISTING ledger account matching the card when one exists; otherwise propose Liabilities:CreditCards:<Issuer>:<CardName>.
-- account: an existing Expenses:* account when one fits, else a sensible canonical one (Expenses:Food:Restaurants, Expenses:Shopping:..., Expenses:Transport:Fuel, Expenses:Software:Subscriptions, ...).
-- excluded: true when the card earns NO points on this merchant category per the card rules (fuel, rent, wallet loads, government/tax payments).
-- Cover EVERY merchant you are given, exactly once, name copied verbatim.`
-
-function classifyPrompt(opts: {
-  merchants: string[]
-  cardName: string
+function extractPrompt(opts: {
+  statementText: string
   accounts: readonly string[]
   cardRules: string | null
+  instruction?: string | null
 }): string {
-  return `Card: ${opts.cardName}
-Card earn rules:
-${opts.cardRules ?? '(none known)'}
-
-Existing ledger accounts:
+  return `${opts.instruction?.trim() ? `User instruction: ${opts.instruction.trim()}\n\n` : ''}Existing ledger accounts:
 ${opts.accounts.join('\n')}
 
-Merchants to classify:
-${opts.merchants.join('\n')}`
+Card earn-exclusion rules:
+${opts.cardRules ?? '(none known)'}
+
+--- statement ---
+${opts.statementText}`
 }
 
-// ---- Orchestration -----------------------------------------------------------
+// ---- Orchestration -------------------------------------------------------------
 
 export type PipelineResult = {
   ok: boolean
   entries: string[]
   error?: string
   stages: {
-    extract?: { txns: number; period?: string; card?: string; error?: string }
+    card?: { name?: string; error?: string }
     guide?: { found: boolean; rate?: string; error?: string }
-    classify?: { merchants: number; cardAccount?: string; error?: string }
+    extract?: { txns: number; balances: number; error?: string }
+    validate?: { issues: number; sample?: string }
   }
 }
 
@@ -316,27 +406,13 @@ export async function runDraftPipeline(deps: {
 }): Promise<PipelineResult> {
   const stages: PipelineResult['stages'] = {}
 
-  // 1. Extract — the only step that reads the raw statement.
-  const ext = await genJson(
-    deps.gen,
-    ExtractedStatement,
-    EXTRACT_SYSTEM,
-    extractPrompt(deps.statementText, deps.instruction),
-    8192,
-  )
-  if (ext.value === null) {
-    stages.extract = { txns: 0, error: ext.error ?? 'unknown' }
-    return { ok: false, entries: [], error: `extract: ${ext.error}`, stages }
-  }
-  const extracted = ext.value
-  stages.extract = {
-    txns: extracted.transactions.length,
-    period: `${extracted.period.from}..${extracted.period.to}`,
-    card: extracted.card_name,
-  }
-
-  // 2. Card guide + base rate — pure code from here on.
-  const guide = await fetchCardGuide(deps.kb, extracted.card_name)
+  // 1. Identify the card (tiny call) → guide → rate, so the guide's
+  //    exclusion rules ride the extraction prompt.
+  const cardRes = await genJson(deps.gen, ZCard, CARD_SYSTEM, deps.statementText.slice(0, 4000), 256)
+  stages.card = { name: cardRes.value?.card_name, error: cardRes.error ?? undefined }
+  const guide: CardGuideResult = cardRes.value
+    ? await fetchCardGuide(deps.kb, cardRes.value.card_name)
+    : { ok: false, error: 'card_not_identified' }
   const rate = parseBaseRate(guide)
   stages.guide = {
     found: guide.ok,
@@ -344,35 +420,39 @@ export async function runDraftPipeline(deps: {
     error: guide.ok ? undefined : (guide as { error?: string }).error,
   }
 
-  // 3. Classify merchants (unique, order-stable).
-  const merchants = [...new Set(extracted.transactions.map((t) => t.merchant))]
-  const cls = await genJson(
+  // 2. Extract as beancount-shaped entries (loose acceptors → canonical types).
+  const ext = await genJson(
     deps.gen,
-    Classification,
-    CLASSIFY_SYSTEM,
-    classifyPrompt({
-      merchants,
-      cardName: extracted.card_name,
+    ZStatement,
+    EXTRACT_SYSTEM,
+    extractPrompt({
+      statementText: deps.statementText,
       accounts: deps.accounts,
       cardRules: guide.ok ? (guide.logging_guide ?? guide.pool?.rate_notes ?? null) : null,
+      instruction: deps.instruction,
     }),
-    4096,
+    12288,
   )
-  if (cls.value === null) {
-    stages.classify = { merchants: merchants.length, error: cls.error ?? 'unknown' }
-    return { ok: false, entries: [], error: `classify: ${cls.error}`, stages }
+  if (ext.value === null) {
+    stages.extract = { txns: 0, balances: 0, error: ext.error ?? 'unknown' }
+    return { ok: false, entries: [], error: `extract: ${ext.error}`, stages }
   }
-  stages.classify = {
-    merchants: cls.value.merchants.length,
-    cardAccount: cls.value.card_account,
-  }
+  const txns = ext.value.entries.filter((e) => e.kind === 'transaction').length
+  stages.extract = { txns, balances: ext.value.entries.length - txns }
 
-  // 4. Render — deterministic.
-  const entries = renderEntries({
-    extracted,
-    classified: cls.value,
+  // 3. Code: arbiter + canonical serialization.
+  const parts = toLedgerEntries({
+    extracted: ext.value,
     rate,
     pool: guide.ok ? guide.pool : null,
   })
-  return { ok: true, entries, stages }
+  const entries = serializeEntries(parts)
+
+  // 4. Validate (informational — the review editor is the final gate).
+  const v = validateDraftBatch(entries)
+  stages.validate = v.ok
+    ? { issues: 0 }
+    : { issues: v.issues.length, sample: v.issues[0]?.message?.slice(0, 140) }
+
+  return { ok: entries.length > 0, entries, stages }
 }

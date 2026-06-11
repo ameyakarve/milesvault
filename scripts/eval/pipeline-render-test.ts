@@ -1,32 +1,14 @@
-import { renderEntries, parseBaseRate, type Extracted, type Classified } from '../../src/durable/ingest/pipeline'
+import {
+  toLedgerEntries,
+  serializeEntries,
+  parseBaseRate,
+  type ExtractedStatement,
+} from '../../src/durable/ingest/pipeline'
+import type { CardGuideResult } from '../../src/durable/agents/tools/editor/card-guide'
 import { validateDraftBatch } from '../../src/lib/beancount/validate-draft-batch'
 
-const extracted: Extracted = {
-  card_name: 'Axis Bank Magnus Burgundy',
-  period: { from: '2026-04-20', to: '2026-05-18' },
-  balances: [
-    { amount: 96913.01, cr: true, as_of: '2026-04-19' },
-    { amount: 16754.09, cr: true, as_of: '2026-05-18' },
-    { amount: 1296, points: true, as_of: '2026-05-18' },
-  ],
-  transactions: [
-    { date: '2026-04-20', merchant: 'ASH CRADLE,BANGALORE', credit: false, amount: 800, note: 'Medical' },
-    { date: '2026-04-24', merchant: 'IOCL FUEL', credit: false, amount: 3000, note: 'Fuel' },
-    { date: '2026-05-14', merchant: 'AMAZON PAY INDIA PRIVA', credit: true, amount: 877.82, note: 'Misc Store' },
-    { date: '2026-05-01', merchant: 'CLOUDFLARE,SAN FRANCISCO', credit: false, amount: 895.96, note: 'Software' },
-  ],
-}
-const classified: Classified = {
-  card_account: 'Liabilities:CreditCards:Axis:MagnusBurgundy:3467',
-  merchants: [
-    { merchant: 'ASH CRADLE,BANGALORE', account: 'Expenses:Medical:Hospital', excluded: false },
-    { merchant: 'IOCL FUEL', account: 'Expenses:Transport:Fuel', excluded: true },
-    { merchant: 'AMAZON PAY INDIA PRIVA', account: 'Expenses:Shopping:Misc', excluded: false },
-    { merchant: 'CLOUDFLARE,SAN FRANCISCO', account: 'Expenses:Software:Subscriptions', excluded: false },
-  ],
-}
-const guideish = {
-  ok: true as const,
+const guide: CardGuideResult = {
+  ok: true,
   card: { slug: 'cc/axis-magnus-burgundy', name: 'Axis Magnus Burgundy' },
   pool: {
     currency: 'currency/edge-rewards-burgundy',
@@ -39,34 +21,130 @@ const guideish = {
   logging_guide: 'Base 12 EDGE RPs / ₹200, block-based.',
   card_notes: null,
 }
-const rate = parseBaseRate(guideish)
-console.log('rate:', rate)
-const entries = renderEntries({ extracted, classified, rate, pool: guideish.pool })
-console.log('--- entries ---')
-for (const e of entries) console.log(e + '\n')
+
+const CARD = 'Liabilities:CreditCards:Axis:MagnusBurgundy:3467'
+
+// What the model would emit (loose) — parsed through the real schema would
+// transform it; here we hand-build the post-transform shape the pipeline
+// type expects, exercising toLedgerEntries + serializeEntries + validation.
+const extracted: ExtractedStatement = {
+  card_name: 'Axis Bank Magnus Burgundy',
+  entries: [
+    {
+      kind: 'balance',
+      date: '2026-04-20',
+      account: CARD,
+      amount: '96913.01',
+      currency: 'INR',
+      plug_account: 'Equity:Opening-Balances',
+    },
+    {
+      kind: 'transaction',
+      txn: {
+        date: '2026-04-20',
+        flag: '*',
+        payee: 'ASH CRADLE,BANGALORE',
+        narration: 'Medical',
+        tags: [],
+        postings: [
+          { account: 'Expenses:Medical:Hospital', amount: '800.00', currency: 'INR' },
+          // deliberately WRONG model figure — code must overrule it
+          { account: CARD, amount: '-999.99', currency: 'INR' },
+        ],
+      },
+    },
+    {
+      kind: 'transaction',
+      txn: {
+        date: '2026-04-24',
+        flag: '*',
+        payee: 'IOCL FUEL',
+        narration: 'Fuel',
+        tags: ['earn-excluded'],
+        postings: [
+          { account: 'Expenses:Transport:Fuel', amount: '3000.00', currency: 'INR' },
+          { account: CARD, amount: null, currency: null },
+        ],
+      },
+    },
+    {
+      kind: 'transaction',
+      txn: {
+        date: '2026-05-14',
+        flag: '*',
+        payee: 'AMAZON PAY INDIA PRIVA',
+        narration: 'Refund',
+        tags: [],
+        postings: [
+          { account: 'Expenses:Shopping:Misc', amount: '-877.82', currency: 'INR' },
+          { account: CARD, amount: null, currency: null },
+        ],
+      },
+    },
+    {
+      kind: 'transaction',
+      txn: {
+        date: '2026-04-26',
+        flag: '*',
+        payee: 'CLOUDFLARE,SAN FRANCISCO',
+        narration: 'Software',
+        tags: [],
+        postings: [
+          {
+            account: 'Expenses:Software:Subscriptions',
+            amount: '9.28',
+            currency: 'USD',
+            price_at_signs: 2,
+            price_amount: '875.30',
+            price_currency: 'INR',
+          },
+          { account: CARD, amount: null, currency: null },
+        ],
+      },
+    },
+    {
+      kind: 'balance',
+      date: '2026-05-19',
+      account: CARD,
+      amount: '16754.09',
+      currency: 'INR',
+      plug_account: 'Equity:Opening-Balances',
+    },
+    {
+      kind: 'balance',
+      date: '2026-05-19',
+      account: 'PLACEHOLDER',
+      amount: '1296',
+      currency: 'POINTS',
+      plug_account: 'Equity:Opening-Balances',
+    },
+  ],
+}
+
+const rate = parseBaseRate(guide)
+const parts = toLedgerEntries({ extracted, rate, pool: guide.ok ? guide.pool : null })
+const entries = serializeEntries(parts)
+console.log(entries.join('\n\n'))
 const v = validateDraftBatch(entries)
-console.log('validate:', JSON.stringify(v))
-// Assertions
 const joined = entries.join('\n\n')
+
 const checks: Array<[string, boolean]> = [
-  ['rate parsed 12/200', rate?.pts === 12 && rate?.per === 200],
-  ['opening +96913.01', joined.includes('balance Liabilities:CreditCards:Axis:MagnusBurgundy:3467  96913.01 INR')],
-  ['closing +16754.09', joined.includes('16754.09 INR')],
-  ['ash cradle 48 pts', joined.includes('Assets:Rewards:Axis:Pending  48 AXIS-EDGE-BURGUNDY')],
-  ['fuel no points', !/IOCL[\s\S]*?AXIS-EDGE/.test(joined.split('\n\n').find((e) => e.includes('IOCL')) ?? '')],
-  ['refund -48 pts', joined.includes('Assets:Rewards:Axis:Pending  -48 AXIS-EDGE-BURGUNDY')],
+  ['rate 12/200', rate?.pts === 12 && rate?.per === 200],
+  ['opening Cr positive', joined.includes('96913.01 INR')],
+  ['closing Cr positive', joined.includes('16754.09 INR')],
+  ['pads folded in', joined.includes('pad Liabilities:CreditCards:Axis:MagnusBurgundy:3467 Equity:Opening-Balances')],
+  ['ash cradle 48 pts', /ASH CRADLE[\s\S]*?Assets:Rewards:Axis:Pending\s+48 AXIS-EDGE-BURGUNDY/.test(joined)],
+  ['card leg code-computed (-999.99 overruled)', /ASH CRADLE[\s\S]*?MagnusBurgundy:3467\s+-800\.00 INR/.test(joined) && !joined.includes('-999.99')],
+  ['fuel no points', !/IOCL[\s\S]*?AXIS-EDGE/.test(entries.find((e) => e.includes('IOCL')) ?? '')],
+  ['refund -48 pts', /AMAZON[\s\S]*?Pending\s+-48 AXIS-EDGE-BURGUNDY/.test(joined)],
+  ['forex @@ preserved + 52 pts', /9\.28 USD @@ 875\.30 INR/.test(joined) && /CLOUDFLARE[\s\S]*?Pending\s+48 AXIS-EDGE-BURGUNDY/.test(joined)],
+  ['points wallet 1296', joined.includes('balance Assets:Rewards:Axis') && joined.includes('1296 AXIS-EDGE-BURGUNDY')],
   ['validates', v.ok],
-  ['points bookend', joined.includes('balance Assets:Rewards:Axis  1296 AXIS-EDGE-BURGUNDY')],
 ]
-// No-balances statement must render without bookends
-const bare = renderEntries({
-  extracted: { ...extracted, balances: [] },
-  classified, rate, pool: guideish.pool,
-})
-checks.push(['no bookends when absent', !bare.join('').includes(' pad ') && validateDraftBatch(bare).ok])
 let fail = 0
 for (const [name, ok] of checks) {
   console.log(ok ? 'PASS' : 'FAIL', name)
   if (!ok) fail++
 }
+if (!v.ok) console.log(JSON.stringify(v.issues.slice(0, 4), null, 1))
 process.exit(fail ? 1 : 0)

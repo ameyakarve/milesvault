@@ -1,26 +1,52 @@
-export type PostingInput = {
-  flag?: string | null
-  account: string
-  amount?: string | null
-  currency?: string | null
-  cost_raw?: string | null
-  price_at_signs?: 0 | 1 | 2
-  price_amount?: string | null
-  price_currency?: string | null
-  comment?: string | null
-  meta?: Record<string, string> | null
-}
+import { z } from 'zod'
 
-export type TransactionInput = {
-  date: string
-  flag?: '*' | '!' | null
-  payee?: string
-  narration?: string
-  postings: PostingInput[]
-  tags?: string[]
-  links?: string[]
-  meta?: Record<string, string> | null
-}
+// Zod-first canonical entry schemas (owner decision): ONE definition of what
+// an entry is — runtime validators and TS types derive from the same source,
+// so nothing (the ingest pipeline, tool schemas, future surfaces) ever
+// maintains a drifting mirror. All hand-written types below the schemas are
+// z.infer re-exports with identical shapes to the original declarations.
+
+const ZMeta = z.record(z.string(), z.string()).nullable()
+
+export const ZPostingInput = z.object({
+  flag: z.string().nullable().optional(),
+  account: z.string(),
+  amount: z.string().nullable().optional(),
+  currency: z.string().nullable().optional(),
+  cost_raw: z.string().nullable().optional(),
+  price_at_signs: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+  price_amount: z.string().nullable().optional(),
+  price_currency: z.string().nullable().optional(),
+  comment: z.string().nullable().optional(),
+  meta: ZMeta.optional(),
+})
+export type PostingInput = z.infer<typeof ZPostingInput>
+
+export const ZTransactionInput = z.object({
+  date: z.string(),
+  flag: z.union([z.literal('*'), z.literal('!')]).nullable().optional(),
+  payee: z.string().optional(),
+  narration: z.string().optional(),
+  postings: z.array(ZPostingInput),
+  tags: z.array(z.string()).optional(),
+  links: z.array(z.string()).optional(),
+  meta: ZMeta.optional(),
+})
+export type TransactionInput = z.infer<typeof ZTransactionInput>
+
+export const ZBalanceInput = z.object({
+  date: z.string(),
+  account: z.string(),
+  amount: z.string(),
+  currency: z.string(),
+  // When set, on assertion the projection materializes a reconciling posting
+  // routing the gap between `account` and `plug_account`. Subsumes the legacy
+  // `pad` directive: a pad+balance pair in beancount text round-trips through
+  // a single BalanceInput with `plug_account` set.
+  plug_account: z.string().nullable().optional(),
+  meta: ZMeta.optional(),
+})
+export type BalanceInput = z.infer<typeof ZBalanceInput>
 
 export type OpenInput = {
   date: string
@@ -39,19 +65,6 @@ export type CloseInput = {
 export type CommodityInput = {
   date: string
   currency: string
-  meta?: Record<string, string> | null
-}
-
-export type BalanceInput = {
-  date: string
-  account: string
-  amount: string
-  currency: string
-  // When set, on assertion the projection materializes a reconciling posting
-  // routing the gap between `account` and `plug_account`. Subsumes the legacy
-  // `pad` directive: a pad+balance pair in beancount text round-trips through
-  // a single BalanceInput with `plug_account` set.
-  plug_account?: string | null
   meta?: Record<string, string> | null
 }
 
