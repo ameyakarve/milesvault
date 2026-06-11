@@ -91,7 +91,6 @@ export function NavRail() {
       <GlobalCapture />
       {/* Desktop: slim side rail */}
       <nav className="hidden h-screen w-[48px] shrink-0 flex-col items-center gap-6 border-r border-border bg-background py-4 md:flex">
-        <Logo />
         <div className="flex flex-col gap-4">
           {ITEMS.map((item) => {
             const active = isActive(item)
@@ -153,6 +152,7 @@ export function NavRail() {
           >
             {(process.env.NEXT_PUBLIC_BUILD_ID ?? 'dev').slice(0, 7)}
           </span>
+          <Logo />
         </div>
       </nav>
 
