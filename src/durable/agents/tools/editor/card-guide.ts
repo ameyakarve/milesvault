@@ -41,19 +41,33 @@ export async function fetchCardGuide(kb: KbHttp, card: string): Promise<CardGuid
     // multiple go back as options.
     let top: Item | undefined = (await resolve(card))[0]
     if (!top) {
-      const seen = new Map<string, Item>()
+      // Score-based recall: every token (≥4 chars) votes; the card matching
+      // the MOST tokens wins. A first-token cap here once truncated the
+      // candidate set to six 'Axis…' cards that didn't include the right
+      // one, and an overlap-chooser then picked a plausible WRONG card —
+      // the worst failure mode. Discriminative tokens now always count.
+      const votes = new Map<string, { item: Item; n: number }>()
       for (const token of card.split(/\s+/)) {
         if (token.length < 4) continue
-        for (const it of await resolve(token)) seen.set(it.slug, it)
-        if (seen.size >= 6) break
+        for (const it of await resolve(token)) {
+          const v = votes.get(it.slug)
+          if (v) v.n++
+          else votes.set(it.slug, { item: it, n: 1 })
+        }
       }
-      const cands = [...seen.values()]
-      if (cands.length === 1) top = cands[0]
-      else if (cands.length > 1) {
+      const ranked = [...votes.values()].sort((a, b) => b.n - a.n)
+      const max = ranked[0]?.n ?? 0
+      const topScorers = ranked.filter((r) => r.n === max)
+      // ≥2 token agreement and a unique winner → confident pick.
+      if (max >= 2 && topScorers.length === 1) top = topScorers[0]!.item
+      else if (ranked.length > 0) {
         return {
           ok: false as const,
           error: 'card_not_found' as const,
-          candidates: cands.map((c) => ({ slug: c.slug, name: c.display_name })),
+          candidates: topScorers.slice(0, 6).map((r) => ({
+            slug: r.item.slug,
+            name: r.item.display_name,
+          })),
           hint: 'Pick the matching card and call card_guide again with its exact `name`.',
         }
       }
