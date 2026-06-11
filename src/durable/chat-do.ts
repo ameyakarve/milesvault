@@ -273,7 +273,18 @@ ${opts.text}`,
   // the suspending client tool. Proposed entries land on the capture row;
   // the Inbox offers review. Fired via waitUntil from the upload route and
   // the email worker — never blocks the user.
+  // Queueing entry point (worker-callable): hand the job to the DO's own
+  // durable scheduler and return immediately. The caller's waitUntil
+  // lifetime CANNOT kill the run — a 217s model call once outlived the
+  // route worker and the retry loop died mid-flight, leaving the capture
+  // stuck in 'processing'.
   async draftStatementAsync(statementId: string): Promise<{ ok: boolean; entries: number }> {
+    await this.__unsafe_ensureInitialized()
+    await this.schedule(0, 'runDraftStatement', statementId)
+    return { ok: true, entries: 0 }
+  }
+
+  async runDraftStatement(statementId: string): Promise<{ ok: boolean; entries: number }> {
     const ledger = this.ledgerStub()
     const t0 = Date.now()
     try {
