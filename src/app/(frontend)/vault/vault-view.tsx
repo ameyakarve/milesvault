@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { StatementUploadModal } from '@/components/statement-upload-modal'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
 import type { VaultStats } from '@/durable/ledger-do'
 import {
@@ -50,6 +52,7 @@ type FetchState =
   | { status: 'ok'; rows: AccountSummaryRow[] }
 
 export function VaultView() {
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
   const [names, setNames] = useState<Names>({})
@@ -185,12 +188,33 @@ export function VaultView() {
       ) : null}
 
       {/* ── headline strip: numbers that mean something ───────────────────── */}
+      {/* Always-present actions (owner call): ingestion and card creation
+          must never depend on empty states. */}
+      <div className="flex items-center justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={() => setUploadOpen(true)}>
+          Upload statement
+        </Button>
+        <Link
+          href={`/editor?prefill=${encodeURIComponent('I want to add a new credit card to track.')}`}
+          className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background hover:bg-foreground/90"
+        >
+          Add a card
+        </Link>
+      </div>
       {stats ? <HeadlineStrip stats={stats} /> : null}
 
       {/* ── credit cards ──────────────────────────────────────────────────── */}
       {cardRows.length > 0 ? (
         <section className="space-y-3">
-          <SectionLabel>Credit cards</SectionLabel>
+          <div className="flex items-center justify-between">
+            <SectionLabel>Credit cards</SectionLabel>
+            <Link
+              href={`/editor?prefill=${encodeURIComponent('I want to add a new credit card to track.')}`}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              + add
+            </Link>
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {cardRows.map((r) => (
               <CreditCardCard
@@ -213,6 +237,7 @@ export function VaultView() {
         <SpendingBreakdown stats={stats} />
       ) : null}
 
+      <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
       {/* ── everything else, compact ──────────────────────────────────────── */}
       {orderedGroups.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -476,7 +501,15 @@ function RewardsSections({ holdings, names }: { holdings: Holding[]; names: Name
         cluster.forEach((h) => claimed.add(`${h.account}|${h.currency}`))
         return (
           <section key={prefix} className="space-y-3">
-            <SectionLabel>{label}</SectionLabel>
+            <div className="flex items-center justify-between">
+              <SectionLabel>{label}</SectionLabel>
+              <Link
+                href={`/editor?prefill=${encodeURIComponent(seed)}`}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                + add
+              </Link>
+            </div>
             {cluster.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {cluster.map((h) => (

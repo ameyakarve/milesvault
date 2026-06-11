@@ -1788,11 +1788,25 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       // (Assets:Rewards:<Issuer>, account-first taxonomy) and multi-ticker,
       // so an UNCONSTRAINED open is the correct creation. Only when neither
       // the ledger nor this batch already has it.
-      for (const d of [...parsed.directives]) {
-        if (d.kind !== 'open') continue
+      // Card creation in practice is EITHER an open directive OR the first
+      // posting to a card account (owner caught the gap: a 0.00 opening
+      // transaction creates the card with no open directive at all).
+      const cardCreations: Array<{ account: string; date: string }> = []
+      for (const d of parsed.directives) {
+        if (d.kind === 'open') cardCreations.push({ account: d.account, date: d.date })
+      }
+      for (const t of parsed.transactions) {
+        for (const p of t.postings) {
+          cardCreations.push({ account: p.account, date: t.date })
+        }
+      }
+      const seenWallets = new Set<string>()
+      for (const d of cardCreations) {
         const parts = d.account.split(':')
         if (parts[0] !== 'Liabilities' || parts[1] !== 'CreditCards' || !parts[2]) continue
         const wallet = `Assets:Rewards:${parts[2]}`
+        if (seenWallets.has(wallet)) continue
+        seenWallets.add(wallet)
         const inBatch = parsed.directives.some(
           (x) => x.kind === 'open' && x.account === wallet,
         )
