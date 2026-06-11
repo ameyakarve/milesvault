@@ -399,8 +399,9 @@ export function checkPointsArithmetic(
     const expected = Math.floor(Math.abs(spend) / rate.per) * rate.pts
     const want = (spend >= 0 ? 1 : -1) * expected
     if (expected === 0) {
-      if (got !== null && got !== 0)
-        issues.push(`${where}: no points should accrue (spend below ${rate.per}); remove the ${got} ${pool.ticker} points legs`)
+      // Sub-block spend earns nothing — OMIT the legs, don't emit a 0 leg.
+      if (pend)
+        issues.push(`${where}: spend below one earning block — omit the points legs entirely (no 0 ${pool.ticker} leg)`)
       return
     }
     if (got === null) {
