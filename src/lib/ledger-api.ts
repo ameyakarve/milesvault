@@ -52,6 +52,7 @@ export type LedgerClient = {
     rows_written: number
   }>
   list_entries(): Promise<ListEntriesResponse>
+  delete_capture(id: string): Promise<{ ok: boolean }>
   set_capture_state(
     id: string,
     state: 'captured' | 'extracted' | 'posted' | 'dismissed',
@@ -245,6 +246,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async list_entries() {
       return stub.listEntries()
+    },
+
+    async delete_capture(id) {
+      return stub.delete_capture(id)
     },
 
     async replace_buffer(req) {

@@ -583,6 +583,17 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     return { ok: cursor.rowsWritten > 0 }
   }
 
+  // Hard delete: the capture row AND its statement blob — the errored-state
+  // escape hatch (dismiss only hides; delete forgets).
+  async delete_capture(id: string): Promise<{ ok: boolean }> {
+    let removed = 0
+    this.ctx.storage.transactionSync(() => {
+      removed = this.db.exec(`DELETE FROM capture_items WHERE id = ?`, id).rowsWritten
+      this.db.exec(`DELETE FROM statements WHERE id = ?`, id)
+    })
+    return { ok: removed > 0 }
+  }
+
   // Capture items for the Inbox, newest first.
   async list_captures(): Promise<{
     rows: Array<{

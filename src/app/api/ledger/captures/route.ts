@@ -21,15 +21,36 @@ export const POST = withLedger(async ({ client, req, email }) => {
   } catch {
     return new NextResponse('expected JSON body {id, action}', { status: 400 })
   }
-  const state = body.action === 'dismiss' ? 'dismissed' : body.action === 'post' ? 'posted' : null
-  if (!body.id || !state) {
-    return new NextResponse('action must be "dismiss" or "post", with an id', { status: 400 })
+  const action = body.action
+  if (!body.id || !['dismiss', 'post', 'delete', 'redraft'].includes(action ?? '')) {
+    return new NextResponse('action must be dismiss|post|delete|redraft, with an id', {
+      status: 400,
+    })
   }
-  const result = await client.set_capture_state(body.id, state)
+  const { env, ctx } = await getCloudflareContext({ async: true })
+  // Re-run the background drafter (errored-state retry). Source-agnostic.
+  if (action === 'redraft') {
+    const chatNs = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO> | undefined
+    if (!chatNs) return new NextResponse('CHAT_DO binding missing', { status: 500 })
+    ctx.waitUntil(
+      chatNs
+        .get(chatNs.idFromName(email))
+        .draftStatementAsync(body.id)
+        .then((): undefined => undefined)
+        .catch((e): undefined => {
+          console.error('[captures] redraft failed', { id: body.id, err: String(e) })
+          return undefined
+        }),
+    )
+    return NextResponse.json({ ok: true })
+  }
+  const result =
+    action === 'delete'
+      ? await client.delete_capture(body.id)
+      : await client.set_capture_state(body.id, action === 'dismiss' ? 'dismissed' : 'posted')
   // Cost hygiene: a closed item's chat thread is dead weight — wipe its DO
   // storage in the background. Safe even if the thread was never opened
   // (destroying an empty DO is a no-op).
-  const { env, ctx } = await getCloudflareContext({ async: true })
   const ns = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO> | undefined
   if (ns) {
     const threadName = `${email}::${body.id}`

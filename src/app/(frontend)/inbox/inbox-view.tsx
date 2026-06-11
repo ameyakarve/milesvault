@@ -150,6 +150,30 @@ export function InboxView() {
   const dismissedCount = (allRows?.length ?? 0) - (rows?.length ?? 0)
   const selected = rows?.find((r) => r.id === selectedId) ?? null
 
+  function deleteItem(id: string) {
+    setAllRows((prev) => prev?.filter((r) => r.id !== id) ?? prev)
+    if (selectedId === id) setSelectedId(null)
+    fetch('/api/ledger/captures', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, action: 'delete' }),
+    }).catch(() => {})
+  }
+
+  function redraft(id: string) {
+    setAllRows(
+      (prev) =>
+        prev?.map((r) =>
+          r.id === id ? { ...r, state: 'processing', draft_error: null } : r,
+        ) ?? prev,
+    )
+    fetch('/api/ledger/captures', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, action: 'redraft' }),
+    }).catch(() => {})
+  }
+
   function dismiss(id: string) {
     // Optimistic: flip locally, revert on failure.
     setAllRows((prev) => prev?.map((r) => (r.id === id ? { ...r, state: 'dismissed' } : r)) ?? prev)
@@ -313,6 +337,8 @@ export function InboxView() {
                 approveError={approveError}
                 onApprove={() => void approve(selected)}
                 onDismiss={() => dismiss(selected.id)}
+                onDelete={() => deleteItem(selected.id)}
+                onRedraft={() => redraft(selected.id)}
                 onBack={() => setSelectedId(null)}
                 onPosted={() => {
                   setAllRows(
@@ -342,6 +368,8 @@ function ItemDetail({
   approveError,
   onApprove,
   onDismiss,
+  onDelete,
+  onRedraft,
   onBack,
   onPosted,
 }: {
@@ -352,6 +380,8 @@ function ItemDetail({
   approveError: string | null
   onApprove: () => void
   onDismiss: () => void
+  onDelete: () => void
+  onRedraft: () => void
   onBack: () => void
   onPosted: () => void
 }) {
@@ -396,6 +426,14 @@ function ItemDetail({
           >
             Dismiss
           </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDelete}
+            className="text-destructive hover:text-destructive"
+          >
+            Delete
+          </Button>
         </div>
       </div>
 
@@ -419,14 +457,35 @@ function ItemDetail({
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
           {row.state === 'processing' || row.state === 'captured' ? (
             <>
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                {row.state === 'processing'
-                  ? 'Drafting in the background…'
-                  : 'Queued for drafting…'}
-              </p>
               {row.draft_error ? (
-                <p className="max-w-md text-xs text-destructive">{row.draft_error}</p>
+                <>
+                  <p className="text-sm text-foreground">Background draft failed</p>
+                  <p className="max-w-md text-xs text-destructive">{row.draft_error}</p>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {row.state === 'processing'
+                      ? 'Drafting in the background…'
+                      : 'Queued for drafting…'}
+                  </p>
+                </>
+              )}
+              {row.draft_error || row.state === 'captured' ? (
+                <div className="mt-1 flex items-center gap-2">
+                  <Button size="sm" onClick={onRedraft}>
+                    Retry draft
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onDelete}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    Delete
+                  </Button>
+                </div>
               ) : null}
             </>
           ) : row.state === 'posted' ? (
