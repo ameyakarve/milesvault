@@ -2,8 +2,10 @@
 
 import { DraftTransactionBatchCard } from './draft-transaction'
 import { ClarifyCard } from './clarify'
+import { AddCardCard, type AddCardResult } from './add-card'
 import { ExploreLinkCard } from './explore-link'
 import {
+  addCardInputSchema,
   clarifyInputSchema,
   draftTransactionBatchSchema,
   showAwardOptionsSchema,
@@ -20,6 +22,8 @@ export type GenUiProps = {
   // For clarify
   resolvedAnswers?: string[]
   onAnswer?: (answers: string[]) => void
+  // For add_card — the confirmed selection becomes the tool output.
+  onAddCard?: (result: AddCardResult) => void
   // Both
   onReject: () => void
 }
@@ -53,6 +57,18 @@ const RENDERERS: Record<
     const parsed = showAwardOptionsSchema.safeParse(input)
     if (!parsed.success) return null
     return <ExploreLinkCard input={parsed.data} />
+  },
+  add_card: (input, props) => {
+    const parsed = addCardInputSchema.safeParse(input)
+    if (!parsed.success) return null
+    return (
+      <AddCardCard
+        input={parsed.data}
+        status={props.status}
+        onResult={props.onAddCard}
+        onReject={props.onReject}
+      />
+    )
   },
   clarify: (input, props) => {
     const parsed = clarifyInputSchema.safeParse(input)

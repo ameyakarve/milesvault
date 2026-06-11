@@ -14,6 +14,7 @@ import {
   cardGuideTool,
   draftTransactionTool,
   clarifyTool,
+  addCardTool,
   readStatementTool,
 } from './agents/tools/editor'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
@@ -455,6 +456,7 @@ entries, or draft corrections.`
         card_guide,
         draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(),
+        add_card: addCardTool(),
       })
     }
     return this.withToolLog(name, {

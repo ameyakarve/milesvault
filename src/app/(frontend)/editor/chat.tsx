@@ -570,6 +570,13 @@ export function Chat({
                                   onShowInJournal,
                                   onAnswer: (answers) =>
                                     handleClarifyAnswer(toolCallId, answers),
+                                  onAddCard: (result) => {
+                                    setSubmitStatus((s) => ({ ...s, [toolCallId]: 'done' }))
+                                    addToolOutput({ toolCallId, output: result })
+                                    // like clarify: the model must continue
+                                    // (draft the open directives next).
+                                    void sendMessage({ text: '' })
+                                  },
                                   onReject: () => handleReject(toolCallId),
                                 })
                               : null

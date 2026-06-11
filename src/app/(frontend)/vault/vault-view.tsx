@@ -426,7 +426,7 @@ const REWARD_CLUSTERS: Array<{ prefix: string; label: string; cta: string; seed:
     prefix: 'Assets:Rewards:',
     label: 'Card programmes',
     cta: 'No card reward pools yet',
-    seed: 'I want to track my credit-card reward points. Ask me which issuers and the balances, then open Assets:Rewards:<Issuer> accounts with the right tickers and record them.',
+    seed: 'I want to add a new credit card to track.',
   },
 ]
 

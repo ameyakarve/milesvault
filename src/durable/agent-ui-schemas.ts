@@ -77,6 +77,18 @@ export const clarifyOutputSchema = z.object({
 })
 
 export type ClarifyInput = z.infer<typeof clarifyInputSchema>
+
+// add_card — the KG-backed card picker. The agent may pre-seed candidates
+// it already resolved; the component searches the KG live regardless.
+export const addCardInputSchema = z.object({
+  // Short context line shown above the picker ("Which card should I add?").
+  prompt: z.string().max(200).optional(),
+  candidates: z
+    .array(z.object({ slug: z.string(), name: z.string().nullable() }))
+    .max(8)
+    .optional(),
+})
+export type AddCardInput = z.infer<typeof addCardInputSchema>
 export type ClarifyOutput = z.infer<typeof clarifyOutputSchema>
 
 // The agent emits a `show_award_options` tool call with only the city pair and
