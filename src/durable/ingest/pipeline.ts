@@ -36,16 +36,10 @@ const ExtractedStatement = z.object({
   // (the bank owes the user) → POSITIVE liability.
   opening_balance: Money.nullable().optional(),
   closing_balance: Money.nullable().optional(),
-  // Reward-point balances when the statement prints them (opening/earned/
-  // closing points for the card's programme). All optional.
-  points_balance: z
-    .object({
-      opening: z.number().nullable().optional(),
-      earned: z.number().nullable().optional(),
-      closing: z.number().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
+  // The statement's closing reward-points balance, when printed. The one
+  // points figure that matters: asserting it reconciles the whole cycle
+  // (the pad absorbs drift) — opening/earned are derivable noise.
+  closing_points: z.number().nullable().optional(),
   transactions: z.array(ExtractedTxn).min(1).max(200),
 })
 export type Extracted = z.infer<typeof ExtractedStatement>
@@ -244,7 +238,7 @@ export function renderEntries(opts: {
   // Statement-stated reward-point balance: assert the POSTED wallet (the
   // pool parent — :Pending is ours, not the bank's) with a pad to absorb
   // history drift. Statement truth beats our estimates.
-  const closingPts = extracted.points_balance?.closing
+  const closingPts = extracted.closing_points
   if (closingPts != null && pool?.account && pool?.ticker) {
     entries.push(
       `${extracted.period.to} pad ${pool.account} Equity:Opening-Balances\n` +
@@ -263,7 +257,7 @@ const EXTRACT_SYSTEM = `You extract credit-card statements into JSON. Output ONL
   "period": { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" },
   "opening_balance": { "amount": 123.45, "cr": false } | null,
   "closing_balance": { "amount": 123.45, "cr": false } | null,
-  "points_balance": { "opening": 1200, "earned": 450, "closing": 1650 } | null,
+  "closing_points": 1650 | null,
   "transactions": [
     { "date": "YYYY-MM-DD", "merchant": "as printed", "credit": false, "amount": 123.45, "note": "short category hint" }
   ]
@@ -271,7 +265,7 @@ const EXTRACT_SYSTEM = `You extract credit-card statements into JSON. Output ONL
 Rules:
 - amount is ALWAYS positive; "credit": true marks refunds/reversals TO the card.
 - "cr": true when the statement marks a balance "Cr" (credit balance — the bank owes the user).
-- Balances are OPTIONAL — use null for anything the statement does not state. points_balance covers reward-point figures when printed.
+- Balances are OPTIONAL — use null for anything the statement does not state. closing_points is the closing reward-points balance when printed.
 - Copy stated amounts digit-for-digit. Normalize all dates to YYYY-MM-DD.
 - SKIP noise rows: payments received, reward-point summaries, interest/late fees, GST-on-fee lines, promotional text.
 - Include every purchase and every refund/credit row.`
