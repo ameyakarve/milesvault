@@ -31,10 +31,19 @@ export function validateDraftBatch(entries: string[]): DraftValidationResult {
       issues.push({ index, message: `${label}: parse error` })
       return
     }
+    // Balance assertions (optionally with their pad folded in — the parser
+    // absorbs a same-account pad into the balance's plug_account) are first-
+    // class draft entries: statements state opening/closing balances and the
+    // import should assert them. Other directive kinds stay out of drafts.
+    const onlyBalances =
+      parsed.transactions.length === 0 &&
+      parsed.directives.length > 0 &&
+      parsed.directives.every((d) => d.kind === 'balance')
+    if (onlyBalances) return
     if (parsed.directives.length > 0) {
       issues.push({
         index,
-        message: `${label}: contains a directive (balance/pad/open/...) — directives belong in a separate draft, not inside draft_transaction`,
+        message: `${label}: contains a directive (open/close/price/...) — only balance/pad assertions and transactions belong in a draft`,
       })
       return
     }

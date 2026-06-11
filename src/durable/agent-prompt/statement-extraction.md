@@ -66,7 +66,27 @@ Follow these rules when building that array.
    (floor(877.82/200)×12 = 48). A spend OR refund entry missing its
    points legs is INCOMPLETE unless the guide gave you no rate at all —
    and then you must tell the user you skipped accruals.
-9. **One transaction per element.** Each entry is a complete Beancount
+9. **Assert the statement's opening and closing balances.** When the
+   statement states them (it almost always does), emit pad+balance pairs
+   as single elements, around the transactions:
+   - Opening, BEFORE the cycle's transactions (the pad absorbs any drift
+     into Equity:Opening-Balances; balance asserts at the START of its
+     date, so date it the cycle's first day):
+     ```
+     2026-04-17 pad Liabilities:CreditCards:Axis:MagnusBurgundy Equity:Opening-Balances
+     2026-04-18 balance Liabilities:CreditCards:Axis:MagnusBurgundy  -45000.00 INR
+     ```
+   - Closing, AFTER all transactions, dated the DAY AFTER the statement
+     end (assertions check the start of day):
+     ```
+     2026-05-18 pad Liabilities:CreditCards:Axis:MagnusBurgundy Equity:Opening-Balances
+     2026-05-19 balance Liabilities:CreditCards:Axis:MagnusBurgundy  -62000.00 INR
+     ```
+   Liabilities are NEGATIVE: "total due ₹62,000" asserts -62000.00 INR.
+   The pad+balance pair must be ONE element (the pad folds into the
+   assertion). Copy the statement's stated figures digit-for-digit; never
+   compute them.
+10. **One transaction per element.** Each entry is a complete Beancount
    block — header line plus 2+ postings, no leading/trailing blank
    lines, no comments narrating what the row is for. The postings
    must balance per currency under Beancount weight rules (`@@` puts

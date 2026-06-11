@@ -118,40 +118,17 @@ export function EditorShell() {
   useEffect(() => {
     if (!journalVisible) return
     if (!filterActive) return
-    let alive = true
-    setFilteredLoading(true)
+    // The full journal is already client-side (list_entries is unbounded),
+    // so the filtered slice derives locally — complete, identity-carrying,
+    // and therefore ALWAYS editable. The old server fetch only supplied a
+    // pagination cursor, which locked the editor read-only for any filter
+    // spanning more than one server page ("works only on All time").
+    const visible = filterRowsClientSide(entries.rows, filter)
+    setFilteredRows(visible)
+    setFilteredBuffer(composeBaseline(visible))
+    setFilteredCursor(null)
     setFilteredError(null)
-    ledgerClient
-      .getJournalFiltered({
-        account: filter.account,
-        dateFrom: filter.date?.from ?? null,
-        dateTo: filter.date?.to ?? null,
-        cursor: null,
-      })
-      .then(async (r) => {
-        if (!alive) return
-        // Backfill snapshot identity for the filtered slice by intersecting
-        // against the full entries list. The full list carries kind+id+updated_at;
-        // the filtered text endpoint only returns rendered text. We diff by
-        // re-parsing — for now, derive snapshots by filtering the global rows
-        // against the filter predicates client-side.
-        const visible = filterRowsClientSide(entries.rows, filter)
-        setFilteredRows(visible)
-        setFilteredBuffer(composeBaseline(visible))
-        setFilteredCursor(r.nextCursor)
-      })
-      .catch((e) => {
-        if (!alive) return
-        setFilteredError(
-          e instanceof Error ? e.message : 'Failed to load filtered journal',
-        )
-      })
-      .finally(() => {
-        if (alive) setFilteredLoading(false)
-      })
-    return () => {
-      alive = false
-    }
+    setFilteredLoading(false)
   }, [journalVisible, filterActive, filter.account, filter.date, entries.rows])
 
   const loadMore = useCallback(async () => {
