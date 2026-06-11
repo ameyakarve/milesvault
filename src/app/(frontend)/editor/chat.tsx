@@ -39,6 +39,7 @@ import {
 import Link from 'next/link'
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import { StatementUploadModal } from '@/components/statement-upload-modal'
+import { AddCardModal } from '@/components/add-card-modal'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import type { ToolUIPart } from 'ai'
 import type { ChatDOState } from '@/durable/chat-do'
@@ -303,9 +304,9 @@ export function Chat({
     })
   }, [canClear, onClearableChange])
 
+  const [addCardOpen, setAddCardOpen] = useState(false)
   function addCardFlow() {
-    if (status === 'streaming' || status === 'submitted') return
-    void sendMessage({ text: 'I want to add a new credit card to track.' })
+    setAddCardOpen(true)
   }
 
   async function handleSubmit(message: PromptInputMessage) {
@@ -427,6 +428,11 @@ export function Chat({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      <AddCardModal
+        open={addCardOpen}
+        onClose={() => setAddCardOpen(false)}
+        onDone={() => void refreshAccounts()}
+      />
       {isEmpty ? (
         <div className="flex flex-1 items-center justify-center px-4">
           <div className="flex w-full max-w-3xl -translate-y-8 flex-col items-center gap-7">

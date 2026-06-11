@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { AddCardModal } from '@/components/add-card-modal'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
 import type { VaultStats } from '@/durable/ledger-do'
 import {
@@ -52,6 +53,7 @@ type FetchState =
 export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
+  const [addCardOpen, setAddCardOpen] = useState(false)
   const [names, setNames] = useState<Names>({})
   const [stats, setStats] = useState<VaultStats | null>(null)
 
@@ -192,12 +194,13 @@ export function VaultView() {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <SectionLabel>Credit cards</SectionLabel>
-            <Link
-              href={`/editor?prefill=${encodeURIComponent('I want to add a new credit card to track.')}`}
+            <button
+              type="button"
+              onClick={() => setAddCardOpen(true)}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
               + add
-            </Link>
+            </button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {cardRows.map((r) => (
@@ -221,6 +224,7 @@ export function VaultView() {
         <SpendingBreakdown stats={stats} />
       ) : null}
 
+      <AddCardModal open={addCardOpen} onClose={() => setAddCardOpen(false)} onDone={() => location.reload()} />
       {/* ── everything else, compact ──────────────────────────────────────── */}
       {orderedGroups.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
