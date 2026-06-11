@@ -78,19 +78,18 @@ Follow these rules when building that array.
    points leg. A spend OR refund entry missing its points legs is
    INCOMPLETE unless the guide gave you no rate at all — and then you must
    tell the user you skipped accruals.
-8b. **Reward-points balance + landing (when the statement states them).**
-   - If the statement prints a CLOSING reward/loyalty points balance
-     (often a small "Reward Points — Opening / Earned / Redeemed / Closing"
-     summary, or a single "Points Balance"), emit ONE `balance` directive
-     for the programme account (`<pool.account>`) in the programme ticker
-     (`<pool.ticker>`) with the CLOSING number, dated the statement close.
-     This is points, never rupees.
-   - If the statement states the points EARNED this cycle, the bank has
-     credited them — emit a `transaction` moving that stated number from
-     `<pool.account>:Pending` to `<pool.account>` (Pending down, parent up,
-     same ticker, NO `Equity:Void`, NO price), dated the statement close.
-     This is the only way to move points pending→posted; a pad/balance
-     cannot (it plugs to one contra account).
+8b. **The points summary (almost every statement prints one).** Look for the
+   reward/loyalty points summary — usually "Reward Points — Opening / Earned /
+   Redeemed / Closing", or a "Points Balance". Two entries from it:
+   - **EARNED → move it.** If it states the points EARNED this cycle (a number,
+     call it N), emit exactly ONE `transaction` that moves N points from
+     `<pool.account>:Pending` to `<pool.account>` — `<pool.account>` +N,
+     `<pool.account>:Pending` −N, same ticker, NO `Equity:Void`, NO price,
+     dated the statement close. Whenever an Earned figure is printed, ALWAYS
+     emit this move. (This is the only way to post pending points; a pad can't.)
+   - **CLOSING → assert it.** If it states a CLOSING points balance, emit ONE
+     `balance` directive for `<pool.account>` in `<pool.ticker>` with that
+     closing number, dated the statement close. Points, never rupees.
 9. **Assert the statement's opening and closing balances.** When the
    statement states them (it almost always does), emit pad+balance pairs
    as single elements, around the transactions:
