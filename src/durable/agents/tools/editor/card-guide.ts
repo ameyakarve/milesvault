@@ -8,6 +8,140 @@ import type { KbHttp } from '../concierge/kb-tools'
 // edges as the per-MCC overrides). Returns everything the drafting agent
 // needs in one call: the Logging guide, the reward pool (ticker + account
 // path), the DENOMINATED_IN rate notes, and every exception.
+export type CardGuideResult =
+  | {
+      ok: true
+      card: { slug: string; name: string | null }
+      pool: {
+        currency: string
+        name: string | null
+        ticker: string | null
+        account: string | null
+        rate_notes: string | null
+      } | null
+      overrides: Array<{ mcc: string; name: string | null; rule: string | null }>
+      logging_guide: string | null
+      card_notes: string | null
+    }
+  | { ok: false; error: string; candidates?: Array<{ slug: string; name: string | null }>; hint?: string }
+
+// Shared by the agent tool AND the deterministic ingest pipeline.
+export async function fetchCardGuide(kb: KbHttp, card: string): Promise<CardGuideResult> {
+  try {
+    type Item = { slug: string; display_name: string | null }
+    const resolve = async (q: string): Promise<Item[]> => {
+      const r = (await kb.resolve(q, { prefix: 'cc', limit: 5 })) as {
+        items?: Item[]
+      }
+      return r.items ?? []
+    }
+    // Resolution is literal display-name matching; statements add filler
+    // the KG nodes omit. No hardcoded vocabulary: on a miss, gather
+    // candidates by per-token recall — a single hit is used directly,
+    // multiple go back as options.
+    let top: Item | undefined = (await resolve(card))[0]
+    if (!top) {
+      const seen = new Map<string, Item>()
+      for (const token of card.split(/\s+/)) {
+        if (token.length < 4) continue
+        for (const it of await resolve(token)) seen.set(it.slug, it)
+        if (seen.size >= 6) break
+      }
+      const cands = [...seen.values()]
+      if (cands.length === 1) top = cands[0]
+      else if (cands.length > 1) {
+        return {
+          ok: false as const,
+          error: 'card_not_found' as const,
+          candidates: cands.map((c) => ({ slug: c.slug, name: c.display_name })),
+          hint: 'Pick the matching card and call card_guide again with its exact `name`.',
+        }
+      }
+    }
+    if (!top) return { ok: false as const, error: 'card_not_found' as const }
+
+    const node = (await kb.get(top.slug)) as {
+      display_name?: string | null
+      content_md?: string
+      source_file?: string
+    } | null
+    // The ::node block holds only the title — the card's prose sections
+    // (## Logging, ## Fees…) live in the FILE body, so fetch that.
+    let content = node?.content_md ?? ''
+    if (node?.source_file) {
+      const file = (await kb.getFile(node.source_file).catch((): null => null)) as {
+        content_md?: string
+      } | null
+      if (file?.content_md) content = file.content_md
+    }
+    const logging = /## Logging[\s\S]*?(?=\n## |$)/.exec(content)?.[0] ?? null
+
+    const rel = (await kb.related(top.slug, { direction: 'outgoing' })) as {
+      items?: Array<{ edge_type: string; other: string; description_md: string | null }>
+    }
+    const items = rel.items ?? []
+
+    const denom = items.find(
+      (i) => i.edge_type === 'DENOMINATED_IN' && i.other.startsWith('currency/'),
+    )
+    let pool: {
+      currency: string
+      name: string | null
+      ticker: string | null
+      account: string | null
+      rate_notes: string | null
+    } | null = null
+    if (denom) {
+      const cur = (await kb.get(denom.other).catch((): null => null)) as {
+        display_name?: string | null
+        attrs?: Record<string, unknown> | null
+      } | null
+      const bankEdge = items.find((i) => i.edge_type === 'ISSUED_BY')
+      const bank = bankEdge
+        ? ((await kb.get(bankEdge.other).catch((): null => null)) as {
+            attrs?: Record<string, unknown> | null
+          } | null)
+        : null
+      const issuer = bank?.attrs?.beancountName
+      const ticker = cur?.attrs?.ticker
+      pool = {
+        currency: denom.other,
+        name: cur?.display_name ?? null,
+        ticker: typeof ticker === 'string' ? ticker : null,
+        // One account per issuer wallet (owner convention): the account
+        // says WHERE points live; the commodity says WHAT they are.
+        account: typeof issuer === 'string' ? `Assets:Rewards:${issuer}` : null,
+        rate_notes: denom.description_md ?? null,
+      }
+    }
+
+    const overrides = await Promise.all(
+      items
+        .filter((i) => i.edge_type === 'EARN_RULE')
+        .slice(0, 12)
+        .map(async (i) => {
+          const mcc = (await kb.get(i.other).catch((): null => null)) as {
+            display_name?: string | null
+          } | null
+          return { mcc: i.other, name: mcc?.display_name ?? null, rule: i.description_md ?? null }
+        }),
+    )
+
+    return {
+      ok: true as const,
+      card: { slug: top.slug, name: node?.display_name ?? top.display_name },
+      pool,
+      overrides,
+      logging_guide: logging,
+      // When no Logging section exists yet, give the model the prose to
+      // reason from (clearly a fallback, not the spec).
+      card_notes: logging ? null : content.slice(0, 1500),
+    }
+  } catch (e) {
+    return { ok: false as const, error: String(e) }
+  }
+}
+
 export function cardGuideTool(kb: KbHttp) {
   return tool({
     description:
@@ -17,123 +151,6 @@ export function cardGuideTool(kb: KbHttp) {
         .string()
         .describe('The card as the user/statement names it, e.g. "Axis Magnus Burgundy"'),
     }),
-    execute: async ({ card }) => {
-      try {
-        type Item = { slug: string; display_name: string | null }
-        const resolve = async (q: string): Promise<Item[]> => {
-          const r = (await kb.resolve(q, { prefix: 'cc', limit: 5 })) as {
-            items?: Item[]
-          }
-          return r.items ?? []
-        }
-        // Resolution is literal display-name matching; statements add filler
-        // the KG nodes omit ("Axis BANK Magnus Burgundy CREDIT CARD"). No
-        // hardcoded vocabulary: on a miss, gather candidates by per-token
-        // recall and let the MODEL choose — a single hit is used directly,
-        // multiple hits go back as options to re-call with.
-        let top: Item | undefined = (await resolve(card))[0]
-        if (!top) {
-          const seen = new Map<string, Item>()
-          for (const token of card.split(/\s+/)) {
-            if (token.length < 4) continue
-            for (const it of await resolve(token)) seen.set(it.slug, it)
-            if (seen.size >= 6) break
-          }
-          const cands = [...seen.values()]
-          if (cands.length === 1) top = cands[0]
-          else if (cands.length > 1) {
-            return {
-              ok: false as const,
-              error: 'card_not_found' as const,
-              candidates: cands.map((c) => ({ slug: c.slug, name: c.display_name })),
-              hint: 'Pick the matching card and call card_guide again with its exact `name`.',
-            }
-          }
-        }
-        if (!top) return { ok: false as const, error: 'card_not_found' as const }
-
-        const node = (await kb.get(top.slug)) as {
-          display_name?: string | null
-          content_md?: string
-          source_file?: string
-        } | null
-        // The ::node block holds only the title — the card's prose sections
-        // (## Logging, ## Fees…) live in the FILE body, so fetch that.
-        let content = node?.content_md ?? ''
-        if (node?.source_file) {
-          const file = (await kb.getFile(node.source_file).catch((): null => null)) as {
-            content_md?: string
-          } | null
-          if (file?.content_md) content = file.content_md
-        }
-        const logging = /## Logging[\s\S]*?(?=\n## |$)/.exec(content)?.[0] ?? null
-
-        const rel = (await kb.related(top.slug, { direction: 'outgoing' })) as {
-          items?: Array<{ edge_type: string; other: string; description_md: string | null }>
-        }
-        const items = rel.items ?? []
-
-        const denom = items.find(
-          (i) => i.edge_type === 'DENOMINATED_IN' && i.other.startsWith('currency/'),
-        )
-        let pool: {
-          currency: string
-          name: string | null
-          ticker: string | null
-          account: string | null
-          rate_notes: string | null
-        } | null = null
-        if (denom) {
-          const cur = (await kb.get(denom.other).catch((): null => null)) as {
-            display_name?: string | null
-            attrs?: Record<string, unknown> | null
-          } | null
-          const bankEdge = items.find((i) => i.edge_type === 'ISSUED_BY')
-          const bank = bankEdge
-            ? ((await kb.get(bankEdge.other).catch((): null => null)) as {
-                attrs?: Record<string, unknown> | null
-              } | null)
-            : null
-          const issuer = bank?.attrs?.beancountName
-          const ticker = cur?.attrs?.ticker
-          pool = {
-            currency: denom.other,
-            name: cur?.display_name ?? null,
-            ticker: typeof ticker === 'string' ? ticker : null,
-            // One account per issuer wallet (owner convention): the account
-            // says WHERE points live; the commodity says WHAT they are
-            // (tier-precise, carries transfer semantics). :Pending child for
-            // earned-not-credited.
-            account: typeof issuer === 'string' ? `Assets:Rewards:${issuer}` : null,
-            rate_notes: denom.description_md ?? null,
-          }
-        }
-
-        const overrides = await Promise.all(
-          items
-            .filter((i) => i.edge_type === 'EARN_RULE')
-            .slice(0, 12)
-            .map(async (i) => {
-              const mcc = (await kb.get(i.other).catch((): null => null)) as {
-                display_name?: string | null
-              } | null
-              return { mcc: i.other, name: mcc?.display_name ?? null, rule: i.description_md ?? null }
-            }),
-        )
-
-        return {
-          ok: true as const,
-          card: { slug: top.slug, name: node?.display_name ?? top.display_name },
-          pool,
-          overrides,
-          logging_guide: logging,
-          // When no Logging section exists yet, give the model the prose to
-          // reason from (clearly a fallback, not the spec).
-          card_notes: logging ? null : content.slice(0, 1500),
-        }
-      } catch (e) {
-        return { ok: false as const, error: String(e) }
-      }
-    },
+    execute: async ({ card }) => fetchCardGuide(kb, card),
   })
 }

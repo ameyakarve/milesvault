@@ -17,6 +17,7 @@ import {
   readStatementTool,
 } from './agents/tools/editor'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
+import { runDraftPipeline } from './ingest/pipeline'
 import type { AgentHost, Registry } from './agents/types'
 
 // The chat/agent runtime for the `/editor` surface. Hosts the `ledger ↔
@@ -293,69 +294,53 @@ ${opts.text}`,
       const capture = (await ledger.list_captures()).rows.find((r) => r.id === statementId)
       await ledger.set_capture_state(statementId, 'processing')
       const snapshot = await ledger.ledger_snapshot()
-      const recorded: string[] = []
-      const draft_transaction = tool({
-        description:
-          'Propose one or more beancount transactions for this statement (recorded for Inbox review, not committed).',
-        inputSchema: draftTransactionBatchSchema,
-        execute: async ({ transactions }) => {
-          recorded.push(...transactions)
-          return { ok: true, recorded: transactions.length }
-        },
-      })
-      const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
-      // The model occasionally LEAKS its tool call as literal text
-      // ("<|tool_call>…") instead of a structured call — nothing gets
-      // recorded. That's a transient serialization flake: retry the whole
-      // generation up to 3 attempts before declaring failure.
-      const MAX_ATTEMPTS = 3
-      let note = ''
-      let attempts = 0
-      for (; attempts < MAX_ATTEMPTS && recorded.length === 0; attempts++) {
-        const result = await generateText({
-          model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
-          system: buildStatementAgentSystem(snapshot),
-          prompt: `${capture?.prompt?.trim() || 'Process this statement into journal entries.'}
 
---- statement: ${stmt.filename} ---
-${stmt.text}`,
-          tools: { card_guide: cardGuideTool(kbHttp), draft_transaction },
-          // 16k output budget (the 4096 default truncates reward-leg chunks);
-          // step ceiling covers card_guide candidate retries + 3-4 chunked
-          // draft calls + validation retries + the closing note.
-          maxOutputTokens: 16384,
-          stopWhen: stepCountIs(16),
-          experimental_repairToolCall: draftTransactionRepair,
+      // Deterministic pipeline (owner decision): two small JSON-only model
+      // calls (extract, classify) — no tools, no bulk payloads over the
+      // flaky tool-call channel — then code renders the beancount: points
+      // floor math, refund mirroring, pad+balance bookends, Cr signs.
+      const gen = async (system: string, prompt: string, maxTokens: number) => {
+        const r = await generateText({
+          model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+          system,
+          prompt,
+          maxOutputTokens: maxTokens,
         })
-        note = result.text.trim()
+        return r.text
       }
-      if (recorded.length > 0) {
-        await ledger.set_capture_drafts(statementId, recorded)
+      const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
+      const result = await runDraftPipeline({
+        gen,
+        kb: kbHttp,
+        statementText: stmt.text,
+        accounts: snapshot.accounts.map((a) => a.account),
+        instruction: capture?.prompt,
+      })
+
+      if (result.ok && result.entries.length > 0) {
+        await ledger.set_capture_drafts(statementId, result.entries)
       } else {
-        const leaked = note.includes('<|tool_call') || note.includes('<|"|>')
         await ledger.set_capture_error(
           statementId,
-          leaked
-            ? `model emitted a malformed tool call (${attempts} attempts) — re-upload to retry, or open the chat below`
-            : note.slice(0, 300) || 'background draft produced no entries',
+          result.error?.slice(0, 300) || 'pipeline produced no entries',
         )
       }
       this.logTool({
         agent: 'async-ingest',
-        tool: 'draft_statement',
+        tool: 'draft_pipeline',
         input: { statement_id: statementId, filename: stmt.filename },
-        output: { entries: recorded.length, attempts, note: note.slice(0, 300) },
-        ok: recorded.length > 0,
+        output: { entries: result.entries.length, stages: result.stages, error: result.error },
+        ok: result.ok,
         ms: Date.now() - t0,
       })
-      return { ok: recorded.length > 0, entries: recorded.length }
+      return { ok: result.ok, entries: result.entries.length }
     } catch (e) {
       await this.ledgerStub()
         .set_capture_error(statementId, String(e).slice(0, 300))
         .catch((): undefined => undefined)
       this.logTool({
         agent: 'async-ingest',
-        tool: 'draft_statement',
+        tool: 'draft_pipeline',
         input: { statement_id: statementId },
         output: null,
         ok: false,
@@ -379,17 +364,17 @@ ${stmt.text}`,
     return i === -1 ? null : this.name.slice(i + 2)
   }
 
-  private ledgerStub(): DurableObjectStub<LedgerDO> {
-    const ns = this.env.LEDGER_DO as unknown as DurableObjectNamespace<LedgerDO>
-    return ns.get(ns.idFromName(this.ownerEmail()))
-  }
-
   // Cost hygiene: when an Inbox item is posted or dismissed, its thread DO is
   // destroyed — storage wiped, alarms cleared, nothing left to bill.
   async destroyThread(): Promise<{ ok: true }> {
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
     return { ok: true }
+  }
+
+  private ledgerStub(): DurableObjectStub<LedgerDO> {
+    const ns = this.env.LEDGER_DO as unknown as DurableObjectNamespace<LedgerDO>
+    return ns.get(ns.idFromName(this.ownerEmail()))
   }
 
   private snapshot(): Snapshot {
