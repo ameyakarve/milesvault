@@ -293,6 +293,61 @@ ${opts.text}`,
     return { ok: true, entries: 0 }
   }
 
+  // Pure OCR: transcribe statement page images to text via Mistral (vision).
+  // No structure, no JSON — just the visible text, so labels banks render as
+  // images come through. Streamed; tail surfaced as the draft trace.
+  private async ocrStatement(
+    images: string[],
+    trace: (t: string) => void,
+  ): Promise<string> {
+    const ai = this.env.AI as unknown as {
+      run: (model: string, inputs: unknown) => Promise<ReadableStream<Uint8Array>>
+    }
+    const stream = await ai.run(VISION_MODEL_ID, {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Transcribe ALL text visible on these credit-card statement pages, exactly as printed — every label, number, date and merchant, preserving line structure. Output only the transcription, nothing else.',
+            },
+            ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+          ],
+        },
+      ],
+      max_tokens: 8192,
+      stream: true,
+    })
+    let text = ''
+    const reader = stream.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      let nl: number
+      while ((nl = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, nl).trim()
+        buf = buf.slice(nl + 1)
+        if (!line.startsWith('data:')) continue
+        const data = line.slice(5).trim()
+        if (data === '[DONE]') continue
+        try {
+          const j = JSON.parse(data) as { response?: string }
+          if (j.response) {
+            text += j.response
+            trace(`Reading the statement…\n${text.slice(-600)}`)
+          }
+        } catch {
+          /* partial SSE frame */
+        }
+      }
+    }
+    return text
+  }
+
   async runDraftStatement(statementId: string): Promise<{ ok: boolean; entries: number }> {
     const ledger = this.ledgerStub()
     const t0 = Date.now()
@@ -323,60 +378,8 @@ ${opts.text}`,
         }
       })()
 
-      const gen: GenFn = async ({ system, prompt, maxTokens, images }) => {
-        if (images && images.length > 0) {
-          // VISION path: PDF statements render to page images and a
-          // multimodal model (Mistral Small 3.1) reads the rendered layout —
-          // including labels HSBC et al. bake as images that text extraction
-          // can't decode. Direct AI binding call, streamed.
-          const ai = this.env.AI as unknown as {
-            run: (model: string, inputs: unknown) => Promise<ReadableStream<Uint8Array>>
-          }
-          const stream = await ai.run(VISION_MODEL_ID, {
-            messages: [
-              { role: 'system', content: system },
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: prompt },
-                  ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
-                ],
-              },
-            ],
-            max_tokens: maxTokens,
-            stream: true,
-          })
-          let text = ''
-          const reader = stream.getReader()
-          const decoder = new TextDecoder()
-          let buf = ''
-          for (;;) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buf += decoder.decode(value, { stream: true })
-            let nl: number
-            while ((nl = buf.indexOf('\n')) !== -1) {
-              const line = buf.slice(0, nl).trim()
-              buf = buf.slice(nl + 1)
-              if (!line.startsWith('data:')) continue
-              const data = line.slice(5).trim()
-              if (data === '[DONE]') continue
-              try {
-                const j = JSON.parse(data) as { response?: string }
-                if (j.response) {
-                  text += j.response
-                  trace(text)
-                }
-              } catch {
-                /* partial SSE frame */
-              }
-            }
-          }
-          return text
-        }
-
-        // TEXT path (email/text-only statements): stream gemma so a long
-        // generation doesn't hit the completion timeout.
+      // The gemma text pipeline does ALL structured extraction (owner call).
+      const gen: GenFn = async ({ system, prompt, maxTokens }) => {
         const r = streamText({
           model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
           system,
@@ -390,12 +393,28 @@ ${opts.text}`,
         }
         return text
       }
+
+      // Vision is a pure OCR layer (owner call): Mistral just transcribes the
+      // rendered pages — recovering labels banks bake as images (HSBC's
+      // reward-points summary) that PDF text extraction garbles. The PDF text
+      // stays authoritative; the OCR only fills gaps. The merged text feeds
+      // the gemma pipeline above — vision never does structure or JSON.
+      let statementText = stmt.text
+      if (stmt.images && stmt.images.length > 0) {
+        const ocr = await this.ocrStatement(stmt.images, trace).catch((): string => '')
+        if (ocr.trim()) {
+          statementText =
+            `${stmt.text}\n\n=== OCR of the statement page images ===\n` +
+            `(The PDF text above is authoritative for anything legible in it. Use this OCR ONLY to read labels/values the text above is missing or garbled — e.g. a reward-points summary the bank renders as an image.)\n` +
+            ocr
+        }
+      }
+
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
       const result = await runDraftPipeline({
         gen,
         kb: kbHttp,
-        statementText: stmt.text,
-        images: stmt.images,
+        statementText,
         accounts: snapshot.accounts.map((a) => a.account),
         // Same convention stack as the editor's statement agent — only the
         // output channel differs (JSON entries).
