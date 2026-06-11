@@ -122,7 +122,12 @@ export type ExtractedStatement = z.infer<typeof ZStatement>
 
 // ---- JSON-only model call ------------------------------------------------------
 
-export type GenFn = (opts: { system: string; prompt: string; maxTokens: number }) => Promise<string>
+export type GenFn = (opts: {
+  system: string
+  prompt: string
+  maxTokens: number
+  images?: string[]
+}) => Promise<string>
 
 function firstJsonBlock(text: string): string | null {
   const start = text.indexOf('{')
@@ -157,12 +162,13 @@ async function genJson<T>(
   system: string,
   prompt: string,
   maxTokens: number,
+  images?: string[],
   attempts = 3,
 ): Promise<{ value: T | null; error: string | null }> {
   let lastError = ''
   let p = prompt
   for (let i = 0; i < attempts; i++) {
-    const text = await gen({ system, prompt: p, maxTokens })
+    const text = await gen({ system, prompt: p, maxTokens, images })
     const block = firstJsonBlock(text)
     if (!block) {
       lastError = 'no JSON object in output'
@@ -309,8 +315,11 @@ export type PipelineResult = {
 export async function runDraftPipeline(deps: {
   gen: GenFn
   kb: KbHttp
-  // The statement text (PDF extraction + vision OCR merged upstream).
+  // PDF-extracted text (exact amounts) plus the page images (gemma is
+  // multimodal — it reads labels the text can't, e.g. image-rendered
+  // points summaries).
   statementText: string
+  images?: string[]
   accounts: readonly string[]
   // The shared convention stack (buildStatementIrSystem) — injected so this
   // module stays free of the generated-prompt import cycle.
@@ -365,7 +374,7 @@ export async function runDraftPipeline(deps: {
   let prompt = basePrompt
   let lastExtractError: string | null = null
   for (let attempt = 0; attempt < 3; attempt++) {
-    const ext = await genJson(deps.gen, ZStatement, deps.system, prompt, EXTRACT_MAX_TOKENS)
+    const ext = await genJson(deps.gen, ZStatement, deps.system, prompt, EXTRACT_MAX_TOKENS, deps.images)
     if (ext.value === null) {
       lastExtractError = ext.error ?? 'unknown'
       stages.extract = { txns: 0, balances: 0, error: lastExtractError }

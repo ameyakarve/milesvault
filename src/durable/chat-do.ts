@@ -33,9 +33,6 @@ type Snapshot = Awaited<ReturnType<LedgerDO['ledger_snapshot']>>
 // Live draft trace (Think state-sync primitive): the per-capture DO
 // publishes the streamed extraction tail here; the Inbox reads it via
 // useAgent when a still-drafting item is selected.
-// Vision model for the PDF statement extraction path — reads rendered page
-// images (labels HSBC bakes as images that text extraction can't decode).
-const VISION_MODEL_ID = '@cf/mistralai/mistral-small-3.1-24b-instruct'
 
 export type ChatDOState = { draftProgress?: string }
 
@@ -293,71 +290,6 @@ ${opts.text}`,
     return { ok: true, entries: 0 }
   }
 
-  // Pure OCR: transcribe statement page images to text via Mistral (vision).
-  // No structure, no JSON — just the visible text, so labels banks render as
-  // images come through. ONE call PER PAGE (concurrent): a single multi-page
-  // transcription near the token ceiling goes sloppy on dense right-aligned
-  // amount columns (verified: it dropped digits — 800→8). Per-page, focused
-  // on copying each row's digits exactly, it's accurate.
-  private async ocrStatement(
-    images: string[],
-    trace: (t: string) => void,
-  ): Promise<string> {
-    const pages = await Promise.all(
-      images.map((url, i) => this.ocrPage(url, i, trace).catch((): string => '')),
-    )
-    return pages.map((t, i) => `--- page ${i + 1} ---\n${t}`).join('\n\n')
-  }
-
-  private async ocrPage(url: string, idx: number, trace: (t: string) => void): Promise<string> {
-    const ai = this.env.AI as unknown as {
-      run: (model: string, inputs: unknown) => Promise<ReadableStream<Uint8Array>>
-    }
-    const stream = await ai.run(VISION_MODEL_ID, {
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'Transcribe everything printed on this one credit-card statement page, exactly as shown, preserving line and table structure. For the transaction table, output ONE ROW PER LINE with its date, merchant and the amount — copy every DIGIT, COMMA and decimal exactly, and keep the Dr/Cr suffix (e.g. "10,155.00 Dr"). Also transcribe any reward / loyalty POINTS summary WITH its labels (opening, earned, redeemed, closing). Output only the transcription, nothing else.',
-            },
-            { type: 'image_url', image_url: { url } },
-          ],
-        },
-      ],
-      max_tokens: 6144,
-      stream: true,
-    })
-    let text = ''
-    const reader = stream.getReader()
-    const decoder = new TextDecoder()
-    let buf = ''
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buf += decoder.decode(value, { stream: true })
-      let nl: number
-      while ((nl = buf.indexOf('\n')) !== -1) {
-        const line = buf.slice(0, nl).trim()
-        buf = buf.slice(nl + 1)
-        if (!line.startsWith('data:')) continue
-        const data = line.slice(5).trim()
-        if (data === '[DONE]') continue
-        try {
-          const j = JSON.parse(data) as { response?: string }
-          if (j.response) {
-            text += j.response
-            trace(`Reading page ${idx + 1}…\n${text.slice(-400)}`)
-          }
-        } catch {
-          /* partial SSE frame */
-        }
-      }
-    }
-    return text
-  }
-
   async runDraftStatement(statementId: string): Promise<{ ok: boolean; entries: number }> {
     const ledger = this.ledgerStub()
     const t0 = Date.now()
@@ -388,14 +320,34 @@ ${opts.text}`,
         }
       })()
 
-      // The gemma text pipeline does ALL structured extraction (owner call).
-      const gen: GenFn = async ({ system, prompt, maxTokens }) => {
-        const r = streamText({
-          model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
-          system,
-          prompt,
-          maxOutputTokens: maxTokens,
-        })
+      // gemma-4-26b is multimodal: pass the page images straight to the
+      // extraction model alongside the PDF text (owner call — no separate OCR
+      // layer). The PDF text carries exact amounts; the images let gemma read
+      // what the text can't (labels banks render as graphics — e.g. HSBC's
+      // reward-points summary). One model does vision + structure.
+      const gen: GenFn = async ({ system, prompt, maxTokens, images }) => {
+        const model = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' })
+        const r =
+          images && images.length > 0
+            ? streamText({
+                model,
+                system,
+                maxOutputTokens: maxTokens,
+                messages: [
+                  {
+                    role: 'user',
+                    content: [
+                      { type: 'text', text: prompt },
+                      ...images.map((url) => ({
+                        type: 'file' as const,
+                        data: url.replace(/^data:[^,]+,/, ''),
+                        mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
+                      })),
+                    ],
+                  },
+                ],
+              })
+            : streamText({ model, system, prompt, maxOutputTokens: maxTokens })
         let text = ''
         for await (const delta of r.textStream) {
           text += delta
@@ -404,27 +356,12 @@ ${opts.text}`,
         return text
       }
 
-      // Vision is a pure OCR layer (owner call): Mistral just transcribes the
-      // rendered pages — recovering labels banks bake as images (HSBC's
-      // reward-points summary) that PDF text extraction garbles. The PDF text
-      // stays authoritative; the OCR only fills gaps. The merged text feeds
-      // the gemma pipeline above — vision never does structure or JSON.
-      let statementText = stmt.text
-      if (stmt.images && stmt.images.length > 0) {
-        const ocr = await this.ocrStatement(stmt.images, trace).catch((): string => '')
-        if (ocr.trim()) {
-          statementText =
-            `${stmt.text}\n\n=== OCR of the statement page images ===\n` +
-            `(The PDF text above is authoritative for anything legible in it. Use this OCR ONLY to read labels/values the text above is missing or garbled — e.g. a reward-points summary the bank renders as an image.)\n` +
-            ocr
-        }
-      }
-
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
       const result = await runDraftPipeline({
         gen,
         kb: kbHttp,
-        statementText,
+        statementText: stmt.text,
+        images: stmt.images,
         accounts: snapshot.accounts.map((a) => a.account),
         // Same convention stack as the editor's statement agent — only the
         // output channel differs (JSON entries).
