@@ -40,8 +40,11 @@ signs, categories, exclusions, noise):
 - Forex rows: the expense amount in the foreign currency plus
   `"price_at_signs": 2, "price_amount": <INR total as printed>,
   "price_currency": "INR"` — the `@@` form from the examples.
-- Tag `"earn-excluded"` on transactions the card earns no points for (per the
-  card rules provided). Do NOT add reward-point postings — computed downstream.
+- Tags are for LINKING related entries only — e.g. a refund and its original
+  purchase may share a tag. Never add decorative or categorical tags.
+- The ONE signaling exception: tag `"earn-excluded"` on transactions the card
+  earns no points for (per the card rules provided) — it is consumed and
+  removed downstream. Do NOT add reward-point postings — computed downstream.
 - One `balance` entry per balance the statement STATES (the pad+balance pairs
   from the extraction rules become these): liability owed → NEGATIVE, "Cr" →
   POSITIVE; opening dated the period's first day, closing the day AFTER the

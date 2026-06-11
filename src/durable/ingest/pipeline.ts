@@ -286,8 +286,12 @@ export function toLedgerEntries(opts: {
     }
 
     const txn = e.txn
-    const tags = txn.tags ?? []
-    const excluded = tags.includes(EXCLUDED_TAG)
+    const rawTags = txn.tags ?? []
+    const excluded = rawTags.includes(EXCLUDED_TAG)
+    // Tags are for LINKING related entries (owner rule: refund ↔ original,
+    // reversal pairs) — the earn-excluded signal is consumed here and
+    // stripped; code never adds decorative tags.
+    const tags = rawTags.filter((t) => t !== EXCLUDED_TAG)
 
     // Strip any model-emitted points legs (code owns those); sanitize
     // accounts; blank the card leg's amount → beancount auto-balances it.
@@ -340,7 +344,6 @@ export function toLedgerEntries(opts: {
           { account: pendingAcct!, amount: String(sign * pts), currency: pool!.ticker! },
           { account: 'Equity:Void', amount: String(-sign * pts), currency: pool!.ticker! },
         )
-        if (!out.tags!.includes('reward-accrual')) out.tags!.push('reward-accrual')
       }
     }
 

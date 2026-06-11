@@ -140,6 +140,7 @@ const checks: Array<[string, boolean]> = [
   ['closing Cr positive', joined.includes('16754.09 INR')],
   ['pads folded in', joined.includes('pad Liabilities:CreditCards:Axis:MagnusBurgundy:3467 Equity:Opening-Balances')],
   ['ash cradle 48 pts', /ASH CRADLE[\s\S]*?Assets:Rewards:Axis:Pending\s+48 AXIS-EDGE-BURGUNDY/.test(joined)],
+  ['no decorative tags', !joined.includes('#reward-accrual') && !joined.includes('#earn-excluded')],
   ['card leg code-computed (-999.99 overruled)', /ASH CRADLE[\s\S]*?MagnusBurgundy:3467\s+-800\.00 INR/.test(joined) && !joined.includes('-999.99')],
   ['fuel no points', !/IOCL[\s\S]*?AXIS-EDGE/.test(entries.find((e) => e.includes('IOCL')) ?? '')],
   ['refund -48 pts', /AMAZON[\s\S]*?Pending\s+-48 AXIS-EDGE-BURGUNDY/.test(joined)],
