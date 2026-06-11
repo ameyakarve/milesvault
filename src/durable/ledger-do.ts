@@ -2129,6 +2129,25 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       }
     })
 
+    // Accounts that exist only via postings / pads / balance assertions (no
+    // explicit `open` directive — e.g. a credit card brought in by a
+    // statement import) are still real accounts. Union them in so the editor
+    // account dropdown, filter, and agent context see them too.
+    const known = new Set(accountList.map((a) => a.account))
+    for (const r of this.db
+      .exec<{ account: string }>(
+        `SELECT account FROM postings
+         UNION SELECT account FROM plug_postings
+         UNION SELECT account FROM directives_balance`,
+      )
+      .toArray()) {
+      if (!known.has(r.account)) {
+        known.add(r.account)
+        accountList.push({ account: r.account, currencies: [], open_date: 0, close_date: null })
+      }
+    }
+    accountList.sort((a, b) => a.account.localeCompare(b.account))
+
     const counts: Record<string, number> = {}
     for (const t of DATA_TABLES) {
       const r = this.db
