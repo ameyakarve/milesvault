@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowRightLeft, ArrowUp, Check, Copy, CreditCard, FileText, Paperclip } from 'lucide-react'
+import { ArrowRightLeft, ArrowUp, Check, Copy, CreditCard, FileText, Paperclip, Scale } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -39,7 +39,8 @@ import {
 import Link from 'next/link'
 import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import { StatementUploadModal } from '@/components/statement-upload-modal'
-import { AddCardModal } from '@/components/add-card-modal'
+import { AddAccountsModal } from '@/components/add-accounts-modal'
+import { UpdateBalanceModal } from '@/components/update-balance-modal'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import type { ToolUIPart } from 'ai'
 import type { ChatDOState } from '@/durable/chat-do'
@@ -77,6 +78,7 @@ function Composer({
   onStop,
   onAttachClick,
   onAddCard,
+  onUpdateBalance,
 }: {
   onSubmit: (m: PromptInputMessage) => void
   status: ReturnType<typeof useAgentChat>['status']
@@ -84,9 +86,9 @@ function Composer({
   // Opens the statement upload modal — statements are Inbox items; the
   // composer carries text only.
   onAttachClick: () => void
-  // Kicks off the add_card picker flow — always present (owner call),
-  // not just on the empty-conversation starter chips.
+  // Always-present account actions (owner call).
   onAddCard: () => void
+  onUpdateBalance: () => void
 }) {
   const chip =
     'inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:bg-muted focus-visible:outline-none'
@@ -101,7 +103,11 @@ function Composer({
         </button>
         <button type="button" onClick={onAddCard} className={chip}>
           <CreditCard className="size-3.5" />
-          Add a card
+          Add accounts
+        </button>
+        <button type="button" onClick={onUpdateBalance} className={chip}>
+          <Scale className="size-3.5" />
+          Update balance
         </button>
       </div>
       <PromptInput onSubmit={onSubmit}>
@@ -305,6 +311,7 @@ export function Chat({
   }, [canClear, onClearableChange])
 
   const [addCardOpen, setAddCardOpen] = useState(false)
+  const [updateBalanceOpen, setUpdateBalanceOpen] = useState(false)
   function addCardFlow() {
     setAddCardOpen(true)
   }
@@ -428,9 +435,14 @@ export function Chat({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
-      <AddCardModal
+      <AddAccountsModal
         open={addCardOpen}
         onClose={() => setAddCardOpen(false)}
+        onDone={() => void refreshAccounts()}
+      />
+      <UpdateBalanceModal
+        open={updateBalanceOpen}
+        onClose={() => setUpdateBalanceOpen(false)}
         onDone={() => void refreshAccounts()}
       />
       {isEmpty ? (
@@ -447,6 +459,7 @@ export function Chat({
                   onStop={stop}
                   onAttachClick={() => setUploadOpen(true)}
                   onAddCard={addCardFlow}
+                  onUpdateBalance={() => setUpdateBalanceOpen(true)}
                 />
                 <StarterChips />
               </div>
@@ -658,6 +671,7 @@ export function Chat({
               onStop={stop}
               onAttachClick={() => setUploadOpen(true)}
               onAddCard={addCardFlow}
+              onUpdateBalance={() => setUpdateBalanceOpen(true)}
             />
             <p className="mt-2 text-center text-xs text-muted-foreground">
               MilesVault can make mistakes. Check important info.

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { AddCardModal } from '@/components/add-card-modal'
+import { AddAccountsModal } from '@/components/add-accounts-modal'
+import { UpdateBalanceModal } from '@/components/update-balance-modal'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
 import type { VaultStats } from '@/durable/ledger-do'
 import {
@@ -54,6 +55,7 @@ export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
   const [addCardOpen, setAddCardOpen] = useState(false)
+  const [updateBalanceOpen, setUpdateBalanceOpen] = useState(false)
   const [names, setNames] = useState<Names>({})
   const [stats, setStats] = useState<VaultStats | null>(null)
 
@@ -194,13 +196,14 @@ export function VaultView() {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <SectionLabel>Credit cards</SectionLabel>
-            <button
-              type="button"
-              onClick={() => setAddCardOpen(true)}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              + add
-            </button>
+            <span className="flex items-center gap-3 text-xs text-muted-foreground">
+              <button type="button" onClick={() => setUpdateBalanceOpen(true)} className="hover:text-foreground">
+                update balance
+              </button>
+              <button type="button" onClick={() => setAddCardOpen(true)} className="hover:text-foreground">
+                + add
+              </button>
+            </span>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {cardRows.map((r) => (
@@ -217,14 +220,15 @@ export function VaultView() {
 
       {/* ── rewards: the hero, clustered by minting source (clusters always
           render — empty ones invite their first programme) ────────────────── */}
-      <RewardsSections holdings={holdings} names={names} />
+      <RewardsSections holdings={holdings} names={names} onAdd={() => setAddCardOpen(true)} />
 
       {/* ── spending this month ───────────────────────────────────────────── */}
       {stats && stats.expense_categories.length > 0 ? (
         <SpendingBreakdown stats={stats} />
       ) : null}
 
-      <AddCardModal open={addCardOpen} onClose={() => setAddCardOpen(false)} onDone={() => location.reload()} />
+      <AddAccountsModal open={addCardOpen} onClose={() => setAddCardOpen(false)} onDone={() => location.reload()} />
+      <UpdateBalanceModal open={updateBalanceOpen} onClose={() => setUpdateBalanceOpen(false)} onDone={() => location.reload()} />
       {/* ── everything else, compact ──────────────────────────────────────── */}
       {orderedGroups.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -472,7 +476,7 @@ function foldPending(rows: AccountSummaryRow[]): Holding[] {
   return [...map.values()].sort((a, b) => b.posted + b.pending - (a.posted + a.pending))
 }
 
-function RewardsSections({ holdings, names }: { holdings: Holding[]; names: Names }) {
+function RewardsSections({ holdings, names, onAdd }: { holdings: Holding[]; names: Names; onAdd: () => void }) {
   const claimed = new Set<string>()
   return (
     <>
@@ -490,12 +494,13 @@ function RewardsSections({ holdings, names }: { holdings: Holding[]; names: Name
           <section key={prefix} className="space-y-3">
             <div className="flex items-center justify-between">
               <SectionLabel>{label}</SectionLabel>
-              <Link
-                href={`/editor?prefill=${encodeURIComponent(seed)}`}
+              <button
+                type="button"
+                onClick={onAdd}
                 className="text-xs text-muted-foreground hover:text-foreground"
               >
                 + add
-              </Link>
+              </button>
             </div>
             {cluster.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
