@@ -30,7 +30,10 @@ type Snapshot = Awaited<ReturnType<LedgerDO['ledger_snapshot']>>
 
 // No broadcast state: the file chip is driven entirely by local upload state in
 // the client now that extraction is inline (no async worker phase to mirror).
-export type ChatDOState = Record<string, never>
+// Live draft trace (Think state-sync primitive): the per-capture DO
+// publishes the streamed extraction tail here; the Inbox reads it via
+// useAgent when a still-drafting item is selected.
+export type ChatDOState = { draftProgress?: string }
 
 // Tool-call repair hook. Forwarded to streamText as `experimental_repairToolCall`
 // via TurnConfig.repairToolCall — see patches/@cloudflare__think@0.7.1.patch.
@@ -313,7 +316,21 @@ ${opts.text}`,
           maxOutputTokens: maxTokens,
         })
         let text = ''
-        for await (const delta of r.textStream) text += delta
+        let lastWrite = 0
+        for await (const delta of r.textStream) {
+          text += delta
+          const now = Date.now()
+          if (now - lastWrite > 1000) {
+            lastWrite = now
+            // Think's setState broadcasts to any connected useAgent client
+            // (the Inbox opens one only for a selected, still-drafting item).
+            try {
+              this.setState({ draftProgress: text.slice(-700) })
+            } catch {
+              /* no-op if state sync unavailable */
+            }
+          }
+        }
         return text
       }
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
@@ -328,6 +345,11 @@ ${opts.text}`,
         instruction: capture?.prompt,
       })
 
+      try {
+        this.setState({})
+      } catch {
+        /* no-op */
+      }
       if (result.ok && result.entries.length > 0) {
         // Pipeline diagnostics (validation issues, omission reasons) are
         // internal: they go to the tool log in full, never onto the

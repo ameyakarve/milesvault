@@ -13,6 +13,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
+import { useAgent } from 'agents/react'
+import type { ChatDOState } from '@/durable/chat-do'
 import { InboxThreadChat } from './thread-chat'
 import { StatementUploadModal } from '@/components/statement-upload-modal'
 import { Journal } from '../editor/journal'
@@ -470,6 +472,7 @@ function ItemDetail({
                       ? 'Drafting in the background…'
                       : 'Queued for drafting…'}
                   </p>
+                  <DraftTrace captureId={row.id} />
                 </>
               )}
               {row.draft_error || row.state === 'captured' ? (
@@ -515,6 +518,25 @@ function ItemDetail({
         ) : null}
       </div>
     </>
+  )
+}
+
+// One socket, only when a still-drafting item is selected (owner rule:
+// the Inbox list connects nothing). Reads the per-capture DO's live
+// draftProgress via Think's state-sync primitive — no polling, no
+// reinvented channel.
+function DraftTrace({ captureId }: { captureId: string }) {
+  const agent = useAgent<ChatDOState>({
+    agent: 'ChatDO',
+    basePath: 'api/agents/editor',
+    query: { thread: captureId },
+  })
+  const trace = agent.state?.draftProgress
+  if (!trace) return null
+  return (
+    <pre className="mt-1 max-h-32 w-full max-w-md overflow-hidden whitespace-pre-wrap break-all rounded-md bg-muted/50 px-3 py-2 text-left font-mono text-[10px] leading-4 text-muted-foreground">
+      {trace}
+    </pre>
   )
 }
 
