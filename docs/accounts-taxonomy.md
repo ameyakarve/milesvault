@@ -194,7 +194,7 @@ Identity lives in the **commodity ticker** (globally unique, registered as
 |---|---|---|
 | `Assets:Rewards:Miles:<Programme>` | airline FFP miles | `Assets:Rewards:Miles:KrisFlyer` → `KRISFLYER` |
 | `Assets:Rewards:Points:<Programme>` | hotel + other programme points (rail, car-rental file here too) | `Assets:Rewards:Points:Marriott` → `MARRIOTTBONVOY` |
-| `Assets:Rewards:Cards:<Issuer>:<Pool>` | bank/card reward pools (issuer level avoids leaf collisions) | `Assets:Rewards:Cards:HDFC:RewardPoints` → `HDFC-RP` |
+| `Assets:Rewards:<Issuer>` | bank/card reward wallet — ONE account per issuer (decided 2026-06-11: the account says WHERE points live; the commodity says WHAT they are, tier-precise, and carries the transfer semantics) | `Assets:Rewards:Axis` → `AXIS-EDGE-BURGUNDY` |
 | `Assets:Rewards:Status:<Programme>` | tier-qualifying counters | `Assets:Rewards:Status:Marriott` → `MAR-NIGHTS` |
 
 ### Tickers (commodity = primary key)

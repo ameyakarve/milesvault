@@ -392,11 +392,19 @@ const REWARD_CLUSTERS: Array<{ prefix: string; label: string; cta: string; seed:
     seed: 'I want to track a hotel loyalty programme. Ask me which one and how many points I hold, then open Assets:Rewards:Points:<Programme> with the right ticker and record the balance.',
   },
   {
-    prefix: 'Assets:Rewards:Cards:',
+    // Issuer-direct wallets (owner convention): Assets:Rewards:<Issuer>
+    // — matched as "under Assets:Rewards but not Miles/Points/Status".
+    prefix: 'Assets:Rewards:',
     label: 'Card programmes',
     cta: 'No card reward pools yet',
-    seed: 'I want to track my credit-card reward points. Ask me which cards/pools and the balances, then open Assets:Rewards:Cards:<Issuer>:<Pool> accounts with the right tickers and record them.',
+    seed: 'I want to track my credit-card reward points. Ask me which issuers and the balances, then open Assets:Rewards:<Issuer> accounts with the right tickers and record them.',
   },
+]
+
+const NON_CARD_REWARD_PREFIXES = [
+  'Assets:Rewards:Miles:',
+  'Assets:Rewards:Points:',
+  'Assets:Rewards:Status:',
 ]
 
 // Fold :Pending children into their programme: one Holding per
@@ -420,7 +428,14 @@ function RewardsSections({ holdings, names }: { holdings: Holding[]; names: Name
   return (
     <>
       {REWARD_CLUSTERS.map(({ prefix, label, cta, seed }) => {
-        const cluster = holdings.filter((h) => h.account.startsWith(prefix))
+        const cluster = holdings.filter(
+          (h) =>
+            h.account.startsWith(prefix) &&
+            // The card cluster's prefix is the bare Assets:Rewards: — it
+            // owns everything the named clusters don't.
+            (prefix !== 'Assets:Rewards:' ||
+              !NON_CARD_REWARD_PREFIXES.some((p) => h.account.startsWith(p))),
+        )
         cluster.forEach((h) => claimed.add(`${h.account}|${h.currency}`))
         return (
           <section key={prefix} className="space-y-3">

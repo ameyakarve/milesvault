@@ -49,7 +49,7 @@ transaction, resolve each piece by name and read `attrs.beancountName` from
   depends on the programme's kind:
   - airline FFP → `Assets:Rewards:Miles:<beancountName>`
   - hotel / other programme → `Assets:Rewards:Points:<beancountName>`
-  - bank/card pool → `Assets:Rewards:Cards:<bank.beancountName>:<beancountName>`
+  - bank/card pool → `Assets:Rewards:<bank.beancountName>` (ONE account per issuer wallet — the commodity ticker carries which pool/tier the points are)
   Below, `<RewardsAcct>` stands for that full programme account.
 
 Prefer an account that already exists in the user's ledger if it clearly matches;
@@ -465,7 +465,7 @@ whatever bonus is running) doesn't change the shape; it just changes
 the two numbers. `<SrcAcct>` / `SRC_PTS` is the programme account you
 transfer from, `<DestAcct>` / `DST_PTS` the one you transfer to. Replace
 both with the real programme accounts and KG tickers (e.g.
-`Assets:Rewards:Cards:Axis:EdgeRewards`/`AXIS-EDGE` →
+`Assets:Rewards:Axis`/`AXIS-EDGE-BURGUNDY` →
 `Assets:Rewards:Points:Marriott`/`MARRIOTTBONVOY`); never emit
 `SRC_PTS`/`DST_PTS` literally in output.
 

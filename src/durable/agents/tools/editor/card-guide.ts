@@ -95,16 +95,16 @@ export function cardGuideTool(kb: KbHttp) {
               } | null)
             : null
           const issuer = bank?.attrs?.beancountName
-          const leaf = cur?.attrs?.beancountName
           const ticker = cur?.attrs?.ticker
           pool = {
             currency: denom.other,
             name: cur?.display_name ?? null,
             ticker: typeof ticker === 'string' ? ticker : null,
-            account:
-              typeof issuer === 'string' && typeof leaf === 'string'
-                ? `Assets:Rewards:Cards:${issuer}:${leaf}`
-                : null,
+            // One account per issuer wallet (owner convention): the account
+            // says WHERE points live; the commodity says WHAT they are
+            // (tier-precise, carries transfer semantics). :Pending child for
+            // earned-not-credited.
+            account: typeof issuer === 'string' ? `Assets:Rewards:${issuer}` : null,
             rate_notes: denom.description_md ?? null,
           }
         }
