@@ -21,15 +21,18 @@ Follow these rules when building that array.
    `Assets:Clearing:CardPayments` (negative — money left the bank toward
    the card; the bank-statement import later mirrors it and the clearing
    account nets to zero). Payments earn no points.
-4. **Filter noise.** Skip these — they aren't user-facing
-   transactions to record:
-   - Interest charged, finance charges, late fees the issuer levies
-   - Statement balance / minimum due / credit limit summary rows
-   - Reward-point accrual / redemption summaries — skip as TRANSACTIONS,
-     but if the statement states the points earned this cycle, REMEMBER
-     that number: it feeds the single accrual entry described in
-     "Reward accrual on card statements" (statement-stated points always
-     beat your own estimate).
+4. **Filter noise vs. record fees.**
+   - SKIP (not transactions): statement balance / minimum due / credit
+     limit summary rows; reward-point accrual / redemption summary rows
+     (but if the summary states the points EARNED this cycle, REMEMBER
+     that number — it drives the landing entry below).
+   - RECORD, but with NO reward points: interest / finance charges / late
+     fees / standalone GST that the ISSUER levies (e.g. "FIN CHGS FOR THIS
+     STMT", "IGST"). These are real charges that hit the card balance, so
+     record each as a plain two-posting expense (`Expenses:Bank:FinanceCharges`,
+     `Expenses:Bank:Fees`, `Expenses:Tax:GST`) + the card leg — never with
+     points legs. Do NOT skip them (the closing balance won't reconcile)
+     and do NOT duplicate a row: each printed line is exactly ONE entry.
 
    A **forex-markup fee** and its **GST** that follow a foreign-currency
    charge are NOT noise and are NOT standalone transactions — fold them
@@ -63,14 +66,31 @@ Follow these rules when building that array.
    guide's base rate, commodity = `pool.ticker`. No tag — tags are for
    LINKING related entries only (e.g. refund ↔ original), never decoration.
    Excluded categories per the guide (fuel, rent, wallet loads,
-   government/tax) get the plain two-posting form — no points legs.
+   government/tax) get the plain two-posting form — no points legs. Issuer
+   fees never earn: interest, finance charges, late fees, and standalone
+   GST (Expenses:Bank:* / Expenses:Tax:*) carry NO points legs, ever.
    REFUNDS REVERSE THEIR POINTS with mirrored signs — same four-posting
    shape, points computed on the refunded amount:
    `Expenses:… -877.82 INR / card +877.82 INR /
    <pool>:Pending -48 <TICKER> / Equity:Void +48 <TICKER>`
-   (floor(877.82/200)×12 = 48). A spend OR refund entry missing its
-   points legs is INCOMPLETE unless the guide gave you no rate at all —
-   and then you must tell the user you skipped accruals.
+   (floor(877.82/200)×12 = 48). Omit the points legs entirely when they
+   compute to zero (spend below one earning block) — never emit a `0`
+   points leg. A spend OR refund entry missing its points legs is
+   INCOMPLETE unless the guide gave you no rate at all — and then you must
+   tell the user you skipped accruals.
+8b. **Reward-points balance + landing (when the statement states them).**
+   - If the statement prints a CLOSING reward/loyalty points balance
+     (often a small "Reward Points — Opening / Earned / Redeemed / Closing"
+     summary, or a single "Points Balance"), emit ONE `balance` directive
+     for the programme account (`<pool.account>`) in the programme ticker
+     (`<pool.ticker>`) with the CLOSING number, dated the statement close.
+     This is points, never rupees.
+   - If the statement states the points EARNED this cycle, the bank has
+     credited them — emit a `transaction` moving that stated number from
+     `<pool.account>:Pending` to `<pool.account>` (Pending down, parent up,
+     same ticker, NO `Equity:Void`, NO price), dated the statement close.
+     This is the only way to move points pending→posted; a pad/balance
+     cannot (it plugs to one contra account).
 9. **Assert the statement's opening and closing balances.** When the
    statement states them (it almost always does), emit pad+balance pairs
    as single elements, around the transactions:

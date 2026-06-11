@@ -48,27 +48,11 @@ signs, categories, exclusions, noise):
 - The ONE signaling exception: tag `"earn-excluded"` on transactions the card
   earns no points for (per the card rules provided) — it is consumed and
   removed downstream.
-- REWARD POINTS: emit the points legs yourself, per the Points pattern in the
-  examples — `<pool>:Pending` + `Equity:Void` contra in the programme's ticker,
-  using the reward-programme account, ticker and base rate given for this card
-  in the user turn. Points earned = `floor(spend / per) × pts` on the purchase
-  amount only (never on forex-markup / fee / GST legs). Excluded categories
-  (tagged `earn-excluded`) carry NO points legs. Refunds reverse their points
-  with mirrored signs. Omit the points legs only when no rate is given.
-- LANDING (points credited at statement close): when the statement states the
-  points EARNED this cycle, the bank has credited them — emit a `transaction`
-  moving that stated number from `<pool>:Pending` to `<pool>` (Pending down,
-  parent up, same ticker, NO `Equity:Void`, NO price), dated the statement's
-  closing date. This is the only way to move points pending→posted; a
-  pad/balance cannot (it plugs to one contra).
 - One `balance` entry per balance the statement STATES (the pad+balance pairs
   from the extraction rules become these): liability owed → NEGATIVE, "Cr" →
   POSITIVE; opening dated the period's first day, closing the day AFTER the
-  period ends. For a stated reward-points balance use `"currency": "POINTS"`
-  with any placeholder account — resolved downstream.
-- REWARD-POINTS BALANCE: if the statement states a closing reward/loyalty
-  points balance (often a small summary like "Reward Points … Opening / Earned
-  / Redeemed / Closing", or a single "Points Balance" figure), emit ONE
-  `balance` entry with `"currency": "POINTS"` and the CLOSING points number,
-  dated the statement's closing date. This is points, NOT rupees — never put a
-  points figure on an INR balance. If no points balance is stated, omit it.
+  period ends. The reward-points balance and the points legs / landing follow
+  the extraction rules above (emit them with the programme account + ticker).
+  As an IR convenience you MAY write a points balance with
+  `"currency": "POINTS"` and any placeholder account — resolved downstream to
+  the programme wallet/ticker — but emitting the real ticker is equally fine.

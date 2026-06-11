@@ -370,6 +370,9 @@ export function checkPointsArithmetic(
     let hasExpense = false
     for (const p of txn.postings) {
       if (!p.account.startsWith('Expenses:')) continue
+      // Issuer fees aren't eligible spend — interest, finance charges, fees,
+      // GST/tax never earn points, so they don't count toward expected.
+      if (/^Expenses:(Bank|Tax|Fees|Charges)\b/.test(p.account)) continue
       hasExpense = true
       const amt = num(p.amount)
       if (amt === null) continue
@@ -383,12 +386,18 @@ export function checkPointsArithmetic(
         spend += amt
       }
     }
-    if (!hasExpense) return // payments, transfers, landings — no per-purchase earn
-    const expected = Math.floor(Math.abs(spend) / rate.per) * rate.pts
-    const want = (spend >= 0 ? 1 : -1) * expected
     const pend = txn.postings.find((p) => p.account === pendingAcct)
     const got = pend ? num(pend.amount) : null
     const where = `entry ${idx + 1} (${txn.date} "${txn.payee ?? ''}")`
+    if (!hasExpense) {
+      // Payments, transfers, the landing, and fee-only rows earn nothing —
+      // but flag points wrongly stapled to a fee/interest entry.
+      if (got !== null && got !== 0)
+        issues.push(`${where}: this earns no points (no eligible purchase — fees/interest/transfer); remove the ${got} ${pool.ticker} points legs`)
+      return
+    }
+    const expected = Math.floor(Math.abs(spend) / rate.per) * rate.pts
+    const want = (spend >= 0 ? 1 : -1) * expected
     if (expected === 0) {
       if (got !== null && got !== 0)
         issues.push(`${where}: no points should accrue (spend below ${rate.per}); remove the ${got} ${pool.ticker} points legs`)
