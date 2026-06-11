@@ -231,10 +231,6 @@ function accountHref(r: AccountSummaryRow): string {
 function CreditCardCard({ row, names }: { row: AccountSummaryRow; names: Names }) {
   const { name, suffix } = displayName(row.account, names)
   const bal = balanceOf(row)
-  // Liability semantics, said in words: negative = you owe; positive = the
-  // bank owes you (overpayment / refunds); zero = settled.
-  const label = bal < 0 ? 'you owe' : bal > 0 ? 'in your favour' : 'settled'
-  const magnitude = Math.abs(bal)
   return (
     <Link
       href={accountHref(row)}
@@ -253,10 +249,10 @@ function CreditCardCard({ row, names }: { row: AccountSummaryRow; names: Names }
         <span
           className={`block font-mono text-lg font-semibold ${bal < 0 ? 'text-foreground' : 'text-muted-foreground'}`}
         >
-          {magnitude.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+          {formatBalance(row.balance_scaled, row.scale)}
           <span className="ml-1 text-xs font-normal text-muted-foreground">{row.currency}</span>
         </span>
-        <span className="block text-[11px] text-muted-foreground">{label}</span>
+        <span className="block text-[11px] text-muted-foreground">balance</span>
       </span>
     </Link>
   )
@@ -317,11 +313,11 @@ function HeadlineStrip({ stats }: { stats: VaultStats }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
       <StatTile
-        label={owed >= 0 ? 'Outstanding on cards' : 'Card credit balance'}
-        value={cards.main ? `${fmtAmt(Math.abs(owed))} ${cards.main.currency}` : '—'}
+        label="Card balances"
+        value={cards.main ? `${fmtAmt(cards.main.total)} ${cards.main.currency}` : '—'}
         sub={
           cards.main
-            ? `${owed >= 0 ? 'you owe · ' : 'in your favour · '}${cards.main.accounts} card${cards.main.accounts === 1 ? '' : 's'}${cards.others ? ` · +${cards.others} ${cards.others === 1 ? 'currency' : 'currencies'}` : ''}`
+            ? `${cards.main.accounts} card${cards.main.accounts === 1 ? '' : 's'}${cards.others ? ` · +${cards.others} ${cards.others === 1 ? 'currency' : 'currencies'}` : ''}`
             : 'no cards yet'
         }
         negative={owed > 0}
