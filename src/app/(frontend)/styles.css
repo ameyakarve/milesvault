@@ -2,6 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* @tailwindcss/forms hardcodes its focus ring to blue-600. Re-theme every
+   form control's focus to the monochrome token so no input ever flashes
+   blue. */
+@layer base {
+  [type='text']:focus,
+  [type='email']:focus,
+  [type='url']:focus,
+  [type='password']:focus,
+  [type='number']:focus,
+  [type='date']:focus,
+  [type='datetime-local']:focus,
+  [type='month']:focus,
+  [type='search']:focus,
+  [type='tel']:focus,
+  [type='time']:focus,
+  [type='week']:focus,
+  [multiple]:focus,
+  input:where(:not([type])):focus,
+  [type='checkbox']:focus,
+  [type='radio']:focus,
+  textarea:focus,
+  select:focus {
+    --tw-ring-color: color-mix(in oklab, var(--foreground) 30%, transparent);
+    border-color: color-mix(in oklab, var(--foreground) 40%, transparent);
+  }
+}
+
 /* CodeMirror colour tokens — the editor wears the scandi palette (owner
    call): warm paper surface, soft ink, muted natural accents — sage dates,
    clay numbers, dusty-blue currencies. Scoped to the editor only; the app
