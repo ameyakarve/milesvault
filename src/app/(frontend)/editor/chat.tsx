@@ -747,11 +747,13 @@ function PendingCapturesHint() {
   useEffect(() => {
     let cancelled = false
     fetch('/api/ledger/captures')
-      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string }> }>) : null))
+      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string; draft_error: string | null }> }>) : null))
       .then((d) => {
         if (cancelled || !d) return
+        // Only items ready for the user — drafts extracted, or a failed
+        // background draft. Still-drafting (captured/processing) doesn't count.
         setPending(
-          (d.rows ?? []).filter((c) => c.state === 'captured' || c.state === 'extracted').length,
+          (d.rows ?? []).filter((c) => c.state === 'extracted' || c.draft_error != null).length,
         )
       })
       .catch(() => {})

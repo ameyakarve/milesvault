@@ -37,11 +37,11 @@ function usePendingCaptures(): number {
   useEffect(() => {
     let cancelled = false
     fetch('/api/ledger/captures')
-      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string }> }>) : null))
+      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string; draft_error: string | null }> }>) : null))
       .then((d) => {
         if (cancelled || !d) return
         const rows = d.rows ?? []
-        setN(rows.filter((r) => r.state === 'captured' || r.state === 'extracted').length)
+        setN(rows.filter((r) => r.state === 'extracted' || r.draft_error != null).length)
       })
       .catch(() => {})
     return () => {

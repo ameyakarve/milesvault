@@ -84,11 +84,11 @@ export function VaultView() {
   useEffect(() => {
     let cancelled = false
     fetch('/api/ledger/captures')
-      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string }> }>) : null))
+      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string; draft_error: string | null }> }>) : null))
       .then((d) => {
         if (cancelled || !d) return
         const all = d.rows ?? []
-        setPendingCaptures(all.filter((c) => c.state === 'captured' || c.state === 'extracted').length)
+        setPendingCaptures(all.filter((c) => c.state === 'extracted' || c.draft_error != null).length)
       })
       .catch(() => {})
     return () => {
@@ -182,7 +182,7 @@ export function VaultView() {
           className="flex items-center justify-between rounded-xl border border-amber-200/60 bg-amber-50 px-4 py-3 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
         >
           <span className="text-sm text-amber-800 dark:text-amber-300">
-            Needs review: {pendingCaptures} captured item{pendingCaptures === 1 ? '' : 's'}
+            {pendingCaptures} item{pendingCaptures === 1 ? '' : 's'} ready to review
           </span>
           <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Open Inbox →</span>
         </Link>
