@@ -108,7 +108,7 @@ export const rowKey = (r: ExploreRow, i: number) => `${r.programme}|${r.stops}|$
 const STOP_CHIP = (stops: number) =>
   stops === 0
     ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60'
-    : 'bg-sky-50 text-sky-700 border border-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60'
+    : 'bg-foreground/5 text-foreground border border-border dark:bg-foreground/10'
 
 // "Via": Direct for nonstop, else the connecting airport IATA.
 const viaText = (row: AwardPlanRow) =>
@@ -153,7 +153,7 @@ function AffordChip({ afford, names }: { afford: Afford; names: Names }) {
     )
   }
   return (
-    <Badge className="text-[10px] font-medium bg-sky-50 text-sky-700 border-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60">
+    <Badge className="text-[10px] font-medium bg-foreground/5 text-foreground border-border dark:bg-foreground/10">
       Via {nameOf(afford.src, names)}
     </Badge>
   )

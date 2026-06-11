@@ -56,7 +56,7 @@ export function StatTile({
 const CHIP_TONES = {
   neutral: 'bg-muted text-muted-foreground border-transparent',
   pending: 'bg-amber-50 text-amber-700 border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900',
-  active: 'bg-sky-50 text-sky-700 border-sky-200/60 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-900',
+  active: 'bg-foreground/5 text-foreground border-border dark:bg-foreground/10',
   positive: 'bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900',
   negative: 'bg-rose-50 text-rose-700 border-rose-200/60 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900',
 } as const
@@ -121,8 +121,6 @@ const MONOGRAM_TONES = [
   'bg-slate-200/70 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200',
   'bg-amber-100/80 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
   'bg-emerald-100/80 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
-  'bg-sky-100/80 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
-  'bg-violet-100/80 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200',
   'bg-rose-100/80 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200',
 ]
 

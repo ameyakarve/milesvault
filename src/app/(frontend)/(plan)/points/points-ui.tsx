@@ -79,15 +79,15 @@ function CardNode({ data }: NodeProps<Node<NodeData>>) {
 }
 function CurrencyNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-sky-50/60 px-3 shadow-sm dark:bg-sky-950/30', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-sky-200/60 dark:border-sky-800/60')}>
+    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-muted/40 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
       <div className="truncate text-xs font-medium text-foreground">{data.display}</div>
       <div className="flex items-center justify-between">
-        <span className="text-[10px] text-sky-600 dark:text-sky-400">{data.multiplier != null ? `×${data.multiplier.toFixed(2)}` : '—'}</span>
+        <span className="text-[10px] text-muted-foreground">{data.multiplier != null ? `×${data.multiplier.toFixed(2)}` : '—'}</span>
         <NeedLine data={data} />
       </div>
       <HeldLine data={data} />
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-sky-400/60" />
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-sky-400/60" />
+      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-foreground/40" />
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-foreground/40" />
     </div>
   )
 }
