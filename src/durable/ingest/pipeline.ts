@@ -310,22 +310,28 @@ export function toLedgerEntries(opts: {
       .map((p) => {
         const isCard = p.account.startsWith('Liabilities:CreditCards')
         const amt = num(p.amount)
-        if (!isCard && amt !== null) {
+        // A card-statement "payment received" is unambiguous: money moves
+        // from the float TO the card — the clearing leg is ALWAYS negative
+        // (the model flips this often enough to legislate it in code).
+        const isClearing = p.account.startsWith('Assets:Clearing:')
+        const amtFixed = isClearing && amt !== null ? -Math.abs(amt) : amt
+        if (!isCard && amtFixed !== null) {
           let weight = 0
           if (p.price_at_signs === 2) {
             const total = num(p.price_amount)
-            if (total !== null) weight = Math.sign(amt) * Math.abs(total)
+            if (total !== null) weight = Math.sign(amtFixed) * Math.abs(total)
           } else if (p.price_at_signs === 1) {
             const per = num(p.price_amount)
-            if (per !== null) weight = amt * per
+            if (per !== null) weight = amtFixed * per
           } else if ((p.currency ?? 'INR') === 'INR') {
-            weight = amt
+            weight = amtFixed
           }
           legTotal += weight
           if (p.account.startsWith('Expenses:')) spendTotal += weight
         }
         return {
           ...p,
+          ...(isClearing && amtFixed !== null ? { amount: fmt(amtFixed) } : {}),
           account: isCard
             ? cardAccountFor(p.account)
             // Non-expense counter-legs (Assets:Clearing:CardPayments …) keep

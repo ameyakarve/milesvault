@@ -124,9 +124,13 @@ export function VaultView() {
     )
   }
 
-  // Holdings only: Assets + Liabilities. Flow accounts (Income/Expenses) and
-  // Equity plumbing never belong on the dashboard.
-  const rows = state.rows.filter((r) => isHolding(r.account))
+  // Holdings only: Assets + Liabilities. Flow accounts (Income/Expenses),
+  // Equity plumbing, and clearing floats (Assets:Clearing:* — reconciliation
+  // state that nets to zero once the counterpart statement arrives) never
+  // belong on the dashboard.
+  const rows = state.rows.filter(
+    (r) => isHolding(r.account) && !r.account.startsWith('Assets:Clearing:'),
+  )
 
   if (rows.length === 0) {
     return (
@@ -195,8 +199,8 @@ export function VaultView() {
                 names={names}
                 spend={
                   stats?.card_spend.find(
-                    (s) => s.account === r.account && s.currency === r.currency,
-                  )?.total ?? null
+                    (s) => s.account === r.account && (s.currency === r.currency || s.currency === 'INR'),
+                  ) ?? null
                 }
               />
             ))}
@@ -244,7 +248,7 @@ function CreditCardCard({
 }: {
   row: AccountSummaryRow
   names: Names
-  spend: number | null
+  spend: { total: number; window: 'statement' | 'month' } | null
 }) {
   const { name, suffix } = displayName(row.account, names)
   const bal = balanceOf(row)
@@ -270,10 +274,9 @@ function CreditCardCard({
           <span className="ml-1 text-xs font-normal text-muted-foreground">{row.currency}</span>
         </span>
         <span className="block text-[11px] text-muted-foreground">
-          balance
-          {spend != null && spend !== 0
-            ? ` · expenses ${spend.toLocaleString('en-IN', { maximumFractionDigits: 0 })} this month`
-            : ''}
+          balance · expenses{' '}
+          {(spend?.total ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}{' '}
+          {spend?.window === 'statement' ? 'last statement' : 'this month'}
         </span>
       </span>
     </Link>
