@@ -141,6 +141,8 @@ export type EntryRef2 = {
 export type VaultStats = {
   period: { from: number; to: number }
   card_outstanding: Array<{ currency: string; total: number; accounts: number }>
+  // Per-card charges (negative postings on the liability) within the period.
+  card_spend: Array<{ account: string; currency: string; total: number }>
   bank_total: Array<{ currency: string; total: number }>
   expense_total: Array<{ currency: string; total: number }>
   expense_categories: Array<{ category: string; currency: string; total: number }>
@@ -347,6 +349,24 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       catMap.set(key, (catMap.get(key) ?? 0) + v)
       totalMap.set(r.currency, (totalMap.get(r.currency) ?? 0) + v)
     }
+    const card_spend = this.db
+      .exec<{ account: string; currency: string; scale: number; s: number }>(
+        `SELECT account, currency, scale, SUM(-amount_scaled) AS s
+         FROM postings
+         WHERE account LIKE 'Liabilities:CreditCards:%'
+           AND amount_scaled < 0
+           AND date >= ? AND date <= ?
+         GROUP BY account, currency, scale`,
+        opts.fromInt,
+        opts.toInt,
+      )
+      .toArray()
+      .reduce((acc, r) => {
+        const key = `${r.account}|${r.currency}`
+        acc.set(key, (acc.get(key) ?? 0) + toDec(r.s, r.scale))
+        return acc
+      }, new Map<string, number>())
+
     const expense_categories = [...catMap.entries()]
       .map(([key, total]) => {
         const [category, currency] = key.split('|')
@@ -360,6 +380,10 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     return {
       period: { from: opts.fromInt, to: opts.toInt },
       card_outstanding,
+      card_spend: [...card_spend.entries()].map(([key, total]) => {
+        const i = key.lastIndexOf('|')
+        return { account: key.slice(0, i), currency: key.slice(i + 1), total }
+      }),
       bank_total,
       expense_total,
       expense_categories,

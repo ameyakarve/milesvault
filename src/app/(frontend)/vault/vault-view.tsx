@@ -189,7 +189,16 @@ export function VaultView() {
           <SectionLabel>Credit cards</SectionLabel>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {cardRows.map((r) => (
-              <CreditCardCard key={`${r.account}|${r.currency}`} row={r} names={names} />
+              <CreditCardCard
+                key={`${r.account}|${r.currency}`}
+                row={r}
+                names={names}
+                spend={
+                  stats?.card_spend.find(
+                    (s) => s.account === r.account && s.currency === r.currency,
+                  )?.total ?? null
+                }
+              />
             ))}
           </div>
         </section>
@@ -228,7 +237,15 @@ function accountHref(r: AccountSummaryRow): string {
 
 // Hero card: one loyalty programme — monogram, resolved name, big balance.
 // Medium card: a credit card — monogram, issuer-qualified name, balance owed.
-function CreditCardCard({ row, names }: { row: AccountSummaryRow; names: Names }) {
+function CreditCardCard({
+  row,
+  names,
+  spend,
+}: {
+  row: AccountSummaryRow
+  names: Names
+  spend: number | null
+}) {
   const { name, suffix } = displayName(row.account, names)
   const bal = balanceOf(row)
   return (
@@ -252,7 +269,12 @@ function CreditCardCard({ row, names }: { row: AccountSummaryRow; names: Names }
           {formatBalance(row.balance_scaled, row.scale)}
           <span className="ml-1 text-xs font-normal text-muted-foreground">{row.currency}</span>
         </span>
-        <span className="block text-[11px] text-muted-foreground">balance</span>
+        <span className="block text-[11px] text-muted-foreground">
+          balance
+          {spend != null && spend !== 0
+            ? ` · expenses ${spend.toLocaleString('en-IN', { maximumFractionDigits: 0 })} this month`
+            : ''}
+        </span>
       </span>
     </Link>
   )
