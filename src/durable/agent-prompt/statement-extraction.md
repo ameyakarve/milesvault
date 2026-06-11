@@ -97,37 +97,41 @@ Follow these rules when building that array.
    - **CLOSING → assert it.** If it states a CLOSING points balance, emit ONE
      `balance` directive for `<pool.account>` in `<pool.ticker>` with that
      closing number, dated the statement close. Points, never rupees.
-9. **Assert the statement's opening and closing balances.** Use the exact
-   printed figures — the OPENING balance is the statement's stated
-   "Opening Balance" / "Previous Balance"; the CLOSING balance is the
-   "Total Payment Due" / "Net Outstanding Balance" / "Closing Balance". NEVER
-   use a transaction amount, the minimum due, or the credit limit as a balance.
-   When the statement states them (it almost always does), emit pad+balance
-   pairs as single elements, around the transactions:
-   - Opening, BEFORE the cycle's transactions (the pad absorbs any drift
-     into Equity:Opening-Balances; balance asserts at the START of its
-     date, so date it the cycle's first day):
+9. **Assert opening & closing balances — read them from the SUMMARY box, not
+   the transaction rows.** Every statement has a summary of TOTALS, e.g.
+   "Previous/Opening Balance · Purchases · Payments/Credits · Net Outstanding /
+   Total Payment Due". Take exactly two figures from THAT summary:
+   - OPENING = the "Previous Balance" / "Opening Balance" total.
+   - CLOSING = the "Net Outstanding Balance" / "Total Payment Due" total.
+   These are TOTALS, never transactions. CRUCIAL: the "Opening Balance" is NOT
+   the transaction printed under it. Statements often start the transaction
+   table with an `OPENING BALANCE  <amount>` row, then the first real
+   transaction right below — do NOT read that next row's date or amount as the
+   opening balance. Never use a transaction amount, minimum due, or credit
+   limit as a balance.
+
+   Find the statement period (printed as "Statement Period DD/MM/YYYY -
+   DD/MM/YYYY"). Emit ONE opening and ONE closing pad+balance pair:
+   - Opening asserts at the START of the period → date the balance the
+     period's FIRST day, the pad the day before:
      ```
-     2026-04-17 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Opening-Balances
-     2026-04-18 balance Liabilities:CreditCards:Axis:SelectPlus  -45000.00 INR
+     2026-04-07 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Adjustments
+     2026-04-08 balance Liabilities:CreditCards:Axis:SelectPlus  -3000.00 INR
      ```
-   - Closing, AFTER all transactions, dated the DAY AFTER the statement
-     end (assertions check the start of day):
+   - Closing asserts after the cycle → date the balance the DAY AFTER the
+     period's LAST day, the pad on the last day:
      ```
-     2026-05-18 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Opening-Balances
-     2026-05-19 balance Liabilities:CreditCards:Axis:SelectPlus  -62000.00 INR
+     2026-05-07 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Adjustments
+     2026-05-08 balance Liabilities:CreditCards:Axis:SelectPlus  -8500.00 INR
      ```
-   Emit EXACTLY ONE opening and ONE closing balance per card — never two
-   closing assertions, never the same balance on two adjacent dates.
-   SIGNS — read the statement's Dr/Cr marker carefully:
-   - amount OWED to the bank (normal "total due", or "Dr") → NEGATIVE:
-     "Total Payment Due 62,000" asserts -62000.00 INR.
-   - "Cr" suffix = CREDIT balance, the bank owes the user (overpayment /
-     refunds) → POSITIVE: "Total Payment Due 5,432.10 Cr" asserts
-     +5432.10 INR. Both opening and closing can be Cr.
-   The pad+balance pair must be ONE element (the pad folds into the
-   assertion). Copy the statement's stated figures digit-for-digit; never
-   compute them.
+   EXACTLY ONE opening and ONE closing per card — never two of either, never
+   the same balance on two adjacent dates.
+   SIGNS — read the Dr/Cr marker: amount OWED to the bank (normal case, "Dr")
+   → NEGATIVE (e.g. "Net Outstanding 8,500.00" → -8500.00 INR); a "Cr" balance
+   (bank owes you — overpayment/refund) → POSITIVE (e.g. "5,432.10 Cr" →
+   +5432.10). Both opening and closing can be Cr.
+   The pad+balance pair is ONE element. Copy the figures digit-for-digit;
+   never compute them.
 10. **One transaction per element.** Each entry is a complete Beancount
    block — header line plus 2+ postings, no leading/trailing blank
    lines, no comments narrating what the row is for. The postings
