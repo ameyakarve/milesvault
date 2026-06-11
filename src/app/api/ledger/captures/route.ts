@@ -32,10 +32,11 @@ export const POST = withLedger(async ({ client, req, email }) => {
   if (action === 'redraft') {
     const chatNs = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO> | undefined
     if (!chatNs) return new NextResponse('CHAT_DO binding missing', { status: 500 })
-    const redraftStub = chatNs.get(chatNs.idFromName(email))
+    const redraftName = `${email}::${body.id}`
+    const redraftStub = chatNs.get(chatNs.idFromName(redraftName))
     ctx.waitUntil(
       redraftStub
-        .setName(email)
+        .setName(redraftName)
         .then(() => redraftStub.draftStatementAsync(body.id))
         .then((): undefined => undefined)
         .catch((e): undefined => {
