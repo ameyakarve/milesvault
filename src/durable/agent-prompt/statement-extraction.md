@@ -59,9 +59,13 @@ Follow these rules when building that array.
    guide's base rate, commodity = `pool.ticker`, tag `#reward-accrual`.
    Excluded categories per the guide (fuel, rent, wallet loads,
    government/tax) get the plain two-posting form — no points legs.
-   Refunds reverse their points too. A spend entry missing its points legs
-   is INCOMPLETE unless the guide gave you no rate at all — and then you
-   must tell the user you skipped accruals.
+   REFUNDS REVERSE THEIR POINTS with mirrored signs — same four-posting
+   shape, points computed on the refunded amount:
+   `Expenses:… -877.82 INR / card +877.82 INR /
+   <pool>:Pending -48 <TICKER> / Equity:Void +48 <TICKER>`
+   (floor(877.82/200)×12 = 48). A spend OR refund entry missing its
+   points legs is INCOMPLETE unless the guide gave you no rate at all —
+   and then you must tell the user you skipped accruals.
 9. **One transaction per element.** Each entry is a complete Beancount
    block — header line plus 2+ postings, no leading/trailing blank
    lines, no comments narrating what the row is for. The postings
