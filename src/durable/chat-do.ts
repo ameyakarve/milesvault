@@ -18,7 +18,7 @@ import {
   readStatementTool,
 } from './agents/tools/editor'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
-import { runDraftPipeline } from './ingest/pipeline'
+import { runDraftPipeline, type GenFn } from './ingest/pipeline'
 import type { AgentHost, Registry } from './agents/types'
 
 // The chat/agent runtime for the `/editor` surface. Hosts the `ledger ↔
@@ -33,6 +33,10 @@ type Snapshot = Awaited<ReturnType<LedgerDO['ledger_snapshot']>>
 // Live draft trace (Think state-sync primitive): the per-capture DO
 // publishes the streamed extraction tail here; the Inbox reads it via
 // useAgent when a still-drafting item is selected.
+// Vision model for the PDF statement extraction path — reads rendered page
+// images (labels HSBC bakes as images that text extraction can't decode).
+const VISION_MODEL_ID = '@cf/mistralai/mistral-small-3.1-24b-instruct'
+
 export type ChatDOState = { draftProgress?: string }
 
 // Tool-call repair hook. Forwarded to streamText as `experimental_repairToolCall`
@@ -303,12 +307,76 @@ ${opts.text}`,
       // calls (extract, classify) — no tools, no bulk payloads over the
       // flaky tool-call channel — then code renders the beancount: points
       // floor math, refund mirroring, pad+balance bookends, Cr signs.
-      const gen = async (system: string, prompt: string, maxTokens: number) => {
-        // STREAM, don't generate: a non-streaming call that takes long to
-        // produce a big JSON payload hits Workers AI's completion timeout
-        // (AiError 3046) and every retry re-runs the same slow call. A
-        // streamed response keeps the connection alive token-by-token, so
-        // long extractions complete instead of timing out.
+      // Stream the trace into Think state (Inbox reads it via useAgent on
+      // select). Shared by both gen paths.
+      const trace = (() => {
+        let last = 0
+        return (text: string) => {
+          const now = Date.now()
+          if (now - last < 1000) return
+          last = now
+          try {
+            this.setState({ draftProgress: text.slice(-700) })
+          } catch {
+            /* no-op */
+          }
+        }
+      })()
+
+      const gen: GenFn = async ({ system, prompt, maxTokens, images }) => {
+        if (images && images.length > 0) {
+          // VISION path: PDF statements render to page images and a
+          // multimodal model (Mistral Small 3.1) reads the rendered layout —
+          // including labels HSBC et al. bake as images that text extraction
+          // can't decode. Direct AI binding call, streamed.
+          const ai = this.env.AI as unknown as {
+            run: (model: string, inputs: unknown) => Promise<ReadableStream<Uint8Array>>
+          }
+          const stream = await ai.run(VISION_MODEL_ID, {
+            messages: [
+              { role: 'system', content: system },
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: prompt },
+                  ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+                ],
+              },
+            ],
+            max_tokens: maxTokens,
+            stream: true,
+          })
+          let text = ''
+          const reader = stream.getReader()
+          const decoder = new TextDecoder()
+          let buf = ''
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buf += decoder.decode(value, { stream: true })
+            let nl: number
+            while ((nl = buf.indexOf('\n')) !== -1) {
+              const line = buf.slice(0, nl).trim()
+              buf = buf.slice(nl + 1)
+              if (!line.startsWith('data:')) continue
+              const data = line.slice(5).trim()
+              if (data === '[DONE]') continue
+              try {
+                const j = JSON.parse(data) as { response?: string }
+                if (j.response) {
+                  text += j.response
+                  trace(text)
+                }
+              } catch {
+                /* partial SSE frame */
+              }
+            }
+          }
+          return text
+        }
+
+        // TEXT path (email/text-only statements): stream gemma so a long
+        // generation doesn't hit the completion timeout.
         const r = streamText({
           model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
           system,
@@ -316,20 +384,9 @@ ${opts.text}`,
           maxOutputTokens: maxTokens,
         })
         let text = ''
-        let lastWrite = 0
         for await (const delta of r.textStream) {
           text += delta
-          const now = Date.now()
-          if (now - lastWrite > 1000) {
-            lastWrite = now
-            // Think's setState broadcasts to any connected useAgent client
-            // (the Inbox opens one only for a selected, still-drafting item).
-            try {
-              this.setState({ draftProgress: text.slice(-700) })
-            } catch {
-              /* no-op if state sync unavailable */
-            }
-          }
+          trace(text)
         }
         return text
       }
@@ -338,6 +395,7 @@ ${opts.text}`,
         gen,
         kb: kbHttp,
         statementText: stmt.text,
+        images: stmt.images,
         accounts: snapshot.accounts.map((a) => a.account),
         // Same convention stack as the editor's statement agent — only the
         // output channel differs (JSON entries).

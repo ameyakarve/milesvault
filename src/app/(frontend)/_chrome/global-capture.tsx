@@ -6,6 +6,7 @@ import { FileText, Loader2 } from 'lucide-react'
 import {
   loadStatement,
   extractStatementText,
+  renderStatementImages,
   StatementExtractError,
 } from '@/lib/pdf/extract'
 import { ledgerClient } from '@/lib/ledger-client-browser'

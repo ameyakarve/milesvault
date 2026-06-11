@@ -1,0 +1,95 @@
+// MilesVault Ledger UI — state transitions (compact)
+digraph LedgerUI {
+  rankdir=TB;
+  compound=true;
+  fontname="Inter"; fontsize=10;
+  nodesep=0.14; ranksep=0.28;
+  splines=true; concentrate=true;
+  bgcolor="white"; pad=0.1;
+  node [shape=box, style="rounded,filled", fontname="Inter", fontsize=9,
+        margin="0.08,0.03", height=0.22, width=0.6,
+        color="#94a3b8", fillcolor="#f8fafc", fontcolor="#0f172a"];
+  edge [fontname="JetBrains Mono", fontsize=7, color="#475569",
+        fontcolor="#334155", arrowsize=0.55];
+
+  // 1. fetch
+  subgraph cluster_fetch {
+    label="useTransactions"; labeljust="l"; fontsize=9;
+    style="rounded,filled"; color="#cbd5e1"; fillcolor="#f1f5f9";
+    f_load [label="loading", fillcolor="#e0f2fe", color="#0284c7"];
+    f_idle [label="idle",    fillcolor="#dcfce7", color="#16a34a"];
+    f_err  [label="error",   fillcolor="#fee2e2", color="#dc2626"];
+    f_load -> f_idle [label="200"];
+    f_load -> f_err  [label="!ok"];
+    f_idle -> f_load [label="page"];
+    f_err  -> f_load [label="retry"];
+  }
+
+  // 2. buffer + save
+  subgraph cluster_buffer {
+    label="buffer + saveStatus"; labeljust="l"; fontsize=9;
+    style="rounded,filled"; color="#cbd5e1"; fillcolor="#f1f5f9";
+    b_clean [label="clean",   fillcolor="#dcfce7", color="#16a34a"];
+    b_dirty [label="dirty",   fillcolor="#fef3c7", color="#d97706"];
+    b_save  [label="saving",  fillcolor="#e0f2fe", color="#0284c7"];
+    b_conf  [label="conflict",fillcolor="#fee2e2", color="#dc2626"];
+    b_err   [label="error",   fillcolor="#fee2e2", color="#dc2626"];
+    b_clean -> b_dirty [label="edit"];
+    b_dirty -> b_clean [label="revert"];
+    b_dirty -> b_save  [label="save"];
+    b_save  -> b_clean [label="200"];
+    b_save  -> b_conf  [label="409"];
+    b_save  -> b_err   [label="fail"];
+    b_conf  -> b_save  [label="retry"];
+    b_err   -> b_save  [label="retry"];
+  }
+
+  // 3. chat
+  subgraph cluster_chat {
+    label="useAgentChat"; labeljust="l"; fontsize=9;
+    style="rounded,filled"; color="#cbd5e1"; fillcolor="#f1f5f9";
+    c_rdy [label="ready",     fillcolor="#dcfce7", color="#16a34a"];
+    c_sub [label="submitted", fillcolor="#e0f2fe", color="#0284c7"];
+    c_str [label="streaming", fillcolor="#e0f2fe", color="#0284c7"];
+    c_err [label="error",     fillcolor="#fee2e2", color="#dc2626"];
+    c_rdy -> c_sub [label="send"];
+    c_sub -> c_str [label="delta"];
+    c_str -> c_rdy [label="finish"];
+    c_sub -> c_err [label="fail"];
+    c_str -> c_err [label="abort"];
+    c_err -> c_rdy [label="clear"];
+  }
+
+  // 4. tool exec
+  subgraph cluster_tool {
+    label="onToolCall"; labeljust="l"; fontsize=9;
+    style="rounded,filled"; color="#cbd5e1"; fillcolor="#f1f5f9";
+    t_in  [label="input",  fillcolor="#e0f2fe", color="#0284c7"];
+    t_run [label="exec",   fillcolor="#e0f2fe", color="#0284c7"];
+    t_ok  [label="output", fillcolor="#dcfce7", color="#16a34a"];
+    t_err [label="err",    fillcolor="#fee2e2", color="#dc2626"];
+    t_in  -> t_run [label="call"];
+    t_run -> t_ok  [label="ok"];
+    t_run -> t_err [label="throw"];
+  }
+
+  // 5. proposal
+  subgraph cluster_prop {
+    label="propose_* → applyProposal"; labeljust="l"; fontsize=9;
+    style="rounded,filled"; color="#cbd5e1"; fillcolor="#f1f5f9";
+    p_call [label="call",  fillcolor="#e0f2fe", color="#0284c7"];
+    p_app  [label="apply", fillcolor="#e0f2fe", color="#0284c7"];
+    p_ok   [label="ok",    fillcolor="#dcfce7", color="#16a34a"];
+    p_bad  [label="fail",  fillcolor="#fee2e2", color="#dc2626"];
+    p_call -> p_app;
+    p_app  -> p_ok  [label="mutate"];
+    p_app  -> p_bad [label="miss"];
+  }
+
+  // cross-machine
+  edge [style=dashed, color="#7c3aed", fontcolor="#6d28d9"];
+  f_idle -> b_clean [label="baseline",   ltail=cluster_fetch,  lhead=cluster_buffer];
+  t_run  -> p_call  [label="propose_*",  ltail=cluster_tool,   lhead=cluster_prop];
+  p_ok   -> b_dirty [label="setBuffer",  ltail=cluster_prop,   lhead=cluster_buffer];
+  b_save -> f_idle  [label="replaceRows",ltail=cluster_buffer, lhead=cluster_fetch];
+}

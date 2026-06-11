@@ -139,3 +139,36 @@ function reconstructPageText(items: TextItem[]): string {
   }
   return lines.join('\n')
 }
+
+// Render each page to a downscaled JPEG data URL for the vision-model
+// extraction path. The decrypted doc already lives in the browser (the
+// password was handled client-side), so rendering here avoids shipping the
+// PDF + password to the server. Capped width keeps payloads small; vision
+// models read 1500px-wide statement scans fine.
+export async function renderStatementImages(
+  doc: PDFDocumentProxy,
+  opts: { maxWidth?: number; quality?: number; maxPages?: number } = {},
+): Promise<string[]> {
+  const maxWidth = opts.maxWidth ?? 1500
+  const quality = opts.quality ?? 0.8
+  const maxPages = opts.maxPages ?? 12
+  const images: string[] = []
+  const n = Math.min(doc.numPages, maxPages)
+  for (let i = 1; i <= n; i++) {
+    const page = await doc.getPage(i)
+    const base = page.getViewport({ scale: 1 })
+    const scale = Math.min(maxWidth / base.width, 2)
+    const viewport = page.getViewport({ scale })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.ceil(viewport.width)
+    canvas.height = Math.ceil(viewport.height)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) continue
+    // White backing — statements are black-on-white; JPEG has no alpha.
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    await page.render({ canvasContext: ctx, viewport, canvas }).promise
+    images.push(canvas.toDataURL('image/jpeg', quality))
+  }
+  return images
+}

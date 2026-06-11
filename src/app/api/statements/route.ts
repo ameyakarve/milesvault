@@ -16,7 +16,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!email) return new NextResponse('unauthorized', { status: 401 })
 
   const body = (await req.json().catch((): null => null)) as
-    | { filename?: unknown; text?: unknown; mode?: unknown }
+    | { filename?: unknown; text?: unknown; mode?: unknown; images?: unknown }
     | null
   if (!body || typeof body !== 'object') {
     return NextResponse.json({ errors: ['invalid body'] }, { status: 400 })
@@ -35,11 +35,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   const inbox = body.mode === 'inbox'
   const client = await getLedgerClient(email)
   const id = `STMT-${crypto.randomUUID()}`
+  const images = Array.isArray(body.images)
+    ? body.images.filter((x): x is string => typeof x === 'string')
+    : []
   await client.put_statement({
     id,
     ownerEmail: email,
     filename: body.filename,
     text: body.text,
+    images,
     capture: inbox,
   })
   if (inbox) {

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import {
   loadStatement,
   extractStatementText,
+  renderStatementImages,
   StatementExtractError,
 } from '@/lib/pdf/extract'
 import { ledgerClient } from '@/lib/ledger-client-browser'
@@ -45,7 +46,8 @@ export function StatementUploadModal({
     try {
       const { doc } = await loadStatement(file, password)
       const text = await extractStatementText(doc)
-      await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text })
+      const images = await renderStatementImages(doc).catch((): string[] => [])
+      await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text, images })
       window.dispatchEvent(new CustomEvent('mv:captured'))
       setState({ kind: 'captured', file })
     } catch (e) {

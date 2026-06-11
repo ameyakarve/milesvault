@@ -1,0 +1,1 @@
+!! HTTP 400 [{"message":"AiError: AiError: {\"error\":{\"message\":\"chat_template is not supported for Mistral tokenizers.\",\"type\":\"BadRequestError\",\"param\":null,\"code\":400}} (71cd1b00-f36c-4e54-9297-730a5d05307d)","code":8007}]

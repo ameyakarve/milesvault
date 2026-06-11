@@ -348,6 +348,11 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     )`,
   },
   {
+    label: 'statements_images',
+    sql: 'ALTER TABLE statements ADD COLUMN images TEXT',
+    allowFail: true,
+  },
+  {
     label: 'agent_attachments',
     sql: `CREATE TABLE IF NOT EXISTS agent_attachments (
       r2_key      TEXT    PRIMARY KEY,

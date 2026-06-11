@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LogicalLedger | HDFC Diners Black</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "background": "#faf8ff",
+                        "surface-bright": "#faf8ff",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed": "#d3e4fe",
+                        "tertiary-container": "#66768d",
+                        "surface-container-low": "#f2f3ff",
+                        "tertiary": "#4d5d73",
+                        "secondary-fixed": "#d5e3fd",
+                        "on-primary-fixed-variant": "#004e61",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed": "#001f28",
+                        "outline": "#6e797e",
+                        "on-secondary-fixed": "#0d1c2f",
+                        "on-secondary-container": "#57657b",
+                        "on-tertiary-fixed-variant": "#38485d",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-container": "#d5e3fd",
+                        "on-surface": "#131b2e",
+                        "on-secondary-fixed-variant": "#3a485c",
+                        "primary-fixed-dim": "#6cd3f7",
+                        "tertiary-fixed-dim": "#b7c8e1",
+                        "secondary-fixed-dim": "#b9c7e0",
+                        "surface-container": "#eaedff",
+                        "primary-container": "#007f9d",
+                        "error": "#ba1a1a",
+                        "secondary": "#515f74",
+                        "surface-tint": "#006780",
+                        "inverse-primary": "#6cd3f7",
+                        "outline-variant": "#bdc8ce",
+                        "surface-variant": "#dae2fd",
+                        "on-primary": "#ffffff",
+                        "surface-dim": "#d2d9f4",
+                        "on-tertiary": "#ffffff",
+                        "on-background": "#131b2e",
+                        "primary-fixed": "#b7eaff",
+                        "surface-container-high": "#e2e7ff",
+                        "on-surface-variant": "#3e484d",
+                        "surface": "#faf8ff",
+                        "on-primary-container": "#fafdff",
+                        "primary": "#00647c",
+                        "inverse-on-surface": "#eef0ff",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-container": "#fdfcff",
+                        "on-tertiary-fixed": "#0b1c30",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#283044",
+                        "surface-container-highest": "#dae2fd"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0px",
+                        "sm": "2px",
+                        "md": "4px",
+                        "lg": "6px",
+                        "xl": "8px",
+                        "full": "9999px"
+                    },
+                    fontFamily: {
+                        "sans": ["Inter", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 18px;
+            vertical-align: middle;
+        }
+        .tonal-shift-bg-surface-to-white {
+            background-color: #ffffff;
+        }
+        body {
+            background-color: #F4F6F8;
+            font-family: 'Inter', sans-serif;
+            color: #334155;
+        }
+        .ledger-row:hover {
+            background-color: #f2f3ff;
+        }
+        .mono-data {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+            letter-spacing: -0.02em;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+<!-- TopNavBar (Shared Component Execution) -->
+<header class="bg-white dark:bg-slate-900 font-['Inter'] text-[13px] tracking-tight rounded-none border-b border-slate-200 dark:border-slate-800 flex justify-between items-center w-full px-6 py-2 h-12 z-50">
+<div class="flex items-center gap-8">
+<span class="font-['Inter'] font-bold text-slate-900 dark:text-white uppercase tracking-wider text-sm">MILESVAULT</span>
+<nav class="flex items-center gap-6">
+<a class="text-cyan-600 dark:text-cyan-500 border-b-2 border-cyan-600 dark:border-cyan-500 pb-1" href="#">Ledger</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors duration-75" href="#">Dashboard</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors duration-75" href="#">Insights</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors duration-75" href="#">Accounts</a>
+<a class="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors duration-75" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative flex items-center bg-slate-50 dark:bg-slate-800 px-3 py-1 rounded-sm">
+<span class="material-symbols-outlined text-slate-400 mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-[12px] w-48" placeholder="Search Ledgers..." type="text"/>
+</div>
+<span class="material-symbols-outlined text-slate-500 cursor-pointer hover:text-slate-900">notifications</span>
+<span class="material-symbols-outlined text-slate-500 cursor-pointer hover:text-slate-900">account_circle</span>
+</div>
+</header>
+<!-- Main Container (1440px max-width flex split) -->
+<main class="flex-1 flex max-w-[1440px] mx-auto w-full">
+<!-- Left Column: Ledger Workspace (1080px) -->
+<div class="w-[1080px] p-6 flex flex-col gap-4 overflow-y-auto">
+<!-- Secondary Chrome / Actions -->
+<div class="flex items-center justify-between text-[12px]">
+<div class="flex items-center gap-4 text-slate-500 font-medium">
+<div class="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
+<span class="text-cyan-600 font-bold">⌘S</span>
+<span>save</span>
+</div>
+<div class="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
+<span class="text-slate-800 font-bold">⌘K</span>
+<span>search</span>
+</div>
+<div class="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
+<span class="text-slate-800 font-bold">⌘J</span>
+<span>ask AI</span>
+</div>
+<div class="flex items-center gap-1.5 px-2 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
+<span class="text-slate-800 font-bold">/</span>
+<span>cmds</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<span class="text-slate-400 italic">3 unsaved edits · last saved 14:32</span>
+<button class="bg-cyan-600 text-white px-4 py-1.5 rounded-lg font-bold flex items-center gap-2 hover:bg-cyan-700 active:scale-95 transition-all">
+<span>Save</span>
+<span class="text-[10px] opacity-70">⌘S</span>
+</button>
+</div>
+</div>
+<!-- Filter Strip -->
+<div class="flex items-center gap-2 py-1">
+<div class="bg-cyan-50 border border-cyan-100 text-cyan-700 px-2 py-1 rounded-lg text-[11px] font-mono flex items-center gap-1.5">
+                    @liabilities:creditcard:hdfc:dinersblack
+                    <span class="material-symbols-outlined text-[14px] cursor-pointer">close</span>
+</div>
+<div class="bg-white border border-slate-200 text-slate-600 px-2 py-1 rounded-lg text-[11px] font-mono flex items-center gap-1.5">
+                    Apr 2026
+                    <span class="material-symbols-outlined text-[14px] cursor-pointer">calendar_today</span>
+</div>
+</div>
+<!-- Account Header Card -->
+<div class="bg-white p-6 rounded-lg shadow-sm border border-slate-100">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-3">
+<span class="mono-data text-slate-500">Liabilities:CreditCard:HDFC:DinersBlack</span>
+<div class="flex gap-2">
+<span class="bg-slate-100 text-slate-600 px-2 py-0.5 text-[10px] font-bold rounded-sm tracking-wider uppercase">CREDIT CARD</span>
+<span class="bg-slate-100 text-slate-600 px-2 py-0.5 text-[10px] font-bold rounded-sm tracking-wider uppercase">INR</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-slate-300">more_vert</span>
+</div>
+<div class="mono-data text-[28px] font-bold text-slate-900">-₹47,820.00</div>
+</div>
+<!-- Tabular Ledger -->
+<div class="bg-white rounded-lg shadow-sm border border-slate-100 overflow-hidden">
+<div class="grid grid-cols-[100px_1fr_120px_120px_140px] bg-slate-50/50 border-b border-slate-100 px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-slate-500">
+<div>Date</div>
+<div>Payee · Narration</div>
+<div class="text-right">Debit</div>
+<div class="text-right">Credit</div>
+<div class="text-right">Balance</div>
+</div>
+<!-- Row 1 -->
+<div class="ledger-row grid grid-cols-[100px_1fr_120px_120px_140px] px-4 py-4 border-b border-slate-50 text-[12.5px] items-center cursor-pointer transition-colors">
+<div class="text-slate-400 mono-data">Apr 22</div>
+<div class="font-medium text-slate-800">Amazon <span class="text-slate-400 mx-2">·</span> <span class="text-slate-500 font-normal">Groceries</span></div>
+<div class="text-right mono-data text-slate-700">2,340.00</div>
+<div class="text-right mono-data text-slate-300">—</div>
+<div class="text-right mono-data text-slate-900">-47,820.00</div>
+</div>
+<!-- Row 2 -->
+<div class="ledger-row grid grid-cols-[100px_1fr_120px_120px_140px] px-4 py-4 border-b border-slate-50 text-[12.5px] items-center cursor-pointer transition-colors">
+<div class="text-slate-400 mono-data">Apr 20</div>
+<div class="font-medium text-slate-800">HDFC <span class="text-slate-400 mx-2">·</span> <span class="text-slate-500 font-normal">Statement payment</span></div>
+<div class="text-right mono-data text-slate-300">—</div>
+<div class="text-right mono-data text-cyan-600">35,000.00</div>
+<div class="text-right mono-data text-slate-900">-45,480.00</div>
+</div>
+<!-- EXPANDED ACTIVE CARD (Lufthansa) -->
+<div class="mx-2 my-2 border-[1.5px] border-teal-500 shadow-xl overflow-hidden rounded-lg">
+<div class="bg-[#F4FBFB] px-4 py-3 border-b border-teal-100 flex justify-between items-center">
+<div class="flex items-center gap-3">
+<span class="text-teal-600 mono-data font-bold">Apr 18</span>
+<span class="text-slate-800 font-bold">Lufthansa <span class="text-slate-400 mx-1">·</span> <span class="font-normal text-slate-600">LH761 BLR-FRA</span></span>
+</div>
+<span class="bg-teal-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-sm">EDITING</span>
+</div>
+<div class="bg-[#F0FDFA] p-4">
+<pre class="mono-data text-[12px] text-slate-700 leading-relaxed">2024-04-18 * "Lufthansa" "LH761 BLR-FRA"
+  Expenses:Travel:Airfare                 38,420.00 INR
+  Liabilities:CreditCard:HDFC:DinersBlack</pre>
+</div>
+<div class="bg-[#F4FBFB] px-4 py-3 border-t border-teal-100 flex justify-between items-center">
+<div class="text-[11px] font-bold text-teal-700 uppercase tracking-tighter flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px]">sync_alt</span> Active Edit Sessions (1)
+                        </div>
+<div class="grid grid-cols-[120px_140px] items-center gap-0">
+<div class="text-right mono-data text-slate-900 font-bold pr-4">38,420.00</div>
+<div class="text-right mono-data text-slate-900 font-bold">-80,480.00</div>
+</div>
+</div>
+</div>
+<!-- Row 4 -->
+<div class="ledger-row grid grid-cols-[100px_1fr_120px_120px_140px] px-4 py-4 border-b border-slate-50 text-[12.5px] items-center cursor-pointer transition-colors">
+<div class="text-slate-400 mono-data">Apr 15</div>
+<div class="font-medium text-slate-800">HDFC <span class="text-slate-400 mx-2">·</span> <span class="text-slate-500 font-normal">Cashback credit</span></div>
+<div class="text-right mono-data text-slate-300">—</div>
+<div class="text-right mono-data text-cyan-600">120.00</div>
+<div class="text-right mono-data text-slate-900">-42,060.00</div>
+</div>
+<!-- Row 5 -->
+<div class="ledger-row grid grid-cols-[100px_1fr_120px_120px_140px] px-4 py-4 border-b border-slate-50 text-[12.5px] items-center cursor-pointer transition-colors">
+<div class="text-slate-400 mono-data">Apr 10</div>
+<div class="font-medium text-slate-800">Swiggy <span class="text-slate-400 mx-2">·</span> <span class="text-slate-500 font-normal">Dining</span></div>
+<div class="text-right mono-data text-slate-700">890.00</div>
+<div class="text-right mono-data text-slate-300">—</div>
+<div class="text-right mono-data text-slate-900">-42,180.00</div>
+</div>
+<!-- Row 6 -->
+<div class="ledger-row grid grid-cols-[100px_1fr_120px_120px_140px] px-4 py-4 text-[12.5px] items-center cursor-pointer transition-colors">
+<div class="text-slate-400 mono-data">Apr 05</div>
+<div class="font-medium text-slate-800">HDFC <span class="text-slate-400 mx-2">·</span> <span class="text-slate-500 font-normal">Annual fee</span></div>
+<div class="text-right mono-data text-slate-700">10,000.00</div>
+<div class="text-right mono-data text-slate-300">—</div>
+<div class="text-right mono-data text-slate-900">-41,290.00</div>
+</div>
+</div>
+<!-- Pagination -->
+<div class="flex items-center justify-between px-2 text-[12px] text-slate-500 font-medium pb-8">
+<button class="flex items-center gap-1 hover:text-slate-900">
+<span class="material-symbols-outlined">chevron_left</span> Prev
+                </button>
+<div>Page 1 of 4 <span class="mx-4 text-slate-300">|</span> 3 of 47 postings</div>
+<button class="flex items-center gap-1 hover:text-slate-900">
+                    Next <span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- Right Column: AI Rail (360px) -->
+<aside class="w-[360px] bg-slate-50 border-l border-slate-200 flex flex-col">
+<!-- Header (AI RAIL Metadata) -->
+<div class="p-4 border-b border-slate-200">
+<div class="flex items-center gap-3 mb-1">
+<div class="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center text-cyan-500">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">analytics</span>
+</div>
+<div>
+<div class="text-[11px] font-bold uppercase tracking-widest text-slate-900 font-headline">AI RAIL</div>
+<div class="text-[10px] text-slate-500">Contextual Analysis Active</div>
+</div>
+</div>
+</div>
+<!-- Content Area -->
+<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-6">
+<!-- Pinned Preview -->
+<div>
+<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Pinned Context</div>
+<div class="bg-white p-4 rounded-lg border border-slate-200 shadow-sm relative overflow-hidden group cursor-pointer hover:border-cyan-300 transition-colors">
+<div class="flex items-start gap-3">
+<div class="bg-slate-100 p-2 rounded-lg">
+<span class="material-symbols-outlined text-slate-600">flight_takeoff</span>
+</div>
+<div>
+<div class="text-[12px] font-bold text-slate-900">Thu 18 Apr · Lufthansa</div>
+<div class="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                                    Flight transaction detected. Associated with trip code <span class="text-cyan-600">GER-2024-Q2</span>.
+                                </div>
+</div>
+</div>
+<div class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-slate-400 text-sm">open_in_new</span>
+</div>
+</div>
+</div>
+<!-- Chat History / Insights -->
+<div class="flex flex-col gap-4">
+<div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Analysis History</div>
+<div class="flex flex-col gap-2">
+<div class="flex gap-2">
+<div class="w-6 h-6 rounded-full bg-slate-200 flex-shrink-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px]">person</span>
+</div>
+<div class="text-[12px] text-slate-600 bg-slate-100 p-3 rounded-lg rounded-tl-none">
+                                How much did I spend on Lufthansa this year?
+                            </div>
+</div>
+<div class="flex gap-2 flex-row-reverse">
+<div class="w-6 h-6 rounded-full bg-cyan-100 flex-shrink-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-[14px] text-cyan-600">bolt</span>
+</div>
+<div class="text-[12px] text-slate-700 bg-white border border-slate-200 p-3 rounded-lg rounded-tr-none shadow-sm">
+                                Including this transaction, you've spent <span class="font-bold">₹1,24,300</span> on airfare in 2024. This is 12% higher than the same period last year.
+                            </div>
+</div>
+</div>
+<div class="p-3 bg-cyan-50 border border-cyan-100 rounded-lg">
+<div class="text-[11px] font-bold text-cyan-700 flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-[16px]">info</span> Suggested Action
+                        </div>
+<div class="text-[11px] text-cyan-800 leading-normal">
+                            Categorize as "Business Travel" to match your recent invoice from 'SAP Concur'?
+                        </div>
+<button class="mt-2 text-[10px] font-bold text-white bg-cyan-600 px-3 py-1 rounded-sm">Apply Label</button>
+</div>
+</div>
+</div>
+<!-- Terminal / Input at bottom -->
+<div class="p-4 border-t border-slate-200 bg-white">
+<div class="relative">
+<textarea class="w-full border-slate-200 rounded-lg text-[12px] p-3 focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 resize-none" placeholder="Ask AI about this ledger..." rows="2"></textarea>
+<div class="absolute right-2 bottom-3 flex gap-2">
+<span class="material-symbols-outlined text-slate-400 cursor-pointer hover:text-cyan-600">mic</span>
+<span class="material-symbols-outlined text-cyan-600 cursor-pointer">send</span>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- SideNavBar (Shared Component Execution, positioned at far right but we keep rail fixed as sibling) -->
+<div class="fixed right-0 top-12 h-[calc(100vh-48px)] w-16 flex flex-col items-center py-4 z-40 bg-slate-50 dark:bg-slate-950 rounded-none border-l border-slate-200 dark:border-slate-800">
+<div class="flex flex-col gap-6 items-center w-full">
+<div class="flex flex-col items-center gap-1 group cursor-pointer transition-all duration-75 text-slate-400 dark:text-slate-600 hover:text-slate-900 dark:hover:text-slate-100">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-['Inter'] text-[9px] uppercase font-bold">Context</span>
+</div>
+<div class="flex flex-col items-center gap-1 group cursor-pointer transition-all duration-75 bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-500 border-r-4 border-cyan-600 w-full py-2">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-['Inter'] text-[9px] uppercase font-bold">Insights</span>
+</div>
+<div class="flex flex-col items-center gap-1 group cursor-pointer transition-all duration-75 text-slate-400 dark:text-slate-600 hover:text-slate-900 dark:hover:text-slate-100">
+<span class="material-symbols-outlined">keep</span>
+<span class="font-['Inter'] text-[9px] uppercase font-bold">Pinned</span>
+</div>
+<div class="flex flex-col items-center gap-1 group cursor-pointer transition-all duration-75 text-slate-400 dark:text-slate-600 hover:text-slate-900 dark:hover:text-slate-100">
+<span class="material-symbols-outlined">history</span>
+<span class="font-['Inter'] text-[9px] uppercase font-bold">History</span>
+</div>
+<div class="mt-auto flex flex-col items-center gap-1 group cursor-pointer transition-all duration-75 text-slate-400 dark:text-slate-600 hover:text-slate-900 dark:hover:text-slate-100">
+<span class="material-symbols-outlined">terminal</span>
+<span class="font-['Inter'] text-[9px] uppercase font-bold">Term</span>
+</div>
+</div>
+</div>
+</body></html>

@@ -258,6 +258,9 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     ownerEmail: string
     filename: string
     text: string
+    // Page images (data URLs) for the vision extraction path; empty for
+    // email/text-only arrivals.
+    images?: string[]
     // Where the statement arrived from (ledger-pipeline.md §2). 'upload' is
     // the in-app paperclip/drop flow; 'email' is the ingest+token@ worker.
     source?: 'upload' | 'email'
@@ -273,12 +276,13 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     const source = opts.source ?? 'upload'
     this.ctx.storage.transactionSync(() => {
       this.db.exec(
-        `INSERT OR REPLACE INTO statements (id, owner_email, filename, text, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO statements (id, owner_email, filename, text, images, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         opts.id,
         opts.ownerEmail,
         opts.filename,
         opts.text,
+        opts.images && opts.images.length ? JSON.stringify(opts.images) : null,
         now,
       )
       // Async arrivals become Inbox captures: forwarded email always, an
@@ -834,15 +838,24 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
 
   async get_statement(
     id: string,
-  ): Promise<{ filename: string; text: string; ownerEmail: string } | null> {
+  ): Promise<{ filename: string; text: string; images: string[]; ownerEmail: string } | null> {
     const row = this.db
-      .exec<{ filename: string; text: string; owner_email: string }>(
-        `SELECT filename, text, owner_email FROM statements WHERE id = ?`,
+      .exec<{ filename: string; text: string; images: string | null; owner_email: string }>(
+        `SELECT filename, text, images, owner_email FROM statements WHERE id = ?`,
         id,
       )
       .toArray()[0]
     if (!row) return null
-    return { filename: row.filename, text: row.text, ownerEmail: row.owner_email }
+    let images: string[] = []
+    if (row.images) {
+      try {
+        const p = JSON.parse(row.images) as unknown
+        if (Array.isArray(p)) images = p.filter((x): x is string => typeof x === 'string')
+      } catch {
+        /* ignore */
+      }
+    }
+    return { filename: row.filename, text: row.text, images, ownerEmail: row.owner_email }
   }
 
   private migrate(): void {

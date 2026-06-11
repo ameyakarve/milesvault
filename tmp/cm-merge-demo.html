@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CM unifiedMergeView + per-entry strip — ledger sandbox</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 24px;
+      max-width: 820px;
+      margin: 0 auto;
+      color: #0F172A;
+      background: #F8FAFC;
+    }
+    h2 { margin: 0 0 16px; font-size: 18px; font-weight: 600; }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    button {
+      padding: 6px 12px;
+      cursor: pointer;
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #0F172A;
+    }
+    button:hover { background: #F1F5F9; }
+    label.chk {
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #334155;
+    }
+    #entries-strip {
+      padding: 8px 10px;
+      border: 1px solid #E2E8F0;
+      border-bottom: none;
+      border-radius: 4px 4px 0 0;
+      background: #F0F9FF;
+      font-size: 12px;
+      font-family: ui-monospace, SF Mono, Menlo, monospace;
+      color: #334155;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      min-height: 34px;
+    }
+    #entries-strip .empty { color: #94A3B8; }
+    #entries-strip .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #FFFFFF;
+      border: 1px solid #BAE6FD;
+      border-radius: 14px;
+      padding: 2px 4px 2px 10px;
+      font-size: 11px;
+    }
+    #entries-strip .chip .title { color: #0F172A; }
+    #entries-strip .chip .mini {
+      border: none;
+      background: transparent;
+      padding: 0 6px;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      color: #475569;
+    }
+    #entries-strip .chip .mini:hover { color: #0F172A; background: #F1F5F9; border-radius: 10px; }
+
+    #editor {
+      height: 520px;
+      border: 1px solid #E2E8F0;
+      border-radius: 0 0 4px 4px;
+      overflow: hidden;
+      background: #FFFFFF;
+    }
+    .status {
+      margin-left: auto;
+      font-size: 12px;
+      color: #0369A1;
+      font-family: ui-monospace, monospace;
+    }
+    .hint {
+      color: #475569;
+      font-size: 13px;
+      margin-top: 16px;
+      line-height: 1.65;
+    }
+    .hint code {
+      background: #F1F5F9;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-family: ui-monospace, monospace;
+    }
+    .hint b { color: #0F172A; }
+    .cm-editor { height: 100%; }
+    .cm-scroller {
+      font-family: ui-monospace, SF Mono, Menlo, monospace;
+      font-size: 13px;
+    }
+
+    .cm-entry-changed {
+      background: rgba(14, 165, 233, 0.06);
+      box-shadow: inset 3px 0 0 #7DD3FC;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "@codemirror/state":    "https://esm.sh/@codemirror/state@6.4.1",
+      "@codemirror/view":     "https://esm.sh/@codemirror/view@6.26.3?deps=@codemirror/state@6.4.1",
+      "@codemirror/commands": "https://esm.sh/@codemirror/commands@6.6.0?deps=@codemirror/state@6.4.1,@codemirror/view@6.26.3",
+      "@codemirror/merge":    "https://esm.sh/@codemirror/merge@6.6.3?deps=@codemirror/state@6.4.1,@codemirror/view@6.26.3"
+    }
+  }
+  </script>
+</head>
+<body>
+  <h2>CodeMirror merge — Path B: per-entry strip + line-group overlay</h2>
+
+  <div class="toolbar">
+    <button id="save">save (baseline ← current)</button>
+    <button id="revert">revert (current ← baseline)</button>
+    <label class="chk">
+      <input type="checkbox" id="gutter" checked /> merge gutter
+    </label>
+    <label class="chk">
+      <input type="checkbox" id="perChunk" /> show library's per-chunk ✓/✕
+    </label>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div id="entries-strip"><span class="empty">no changed entries</span></div>
+  <div id="editor"></div>
+
+  <p class="hint">
+    Per-entry ✓/✕ live in the <b>sky strip above the editor</b>, not as inline widgets — inline block widgets fight focus inside <code>unifiedMergeView</code>, so we keep the editor clean and render the chips outside.<br />
+    Inside the editor: changed entries get a sky left-rule + tint (our decoration). Library still handles phantom red-strikethrough deletes + green additions + gutter.<br /><br />
+    <b>Try:</b> (1) click ✕ on the Uber chip → narration snaps back. (2) click ✓ on the Amazon chip → the whole 4-line new entry is accepted. (3) edit a posting inside Swiggy → a new chip appears in the strip.
+  </p>
+
+  <script type="module">
+    import {
+      EditorView, keymap, lineNumbers, drawSelection, highlightActiveLine,
+      highlightActiveLineGutter, dropCursor, Decoration, ViewPlugin,
+    } from "@codemirror/view"
+    import { EditorState, Compartment } from "@codemirror/state"
+    import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands"
+    import { unifiedMergeView, getChunks, acceptChunk, rejectChunk } from "@codemirror/merge"
+
+    const BASELINE = `2025-10-15 * "Swiggy" "dinner with r"
+  Liabilities:CC:Axis        -640.00 INR
+  Expenses:Food:Dining        640.00 INR
+
+2025-10-20 * "Uber" "ride to office"
+  Liabilities:CC:Axis        -450.00 INR
+  Expenses:Travel:Rideshare   450.00 INR
+
+2025-10-22 * "PVR" "dune part two"
+  Liabilities:CC:Axis        -480.00 INR
+  Expenses:Entertainment      480.00 INR
+`
+
+    const CURRENT = `2025-10-15 * "Swiggy" "dinner with r"
+  Liabilities:CC:Axis        -640.00 INR
+  Expenses:Food:Dining        640.00 INR
+
+2025-10-20 * "Uber" "morning commute"
+  Liabilities:CC:Axis        -450.00 INR
+  Expenses:Travel:Rideshare   450.00 INR
+
+2025-10-22 * "PVR" "dune part two"
+  Liabilities:CC:Axis        -480.00 INR
+  Expenses:Entertainment      480.00 INR
+
+2025-10-25 * "Amazon" "monitor & cables"
+  Liabilities:CC:Axis       -4500.00 INR
+  Expenses:Gadgets           4500.00 INR
+`
+
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}/
+    const TITLE_RE = /^\d{4}-\d{2}-\d{2}\s+[*!]\s+(?:"([^"]*)")?(?:\s+"([^"]*)")?/
+
+    function splitEntries(text) {
+      const lines = text.split('\n')
+      const out = []
+      let start = -1
+      for (let i = 0; i < lines.length; i++) {
+        if (DATE_RE.test(lines[i])) {
+          if (start >= 0) out.push({ startLine: start, endLine: i - 1, header: lines[start] })
+          start = i
+        }
+      }
+      if (start >= 0) out.push({ startLine: start, endLine: lines.length - 1, header: lines[start] })
+      return out
+    }
+
+    function entryTitle(header) {
+      const m = header.match(TITLE_RE)
+      if (!m) return header.slice(0, 40)
+      const bits = [m[1]?.trim(), m[2]?.trim()].filter(Boolean)
+      return bits.length > 0 ? bits.join(' · ').toLowerCase() : header.slice(0, 40)
+    }
+
+    function changedEntries(view) {
+      const result = getChunks(view.state)
+      if (!result || result.chunks.length === 0) return []
+      const doc = view.state.doc
+      const entries = splitEntries(doc.toString())
+      const out = []
+      for (const e of entries) {
+        const fromPos = doc.line(e.startLine + 1).from
+        const toPos = doc.line(Math.min(e.endLine + 1, doc.lines)).to
+        if (result.chunks.some((c) => c.fromB <= toPos && c.toB >= fromPos)) {
+          out.push({ ...e, title: entryTitle(e.header), fromPos, toPos })
+        }
+      }
+      return out
+    }
+
+    function acceptEntry(view, e) {
+      const result = getChunks(view.state)
+      if (!result) return
+      const positions = result.chunks
+        .filter((c) => c.fromB <= e.toPos && c.toB >= e.fromPos)
+        .map((c) => c.fromB)
+        .sort((a, b) => b - a)
+      for (const pos of positions) acceptChunk(view, pos)
+      view.focus()
+    }
+
+    function rejectEntry(view, e) {
+      const result = getChunks(view.state)
+      if (!result) return
+      const positions = result.chunks
+        .filter((c) => c.fromB <= e.toPos && c.toB >= e.fromPos)
+        .map((c) => c.fromB)
+        .sort((a, b) => b - a)
+      for (const pos of positions) rejectChunk(view, pos)
+      view.focus()
+    }
+
+    const entryChangedLine = Decoration.line({ attributes: { class: 'cm-entry-changed' } })
+
+    function buildEntryDecorations(view) {
+      const entries = changedEntries(view)
+      if (entries.length === 0) return Decoration.none
+      const doc = view.state.doc
+      const ranges = []
+      for (const e of entries) {
+        for (let ln = e.startLine + 1; ln <= e.endLine + 1; ln++) {
+          if (ln > doc.lines) break
+          ranges.push(entryChangedLine.range(doc.line(ln).from))
+        }
+      }
+      return Decoration.set(ranges, true)
+    }
+
+    const entryOverlayPlugin = ViewPlugin.fromClass(
+      class {
+        constructor(view) { this.decorations = buildEntryDecorations(view) }
+        update(u) {
+          if (u.docChanged || u.transactions.some((t) => t.effects.length > 0)) {
+            this.decorations = buildEntryDecorations(u.view)
+          }
+        }
+      },
+      { decorations: (v) => v.decorations }
+    )
+
+    let baseline = BASELINE
+    const mergeCompartment = new Compartment()
+    const perChunkCb = document.getElementById('perChunk')
+    const gutterCb = document.getElementById('gutter')
+    const statusEl = document.getElementById('status')
+    const stripEl = document.getElementById('entries-strip')
+
+    function buildMerge() {
+      return unifiedMergeView({
+        original: baseline,
+        mergeControls: perChunkCb.checked,
+        gutter: gutterCb.checked,
+      })
+    }
+
+    function renderStrip(view) {
+      const entries = changedEntries(view)
+      stripEl.innerHTML = ''
+      if (entries.length === 0) {
+        const s = document.createElement('span')
+        s.className = 'empty'
+        s.textContent = 'no changed entries'
+        stripEl.appendChild(s)
+        return
+      }
+      const count = document.createElement('span')
+      count.style.color = '#0369A1'
+      count.style.fontWeight = '600'
+      count.textContent = `${entries.length} changed · `
+      stripEl.appendChild(count)
+      for (const e of entries) {
+        const chip = document.createElement('span')
+        chip.className = 'chip'
+        const title = document.createElement('span')
+        title.className = 'title'
+        title.textContent = e.title
+        chip.appendChild(title)
+        const rej = document.createElement('button')
+        rej.className = 'mini'
+        rej.title = 'reject entry (revert to baseline)'
+        rej.textContent = '✕'
+        rej.onclick = () => rejectEntry(view, e)
+        const acc = document.createElement('button')
+        acc.className = 'mini'
+        acc.title = 'accept entry (keep current, drop highlight)'
+        acc.textContent = '✓'
+        acc.onclick = () => acceptEntry(view, e)
+        chip.appendChild(rej)
+        chip.appendChild(acc)
+        stripEl.appendChild(chip)
+      }
+    }
+
+    const stripUpdateListener = EditorView.updateListener.of((u) => {
+      if (u.docChanged || u.transactions.some((t) => t.effects.length > 0)) {
+        renderStrip(u.view)
+      }
+    })
+
+    const baseExtensions = [
+      lineNumbers(),
+      highlightActiveLine(),
+      highlightActiveLineGutter(),
+      drawSelection(),
+      dropCursor(),
+      history(),
+      EditorView.lineWrapping,
+      keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+      entryOverlayPlugin,
+      stripUpdateListener,
+    ]
+
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: CURRENT,
+        extensions: [...baseExtensions, mergeCompartment.of(buildMerge())],
+      }),
+      parent: document.getElementById('editor'),
+    })
+
+    renderStrip(view)
+
+    function flash(msg) {
+      statusEl.textContent = msg
+      setTimeout(() => {
+        if (statusEl.textContent === msg) statusEl.textContent = ''
+      }, 1800)
+    }
+
+    document.getElementById('save').onclick = () => {
+      baseline = view.state.doc.toString()
+      view.dispatch({ effects: mergeCompartment.reconfigure(buildMerge()) })
+      renderStrip(view)
+      view.focus()
+      flash('saved — baseline updated, chunks cleared')
+    }
+    document.getElementById('revert').onclick = () => {
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: baseline } })
+      view.focus()
+      flash('reverted — current reset to baseline')
+    }
+    perChunkCb.onchange = () => {
+      view.dispatch({ effects: mergeCompartment.reconfigure(buildMerge()) })
+      view.focus()
+    }
+    gutterCb.onchange = () => {
+      view.dispatch({ effects: mergeCompartment.reconfigure(buildMerge()) })
+      view.focus()
+    }
+
+    view.focus()
+  </script>
+</body>
+</html>

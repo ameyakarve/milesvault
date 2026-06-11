@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Logical Manuscript - Account Editor</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-container": "#fffbff",
+                    "tertiary-fixed-dim": "#ffb59a",
+                    "primary-fixed-dim": "#6bd8cb",
+                    "surface-variant": "#e0e3e5",
+                    "on-background": "#191c1e",
+                    "tertiary-fixed": "#ffdbce",
+                    "on-surface": "#191c1e",
+                    "surface-container-low": "#f2f4f6",
+                    "background": "#f7f9fb",
+                    "primary": "#00685f",
+                    "on-tertiary": "#ffffff",
+                    "on-surface-variant": "#3d4947",
+                    "on-secondary-fixed-variant": "#3a485b",
+                    "secondary-fixed": "#d5e3fc",
+                    "surface-dim": "#d8dadc",
+                    "on-primary-fixed-variant": "#005049",
+                    "on-error-container": "#93000a",
+                    "on-tertiary-fixed": "#370e00",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-fixed-variant": "#773215",
+                    "on-secondary-fixed": "#0d1c2e",
+                    "on-secondary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "primary-container": "#008378",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-primary": "#ffffff",
+                    "surface-container-highest": "#e0e3e5",
+                    "surface": "#f7f9fb",
+                    "secondary-container": "#d5e3fc",
+                    "surface-container-high": "#e6e8ea",
+                    "on-primary-fixed": "#00201d",
+                    "outline": "#6d7a77",
+                    "surface-container": "#eceef0",
+                    "on-secondary-container": "#57657a",
+                    "primary-fixed": "#89f5e7",
+                    "outline-variant": "#bcc9c6",
+                    "inverse-primary": "#6bd8cb",
+                    "surface-tint": "#006a61",
+                    "surface-bright": "#f7f9fb",
+                    "tertiary-container": "#b05e3d",
+                    "on-primary-container": "#f4fffc",
+                    "inverse-surface": "#2d3133",
+                    "secondary": "#515f74",
+                    "error": "#ba1a1a",
+                    "tertiary": "#924628",
+                    "secondary-fixed-dim": "#b9c7df",
+                    "on-error": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "fontFamily": {
+                    "headline": ["Inter"],
+                    "display": ["Inter"],
+                    "body": ["Inter"],
+                    "label": ["Inter"],
+                    "mono": ["JetBrains Mono"]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .gutter-num {
+            user-select: none;
+            text-align: right;
+            padding-right: 12px;
+            color: #bcc9c6;
+        }
+        .editor-container {
+            scrollbar-width: thin;
+            scrollbar-color: #e0e3e5 transparent;
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface overflow-hidden">
+<!-- 1. Left Side Rail (Immutable Style Execution) -->
+<aside class="fixed left-0 top-0 h-screen w-[48px] z-50 bg-[#f2f4f6] dark:bg-slate-900 flex flex-col items-center py-4 space-y-6 border-r border-slate-200">
+<div class="text-[#0D9488] font-black text-xl mb-4">M</div>
+<nav class="flex flex-col items-center space-y-6 flex-1">
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">dashboard</span></button>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">query_stats</span></button>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors"><span class="material-symbols-outlined">lightbulb</span></button>
+<button class="text-[#0D9488] dark:text-teal-400 transition-colors"><span class="material-symbols-outlined">account_balance</span></button>
+</nav>
+<button class="text-[#515f74] dark:text-slate-500 hover:text-[#0D9488] transition-colors mt-auto"><span class="material-symbols-outlined">settings</span></button>
+</aside>
+<!-- 2. Top App Bar -->
+<header class="fixed top-0 left-[48px] right-0 h-12 z-40 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-6">
+<div class="flex items-center space-x-2 font-sans text-sm tracking-tight">
+<span class="text-secondary">Ledger</span>
+<span class="text-outline-variant">/</span>
+<span class="text-secondary">Assets</span>
+<span class="text-outline-variant">/</span>
+<span class="text-secondary">Bank</span>
+<span class="text-outline-variant">/</span>
+<span class="text-on-surface font-medium">Checking</span>
+</div>
+<div class="flex items-center space-x-4">
+<span class="text-xs text-secondary italic">Unsaved Changes</span>
+<button class="bg-primary text-on-primary px-3 py-1.5 rounded-sm text-xs font-medium flex items-center space-x-2 hover:bg-primary-container transition-all duration-200">
+<span>Save ⌘S</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area Wrapper -->
+<main class="ml-[48px] pt-12 flex h-screen overflow-hidden">
+<!-- Left Editor Section -->
+<div class="flex-1 flex flex-col min-w-0">
+<!-- 3. Account Strip -->
+<section class="h-16 bg-surface-container-low px-8 flex items-center justify-between flex-shrink-0 border-b border-slate-100">
+<div class="flex flex-col">
+<h1 class="text-lg font-bold text-on-surface leading-tight">Bank Checking</h1>
+<span class="font-mono text-[10px] text-secondary tracking-tight">Liabilities:CreditCard:HDFC:DinersBlack</span>
+</div>
+<div class="text-right">
+<div class="font-mono font-bold text-2xl text-on-surface">₹1,32,450.00</div>
+</div>
+</section>
+<!-- 4. Main Editor Pane -->
+<div class="flex-1 flex overflow-hidden editor-container">
+<!-- Gutter (Line Numbers) -->
+<div class="w-12 bg-surface-container-high border-r border-outline-variant/10 py-4 font-mono text-[11px] leading-6 flex flex-col items-end">
+<span>1</span><span>2</span><span>3</span><span>4</span><span class="bg-primary-fixed text-on-primary-fixed w-full flex justify-end pr-3">5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span>18</span><span>19</span><span>20</span>
+</div>
+<!-- The Manuscript Text Area -->
+<div class="flex-1 bg-surface-container-lowest overflow-y-auto font-mono text-[13px] leading-6 py-4 px-6 focus:outline-none">
+<!-- Beancount Source Example -->
+<div class="whitespace-pre">
+<span class="text-primary">2023-11-20</span> <span class="font-bold text-on-surface">*</span> <span class="text-on-secondary-container">"Amazon India"</span> <span class="text-secondary">"Cloud Subscription"</span>
+<span class="text-on-background">Assets:Bank:Checking</span> <span class="text-on-surface-variant font-bold">-1,249.00</span> <span class="text-secondary">INR</span>
+<span class="text-on-background">Expenses:Services:AWS</span> <span class="text-on-surface-variant font-bold">1,249.00</span> <span class="text-secondary">INR</span>
+<span class="text-primary">2023-11-21</span> <span class="font-bold text-on-surface">!</span> <span class="text-on-secondary-container">"Starbucks Coffee"</span> <span class="text-secondary">"Morning Brew"</span>
+<span class="text-on-background">Assets:Bank:Checking</span> <span class="text-on-surface-variant font-bold">-450.00</span> <span class="text-secondary">INR</span>
+<span class="text-on-background">Expenses:Food:Coffee</span> <span class="text-on-surface-variant font-bold">450.00</span> <span class="text-secondary">INR</span>
+<span class="text-primary">2023-11-22</span> <span class="font-bold text-on-surface">*</span> <span class="text-on-secondary-container">"HDFC Bank"</span> <span class="text-secondary">"Interest Credit"</span>
+<span class="text-on-background">Assets:Bank:Checking</span> <span class="text-on-surface-variant font-bold">3,450.00</span> <span class="text-secondary">INR</span>
+<span class="text-on-background">Income:Interest</span> <span class="text-on-surface-variant font-bold">-3,450.00</span> <span class="text-secondary">INR</span>
+<span class="text-primary">2023-11-23</span> <span class="font-bold text-on-surface">*</span> <span class="text-on-secondary-container">"Apple Store"</span> <span class="text-secondary">"App Store Purchase"</span>
+<span class="text-on-background">Assets:Bank:Checking</span> <span class="text-on-surface-variant font-bold">-199.00</span> <span class="text-secondary">INR</span>
+<span class="text-on-background">Expenses:Digital:Apps</span> <span class="text-on-surface-variant font-bold">199.00</span> <span class="text-secondary">INR</span>
+<span class="text-primary">2023-11-24</span> <span class="font-bold text-on-surface">*</span> <span class="text-on-secondary-container">"Zomato Limited"</span> <span class="text-secondary">"Dinner Order"</span>
+<span class="text-on-background">Assets:Bank:Checking</span> <span class="text-on-surface-variant font-bold">-890.00</span> <span class="text-secondary">INR</span>
+<span class="text-on-background">Expenses:Food:Delivery</span> <span class="text-on-surface-variant font-bold">890.00</span> <span class="text-secondary">INR</span>
+</div>
+</div>
+<!-- 5. Right Gutter (Running Balances) -->
+<div class="w-[120px] bg-surface-container-low border-l border-outline-variant/10 font-mono text-[10px] py-4 leading-6">
+<div class="px-3 flex flex-col space-y-0 text-right h-full">
+<div class="h-6"></div><div class="h-6 text-error">-1,249.00</div><div class="h-6 text-primary">1,31,000.00</div>
+<div class="h-6"></div><div class="h-6 text-error">-450.00</div><div class="h-6 text-primary">1,30,550.00</div>
+<div class="h-6"></div><div class="h-6 text-primary">3,450.00</div><div class="h-6 text-primary">1,34,000.00</div>
+<div class="h-6"></div><div class="h-6 text-error">-199.00</div><div class="h-6 text-primary">1,33,801.00</div>
+<div class="h-6"></div><div class="h-6 text-error">-890.00</div><div class="h-6 text-primary">1,32,911.00</div>
+</div>
+</div>
+</div>
+</div>
+<!-- 6. Right Sidebar (Outline & AI) -->
+<aside class="w-[320px] bg-surface-container-low border-l border-slate-100 flex flex-col overflow-hidden">
+<div class="p-4 border-b border-slate-200 bg-surface-container">
+<h3 class="text-[11px] font-bold uppercase tracking-wider text-secondary">Outline</h3>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-1">
+<div class="p-2 bg-surface-container-lowest rounded-sm text-xs border-l-2 border-primary flex justify-between">
+<span class="font-medium">24 Nov - Zomato Limited</span>
+<span class="text-secondary">890.00</span>
+</div>
+<div class="p-2 hover:bg-surface-container-highest rounded-sm text-xs flex justify-between transition-colors">
+<span class="text-on-surface-variant">23 Nov - Apple Store</span>
+<span class="text-secondary">199.00</span>
+</div>
+<div class="p-2 hover:bg-surface-container-highest rounded-sm text-xs flex justify-between transition-colors">
+<span class="text-on-surface-variant">22 Nov - HDFC Bank</span>
+<span class="text-primary font-medium">3,450.00</span>
+</div>
+<div class="p-2 hover:bg-surface-container-highest rounded-sm text-xs flex justify-between transition-colors">
+<span class="text-on-surface-variant">21 Nov - Starbucks Coffee</span>
+<span class="text-secondary">450.00</span>
+</div>
+<div class="p-2 hover:bg-surface-container-highest rounded-sm text-xs flex justify-between transition-colors">
+<span class="text-on-surface-variant">20 Nov - Amazon India</span>
+<span class="text-secondary">1,249.00</span>
+</div>
+<div class="mt-6">
+<img class="w-full h-32 object-cover rounded-sm grayscale contrast-125 opacity-40 mix-blend-multiply" data-alt="minimal desk setup with high-end mechanical keyboard and financial journal in soft natural light office setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdlQOpIzhOC-XiImjTSrTOUgOG-YuMN0A5v5j9wI8wTj_nUgqjZVDpdULrV-aybVRsvPzdezF7N-9g4ZP4mjRbTyBem3VGGjZkxZJ7nPRe8r5TUQG17XS8cWbem0UkZbmz2o2Al14c2Z-8NK4WmL0MPTVuE39j-ersq5hg1dbyiu6rvYCwgrtWetSD3t97syNqED42k6JlyGszAHlYmOJrNff7ma8NjuU1isq5VQ8CETsfx9nFbPcSzEvoLTr5-beFS4NUUp0N3uEE"/>
+</div>
+</div>
+<!-- AI Assistant Prompt Area -->
+<div class="p-4 bg-surface-container-high border-t border-slate-200">
+<div class="flex items-center space-x-2 text-[10px] font-bold text-primary mb-2">
+<span class="material-symbols-outlined text-[14px]">auto_awesome</span>
+<span class="uppercase tracking-widest">AI Manuscript Assistant</span>
+</div>
+<div class="relative">
+<textarea class="w-full bg-surface-container-lowest border-outline-variant/30 rounded-sm text-xs p-3 h-20 resize-none focus:ring-1 focus:ring-primary focus:border-primary placeholder:italic" placeholder="Ask to balance a transaction or summarize spending..."></textarea>
+<div class="absolute bottom-2 right-2 flex space-x-1">
+<kbd class="text-[9px] bg-surface-container-highest px-1.5 py-0.5 rounded border border-outline-variant/30 text-secondary">Ctrl</kbd>
+<kbd class="text-[9px] bg-surface-container-highest px-1.5 py-0.5 rounded border border-outline-variant/30 text-secondary">Enter</kbd>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- 7. Bottom Status Bar -->
+<footer class="fixed bottom-0 left-[48px] right-0 h-[28px] z-40 bg-[#f2f4f6] dark:bg-slate-900 border-t border-slate-200 flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-secondary">
+<div class="flex items-center space-x-6">
+<span class="hover:text-primary transition-colors cursor-default">Ln 24, Col 8</span>
+<span class="text-[#0D9488] font-bold flex items-center space-x-1">
+<span class="material-symbols-outlined text-[12px]">check_circle</span>
+<span>Parsed</span>
+</span>
+<span class="hover:text-primary transition-colors cursor-default">12 txns</span>
+</div>
+<div class="flex items-center space-x-4">
+<span class="flex items-center space-x-1">
+<span class="w-2 h-2 rounded-full bg-[#0D9488]"></span>
+<span>Ready</span>
+</span>
+<span class="hover:text-primary transition-colors">Beancount v2.3.5</span>
+<span class="material-symbols-outlined text-[14px] hover:text-primary transition-colors cursor-pointer">notifications</span>
+</div>
+</footer>
+</body></html>

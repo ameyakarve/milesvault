@@ -56,6 +56,7 @@ export const ledgerClient = {
     mode?: 'inbox'
     filename: string
     text: string
+    images?: string[]
   }): Promise<{ id: string }> {
     return postJSON('/api/statements', body)
   },

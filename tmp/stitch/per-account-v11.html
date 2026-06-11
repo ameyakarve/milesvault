@@ -1,0 +1,253 @@
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MilesVault — Nav Chrome Option 2</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;family=JetBrains+Mono:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "secondary-container": "#E2E8F0",
+                        "secondary-fixed": "#d5e3fd",
+                        "background": "#F4F6F8",
+                        "surface-tint": "#0D9488",
+                        "primary-fixed-dim": "#5eead4",
+                        "on-secondary-fixed": "#0d1c2f",
+                        "outline": "#E2E8F0",
+                        "on-error-container": "#7F1D1D",
+                        "secondary-fixed-dim": "#b9c7e0",
+                        "tertiary-fixed-dim": "#b7c8e1",
+                        "surface-container-high": "#f2f3ff",
+                        "tertiary": "#14B8A6",
+                        "on-tertiary": "#ffffff",
+                        "surface-container": "#F4F6F8",
+                        "on-background": "#131b2e",
+                        "error-container": "#FEE2E2",
+                        "inverse-on-surface": "#f2f3ff",
+                        "on-primary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#334155",
+                        "on-tertiary-fixed-variant": "#38485d",
+                        "on-secondary-fixed-variant": "#3a485c",
+                        "on-primary-fixed-variant": "#0f766e",
+                        "surface-container-low": "#F4F6F8",
+                        "surface-dim": "#F4F6F8",
+                        "tertiary-container": "#CCFBF1",
+                        "outline-variant": "#CBD5E1",
+                        "on-tertiary-fixed": "#0b1c30",
+                        "on-surface": "#131b2e",
+                        "primary": "#0D9488",
+                        "surface-bright": "#ffffff",
+                        "tertiary-fixed": "#d3e4fe",
+                        "error": "#EF4444",
+                        "primary-fixed": "#99f6e4",
+                        "surface": "#ffffff",
+                        "surface-container-highest": "#eaedff",
+                        "on-surface-variant": "#334155",
+                        "inverse-primary": "#5eead4",
+                        "on-secondary-container": "#1E293B",
+                        "surface-variant": "#F1F5F9",
+                        "on-primary-fixed": "#001f28",
+                        "primary-container": "#f0fdfa",
+                        "inverse-surface": "#0F172A",
+                        "on-tertiary-container": "#134E4A",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#042f2e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "fontFamily": {
+                        "headline": ["Inter"],
+                        "display": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .mono-data { font-family: 'JetBrains Mono', monospace; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 10px; }
+        .active-teal-accent { background-color: #14B8A6 !important; }
+    </style>
+</head><body class="bg-slate-200 min-h-screen flex font-body overflow-hidden">
+<div class="w-full h-screen flex bg-slate-50">
+<!-- Left Sidebar: Icon Rail -->
+<nav class="bg-white border-r border-slate-200 flex flex-col items-center py-4 gap-6 w-[64px] h-screen shrink-0">
+<div class="w-8 h-8 active-teal-accent flex items-center justify-center rounded-[6px] text-white font-black text-lg">M</div>
+<div class="flex flex-col gap-4">
+<div class="p-2 text-slate-400 hover:text-teal-500 transition-all cursor-pointer"><span class="material-symbols-outlined">dashboard</span></div>
+<div class="p-2 text-slate-400 hover:text-teal-500 transition-all cursor-pointer"><span class="material-symbols-outlined">analytics</span></div>
+<div class="p-2 text-slate-400 hover:text-teal-500 transition-all cursor-pointer"><span class="material-symbols-outlined">lightbulb</span></div>
+<div class="p-2 bg-teal-50 text-teal-600 border-r-2 border-teal-500 cursor-pointer"><span class="material-symbols-outlined">account_balance</span></div>
+</div>
+<div class="mt-auto flex flex-col items-center gap-4 mb-4 pt-6">
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-slate-200" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCOxr9-cU_KoE3CTmQRvSN_wIp719XCoH9ppHvA_l4dQDxOMM-r9-Ca6qrHjTd9J_gl5oKyz6acsIrSOU8dSFwAwdgjsZhEjY3dTxEixtDirpFrYSfobRVvh37iigiwiz7RNqTtEewLZoLtDfC30BiQTPR-i4G7B0lVfa0JVjISb2ErV3aPpI0HdB8DPMxKVbFwqS2FPlOoYIWkEp7d33yXark6x6nhgm8dW6lgdR9J-LGDRZ-S1AvaMMrad9TrWfeWMRmte_kFQ-N4"/>
+</div></nav>
+<!-- Main Workspace -->
+<main class="flex-1 flex flex-col min-w-0 bg-slate-50 relative">
+<!-- Top Nav Bar -->
+<div class="h-[56px] bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
+<div class="flex items-center gap-4">
+<div class="text-[13px] font-body flex items-center gap-2">
+<span class="text-slate-500">Ledger</span>
+<span class="text-slate-300">/</span>
+<span class="text-slate-500">Liabilities</span>
+<span class="text-slate-300">/</span>
+<span class="text-slate-500">CreditCard</span>
+<span class="text-slate-300">/</span>
+<span class="text-slate-700">HDFC</span>
+</div>
+<button class="flex items-center gap-1 bg-white border border-slate-200 rounded-[4px] h-[32px] px-3 text-[13px] font-medium text-slate-900 hover:bg-slate-50">
+HDFC Diners Black
+<span class="material-symbols-outlined text-[16px] text-slate-500">expand_more</span>
+</button>
+</div>
+<div class="flex items-center gap-2 text-slate-500">
+<button class="p-1.5 hover:bg-slate-100 rounded text-slate-500 transition-colors"><span class="material-symbols-outlined text-[20px]">search</span></button>
+<button class="p-1.5 hover:bg-slate-100 rounded text-slate-500 transition-colors"><span class="material-symbols-outlined text-[20px]">settings</span></button>
+</div>
+</div>
+<!-- Account Header Strip -->
+<div class="px-6 py-4 border-b border-slate-100 flex flex-col gap-2 shrink-0">
+<div class="flex items-center justify-between">
+<div class="flex flex-col gap-1">
+<h1 class="font-bold text-[18px] text-slate-900 leading-none">HDFC Diners Black</h1>
+<div class="mono-data text-[12px] text-slate-400 leading-none">Liabilities:CreditCard:HDFC:DinersBlack</div>
+</div>
+<div class="mono-data font-bold text-[28px] text-slate-900 leading-none text-right">-₹47,820.00</div>
+</div>
+</div>
+<!-- Sticky Dirty Bar -->
+<div class="h-[40px] bg-teal-50 px-6 flex justify-between items-center shrink-0 sticky top-0 z-10 text-teal-700 border border-slate-200">
+<div class="text-[12px] text-slate-500">Unsaved changes · last saved 14:32</div>
+<div class="flex items-center gap-3">
+<button class="border border-slate-300 bg-white text-slate-700 text-[13px] font-medium hover:bg-slate-50 px-3 py-1 rounded shadow-sm">Revert</button>
+<button class="bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-medium px-3 py-1 rounded shadow-sm flex items-center gap-1"><span>Save</span><span class="text-[11px] bg-teal-700 px-1.5 py-0.5 rounded ml-1.5">⌘S</span></button>
+</div>
+</div>
+<!-- Ledger Table Container -->
+<div class="flex-1 overflow-y-auto">
+<div class="min-w-[800px]">
+<!-- Header -->
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-2 bg-slate-50/50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-widest text-slate-500 sticky top-0 z-0 hover:bg-slate-50">
+<div></div>
+<div class="pl-0">DATE</div>
+<div>PAYEE · NARRATION</div>
+<div class="text-right">DEBIT</div>
+<div class="text-right">CREDIT</div>
+<div class="text-right">BALANCE</div>
+</div>
+<!-- Row 1 -->
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-3 border-b border-slate-100 items-center hover:bg-white transition-colors cursor-pointer group hover:bg-slate-50">
+<div class="text-slate-400 group-hover:text-slate-600"><span class="material-symbols-outlined text-[18px]">chevron_right</span></div>
+<div class="mono-data text-[13px] text-slate-400">Apr 22</div>
+<div class="text-[13px] truncate"><span class="font-bold text-slate-800">Amazon</span> <span class="text-slate-500">· Groceries</span></div>
+<div class="mono-data text-[13px] text-right text-slate-900">2,340.00</div>
+<div class="mono-data text-[13px] text-right text-slate-400">—</div>
+<div class="mono-data text-[13px] text-right text-slate-600">-47,820.00</div>
+</div>
+<!-- Row 2 -->
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-3 border-b border-slate-100 items-center hover:bg-white transition-colors cursor-pointer group hover:bg-slate-50">
+<div class="text-slate-400 group-hover:text-slate-600"><span class="material-symbols-outlined text-[18px]">chevron_right</span></div>
+<div class="mono-data text-[13px] text-slate-400">Apr 20</div>
+<div class="text-[13px] truncate"><span class="font-bold text-slate-800">HDFC</span> <span class="text-slate-500">· Statement payment</span></div>
+<div class="mono-data text-[13px] text-right text-slate-400">—</div>
+<div class="mono-data text-[13px] text-right text-teal-600">35,000.00</div>
+<div class="mono-data text-[13px] text-right text-slate-600">-45,480.00</div>
+</div>
+<!-- Row 3 (EXPANDED) -->
+<div class="bg-white border-b border-slate-100 shadow-sm">
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-3 items-center cursor-pointer hover:bg-slate-50">
+<div class="text-teal-500"><span class="material-symbols-outlined text-[18px] rotate-90">expand_more</span></div>
+<div class="mono-data text-[13px] text-slate-400">Apr 18</div>
+<div class="text-[13px] truncate"><span class="font-bold text-slate-800">Lufthansa</span> <span class="text-slate-500">· LH761 BLR-FRA</span></div>
+<div class="mono-data text-[13px] text-right text-slate-900">38,420.00</div>
+<div class="mono-data text-[13px] text-right text-slate-400">—</div>
+<div class="mono-data text-[13px] text-right text-slate-600">-80,480.00</div>
+</div>
+<!-- Source Pane -->
+<div class="ml-[56px] mr-6 mb-4 bg-slate-50 border border-slate-200 p-5 rounded">
+<pre class="mono-data text-[12.5px] leading-[1.6] m-0"><span class="text-teal-600">2024-04-18</span> <span class="text-slate-700">* "Lufthansa" "LH761 BLR-FRA"</span>
+  <span class="text-slate-700">Expenses:Travel:Airfare</span>                 <span class="font-bold text-slate-900">38,420.00</span> <span class="text-slate-500">INR</span>
+  <span class="text-slate-700">Liabilities:CreditCard:HDFC:DinersBlack</span></pre></div>
+</div>
+<!-- Row 4 -->
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-3 border-b border-slate-100 items-center hover:bg-white transition-colors cursor-pointer group hover:bg-slate-50">
+<div class="text-slate-400 group-hover:text-slate-600"><span class="material-symbols-outlined text-[18px]">chevron_right</span></div>
+<div class="mono-data text-[13px] text-slate-400">Apr 15</div>
+<div class="text-[13px] truncate"><span class="font-bold text-slate-800">HDFC</span> <span class="text-slate-500">· Cashback credit</span></div>
+<div class="mono-data text-[13px] text-right text-slate-400">—</div>
+<div class="mono-data text-[13px] text-right text-teal-600">120.00</div>
+<div class="mono-data text-[13px] text-right text-slate-600">-42,060.00</div>
+</div>
+<!-- Row 5 -->
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-3 border-b border-slate-100 items-center hover:bg-white transition-colors cursor-pointer group hover:bg-slate-50">
+<div class="text-slate-400 group-hover:text-slate-600"><span class="material-symbols-outlined text-[18px]">chevron_right</span></div>
+<div class="mono-data text-[13px] text-slate-400">Apr 10</div>
+<div class="text-[13px] truncate"><span class="font-bold text-slate-800">Swiggy</span> <span class="text-slate-500">· Dining</span></div>
+<div class="mono-data text-[13px] text-right text-slate-900">890.00</div>
+<div class="mono-data text-[13px] text-right text-slate-400">—</div>
+<div class="mono-data text-[13px] text-right text-slate-600">-42,180.00</div>
+</div>
+<!-- Row 6 -->
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-3 border-b border-slate-100 items-center hover:bg-white transition-colors cursor-pointer group hover:bg-slate-50">
+<div class="text-slate-400 group-hover:text-slate-600"><span class="material-symbols-outlined text-[18px]">chevron_right</span></div>
+<div class="mono-data text-[13px] text-slate-400">Apr 05</div>
+<div class="text-[13px] truncate"><span class="font-bold text-slate-800">HDFC</span> <span class="text-slate-500">· Annual fee</span></div>
+<div class="mono-data text-[13px] text-right text-slate-900">10,000.00</div>
+<div class="mono-data text-[13px] text-right text-slate-400">—</div>
+<div class="mono-data text-[13px] text-right text-slate-600">-41,290.00</div>
+</div>
+<!-- Row 7 -->
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-3 border-b border-slate-100 items-center hover:bg-white transition-colors cursor-pointer group hover:bg-slate-50">
+<div class="text-slate-400 group-hover:text-slate-600"><span class="material-symbols-outlined text-[18px]">chevron_right</span></div>
+<div class="mono-data text-[13px] text-slate-400">Mar 30</div>
+<div class="text-[13px] truncate"><span class="font-bold text-slate-800">Uber</span> <span class="text-slate-500">· Dining</span></div>
+<div class="mono-data text-[13px] text-right text-slate-900">540.00</div>
+<div class="mono-data text-[13px] text-right text-slate-400">—</div>
+<div class="mono-data text-[13px] text-right text-slate-600">-31,290.00</div>
+</div>
+<!-- Row 8 -->
+<div class="grid grid-cols-[24px_100px_1fr_120px_120px_140px] px-6 py-3 border-b border-slate-100 items-center hover:bg-white transition-colors cursor-pointer group hover:bg-slate-50">
+<div class="text-slate-400 group-hover:text-slate-600"><span class="material-symbols-outlined text-[18px]">chevron_right</span></div>
+<div class="mono-data text-[13px] text-slate-400">Mar 28</div>
+<div class="text-[13px] truncate"><span class="font-bold text-slate-800">BookMyShow</span> <span class="text-slate-500">· Entertainment</span></div>
+<div class="mono-data text-[13px] text-right text-slate-900">1,200.00</div>
+<div class="mono-data text-[13px] text-right text-slate-400">—</div>
+<div class="mono-data text-[13px] text-right text-slate-600">-30,750.00</div>
+</div>
+<!-- Footer Hint -->
+<div class="py-6 flex justify-center text-slate-400 mono-data text-[11px]">↓ 39 more</div>
+</div>
+</div>
+</main>
+<!-- AI Rail -->
+<aside class="w-[360px] bg-slate-50 border-l border-slate-200 flex flex-col shrink-0">
+<div class="flex-1 p-6 flex items-center justify-center"><div class="w-[80%] h-[120px] border-2 border-dashed rounded-lg flex items-center justify-center text-slate-300 text-[13px] mx-auto border-slate-300">AI assistant coming soon</div></div>
+<div class="p-4 bg-white border-t border-slate-200">
+<div class="relative flex items-end bg-white border border-slate-200 rounded-lg p-2 focus-within:ring-1 focus-within:ring-teal-500 focus-within:border-teal-500">
+<textarea class="w-full bg-transparent border-none focus:ring-0 resize-none text-[13px] text-slate-700 placeholder-slate-400 p-1" placeholder="Ask AI about this ledger..." rows="1"></textarea>
+<div class="flex items-center gap-1 ml-2 shrink-0"><button class="p-1.5 text-slate-400 hover:text-teal-600 transition-colors rounded-md hover:bg-teal-50"><span class="material-symbols-outlined text-[18px]">mic</span></button>
+<button class="p-1.5 hover:text-teal-700 transition-colors rounded-md hover:bg-teal-50"><span class="material-symbols-outlined text-[18px]">send</span></button></div>
+</div>
+</div>
+</aside>
+</div>
+</body></html>

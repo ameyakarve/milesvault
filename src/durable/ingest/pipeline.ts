@@ -135,7 +135,12 @@ export type ExtractedStatement = z.infer<typeof ZStatement>
 
 // ---- JSON-only model call ------------------------------------------------------
 
-export type GenFn = (system: string, prompt: string, maxTokens: number) => Promise<string>
+export type GenFn = (opts: {
+  system: string
+  prompt: string
+  maxTokens: number
+  images?: string[]
+}) => Promise<string>
 
 function firstJsonBlock(text: string): string | null {
   const start = text.indexOf('{')
@@ -170,12 +175,13 @@ async function genJson<T>(
   system: string,
   prompt: string,
   maxTokens: number,
+  images?: string[],
   attempts = 3,
 ): Promise<{ value: T | null; error: string | null }> {
   let lastError = ''
   let p = prompt
   for (let i = 0; i < attempts; i++) {
-    const text = await gen(system, p, maxTokens)
+    const text = await gen({ system, prompt: p, maxTokens, images })
     const block = firstJsonBlock(text)
     if (!block) {
       lastError = 'no JSON object in output'
@@ -412,6 +418,12 @@ ${opts.statementText}`
 // the long generation alive.
 const EXTRACT_MAX_TOKENS = 32768
 
+// Vision path: the page images are attached; the system prompt
+// (buildStatementIrSystem) carries every extraction rule. The user turn
+// just points the model at the images.
+const VISION_EXTRACT_INSTRUCTION =
+  'The attached images are the pages of a credit-card statement. Read them and output the single JSON object of entries per the rules above — every transaction and every stated balance (including any reward-points balance printed on the statement).'
+
 export type PipelineResult = {
   ok: boolean
   entries: string[]
@@ -430,7 +442,9 @@ export type PipelineResult = {
 export async function runDraftPipeline(deps: {
   gen: GenFn
   kb: KbHttp
+  // Text path (email/text statements) OR images (vision path for PDFs).
   statementText: string
+  images?: string[]
   accounts: readonly string[]
   // The shared convention stack (buildStatementIrSystem) — injected so this
   // module stays free of the generated-prompt import cycle.
@@ -441,7 +455,15 @@ export async function runDraftPipeline(deps: {
 
   // 1. Identify the card (tiny call) → guide → rate, so the guide's
   //    exclusion rules ride the extraction prompt.
-  const cardRes = await genJson(deps.gen, ZCard, CARD_SYSTEM, deps.statementText.slice(0, 4000), 256)
+  const useVision = (deps.images?.length ?? 0) > 0
+  const cardRes = await genJson(
+    deps.gen,
+    ZCard,
+    CARD_SYSTEM,
+    useVision ? 'Identify the credit card from this statement page.' : deps.statementText.slice(0, 4000),
+    256,
+    useVision ? deps.images!.slice(0, 1) : undefined,
+  )
   stages.card = { name: cardRes.value?.card_name, error: cardRes.error ?? undefined }
   let guide: CardGuideResult = cardRes.value
     ? await fetchCardGuide(deps.kb, cardRes.value.card_name)
@@ -483,7 +505,14 @@ export async function runDraftPipeline(deps: {
   let prompt = basePrompt
   let lastExtractError: string | null = null
   for (let attempt = 0; attempt < 3; attempt++) {
-    const ext = await genJson(deps.gen, ZStatement, deps.system, prompt, EXTRACT_MAX_TOKENS)
+    const ext = await genJson(
+      deps.gen,
+      ZStatement,
+      deps.system,
+      useVision ? VISION_EXTRACT_INSTRUCTION + (validation_issues.length ? `\n\nFix these from your previous output:\n${validation_issues.join('\n')}` : '') : prompt,
+      EXTRACT_MAX_TOKENS,
+      useVision ? deps.images : undefined,
+    )
     if (ext.value === null) {
       lastExtractError = ext.error ?? 'unknown'
       stages.extract = { txns: 0, balances: 0, error: lastExtractError }

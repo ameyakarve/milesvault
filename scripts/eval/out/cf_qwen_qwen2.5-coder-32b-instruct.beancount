@@ -1,0 +1,127 @@
+```beancount
+2026-04-17 * "ASH CRADLE,BANGALORE" "MEDICAL"
+  Expenses:Healthcare:Medical   800.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -800.00 INR
+
+2026-04-20 * "RAZ*MAGNIFY CLUB,BENGALURU U" "DEPT STORES"
+  Expenses:Shopping:DeptStores  10155.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -10155.00 INR
+
+2026-04-20 * "AMAZON PAY INDIA PRIVA,BANGALORE" "MISC STORE"
+  Expenses:Shopping:Misc        10000.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -10000.00 INR
+
+2026-04-21 * "FIREFLY COFFEE ROASTE,BANGALORE" "RESTAURANTS"
+  Expenses:Food:Restaurants     460.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -460.00 INR
+
+2026-04-24 * "CAS*SWIGGY,BENGALURU" "FOOD PRODUCTS"
+  Expenses:Food:Groceries       1065.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -1065.00 INR
+
+2026-04-24 * "NETFLIX,MUMBAI" "MISCELLANEOUS"
+  Expenses:Entertainment:Streaming  499.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -499.00 INR
+
+2026-04-24 * "AMADORAGOURMET ICE CR,BANGALORE" "FOOD PRODUCTS"
+  Expenses:Food:Groceries       170.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -170.00 INR
+
+2026-04-25 * "EAZYDINER,GURGAON" "RESTAURANTS"
+  Expenses:Food:Restaurants     1290.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -1290.00 INR
+
+2026-04-25 * "BUNDL TECHNOLOGIES,BENGALURU" "DEPT STORES"
+  Expenses:Shopping:DeptStores  2043.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -2043.00 INR
+
+2026-04-25 * "PYU*FSN ECOMMERCE VENT,MUMBAI" "CLOTH STORES"
+  Expenses:Shopping:Clothing    4959.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -4959.00 INR
+
+2026-04-25 * "RAZ*SWIGGY,BENGALURU" "FOOD PRODUCTS"
+  Expenses:Food:Groceries       353.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -353.00 INR
+
+2026-04-26 * "RSP*INSTAMART,BANGALORE" "DEPT STORES"
+  Expenses:Shopping:DeptStores  173.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -173.00 INR
+
+2026-04-26 * "CLOUDFLARE,SAN FRANCISCO" "RETAIL STORES"
+  Expenses:Shopping:Misc        9.28 USD @@ 875.30 INR
+  Expenses:Bank:ForexMarkup     17.51 INR
+  Expenses:Tax:GST              3.15 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -895.96 INR
+
+2026-04-26 * "THIRD WAVE COFFEE,BANGALORE" "RESTAURANTS"
+  Expenses:Food:Restaurants     285.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -285.00 INR
+
+2026-04-26 * "THIRD WAVE COFFEE,BANGALORE" "RESTAURANTS"
+  Expenses:Food:Restaurants     285.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -285.00 INR
+
+2026-04-27 * "ELITE AUTOMOBILES PVT,BENGALURU" "AUTO SERVICES"
+  Expenses:Transport:AutoServices  20830.00 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -20830.00 INR
+
+2026-04-28 * "REINCUBATE,LONDON" "RETAIL STORES"
+  Expenses:Shopping:Misc        49.99 USD @@ 4713.75 INR
+  Expenses:Bank:ForexMarkup     94.28 INR
+  Expenses:Tax:GST              40.18 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -5252.21 INR
+
+2026-04-29 * "CLAUDE.AI SUBSCRIPTION,SAN FRANCISCO" "RETAIL STORES"
+  Expenses:Software:Subscription  118.00 USD @@ 11161.76 INR
+  Expenses:Bank:ForexMarkup     223.24 INR
+  Expenses:Tax:GST              16.97 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -11401.97 INR
+
+2026-05-01 * "ELEVENLABS.IO,NEW YORK" "RETAIL STORES"
+  Expenses:Shopping:Misc        519.20 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -519.20 INR
+
+2026-05-02 * "DCC MARKUP"
+  Expenses:Bank:ForexMarkup     7.79 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -7.79 INR
+
+2026-05-02 * "GST"
+  Expenses:Tax:GST              1.40 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -1.40 INR
+
+2026-05-07 * "PIKAPODS.COM,NAXXAR" "RETAIL STORES"
+  Expenses:Shopping:Misc        20.00 USD @@ 1893.43 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -1893.43 INR
+
+2026-05-08 * "GST"
+  Expenses:Tax:GST              20.97 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -20.97 INR
+
+2026-05-08 * "CLOUDFLARE,SAN FRANCISCO" "RETAIL STORES"
+  Expenses:Shopping:Misc        61.71 USD @@ 5825.78 INR
+  Expenses:Bank:ForexMarkup     116.52 INR
+  Expenses:Tax:GST              6.82 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -5948.12 INR
+
+2026-05-11 * "AMAZON PAY INDIA PRIVA,BANGALORE" "MISC STORE"
+  Expenses:Shopping:Misc        1764.64 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -1764.64 INR
+
+2026-05-12 * "FAL FEATURES LABELS,SAN FRANCISCO" "RETAIL STORES"
+  Expenses:Shopping:Misc        10.00 USD @@ 953.20 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -953.20 INR
+
+2026-05-13 * "CLOUDFLARE,SAN FRANCISCO" "RETAIL STORES"
+  Expenses:Shopping:Misc        2.36 USD @@ 225.98 INR
+  Expenses:Bank:ForexMarkup     4.52 INR
+  Expenses:Tax:GST              0.81 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467  -231.31 INR
+
+2026-05-14 * "AMAZON PAY INDIA PRIVA,BANGALORE" "MISC STORE"
+  Expenses:Shopping:Misc        -877.82 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467   877.82 INR
+
+2026-05-14 * "AMAZON PAY INDIA PRIVA,BANGALORE" "MISC STORE"
+  Expenses:Shopping:Misc        -877.82 INR
+  Liabilities:CreditCards:Axis:MagnusBurgundy:3467   877.82 INR
+```
