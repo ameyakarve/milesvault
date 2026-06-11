@@ -376,7 +376,6 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
   // postings. The transactions → postings cascade fires the DELETE triggers
   // automatically, so replaceBuffer's batched writes never need to touch these
   // tables directly. Both are rebuildable from postings via
-  // LedgerDO.rebuild_balances().
   //
   // `balance_totals` — one row per (account, currency, scale); current
   // cumulative balance. Hot path for "list all accounts with their current
