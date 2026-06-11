@@ -16,7 +16,7 @@ export const Default: StoryObj = {
           last_activity: 20260518,
         }}
         names={{}}
-        spend={[{ currency: 'INR', total: 87398, window: 'statement' }]}
+        spend={[{ currency: 'INR', total: 87398 }]}
       />
       <CreditCardCard
         row={{

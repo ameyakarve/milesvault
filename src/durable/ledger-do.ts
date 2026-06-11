@@ -144,7 +144,7 @@ export type VaultStats = {
   // Per-card charges (negative postings on the liability). Window: between
   // the card's two most recent balance assertions (= the imported statement
   // cycle) when they exist, else the stats period (month-to-date).
-  card_spend: Array<{ account: string; currency: string; total: number; window: 'statement' | 'month' }>
+  card_spend: Array<{ account: string; currency: string; total: number }>
   bank_total: Array<{ currency: string; total: number }>
   expense_total: Array<{ currency: string; total: number }>
   expense_categories: Array<{ category: string; currency: string; total: number }>
@@ -361,38 +361,39 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       account: string
       currency: string
       total: number
-      window: 'statement' | 'month'
     }> = []
+    // Charges in the trailing 90 days (owner call: a plain rolling window,
+    // not the vague 'last statement'). toInt is YYYYMMDD; subtract 90 days.
+    const toDate = new Date(
+      Date.UTC(
+        Math.floor(opts.toInt / 10000),
+        Math.floor((opts.toInt % 10000) / 100) - 1,
+        opts.toInt % 100,
+      ),
+    )
+    const fromDate = new Date(toDate.getTime() - 90 * 86400000)
+    const fromInt =
+      fromDate.getUTCFullYear() * 10000 +
+      (fromDate.getUTCMonth() + 1) * 100 +
+      fromDate.getUTCDate()
     for (const account of cardAccounts) {
-      // The two latest assertions bracket the imported statement cycle.
-      const asserts = this.db
-        .exec<{ date: number }>(
-          `SELECT date FROM directives_balance WHERE account = ? ORDER BY date DESC LIMIT 2`,
-          account,
-        )
-        .toArray()
-      const window: 'statement' | 'month' = asserts.length === 2 ? 'statement' : 'month'
-      const [fromInt, toInt] =
-        asserts.length === 2
-          ? [asserts[1]!.date, asserts[0]!.date]
-          : [opts.fromInt, opts.toInt]
       const sums = new Map<string, number>()
       for (const r of this.db
         .exec<{ currency: string; scale: number; s: number | null }>(
           `SELECT currency, scale, SUM(-amount_scaled) AS s
            FROM postings
-           WHERE account = ? AND amount_scaled < 0 AND date >= ? AND date < ?
+           WHERE account = ? AND amount_scaled < 0 AND date >= ? AND date <= ?
            GROUP BY currency, scale`,
           account,
           fromInt,
-          toInt,
+          opts.toInt,
         )
         .toArray()) {
         sums.set(r.currency, (sums.get(r.currency) ?? 0) + toDec(r.s ?? 0, r.scale))
       }
       if (sums.size === 0) sums.set('INR', 0)
       for (const [currency, total] of sums) {
-        card_spend.push({ account, currency, total, window })
+        card_spend.push({ account, currency, total })
       }
     }
 
@@ -1455,13 +1456,18 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       try {
         currencies = JSON.parse(r.constraint_currencies) as string[]
       } catch {}
-      // Unconstrained opens (multi-ticker wallets) still surface as a
-      // zero row so a freshly created programme shows on the Vault.
+      // Unconstrained opens (multi-ticker wallets) surface as a zero
+      // placeholder ONLY when the account has no real balance anywhere —
+      // including a :Pending child. Otherwise the placeholder duplicated a
+      // wallet that already shows its true commodity (the '0 pts' dupes).
       const list = currencies.length > 0 ? currencies : ['']
+      const hasBalance = [...map.keys()].some((k) => {
+        const acct = k.slice(0, k.lastIndexOf('|'))
+        return acct === r.account || acct.startsWith(`${r.account}:`)
+      })
       for (const c of list) {
         const key = `${r.account}|${c}`
-        const already = [...map.keys()].some((k) => k.startsWith(`${r.account}|`))
-        if (!map.has(key) && (c !== '' || !already)) {
+        if (!map.has(key) && (c !== '' || !hasBalance)) {
           map.set(key, { account: r.account, currency: c, sumScaled12: 0n, lastActivity: r.date })
         }
       }

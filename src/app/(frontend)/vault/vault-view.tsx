@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AddAccountsModal } from '@/components/add-accounts-modal'
-import { UpdateBalanceModal } from '@/components/update-balance-modal'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
 import type { VaultStats } from '@/durable/ledger-do'
 import {
@@ -55,7 +54,6 @@ export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
   const [addCardOpen, setAddCardOpen] = useState(false)
-  const [updateBalanceOpen, setUpdateBalanceOpen] = useState(false)
   const [names, setNames] = useState<Names>({})
   const [stats, setStats] = useState<VaultStats | null>(null)
 
@@ -196,14 +194,13 @@ export function VaultView() {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <SectionLabel>Credit cards</SectionLabel>
-            <span className="flex items-center gap-3 text-xs text-muted-foreground">
-              <button type="button" onClick={() => setUpdateBalanceOpen(true)} className="hover:text-foreground">
-                update balance
-              </button>
-              <button type="button" onClick={() => setAddCardOpen(true)} className="hover:text-foreground">
-                + add
-              </button>
-            </span>
+            <button
+              type="button"
+              onClick={() => setAddCardOpen(true)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              + add
+            </button>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {cardRows.map((r) => (
@@ -228,7 +225,6 @@ export function VaultView() {
       ) : null}
 
       <AddAccountsModal open={addCardOpen} onClose={() => setAddCardOpen(false)} onDone={() => location.reload()} />
-      <UpdateBalanceModal open={updateBalanceOpen} onClose={() => setUpdateBalanceOpen(false)} onDone={() => location.reload()} />
       {/* ── everything else, compact ──────────────────────────────────────── */}
       {orderedGroups.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -260,21 +256,19 @@ export function CreditCardCard({
 }: {
   row: AccountSummaryRow
   names: Names
-  spend: Array<{ currency: string; total: number; window: 'statement' | 'month' }> | null
+  spend: Array<{ currency: string; total: number }> | null
 }) {
   const { name, suffix } = displayName(row.account, names)
   const bal = balanceOf(row)
   const expensesText = (spend && spend.length > 0
     ? spend
-    : [{ currency: row.currency, total: 0, window: 'month' as const }]
+    : [{ currency: row.currency, total: 0 }]
   )
     .map(
       (s) =>
         `${s.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}${s.currency !== row.currency ? ` ${s.currency}` : ''}`,
     )
     .join(' + ')
-  const windowText =
-    (spend?.[0]?.window ?? 'month') === 'statement' ? 'last statement' : 'this month'
   return (
     <Link
       href={accountHref(row)}
@@ -301,7 +295,7 @@ export function CreditCardCard({
         </span>
       </span>
       <span className="mt-3 flex items-center justify-between border-t border-border pt-2 text-[11px] text-muted-foreground">
-        <span>Expenses · {windowText}</span>
+        <span>Expenses · 90d</span>
         <span className="font-mono">{expensesText} {row.currency}</span>
       </span>
     </Link>
