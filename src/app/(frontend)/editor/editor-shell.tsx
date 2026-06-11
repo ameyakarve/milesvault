@@ -95,7 +95,7 @@ export function EditorShell() {
     () => composeBaseline(filteredRows),
     [filteredRows],
   )
-  const filteredDirty = filteredBuffer !== filteredBaseline && filteredRows.length > 0
+  const filteredDirty = filteredBuffer !== filteredBaseline
 
   useEffect(() => {
     let alive = true
@@ -167,7 +167,7 @@ export function EditorShell() {
 
   const saveFiltered = useCallback(async (): Promise<boolean> => {
     if (filteredSaving) return false
-    if (filteredRows.length === 0) return false
+    if (filteredRows.length === 0 && filteredBuffer.trim() === '') return false
     setFilteredSaving(true)
     setFilteredError(null)
     try {
@@ -255,7 +255,10 @@ export function EditorShell() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [isDirty, filteredDirty])
 
-  const filteredEditable = filteredRows.length > 0 && filteredCursor === null
+  // An empty filtered month is an editable blank page — gating on matching
+  // rows made the editor's DEFAULT view (this month, before any entries
+  // exist in it) a read-only dead end.
+  const filteredEditable = filteredCursor === null
 
   return (
     <>
