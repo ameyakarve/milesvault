@@ -550,16 +550,11 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
                AND date >= OLD.date;
           END`,
   },
-  // Backfill from postings. Idempotent: every DO init wipes and re-derives,
-  // so existing data picks up the new tables and any future drift heals on
-  // restart. Cost is O(postings) per cold start — acceptable for the
-  // single-user-per-DO shape.
+  // ONE-TIME backfill (owner call: correctness is maintained on save by the
+  // triggers — init only seeds a table that has never been derived, e.g.
+  // right after the table is introduced to an existing journal).
   {
-    label: 'balance_totals_backfill_delete',
-    sql: 'DELETE FROM balance_totals',
-  },
-  {
-    label: 'balance_totals_backfill_insert',
+    label: 'balance_totals_backfill_once',
     sql: `INSERT INTO balance_totals (account, currency, scale, balance_scaled)
           SELECT account, currency, scale, SUM(amount_scaled)
           FROM (
@@ -567,14 +562,11 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
             UNION ALL
             SELECT account, currency, scale, amount_scaled FROM plug_postings
           )
+          WHERE (SELECT COUNT(*) FROM balance_totals) = 0
           GROUP BY account, currency, scale`,
   },
   {
-    label: 'daily_balances_backfill_delete',
-    sql: 'DELETE FROM daily_balances',
-  },
-  {
-    label: 'daily_balances_backfill_insert',
+    label: 'daily_balances_backfill_once',
     sql: `INSERT INTO daily_balances (account, currency, scale, date, balance_scaled)
           SELECT account, currency, scale, date,
                  SUM(daily_delta) OVER (
@@ -589,6 +581,7 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
               UNION ALL
               SELECT account, currency, scale, date, amount_scaled FROM plug_postings
             )
+            WHERE (SELECT COUNT(*) FROM daily_balances) = 0
             GROUP BY account, currency, scale, date
           )`,
   },
