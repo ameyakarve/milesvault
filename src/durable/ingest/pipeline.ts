@@ -186,15 +186,33 @@ async function genJson<T>(
     if (!block) {
       lastError = 'no JSON object in output'
     } else {
-      try {
-        const parsed = schema.safeParse(JSON.parse(block))
-        if (parsed.success) return { value: parsed.data, error: null }
-        lastError = parsed.error.issues
-          .map((iss) => `${iss.path.join('.')}: ${iss.message}`)
-          .join('; ')
-      } catch (e) {
-        lastError = `invalid JSON: ${String(e)}`
+      // Vision models mirror the document and emit comma-grouped numbers
+      // (28,248.00) which are invalid JSON. Strip a comma sitting between two
+      // digits (number grouping only — 'BIGTREE, Mumbai' is digit,letter and
+      // untouched) and retry before giving up.
+      const candidates = [block]
+      let stripped = block
+      for (let k = 0; k < 4; k++) {
+        const next = stripped.replace(/(\d),(\d)/g, '$1$2')
+        if (next === stripped) break
+        stripped = next
       }
+      if (stripped !== block) candidates.push(stripped)
+      let parsedOk = false
+      for (const cand of candidates) {
+        try {
+          const parsed = schema.safeParse(JSON.parse(cand))
+          if (parsed.success) return { value: parsed.data, error: null }
+          lastError = parsed.error.issues
+            .map((iss) => `${iss.path.join('.')}: ${iss.message}`)
+            .join('; ')
+          parsedOk = true
+          break
+        } catch (e) {
+          lastError = `invalid JSON: ${String(e)}`
+        }
+      }
+      void parsedOk
     }
     p = `${prompt}\n\nYour previous output was invalid (${lastError}). Output ONLY the corrected JSON object.`
   }
@@ -422,7 +440,7 @@ const EXTRACT_MAX_TOKENS = 32768
 // (buildStatementIrSystem) carries every extraction rule. The user turn
 // just points the model at the images.
 const VISION_EXTRACT_INSTRUCTION =
-  'The attached images are the pages of a credit-card statement. Read them and output the single JSON object of entries per the rules above — every transaction and every stated balance (including any reward-points balance printed on the statement).'
+  'The attached images are the pages of a credit-card statement, and below is the text already extracted from the PDF. PREFER THE TEXT: it is reliable for anything legible in it (dates, amounts, merchant names) — use it as the source of truth there. Use the IMAGES only to read what the text is missing or garbled (e.g. labels the bank renders as images, like the reward-points summary). Output the single JSON object of entries per the rules above — every transaction and every stated balance, including the reward-points balance.'
 
 export type PipelineResult = {
   ok: boolean
@@ -509,7 +527,11 @@ export async function runDraftPipeline(deps: {
       deps.gen,
       ZStatement,
       deps.system,
-      useVision ? VISION_EXTRACT_INSTRUCTION + (validation_issues.length ? `\n\nFix these from your previous output:\n${validation_issues.join('\n')}` : '') : prompt,
+      useVision
+        ? VISION_EXTRACT_INSTRUCTION +
+          `\n\n--- extracted text (authoritative where legible) ---\n${deps.statementText}` +
+          (validation_issues.length ? `\n\nFix these from your previous output:\n${validation_issues.join('\n')}` : '')
+        : prompt,
       EXTRACT_MAX_TOKENS,
       useVision ? deps.images : undefined,
     )

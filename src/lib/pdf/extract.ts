@@ -156,7 +156,7 @@ export async function renderStatementImages(
   doc: PDFDocumentProxy,
   opts: { maxWidth?: number; quality?: number; maxPages?: number } = {},
 ): Promise<string[]> {
-  const maxWidth = opts.maxWidth ?? 1500
+  const maxWidth = opts.maxWidth ?? 2200
   const quality = opts.quality ?? 0.8
   const maxPages = opts.maxPages ?? MAX_STATEMENT_PAGES
   const images: string[] = []
