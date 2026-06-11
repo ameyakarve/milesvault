@@ -103,6 +103,20 @@ const extracted: ExtractedStatement = {
       },
     },
     {
+      kind: 'transaction',
+      txn: {
+        date: '2026-05-02',
+        flag: '*',
+        payee: 'PAYMENT RECEIVED',
+        narration: 'Auto-debit',
+        tags: [],
+        postings: [
+          { account: 'Assets:Clearing:CardPayments', amount: '-25000.00', currency: 'INR' },
+          { account: CARD, amount: null, currency: null },
+        ],
+      },
+    },
+    {
       kind: 'balance',
       date: '2026-05-19',
       account: CARD,
@@ -138,7 +152,8 @@ const checks: Array<[string, boolean]> = [
   ['rate 12/200', rate?.pts === 12 && rate?.per === 200],
   ['opening Cr positive', joined.includes('96913.01 INR')],
   ['closing Cr positive', joined.includes('16754.09 INR')],
-  ['pads folded in', joined.includes('pad Liabilities:CreditCards:Axis:MagnusBurgundy:3467 Equity:Opening-Balances')],
+  ['pads plug Adjustments', joined.includes('pad Liabilities:CreditCards:Axis:MagnusBurgundy:3467 Equity:Adjustments')],
+  ['payment: card +25000, no points', /PAYMENT RECEIVED[\s\S]*?MagnusBurgundy:3467\s+25000\.00 INR/.test(joined) && !/PAYMENT RECEIVED[\s\S]*?AXIS-EDGE/.test(entries.find((e) => e.includes('PAYMENT')) ?? '')],
   ['ash cradle 48 pts', /ASH CRADLE[\s\S]*?Assets:Rewards:Axis:Pending\s+48 AXIS-EDGE-BURGUNDY/.test(joined)],
   ['no decorative tags', !joined.includes('#reward-accrual') && !joined.includes('#earn-excluded')],
   ['card leg code-computed (-999.99 overruled)', /ASH CRADLE[\s\S]*?MagnusBurgundy:3467\s+-800\.00 INR/.test(joined) && !joined.includes('-999.99')],

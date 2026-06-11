@@ -123,7 +123,8 @@ const ZLooseBalance = z
     account: b.account,
     amount: String(b.amount),
     currency: b.currency,
-    plug_account: b.plug_account ?? 'Equity:Opening-Balances',
+    // One plug for all statement pads (owner ruling: don't complicate).
+    plug_account: 'Equity:Adjustments',
   }))
 
 const ZStatement = z.object({
@@ -280,7 +281,7 @@ export function toLedgerEntries(opts: {
         account: isPoints ? pool!.account! : cardAccountFor(e.account),
         amount: isPoints ? String(Math.round(amount)) : fmt(amount),
         currency: isPoints ? pool!.ticker! : e.currency,
-        plug_account: sanitizeAccount(e.plug_account, 'Equity:Opening-Balances'),
+        plug_account: 'Equity:Adjustments',
       })
       continue
     }
@@ -295,7 +296,11 @@ export function toLedgerEntries(opts: {
 
     // Strip any model-emitted points legs (code owns those); sanitize
     // accounts; blank the card leg's amount → beancount auto-balances it.
-    let inrTotal = 0
+    // Two sums, two jobs: the card leg balances against ALL non-card legs
+    // (clearing/payment legs included); points accrue on Expenses legs only
+    // (a payment's clearing leg must not read as a refund clawback).
+    let legTotal = 0
+    let spendTotal = 0
     const postings = txn.postings
       .filter(
         (p) =>
@@ -306,21 +311,26 @@ export function toLedgerEntries(opts: {
         const isCard = p.account.startsWith('Liabilities:CreditCards')
         const amt = num(p.amount)
         if (!isCard && amt !== null) {
+          let weight = 0
           if (p.price_at_signs === 2) {
             const total = num(p.price_amount)
-            if (total !== null) inrTotal += Math.sign(amt) * Math.abs(total)
+            if (total !== null) weight = Math.sign(amt) * Math.abs(total)
           } else if (p.price_at_signs === 1) {
             const per = num(p.price_amount)
-            if (per !== null) inrTotal += amt * per
+            if (per !== null) weight = amt * per
           } else if ((p.currency ?? 'INR') === 'INR') {
-            inrTotal += amt
+            weight = amt
           }
+          legTotal += weight
+          if (p.account.startsWith('Expenses:')) spendTotal += weight
         }
         return {
           ...p,
           account: isCard
             ? cardAccountFor(p.account)
-            : sanitizeAccount(p.account, 'Expenses:Misc'),
+            // Non-expense counter-legs (Assets:Clearing:CardPayments …) keep
+            // their family; only unusable accounts fall back.
+            : sanitizeAccount(p.account, p.account.startsWith('Assets:') ? 'Assets:Clearing:CardPayments' : 'Expenses:Misc'),
           ...(isCard ? { amount: null, currency: null } : {}),
         }
       })
@@ -330,15 +340,15 @@ export function toLedgerEntries(opts: {
     // explicit in review, and the draft validator sees a balanced entry.
     const cardLeg = postings.find((p) => p.account.startsWith('Liabilities:CreditCards'))
     if (cardLeg) {
-      cardLeg.amount = fmt(-inrTotal)
+      cardLeg.amount = fmt(-legTotal)
       cardLeg.currency = 'INR'
     }
 
-    const out: TransactionInput = { ...txn, postings }
+    const out: TransactionInput = { ...txn, tags, postings }
 
-    if (canEarn && !excluded && inrTotal !== 0) {
-      const sign = inrTotal > 0 ? 1 : -1 // negative total = refund → claw back
-      const pts = Math.floor(Math.abs(inrTotal) / rate!.per) * rate!.pts
+    if (canEarn && !excluded && spendTotal !== 0) {
+      const sign = spendTotal > 0 ? 1 : -1 // negative total = refund → claw back
+      const pts = Math.floor(Math.abs(spendTotal) / rate!.per) * rate!.pts
       if (pts > 0) {
         out.postings.push(
           { account: pendingAcct!, amount: String(sign * pts), currency: pool!.ticker! },

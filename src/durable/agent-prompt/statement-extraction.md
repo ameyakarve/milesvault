@@ -16,9 +16,13 @@ Follow these rules when building that array.
 2. **Infer dates.** Statements usually show `dd Mon` (no year) within
    a billing period printed elsewhere. Use the period or statement
    date to resolve the year, then emit each posting as `YYYY-MM-DD`.
-3. **Filter noise.** Skip these — they aren't user-facing
+3. **Payments received ARE transactions** (owner ruling): record each
+   payment/auto-debit credit to the card with the counter-leg
+   `Assets:Clearing:CardPayments` (negative — money left the bank toward
+   the card; the bank-statement import later mirrors it and the clearing
+   account nets to zero). Payments earn no points.
+4. **Filter noise.** Skip these — they aren't user-facing
    transactions to record:
-   - Payment received / auto-debit credits to the card
    - Interest charged, finance charges, late fees the issuer levies
    - Statement balance / minimum due / credit limit summary rows
    - Reward-point accrual / redemption summaries — skip as TRANSACTIONS,
