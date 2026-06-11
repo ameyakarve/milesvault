@@ -46,10 +46,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     const { env, ctx } = await getCloudflareContext({ async: true })
     const ns = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO> | undefined
     if (ns) {
+      const stub = ns.get(ns.idFromName(email))
       ctx.waitUntil(
-        ns
-          .get(ns.idFromName(email))
-          .draftStatementAsync(id)
+        // setName first: an instance that has never served a websocket is
+        // unnamed, and the scheduled pipeline would run against the wrong
+        // ledger (caught by the e2e smoke on the fresh test user).
+        stub
+          .setName(email)
+          .then(() => stub.draftStatementAsync(id))
           .then((): undefined => undefined)
           .catch((e): undefined => {
             console.error('[statements] background draft failed', { id, err: String(e) })

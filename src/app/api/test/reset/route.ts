@@ -20,6 +20,10 @@ export async function POST(): Promise<Response> {
   await client.clear()
   const { env } = await getCloudflareContext({ async: true })
   const ns = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO> | undefined
-  if (ns) await ns.get(ns.idFromName(TEST_USER_EMAIL)).destroyThread()
+  if (ns) {
+    const stub = ns.get(ns.idFromName(TEST_USER_EMAIL))
+    await stub.setName(TEST_USER_EMAIL)
+    await stub.destroyThread()
+  }
   return NextResponse.json({ ok: true })
 }

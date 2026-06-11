@@ -32,10 +32,11 @@ export const POST = withLedger(async ({ client, req, email }) => {
   if (action === 'redraft') {
     const chatNs = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO> | undefined
     if (!chatNs) return new NextResponse('CHAT_DO binding missing', { status: 500 })
+    const redraftStub = chatNs.get(chatNs.idFromName(email))
     ctx.waitUntil(
-      chatNs
-        .get(chatNs.idFromName(email))
-        .draftStatementAsync(body.id)
+      redraftStub
+        .setName(email)
+        .then(() => redraftStub.draftStatementAsync(body.id))
         .then((): undefined => undefined)
         .catch((e): undefined => {
           console.error('[captures] redraft failed', { id: body.id, err: String(e) })
@@ -54,10 +55,11 @@ export const POST = withLedger(async ({ client, req, email }) => {
   const ns = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO> | undefined
   if (ns) {
     const threadName = `${email}::${body.id}`
+    const threadStub = ns.get(ns.idFromName(threadName))
     ctx.waitUntil(
-      ns
-        .get(ns.idFromName(threadName))
-        .destroyThread()
+      threadStub
+        .setName(threadName)
+        .then(() => threadStub.destroyThread())
         .then((): undefined => undefined)
         .catch((e): undefined => {
           console.warn('[captures] thread cleanup failed', { id: body.id, err: String(e) })

@@ -25,8 +25,8 @@ async function call(method, path, body) {
   }
 }
 
-const FIXTURE_JOURNAL = `2026-01-01 open Liabilities:CreditCards:Axis:MagnusBurgundy:3467
-2026-01-01 open Liabilities:CreditCards:HDFC:Infinia:1784
+const FIXTURE_JOURNAL = `2026-01-01 open Liabilities:CreditCards:Axis:MagnusBurgundy:3467 INR
+2026-01-01 open Liabilities:CreditCards:HDFC:Infinia:1784 INR
 
 2026-06-01 * "Opening" "Card balances at tracking start"
   Liabilities:CreditCards:Axis:MagnusBurgundy:3467   0.00 INR
