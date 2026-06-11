@@ -293,37 +293,47 @@ ${opts.text}`,
         },
       })
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
-      const result = await generateText({
-        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
-        system: buildStatementAgentSystem(snapshot),
-        prompt: `${capture?.prompt?.trim() || 'Process this statement into journal entries.'}
+      // The model occasionally LEAKS its tool call as literal text
+      // ("<|tool_call>…") instead of a structured call — nothing gets
+      // recorded. That's a transient serialization flake: retry the whole
+      // generation up to 3 attempts before declaring failure.
+      const MAX_ATTEMPTS = 3
+      let note = ''
+      let attempts = 0
+      for (; attempts < MAX_ATTEMPTS && recorded.length === 0; attempts++) {
+        const result = await generateText({
+          model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+          system: buildStatementAgentSystem(snapshot),
+          prompt: `${capture?.prompt?.trim() || 'Process this statement into journal entries.'}
 
 --- statement: ${stmt.filename} ---
 ${stmt.text}`,
-        tools: { card_guide: cardGuideTool(kbHttp), draft_transaction },
-        // Same output budget as the interactive agent (the 4096 default
-        // truncates chunks that carry the 4-posting reward legs — the slim
-        // 2-posting form then survives validation and points silently
-        // vanish). Step ceiling covers card_guide with candidate retries
-        // (ambiguous names go back to the model to pick), 3-4 chunked
-        // draft calls, validation retries, and the closing note.
-        maxOutputTokens: 16384,
-        stopWhen: stepCountIs(16),
-        experimental_repairToolCall: draftTransactionRepair,
-      })
+          tools: { card_guide: cardGuideTool(kbHttp), draft_transaction },
+          // 16k output budget (the 4096 default truncates reward-leg chunks);
+          // step ceiling covers card_guide candidate retries + 3-4 chunked
+          // draft calls + validation retries + the closing note.
+          maxOutputTokens: 16384,
+          stopWhen: stepCountIs(16),
+          experimental_repairToolCall: draftTransactionRepair,
+        })
+        note = result.text.trim()
+      }
       if (recorded.length > 0) {
         await ledger.set_capture_drafts(statementId, recorded)
       } else {
+        const leaked = note.includes('<|tool_call') || note.includes('<|"|>')
         await ledger.set_capture_error(
           statementId,
-          result.text.trim().slice(0, 300) || 'background draft produced no entries',
+          leaked
+            ? `model emitted a malformed tool call (${attempts} attempts) — re-upload to retry, or open the chat below`
+            : note.slice(0, 300) || 'background draft produced no entries',
         )
       }
       this.logTool({
         agent: 'async-ingest',
         tool: 'draft_statement',
         input: { statement_id: statementId, filename: stmt.filename },
-        output: { entries: recorded.length, note: result.text.trim().slice(0, 300) },
+        output: { entries: recorded.length, attempts, note: note.slice(0, 300) },
         ok: recorded.length > 0,
         ms: Date.now() - t0,
       })
