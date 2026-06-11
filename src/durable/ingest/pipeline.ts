@@ -416,9 +416,30 @@ export async function runDraftPipeline(deps: {
   //    exclusion rules ride the extraction prompt.
   const cardRes = await genJson(deps.gen, ZCard, CARD_SYSTEM, deps.statementText.slice(0, 4000), 256)
   stages.card = { name: cardRes.value?.card_name, error: cardRes.error ?? undefined }
-  const guide: CardGuideResult = cardRes.value
+  let guide: CardGuideResult = cardRes.value
     ? await fetchCardGuide(deps.kb, cardRes.value.card_name)
     : { ok: false, error: 'card_not_identified' }
+  // Ambiguous resolution returns candidates; the agent flow lets the model
+  // pick — here CODE picks: max token overlap with the statement's name.
+  if (guide.ok === false && guide.candidates?.length && cardRes.value) {
+    const want = new Set(
+      cardRes.value.card_name.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4),
+    )
+    const cands: Array<{ slug: string; name: string | null }> = guide.candidates
+    const scored = cands
+      .map((c) => ({
+        c,
+        score: (c.name ?? '')
+          .toLowerCase()
+          .split(/[^a-z0-9]+/)
+          .filter((t) => want.has(t)).length,
+      }))
+      .sort((a, b) => b.score - a.score)
+    const best = scored[0]
+    if (best && best.score > 0 && best.c.name) {
+      guide = await fetchCardGuide(deps.kb, best.c.name)
+    }
+  }
   const rate = parseBaseRate(guide)
   stages.guide = {
     found: guide.ok,
@@ -460,6 +481,15 @@ export async function runDraftPipeline(deps: {
   //    them) but they are NEVER silent: full messages ride the result.
   const v = validateDraftBatch(entries)
   const validation_issues = v.ok === true ? [] : v.issues.map((i) => i.message)
+  if (!guide.ok) {
+    validation_issues.unshift(
+      `Reward points OMITTED: card guide not found for "${cardRes.value?.card_name ?? '?'}" (${(guide as { error?: string }).error ?? 'unknown'}${guide.ok === false && guide.candidates ? `; candidates: ${guide.candidates.map((c) => c.name).join(', ')}` : ''})`,
+    )
+  } else if (!rate) {
+    validation_issues.unshift(
+      `Reward points OMITTED: no base earn rate parsed from the card guide for "${guide.card.name}" — check the KG Logging section.`,
+    )
+  }
   stages.validate = { issues: validation_issues.length }
 
   return { ok: entries.length > 0, entries, stages, validation_issues }
