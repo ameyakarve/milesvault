@@ -6,6 +6,7 @@ import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import { InboxThreadChat } from './thread-chat'
 import { StatementUploadModal } from '@/components/statement-upload-modal'
+import { Journal } from '../editor/journal'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -60,6 +61,10 @@ export function InboxView() {
   const [uploadOpen, setUploadOpen] = useState(false)
   const [approveBusy, setApproveBusy] = useState<string | null>(null)
   const [approveError, setApproveError] = useState<Record<string, string>>({})
+  // The drafts open in a real (CodeMirror) editor — same component, theme
+  // and beancount highlighting as the Journal — so the user can fix an
+  // entry before posting. Buffers keyed by capture id; seeded on open.
+  const [draftBuffers, setDraftBuffers] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -143,16 +148,17 @@ export function InboxView() {
   }
 
   async function approveDrafts(row: CaptureRow) {
-    const entries = parseDrafts(row.drafts)
-    if (entries.length === 0) return
+    const text = (draftBuffers[row.id] ?? parseDrafts(row.drafts).join('\n\n')).trim()
+    if (!text) return
     setApproveBusy(row.id)
     setApproveError((s) => {
       const { [row.id]: _drop, ...rest } = s
       return rest
     })
     try {
-      // Append-only commit, same contract as chat approval.
-      const r = await ledgerClient.replaceBuffer([], entries.join('\n\n'))
+      // Append-only commit, same contract as chat approval — parse errors
+      // come back as the save message, exactly like an editor save.
+      const r = await ledgerClient.replaceBuffer([], text)
       if (isReplaceBufferError(r)) {
         setApproveError((s) => ({ ...s, [row.id]: 'message' in r ? r.message : 'Save conflict' }))
         return
@@ -245,13 +251,13 @@ export function InboxView() {
 
   return (
     <>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
+        <SectionLabel>Inbox · {rows.length} to review</SectionLabel>
+        <Button size="xs" variant="ghost" onClick={() => setUploadOpen(true)}>
+          Upload statement
+        </Button>
+      </div>
       <div className="mx-auto w-full max-w-2xl px-4 py-6 space-y-3">
-        <div className="flex items-center justify-between">
-          <SectionLabel>Captured ({rows.length})</SectionLabel>
-          <Button size="xs" variant="ghost" onClick={() => setUploadOpen(true)}>
-            Upload statement
-          </Button>
-        </div>
         <ul className="space-y-2">
           {rows.map((r) => {
             const entries = parseDrafts(r.drafts)
@@ -283,7 +289,12 @@ export function InboxView() {
                       <Button
                         variant="ghost"
                         size="xs"
-                        onClick={() => setOpenId(open ? null : r.id)}
+                        onClick={() => {
+                          if (!open && entries.length > 0 && draftBuffers[r.id] === undefined) {
+                            setDraftBuffers((s) => ({ ...s, [r.id]: entries.join('\n\n') + '\n' }))
+                          }
+                          setOpenId(open ? null : r.id)
+                        }}
                         className="text-foreground whitespace-nowrap"
                       >
                         {open ? 'Close' : entries.length > 0 ? `Open (${entries.length})` : 'Open'}
@@ -301,14 +312,18 @@ export function InboxView() {
                 </div>
                 {open && openable ? (
                   <div className="mt-3 space-y-2 border-t border-border pt-3">
-                    {entries.map((e, i) => (
-                      <pre
-                        key={i}
-                        className="overflow-x-auto rounded-lg bg-muted/50 px-3 py-2 font-mono text-xs leading-5 text-foreground"
-                      >
-                        {e}
-                      </pre>
-                    ))}
+                    {entries.length > 0 ? (
+                      <div className="h-72 overflow-hidden rounded-lg border border-border">
+                        <Journal
+                          text={draftBuffers[r.id] ?? entries.join('\n\n') + '\n'}
+                          onChange={(next) =>
+                            setDraftBuffers((s) => ({ ...s, [r.id]: next }))
+                          }
+                          onSave={() => void approveDrafts(r)}
+                          readOnly={approveBusy === r.id}
+                        />
+                      </div>
+                    ) : null}
                     {approveError[r.id] ? (
                       <p className="text-xs text-destructive">{approveError[r.id]}</p>
                     ) : null}
@@ -319,10 +334,10 @@ export function InboxView() {
                           onClick={() => void approveDrafts(r)}
                           disabled={approveBusy === r.id}
                         >
-                          {approveBusy === r.id ? 'Posting…' : `Approve all (${entries.length})`}
+                          {approveBusy === r.id ? 'Posting…' : 'Approve & post'}
                         </Button>
                         <p className="text-xs text-muted-foreground">
-                          Edits or questions? Chat below — it knows this statement.
+                          Edit the entries directly (⌘S posts) — or ask the chat below.
                         </p>
                       </div>
                     ) : null}
