@@ -47,7 +47,20 @@ signs, categories, exclusions, noise):
   purchase may share a tag. Never add decorative or categorical tags.
 - The ONE signaling exception: tag `"earn-excluded"` on transactions the card
   earns no points for (per the card rules provided) — it is consumed and
-  removed downstream. Do NOT add reward-point postings — computed downstream.
+  removed downstream.
+- REWARD POINTS: emit the points legs yourself, per the Points pattern in the
+  examples — `<pool>:Pending` + `Equity:Void` contra in the programme's ticker,
+  using the reward-programme account, ticker and base rate given for this card
+  in the user turn. Points earned = `floor(spend / per) × pts` on the purchase
+  amount only (never on forex-markup / fee / GST legs). Excluded categories
+  (tagged `earn-excluded`) carry NO points legs. Refunds reverse their points
+  with mirrored signs. Omit the points legs only when no rate is given.
+- LANDING (points credited at statement close): when the statement states the
+  points EARNED this cycle, the bank has credited them — emit a `transaction`
+  moving that stated number from `<pool>:Pending` to `<pool>` (Pending down,
+  parent up, same ticker, NO `Equity:Void`, NO price), dated the statement's
+  closing date. This is the only way to move points pending→posted; a
+  pad/balance cannot (it plugs to one contra).
 - One `balance` entry per balance the statement STATES (the pad+balance pairs
   from the extraction rules become these): liability owed → NEGATIVE, "Cr" →
   POSITIVE; opening dated the period's first day, closing the day AFTER the

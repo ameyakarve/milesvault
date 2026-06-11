@@ -48,6 +48,8 @@ const extracted: ExtractedStatement = {
         tags: [],
         postings: [
           { account: 'Expenses:Medical:Hospital', amount: '800.00', currency: 'INR' },
+          { account: 'Assets:Rewards:Axis:Pending', amount: '48', currency: 'AXIS-EDGE-BURGUNDY' },
+          { account: 'Equity:Void', amount: '-48', currency: 'AXIS-EDGE-BURGUNDY' },
           // deliberately WRONG model figure — code must overrule it
           { account: CARD, amount: '-999.99', currency: 'INR' },
         ],
@@ -77,6 +79,8 @@ const extracted: ExtractedStatement = {
         tags: [],
         postings: [
           { account: 'Expenses:Shopping:Misc', amount: '-877.82', currency: 'INR' },
+          { account: 'Assets:Rewards:Axis:Pending', amount: '-48', currency: 'AXIS-EDGE-BURGUNDY' },
+          { account: 'Equity:Void', amount: '48', currency: 'AXIS-EDGE-BURGUNDY' },
           { account: CARD, amount: null, currency: null },
         ],
       },
@@ -98,6 +102,8 @@ const extracted: ExtractedStatement = {
             price_amount: '875.30',
             price_currency: 'INR',
           },
+          { account: 'Assets:Rewards:Axis:Pending', amount: '48', currency: 'AXIS-EDGE-BURGUNDY' },
+          { account: 'Equity:Void', amount: '-48', currency: 'AXIS-EDGE-BURGUNDY' },
           { account: CARD, amount: null, currency: null },
         ],
       },
@@ -183,6 +189,20 @@ checks.push([
     cardName: 'Axis Bank Magnus Burgundy',
   }) === 'Liabilities:CreditCards:Axis:MagnusBurgundy',
 ])
+// Rate-check guards the model's own points: a clean batch passes, a wrong
+// figure bounces a precise repair message.
+import { checkPointsArithmetic } from '../../src/durable/ingest/pipeline'
+const pool = guide.ok ? guide.pool : null
+checks.push(['rate-check: clean batch → no issues', checkPointsArithmetic(extracted, rate, pool).length === 0])
+const wrong = structuredClone(extracted)
+const ash = wrong.entries.find((e) => e.kind === 'transaction' && e.txn.payee === 'ASH CRADLE,BANGALORE')
+if (ash && ash.kind === 'transaction') {
+  const pend = ash.txn.postings.find((p) => p.account === 'Assets:Rewards:Axis:Pending')
+  if (pend) pend.amount = '24' // should be 48
+}
+const wrongIssues = checkPointsArithmetic(wrong, rate, pool)
+checks.push(['rate-check: wrong 24 → flags should-be-48', wrongIssues.some((m) => m.includes('should be 48'))])
+
 let fail = 0
 for (const [name, ok] of checks) {
   console.log(ok ? 'PASS' : 'FAIL', name)

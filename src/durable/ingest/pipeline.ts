@@ -258,9 +258,7 @@ export function toLedgerEntries(opts: {
   accounts: readonly string[]
   cardName: string | null
 }): { transactions: TransactionInput[]; directives: DirectiveInput[] } {
-  const { extracted, rate, pool } = opts
-  const canEarn = rate !== null && pool?.ticker != null && pool?.account != null
-  const pendingAcct = canEarn ? `${pool!.account}:Pending` : null
+  const { extracted, pool } = opts
   // Issuer rides the pool account (Assets:Rewards:<Issuer>, owner convention).
   const issuer = pool?.account?.split(':').pop() ?? null
   const cardAccountFor = (modelAccount: string | null) =>
@@ -271,8 +269,10 @@ export function toLedgerEntries(opts: {
 
   for (const e of extracted.entries) {
     if (e.kind === 'balance') {
+      // A model that emits real tickers needs no sentinel, but accept the
+      // "POINTS" sentinel too and resolve it to the pool wallet/ticker.
       const isPoints = e.currency.toUpperCase() === 'POINTS'
-      if (isPoints && !canEarn) continue
+      if (isPoints && (!pool?.account || !pool?.ticker)) continue
       const amount = num(e.amount)
       if (amount === null) continue
       directives.push({
@@ -294,79 +294,113 @@ export function toLedgerEntries(opts: {
     // stripped; code never adds decorative tags.
     const tags = rawTags.filter((t) => t !== EXCLUDED_TAG && t !== 'reward-accrual')
 
-    // Strip any model-emitted points legs (code owns those); sanitize
-    // accounts; blank the card leg's amount → beancount auto-balances it.
-    // Two sums, two jobs: the card leg balances against ALL non-card legs
-    // (clearing/payment legs included); points accrue on Expenses legs only
-    // (a payment's clearing leg must not read as a refund clawback).
+    // The model authors every posting now, including the points legs (the
+    // validator rate-checks them and bounces repairs). Code does only the one
+    // pure-mechanical thing it's strictly better at: blank the card leg's
+    // amount so beancount auto-balances it against ALL non-card INR legs —
+    // deterministic arithmetic the model fumbles on multi-leg forex. Points
+    // legs (ticker currency) carry no INR weight, so they don't affect it.
     let legTotal = 0
-    let spendTotal = 0
-    const postings = txn.postings
-      .filter(
-        (p) =>
-          !(pool?.account && p.account.startsWith(pool.account)) &&
-          p.account !== 'Equity:Void',
-      )
-      .map((p) => {
-        const isCard = p.account.startsWith('Liabilities:CreditCards')
-        const amt = num(p.amount)
-        // A card-statement "payment received" is unambiguous: money moves
-        // from the float TO the card — the clearing leg is ALWAYS negative
-        // (the model flips this often enough to legislate it in code).
-        const isClearing = p.account.startsWith('Assets:Clearing:')
-        const amtFixed = isClearing && amt !== null ? -Math.abs(amt) : amt
-        if (!isCard && amtFixed !== null) {
-          let weight = 0
-          if (p.price_at_signs === 2) {
-            const total = num(p.price_amount)
-            if (total !== null) weight = Math.sign(amtFixed) * Math.abs(total)
-          } else if (p.price_at_signs === 1) {
-            const per = num(p.price_amount)
-            if (per !== null) weight = amtFixed * per
-          } else if ((p.currency ?? 'INR') === 'INR') {
-            weight = amtFixed
-          }
-          legTotal += weight
-          if (p.account.startsWith('Expenses:')) spendTotal += weight
+    const postings = txn.postings.map((p) => {
+      const isCard = p.account.startsWith('Liabilities:CreditCards')
+      const amt = num(p.amount)
+      // A card-statement "payment received" is unambiguous: money moves
+      // from the float TO the card — the clearing leg is ALWAYS negative
+      // (the model flips this often enough to legislate it in code).
+      const isClearing = p.account.startsWith('Assets:Clearing:')
+      const amtFixed = isClearing && amt !== null ? -Math.abs(amt) : amt
+      if (!isCard && amtFixed !== null) {
+        let weight = 0
+        if (p.price_at_signs === 2) {
+          const total = num(p.price_amount)
+          if (total !== null) weight = Math.sign(amtFixed) * Math.abs(total)
+        } else if (p.price_at_signs === 1) {
+          const per = num(p.price_amount)
+          if (per !== null) weight = amtFixed * per
+        } else if ((p.currency ?? 'INR') === 'INR') {
+          weight = amtFixed
         }
-        return {
-          ...p,
-          ...(isClearing && amtFixed !== null ? { amount: fmt(amtFixed) } : {}),
-          account: isCard
-            ? cardAccountFor(p.account)
-            // Non-expense counter-legs (Assets:Clearing:CardPayments …) keep
-            // their family; only unusable accounts fall back.
-            : sanitizeAccount(p.account, p.account.startsWith('Assets:') ? 'Assets:Clearing:CardPayments' : 'Expenses:Misc'),
-          ...(isCard ? { amount: null, currency: null } : {}),
-        }
-      })
+        legTotal += weight
+      }
+      return {
+        ...p,
+        ...(isClearing && amtFixed !== null ? { amount: fmt(amtFixed) } : {}),
+        account: isCard
+          ? cardAccountFor(p.account)
+          // Non-expense counter-legs (rewards wallets, Equity:Void,
+          // Assets:Clearing:CardPayments …) keep their family; only unusable
+          // accounts fall back.
+          : sanitizeAccount(p.account, p.account.startsWith('Assets:') ? 'Assets:Clearing:CardPayments' : 'Expenses:Misc'),
+        ...(isCard ? { amount: null, currency: null } : {}),
+      }
+    })
 
-    // Code computes the card leg: −(sum of INR weights, @@ prices included).
-    // The model's own figure was discarded above — deterministic arithmetic,
-    // explicit in review, and the draft validator sees a balanced entry.
     const cardLeg = postings.find((p) => p.account.startsWith('Liabilities:CreditCards'))
     if (cardLeg) {
       cardLeg.amount = fmt(-legTotal)
       cardLeg.currency = 'INR'
     }
 
-    const out: TransactionInput = { ...txn, tags, postings }
-
-    if (canEarn && !excluded && spendTotal !== 0) {
-      const sign = spendTotal > 0 ? 1 : -1 // negative total = refund → claw back
-      const pts = Math.floor(Math.abs(spendTotal) / rate!.per) * rate!.pts
-      if (pts > 0) {
-        out.postings.push(
-          { account: pendingAcct!, amount: String(sign * pts), currency: pool!.ticker! },
-          { account: 'Equity:Void', amount: String(-sign * pts), currency: pool!.ticker! },
-        )
-      }
-    }
-
-    transactions.push(out)
+    transactions.push({ ...txn, tags, postings })
   }
 
   return { transactions, directives }
+}
+
+// Rate-check the model's OWN points legs (it authors them now). The balance
+// validator only proves entries balance — a wrong-but-balanced points figure
+// (Pending +24 / Void −24 when the rate says 48) would slip through. So we
+// keep the rate in CODE as a CHECKER: recompute the expected points and bounce
+// a precise repair message back to the model. Skips entries with no Expenses
+// leg (payments, transfers, the pending→posted landing) and earn-excluded
+// ones. Authorship stays with the model; arithmetic stays guaranteed.
+export function checkPointsArithmetic(
+  extracted: ExtractedStatement,
+  rate: { pts: number; per: number } | null,
+  pool: { ticker: string | null; account: string | null } | null,
+): string[] {
+  if (!rate || !pool?.account || !pool?.ticker) return []
+  const pendingAcct = `${pool.account}:Pending`
+  const issues: string[] = []
+  extracted.entries.forEach((e, idx) => {
+    if (e.kind !== 'transaction') return
+    const txn = e.txn
+    if ((txn.tags ?? []).includes(EXCLUDED_TAG)) return
+    let spend = 0
+    let hasExpense = false
+    for (const p of txn.postings) {
+      if (!p.account.startsWith('Expenses:')) continue
+      hasExpense = true
+      const amt = num(p.amount)
+      if (amt === null) continue
+      if (p.price_at_signs === 2) {
+        const t = num(p.price_amount)
+        if (t !== null) spend += Math.sign(amt) * Math.abs(t)
+      } else if (p.price_at_signs === 1) {
+        const per = num(p.price_amount)
+        if (per !== null) spend += amt * per
+      } else if ((p.currency ?? 'INR') === 'INR') {
+        spend += amt
+      }
+    }
+    if (!hasExpense) return // payments, transfers, landings — no per-purchase earn
+    const expected = Math.floor(Math.abs(spend) / rate.per) * rate.pts
+    const want = (spend >= 0 ? 1 : -1) * expected
+    const pend = txn.postings.find((p) => p.account === pendingAcct)
+    const got = pend ? num(pend.amount) : null
+    const where = `entry ${idx + 1} (${txn.date} "${txn.payee ?? ''}")`
+    if (expected === 0) {
+      if (got !== null && got !== 0)
+        issues.push(`${where}: no points should accrue (spend below ${rate.per}); remove the ${got} ${pool.ticker} points legs`)
+      return
+    }
+    if (got === null) {
+      issues.push(`${where}: missing reward points — add ${want} ${pool.ticker} to ${pendingAcct} (floor(${Math.abs(spend)}/${rate.per})×${rate.pts}) with the matching Equity:Void contra`)
+    } else if (got !== want) {
+      issues.push(`${where}: reward points should be ${want} ${pool.ticker} (floor(${Math.abs(spend)}/${rate.per})×${rate.pts}), got ${got}`)
+    }
+  })
+  return issues
 }
 
 // Serialize each entry standalone via the canonical serializer — identical
@@ -390,10 +424,21 @@ function extractPrompt(opts: {
   statementText: string
   accounts: readonly string[]
   cardRules: string | null
+  pool: { ticker: string | null; account: string | null } | null
+  rate: { pts: number; per: number } | null
   instruction?: string | null
 }): string {
+  const reward =
+    opts.pool?.account && opts.pool?.ticker && opts.rate
+      ? `Reward programme for this card (emit the points legs yourself, per the Points pattern):
+- points account: ${opts.pool.account}  (earn → ${opts.pool.account}:Pending; posted/landed → ${opts.pool.account})
+- points commodity (ticker): ${opts.pool.ticker}
+- base earn rate: ${opts.rate.pts} points per ${opts.rate.per} (floor(spend / ${opts.rate.per}) × ${opts.rate.pts}, purchase amount only)`
+      : 'Reward programme: none resolved — DO NOT emit points legs.'
   return `${opts.instruction?.trim() ? `User instruction: ${opts.instruction.trim()}\n\n` : ''}Existing ledger accounts:
 ${opts.accounts.join('\n')}
+
+${reward}
 
 Card earn-exclusion rules:
 ${opts.cardRules ?? '(none known)'}
@@ -483,6 +528,8 @@ export async function runDraftPipeline(deps: {
     statementText: deps.statementText,
     accounts: deps.accounts,
     cardRules: guide.ok ? (guide.logging_guide ?? guide.pool?.rate_notes ?? null) : null,
+    pool: guide.ok ? guide.pool : null,
+    rate,
     instruction: deps.instruction,
   })
   let entries: string[] = []
@@ -509,7 +556,11 @@ export async function runDraftPipeline(deps: {
     })
     entries = serializeEntries(parts)
     const v = validateDraftBatch(entries)
-    validation_issues = v.ok === true ? [] : v.issues.map((i) => i.message)
+    const balanceIssues = v.ok === true ? [] : v.issues.map((i) => i.message)
+    // The validator works on the IR: balance + shape (serialized) AND the
+    // rate-check on the model's own points legs. Both bounce to the model.
+    const pointIssues = checkPointsArithmetic(ext.value, rate, guide.ok ? guide.pool : null)
+    validation_issues = [...balanceIssues, ...pointIssues]
     if (validation_issues.length === 0) break
     prompt = `${basePrompt}\n\nYour previous output produced INVALID entries — fix these and output the corrected full JSON object:\n${validation_issues.join('\n')}`
   }
