@@ -82,7 +82,12 @@ Follow these rules when building that array.
      2026-05-18 pad Liabilities:CreditCards:Axis:MagnusBurgundy Equity:Opening-Balances
      2026-05-19 balance Liabilities:CreditCards:Axis:MagnusBurgundy  -62000.00 INR
      ```
-   Liabilities are NEGATIVE: "total due ₹62,000" asserts -62000.00 INR.
+   SIGNS — read the statement's Dr/Cr marker carefully:
+   - amount OWED to the bank (normal "total due", or "Dr") → NEGATIVE:
+     "Total Payment Due 62,000" asserts -62000.00 INR.
+   - "Cr" suffix = CREDIT balance, the bank owes the user (overpayment /
+     refunds) → POSITIVE: "Total Payment Due 16,754.09 Cr" asserts
+     +16754.09 INR. Both opening and closing can be Cr.
    The pad+balance pair must be ONE element (the pad folds into the
    assertion). Copy the statement's stated figures digit-for-digit; never
    compute them.
