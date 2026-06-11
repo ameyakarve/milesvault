@@ -87,31 +87,32 @@ function Composer({
   // not just on the empty-conversation starter chips.
   onAddCard: () => void
 }) {
+  const chip =
+    'inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-foreground transition hover:bg-muted focus-visible:bg-muted focus-visible:outline-none'
   return (
-    <PromptInput onSubmit={onSubmit}>
-      <PromptInputTextarea placeholder="Ask anything" />
-      <PromptInputFooter>
-        <PromptInputTools>
-          <PromptInputButton
-            type="button"
-            onClick={onAttachClick}
-            tooltip="Upload statement (PDF) — goes to your Inbox"
-          >
-            <Paperclip className="size-4" />
-          </PromptInputButton>
-          <PromptInputButton
-            type="button"
-            onClick={onAddCard}
-            tooltip="Add a card"
-          >
-            <CreditCard className="size-4" />
-          </PromptInputButton>
-        </PromptInputTools>
-        <PromptInputSubmit status={status} onStop={onStop}>
-          <ArrowUp className="size-4" strokeWidth={2.5} />
-        </PromptInputSubmit>
-      </PromptInputFooter>
-    </PromptInput>
+    <div className="flex w-full flex-col gap-2">
+      {/* Labeled actions ABOVE the input, always present (owner call) —
+          not unlabeled icons buried in the footer. */}
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onAttachClick} className={chip}>
+          <Paperclip className="size-3.5" />
+          Upload statement
+        </button>
+        <button type="button" onClick={onAddCard} className={chip}>
+          <CreditCard className="size-3.5" />
+          Add a card
+        </button>
+      </div>
+      <PromptInput onSubmit={onSubmit}>
+        <PromptInputTextarea placeholder="Ask anything" />
+        <PromptInputFooter>
+          <PromptInputTools />
+          <PromptInputSubmit status={status} onStop={onStop}>
+            <ArrowUp className="size-4" strokeWidth={2.5} />
+          </PromptInputSubmit>
+        </PromptInputFooter>
+      </PromptInput>
+    </div>
   )
 }
 
@@ -441,7 +442,7 @@ export function Chat({
                   onAttachClick={() => setUploadOpen(true)}
                   onAddCard={addCardFlow}
                 />
-                <StarterChips onAttachClick={() => setUploadOpen(true)} />
+                <StarterChips />
               </div>
             </PromptInputProvider>
             <PendingCapturesHint />
@@ -690,7 +691,7 @@ function CopyMessageButton({ text }: { text: string }) {
 
 // Teach the empty state: chips prefill the composer with editable templates
 // (via the PromptInput controller), the last one opens the statement picker.
-function StarterChips({ onAttachClick }: { onAttachClick: () => void }) {
+function StarterChips() {
   const controller = usePromptInputController()
   const chipCls =
     'rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground'
@@ -710,25 +711,11 @@ function StarterChips({ onAttachClick }: { onAttachClick: () => void }) {
         className={chipCls}
         onClick={() =>
           controller.textInput.setInput(
-            'I got a new credit card: HDFC Infinia. Set it up with an opening balance of 0.',
-          )
-        }
-      >
-        Add a card
-      </button>
-      <button
-        type="button"
-        className={chipCls}
-        onClick={() =>
-          controller.textInput.setInput(
             'I have 80,000 Amex Membership Rewards points. Record them.',
           )
         }
       >
         Record points I hold
-      </button>
-      <button type="button" className={chipCls} onClick={onAttachClick}>
-        Process a statement (PDF)
       </button>
     </div>
   )
