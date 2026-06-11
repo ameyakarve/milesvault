@@ -11,6 +11,12 @@ const config: StorybookConfig = {
     reactDocgen: false,
   },
   viteFinal: async (cfg) => {
+    // Pre-bundle next/link & friends: on-demand optimization 504s
+    // ("Outdated Optimize Dep") the first time a story pulls them in.
+    cfg.optimizeDeps = {
+      ...(cfg.optimizeDeps ?? {}),
+      include: [...(cfg.optimizeDeps?.include ?? []), 'next/link', 'next/navigation'],
+    }
     cfg.define = {
       ...(cfg.define ?? {}),
       __dirname: '"/"',

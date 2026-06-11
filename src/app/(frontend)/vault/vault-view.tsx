@@ -237,7 +237,7 @@ function accountHref(r: AccountSummaryRow): string {
 
 // Hero card: one loyalty programme — monogram, resolved name, big balance.
 // Medium card: a credit card — monogram, issuer-qualified name, balance owed.
-function CreditCardCard({
+export function CreditCardCard({
   row,
   names,
   spend,
@@ -248,37 +248,45 @@ function CreditCardCard({
 }) {
   const { name, suffix } = displayName(row.account, names)
   const bal = balanceOf(row)
+  const expensesText = (spend && spend.length > 0
+    ? spend
+    : [{ currency: row.currency, total: 0, window: 'month' as const }]
+  )
+    .map(
+      (s) =>
+        `${s.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}${s.currency !== row.currency ? ` ${s.currency}` : ''}`,
+    )
+    .join(' + ')
+  const windowText =
+    (spend?.[0]?.window ?? 'month') === 'statement' ? 'last statement' : 'this month'
   return (
     <Link
       href={accountHref(row)}
-      className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/25"
+      className="group block rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/25"
     >
-      <Monogram name={name} />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-        {name}
-        {suffix ? (
-          <span className="ml-1.5 font-mono text-[10px] font-normal text-muted-foreground">
-            ··{suffix}
+      <span className="flex items-center gap-3">
+        <Monogram name={name} />
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {name}
+          {suffix ? (
+            <span className="ml-1.5 font-mono text-[10px] font-normal text-muted-foreground">
+              ··{suffix}
+            </span>
+          ) : null}
+        </span>
+        <span className="shrink-0 text-right">
+          <span
+            className={`block whitespace-nowrap font-mono text-lg font-semibold ${bal < 0 ? 'text-foreground' : 'text-muted-foreground'}`}
+          >
+            {formatBalance(row.balance_scaled, row.scale)}
+            <span className="ml-1 text-xs font-normal text-muted-foreground">{row.currency}</span>
           </span>
-        ) : null}
+          <span className="block text-[11px] leading-4 text-muted-foreground">balance</span>
+        </span>
       </span>
-      <span className="min-w-0 shrink-0 text-right">
-        <span
-          className={`block whitespace-nowrap font-mono text-lg font-semibold ${bal < 0 ? 'text-foreground' : 'text-muted-foreground'}`}
-        >
-          {formatBalance(row.balance_scaled, row.scale)}
-          <span className="ml-1 text-xs font-normal text-muted-foreground">{row.currency}</span>
-        </span>
-        <span className="block text-[11px] leading-4 text-muted-foreground">
-          balance · expenses{' '}
-          {(spend && spend.length > 0 ? spend : [{ currency: row.currency, total: 0, window: 'month' as const }])
-            .map(
-              (s) =>
-                `${s.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}${s.currency !== row.currency ? ` ${s.currency}` : ''}`,
-            )
-            .join(' + ')}{' '}
-          {(spend?.[0]?.window ?? 'month') === 'statement' ? 'last statement' : 'this month'}
-        </span>
+      <span className="mt-3 flex items-center justify-between border-t border-border pt-2 text-[11px] text-muted-foreground">
+        <span>Expenses · {windowText}</span>
+        <span className="font-mono">{expensesText} {row.currency}</span>
       </span>
     </Link>
   )

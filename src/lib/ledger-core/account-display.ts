@@ -130,11 +130,18 @@ export function kgLookupParts(
 // ("MR", "AVIOS"… ≤4 chars) untouched: "Mr" would be worse than "MR". The KG
 // display name, when resolved, always wins over this fallback.
 export function prettyLeaf(leaf: string): string {
-  if (leaf.length <= 4 || leaf !== leaf.toUpperCase()) return leaf
+  if (leaf.length <= 4) return leaf
+  if (leaf === leaf.toUpperCase()) {
+    return leaf
+      .split(/[-_]/)
+      .map((w) => (w ? w[0] + w.slice(1).toLowerCase() : w))
+      .join(' ')
+  }
+  // CamelCase beancount leaves read as words ("MagnusBurgundy" →
+  // "Magnus Burgundy"); acronym runs stay intact ("HDFCBank" → "HDFC Bank").
   return leaf
-    .split(/[-_]/)
-    .map((w) => (w ? w[0] + w.slice(1).toLowerCase() : w))
-    .join(' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
 }
 
 // One resolution chain for what to call an account, everywhere:
