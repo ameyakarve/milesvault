@@ -274,45 +274,7 @@ export function EditorShell() {
         <div className="hidden text-[12px] font-medium text-muted-foreground lg:block">
           Ledger chat · Journal
         </div>
-        <div className="flex w-[60px] items-center justify-end gap-2 sm:w-[120px] lg:w-auto">
-          {journalVisible && entries.loaded && !filterActive ? (
-            <>
-              <SavedChip dirty={isDirty} saving={entries.saving} />
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void save()}
-                disabled={!isDirty || entries.saving}
-              >
-                Save
-              </Button>
-            </>
-          ) : null}
-          {journalVisible && filterActive && filteredEditable ? (
-            <>
-              <SavedChip dirty={filteredDirty} saving={filteredSaving} />
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => void saveFiltered()}
-                disabled={!filteredDirty || filteredSaving}
-              >
-                Save
-              </Button>
-            </>
-          ) : null}
-          {(tab === 'chat' || isLg) && chatClear.canClear ? (
-            <button
-              type="button"
-              onClick={chatClear.clear}
-              title="Clear conversation (stops any active run)"
-              aria-label="Clear conversation"
-              className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
-            >
-              <Eraser className="size-3.5" />
-            </button>
-          ) : null}
-        </div>
+        <div className="w-[60px] sm:w-[120px] lg:w-auto" />
       </header>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <section
@@ -322,12 +284,28 @@ export function EditorShell() {
           )}
         >
           {mounted ? (
-            <Chat
-              onBusyChange={setChatBusy}
-              onClearableChange={setChatClear}
-              onAppended={() => void entries.refetch()}
-              onShowInJournal={showInJournal}
-            />
+            <>
+              {chatClear.canClear ? (
+                <div className="flex items-center justify-end border-b border-border px-4 py-2 sm:px-6">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={chatClear.clear}
+                    className="text-muted-foreground"
+                  >
+                    <Eraser className="size-3.5" />
+                    Clear chat
+                  </Button>
+                </div>
+              ) : null}
+              <Chat
+                onBusyChange={setChatBusy}
+                onClearableChange={setChatClear}
+                onAppended={() => void entries.refetch()}
+                onShowInJournal={showInJournal}
+              />
+            </>
           ) : null}
         </section>
         <section
@@ -341,6 +319,35 @@ export function EditorShell() {
               accounts={accounts}
               filter={filter}
               onChange={setFilter}
+              trailing={
+                filterActive ? (
+                  filteredEditable ? (
+                    <span className="flex items-center gap-2">
+                      <SavedChip dirty={filteredDirty} saving={filteredSaving} />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void saveFiltered()}
+                        disabled={!filteredDirty || filteredSaving}
+                      >
+                        Save
+                      </Button>
+                    </span>
+                  ) : null
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <SavedChip dirty={isDirty} saving={entries.saving} />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void save()}
+                      disabled={!isDirty || entries.saving}
+                    >
+                      Save
+                    </Button>
+                  </span>
+                )
+              }
             />
           ) : null}
           {(saveError || entries.loadError) ? (

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type React from 'react'
 import { Calendar, ChevronRight, Search, User, X } from 'lucide-react'
 import {
   Popover,
@@ -85,10 +86,14 @@ export function JournalFilterBar({
   accounts,
   filter,
   onChange,
+  trailing,
 }: {
   accounts: string[]
   filter: JournalFilter
   onChange: (f: JournalFilter) => void
+  // Right-aligned slot for pane actions (Save) so they live in the journal's
+  // own toolbar, not a detached global header.
+  trailing?: React.ReactNode
 }) {
   const today = useMemo(() => new Date(), [])
 
@@ -149,18 +154,19 @@ export function JournalFilterBar({
         </PopoverContent>
       </Popover>
 
-      {anyActive ? (
-        <button
-          type="button"
-          onClick={() =>
-            onChange({ account: null, date: null })
-          }
-          className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none"
-        >
-          <X className="size-3" />
-          Reset
-        </button>
-      ) : null}
+      <div className="ml-auto flex items-center gap-2">
+        {anyActive ? (
+          <button
+            type="button"
+            onClick={() => onChange({ account: null, date: null })}
+            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none"
+          >
+            <X className="size-3" />
+            Reset
+          </button>
+        ) : null}
+        {trailing}
+      </div>
     </div>
   )
 }
