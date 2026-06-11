@@ -39,7 +39,10 @@ signs, categories, exclusions, noise):
 - Refunds/credits TO the card: NEGATIVE expense amount.
 - Forex rows: the expense amount in the foreign currency plus
   `"price_at_signs": 2, "price_amount": <INR total as printed>,
-  "price_currency": "INR"` — the `@@` form from the examples.
+  "price_currency": "INR"` — the `@@` form from the examples. This applies
+  to forex REFUNDS too: negative foreign amount, the refunded INR total as
+  the price (e.g. `-96.00 USD` with `"price_amount": 8448.00`). A non-INR
+  amount without its INR price is INVALID.
 - Tags are for LINKING related entries only — e.g. a refund and its original
   purchase may share a tag. Never add decorative or categorical tags.
 - The ONE signaling exception: tag `"earn-excluded"` on transactions the card

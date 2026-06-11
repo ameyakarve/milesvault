@@ -454,40 +454,47 @@ export async function runDraftPipeline(deps: {
     error: guide.ok ? undefined : (guide as { error?: string }).error,
   }
 
-  // 2. Extract as beancount-shaped entries (loose acceptors → canonical types).
-  const ext = await genJson(
-    deps.gen,
-    ZStatement,
-    deps.system,
-    extractPrompt({
-      statementText: deps.statementText,
-      accounts: deps.accounts,
-      cardRules: guide.ok ? (guide.logging_guide ?? guide.pool?.rate_notes ?? null) : null,
-      instruction: deps.instruction,
-    }),
-    12288,
-  )
-  if (ext.value === null) {
-    stages.extract = { txns: 0, balances: 0, error: ext.error ?? 'unknown' }
-    return { ok: false, entries: [], error: `extract: ${ext.error}`, stages, validation_issues: [] }
-  }
-  const txns = ext.value.entries.filter((e) => e.kind === 'transaction').length
-  stages.extract = { txns, balances: ext.value.entries.length - txns }
-
-  // 3. Code: arbiter + canonical serialization.
-  const parts = toLedgerEntries({
-    extracted: ext.value,
-    rate,
-    pool: guide.ok ? guide.pool : null,
+  // 2-4. Extract → render → validate, with the validator CLOSING THE LOOP:
+  // entries that fail the draft validator go back to the model with the
+  // full messages (the agent flow's bounce, in pipeline form — without it,
+  // an invalid forex refund once sailed straight into the drafts).
+  const basePrompt = extractPrompt({
+    statementText: deps.statementText,
     accounts: deps.accounts,
-    cardName: guide.ok ? guide.card.name : (cardRes.value?.card_name ?? null),
+    cardRules: guide.ok ? (guide.logging_guide ?? guide.pool?.rate_notes ?? null) : null,
+    instruction: deps.instruction,
   })
-  const entries = serializeEntries(parts)
+  let entries: string[] = []
+  let validation_issues: string[] = []
+  let prompt = basePrompt
+  let lastExtractError: string | null = null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ext = await genJson(deps.gen, ZStatement, deps.system, prompt, 12288)
+    if (ext.value === null) {
+      lastExtractError = ext.error ?? 'unknown'
+      stages.extract = { txns: 0, balances: 0, error: lastExtractError }
+      continue
+    }
+    const txns = ext.value.entries.filter((e) => e.kind === 'transaction').length
+    stages.extract = { txns, balances: ext.value.entries.length - txns }
+    lastExtractError = null
 
-  // 4. Validate. Failures don't block delivery (the review editor can fix
-  //    them) but they are NEVER silent: full messages ride the result.
-  const v = validateDraftBatch(entries)
-  const validation_issues = v.ok === true ? [] : v.issues.map((i) => i.message)
+    const parts = toLedgerEntries({
+      extracted: ext.value,
+      rate,
+      pool: guide.ok ? guide.pool : null,
+      accounts: deps.accounts,
+      cardName: guide.ok ? guide.card.name : (cardRes.value?.card_name ?? null),
+    })
+    entries = serializeEntries(parts)
+    const v = validateDraftBatch(entries)
+    validation_issues = v.ok === true ? [] : v.issues.map((i) => i.message)
+    if (validation_issues.length === 0) break
+    prompt = `${basePrompt}\n\nYour previous output produced INVALID entries — fix these and output the corrected full JSON object:\n${validation_issues.join('\n')}`
+  }
+  if (lastExtractError !== null && entries.length === 0) {
+    return { ok: false, entries: [], error: `extract: ${lastExtractError}`, stages, validation_issues: [] }
+  }
   if (!guide.ok) {
     validation_issues.unshift(
       `Reward points OMITTED: card guide not found for "${cardRes.value?.card_name ?? '?'}" (${(guide as { error?: string }).error ?? 'unknown'}${guide.ok === false && guide.candidates ? `; candidates: ${guide.candidates.map((c) => c.name).join(', ')}` : ''})`,
