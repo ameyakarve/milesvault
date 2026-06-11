@@ -180,33 +180,15 @@ async function genJson<T>(
     if (!block) {
       lastError = 'no JSON object in output'
     } else {
-      // Models sometimes mirror the document and emit comma-grouped numbers
-      // (e.g. 12,345.00) which are invalid JSON. Strip a comma sitting between
-      // two digits (number grouping only — a string like "Foo, City" is
-      // digit,letter and untouched) and retry before giving up.
-      const candidates = [block]
-      let stripped = block
-      for (let k = 0; k < 4; k++) {
-        const next = stripped.replace(/(\d),(\d)/g, '$1$2')
-        if (next === stripped) break
-        stripped = next
+      try {
+        const parsed = schema.safeParse(JSON.parse(block))
+        if (parsed.success) return { value: parsed.data, error: null }
+        lastError = parsed.error.issues
+          .map((iss) => `${iss.path.join('.')}: ${iss.message}`)
+          .join('; ')
+      } catch (e) {
+        lastError = `invalid JSON: ${String(e)}`
       }
-      if (stripped !== block) candidates.push(stripped)
-      let parsedOk = false
-      for (const cand of candidates) {
-        try {
-          const parsed = schema.safeParse(JSON.parse(cand))
-          if (parsed.success) return { value: parsed.data, error: null }
-          lastError = parsed.error.issues
-            .map((iss) => `${iss.path.join('.')}: ${iss.message}`)
-            .join('; ')
-          parsedOk = true
-          break
-        } catch (e) {
-          lastError = `invalid JSON: ${String(e)}`
-        }
-      }
-      void parsedOk
     }
     p = `${prompt}\n\nYour previous output was invalid (${lastError}). Output ONLY the corrected JSON object.`
   }
