@@ -216,14 +216,54 @@ export function parseBaseRate(guide: CardGuideResult): { pts: number; per: numbe
 
 const EXCLUDED_TAG = 'earn-excluded'
 
+// The card liability account is too important to trust the model with.
+// Preference order: the model's account when it already exists in the
+// ledger → an existing Liabilities:CreditCards account whose name carries
+// the card's tokens → the canonical Liabilities:CreditCards:<Issuer>:<Leaf>
+// built from the KG guide → sanitized model output as a last resort.
+export function resolveCardAccount(opts: {
+  modelAccount: string | null
+  accounts: readonly string[]
+  issuer: string | null
+  cardName: string | null
+}): string {
+  const { modelAccount, accounts, issuer, cardName } = opts
+  if (modelAccount && accounts.includes(modelAccount)) return modelAccount
+
+  const existing = accounts.filter((a) => a.startsWith('Liabilities:CreditCards:'))
+  const noise = new Set(['bank', 'credit', 'card', 'cards', ...(issuer ? issuer.toLowerCase().split(/\s+/) : [])])
+  const tokens = (cardName ?? '')
+    .split(/[^A-Za-z0-9]+/)
+    .map((t) => t.toLowerCase())
+    .filter((t) => t.length >= 4 && !noise.has(t))
+  if (tokens.length > 0) {
+    const hit = existing.find((a) => {
+      const al = a.toLowerCase()
+      return tokens.every((t) => al.includes(t))
+    })
+    if (hit) return hit
+  }
+  if (issuer && tokens.length > 0) {
+    const leaf = tokens.map((t) => t[0]!.toUpperCase() + t.slice(1)).join('')
+    return `Liabilities:CreditCards:${issuer}:${leaf}`
+  }
+  return sanitizeAccount(modelAccount ?? '', 'Liabilities:CreditCards:Unknown')
+}
+
 export function toLedgerEntries(opts: {
   extracted: ExtractedStatement
   rate: { pts: number; per: number } | null
   pool: { ticker: string | null; account: string | null } | null
+  accounts: readonly string[]
+  cardName: string | null
 }): { transactions: TransactionInput[]; directives: DirectiveInput[] } {
   const { extracted, rate, pool } = opts
   const canEarn = rate !== null && pool?.ticker != null && pool?.account != null
   const pendingAcct = canEarn ? `${pool!.account}:Pending` : null
+  // Issuer rides the pool account (Assets:Rewards:<Issuer>, owner convention).
+  const issuer = pool?.account?.split(':').pop() ?? null
+  const cardAccountFor = (modelAccount: string | null) =>
+    resolveCardAccount({ modelAccount, accounts: opts.accounts, issuer, cardName: opts.cardName })
 
   const transactions: TransactionInput[] = []
   const directives: DirectiveInput[] = []
@@ -237,9 +277,7 @@ export function toLedgerEntries(opts: {
       directives.push({
         kind: 'balance',
         date: e.date,
-        account: isPoints
-          ? pool!.account!
-          : sanitizeAccount(e.account, 'Liabilities:CreditCards:Unknown'),
+        account: isPoints ? pool!.account! : cardAccountFor(e.account),
         amount: isPoints ? String(Math.round(amount)) : fmt(amount),
         currency: isPoints ? pool!.ticker! : e.currency,
         plug_account: sanitizeAccount(e.plug_account, 'Equity:Opening-Balances'),
@@ -276,10 +314,9 @@ export function toLedgerEntries(opts: {
         }
         return {
           ...p,
-          account: sanitizeAccount(
-            p.account,
-            isCard ? 'Liabilities:CreditCards:Unknown' : 'Expenses:Misc',
-          ),
+          account: isCard
+            ? cardAccountFor(p.account)
+            : sanitizeAccount(p.account, 'Expenses:Misc'),
           ...(isCard ? { amount: null, currency: null } : {}),
         }
       })
@@ -330,42 +367,6 @@ export function serializeEntries(parts: {
 const CARD_SYSTEM = `Identify the credit card a statement belongs to. Output ONLY: {"card_name": "issuer + card name as printed"}`
 const ZCard = z.object({ card_name: z.string().min(2).max(80) })
 
-const EXTRACT_SYSTEM = `You convert credit-card statements into beancount-shaped JSON. Output ONLY a JSON object:
-{
-  "card_name": "issuer + card name as printed",
-  "entries": [
-    {
-      "kind": "transaction",
-      "date": "YYYY-MM-DD",
-      "payee": "merchant as printed",
-      "narration": "short note",
-      "tags": [],
-      "postings": [
-        { "account": "Expenses:...", "amount": 123.45, "currency": "INR" },
-        { "account": "Liabilities:CreditCards:..." }
-      ]
-    },
-    {
-      "kind": "balance",
-      "date": "YYYY-MM-DD",
-      "account": "Liabilities:CreditCards:...",
-      "amount": -16754.09,
-      "currency": "INR"
-    }
-  ]
-}
-Rules:
-- One "transaction" per purchase/refund row. The expense posting carries the amount; the card (liability) posting carries NO amount — it auto-balances.
-- Refunds/credits TO the card: NEGATIVE expense amount.
-- Forex rows: amount in the foreign currency plus "price_at_signs": 2, "price_amount": <INR total as printed>, "price_currency": "INR".
-- Use existing ledger accounts when one fits (expense AND the card liability account); otherwise a sensible canonical path.
-- Tag "earn-excluded" on transactions the card earns NO points for per the card rules (fuel, rent, wallet loads, government/tax).
-- One "balance" entry per balance the statement STATES. Liability owed → NEGATIVE amount; "Cr" (credit balance — the bank owes the user) → POSITIVE. Opening balance → dated the period's first day; closing → dated the day AFTER the period ends (assertions check the start of day).
-- A stated reward-points balance: "currency": "POINTS", the points count as amount, any placeholder account (resolved downstream).
-- Copy printed figures digit-for-digit. Normalize dates to YYYY-MM-DD.
-- SKIP noise rows: payments received, reward-point summaries, interest/late fees, GST-on-fees, promotions.
-- Do NOT add reward-point postings to transactions — computed downstream.`
-
 function extractPrompt(opts: {
   statementText: string
   accounts: readonly string[]
@@ -404,6 +405,9 @@ export async function runDraftPipeline(deps: {
   kb: KbHttp
   statementText: string
   accounts: readonly string[]
+  // The shared convention stack (buildStatementIrSystem) — injected so this
+  // module stays free of the generated-prompt import cycle.
+  system: string
   instruction?: string | null
 }): Promise<PipelineResult> {
   const stages: PipelineResult['stages'] = {}
@@ -426,7 +430,7 @@ export async function runDraftPipeline(deps: {
   const ext = await genJson(
     deps.gen,
     ZStatement,
-    EXTRACT_SYSTEM,
+    deps.system,
     extractPrompt({
       statementText: deps.statementText,
       accounts: deps.accounts,
@@ -447,6 +451,8 @@ export async function runDraftPipeline(deps: {
     extracted: ext.value,
     rate,
     pool: guide.ok ? guide.pool : null,
+    accounts: deps.accounts,
+    cardName: guide.ok ? guide.card.name : (cardRes.value?.card_name ?? null),
   })
   const entries = serializeEntries(parts)
 

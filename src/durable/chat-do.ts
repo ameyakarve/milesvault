@@ -2,7 +2,7 @@ import type { ChatResponseResult } from '@cloudflare/think'
 import { generateText, stepCountIs, tool, type ToolCallRepairFunction, type ToolSet } from 'ai'
 import { draftTransactionBatchSchema } from './agent-ui-schemas'
 import { repairDraftBatch } from '@/lib/beancount/repair-draft-batch'
-import { buildLedgerSystem, buildStatementAgentSystem } from './agent-prompt'
+import { buildLedgerSystem, buildStatementAgentSystem, buildStatementIrSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
 import {
@@ -314,6 +314,9 @@ ${opts.text}`,
         kb: kbHttp,
         statementText: stmt.text,
         accounts: snapshot.accounts.map((a) => a.account),
+        // Same convention stack as the editor's statement agent — only the
+        // output channel differs (JSON entries).
+        system: buildStatementIrSystem(),
         instruction: capture?.prompt,
       })
 

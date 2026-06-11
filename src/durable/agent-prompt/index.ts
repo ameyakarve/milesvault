@@ -10,6 +10,7 @@ import {
   CLARIFICATIONS,
   STATEMENT_HANDLING,
   STATEMENT_EXTRACTION,
+  STATEMENT_IR,
   ANALYST_ROLE,
   GRAPH_WALKER_ROLE,
 } from './inline.generated'
@@ -100,6 +101,21 @@ export function buildLedgerSystem(snapshot: Snapshot): string {
     CLARIFICATIONS,
     HANDOFF_TO_STATEMENT,
     renderSnapshotBlock(snapshot),
+  ].join('\n\n---\n\n')
+}
+
+// System prompt for the headless ingest pipeline's extraction call: the
+// SAME convention stack the editor's statement agent runs on (primer,
+// examples, clarifications, extraction rules) — the only delta is the
+// output channel (STATEMENT_IR: JSON entries instead of a tool call).
+// One source of conventions; never fork prompts per surface.
+export function buildStatementIrSystem(): string {
+  return [
+    BEANCOUNT_PRIMER,
+    EXAMPLES,
+    CLARIFICATIONS,
+    STATEMENT_EXTRACTION,
+    STATEMENT_IR,
   ].join('\n\n---\n\n')
 }
 

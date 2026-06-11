@@ -23,6 +23,7 @@ const FRAGMENTS = [
   { file: 'clarifications.md', name: 'CLARIFICATIONS' },
   { file: 'statement-handling.md', name: 'STATEMENT_HANDLING' },
   { file: 'statement-extraction.md', name: 'STATEMENT_EXTRACTION' },
+  { file: 'statement-ir.md', name: 'STATEMENT_IR' },
   { file: 'analyst.md', name: 'ANALYST_ROLE' },
   { file: 'graph-walker.md', name: 'GRAPH_WALKER_ROLE' },
 ]

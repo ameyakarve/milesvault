@@ -122,7 +122,13 @@ const extracted: ExtractedStatement = {
 }
 
 const rate = parseBaseRate(guide)
-const parts = toLedgerEntries({ extracted, rate, pool: guide.ok ? guide.pool : null })
+const parts = toLedgerEntries({
+  extracted,
+  rate,
+  pool: guide.ok ? guide.pool : null,
+  accounts: [CARD, 'Expenses:Medical:Hospital'],
+  cardName: 'Axis Magnus Burgundy',
+})
 const entries = serializeEntries(parts)
 console.log(entries.join('\n\n'))
 const v = validateDraftBatch(entries)
@@ -141,6 +147,26 @@ const checks: Array<[string, boolean]> = [
   ['points wallet 1296', joined.includes('balance Assets:Rewards:Axis') && joined.includes('1296 AXIS-EDGE-BURGUNDY')],
   ['validates', v.ok],
 ]
+// A mashed model account must resolve to the EXISTING ledger account
+import { resolveCardAccount } from '../../src/durable/ingest/pipeline'
+checks.push([
+  'mashed card account resolved',
+  resolveCardAccount({
+    modelAccount: 'Liabilities:CreditCards:AxisBankMagnusBurgundy',
+    accounts: [CARD],
+    issuer: 'Axis',
+    cardName: 'Axis Magnus Burgundy',
+  }) === CARD,
+])
+checks.push([
+  'no existing → canonical from guide',
+  resolveCardAccount({
+    modelAccount: 'Liabilities:CreditCards:AxisBankMagnusBurgundy',
+    accounts: [],
+    issuer: 'Axis',
+    cardName: 'Axis Bank Magnus Burgundy',
+  }) === 'Liabilities:CreditCards:Axis:MagnusBurgundy',
+])
 let fail = 0
 for (const [name, ok] of checks) {
   console.log(ok ? 'PASS' : 'FAIL', name)
