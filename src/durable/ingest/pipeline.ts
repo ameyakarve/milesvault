@@ -404,6 +404,14 @@ ${opts.statementText}`
 
 // ---- Orchestration -------------------------------------------------------------
 
+// Gemma-4-26b has a 256k context and no separate output cap, so the only
+// limit on extraction output is what we set. A long statement's JSON
+// (one entry per row, multi-leg forex included) can run well past 12k
+// tokens; capping low truncated it mid-JSON and every retry re-truncated
+// — the 'stuck forever' the owner hit. Generous budget; streaming keeps
+// the long generation alive.
+const EXTRACT_MAX_TOKENS = 32768
+
 export type PipelineResult = {
   ok: boolean
   entries: string[]
@@ -475,7 +483,7 @@ export async function runDraftPipeline(deps: {
   let prompt = basePrompt
   let lastExtractError: string | null = null
   for (let attempt = 0; attempt < 3; attempt++) {
-    const ext = await genJson(deps.gen, ZStatement, deps.system, prompt, 12288)
+    const ext = await genJson(deps.gen, ZStatement, deps.system, prompt, EXTRACT_MAX_TOKENS)
     if (ext.value === null) {
       lastExtractError = ext.error ?? 'unknown'
       stages.extract = { txns: 0, balances: 0, error: lastExtractError }
