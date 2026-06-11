@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { StatementUploadModal } from '@/components/statement-upload-modal'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
 import type { VaultStats } from '@/durable/ledger-do'
 import {
@@ -51,7 +50,6 @@ type FetchState =
   | { status: 'ok'; rows: AccountSummaryRow[] }
 
 export function VaultView() {
-  const [uploadOpen, setUploadOpen] = useState(false)
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
   const [names, setNames] = useState<Names>({})
@@ -194,21 +192,12 @@ export function VaultView() {
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <SectionLabel>Credit cards</SectionLabel>
-            <span className="flex items-center gap-3 text-xs text-muted-foreground">
-              <button
-                type="button"
-                onClick={() => setUploadOpen(true)}
-                className="hover:text-foreground"
-              >
-                upload statement
-              </button>
-              <Link
-                href={`/editor?prefill=${encodeURIComponent('I want to add a new credit card to track.')}`}
-                className="hover:text-foreground"
-              >
-                + add
-              </Link>
-            </span>
+            <Link
+              href={`/editor?prefill=${encodeURIComponent('I want to add a new credit card to track.')}`}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              + add
+            </Link>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {cardRows.map((r) => (
@@ -232,7 +221,6 @@ export function VaultView() {
         <SpendingBreakdown stats={stats} />
       ) : null}
 
-      <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
       {/* ── everything else, compact ──────────────────────────────────────── */}
       {orderedGroups.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
