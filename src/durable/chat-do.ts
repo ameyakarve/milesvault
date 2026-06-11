@@ -1,5 +1,5 @@
 import type { ChatResponseResult } from '@cloudflare/think'
-import { generateText, stepCountIs, tool, type ToolCallRepairFunction, type ToolSet } from 'ai'
+import { generateText, streamText, stepCountIs, tool, type ToolCallRepairFunction, type ToolSet } from 'ai'
 import { draftTransactionBatchSchema } from './agent-ui-schemas'
 import { repairDraftBatch } from '@/lib/beancount/repair-draft-batch'
 import { buildLedgerSystem, buildStatementAgentSystem, buildStatementIrSystem } from './agent-prompt'
@@ -301,13 +301,20 @@ ${opts.text}`,
       // flaky tool-call channel — then code renders the beancount: points
       // floor math, refund mirroring, pad+balance bookends, Cr signs.
       const gen = async (system: string, prompt: string, maxTokens: number) => {
-        const r = await generateText({
+        // STREAM, don't generate: a non-streaming call that takes long to
+        // produce a big JSON payload hits Workers AI's completion timeout
+        // (AiError 3046) and every retry re-runs the same slow call. A
+        // streamed response keeps the connection alive token-by-token, so
+        // long extractions complete instead of timing out.
+        const r = streamText({
           model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
           system,
           prompt,
           maxOutputTokens: maxTokens,
         })
-        return r.text
+        let text = ''
+        for await (const delta of r.textStream) text += delta
+        return text
       }
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
       const result = await runDraftPipeline({
