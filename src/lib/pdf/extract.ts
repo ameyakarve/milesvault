@@ -24,6 +24,13 @@ export class StatementExtractError extends Error {
 // scans; surface that explicitly so the UI can tell the user we can't OCR yet.
 const MIN_CHARS_FOR_TEXT_PDF = 500
 
+// Defensive caps (owner call). A statement is a handful of pages; a 25MB
+// upload or a 50-page render is almost certainly a mistake or abuse — and the
+// vision path bills per page-image. Enforced at the client (reject early) AND
+// the server (never trust the client).
+export const MAX_STATEMENT_BYTES = 15 * 1024 * 1024 // 15 MB
+export const MAX_STATEMENT_PAGES = 15
+
 // pdf.js groups text into TextItems with `transform = [a,b,c,d,e,f]` where
 // (e,f) is the baseline origin. We bucket items by integer Y and sort by X
 // to reconstruct rows — this preserves table layout well enough for most
@@ -151,7 +158,7 @@ export async function renderStatementImages(
 ): Promise<string[]> {
   const maxWidth = opts.maxWidth ?? 1500
   const quality = opts.quality ?? 0.8
-  const maxPages = opts.maxPages ?? 12
+  const maxPages = opts.maxPages ?? MAX_STATEMENT_PAGES
   const images: string[] = []
   const n = Math.min(doc.numPages, maxPages)
   for (let i = 1; i <= n; i++) {

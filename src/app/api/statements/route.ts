@@ -27,6 +27,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (typeof body.text !== 'string' || body.text.length === 0) {
     return NextResponse.json({ errors: ['text required'] }, { status: 400 })
   }
+  // Defensive server caps (never trust the client): bounded text + a small
+  // page count, and a total payload ceiling so a huge upload can't bloat the
+  // user's DO or the vision bill.
+  const MAX_PAGES = 15
+  const MAX_TEXT = 1_000_000 // 1 MB of extracted text
+  const MAX_TOTAL = 25_000_000 // 25 MB incl. base64 page images
+  if (body.text.length > MAX_TEXT) {
+    return NextResponse.json({ errors: ['statement text too large'] }, { status: 413 })
+  }
 
   // mode 'inbox' (global drop): capture row + headless background drafting —
   // the Inbox is THE ingestion surface; drafts are ready when the user opens
@@ -35,9 +44,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   const inbox = body.mode === 'inbox'
   const client = await getLedgerClient(email)
   const id = `STMT-${crypto.randomUUID()}`
-  const images = Array.isArray(body.images)
-    ? body.images.filter((x): x is string => typeof x === 'string')
-    : []
+  const images = (
+    Array.isArray(body.images)
+      ? body.images.filter((x): x is string => typeof x === 'string')
+      : []
+  ).slice(0, MAX_PAGES)
+  const totalBytes = body.text.length + images.reduce((n, i) => n + i.length, 0)
+  if (totalBytes > MAX_TOTAL) {
+    return NextResponse.json({ errors: ['upload too large'] }, { status: 413 })
+  }
   await client.put_statement({
     id,
     ownerEmail: email,

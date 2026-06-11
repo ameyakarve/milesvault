@@ -7,6 +7,7 @@ import {
   loadStatement,
   extractStatementText,
   renderStatementImages,
+  MAX_STATEMENT_BYTES,
   StatementExtractError,
 } from '@/lib/pdf/extract'
 import { ledgerClient } from '@/lib/ledger-client-browser'
@@ -98,6 +99,10 @@ export function GlobalCapture() {
       const file = files[0]!
       if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
         showError('PDF statements only.')
+        return
+      }
+      if (file.size > MAX_STATEMENT_BYTES) {
+        showError(`That file is too large (max ${Math.round(MAX_STATEMENT_BYTES / 1024 / 1024)} MB).`)
         return
       }
 

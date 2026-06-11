@@ -14,6 +14,7 @@ import {
   loadStatement,
   extractStatementText,
   renderStatementImages,
+  MAX_STATEMENT_BYTES,
   StatementExtractError,
 } from '@/lib/pdf/extract'
 import { ledgerClient } from '@/lib/ledger-client-browser'
@@ -80,6 +81,14 @@ export function StatementUploadModal({
     if (!file) return
     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       setState({ kind: 'error', file: null, message: 'PDF statements only.' })
+      return
+    }
+    if (file.size > MAX_STATEMENT_BYTES) {
+      setState({
+        kind: 'error',
+        file: null,
+        message: `That file is too large (max ${Math.round(MAX_STATEMENT_BYTES / 1024 / 1024)} MB).`,
+      })
       return
     }
     void process(file)
