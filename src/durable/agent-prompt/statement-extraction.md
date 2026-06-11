@@ -60,7 +60,8 @@ Follow these rules when building that array.
    statement, each spend entry follows the card guide's earn example:
    expense leg + card leg + `pool.account`:Pending points leg +
    `Equity:Void` contra, points = `floor(amount / per) * points` from the
-   guide's base rate, commodity = `pool.ticker`, tag `#reward-accrual`.
+   guide's base rate, commodity = `pool.ticker`. No tag — tags are for
+   LINKING related entries only (e.g. refund ↔ original), never decoration.
    Excluded categories per the guide (fuel, rent, wallet loads,
    government/tax) get the plain two-posting form — no points legs.
    REFUNDS REVERSE THEIR POINTS with mirrored signs — same four-posting

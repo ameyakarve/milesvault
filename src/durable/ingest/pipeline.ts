@@ -292,7 +292,7 @@ export function toLedgerEntries(opts: {
     // Tags are for LINKING related entries (owner rule: refund ↔ original,
     // reversal pairs) — the earn-excluded signal is consumed here and
     // stripped; code never adds decorative tags.
-    const tags = rawTags.filter((t) => t !== EXCLUDED_TAG)
+    const tags = rawTags.filter((t) => t !== EXCLUDED_TAG && t !== 'reward-accrual')
 
     // Strip any model-emitted points legs (code owns those); sanitize
     // accounts; blank the card leg's amount → beancount auto-balances it.
