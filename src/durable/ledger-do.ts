@@ -1350,6 +1350,25 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       const factor = 10n ** BigInt(TARGET_SCALE - p.scale)
       upsert(p.account, p.currency, BigInt(p.amount_scaled) * factor, p.date)
     }
+    // Materialized assertion plugs count like postings — without them the
+    // summaries show the raw transaction sum while balance_totals (and the
+    // statement's own assertion) say otherwise.
+    for (const p of this.db
+      .exec<{
+        account: string
+        currency: string
+        amount_scaled: number
+        scale: number
+        date: number
+      }>(
+        `SELECT account, currency, amount_scaled, scale, date
+         FROM plug_postings WHERE date <= ?`,
+        asOfInt,
+      )
+      .toArray()) {
+      const factor = 10n ** BigInt(TARGET_SCALE - p.scale)
+      upsert(p.account, p.currency, BigInt(p.amount_scaled) * factor, p.date)
+    }
     for (const r of this.db
       .exec<{ account: string; currency: string; date: number }>(
         `SELECT account, currency, date FROM directives_balance
