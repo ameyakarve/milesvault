@@ -66,7 +66,12 @@ Follow these rules when building that array.
    guide's base rate, commodity = `pool.ticker`. No tag — tags are for
    LINKING related entries only (e.g. refund ↔ original), never decoration.
    Excluded categories per the guide (fuel, rent, wallet loads,
-   government/tax) get the plain two-posting form — no points legs. Issuer
+   government/tax) get the plain two-posting form — no points legs.
+   "Fuel" means petrol/diesel/CNG bought AT A FUEL STATION or pump — it is
+   NOT a piped-gas / electricity / water UTILITY BILL (e.g. "GAIL GAS",
+   "...GAS LIMITED", a power or water board). Utility bills earn normally
+   unless the guide says otherwise. Don't infer an exclusion from a
+   merchant's name alone — only the guide's listed categories exclude. Issuer
    fees never earn: interest, finance charges, late fees, and standalone
    GST (Expenses:Bank:* / Expenses:Tax:*) carry NO points legs, ever.
    REFUNDS REVERSE THEIR POINTS with mirrored signs — same four-posting
@@ -106,6 +111,8 @@ Follow these rules when building that array.
      2026-05-18 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Opening-Balances
      2026-05-19 balance Liabilities:CreditCards:Axis:SelectPlus  -62000.00 INR
      ```
+   Emit EXACTLY ONE opening and ONE closing balance per card — never two
+   closing assertions, never the same balance on two adjacent dates.
    SIGNS — read the statement's Dr/Cr marker carefully:
    - amount OWED to the bank (normal "total due", or "Dr") → NEGATIVE:
      "Total Payment Due 62,000" asserts -62000.00 INR.
