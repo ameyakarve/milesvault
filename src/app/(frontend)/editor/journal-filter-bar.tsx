@@ -155,7 +155,7 @@ export function JournalFilterBar({
           onClick={() =>
             onChange({ account: null, date: null })
           }
-          className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none"
         >
           <X className="size-3" />
           Reset
@@ -168,6 +168,8 @@ export function JournalFilterBar({
 function chipCls(active: boolean): string {
   return cn(
     'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition',
+    // Replace the UA focus outline (blue) with the app's monochrome ring.
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30',
     active
       ? 'border-foreground bg-foreground text-background'
       : 'border-border bg-background text-foreground hover:bg-muted',
@@ -208,8 +210,8 @@ function DatePicker({
                 type="button"
                 onClick={() => onPick(p.range)}
                 className={cn(
-                  'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-muted',
-                  isActive ? 'font-medium text-foreground' : 'text-foreground/80',
+                  'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-muted focus-visible:bg-muted focus-visible:outline-none',
+                  isActive ? 'bg-muted font-medium text-foreground' : 'text-foreground/80',
                 )}
               >
                 <span>{p.label}</span>
@@ -232,7 +234,7 @@ function DatePicker({
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-1 text-[12px]"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-1 text-[12px] accent-foreground [color-scheme:light] focus:border-foreground/50 focus:outline-none dark:[color-scheme:dark]"
             />
           </label>
           <label className="flex items-center gap-2">
@@ -241,7 +243,7 @@ function DatePicker({
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-1 text-[12px]"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-1.5 py-1 text-[12px] accent-foreground [color-scheme:light] focus:border-foreground/50 focus:outline-none dark:[color-scheme:dark]"
             />
           </label>
         </div>
@@ -249,7 +251,7 @@ function DatePicker({
           <button
             type="button"
             onClick={onClear}
-            className="rounded-md px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted"
+            className="rounded-md px-2 py-1 text-[12px] text-muted-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
           >
             All time
           </button>
@@ -257,7 +259,7 @@ function DatePicker({
             type="button"
             disabled={!customFrom || !customTo || customFrom > customTo}
             onClick={() => onPick({ from: customFrom, to: customTo })}
-            className="rounded-md bg-foreground px-2.5 py-1 text-[12px] font-medium text-background hover:bg-foreground/90 disabled:bg-muted disabled:text-muted-foreground"
+            className="rounded-md bg-foreground px-2.5 py-1 text-[12px] font-medium text-background hover:bg-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/30 disabled:bg-muted disabled:text-muted-foreground"
           >
             Apply
           </button>
@@ -359,7 +361,7 @@ function AccountPicker({
           <button
             type="button"
             onClick={onClear}
-            className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground hover:bg-muted"
+            className="w-full rounded-md px-2 py-1.5 text-left text-[12px] text-muted-foreground hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
           >
             Clear account filter
           </button>
@@ -403,7 +405,7 @@ function AccountRow({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none"
             aria-label={open ? 'Collapse' : 'Expand'}
           >
             <ChevronRight
@@ -416,7 +418,10 @@ function AccountRow({
         <button
           type="button"
           onClick={() => onPick(node.full)}
-          className="flex-1 truncate py-1.5 pr-3 text-left text-[13px] text-foreground/80 hover:text-foreground"
+          className={cn(
+            'flex-1 truncate py-1.5 pr-3 text-left text-[13px] hover:text-foreground focus-visible:text-foreground focus-visible:outline-none',
+            isSelected ? 'font-medium text-foreground' : 'text-foreground/80',
+          )}
           title={node.full}
         >
           {node.name}
