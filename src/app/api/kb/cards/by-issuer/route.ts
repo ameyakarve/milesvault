@@ -19,9 +19,17 @@ export async function GET(req: NextRequest): Promise<Response> {
     edge_type: 'ISSUED_BY',
     direction: 'incoming',
   })) as { items?: Array<{ other: string; display_name?: string | null }> }
+  // ISSUED_BY edges don't carry display names; derive a readable label from
+  // the slug (cc/axis-magnus-burgundy → "Axis Magnus Burgundy").
+  const pretty = (slug: string) =>
+    slug
+      .replace(/^cc\//, '')
+      .split('-')
+      .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
+      .join(' ')
   const items = (r.items ?? [])
     .filter((i) => i.other.startsWith('cc/'))
-    .map((i) => ({ slug: i.other, name: i.display_name ?? null }))
-    .sort((a, b) => (a.name ?? a.slug).localeCompare(b.name ?? b.slug))
+    .map((i) => ({ slug: i.other, name: i.display_name ?? pretty(i.other) }))
+    .sort((a, b) => a.name.localeCompare(b.name))
   return NextResponse.json({ items })
 }
