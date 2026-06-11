@@ -419,25 +419,19 @@ export async function runDraftPipeline(deps: {
   let guide: CardGuideResult = cardRes.value
     ? await fetchCardGuide(deps.kb, cardRes.value.card_name)
     : { ok: false, error: 'card_not_identified' }
-  // Ambiguous resolution returns candidates; the agent flow lets the model
-  // pick — here CODE picks: max token overlap with the statement's name.
+  // Ambiguous resolution returns candidates. Code did the RECALL; the
+  // MODEL does the choosing (owner design — no matching heuristics here).
   if (guide.ok === false && guide.candidates?.length && cardRes.value) {
-    const want = new Set(
-      cardRes.value.card_name.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length >= 4),
-    )
     const cands: Array<{ slug: string; name: string | null }> = guide.candidates
-    const scored = cands
-      .map((c) => ({
-        c,
-        score: (c.name ?? '')
-          .toLowerCase()
-          .split(/[^a-z0-9]+/)
-          .filter((t) => want.has(t)).length,
-      }))
-      .sort((a, b) => b.score - a.score)
-    const best = scored[0]
-    if (best && best.score > 0 && best.c.name) {
-      guide = await fetchCardGuide(deps.kb, best.c.name)
+    const pick = await genJson(
+      deps.gen,
+      z.object({ name: z.string().nullable() }),
+      'A statement names a credit card; the knowledge graph offers candidate cards. Output ONLY {"name": "<exact candidate name>"} for the matching card, or {"name": null} if none match.',
+      `Statement card: ${cardRes.value.card_name}\nCandidates:\n${cands.map((c) => `- ${c.name}`).join('\n')}`,
+      128,
+    )
+    if (pick.value?.name) {
+      guide = await fetchCardGuide(deps.kb, pick.value.name)
     }
   }
   const rate = parseBaseRate(guide)

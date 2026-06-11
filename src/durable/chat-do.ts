@@ -321,13 +321,10 @@ ${opts.text}`,
       })
 
       if (result.ok && result.entries.length > 0) {
-        await ledger.set_capture_drafts(
-          statementId,
-          result.entries,
-          result.validation_issues.length > 0
-            ? `Validation warnings (fix in the editor before approving):\n${result.validation_issues.join('\n')}`
-            : null,
-        )
+        // Pipeline diagnostics (validation issues, omission reasons) are
+        // internal: they go to the tool log in full, never onto the
+        // product surface (owner call).
+        await ledger.set_capture_drafts(statementId, result.entries, null)
       } else {
         await ledger.set_capture_error(
           statementId,
