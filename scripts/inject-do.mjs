@@ -45,6 +45,14 @@ const __AGENT_DO_BINDINGS = {
 }
 
 async function __resolveEmail(request, env) {
+  // e2e test identity (staging only — TEST_USER_TOKEN secret unset in prod).
+  if (env.TEST_USER_TOKEN) {
+    const cookie = request.headers.get("cookie") ?? ""
+    const m = /(?:^|;\s*)mv-test-token=([^;]+)/.exec(cookie)
+    if (m && decodeURIComponent(m[1]) === env.TEST_USER_TOKEN) {
+      return "test@milesvault.test"
+    }
+  }
   try {
     const token = await __authGetToken({
       req: request,

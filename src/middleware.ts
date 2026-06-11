@@ -5,6 +5,9 @@ const { auth } = NextAuth(authConfig)
 
 export default auth((req) => {
   if (!req.auth) {
+    // e2e test identity: the per-route auth() validates the token against
+    // TEST_USER_TOKEN; the middleware only needs to not redirect it.
+    if (req.cookies.get('mv-test-token')?.value) return
     const url = new URL('/login', req.nextUrl.origin)
     url.searchParams.set('callbackUrl', req.nextUrl.pathname)
     return Response.redirect(url)
