@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowRightLeft, ArrowUp, Check, Copy, FileText, Paperclip } from 'lucide-react'
+import { ArrowRightLeft, ArrowUp, Check, Copy, CreditCard, FileText, Paperclip } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
@@ -75,6 +75,7 @@ function Composer({
   status,
   onStop,
   onAttachClick,
+  onAddCard,
 }: {
   onSubmit: (m: PromptInputMessage) => void
   status: ReturnType<typeof useAgentChat>['status']
@@ -82,6 +83,9 @@ function Composer({
   // Opens the statement upload modal — statements are Inbox items; the
   // composer carries text only.
   onAttachClick: () => void
+  // Kicks off the add_card picker flow — always present (owner call),
+  // not just on the empty-conversation starter chips.
+  onAddCard: () => void
 }) {
   return (
     <PromptInput onSubmit={onSubmit}>
@@ -94,6 +98,13 @@ function Composer({
             tooltip="Upload statement (PDF) — goes to your Inbox"
           >
             <Paperclip className="size-4" />
+          </PromptInputButton>
+          <PromptInputButton
+            type="button"
+            onClick={onAddCard}
+            tooltip="Add a card"
+          >
+            <CreditCard className="size-4" />
           </PromptInputButton>
         </PromptInputTools>
         <PromptInputSubmit status={status} onStop={onStop}>
@@ -291,6 +302,11 @@ export function Chat({
     })
   }, [canClear, onClearableChange])
 
+  function addCardFlow() {
+    if (status === 'streaming' || status === 'submitted') return
+    void sendMessage({ text: 'I want to add a new credit card to track.' })
+  }
+
   async function handleSubmit(message: PromptInputMessage) {
     const userText = message.text.trim()
     if (!userText) return
@@ -423,6 +439,7 @@ export function Chat({
                   status={status}
                   onStop={stop}
                   onAttachClick={() => setUploadOpen(true)}
+                  onAddCard={addCardFlow}
                 />
                 <StarterChips onAttachClick={() => setUploadOpen(true)} />
               </div>
@@ -633,6 +650,7 @@ export function Chat({
               status={status}
               onStop={stop}
               onAttachClick={() => setUploadOpen(true)}
+              onAddCard={addCardFlow}
             />
             <p className="mt-2 text-center text-xs text-muted-foreground">
               MilesVault can make mistakes. Check important info.
