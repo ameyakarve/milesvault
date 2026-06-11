@@ -2,6 +2,7 @@
 //   TEST_USER_TOKEN=... node scripts/test/seed.mjs [--with-statement]
 // Idempotent: resets first, then writes the fixture journal; optionally
 // uploads a fixture statement so the background pipeline runs for real.
+import { readFileSync } from 'node:fs'
 const BASE = process.env.MV_BASE ?? 'https://staging.milesvault.com'
 const TOKEN = process.env.TEST_USER_TOKEN
 if (!TOKEN) {
@@ -48,13 +49,18 @@ Reward Points: Opening 0  Earned 60  Closing 60
 `
 
 const withStatement = process.argv.includes('--with-statement')
+// --journal <path> (or MV_SEED_JOURNAL): seed a real journal file instead of
+// the synthetic fixture. Owner journals stay OUT of the repo — pass a path.
+const jIdx = process.argv.indexOf('--journal')
+const journalPath = jIdx > -1 ? process.argv[jIdx + 1] : process.env.MV_SEED_JOURNAL
+const journal = journalPath ? readFileSync(journalPath, 'utf8') : FIXTURE_JOURNAL
 
 console.log('reset…')
 await call('POST', '/api/test/reset')
 console.log('journal…')
 const r = await call('PUT', '/api/ledger/journal/batch', {
   knownIds: [],
-  buffer: FIXTURE_JOURNAL,
+  buffer: journal,
 })
 console.log('journal rows:', r.rows?.length ?? r)
 if (withStatement) {

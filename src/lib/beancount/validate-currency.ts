@@ -21,6 +21,11 @@ import type { DirectiveInput, TransactionInput } from '@/durable/ledger-types'
 const LOCKED_TOPS = new Set(['Assets', 'Liabilities'])
 
 function isLocked(account: string): boolean {
+  // Rewards wallets are MULTI-commodity by the account-first taxonomy
+  // (Assets:Rewards:<Issuer> holds every tier ticker; the auto-open even
+  // creates them unconstrained) — currency-locking them contradicted our
+  // own output and broke journal round-trips.
+  if (account.startsWith('Assets:Rewards:')) return false
   const top = account.split(':', 1)[0]!
   return LOCKED_TOPS.has(top)
 }
