@@ -65,15 +65,17 @@ Follow these rules when building that array.
    `Equity:Void` contra, points = `floor(amount / per) * points` from the
    guide's base rate, commodity = `pool.ticker`. No tag — tags are for
    LINKING related entries only (e.g. refund ↔ original), never decoration.
-   Excluded categories per the guide (fuel, rent, wallet loads,
-   government/tax) get the plain two-posting form — no points legs.
-   "Fuel" means petrol/diesel/CNG bought AT A FUEL STATION or pump — it is
-   NOT a piped-gas / electricity / water UTILITY BILL (e.g. "GAIL GAS",
-   "...GAS LIMITED", a power or water board). Utility bills earn normally
-   unless the guide says otherwise. Don't infer an exclusion from a
-   merchant's name alone — only the guide's listed categories exclude. Issuer
-   fees never earn: interest, finance charges, late fees, and standalone
-   GST (Expenses:Bank:* / Expenses:Tax:*) carry NO points legs, ever.
+   EARN BY DEFAULT — a spend earns at the base rate UNLESS the card guide's
+   per-category earn rules (provided with the card) exclude it. Apply those
+   rules by the merchant's actual category, not by keywords in its name (a
+   "GAS" merchant may be a utility, which most cards still earn on — defer to
+   the guide). When the guide doesn't clearly exclude it, the spend EARNS.
+   RECONCILE: the points you assign across all transactions should add up to
+   the statement's stated "Earned this cycle" figure. If your per-transaction
+   total falls short, you wrongly excluded a spend that actually earned — put
+   its points back so the totals agree.
+   Issuer fees never earn: interest, finance charges, late fees, and
+   standalone GST (Expenses:Bank:* / Expenses:Tax:*) carry NO points legs.
    REFUNDS REVERSE THEIR POINTS with mirrored signs — same four-posting
    shape, points computed on the refunded amount:
    `Expenses:… -877.82 INR / card +877.82 INR /
@@ -95,9 +97,13 @@ Follow these rules when building that array.
    - **CLOSING → assert it.** If it states a CLOSING points balance, emit ONE
      `balance` directive for `<pool.account>` in `<pool.ticker>` with that
      closing number, dated the statement close. Points, never rupees.
-9. **Assert the statement's opening and closing balances.** When the
-   statement states them (it almost always does), emit pad+balance pairs
-   as single elements, around the transactions:
+9. **Assert the statement's opening and closing balances.** Use the exact
+   printed figures — the OPENING balance is the statement's stated
+   "Opening Balance" / "Previous Balance"; the CLOSING balance is the
+   "Total Payment Due" / "Net Outstanding Balance" / "Closing Balance". NEVER
+   use a transaction amount, the minimum due, or the credit limit as a balance.
+   When the statement states them (it almost always does), emit pad+balance
+   pairs as single elements, around the transactions:
    - Opening, BEFORE the cycle's transactions (the pad absorbs any drift
      into Equity:Opening-Balances; balance asserts at the START of its
      date, so date it the cycle's first day):

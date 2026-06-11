@@ -361,10 +361,27 @@ export async function runDraftPipeline(deps: {
   // entries that fail the draft validator go back to the model with the
   // full messages (the agent flow's bounce, in pipeline form — without it,
   // an invalid forex refund once sailed straight into the drafts).
+  // Send the FULL earn rules the guide carries — the prose AND the per-MCC
+  // EARN_RULE edges (the precise exclusions + which categories earn). Without
+  // the edges, the model only sees vague prose ("no fuel") and mis-classifies
+  // utilities (e.g. a piped-gas bill) as fuel.
+  const cardRules = guide.ok
+    ? [
+        guide.logging_guide ?? guide.pool?.rate_notes,
+        guide.overrides.length
+          ? 'Per-category earn rules (from the card guide):\n' +
+            guide.overrides
+              .map((o) => `- ${o.name ?? o.mcc}: ${o.rule ?? '(see guide)'}`)
+              .join('\n')
+          : null,
+      ]
+        .filter(Boolean)
+        .join('\n\n') || null
+    : null
   const basePrompt = extractPrompt({
     statementText: deps.statementText,
     accounts: deps.accounts,
-    cardRules: guide.ok ? (guide.logging_guide ?? guide.pool?.rate_notes ?? null) : null,
+    cardRules,
     pool: guide.ok ? guide.pool : null,
     rate,
     instruction: deps.instruction,
