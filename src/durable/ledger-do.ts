@@ -83,6 +83,7 @@ export type JournalPutError = {
     | 'currency_lock'
     | 'credit_card_format'
     | 'unbalanced'
+    | 'balance_assertion_failed'
   message: string
 }
 export type ProposeJournalEditResponse =
@@ -817,6 +818,13 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       }
     }
     this.hardenPostings()
+    // Apply balance assertions to the materialized balances (plug rows are
+    // wiped/rebuilt; triggers keep balance_totals/daily_balances in step).
+    try {
+      this.rematerializePlugs()
+    } catch (e) {
+      console.error('[migrate] plug rematerialization failed', { err: String(e) })
+    }
   }
 
   // A prior deploy spawned a `StatementExtractor` facet sub-agent via
@@ -1703,20 +1711,145 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
 
       // 5. Atomic: DELETE the knownIds, INSERT parsed entries.
       const now = Date.now()
-      this.ctx.storage.transactionSync(() => {
-        for (const ref of req.knownIds) {
-          const table =
-            ref.kind === 'txn' ? 'transactions' : DIRECTIVE_TABLE[ref.kind]
-          this.db.exec(`DELETE FROM ${table} WHERE id = ?`, ref.id)
+      let assertionFailures: ReturnType<LedgerDO['rematerializePlugs']> = []
+      try {
+        this.ctx.storage.transactionSync(() => {
+          for (const ref of req.knownIds) {
+            const table =
+              ref.kind === 'txn' ? 'transactions' : DIRECTIVE_TABLE[ref.kind]
+            this.db.exec(`DELETE FROM ${table} WHERE id = ?`, ref.id)
+          }
+          parsed.transactions.forEach((t, i) =>
+            this.insertTxn(t, txnHashes[i]!, now),
+          )
+          for (const d of parsed.directives) this.insertDirective(d, now)
+          // Apply balance assertions: pads materialize their gap; hard
+          // assertions (no plug) with a gap abort the whole write.
+          assertionFailures = this.rematerializePlugs()
+          if (assertionFailures.length > 0) {
+            throw new Error('__assertion_failed__')
+          }
+        })
+      } catch (e) {
+        if (String(e).includes('__assertion_failed__')) {
+          return {
+            ok: false,
+            error: 'balance_assertion_failed',
+            message: assertionFailures
+              .map(
+                (f) =>
+                  `balance assertion failed: ${f.account} ${f.currency} on ${f.date} — asserted ${f.asserted}, computed ${f.computed} (add a pad to absorb the gap, or fix the missing entries)`,
+              )
+              .join('\n'),
+          }
         }
-        parsed.transactions.forEach((t, i) =>
-          this.insertTxn(t, txnHashes[i]!, now),
-        )
-        for (const d of parsed.directives) this.insertDirective(d, now)
-      })
+        throw e
+      }
 
       return { ok: true, rows: this.listEntriesSync() }
     })
+  }
+
+  // Materialize balance assertions: for each directive in (account,
+  // currency, date) order, the gap between the asserted amount and the
+  // posting-derived running balance at start-of-date becomes a synthetic
+  // posting pair routed through plug_account (the pad), dated the previous
+  // day so start-of-date semantics include it. Directives WITHOUT a plug
+  // are hard assertions: any gap aborts the write. Rebuilt wholesale on
+  // every journal write — O(directives × lookups), tiny for one user.
+  private rematerializePlugs(): Array<{
+    account: string
+    currency: string
+    date: string
+    asserted: string
+    computed: string
+  }> {
+    const TARGET_SCALE = 12
+    this.db.exec('DELETE FROM plug_postings')
+    const failures: Array<{
+      account: string
+      currency: string
+      date: string
+      asserted: string
+      computed: string
+    }> = []
+    const dirs = this.db
+      .exec<{
+        id: number
+        date: number
+        account: string
+        amount_scaled: number
+        scale: number
+        currency: string
+        plug_account: string | null
+      }>(
+        `SELECT id, date, account, amount_scaled, scale, currency, plug_account
+         FROM directives_balance
+         ORDER BY account, currency, date, id`,
+      )
+      .toArray()
+    // Running plug total per (account|currency), at TARGET_SCALE.
+    const plugged = new Map<string, bigint>()
+    for (const d of dirs) {
+      const key = `${d.account}|${d.currency}`
+      const posted = this.db
+        .exec<{ scale: number; s: number | null }>(
+          `SELECT scale, SUM(amount_scaled) AS s FROM postings
+           WHERE account = ? AND currency = ? AND date < ?
+           GROUP BY scale`,
+          d.account,
+          d.currency,
+          d.date,
+        )
+        .toArray()
+        .reduce(
+          (acc, r) =>
+            acc + BigInt(r.s ?? 0) * 10n ** BigInt(TARGET_SCALE - r.scale),
+          0n,
+        )
+      const computed = posted + (plugged.get(key) ?? 0n)
+      const asserted =
+        BigInt(d.amount_scaled) * 10n ** BigInt(TARGET_SCALE - d.scale)
+      const gap = asserted - computed
+      if (gap === 0n) continue
+      if (!d.plug_account) {
+        const toDec = (v: bigint) => (Number(v) / 10 ** TARGET_SCALE).toFixed(2)
+        failures.push({
+          account: d.account,
+          currency: d.currency,
+          date: String(d.date),
+          asserted: toDec(asserted),
+          computed: toDec(computed),
+        })
+        continue
+      }
+      // Dated the day before the assertion (start-of-day semantics).
+      const dt = String(d.date)
+      const prev = new Date(
+        Date.UTC(Number(dt.slice(0, 4)), Number(dt.slice(4, 6)) - 1, Number(dt.slice(6, 8)) - 1),
+      )
+      const prevInt = Number(
+        `${prev.getUTCFullYear()}${String(prev.getUTCMonth() + 1).padStart(2, '0')}${String(prev.getUTCDate()).padStart(2, '0')}`,
+      )
+      this.db.exec(
+        `INSERT INTO plug_postings (directive_id, account, amount_scaled, scale, currency, date)
+         VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)`,
+        d.id,
+        d.account,
+        Number(gap),
+        TARGET_SCALE,
+        d.currency,
+        prevInt,
+        d.id,
+        d.plug_account,
+        Number(-gap),
+        TARGET_SCALE,
+        d.currency,
+        prevInt,
+      )
+      plugged.set(key, (plugged.get(key) ?? 0n) + gap)
+    }
+    return failures
   }
 
   private readUpdatedAt(kind: EntryKind, id: number): number | null {
@@ -1767,7 +1900,11 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       }>(
         `WITH expected AS (
            SELECT account, currency, scale, SUM(amount_scaled) AS s
-           FROM postings GROUP BY account, currency, scale
+           FROM (
+             SELECT account, currency, scale, amount_scaled FROM postings
+             UNION ALL
+             SELECT account, currency, scale, amount_scaled FROM plug_postings
+           ) GROUP BY account, currency, scale
          )
          SELECT b.account, b.currency, b.scale,
                 b.balance_scaled AS stored,
@@ -1799,7 +1936,11 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         `WITH daily_deltas AS (
            SELECT account, currency, scale, date,
                   SUM(amount_scaled) AS d
-           FROM postings
+           FROM (
+             SELECT account, currency, scale, date, amount_scaled FROM postings
+             UNION ALL
+             SELECT account, currency, scale, date, amount_scaled FROM plug_postings
+           )
            GROUP BY account, currency, scale, date
          ),
          expected AS (
@@ -1842,7 +1983,11 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       this.db.exec(
         `INSERT INTO balance_totals (account, currency, scale, balance_scaled)
          SELECT account, currency, scale, SUM(amount_scaled)
-         FROM postings
+         FROM (
+           SELECT account, currency, scale, amount_scaled FROM postings
+           UNION ALL
+           SELECT account, currency, scale, amount_scaled FROM plug_postings
+         )
          GROUP BY account, currency, scale`,
       )
       this.db.exec('DELETE FROM daily_balances')
@@ -1856,7 +2001,11 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
          FROM (
            SELECT account, currency, scale, date,
                   SUM(amount_scaled) AS daily_delta
-           FROM postings
+           FROM (
+             SELECT account, currency, scale, date, amount_scaled FROM postings
+             UNION ALL
+             SELECT account, currency, scale, date, amount_scaled FROM plug_postings
+           )
            GROUP BY account, currency, scale, date
          )`,
       )

@@ -474,6 +474,82 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
                AND date >= OLD.date;
           END`,
   },
+  // Synthetic reconciling postings materialized from balance directives
+  // with a plug_account (the pad): two rows per directive — the gap into
+  // the asserted account, its mirror into the plug. Stored at scale 12
+  // (TARGET_SCALE); readers already sum across scales. CASCADE keeps them
+  // exactly as alive as their directive; rematerializePlugs() rebuilds the
+  // whole table on every journal write.
+  {
+    label: 'plug_postings',
+    sql: `CREATE TABLE IF NOT EXISTS plug_postings (
+      directive_id   INTEGER NOT NULL REFERENCES directives_balance(id) ON DELETE CASCADE,
+      account        TEXT    NOT NULL,
+      amount_scaled  INTEGER NOT NULL,
+      scale          INTEGER NOT NULL,
+      currency       TEXT    NOT NULL,
+      date           INTEGER NOT NULL
+    ) STRICT`,
+  },
+  {
+    label: 'trg_plugs_balance_ai',
+    sql: `CREATE TRIGGER IF NOT EXISTS trg_plugs_balance_ai
+          AFTER INSERT ON plug_postings
+          BEGIN
+            INSERT INTO balance_totals (account, currency, scale, balance_scaled)
+            VALUES (NEW.account, NEW.currency, NEW.scale, NEW.amount_scaled)
+            ON CONFLICT(account, currency, scale) DO UPDATE SET
+              balance_scaled = balance_scaled + NEW.amount_scaled;
+          END`,
+  },
+  {
+    label: 'trg_plugs_balance_ad',
+    sql: `CREATE TRIGGER IF NOT EXISTS trg_plugs_balance_ad
+          AFTER DELETE ON plug_postings
+          BEGIN
+            UPDATE balance_totals
+               SET balance_scaled = balance_scaled - OLD.amount_scaled
+             WHERE account = OLD.account
+               AND currency = OLD.currency
+               AND scale = OLD.scale;
+          END`,
+  },
+  {
+    label: 'trg_plugs_daily_ai',
+    sql: `CREATE TRIGGER IF NOT EXISTS trg_plugs_daily_ai
+          AFTER INSERT ON plug_postings
+          BEGIN
+            INSERT OR IGNORE INTO daily_balances (account, currency, scale, date, balance_scaled)
+            SELECT NEW.account, NEW.currency, NEW.scale, NEW.date,
+                   COALESCE((
+                     SELECT balance_scaled FROM daily_balances
+                      WHERE account = NEW.account
+                        AND currency = NEW.currency
+                        AND scale = NEW.scale
+                        AND date < NEW.date
+                      ORDER BY date DESC LIMIT 1
+                   ), 0);
+            UPDATE daily_balances
+               SET balance_scaled = balance_scaled + NEW.amount_scaled
+             WHERE account = NEW.account
+               AND currency = NEW.currency
+               AND scale = NEW.scale
+               AND date >= NEW.date;
+          END`,
+  },
+  {
+    label: 'trg_plugs_daily_ad',
+    sql: `CREATE TRIGGER IF NOT EXISTS trg_plugs_daily_ad
+          AFTER DELETE ON plug_postings
+          BEGIN
+            UPDATE daily_balances
+               SET balance_scaled = balance_scaled - OLD.amount_scaled
+             WHERE account = OLD.account
+               AND currency = OLD.currency
+               AND scale = OLD.scale
+               AND date >= OLD.date;
+          END`,
+  },
   // Backfill from postings. Idempotent: every DO init wipes and re-derives,
   // so existing data picks up the new tables and any future drift heals on
   // restart. Cost is O(postings) per cold start — acceptable for the
@@ -486,7 +562,11 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     label: 'balance_totals_backfill_insert',
     sql: `INSERT INTO balance_totals (account, currency, scale, balance_scaled)
           SELECT account, currency, scale, SUM(amount_scaled)
-          FROM postings
+          FROM (
+            SELECT account, currency, scale, amount_scaled FROM postings
+            UNION ALL
+            SELECT account, currency, scale, amount_scaled FROM plug_postings
+          )
           GROUP BY account, currency, scale`,
   },
   {
@@ -504,7 +584,11 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
           FROM (
             SELECT account, currency, scale, date,
                    SUM(amount_scaled) AS daily_delta
-            FROM postings
+            FROM (
+              SELECT account, currency, scale, date, amount_scaled FROM postings
+              UNION ALL
+              SELECT account, currency, scale, date, amount_scaled FROM plug_postings
+            )
             GROUP BY account, currency, scale, date
           )`,
   },
