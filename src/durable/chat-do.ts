@@ -295,11 +295,21 @@ ${opts.text}`,
 
   // Pure OCR: transcribe statement page images to text via Mistral (vision).
   // No structure, no JSON — just the visible text, so labels banks render as
-  // images come through. Streamed; tail surfaced as the draft trace.
+  // images come through. ONE call PER PAGE (concurrent): a single multi-page
+  // transcription near the token ceiling goes sloppy on dense right-aligned
+  // amount columns (verified: it dropped digits — 800→8). Per-page, focused
+  // on copying each row's digits exactly, it's accurate.
   private async ocrStatement(
     images: string[],
     trace: (t: string) => void,
   ): Promise<string> {
+    const pages = await Promise.all(
+      images.map((url, i) => this.ocrPage(url, i, trace).catch((): string => '')),
+    )
+    return pages.map((t, i) => `--- page ${i + 1} ---\n${t}`).join('\n\n')
+  }
+
+  private async ocrPage(url: string, idx: number, trace: (t: string) => void): Promise<string> {
     const ai = this.env.AI as unknown as {
       run: (model: string, inputs: unknown) => Promise<ReadableStream<Uint8Array>>
     }
@@ -310,13 +320,13 @@ ${opts.text}`,
           content: [
             {
               type: 'text',
-              text: 'Transcribe ALL text visible on these credit-card statement pages, exactly as printed — every label, number, date and merchant, preserving line structure. Pay special attention to the reward / loyalty POINTS summary (opening, earned, redeemed, closing points) and transcribe it WITH its label so the closing points balance is unambiguous. Output only the transcription, nothing else.',
+              text: 'Transcribe everything printed on this one credit-card statement page, exactly as shown, preserving line and table structure. For the transaction table, output ONE ROW PER LINE with its date, merchant and the amount — copy every DIGIT, COMMA and decimal exactly, and keep the Dr/Cr suffix (e.g. "10,155.00 Dr"). Also transcribe any reward / loyalty POINTS summary WITH its labels (opening, earned, redeemed, closing). Output only the transcription, nothing else.',
             },
-            ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+            { type: 'image_url', image_url: { url } },
           ],
         },
       ],
-      max_tokens: 8192,
+      max_tokens: 6144,
       stream: true,
     })
     let text = ''
@@ -338,7 +348,7 @@ ${opts.text}`,
           const j = JSON.parse(data) as { response?: string }
           if (j.response) {
             text += j.response
-            trace(`Reading the statement…\n${text.slice(-600)}`)
+            trace(`Reading page ${idx + 1}…\n${text.slice(-400)}`)
           }
         } catch {
           /* partial SSE frame */
