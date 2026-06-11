@@ -180,10 +180,10 @@ async function genJson<T>(
     if (!block) {
       lastError = 'no JSON object in output'
     } else {
-      // Vision models mirror the document and emit comma-grouped numbers
-      // (28,248.00) which are invalid JSON. Strip a comma sitting between two
-      // digits (number grouping only — 'BIGTREE, Mumbai' is digit,letter and
-      // untouched) and retry before giving up.
+      // Models sometimes mirror the document and emit comma-grouped numbers
+      // (e.g. 12,345.00) which are invalid JSON. Strip a comma sitting between
+      // two digits (number grouping only — a string like "Foo, City" is
+      // digit,letter and untouched) and retry before giving up.
       const candidates = [block]
       let stripped = block
       for (let k = 0; k < 4; k++) {
