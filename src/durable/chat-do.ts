@@ -381,6 +381,16 @@ ${opts.text}`,
   async destroyThread(): Promise<{ ok: true }> {
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
+    // deleteAll guts the agents framework's own tables out from under the
+    // LIVE instance — a subsequent schedule() on it dies with "no such
+    // table: cf_agents_schedules" (caught by the e2e smoke). Evict after
+    // the response flushes; the next touch reconstructs from scratch.
+    this.ctx.waitUntil(
+      (async () => {
+        await new Promise((r) => setTimeout(r, 100))
+        this.ctx.abort()
+      })(),
+    )
     return { ok: true }
   }
 
