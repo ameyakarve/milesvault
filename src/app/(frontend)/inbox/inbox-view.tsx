@@ -1,12 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { ChevronLeft, Loader2 } from 'lucide-react'
 import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
-import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
-import { InboxThreadChat } from './thread-chat'
-import { StatementUploadModal } from '@/components/statement-upload-modal'
-import { Journal } from '../editor/journal'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -15,6 +12,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
+import { InboxThreadChat } from './thread-chat'
+import { StatementUploadModal } from '@/components/statement-upload-modal'
+import { Journal } from '../editor/journal'
 
 type CaptureRow = {
   id: string
@@ -46,24 +47,35 @@ function fmtDate(ms: number): string {
   })
 }
 
-// The capture lifecycle view (ledger-pipeline.md §2): ASYNC arrivals only —
-// forwarded transaction emails queue here for review. Chat uploads are
-// processed interactively and never enter the Inbox (owner call).
+// Chip tone mapping: captured→neutral (queued), processing→pending,
+// extracted→active (ready to review), posted→positive
+function chipTone(state: string) {
+  if (state === 'captured') return 'neutral' as const
+  if (state === 'processing') return 'pending' as const
+  if (state === 'extracted') return 'active' as const
+  if (state === 'posted') return 'positive' as const
+  return 'neutral' as const
+}
+
+function chipLabel(state: string): string {
+  return state === 'processing' ? 'drafting' : state
+}
+
+// The capture review workspace — same anatomy as the editor: a bordered
+// header strip, a list rail, and a detail pane whose drafts open in the real
+// Journal (CodeMirror) for in-place fixes before posting.
 export function InboxView() {
   const [allRows, setAllRows] = useState<CaptureRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [address, setAddress] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [rotateOpen, setRotateOpen] = useState(false)
-  // Inline draft review (async ingestion): which capture is expanded, and
-  // per-capture approve state.
-  const [openId, setOpenId] = useState<string | null>(null)
   const [uploadOpen, setUploadOpen] = useState(false)
-  const [approveBusy, setApproveBusy] = useState<string | null>(null)
-  const [approveError, setApproveError] = useState<Record<string, string>>({})
-  // The drafts open in a real (CodeMirror) editor — same component, theme
-  // and beancount highlighting as the Journal — so the user can fix an
-  // entry before posting. Buffers keyed by capture id; seeded on open.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [approveBusy, setApproveBusy] = useState(false)
+  const [approveError, setApproveError] = useState<string | null>(null)
+  // Editable draft buffer per capture — seeded from the background drafts
+  // when an item is opened; the Journal edits this, approve posts it.
   const [draftBuffers, setDraftBuffers] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -93,7 +105,9 @@ export function InboxView() {
     const load = () => {
       fetch('/api/ledger/captures')
         .then((r) =>
-          r.ok ? (r.json() as Promise<{ rows: CaptureRow[] }>) : Promise.reject(new Error(String(r.status))),
+          r.ok
+            ? (r.json() as Promise<{ rows: CaptureRow[] }>)
+            : Promise.reject(new Error(String(r.status))),
         )
         .then((d) => {
           if (cancelled) return
@@ -108,7 +122,6 @@ export function InboxView() {
     window.addEventListener('mv:captured', onCaptured)
     window.addEventListener('focus', onFocus)
     const interval = setInterval(() => {
-      // Only poll while a background draft is pending.
       setAllRows((prev) => {
         if (prev?.some((r) => r.state === 'captured' || r.state === 'processing')) load()
         return prev
@@ -130,12 +143,17 @@ export function InboxView() {
       .finally(() => setRotateOpen(false))
   }
 
-  const rows = allRows?.filter((r) => r.state !== 'dismissed') ?? null
+  const rows = useMemo(
+    () => allRows?.filter((r) => r.state !== 'dismissed') ?? null,
+    [allRows],
+  )
   const dismissedCount = (allRows?.length ?? 0) - (rows?.length ?? 0)
+  const selected = rows?.find((r) => r.id === selectedId) ?? null
 
   function dismiss(id: string) {
     // Optimistic: flip locally, revert on failure.
     setAllRows((prev) => prev?.map((r) => (r.id === id ? { ...r, state: 'dismissed' } : r)) ?? prev)
+    if (selectedId === id) setSelectedId(null)
     fetch('/api/ledger/captures', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -147,20 +165,26 @@ export function InboxView() {
       })
   }
 
-  async function approveDrafts(row: CaptureRow) {
+  function openItem(row: CaptureRow) {
+    const entries = parseDrafts(row.drafts)
+    if (entries.length > 0 && draftBuffers[row.id] === undefined) {
+      setDraftBuffers((s) => ({ ...s, [row.id]: entries.join('\n\n') + '\n' }))
+    }
+    setApproveError(null)
+    setSelectedId(row.id)
+  }
+
+  async function approve(row: CaptureRow) {
     const text = (draftBuffers[row.id] ?? parseDrafts(row.drafts).join('\n\n')).trim()
-    if (!text) return
-    setApproveBusy(row.id)
-    setApproveError((s) => {
-      const { [row.id]: _drop, ...rest } = s
-      return rest
-    })
+    if (!text || approveBusy) return
+    setApproveBusy(true)
+    setApproveError(null)
     try {
-      // Append-only commit, same contract as chat approval — parse errors
-      // come back as the save message, exactly like an editor save.
+      // Append-only commit, same contract as an editor save — parse errors
+      // come back as the save message.
       const r = await ledgerClient.replaceBuffer([], text)
       if (isReplaceBufferError(r)) {
-        setApproveError((s) => ({ ...s, [row.id]: 'message' in r ? r.message : 'Save conflict' }))
+        setApproveError('message' in r ? r.message : 'Save conflict')
         return
       }
       const post = await fetch('/api/ledger/captures', {
@@ -169,27 +193,12 @@ export function InboxView() {
         body: JSON.stringify({ id: row.id, action: 'post' }),
       }).catch((): null => null)
       if (!post?.ok) {
-        // The entries ARE in the journal; only the lifecycle update failed.
-        setApproveError((s) => ({
-          ...s,
-          [row.id]: 'Posted to the journal, but the Inbox state update failed — refresh.',
-        }))
+        setApproveError('Posted to the journal, but the Inbox update failed — refresh.')
       }
       setAllRows((prev) => prev?.map((x) => (x.id === row.id ? { ...x, state: 'posted' } : x)) ?? prev)
-      setOpenId(null)
     } finally {
-      setApproveBusy(null)
+      setApproveBusy(false)
     }
-  }
-
-  // Chip tone mapping: captured→neutral (queued), processing→pending,
-  // extracted→active (ready to review), posted→positive
-  function chipTone(state: string) {
-    if (state === 'captured') return 'neutral' as const
-    if (state === 'processing') return 'pending' as const
-    if (state === 'extracted') return 'active' as const
-    if (state === 'posted') return 'positive' as const
-    return 'neutral' as const
   }
 
   if (error) {
@@ -200,8 +209,8 @@ export function InboxView() {
   }
 
   const addressLine = address ? (
-    <p className="text-xs text-muted-foreground">
-      Forward transaction emails (alerts, receipts — no attachments) to{' '}
+    <p className="text-xs leading-5 text-muted-foreground">
+      Forward transaction emails to{' '}
       <button
         type="button"
         onClick={copyAddress}
@@ -210,9 +219,12 @@ export function InboxView() {
       >
         {address}
       </button>
-      {copied ? <span className="ml-1 text-foreground font-medium">copied</span> : null}
+      {copied ? <span className="ml-1 font-medium text-foreground">copied</span> : null}
       {' · '}
-      <Link href="/inbox/rules" className="text-foreground underline underline-offset-4 hover:no-underline">
+      <Link
+        href="/inbox/rules"
+        className="text-foreground underline underline-offset-4 hover:no-underline"
+      >
         Rules
       </Link>
       {' · '}
@@ -224,149 +236,225 @@ export function InboxView() {
       >
         Rotate
       </button>
+      {dismissedCount > 0 ? ` · ${dismissedCount} dismissed hidden` : ''}
     </p>
   ) : null
 
-  if (rows.length === 0) {
-    return (
-      <>
-        <CenteredState>
-          <span className="flex flex-col items-center gap-3">
-            <span>Nothing to review. Statements and forwarded emails queue here.</span>
-            <Button size="xs" onClick={() => setUploadOpen(true)}>
-              Upload statement
-            </Button>
-          </span>
-        </CenteredState>
-        {address ? (
-          <div className="mx-auto w-full max-w-2xl px-4 pb-6 text-center">
-            {addressLine}
-          </div>
-        ) : null}
-        <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
-        <RotateDialog open={rotateOpen} onClose={() => setRotateOpen(false)} onConfirm={doRotate} />
-      </>
-    )
-  }
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
+        <SectionLabel>Inbox{rows.length > 0 ? ` · ${rows.length} to review` : ''}</SectionLabel>
+        <Button size="sm" onClick={() => setUploadOpen(true)}>
+          Upload statement
+        </Button>
+      </header>
+
+      {rows.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4">
+          <p className="text-sm text-muted-foreground">
+            Nothing to review. Dropped statements and forwarded emails queue here.
+          </p>
+          {addressLine ? <div className="max-w-md text-center">{addressLine}</div> : null}
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1">
+          {/* List rail — hidden on mobile while an item is open */}
+          <aside
+            className={`${selected ? 'hidden md:flex' : 'flex'} w-full min-h-0 flex-col border-border md:w-80 md:shrink-0 md:border-r`}
+          >
+            <ul className="min-h-0 flex-1 overflow-y-auto py-1">
+              {rows.map((r) => (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    onClick={() => openItem(r)}
+                    className={`flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition hover:bg-muted/50 focus-visible:bg-muted focus-visible:outline-none ${
+                      selectedId === r.id ? 'bg-muted' : ''
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate text-sm text-foreground">
+                        {r.filename ?? r.id}
+                      </span>
+                      <StateChip tone={chipTone(r.state)}>{chipLabel(r.state)}</StateChip>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {r.source} · {fmtDate(r.created_at)}
+                    </span>
+                    {r.draft_error ? (
+                      <span className="text-xs text-destructive">
+                        Background draft failed
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="border-t border-border px-4 py-3">{addressLine}</div>
+          </aside>
+
+          {/* Detail pane */}
+          <section
+            className={`${selected ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-1 flex-col`}
+          >
+            {!selected ? (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-sm text-muted-foreground">Select an item to review.</p>
+              </div>
+            ) : (
+              <ItemDetail
+                key={selected.id}
+                row={selected}
+                buffer={draftBuffers[selected.id] ?? null}
+                onBufferChange={(next) =>
+                  setDraftBuffers((s) => ({ ...s, [selected.id]: next }))
+                }
+                approveBusy={approveBusy}
+                approveError={approveError}
+                onApprove={() => void approve(selected)}
+                onDismiss={() => dismiss(selected.id)}
+                onBack={() => setSelectedId(null)}
+                onPosted={() => {
+                  setAllRows(
+                    (prev) =>
+                      prev?.map((x) =>
+                        x.id === selected.id ? { ...x, state: 'posted' } : x,
+                      ) ?? prev,
+                  )
+                }}
+              />
+            )}
+          </section>
+        </div>
+      )}
+
+      <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
+      <RotateDialog open={rotateOpen} onClose={() => setRotateOpen(false)} onConfirm={doRotate} />
+    </div>
+  )
+}
+
+function ItemDetail({
+  row,
+  buffer,
+  onBufferChange,
+  approveBusy,
+  approveError,
+  onApprove,
+  onDismiss,
+  onBack,
+  onPosted,
+}: {
+  row: CaptureRow
+  buffer: string | null
+  onBufferChange: (next: string) => void
+  approveBusy: boolean
+  approveError: string | null
+  onApprove: () => void
+  onDismiss: () => void
+  onBack: () => void
+  onPosted: () => void
+}) {
+  const entries = parseDrafts(row.drafts)
+  const hasDrafts = entries.length > 0 && row.state === 'extracted'
+  const [chatOpen, setChatOpen] = useState(false)
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
-        <SectionLabel>Inbox · {rows.length} to review</SectionLabel>
-        <Button size="xs" variant="ghost" onClick={() => setUploadOpen(true)}>
-          Upload statement
-        </Button>
+      {/* Item header — mirrors the editor's header strip: meta left, actions right */}
+      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:outline-none md:hidden"
+            aria-label="Back to list"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">
+              {row.filename ?? row.id}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {row.source} · {fmtDate(row.created_at)}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <StateChip tone={chipTone(row.state)}>{chipLabel(row.state)}</StateChip>
+          {hasDrafts ? (
+            <Button size="sm" onClick={onApprove} disabled={approveBusy}>
+              {approveBusy ? 'Posting…' : 'Approve & post'}
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDismiss}
+            className="text-muted-foreground"
+          >
+            Dismiss
+          </Button>
+        </div>
       </div>
-      <div className="mx-auto w-full max-w-2xl px-4 py-6 space-y-3">
-        <ul className="space-y-2">
-          {rows.map((r) => {
-            const entries = parseDrafts(r.drafts)
-            const open = openId === r.id
-            const openable = r.state === 'extracted' || r.state === 'captured'
-            return (
-              <li
-                key={r.id}
-                className="rounded-xl border border-border bg-card px-4 py-3"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm text-foreground">{r.filename ?? r.id}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {r.source} · {fmtDate(r.created_at)}
-                      {r.state === 'processing' ? ' · drafting…' : ''}
-                    </p>
-                    {r.draft_error ? (
-                      <p className="mt-0.5 text-xs text-destructive">
-                        Background draft failed: {r.draft_error}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <StateChip tone={chipTone(r.state)}>
-                      {r.state === 'processing' ? 'drafting' : r.state}
-                    </StateChip>
-                    {openable ? (
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => {
-                          if (!open && entries.length > 0 && draftBuffers[r.id] === undefined) {
-                            setDraftBuffers((s) => ({ ...s, [r.id]: entries.join('\n\n') + '\n' }))
-                          }
-                          setOpenId(open ? null : r.id)
-                        }}
-                        className="text-foreground whitespace-nowrap"
-                      >
-                        {open ? 'Close' : entries.length > 0 ? `Open (${entries.length})` : 'Open'}
-                      </Button>
-                    ) : null}
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => dismiss(r.id)}
-                      className="text-muted-foreground whitespace-nowrap"
-                    >
-                      Dismiss
-                    </Button>
-                  </div>
-                </div>
-                {open && openable ? (
-                  <div className="mt-3 space-y-2 border-t border-border pt-3">
-                    {entries.length > 0 ? (
-                      <div className="h-72 overflow-hidden rounded-lg border border-border">
-                        <Journal
-                          text={draftBuffers[r.id] ?? entries.join('\n\n') + '\n'}
-                          onChange={(next) =>
-                            setDraftBuffers((s) => ({ ...s, [r.id]: next }))
-                          }
-                          onSave={() => void approveDrafts(r)}
-                          readOnly={approveBusy === r.id}
-                        />
-                      </div>
-                    ) : null}
-                    {approveError[r.id] ? (
-                      <p className="text-xs text-destructive">{approveError[r.id]}</p>
-                    ) : null}
-                    {entries.length > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="xs"
-                          onClick={() => void approveDrafts(r)}
-                          disabled={approveBusy === r.id}
-                        >
-                          {approveBusy === r.id ? 'Posting…' : 'Approve & post'}
-                        </Button>
-                        <p className="text-xs text-muted-foreground">
-                          Edit the entries directly (⌘S posts) — or ask the chat below.
-                        </p>
-                      </div>
-                    ) : null}
-                    <InboxThreadChat
-                      captureId={r.id}
-                      onPosted={() => {
-                        setAllRows(
-                          (prev) =>
-                            prev?.map((x) => (x.id === r.id ? { ...x, state: 'posted' } : x)) ??
-                            prev,
-                        )
-                        setOpenId(null)
-                      }}
-                    />
-                  </div>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
-        <p className="text-xs text-muted-foreground">
-          Dropped statements and forwarded transaction emails are drafted in
-          the background and reviewed here.
-          {dismissedCount > 0 ? ` ${dismissedCount} dismissed item${dismissedCount === 1 ? '' : 's'} hidden.` : ''}
+
+      {approveError ? (
+        <p className="border-b border-border bg-destructive/5 px-4 py-2 text-xs text-destructive sm:px-6">
+          {approveError}
         </p>
-        {addressLine}
+      ) : null}
+
+      {/* Body: drafts editor fills the pane (real Journal — scrolls like the editor) */}
+      {hasDrafts ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Journal
+            text={buffer ?? entries.join('\n\n') + '\n'}
+            onChange={onBufferChange}
+            onSave={onApprove}
+            readOnly={approveBusy}
+          />
+        </div>
+      ) : (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+          {row.state === 'processing' || row.state === 'captured' ? (
+            <>
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                {row.state === 'processing'
+                  ? 'Drafting in the background…'
+                  : 'Queued for drafting…'}
+              </p>
+              {row.draft_error ? (
+                <p className="max-w-md text-xs text-destructive">{row.draft_error}</p>
+              ) : null}
+            </>
+          ) : row.state === 'posted' ? (
+            <p className="text-sm text-muted-foreground">
+              Posted to the journal. Dismiss to clear it from the list.
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Nothing to review here yet.</p>
+          )}
+        </div>
+      )}
+
+      {/* Per-item chat: collapsed by default so the editor gets the space */}
+      <div className="border-t border-border">
+        <button
+          type="button"
+          onClick={() => setChatOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted focus-visible:outline-none sm:px-6"
+        >
+          <span>Ask about this statement</span>
+          <span>{chatOpen ? 'Hide' : 'Open'}</span>
+        </button>
+        {chatOpen ? (
+          <div className="border-t border-border px-3 pb-3">
+            <InboxThreadChat captureId={row.id} onPosted={onPosted} />
+          </div>
+        ) : null}
       </div>
-      <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
-      <RotateDialog open={rotateOpen} onClose={() => setRotateOpen(false)} onConfirm={doRotate} />
     </>
   )
 }
@@ -381,17 +469,22 @@ function RotateDialog({
   onConfirm: () => void
 }) {
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Rotate forwarding address?</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          The current address stops working immediately. Any emails sent to the old address will be lost.
+          The current address stops working immediately. Update any forwarding
+          rules you have set up in your mail client.
         </p>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="destructive" onClick={onConfirm}>Rotate address</Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={onConfirm}>
+            Rotate
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
