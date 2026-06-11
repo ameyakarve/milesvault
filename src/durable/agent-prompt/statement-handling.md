@@ -49,7 +49,7 @@ commodity tickers, `:Pending` accruals.
 - Excluded categories per the guide (fuel, rent, wallet loads,
   government/tax — judged from merchant names) get NO points legs.
 - A null `logging_guide` does NOT mean skip: if `pool.rate_notes` states a
-  base rate (e.g. "12 EDGE RPs / ₹200"), apply it the same way.
+  base rate (e.g. "12 RP / ₹200"), apply it the same way.
 - Only when there is no guide AND no usable rate anywhere do you draft
   plain spends — and then tell the user you skipped accruals, rather than
   inventing a rate.

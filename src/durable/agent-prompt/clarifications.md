@@ -55,7 +55,7 @@ fares (ask what the points side covered).
 ## A rule the user states after you've drafted (earn rate, fee policy, scope)
 
 When the user volunteers a rule once a batch is already on screen —
-"Magnus earns 12 EdgeRewards per ₹200", "skip the GST lines", "these are
+"Select Plus earns 12 reward points per ₹200", "skip the GST lines", "these are
 all reimbursable" — that's a fork, not a command to silently redo work.
 They may want it applied to the batch you just drafted, or just noted for
 next time. Do NOT re-draft an already-drafted batch on your own. Ask

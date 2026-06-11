@@ -1,207 +1,174 @@
 import {
   toLedgerEntries,
   serializeEntries,
-  parseBaseRate,
   type ExtractedStatement,
 } from '../../src/durable/ingest/pipeline'
-import type { CardGuideResult } from '../../src/durable/agents/tools/editor/card-guide'
 import { validateDraftBatch } from '../../src/lib/beancount/validate-draft-batch'
 
-const guide: CardGuideResult = {
-  ok: true,
-  card: { slug: 'cc/axis-magnus-burgundy', name: 'Axis Magnus Burgundy' },
-  pool: {
-    currency: 'currency/edge-rewards-burgundy',
-    name: 'EDGE Rewards — Burgundy tier',
-    ticker: 'AXIS-EDGE-BURGUNDY',
-    account: 'Assets:Rewards:Axis',
-    rate_notes: 'Base earn: 12 EDGE RPs / ₹200 spent (block-based).',
-  },
-  overrides: [],
-  logging_guide: 'Base 12 EDGE RPs / ₹200, block-based.',
-  card_notes: null,
-}
+// Owner ruling: code is NOT an arbiter — the model emits complete beancount in
+// the IR; toLedgerEntries only splits it for the serializer, and the GENERIC
+// validator (parse + per-currency balance + account shape) bounces repairs.
+// So this test feeds a complete, model-authored IR and checks two things:
+//   1. it passes through unchanged and serializes to the expected beancount;
+//   2. the generic validator accepts a balanced batch and rejects a broken one.
+//
+// All data here is SYNTHETIC — fictional issuer/merchants/amounts. Never put
+// real statement data in tests.
 
-const CARD = 'Liabilities:CreditCards:Axis:MagnusBurgundy:3467'
+const CARD = 'Liabilities:CreditCards:Demo:Sample:0000'
+const POOL = 'Assets:Rewards:Demo'
+const TICKER = 'DEMO-PTS'
 
-// What the model would emit (loose) — parsed through the real schema would
-// transform it; here we hand-build the post-transform shape the pipeline
-// type expects, exercising toLedgerEntries + serializeEntries + validation.
+// A complete batch exactly as the model authors it (balanced, real accounts,
+// real ticker, points legs, the landing, pad+balance bookends).
 const extracted: ExtractedStatement = {
-  card_name: 'Axis Bank Magnus Burgundy',
+  card_name: 'Demo Sample Card',
   entries: [
     {
       kind: 'balance',
-      date: '2026-04-20',
+      date: '2026-04-01',
       account: CARD,
-      amount: '96913.01',
+      amount: '1000.00',
       currency: 'INR',
-      plug_account: 'Equity:Opening-Balances',
+      plug_account: 'Equity:Adjustments',
     },
+    // A spend with its own points legs (model-authored).
     {
       kind: 'transaction',
       txn: {
-        date: '2026-04-20',
+        date: '2026-04-05',
         flag: '*',
-        payee: 'ASH CRADLE,BANGALORE',
-        narration: 'Medical',
+        payee: 'SAMPLE STORE',
+        narration: 'Shopping',
         tags: [],
         postings: [
-          { account: 'Expenses:Medical:Hospital', amount: '800.00', currency: 'INR' },
-          { account: 'Assets:Rewards:Axis:Pending', amount: '48', currency: 'AXIS-EDGE-BURGUNDY' },
-          { account: 'Equity:Void', amount: '-48', currency: 'AXIS-EDGE-BURGUNDY' },
-          // deliberately WRONG model figure — code must overrule it
-          { account: CARD, amount: '-999.99', currency: 'INR' },
+          { account: 'Expenses:Shopping:General', amount: '2000.00', currency: 'INR' },
+          { account: CARD, amount: '-2000.00', currency: 'INR' },
+          { account: `${POOL}:Pending`, amount: '120', currency: TICKER },
+          { account: 'Equity:Void', amount: '-120', currency: TICKER },
         ],
       },
     },
+    // A forex spend, model-balanced with @@ and the fee/GST legs.
     {
       kind: 'transaction',
       txn: {
-        date: '2026-04-24',
+        date: '2026-04-10',
         flag: '*',
-        payee: 'IOCL FUEL',
-        narration: 'Fuel',
-        tags: ['earn-excluded'],
-        postings: [
-          { account: 'Expenses:Transport:Fuel', amount: '3000.00', currency: 'INR' },
-          { account: CARD, amount: null, currency: null },
-        ],
-      },
-    },
-    {
-      kind: 'transaction',
-      txn: {
-        date: '2026-05-14',
-        flag: '*',
-        payee: 'AMAZON PAY INDIA PRIVA',
-        narration: 'Refund',
-        tags: [],
-        postings: [
-          { account: 'Expenses:Shopping:Misc', amount: '-877.82', currency: 'INR' },
-          { account: 'Assets:Rewards:Axis:Pending', amount: '-48', currency: 'AXIS-EDGE-BURGUNDY' },
-          { account: 'Equity:Void', amount: '48', currency: 'AXIS-EDGE-BURGUNDY' },
-          { account: CARD, amount: null, currency: null },
-        ],
-      },
-    },
-    {
-      kind: 'transaction',
-      txn: {
-        date: '2026-04-26',
-        flag: '*',
-        payee: 'CLOUDFLARE,SAN FRANCISCO',
-        narration: 'Software',
+        payee: 'EXAMPLE SAAS CO',
+        narration: 'Software (USD 10.00 + ₹19.00 markup + ₹3.42 GST)',
         tags: [],
         postings: [
           {
-            account: 'Expenses:Software:Subscriptions',
-            amount: '9.28',
+            account: 'Expenses:Software:SaaS',
+            amount: '10.00',
             currency: 'USD',
             price_at_signs: 2,
-            price_amount: '875.30',
+            price_amount: '850.00',
             price_currency: 'INR',
           },
-          { account: 'Assets:Rewards:Axis:Pending', amount: '48', currency: 'AXIS-EDGE-BURGUNDY' },
-          { account: 'Equity:Void', amount: '-48', currency: 'AXIS-EDGE-BURGUNDY' },
-          { account: CARD, amount: null, currency: null },
+          { account: 'Expenses:Bank:ForexMarkup', amount: '19.00', currency: 'INR' },
+          { account: 'Expenses:Tax:GST', amount: '3.42', currency: 'INR' },
+          { account: CARD, amount: '-872.42', currency: 'INR' },
+          { account: `${POOL}:Pending`, amount: '48', currency: TICKER },
+          { account: 'Equity:Void', amount: '-48', currency: TICKER },
         ],
       },
     },
+    // A payment (clearing leg negative, no points), model-authored.
     {
       kind: 'transaction',
       txn: {
-        date: '2026-05-02',
+        date: '2026-04-15',
         flag: '*',
         payee: 'PAYMENT RECEIVED',
         narration: 'Auto-debit',
         tags: [],
         postings: [
-          { account: 'Assets:Clearing:CardPayments', amount: '-25000.00', currency: 'INR' },
-          { account: CARD, amount: null, currency: null },
+          { account: 'Assets:Clearing:CardPayments', amount: '-5000.00', currency: 'INR' },
+          { account: CARD, amount: '5000.00', currency: 'INR' },
         ],
       },
     },
+    // The landing: earned points credited at close (Pending → posted, no Void).
+    {
+      kind: 'transaction',
+      txn: {
+        date: '2026-04-30',
+        flag: '*',
+        payee: 'Statement close',
+        narration: 'Reward points credited',
+        tags: [],
+        postings: [
+          { account: POOL, amount: '168', currency: TICKER },
+          { account: `${POOL}:Pending`, amount: '-168', currency: TICKER },
+        ],
+      },
+    },
+    // Closing balances (card + points), model-authored with their pads.
     {
       kind: 'balance',
-      date: '2026-05-19',
+      date: '2026-04-30',
       account: CARD,
-      amount: '16754.09',
+      amount: '-2127.58',
       currency: 'INR',
-      plug_account: 'Equity:Opening-Balances',
+      plug_account: 'Equity:Adjustments',
     },
     {
       kind: 'balance',
-      date: '2026-05-19',
-      account: 'PLACEHOLDER',
-      amount: '1296',
-      currency: 'POINTS',
-      plug_account: 'Equity:Opening-Balances',
+      date: '2026-04-30',
+      account: POOL,
+      amount: '168',
+      currency: TICKER,
+      plug_account: 'Equity:Adjustments',
     },
   ],
 }
 
-const rate = parseBaseRate(guide)
-const parts = toLedgerEntries({
-  extracted,
-  rate,
-  pool: guide.ok ? guide.pool : null,
-  accounts: [CARD, 'Expenses:Medical:Hospital'],
-  cardName: 'Axis Magnus Burgundy',
-})
+const parts = toLedgerEntries({ extracted })
 const entries = serializeEntries(parts)
-console.log(entries.join('\n\n'))
-const v = validateDraftBatch(entries)
 const joined = entries.join('\n\n')
+console.log(joined)
+const v = validateDraftBatch(entries)
 
 const checks: Array<[string, boolean]> = [
-  ['rate 12/200', rate?.pts === 12 && rate?.per === 200],
-  ['opening Cr positive', joined.includes('96913.01 INR')],
-  ['closing Cr positive', joined.includes('16754.09 INR')],
-  ['pads plug Adjustments', joined.includes('pad Liabilities:CreditCards:Axis:MagnusBurgundy:3467 Equity:Adjustments')],
-  ['payment: card +25000, no points', /PAYMENT RECEIVED[\s\S]*?MagnusBurgundy:3467\s+25000\.00 INR/.test(joined) && !/PAYMENT RECEIVED[\s\S]*?AXIS-EDGE/.test(entries.find((e) => e.includes('PAYMENT')) ?? '')],
-  ['ash cradle 48 pts', /ASH CRADLE[\s\S]*?Assets:Rewards:Axis:Pending\s+48 AXIS-EDGE-BURGUNDY/.test(joined)],
-  ['no decorative tags', !joined.includes('#reward-accrual') && !joined.includes('#earn-excluded')],
-  ['card leg code-computed (-999.99 overruled)', /ASH CRADLE[\s\S]*?MagnusBurgundy:3467\s+-800\.00 INR/.test(joined) && !joined.includes('-999.99')],
-  ['fuel no points', !/IOCL[\s\S]*?AXIS-EDGE/.test(entries.find((e) => e.includes('IOCL')) ?? '')],
-  ['refund -48 pts', /AMAZON[\s\S]*?Pending\s+-48 AXIS-EDGE-BURGUNDY/.test(joined)],
-  ['forex @@ preserved + 52 pts', /9\.28 USD @@ 875\.30 INR/.test(joined) && /CLOUDFLARE[\s\S]*?Pending\s+48 AXIS-EDGE-BURGUNDY/.test(joined)],
-  ['points wallet 1296', joined.includes('balance Assets:Rewards:Axis') && joined.includes('1296 AXIS-EDGE-BURGUNDY')],
-  ['validates', v.ok],
+  // Pass-through: nothing rewritten, amounts/accounts/tickers verbatim.
+  ['card amount verbatim (not recomputed)', joined.includes('-2000.00 INR')],
+  ['forex @@ preserved', joined.includes('10.00 USD @@ 850.00 INR')],
+  ['points legs verbatim', /Assets:Rewards:Demo:Pending\s+120 DEMO-PTS/.test(joined)],
+  ['landing present (pending → posted)', /Assets:Rewards:Demo\s+168 DEMO-PTS/.test(joined) && /Assets:Rewards:Demo:Pending\s+-168 DEMO-PTS/.test(joined)],
+  ['payment clearing negative', /Assets:Clearing:CardPayments\s+-5000\.00 INR/.test(joined)],
+  ['points balance verbatim', joined.includes('balance Assets:Rewards:Demo') && joined.includes('168 DEMO-PTS')],
+  ['pads plug Adjustments', joined.includes('pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Adjustments')],
+  ['generic validator accepts the balanced batch', v.ok === true],
 ]
-// A mashed model account must resolve to the EXISTING ledger account
-import { resolveCardAccount } from '../../src/durable/ingest/pipeline'
-checks.push([
-  'mashed card account resolved',
-  resolveCardAccount({
-    modelAccount: 'Liabilities:CreditCards:AxisBankMagnusBurgundy',
-    accounts: [CARD],
-    issuer: 'Axis',
-    cardName: 'Axis Magnus Burgundy',
-  }) === CARD,
-])
-checks.push([
-  'no existing → canonical from guide',
-  resolveCardAccount({
-    modelAccount: 'Liabilities:CreditCards:AxisBankMagnusBurgundy',
-    accounts: [],
-    issuer: 'Axis',
-    cardName: 'Axis Bank Magnus Burgundy',
-  }) === 'Liabilities:CreditCards:Axis:MagnusBurgundy',
-])
-// Rate-check guards the model's own points: a clean batch passes, a wrong
-// figure bounces a precise repair message.
-import { checkPointsArithmetic } from '../../src/durable/ingest/pipeline'
-const pool = guide.ok ? guide.pool : null
-checks.push(['rate-check: clean batch → no issues', checkPointsArithmetic(extracted, rate, pool).length === 0])
-const wrong = structuredClone(extracted)
-const ash = wrong.entries.find((e) => e.kind === 'transaction' && e.txn.payee === 'ASH CRADLE,BANGALORE')
-if (ash && ash.kind === 'transaction') {
-  const pend = ash.txn.postings.find((p) => p.account === 'Assets:Rewards:Axis:Pending')
-  if (pend) pend.amount = '24' // should be 48
-}
-const wrongIssues = checkPointsArithmetic(wrong, rate, pool)
-checks.push(['rate-check: wrong 24 → flags should-be-48', wrongIssues.some((m) => m.includes('should be 48'))])
+
+// The validator must REJECT a broken (unbalanced) entry — that's the only
+// guardrail now, and it must bounce.
+const broken = serializeEntries(
+  toLedgerEntries({
+    extracted: {
+      card_name: 'x',
+      entries: [
+        {
+          kind: 'transaction',
+          txn: {
+            date: '2026-04-05',
+            flag: '*',
+            payee: 'UNBALANCED',
+            narration: '',
+            tags: [],
+            postings: [
+              { account: 'Expenses:Misc', amount: '100.00', currency: 'INR' },
+              { account: CARD, amount: '-90.00', currency: 'INR' },
+            ],
+          },
+        },
+      ],
+    },
+  }),
+)
+checks.push(['generic validator rejects an unbalanced entry', validateDraftBatch(broken).ok === false])
 
 let fail = 0
 for (const [name, ok] of checks) {

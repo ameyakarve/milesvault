@@ -41,7 +41,7 @@ const joined = drafts.join('\n\n')
 const checks = [
   ['drafts non-empty', drafts.length >= 4],
   ['points legs', joined.includes('Assets:Rewards:Axis:Pending')],
-  ['fuel excluded', !/IOCL[\s\S]*?AXIS-EDGE/.test(drafts.find((d) => d.includes('IOCL')) ?? '')],
+  ['fuel earns no points', !/Pending/.test(drafts.find((d) => d.includes('FUEL')) ?? '')],
   ['payment clearing', joined.includes('Assets:Clearing:CardPayments')],
   ['balance bookend', joined.includes('balance Liabilities:CreditCards:Axis')],
   ['pad plug', joined.includes('Equity:Adjustments')],

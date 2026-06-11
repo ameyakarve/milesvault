@@ -40,11 +40,11 @@ transaction, resolve each piece by name and read `attrs.beancountName` from
 - `<Issuer>` → `kb_resolve(<bank name>, prefix='bank')` → `kb_get(slug)` →
   `attrs.beancountName` (e.g. "Axis Bank" → `Axis`).
 - `<Card>` → `kb_resolve(<card name>, prefix='cc')` → `kb_get(slug)` →
-  `attrs.beancountName` (e.g. "Magnus Burgundy" → `MagnusBurgundy`), giving
-  `Liabilities:CreditCards:Axis:MagnusBurgundy`.
+  `attrs.beancountName` (e.g. "Select Plus" → `SelectPlus`), giving
+  `Liabilities:CreditCards:Axis:SelectPlus`.
 - Reward currency → `kb_resolve(<currency name or ticker>, prefix='currency')`
   → `kb_get(slug)`. Two attrs matter: `ticker` is the Beancount COMMODITY
-  (always use it for the point amounts — `HDFC-RP`, `AXIS-EDGE`, `MR`,
+  (always use it for the point amounts — `HDFC-RP`, `AXIS-RP`, `MR`,
   `KRISFLYER`), and `beancountName` is the account leaf. The account path
   depends on the programme's kind:
   - airline FFP → `Assets:Rewards:Miles:<beancountName>`
@@ -118,8 +118,8 @@ zero too** — the `:Pending` leg ALWAYS needs its `Equity:Void`
 contra with the equal-and-opposite amount in the SAME point currency.
 A three-posting variant with only the points leg and no contra is
 rejected by the parser. Replace `RWD_PTS` with the KG currency node's
-`ticker` (e.g. `HDFC-RP`, `AXIS-EDGE`, `MR`); never emit `RWD_PTS` literally,
-and never emit angle-bracket currencies like `<EdgeRewards>` —
+`ticker` (e.g. `HDFC-RP`, `AXIS-RP`, `MR`); never emit `RWD_PTS` literally,
+and never emit angle-bracket currencies like `<reward points>` —
 Beancount has no such syntax.
 
 ### Landing (issuer posts the points to your balance)
@@ -465,7 +465,7 @@ whatever bonus is running) doesn't change the shape; it just changes
 the two numbers. `<SrcAcct>` / `SRC_PTS` is the programme account you
 transfer from, `<DestAcct>` / `DST_PTS` the one you transfer to. Replace
 both with the real programme accounts and KG tickers (e.g.
-`Assets:Rewards:Axis`/`AXIS-EDGE-BURGUNDY` →
+`Assets:Rewards:Axis`/`AXIS-RP` →
 `Assets:Rewards:Points:Marriott`/`MARRIOTTBONVOY`); never emit
 `SRC_PTS`/`DST_PTS` literally in output.
 

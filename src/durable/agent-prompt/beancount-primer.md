@@ -31,11 +31,11 @@ segments. Plural `CreditCards`. Anything else is rejected by the ledger
 validator.
 
 - Fold the tier/variant/product name INTO the single `<Card>` segment — do
-  NOT spill it into an extra segment. E.g. an Axis Magnus Burgundy card is
-  `Liabilities:CreditCards:Axis:MagnusBurgundy`, NOT
-  `Liabilities:CreditCards:Axis:Magnus:Burgundy`.
+  NOT spill it into an extra segment. E.g. an Axis Select Plus card is
+  `Liabilities:CreditCards:Axis:SelectPlus`, NOT
+  `Liabilities:CreditCards:Axis:Select:Plus`.
 - Use the optional `<Id>` ONLY for the last-4 digits / account suffix, e.g.
   `Liabilities:CreditCards:HSBC:Cashback:9065`.
-- Never emit a 6th segment. `Liabilities:CreditCards:Axis:Magnus:Burgundy:3467`
+- Never emit a 6th segment. `Liabilities:CreditCards:Axis:Select:Plus:1234`
   is invalid (6 segments); the valid form is
-  `Liabilities:CreditCards:Axis:MagnusBurgundy:3467`.
+  `Liabilities:CreditCards:Axis:SelectPlus:1234`.

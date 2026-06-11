@@ -9,14 +9,14 @@ export const Default: StoryObj = {
     <div className="max-w-md space-y-3 bg-background p-6">
       <CreditCardCard
         row={{
-          account: 'Liabilities:CreditCards:Axis:MagnusBurgundy:3467',
+          account: 'Liabilities:CreditCards:Demo:Sample:1234',
           currency: 'INR',
-          balance_scaled: '16754090000000000',
+          balance_scaled: '12345000000000000',
           scale: 12,
-          last_activity: 20260518,
+          last_activity: 20260430,
         }}
         names={{}}
-        spend={[{ currency: 'INR', total: 87398 }]}
+        spend={[{ currency: 'INR', total: 50000 }]}
       />
       <CreditCardCard
         row={{
@@ -24,7 +24,7 @@ export const Default: StoryObj = {
           currency: 'INR',
           balance_scaled: '0',
           scale: 12,
-          last_activity: 20260518,
+          last_activity: 20260430,
         }}
         names={{}}
         spend={[]}

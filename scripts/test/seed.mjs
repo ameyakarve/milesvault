@@ -26,26 +26,23 @@ async function call(method, path, body) {
   }
 }
 
-const FIXTURE_JOURNAL = `2026-01-01 open Liabilities:CreditCards:Axis:MagnusBurgundy:3467 INR
-2026-01-01 open Liabilities:CreditCards:HDFC:Infinia:1784 INR
+const FIXTURE_JOURNAL = `2026-01-01 open Liabilities:CreditCards:Axis:Ace:0000 INR
 
-2026-06-01 * "Opening" "Card balances at tracking start"
-  Liabilities:CreditCards:Axis:MagnusBurgundy:3467   0.00 INR
-  Equity:Opening-Balances                            0.00 INR
+2026-06-01 * "Opening" "Card balance at tracking start"
+  Liabilities:CreditCards:Axis:Ace:0000   0.00 INR
+  Equity:Opening-Balances                 0.00 INR
 `
 
-const FIXTURE_STATEMENT = `AXIS BANK MAGNUS BURGUNDY CREDIT CARD STATEMENT
-Statement Period 20/04/2026 - 18/05/2026  Payment Due Date 07/06/2026
-Card Number 529629******3467
-Previous Balance 1,000.00 Cr   Total Payment Due 2,330.00
-Date        Merchant                          Amount
-22/04/2026  ASH CRADLE,BANGALORE              800.00
-24/04/2026  IOCL FUEL,BANGALORE               1,200.00
-02/05/2026  FIREFLY COFFEE ROASTE,BANGALORE   460.00
-05/05/2026  AMAZON PAY INDIA PRIVA            870.00
-10/05/2026  PAYMENT RECEIVED                  1,000.00 Cr
-12/05/2026  AMAZON PAY INDIA PRIVA            870.00 Cr (refund)
-Reward Points: Opening 0  Earned 60  Closing 60
+const FIXTURE_STATEMENT = `AXIS BANK ACE CREDIT CARD STATEMENT
+Statement Period 01/04/2026 - 30/04/2026  Payment Due Date 18/05/2026
+Card Number 400000******0000
+Previous Balance 0.00   Total Payment Due 3,000.00
+Date        Merchant            Amount
+05/04/2026  SAMPLE STORE        1,000.00
+08/04/2026  DEMO FUEL STATION   2,000.00
+15/04/2026  EXAMPLE CAFE        500.00
+20/04/2026  PAYMENT RECEIVED    500.00 Cr
+Reward Points: Opening 0  Earned 30  Closing 30
 `
 
 const withStatement = process.argv.includes('--with-statement')
@@ -66,7 +63,7 @@ console.log('journal rows:', r.rows?.length ?? r)
 if (withStatement) {
   console.log('statement…')
   const s = await call('POST', '/api/statements', {
-    filename: 'fixture-axis-magnus.pdf',
+    filename: 'fixture-statement.pdf',
     text: FIXTURE_STATEMENT,
     mode: 'inbox',
   })

@@ -98,21 +98,21 @@ Follow these rules when building that array.
      into Equity:Opening-Balances; balance asserts at the START of its
      date, so date it the cycle's first day):
      ```
-     2026-04-17 pad Liabilities:CreditCards:Axis:MagnusBurgundy Equity:Opening-Balances
-     2026-04-18 balance Liabilities:CreditCards:Axis:MagnusBurgundy  -45000.00 INR
+     2026-04-17 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Opening-Balances
+     2026-04-18 balance Liabilities:CreditCards:Axis:SelectPlus  -45000.00 INR
      ```
    - Closing, AFTER all transactions, dated the DAY AFTER the statement
      end (assertions check the start of day):
      ```
-     2026-05-18 pad Liabilities:CreditCards:Axis:MagnusBurgundy Equity:Opening-Balances
-     2026-05-19 balance Liabilities:CreditCards:Axis:MagnusBurgundy  -62000.00 INR
+     2026-05-18 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Opening-Balances
+     2026-05-19 balance Liabilities:CreditCards:Axis:SelectPlus  -62000.00 INR
      ```
    SIGNS — read the statement's Dr/Cr marker carefully:
    - amount OWED to the bank (normal "total due", or "Dr") → NEGATIVE:
      "Total Payment Due 62,000" asserts -62000.00 INR.
    - "Cr" suffix = CREDIT balance, the bank owes the user (overpayment /
-     refunds) → POSITIVE: "Total Payment Due 16,754.09 Cr" asserts
-     +16754.09 INR. Both opening and closing can be Cr.
+     refunds) → POSITIVE: "Total Payment Due 5,432.10 Cr" asserts
+     +5432.10 INR. Both opening and closing can be Cr.
    The pad+balance pair must be ONE element (the pad folds into the
    assertion). Copy the statement's stated figures digit-for-digit; never
    compute them.

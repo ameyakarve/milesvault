@@ -60,3 +60,11 @@ node_modules/
 # local verification scripts
 .sb-check.mjs
 .sb-shot.mjs
+
+# eval scratch + ad-hoc probes may contain real statement data — never commit
+scripts/eval/out/
+scripts/eval/*.beancount
+scripts/eval/statement.*
+scripts/test/run-stmt*.mjs
+scripts/test/spotcheck.mjs
+scripts/test/extract-pdf*.mjs

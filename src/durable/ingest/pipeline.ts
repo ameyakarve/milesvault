@@ -5,9 +5,9 @@ import type { TransactionInput, DirectiveInput } from '../ledger-types'
 import { serializeTransactionInput, serializeJournal } from '@/lib/beancount/ast'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 
-// Deterministic statement-ingest pipeline.
+// Statement-ingest pipeline.
 //
-//   model CLASSIFIES, code COMPUTES.
+//   The MODEL emits complete beancount; code validates and serializes.
 //
 // The IR is beancount itself (owner decision): the model emits an array of
 // entry objects — transactions as top line + postings, stated balances as
@@ -16,29 +16,16 @@ import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 // in src/durable/ledger-types.ts. One definition of what an entry is; no
 // drifting mirrors. Forex prices, multi-leg fees and tags stay expressible.
 //
-// Code is the arbiter of everything load-bearing:
-//   - the card leg's amount is COMPUTED by code as −(sum of INR weights,
-//     @@ prices included) — whatever the model claimed is discarded, so
-//     model arithmetic can never unbalance an entry (forex included);
-//   - reward-point legs are stripped and recomputed (floor blocks) from
-//     the KG rate; refunds claw back with mirrored negative legs;
-//   - accounts sanitized; balance directives default plug
-//     Equity:Opening-Balances; "POINTS" currency sentinel lands on the
-//     pool wallet in its ticker;
-//   - rendering via the canonical serializer (same formatting as saves).
+// Code is NOT an arbiter (owner ruling): it does not compute card legs, points
+// or signs, and does not rewrite accounts. The model authors every posting,
+// guided by the shared prompt (which carries the card's rate, pool and the
+// existing accounts). Code only: parses the JSON into the IR, splits it for
+// the canonical serializer, and runs the GENERIC validator (parse +
+// per-currency balance + account shape) — whose findings bounce verbatim back
+// to the model. Same conventions as the editor; the only delta is the output
+// channel (JSON IR here vs the draft_transaction tool there).
 
-// ---- Code arbiters -------------------------------------------------------------
-
-// Beancount account segments start with uppercase or digit (…:3467 is legal).
-const SEGMENT_RE = /^[A-Z0-9][A-Za-z0-9-]*$/
-
-export function sanitizeAccount(account: string, fallback: string): string {
-  const parts = account
-    .split(':')
-    .map((p) => p.replace(/[^A-Za-z0-9-]/g, '').replace(/^([a-z])/, (c) => c.toUpperCase()))
-  if (parts.length < 2 || !parts.every((p) => SEGMENT_RE.test(p))) return fallback
-  return parts.join(':')
-}
+// ---- Amount parsing helpers ----------------------------------------------------
 
 function num(v: string | number | null | undefined): number | null {
   if (v == null) return null
@@ -213,204 +200,35 @@ export function parseBaseRate(guide: CardGuideResult): { pts: number; per: numbe
   return null
 }
 
-// ---- Code as arbiter: canonicalize, points, sentinel resolution ---------------
-
-const EXCLUDED_TAG = 'earn-excluded'
-
-// The card liability account is too important to trust the model with.
-// Preference order: the model's account when it already exists in the
-// ledger → an existing Liabilities:CreditCards account whose name carries
-// the card's tokens → the canonical Liabilities:CreditCards:<Issuer>:<Leaf>
-// built from the KG guide → sanitized model output as a last resort.
-export function resolveCardAccount(opts: {
-  modelAccount: string | null
-  accounts: readonly string[]
-  issuer: string | null
-  cardName: string | null
-}): string {
-  const { modelAccount, accounts, issuer, cardName } = opts
-  if (modelAccount && accounts.includes(modelAccount)) return modelAccount
-
-  const existing = accounts.filter((a) => a.startsWith('Liabilities:CreditCards:'))
-  const noise = new Set(['bank', 'credit', 'card', 'cards', ...(issuer ? issuer.toLowerCase().split(/\s+/) : [])])
-  const tokens = (cardName ?? '')
-    .split(/[^A-Za-z0-9]+/)
-    .map((t) => t.toLowerCase())
-    .filter((t) => t.length >= 4 && !noise.has(t))
-  if (tokens.length > 0) {
-    const hit = existing.find((a) => {
-      const al = a.toLowerCase()
-      return tokens.every((t) => al.includes(t))
-    })
-    if (hit) return hit
-  }
-  if (issuer && tokens.length > 0) {
-    const leaf = tokens.map((t) => t[0]!.toUpperCase() + t.slice(1)).join('')
-    return `Liabilities:CreditCards:${issuer}:${leaf}`
-  }
-  return sanitizeAccount(modelAccount ?? '', 'Liabilities:CreditCards:Unknown')
-}
-
+// ---- IR → entries (no arbiter): code only splits + serializes ---------------
+//
+// Owner ruling: code is NOT an arbiter. The model emits complete beancount
+// directives in the IR (balanced card legs, correct signs, canonical accounts,
+// points legs, the landing, pad+balance). Here we only split them for the
+// serializer; the generic validator (parse + per-currency balance + account
+// shape) bounces any repair back to the model. No points math, no card-leg
+// fill, no account rewriting, no sentinels.
 export function toLedgerEntries(opts: {
   extracted: ExtractedStatement
-  rate: { pts: number; per: number } | null
-  pool: { ticker: string | null; account: string | null } | null
-  accounts: readonly string[]
-  cardName: string | null
 }): { transactions: TransactionInput[]; directives: DirectiveInput[] } {
-  const { extracted, pool } = opts
-  // Issuer rides the pool account (Assets:Rewards:<Issuer>, owner convention).
-  const issuer = pool?.account?.split(':').pop() ?? null
-  const cardAccountFor = (modelAccount: string | null) =>
-    resolveCardAccount({ modelAccount, accounts: opts.accounts, issuer, cardName: opts.cardName })
-
   const transactions: TransactionInput[] = []
   const directives: DirectiveInput[] = []
-
-  for (const e of extracted.entries) {
+  for (const e of opts.extracted.entries) {
     if (e.kind === 'balance') {
-      // A model that emits real tickers needs no sentinel, but accept the
-      // "POINTS" sentinel too and resolve it to the pool wallet/ticker.
-      const isPoints = e.currency.toUpperCase() === 'POINTS'
-      if (isPoints && (!pool?.account || !pool?.ticker)) continue
-      const amount = num(e.amount)
-      if (amount === null) continue
       directives.push({
         kind: 'balance',
         date: e.date,
-        account: isPoints ? pool!.account! : cardAccountFor(e.account),
-        amount: isPoints ? String(Math.round(amount)) : fmt(amount),
-        currency: isPoints ? pool!.ticker! : e.currency,
-        plug_account: 'Equity:Adjustments',
+        account: e.account,
+        amount: e.amount,
+        currency: e.currency,
+        // One plug for all statement pads (owner ruling: don't complicate).
+        plug_account: e.plug_account ?? 'Equity:Adjustments',
       })
-      continue
+    } else {
+      transactions.push(e.txn)
     }
-
-    const txn = e.txn
-    const rawTags = txn.tags ?? []
-    const excluded = rawTags.includes(EXCLUDED_TAG)
-    // Tags are for LINKING related entries (owner rule: refund ↔ original,
-    // reversal pairs) — the earn-excluded signal is consumed here and
-    // stripped; code never adds decorative tags.
-    const tags = rawTags.filter((t) => t !== EXCLUDED_TAG && t !== 'reward-accrual')
-
-    // The model authors every posting now, including the points legs (the
-    // validator rate-checks them and bounces repairs). Code does only the one
-    // pure-mechanical thing it's strictly better at: blank the card leg's
-    // amount so beancount auto-balances it against ALL non-card INR legs —
-    // deterministic arithmetic the model fumbles on multi-leg forex. Points
-    // legs (ticker currency) carry no INR weight, so they don't affect it.
-    let legTotal = 0
-    const postings = txn.postings.map((p) => {
-      const isCard = p.account.startsWith('Liabilities:CreditCards')
-      const amt = num(p.amount)
-      // A card-statement "payment received" is unambiguous: money moves
-      // from the float TO the card — the clearing leg is ALWAYS negative
-      // (the model flips this often enough to legislate it in code).
-      const isClearing = p.account.startsWith('Assets:Clearing:')
-      const amtFixed = isClearing && amt !== null ? -Math.abs(amt) : amt
-      if (!isCard && amtFixed !== null) {
-        let weight = 0
-        if (p.price_at_signs === 2) {
-          const total = num(p.price_amount)
-          if (total !== null) weight = Math.sign(amtFixed) * Math.abs(total)
-        } else if (p.price_at_signs === 1) {
-          const per = num(p.price_amount)
-          if (per !== null) weight = amtFixed * per
-        } else if ((p.currency ?? 'INR') === 'INR') {
-          weight = amtFixed
-        }
-        legTotal += weight
-      }
-      return {
-        ...p,
-        ...(isClearing && amtFixed !== null ? { amount: fmt(amtFixed) } : {}),
-        account: isCard
-          ? cardAccountFor(p.account)
-          // Non-expense counter-legs (rewards wallets, Equity:Void,
-          // Assets:Clearing:CardPayments …) keep their family; only unusable
-          // accounts fall back.
-          : sanitizeAccount(p.account, p.account.startsWith('Assets:') ? 'Assets:Clearing:CardPayments' : 'Expenses:Misc'),
-        ...(isCard ? { amount: null, currency: null } : {}),
-      }
-    })
-
-    const cardLeg = postings.find((p) => p.account.startsWith('Liabilities:CreditCards'))
-    if (cardLeg) {
-      cardLeg.amount = fmt(-legTotal)
-      cardLeg.currency = 'INR'
-    }
-
-    transactions.push({ ...txn, tags, postings })
   }
-
   return { transactions, directives }
-}
-
-// Rate-check the model's OWN points legs (it authors them now). The balance
-// validator only proves entries balance — a wrong-but-balanced points figure
-// (Pending +24 / Void −24 when the rate says 48) would slip through. So we
-// keep the rate in CODE as a CHECKER: recompute the expected points and bounce
-// a precise repair message back to the model. Skips entries with no Expenses
-// leg (payments, transfers, the pending→posted landing) and earn-excluded
-// ones. Authorship stays with the model; arithmetic stays guaranteed.
-export function checkPointsArithmetic(
-  extracted: ExtractedStatement,
-  rate: { pts: number; per: number } | null,
-  pool: { ticker: string | null; account: string | null } | null,
-): string[] {
-  if (!rate || !pool?.account || !pool?.ticker) return []
-  const pendingAcct = `${pool.account}:Pending`
-  const issues: string[] = []
-  extracted.entries.forEach((e, idx) => {
-    if (e.kind !== 'transaction') return
-    const txn = e.txn
-    if ((txn.tags ?? []).includes(EXCLUDED_TAG)) return
-    let spend = 0
-    let hasExpense = false
-    for (const p of txn.postings) {
-      if (!p.account.startsWith('Expenses:')) continue
-      // Issuer fees aren't eligible spend — interest, finance charges, fees,
-      // GST/tax never earn points, so they don't count toward expected.
-      if (/^Expenses:(Bank|Tax|Fees|Charges)\b/.test(p.account)) continue
-      hasExpense = true
-      const amt = num(p.amount)
-      if (amt === null) continue
-      if (p.price_at_signs === 2) {
-        const t = num(p.price_amount)
-        if (t !== null) spend += Math.sign(amt) * Math.abs(t)
-      } else if (p.price_at_signs === 1) {
-        const per = num(p.price_amount)
-        if (per !== null) spend += amt * per
-      } else if ((p.currency ?? 'INR') === 'INR') {
-        spend += amt
-      }
-    }
-    const pend = txn.postings.find((p) => p.account === pendingAcct)
-    const got = pend ? num(pend.amount) : null
-    const where = `entry ${idx + 1} (${txn.date} "${txn.payee ?? ''}")`
-    if (!hasExpense) {
-      // Payments, transfers, the landing, and fee-only rows earn nothing —
-      // but flag points wrongly stapled to a fee/interest entry.
-      if (got !== null && got !== 0)
-        issues.push(`${where}: this earns no points (no eligible purchase — fees/interest/transfer); remove the ${got} ${pool.ticker} points legs`)
-      return
-    }
-    const expected = Math.floor(Math.abs(spend) / rate.per) * rate.pts
-    const want = (spend >= 0 ? 1 : -1) * expected
-    if (expected === 0) {
-      // Sub-block spend earns nothing — OMIT the legs, don't emit a 0 leg.
-      if (pend)
-        issues.push(`${where}: spend below one earning block — omit the points legs entirely (no 0 ${pool.ticker} leg)`)
-      return
-    }
-    if (got === null) {
-      issues.push(`${where}: missing reward points — add ${want} ${pool.ticker} to ${pendingAcct} (floor(${Math.abs(spend)}/${rate.per})×${rate.pts}) with the matching Equity:Void contra`)
-    } else if (got !== want) {
-      issues.push(`${where}: reward points should be ${want} ${pool.ticker} (floor(${Math.abs(spend)}/${rate.per})×${rate.pts}), got ${got}`)
-    }
-  })
-  return issues
 }
 
 // Serialize each entry standalone via the canonical serializer — identical
@@ -557,20 +375,13 @@ export async function runDraftPipeline(deps: {
     stages.extract = { txns, balances: ext.value.entries.length - txns }
     lastExtractError = null
 
-    const parts = toLedgerEntries({
-      extracted: ext.value,
-      rate,
-      pool: guide.ok ? guide.pool : null,
-      accounts: deps.accounts,
-      cardName: guide.ok ? guide.card.name : (cardRes.value?.card_name ?? null),
-    })
+    const parts = toLedgerEntries({ extracted: ext.value })
     entries = serializeEntries(parts)
+    // Generic validator only: parse + per-currency balance + account shape.
+    // Whatever it flags bounces back to the model verbatim — code never fixes
+    // the entries itself.
     const v = validateDraftBatch(entries)
-    const balanceIssues = v.ok === true ? [] : v.issues.map((i) => i.message)
-    // The validator works on the IR: balance + shape (serialized) AND the
-    // rate-check on the model's own points legs. Both bounce to the model.
-    const pointIssues = checkPointsArithmetic(ext.value, rate, guide.ok ? guide.pool : null)
-    validation_issues = [...balanceIssues, ...pointIssues]
+    validation_issues = v.ok === true ? [] : v.issues.map((i) => i.message)
     if (validation_issues.length === 0) break
     prompt = `${basePrompt}\n\nYour previous output produced INVALID entries — fix these and output the corrected full JSON object:\n${validation_issues.join('\n')}`
   }
