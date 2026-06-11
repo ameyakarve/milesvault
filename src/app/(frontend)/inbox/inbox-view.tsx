@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
@@ -531,10 +531,19 @@ function DraftTrace({ captureId }: { captureId: string }) {
     basePath: 'api/agents/editor',
     query: { thread: captureId },
   })
+  const ref = useRef<HTMLPreElement>(null)
   const trace = agent.state?.draftProgress
+  // Keep the newest output in view as it streams.
+  useEffect(() => {
+    const el = ref.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [trace])
   if (!trace) return null
   return (
-    <pre className="mt-1 max-h-32 w-full max-w-md overflow-hidden whitespace-pre-wrap break-all rounded-md bg-muted/50 px-3 py-2 text-left font-mono text-[10px] leading-4 text-muted-foreground">
+    <pre
+      ref={ref}
+      className="mt-2 h-64 w-full max-w-xl overflow-y-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted/50 px-3 py-2 text-left font-mono text-xs leading-5 text-muted-foreground"
+    >
       {trace}
     </pre>
   )
