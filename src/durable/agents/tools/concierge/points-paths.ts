@@ -259,7 +259,20 @@ function matchAccount(node: PathNode, account: string): boolean {
   if (node.kind === 'card') {
     if (parts[0] !== 'Liabilities' || parts[1] !== 'CreditCards') return false
     if (node.issuer && parts[2] !== node.issuer) return false
-    return parts[3] === node.beancountName
+    const leaf = (parts[3] ?? '').toLowerCase()
+    if (!leaf) return false
+    if (leaf === node.beancountName.toLowerCase()) return true
+    // Tolerant: users name card accounts loosely ("Infinia" vs the KG's
+    // "InfiniaMetal") — held when the account leaf appears among the card's
+    // name tokens. Exact-match-only silently un-held real cards and the
+    // "My points" filter then hid their entire path.
+    const tokens = new Set(
+      `${node.beancountName.replace(/([a-z0-9])([A-Z])/g, '$1 $2')} ${node.display ?? ''}`
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter(Boolean),
+    )
+    return tokens.has(leaf)
   }
   // target / currency fallback: a rewards leaf matching the beancountName hint
   return parts[0] === 'Assets' && parts[1] === 'Rewards' && leafOf(account) === node.beancountName
