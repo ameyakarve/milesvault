@@ -197,11 +197,7 @@ export function VaultView() {
                 key={`${r.account}|${r.currency}`}
                 row={r}
                 names={names}
-                spend={
-                  stats?.card_spend.find(
-                    (s) => s.account === r.account && (s.currency === r.currency || s.currency === 'INR'),
-                  ) ?? null
-                }
+                spend={stats?.card_spend.filter((s) => s.account === r.account) ?? null}
               />
             ))}
           </div>
@@ -248,7 +244,7 @@ function CreditCardCard({
 }: {
   row: AccountSummaryRow
   names: Names
-  spend: { total: number; window: 'statement' | 'month' } | null
+  spend: Array<{ currency: string; total: number; window: 'statement' | 'month' }> | null
 }) {
   const { name, suffix } = displayName(row.account, names)
   const bal = balanceOf(row)
@@ -266,17 +262,22 @@ function CreditCardCard({
           </span>
         ) : null}
       </span>
-      <span className="shrink-0 text-right">
+      <span className="min-w-0 shrink-0 text-right">
         <span
-          className={`block font-mono text-lg font-semibold ${bal < 0 ? 'text-foreground' : 'text-muted-foreground'}`}
+          className={`block whitespace-nowrap font-mono text-lg font-semibold ${bal < 0 ? 'text-foreground' : 'text-muted-foreground'}`}
         >
           {formatBalance(row.balance_scaled, row.scale)}
           <span className="ml-1 text-xs font-normal text-muted-foreground">{row.currency}</span>
         </span>
-        <span className="block text-[11px] text-muted-foreground">
+        <span className="block text-[11px] leading-4 text-muted-foreground">
           balance · expenses{' '}
-          {(spend?.total ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}{' '}
-          {spend?.window === 'statement' ? 'last statement' : 'this month'}
+          {(spend && spend.length > 0 ? spend : [{ currency: row.currency, total: 0, window: 'month' as const }])
+            .map(
+              (s) =>
+                `${s.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}${s.currency !== row.currency ? ` ${s.currency}` : ''}`,
+            )
+            .join(' + ')}{' '}
+          {(spend?.[0]?.window ?? 'month') === 'statement' ? 'last statement' : 'this month'}
         </span>
       </span>
     </Link>
