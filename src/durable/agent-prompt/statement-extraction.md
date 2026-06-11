@@ -16,11 +16,17 @@ Follow these rules when building that array.
 2. **Infer dates.** Statements usually show `dd Mon` (no year) within
    a billing period printed elsewhere. Use the period or statement
    date to resolve the year, then emit each posting as `YYYY-MM-DD`.
-3. **Payments received ARE transactions** (owner ruling): record each
-   payment/auto-debit credit to the card with the counter-leg
-   `Assets:Clearing:CardPayments` (negative — money left the bank toward
-   the card; the bank-statement import later mirrors it and the clearing
-   account nets to zero). Payments earn no points.
+3. **Payments received ARE transactions** (owner ruling). A payment/credit to
+   the card REDUCES what you owe, so the card leg is POSITIVE and the counter
+   leg `Assets:Clearing:CardPayments` is NEGATIVE — the two must sum to zero:
+   ```
+   2026-05-21 * "Payment received" "Auto-debit"
+     Liabilities:CreditCards:Demo:Sample    5000.00 INR
+     Assets:Clearing:CardPayments           -5000.00 INR
+   ```
+   (the bank-statement import later mirrors the clearing leg and it nets to
+   zero). Both legs are the same magnitude with OPPOSITE signs — never the
+   same sign. Payments earn no points.
 4. **Filter noise vs. record fees.**
    - SKIP (not transactions): statement balance / minimum due / credit
      limit summary rows; reward-point accrual / redemption summary rows

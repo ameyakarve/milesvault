@@ -5,6 +5,7 @@ import {
   scaledFormat,
   scaledIsZero,
   scaledMul,
+  scaledNeg,
   type Scaled,
 } from './decimal'
 
@@ -125,6 +126,25 @@ function formatBalanceMessage(
       const dStr = debits ? scaledFormat(debits) : '0'
       const cStr = credits ? scaledFormat(credits) : '0'
       lines.push(`    debits=${dStr}, credits=${cStr}, diff=${signed(r.amount)}`)
+    }
+    // Sign-flip heuristic (likely, not definitive): if negating exactly one
+    // leg would zero the net — i.e. the imbalance is exactly TWICE that leg —
+    // its sign is almost certainly backwards. Two equal, same-sign legs (a
+    // payment with both legs +, a refund pair both −) are the classic case.
+    const net = inCcy.reduce<Scaled | null>(
+      (acc, w) => (acc ? scaledAdd(acc, w.amount) : w.amount),
+      null,
+    )
+    if (net) {
+      for (const w of inCcy) {
+        if (scaledIsZero(scaledAdd(net, scaledNeg(scaledAdd(w.amount, w.amount))))) {
+          lines.push(
+            `    LIKELY SIGN FLIP: ${w.account} is ${signed(scaledFormat(w.amount))} ${r.currency} ` +
+              `and the imbalance (${signed(r.amount)}) is exactly twice that — flipping this leg's sign ` +
+              `balances it. Check whether this posting should be the opposite sign (don't change amounts).`,
+          )
+        }
+      }
     }
     lines.push(
       `    fix: adjust postings so ${r.currency} weights sum to 0 (a single leg ` +
