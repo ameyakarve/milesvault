@@ -2,6 +2,21 @@ import type { Config } from 'tailwindcss'
 import forms from '@tailwindcss/forms'
 import containerQueries from '@tailwindcss/container-queries'
 
+
+// Theme tokens hold COMPLETE colors (oklch(...)) in CSS vars, so Tailwind's
+// <alpha-value> can't compose with them — every `token/NN` opacity modifier
+// silently compiled to NOTHING, and `ring-1` (et al) fell back to Tailwind's
+// default BLUE ring. This function makes opacity modifiers real via
+// color-mix, app-wide.
+function tokenColor(cssVar: string): string {
+  // Function color values are supported by Tailwind v3 at runtime but not in
+  // its TS types — hence the cast.
+  return (({ opacityValue }: { opacityValue?: string }) =>
+    opacityValue === undefined || opacityValue === '1'
+      ? `var(${cssVar})`
+      : `color-mix(in oklab, var(${cssVar}) calc(${opacityValue} * 100%), transparent)`) as unknown as string
+}
+
 const config: Config = {
   content: [
     './src/app/(frontend)/**/*.{ts,tsx}',
@@ -16,48 +31,48 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       colors: {
-        border: 'var(--border)',
-        input: 'var(--input)',
-        ring: 'var(--ring)',
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
+        border: tokenColor('--border'),
+        input: tokenColor('--input'),
+        ring: tokenColor('--ring'),
+        background: tokenColor('--background'),
+        foreground: tokenColor('--foreground'),
         primary: {
-          DEFAULT: 'var(--primary)',
-          foreground: 'var(--primary-foreground)',
+          DEFAULT: tokenColor('--primary'),
+          foreground: tokenColor('--primary-foreground'),
         },
         secondary: {
-          DEFAULT: 'var(--secondary)',
-          foreground: 'var(--secondary-foreground)',
+          DEFAULT: tokenColor('--secondary'),
+          foreground: tokenColor('--secondary-foreground'),
         },
         destructive: {
-          DEFAULT: 'var(--destructive)',
+          DEFAULT: tokenColor('--destructive'),
           foreground: 'var(--destructive-foreground, oklch(0.985 0 0))',
         },
         muted: {
-          DEFAULT: 'var(--muted)',
-          foreground: 'var(--muted-foreground)',
+          DEFAULT: tokenColor('--muted'),
+          foreground: tokenColor('--muted-foreground'),
         },
         accent: {
-          DEFAULT: 'var(--accent)',
-          foreground: 'var(--accent-foreground)',
+          DEFAULT: tokenColor('--accent'),
+          foreground: tokenColor('--accent-foreground'),
         },
         popover: {
-          DEFAULT: 'var(--popover)',
-          foreground: 'var(--popover-foreground)',
+          DEFAULT: tokenColor('--popover'),
+          foreground: tokenColor('--popover-foreground'),
         },
         card: {
-          DEFAULT: 'var(--card)',
-          foreground: 'var(--card-foreground)',
+          DEFAULT: tokenColor('--card'),
+          foreground: tokenColor('--card-foreground'),
         },
         sidebar: {
-          DEFAULT: 'var(--sidebar)',
-          foreground: 'var(--sidebar-foreground)',
-          primary: 'var(--sidebar-primary)',
-          'primary-foreground': 'var(--sidebar-primary-foreground)',
-          accent: 'var(--sidebar-accent)',
-          'accent-foreground': 'var(--sidebar-accent-foreground)',
-          border: 'var(--sidebar-border)',
-          ring: 'var(--sidebar-ring)',
+          DEFAULT: tokenColor('--sidebar'),
+          foreground: tokenColor('--sidebar-foreground'),
+          primary: tokenColor('--sidebar-primary'),
+          'primary-foreground': tokenColor('--sidebar-primary-foreground'),
+          accent: tokenColor('--sidebar-accent'),
+          'accent-foreground': tokenColor('--sidebar-accent-foreground'),
+          border: tokenColor('--sidebar-border'),
+          ring: tokenColor('--sidebar-ring'),
         },
       },
       fontFamily: {
