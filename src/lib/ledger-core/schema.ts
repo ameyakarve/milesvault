@@ -353,6 +353,17 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     allowFail: true,
   },
   {
+    // One row per page image — a single statement's images blob exceeds
+    // DO SQLite's ~2MB per-value cap (SQLITE_TOOBIG), so store them split.
+    label: 'statement_images',
+    sql: `CREATE TABLE IF NOT EXISTS statement_images (
+      statement_id TEXT NOT NULL,
+      idx          INTEGER NOT NULL,
+      data_url     TEXT NOT NULL,
+      PRIMARY KEY (statement_id, idx)
+    )`,
+  },
+  {
     label: 'agent_attachments',
     sql: `CREATE TABLE IF NOT EXISTS agent_attachments (
       r2_key      TEXT    PRIMARY KEY,

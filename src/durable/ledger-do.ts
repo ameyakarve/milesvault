@@ -276,15 +276,27 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     const source = opts.source ?? 'upload'
     this.ctx.storage.transactionSync(() => {
       this.db.exec(
-        `INSERT OR REPLACE INTO statements (id, owner_email, filename, text, images, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO statements (id, owner_email, filename, text, created_at)
+         VALUES (?, ?, ?, ?, ?)`,
         opts.id,
         opts.ownerEmail,
         opts.filename,
         opts.text,
-        opts.images && opts.images.length ? JSON.stringify(opts.images) : null,
         now,
       )
+      // Page images, one row each (per-value size cap). Skip any single
+      // image still over the limit rather than failing the whole write.
+      this.db.exec('DELETE FROM statement_images WHERE statement_id = ?', opts.id)
+      let idx = 0
+      for (const url of opts.images ?? []) {
+        if (url.length > 1_900_000) continue
+        this.db.exec(
+          'INSERT OR REPLACE INTO statement_images (statement_id, idx, data_url) VALUES (?, ?, ?)',
+          opts.id,
+          idx++,
+          url,
+        )
+      }
       // Async arrivals become Inbox captures: forwarded email always, an
       // upload when the client opted in (global drop). The chat paperclip
       // is interactive and never enters the Inbox.
@@ -840,21 +852,19 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     id: string,
   ): Promise<{ filename: string; text: string; images: string[]; ownerEmail: string } | null> {
     const row = this.db
-      .exec<{ filename: string; text: string; images: string | null; owner_email: string }>(
-        `SELECT filename, text, images, owner_email FROM statements WHERE id = ?`,
+      .exec<{ filename: string; text: string; owner_email: string }>(
+        `SELECT filename, text, owner_email FROM statements WHERE id = ?`,
         id,
       )
       .toArray()[0]
     if (!row) return null
-    let images: string[] = []
-    if (row.images) {
-      try {
-        const p = JSON.parse(row.images) as unknown
-        if (Array.isArray(p)) images = p.filter((x): x is string => typeof x === 'string')
-      } catch {
-        /* ignore */
-      }
-    }
+    const images = this.db
+      .exec<{ data_url: string }>(
+        'SELECT data_url FROM statement_images WHERE statement_id = ? ORDER BY idx',
+        id,
+      )
+      .toArray()
+      .map((r) => r.data_url)
     return { filename: row.filename, text: row.text, images, ownerEmail: row.owner_email }
   }
 
