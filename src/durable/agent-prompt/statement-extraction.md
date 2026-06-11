@@ -103,41 +103,26 @@ Follow these rules when building that array.
    - **CLOSING → assert it.** If it states a CLOSING points balance, emit ONE
      `balance` directive for `<pool.account>` in `<pool.ticker>` with that
      closing number, dated the statement close. Points, never rupees.
-9. **Assert opening & closing balances — read them from the SUMMARY box, not
-   the transaction rows.** Every statement has a summary of TOTALS, e.g.
-   "Previous/Opening Balance · Purchases · Payments/Credits · Net Outstanding /
-   Total Payment Due". Take exactly two figures from THAT summary:
-   - OPENING = the "Previous Balance" / "Opening Balance" total.
-   - CLOSING = the "Net Outstanding Balance" / "Total Payment Due" total.
-   These are TOTALS, never transactions. CRUCIAL: the "Opening Balance" is NOT
-   the transaction printed under it. Statements often start the transaction
-   table with an `OPENING BALANCE  <amount>` row, then the first real
-   transaction right below — do NOT read that next row's date or amount as the
-   opening balance. Never use a transaction amount, minimum due, or credit
-   limit as a balance.
-
-   Find the statement period (printed as "Statement Period DD/MM/YYYY -
-   DD/MM/YYYY"). Emit ONE opening and ONE closing pad+balance pair:
-   - Opening asserts at the START of the period → date the balance the
-     period's FIRST day, the pad the day before:
-     ```
-     2026-04-07 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Adjustments
-     2026-04-08 balance Liabilities:CreditCards:Axis:SelectPlus  -3000.00 INR
-     ```
-   - Closing asserts after the cycle → date the balance the DAY AFTER the
-     period's LAST day, the pad on the last day:
-     ```
-     2026-05-07 pad Liabilities:CreditCards:Axis:SelectPlus Equity:Adjustments
-     2026-05-08 balance Liabilities:CreditCards:Axis:SelectPlus  -8500.00 INR
-     ```
-   EXACTLY ONE opening and ONE closing per card — never two of either, never
-   the same balance on two adjacent dates.
-   SIGNS — read the Dr/Cr marker: amount OWED to the bank (normal case, "Dr")
-   → NEGATIVE (e.g. "Net Outstanding 8,500.00" → -8500.00 INR); a "Cr" balance
+9. **Assert ONLY the statement's CLOSING balance** (one per card). Do NOT
+   assert an opening balance — this statement's opening is the previous
+   statement's closing, which is already asserted; emit the closing only.
+   Read the closing from the SUMMARY box of TOTALS (Previous Balance ·
+   Purchases · Payments · Net Outstanding / Total Payment Due) — use the
+   "Net Outstanding Balance" / "Total Payment Due" total, NOT a transaction
+   amount, the minimum due, or the credit limit.
+   The closing asserts AFTER the cycle → date the balance the DAY AFTER the
+   statement period's last day, the pad on the last day:
+   ```
+   2026-05-07 pad Liabilities:CreditCards:Demo:Sample Equity:Adjustments
+   2026-05-08 balance Liabilities:CreditCards:Demo:Sample  -8500.00 INR
+   ```
+   EXACTLY ONE closing balance per card — never two, never the same balance on
+   two adjacent dates.
+   SIGNS — read the Dr/Cr marker: amount OWED to the bank (normal "Dr") →
+   NEGATIVE (e.g. "Net Outstanding 8,500.00" → -8500.00 INR); a "Cr" balance
    (bank owes you — overpayment/refund) → POSITIVE (e.g. "5,432.10 Cr" →
-   +5432.10). Both opening and closing can be Cr.
-   The pad+balance pair is ONE element. Copy the figures digit-for-digit;
-   never compute them.
+   +5432.10).
+   The pad+balance pair is ONE element. Copy the figure digit-for-digit.
 10. **One transaction per element.** Each entry is a complete Beancount
    block — header line plus 2+ postings, no leading/trailing blank
    lines, no comments narrating what the row is for. The postings
