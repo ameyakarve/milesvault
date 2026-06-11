@@ -126,7 +126,7 @@ export class ChatDO
       if (v === undefined) return null
       try {
         const s = JSON.stringify(v)
-        return s.length > 4000 ? s.slice(0, 4000) + '…' : s
+        return s.length > 16000 ? s.slice(0, 16000) + '…' : s
       } catch {
         return String(v).slice(0, 4000)
       }
@@ -318,25 +318,36 @@ ${opts.text}`,
       })
 
       if (result.ok && result.entries.length > 0) {
-        await ledger.set_capture_drafts(statementId, result.entries)
+        await ledger.set_capture_drafts(
+          statementId,
+          result.entries,
+          result.validation_issues.length > 0
+            ? `Validation warnings (fix in the editor before approving):\n${result.validation_issues.join('\n')}`
+            : null,
+        )
       } else {
         await ledger.set_capture_error(
           statementId,
-          result.error?.slice(0, 300) || 'pipeline produced no entries',
+          result.error || 'pipeline produced no entries',
         )
       }
       this.logTool({
         agent: 'async-ingest',
         tool: 'draft_pipeline',
         input: { statement_id: statementId, filename: stmt.filename },
-        output: { entries: result.entries.length, stages: result.stages, error: result.error },
+        output: {
+          entries: result.entries.length,
+          stages: result.stages,
+          error: result.error,
+          validation_issues: result.validation_issues,
+        },
         ok: result.ok,
         ms: Date.now() - t0,
       })
       return { ok: result.ok, entries: result.entries.length }
     } catch (e) {
       await this.ledgerStub()
-        .set_capture_error(statementId, String(e).slice(0, 300))
+        .set_capture_error(statementId, String(e))
         .catch((): undefined => undefined)
       this.logTool({
         agent: 'async-ingest',

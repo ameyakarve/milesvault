@@ -183,11 +183,10 @@ async function genJson<T>(
         const parsed = schema.safeParse(JSON.parse(block))
         if (parsed.success) return { value: parsed.data, error: null }
         lastError = parsed.error.issues
-          .slice(0, 3)
           .map((iss) => `${iss.path.join('.')}: ${iss.message}`)
           .join('; ')
       } catch (e) {
-        lastError = `invalid JSON: ${String(e).slice(0, 120)}`
+        lastError = `invalid JSON: ${String(e)}`
       }
     }
     p = `${prompt}\n\nYour previous output was invalid (${lastError}). Output ONLY the corrected JSON object.`
@@ -393,8 +392,11 @@ export type PipelineResult = {
     card?: { name?: string; error?: string }
     guide?: { found: boolean; rate?: string; error?: string }
     extract?: { txns: number; balances: number; error?: string }
-    validate?: { issues: number; sample?: string }
+    validate?: { issues: number }
   }
+  // FULL validator messages — never truncated (owner decree): these surface
+  // on the Inbox item and in the tool log verbatim.
+  validation_issues: string[]
 }
 
 export async function runDraftPipeline(deps: {
@@ -435,7 +437,7 @@ export async function runDraftPipeline(deps: {
   )
   if (ext.value === null) {
     stages.extract = { txns: 0, balances: 0, error: ext.error ?? 'unknown' }
-    return { ok: false, entries: [], error: `extract: ${ext.error}`, stages }
+    return { ok: false, entries: [], error: `extract: ${ext.error}`, stages, validation_issues: [] }
   }
   const txns = ext.value.entries.filter((e) => e.kind === 'transaction').length
   stages.extract = { txns, balances: ext.value.entries.length - txns }
@@ -448,11 +450,11 @@ export async function runDraftPipeline(deps: {
   })
   const entries = serializeEntries(parts)
 
-  // 4. Validate (informational — the review editor is the final gate).
+  // 4. Validate. Failures don't block delivery (the review editor can fix
+  //    them) but they are NEVER silent: full messages ride the result.
   const v = validateDraftBatch(entries)
-  stages.validate = v.ok
-    ? { issues: 0 }
-    : { issues: v.issues.length, sample: v.issues[0]?.message?.slice(0, 140) }
+  const validation_issues = v.ok === true ? [] : v.issues.map((i) => i.message)
+  stages.validate = { issues: validation_issues.length }
 
-  return { ok: entries.length > 0, entries, stages }
+  return { ok: entries.length > 0, entries, stages, validation_issues }
 }

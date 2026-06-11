@@ -146,5 +146,5 @@ for (const [name, ok] of checks) {
   console.log(ok ? 'PASS' : 'FAIL', name)
   if (!ok) fail++
 }
-if (!v.ok) console.log(JSON.stringify(v.issues.slice(0, 4), null, 1))
+if (v.ok === false) console.log(JSON.stringify(v.issues, null, 1))
 process.exit(fail ? 1 : 0)

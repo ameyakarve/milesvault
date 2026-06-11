@@ -446,6 +446,11 @@ function ItemDetail({
       {/* Body: drafts editor fills the pane (real Journal — scrolls like the editor) */}
       {hasDrafts ? (
         <div className="flex min-h-0 flex-1 flex-col">
+          {row.draft_error ? (
+            <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap border-b border-border bg-destructive/5 px-4 py-2 font-mono text-[11px] leading-4 text-destructive sm:px-6">
+              {row.draft_error}
+            </pre>
+          ) : null}
           <Journal
             text={buffer ?? entries.join('\n\n') + '\n'}
             onChange={onBufferChange}

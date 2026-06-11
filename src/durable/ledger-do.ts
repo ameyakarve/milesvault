@@ -560,11 +560,18 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
   // Background statement agent's proposal lands here: entries as a JSON
   // array of beancount strings; the capture flips to 'extracted' so the
   // Inbox offers review. Empty entries leave the row untouched.
-  async set_capture_drafts(id: string, entries: string[]): Promise<{ ok: boolean }> {
+  async set_capture_drafts(
+    id: string,
+    entries: string[],
+    // Non-blocking validation warnings: drafts are delivered AND the
+    // problems are shown verbatim on the item (never silent).
+    warning?: string | null,
+  ): Promise<{ ok: boolean }> {
     if (entries.length === 0) return { ok: false }
     const cursor = this.db.exec(
-      `UPDATE capture_items SET drafts = ?, draft_error = NULL, state = 'extracted', updated_at = ? WHERE id = ?`,
+      `UPDATE capture_items SET drafts = ?, draft_error = ?, state = 'extracted', updated_at = ? WHERE id = ?`,
       JSON.stringify(entries),
+      warning?.slice(0, 4000) ?? null,
       Date.now(),
       id,
     )
@@ -576,7 +583,7 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
   async set_capture_error(id: string, error: string): Promise<{ ok: boolean }> {
     const cursor = this.db.exec(
       `UPDATE capture_items SET draft_error = ?, state = 'captured', updated_at = ? WHERE id = ?`,
-      error.slice(0, 500),
+      error.slice(0, 4000),
       Date.now(),
       id,
     )
