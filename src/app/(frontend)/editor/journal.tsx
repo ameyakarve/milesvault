@@ -48,6 +48,9 @@ const THEME = EditorView.theme({
     overflow: 'auto',
   },
   '.cm-content': { padding: '12px 0', caretColor: 'var(--cm-caret)', color: 'var(--cm-text)' },
+  // drawSelection renders the cursor as .cm-cursor (border-left), which
+  // ignores caretColor and defaults to BLACK — invisible in dark mode.
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--cm-caret)', borderLeftWidth: '1.5px' },
   '.cm-line': { padding: '0 16px', lineHeight: '24px' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
     { backgroundColor: 'var(--cm-selection)' },
