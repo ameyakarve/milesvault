@@ -27,19 +27,25 @@ const ExtractedTxn = z.object({
   note: z.string().max(160).optional(),
 })
 
-const Money = z.object({ amount: z.number(), cr: z.boolean() })
+const StatedBalance = z.object({
+  amount: z.number(),
+  // credit balance — the bank owes the user → POSITIVE liability sign.
+  cr: z.boolean().optional(),
+  // true → a reward-points balance (asserted on the points wallet in the
+  // pool's commodity); false/absent → fiat on the card account.
+  points: z.boolean().optional(),
+  // The date the statement states the balance for. Opening balances are
+  // as-of the day before the period starts; closing as-of the period end.
+  // Defaults to the period end when omitted.
+  as_of: z.string().regex(DATE_RE).optional(),
+})
 
 const ExtractedStatement = z.object({
   card_name: z.string().min(2).max(80),
   period: z.object({ from: z.string().regex(DATE_RE), to: z.string().regex(DATE_RE) }),
-  // ALL balances are optional — statements vary. cr=true → credit balance
-  // (the bank owes the user) → POSITIVE liability.
-  opening_balance: Money.nullable().optional(),
-  closing_balance: Money.nullable().optional(),
-  // The statement's closing reward-points balance, when printed. The one
-  // points figure that matters: asserting it reconciles the whole cycle
-  // (the pad absorbs drift) — opening/earned are derivable noise.
-  closing_points: z.number().nullable().optional(),
+  // Whatever balances the statement states — zero or more; fiat and points
+  // are the same construct, just different accounts (owner convention).
+  balances: z.array(StatedBalance).max(8).optional(),
   transactions: z.array(ExtractedTxn).min(1).max(200),
 })
 export type Extracted = z.infer<typeof ExtractedStatement>
@@ -190,22 +196,26 @@ export function renderEntries(opts: {
 
   const entries: string[] = []
 
-  // Opening bookend: pad absorbs drift, assertion pins the statement's figure.
-  // Balance asserts at START of day → opening dated period.from, pad the day
-  // before; closing dated the day AFTER period.to. Cr → positive liability.
-  const bookend = (
-    bal: { amount: number; cr: boolean },
-    padDate: string,
-    assertDate: string,
-  ) => {
-    const signed = bal.cr ? bal.amount : -bal.amount
-    entries.push(
-      `${padDate} pad ${cardAccount} Equity:Opening-Balances\n` +
-        `${assertDate} balance ${cardAccount}  ${money(signed)} INR`,
-    )
-  }
-  if (extracted.opening_balance) {
-    bookend(extracted.opening_balance, addDays(extracted.period.from, -1), extracted.period.from)
+  // Stated balances: one uniform treatment — pad absorbs drift, assertion
+  // pins the statement's figure. Assertions check the START of day, so the
+  // assert date is as_of + 1 with the pad on as_of. Fiat lands on the card
+  // account (Cr → positive); points on the pool wallet in its commodity
+  // (skipped when the pool is unknown).
+  for (const bal of extracted.balances ?? []) {
+    const asOf = bal.as_of ?? extracted.period.to
+    if (bal.points) {
+      if (!pool?.account || !pool?.ticker) continue
+      entries.push(
+        `${asOf} pad ${pool.account} Equity:Opening-Balances\n` +
+          `${addDays(asOf, 1)} balance ${pool.account}  ${Math.round(bal.amount)} ${pool.ticker}`,
+      )
+    } else {
+      const signed = bal.cr ? bal.amount : -bal.amount
+      entries.push(
+        `${asOf} pad ${cardAccount} Equity:Opening-Balances\n` +
+          `${addDays(asOf, 1)} balance ${cardAccount}  ${money(signed)} INR`,
+      )
+    }
   }
 
   for (const t of extracted.transactions) {
@@ -231,21 +241,6 @@ export function renderEntries(opts: {
     entries.push(lines.join('\n'))
   }
 
-  if (extracted.closing_balance) {
-    bookend(extracted.closing_balance, extracted.period.to, addDays(extracted.period.to, 1))
-  }
-
-  // Statement-stated reward-point balance: assert the POSTED wallet (the
-  // pool parent — :Pending is ours, not the bank's) with a pad to absorb
-  // history drift. Statement truth beats our estimates.
-  const closingPts = extracted.closing_points
-  if (closingPts != null && pool?.account && pool?.ticker) {
-    entries.push(
-      `${extracted.period.to} pad ${pool.account} Equity:Opening-Balances\n` +
-        `${addDays(extracted.period.to, 1)} balance ${pool.account}  ${closingPts} ${pool.ticker}`,
-    )
-  }
-
   return entries
 }
 
@@ -255,17 +250,14 @@ const EXTRACT_SYSTEM = `You extract credit-card statements into JSON. Output ONL
 {
   "card_name": "issuer + card name as printed",
   "period": { "from": "YYYY-MM-DD", "to": "YYYY-MM-DD" },
-  "opening_balance": { "amount": 123.45, "cr": false } | null,
-  "closing_balance": { "amount": 123.45, "cr": false } | null,
-  "closing_points": 1650 | null,
+  "balances": [ { "amount": 123.45, "cr": false, "points": false, "as_of": "YYYY-MM-DD" } ],
   "transactions": [
     { "date": "YYYY-MM-DD", "merchant": "as printed", "credit": false, "amount": 123.45, "note": "short category hint" }
   ]
 }
 Rules:
 - amount is ALWAYS positive; "credit": true marks refunds/reversals TO the card.
-- "cr": true when the statement marks a balance "Cr" (credit balance — the bank owes the user).
-- Balances are OPTIONAL — use null for anything the statement does not state. closing_points is the closing reward-points balance when printed.
+- balances: every balance the statement STATES, zero or more. "cr": true when marked Cr (credit balance — the bank owes the user). "points": true for reward-point balances. "as_of": the date the figure is stated for — opening balances are as-of the day BEFORE the period starts, closing as-of the period end.
 - Copy stated amounts digit-for-digit. Normalize all dates to YYYY-MM-DD.
 - SKIP noise rows: payments received, reward-point summaries, interest/late fees, GST-on-fee lines, promotional text.
 - Include every purchase and every refund/credit row.`
