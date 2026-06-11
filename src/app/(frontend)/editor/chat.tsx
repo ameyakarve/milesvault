@@ -753,7 +753,7 @@ function PendingCapturesHint() {
         // Only items ready for the user — drafts extracted, or a failed
         // background draft. Still-drafting (captured/processing) doesn't count.
         setPending(
-          (d.rows ?? []).filter((c) => c.state === 'extracted' || c.draft_error != null).length,
+          (d.rows ?? []).filter((c) => (c.state === 'extracted' || (c.draft_error != null && c.state !== 'posted' && c.state !== 'dismissed'))).length,
         )
       })
       .catch(() => {})

@@ -41,7 +41,7 @@ function usePendingCaptures(): number {
       .then((d) => {
         if (cancelled || !d) return
         const rows = d.rows ?? []
-        setN(rows.filter((r) => r.state === 'extracted' || r.draft_error != null).length)
+        setN(rows.filter((r) => r.state === 'extracted' || (r.draft_error != null && r.state !== 'posted' && r.state !== 'dismissed')).length)
       })
       .catch(() => {})
     return () => {

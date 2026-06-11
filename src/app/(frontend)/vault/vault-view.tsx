@@ -88,7 +88,7 @@ export function VaultView() {
       .then((d) => {
         if (cancelled || !d) return
         const all = d.rows ?? []
-        setPendingCaptures(all.filter((c) => c.state === 'extracted' || c.draft_error != null).length)
+        setPendingCaptures(all.filter((c) => (c.state === 'extracted' || (c.draft_error != null && c.state !== 'posted' && c.state !== 'dismissed'))).length)
       })
       .catch(() => {})
     return () => {

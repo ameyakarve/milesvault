@@ -599,8 +599,13 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     id: string,
     state: 'captured' | 'processing' | 'extracted' | 'posted' | 'dismissed',
   ): Promise<{ ok: boolean }> {
+    // Terminal transitions clear any lingering draft warning so review
+    // counts don't keep flagging an item that's already posted/dismissed.
+    const clearWarning = state === 'posted' || state === 'dismissed'
     const cursor = this.db.exec(
-      `UPDATE capture_items SET state = ?, updated_at = ? WHERE id = ?`,
+      clearWarning
+        ? `UPDATE capture_items SET state = ?, draft_error = NULL, updated_at = ? WHERE id = ?`
+        : `UPDATE capture_items SET state = ?, updated_at = ? WHERE id = ?`,
       state,
       Date.now(),
       id,
