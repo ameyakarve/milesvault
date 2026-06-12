@@ -325,44 +325,47 @@ ${opts.text}`,
       // layer). The PDF text carries exact amounts; the images let gemma read
       // what the text can't (labels banks render as graphics — e.g. HSBC's
       // reward-points summary). One model does vision + structure.
-      const gen: GenFn = async ({ system, prompt, maxTokens, images }) => {
-        // Thinking ON for statement-upload extraction only (owner call): the
-        // careful "did I already fold this fee? which charge does this GST
-        // belong to?" reasoning that trips a non-thinking pass on long,
-        // forex-heavy statements.
-        const model = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'low' })
-        const r =
-          images && images.length > 0
-            ? streamText({
-                model,
-                system,
-                maxOutputTokens: maxTokens,
-                messages: [
-                  {
-                    role: 'user',
-                    content: [
-                      { type: 'text', text: prompt },
-                      ...images.map((url) => ({
-                        type: 'file' as const,
-                        data: url.replace(/^data:[^,]+,/, ''),
-                        mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
-                      })),
-                    ],
-                  },
-                ],
-              })
-            : streamText({ model, system, prompt, maxOutputTokens: maxTokens })
-        let text = ''
-        for await (const delta of r.textStream) {
-          text += delta
-          trace(text)
+      // Two gens: the heavy multimodal EXTRACTION runs with thinking ON (the
+      // careful fee-fold/charge-match reasoning); the small card-identify /
+      // candidate-pick calls run thinking OFF — a 256-token budget gets
+      // STARVED by a thinking trace, which silently broke card resolution.
+      const makeGen =
+        (reasoning: 'low' | 'off'): GenFn =>
+        async ({ system, prompt, maxTokens, images }) => {
+          const model = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning })
+          const r =
+            images && images.length > 0
+              ? streamText({
+                  model,
+                  system,
+                  maxOutputTokens: maxTokens,
+                  messages: [
+                    {
+                      role: 'user',
+                      content: [
+                        { type: 'text', text: prompt },
+                        ...images.map((url) => ({
+                          type: 'file' as const,
+                          data: url.replace(/^data:[^,]+,/, ''),
+                          mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
+                        })),
+                      ],
+                    },
+                  ],
+                })
+              : streamText({ model, system, prompt, maxOutputTokens: maxTokens })
+          let text = ''
+          for await (const delta of r.textStream) {
+            text += delta
+            if (reasoning === 'low') trace(text)
+          }
+          return text
         }
-        return text
-      }
 
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
       const result = await runDraftPipeline({
-        gen,
+        gen: makeGen('low'),
+        genFast: makeGen('off'),
         kb: kbHttp,
         statementText: stmt.text,
         images: stmt.images,

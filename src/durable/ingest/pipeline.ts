@@ -344,6 +344,9 @@ export type PipelineResult = {
 
 export async function runDraftPipeline(deps: {
   gen: GenFn
+  // Lightweight, NON-thinking gen for the small card-identify / pick calls
+  // (thinking starves their 256-token budget). Falls back to `gen`.
+  genFast?: GenFn
   kb: KbHttp
   // PDF-extracted text (exact amounts) plus the page images (gemma is
   // multimodal — it reads labels the text can't, e.g. image-rendered
@@ -358,22 +361,60 @@ export async function runDraftPipeline(deps: {
 }): Promise<PipelineResult> {
   const stages: PipelineResult['stages'] = {}
 
-  // 1. Identify the card (tiny call) → guide → rate, so the guide's
-  //    exclusion rules ride the extraction prompt.
-  const cardRes = await genJson(deps.gen, ZCard, CARD_SYSTEM, deps.statementText.slice(0, 4000), 256)
+  const genFast = deps.genFast ?? deps.gen
+
+  // 1. Identify the card → resolve its guide (rate, pool, exclusions).
+  //    (A) The identify call runs on the NON-thinking gen — its 256-token
+  //    budget gets starved by a thinking trace.
+  const cardRes = await genJson(genFast, ZCard, CARD_SYSTEM, deps.statementText.slice(0, 4000), 256)
   stages.card = { name: cardRes.value?.card_name, error: cardRes.error ?? undefined }
-  let guide: CardGuideResult = cardRes.value
-    ? await fetchCardGuide(deps.kb, cardRes.value.card_name)
+
+  // (B) Prefer the user's EXISTING card account as the resolution anchor: its
+  //     clean name ("Axis:MagnusBurgundy" → "Axis Magnus Burgundy") maps to the
+  //     KG deterministically, where the noisy statement header ("Axis Bank
+  //     Magnus Burgundy Credit Card") ties on generic tokens. Falls back to the
+  //     header for cards the user doesn't track yet.
+  const cardAccounts = deps.accounts.filter((a) => a.startsWith('Liabilities:CreditCards:'))
+  const cleanName = (acct: string): string => {
+    const parts = acct.split(':')
+    const issuer = parts[2] ?? ''
+    const leaf = (parts[3] ?? '').replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    return `${issuer} ${leaf}`.trim()
+  }
+  const toks = (s: string) =>
+    new Set(
+      s
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((t) => t.length >= 3),
+    )
+  let anchor: string | null = null
+  if (cardAccounts.length === 1) anchor = cardAccounts[0]!
+  else if (cardAccounts.length > 1 && cardRes.value) {
+    const idTok = toks(cardRes.value.card_name)
+    let best = 0
+    for (const a of cardAccounts) {
+      const n = [...toks(cleanName(a))].filter((t) => idTok.has(t)).length
+      if (n > best) {
+        best = n
+        anchor = a
+      }
+    }
+    if (best < 1) anchor = null
+  }
+  const resolveName = anchor ? cleanName(anchor) : (cardRes.value?.card_name ?? null)
+  let guide: CardGuideResult = resolveName
+    ? await fetchCardGuide(deps.kb, resolveName)
     : { ok: false, error: 'card_not_identified' }
-  // Ambiguous resolution returns candidates. Code did the RECALL; the
-  // MODEL does the choosing (owner design — no matching heuristics here).
-  if (guide.ok === false && guide.candidates?.length && cardRes.value) {
+
+  // Ambiguous resolution returns candidates — the model picks (non-thinking).
+  if (guide.ok === false && guide.candidates?.length && resolveName) {
     const cands: Array<{ slug: string; name: string | null }> = guide.candidates
     const pick = await genJson(
-      deps.gen,
+      genFast,
       z.object({ name: z.string().nullable() }),
       'A statement names a credit card; the knowledge graph offers candidate cards. Output ONLY {"name": "<exact candidate name>"} for the matching card, or {"name": null} if none match.',
-      `Statement card: ${cardRes.value.card_name}\nCandidates:\n${cands.map((c) => `- ${c.name}`).join('\n')}`,
+      `Statement card: ${resolveName}\nCandidates:\n${cands.map((c) => `- ${c.name}`).join('\n')}`,
       128,
     )
     if (pick.value?.name) {
