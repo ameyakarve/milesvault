@@ -321,7 +321,7 @@ ${cards.map((c) => `${c.name} [${c.slug}]`).join('\n')}`
 // old fuzzy-by-name path rather than breaking every card.
 let cardListCache: Promise<Array<{ slug: string; name: string }>> | null = null
 const getCardList = (kb: KbHttp): Promise<Array<{ slug: string; name: string }>> =>
-  (cardListCache ??= listCards(kb).catch(() => {
+  (cardListCache ??= listCards(kb).catch((): Array<{ slug: string; name: string }> => {
     cardListCache = null
     return []
   }))
