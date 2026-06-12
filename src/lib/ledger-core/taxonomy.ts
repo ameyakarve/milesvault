@@ -65,7 +65,6 @@ export const TAXONOMY: ReadonlyArray<TaxonomyNode> = [
         children: [
           { prefix: 'Assets:Rewards:Miles', label: 'Airline miles', kind: 'Assets' },
           { prefix: 'Assets:Rewards:Points', label: 'Points', kind: 'Assets' },
-          { prefix: 'Assets:Rewards:Cards', label: 'Card rewards', kind: 'Assets' },
           { prefix: 'Assets:Rewards:Status', label: 'Status', kind: 'Assets' },
         ],
       },
@@ -102,6 +101,7 @@ export const TAXONOMY: ReadonlyArray<TaxonomyNode> = [
     kind: 'Equity',
     children: [
       { prefix: 'Equity:Opening-Balances', label: 'Opening balances', kind: 'Equity' },
+      { prefix: 'Equity:Adjustments', label: 'Adjustments', kind: 'Equity' },
       { prefix: 'Equity:Void', label: 'Void', kind: 'Equity' },
     ],
   },

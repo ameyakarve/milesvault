@@ -25,7 +25,8 @@ Liabilities
 
 Equity
   Opening-Balances                      one entry per account at user onboarding
-  Void                                  reserved; do not post to (see plugs below)
+  Adjustments                           reconciliation plug — pad drift on ongoing balance corrections (NOT onboarding)
+  Void                                  reward-commodity mint/burn contra (points/miles/status) — see "System plug accounts"
 
 Income
   Salary:<employer>
@@ -55,12 +56,12 @@ Expenses
 - **Payee in narration, not in path.** Don't create `Expenses:Food:BlueTokai` — log "Blue Tokai" as the payee on the txn.
 - **Institution as the middle segment for Assets/Liabilities.** `Assets:Bank:HDFC:Savings`, `Liabilities:CreditCards:Amex:Plat` — keeps per-institution rollups cheap.
 - **Cashback and refunds are NOT income.** They reduce the originating expense:
-  - Cashback: `#cashback` tag, full outflow + credit-back to the instrument, `Income:Void` plug. See "Cashback and discounts" below.
+  - Cashback (deferred): `#cashback` tag, full purchase + an `Assets:Receivable:<Issuer>` accrual + a matching expense reduction; settles to the instrument when credited. The expense is the contra — no plug. See "Cashback and discounts" below.
   - Refunds: same shape as cashback when traceable to the original txn; otherwise model as a negative posting on the original `Expenses:*` category.
   - Untraceable rebates (rare): `Expenses:Misc:Rewards` is acceptable; don't invent `Income:Cashback`.
 - **`Misc` stays small.** If a row repeats more than 2–3 months, promote it to a real second-level category.
 - **No `Equity:Earnings` rollup.** Beancount does not auto-roll year-end income to equity, and personal users almost never benefit from manual closing entries. Skip it.
-- **Skip `Assets:Receivable` / `Liabilities:Payable` for v1** unless you actually lend/borrow — most users won't. Don't pre-seed empty stubs.
+- **Skip `Assets:Receivable` / `Liabilities:Payable` for v1** unless you actually lend/borrow — most users won't. Don't pre-seed empty stubs. (Deferred cashback is the one exception: it creates `Assets:Receivable:<Issuer>` on demand and clears it on settlement — see "Cashback and discounts".)
 
 ## Cards
 
@@ -216,7 +217,7 @@ miles before the airline posts them:
 ```
 2026-06-01 * "SQ423 BLR-SIN" "miles accrue on flying"   #reward-accrual
   Assets:Rewards:Miles:KrisFlyer:Pending   2400 KRISFLYER
-  Income:Void
+  Equity:Void
 
 2026-07-10 * "KrisFlyer" "miles credited"
   Assets:Rewards:Miles:KrisFlyer:Pending  -2400 KRISFLYER
@@ -235,25 +236,28 @@ Spendable reads (award affordability, transfer planning) exclude
 
 ### System plug accounts
 
-All non-cash accruals and burns flow through a single symmetric pair, regardless of commodity or semantic flavor:
+Plug entries balance a transaction whose other side has no real
+counter-account. The plug splits by whether the plugged leg is a **reward
+commodity** or **fiat**:
 
 | account | role |
 |---|---|
-| `Income:Void` | single source — reward accruals, cashback, discounts, gifts received, all commodities |
-| `Expenses:Void` | single sink — expiry, forfeit, tier reset, gifts given |
+| `Equity:Void` | reward-commodity mint/burn — points / miles / status **accrual, expiry, reset, forfeit, clawback**. Non-fiat (AVIOS, KRISFLYER, MAR-NIGHTS, HDFC-RP, …); stays on the balance sheet, off the P&L — a points accrual is not fiat income. |
+| `Income:Void` | fiat inbound plug — value entering the ledger from outside it (cash gifts received). Cashback/discounts do NOT use it — they net against the expense (see "Cashback and discounts"). |
+| `Expenses:Void` | fiat outbound plug — value leaving the ledger (cash gifts given, fiat write-offs). |
 
-Both auto-provisioned per user; hold multiple commodities simultaneously (INR alongside AVIOS, MARRIOTT, KRISFLYER, MAR-NIGHTS, KF-PPS, SBI-RP, SMARTBUY, …). Normal redemptions (points → flight) flow into real `Expenses:*` accounts, not these plugs.
+All three are auto-provisioned per user and hold multiple commodities simultaneously (Equity:Void carries AVIOS, MARRIOTT, KRISFLYER, MAR-NIGHTS, KF-PPS, SBI-RP, SMARTBUY, …; Income:Void/Expenses:Void carry INR). Normal redemptions (points → flight) flow into real `Expenses:*` accounts, not these plugs.
 
 Transaction-level **tags** classify the plug usage. The name "Void" is flavor-agnostic on purpose — classification lives on the transaction, not the account path.
 
-| tag | used on |
-|---|---|
-| `#reward-accrual` | points / miles / status earned alongside a spend |
-| `#reward-expiry` | points / miles / status lost to expiry or tier reset |
-| `#cashback` | real-fiat cashback credited back to a card/wallet |
-| `#discount` | promo/coupon savings (phantom savings, one instrument leg) |
-| `#gift-in` | gift received (inbound) |
-| `#gift-out` | gift given (outbound) |
+| tag | plug | used on |
+|---|---|---|
+| `#reward-accrual` | `Equity:Void` | points / miles / status earned alongside a spend |
+| `#reward-expiry` | `Equity:Void` | points / miles / status lost to expiry or tier reset |
+| `#cashback` | `Assets:Receivable` | deferred cashback — accrues to a receivable, settles when credited |
+| `#discount` | none (expense contra) | immediate promo/coupon savings — negative leg on the same expense |
+| `#gift-in` | `Income:Void` | cash gift received (inbound) |
+| `#gift-out` | `Expenses:Void` | cash gift given (outbound) |
 
 ### Consolidation
 
@@ -276,7 +280,7 @@ Points earned alongside a spend:
   Liabilities:CreditCards:HDFC:Infinia  -50000.00 INR
   Expenses:Travel:Flights                50000.00 INR
   Assets:Rewards:Miles:Avios              500.00 AVIOS
-  Income:Void                             -500.00 AVIOS
+  Equity:Void                             -500.00 AVIOS
 ```
 
 Status earned from a stay:
@@ -285,7 +289,7 @@ Status earned from a stay:
   Liabilities:CreditCards:HDFC:Infinia  -15000.00 INR
   Expenses:Travel:Hotels                 15000.00 INR
   Assets:Rewards:Status:Marriott             3.00 MAR-NIGHTS
-  Income:Void                               -3.00 MAR-NIGHTS
+  Equity:Void                               -3.00 MAR-NIGHTS
 ```
 
 ### Transfer between programs — `@@` conversion
@@ -293,8 +297,8 @@ Status earned from a stay:
 SmartBuy → Avios at 1:1.5:
 ```beancount
 2026-04-20 * "HDFC SmartBuy" "transfer to Avios"
-  Assets:Rewards:Cards:HDFC:SmartBuy     -10000.00 SMARTBUY
-  Assets:Rewards:Miles:Avios         15000.00 AVIOS @@ 10000.00 SMARTBUY
+  Assets:Rewards:HDFC                -10000.00 SMARTBUY
+  Assets:Rewards:Miles:Avios          15000.00 AVIOS @@ 10000.00 SMARTBUY
 ```
 
 ### Redemption — flows to real expense, no sink
@@ -311,8 +315,8 @@ Award flight (points + cash for taxes):
 Card-locked redemption into a voucher:
 ```beancount
 2026-05-10 * "SBI Rewards" "Amazon voucher"
-  Assets:Rewards:Cards:SBI:RewardPoints         -4000.00 SBI-RP
-  Assets:Loaded:GiftCards:Amazon     1000.00 INR @@ 4000.00 SBI-RP
+  Assets:Rewards:SBI              -4000.00 SBI-RP
+  Assets:Loaded:GiftCards:Amazon   1000.00 INR @@ 4000.00 SBI-RP
 ```
 
 ### Expiry / reset — burn sink
@@ -321,95 +325,81 @@ Points expire unused:
 ```beancount
 2026-12-31 * "Avios" "annual expiry" #reward-expiry
   Assets:Rewards:Miles:Avios  -2000.00 AVIOS
-  Expenses:Void                 2000.00 AVIOS
+  Equity:Void                   2000.00 AVIOS
 ```
 
 Status resets at year end:
 ```beancount
 2026-12-31 * "Marriott" "tier reset" #reward-expiry
   Assets:Rewards:Status:Marriott  -50.00 MAR-NIGHTS
-  Expenses:Void                    50.00 MAR-NIGHTS
+  Equity:Void                      50.00 MAR-NIGHTS
 ```
 
 ## Cashback and discounts
 
-Both are recorded inline with the originating txn. They differ in whether money actually moves.
+The split is **timing**. A **discount** is immediate — it reduced the bill you
+paid, nothing to redeem later. **Cashback** is deferred — ₹X posted back
+separately, redeemable on a later statement, so it accrues to an account until
+it lands. Neither uses an `Income:Void` plug: the expense reduction is the
+contra.
 
-| | Instrument postings | Gross expense shown? | Plug | Tag |
-|---|---|---|---|---|
-| Discount | 1 (net payment only) | yes | `Income:Void` | `#discount` |
-| Cashback | 2 (full outflow + credit back) | yes | `Income:Void` | `#cashback` |
+| | Shape | Plug | Tag |
+|---|---|---|---|
+| Discount | negative leg on the same expense; instrument pays the net | none (expense is the contra) | `#discount` |
+| Cashback | full purchase + `Assets:Receivable:<Issuer>` accrual + expense reduction; settles when credited | none (expense is the contra) | `#cashback` |
 
-### Discount — net payment, phantom savings
+### Discount — immediate, phantom savings
 
-Money never left for the discounted portion. One posting on the instrument.
+The discount reduced the bill at purchase. A negative posting on the same
+expense; the instrument pays the net. No receivable, no plug.
 
 ```beancount
 2026-04-16 * "Zomato" "dinner ₹1000 — ₹150 promo" #discount
+  Expenses:Food:Restaurant               1000.00 INR
+  Expenses:Food:Restaurant               -150.00 INR
   Liabilities:CreditCards:HDFC:Infinia   -850.00 INR
-  Expenses:Food:Restaurant               1000.00 INR
-  Income:Void                            -150.00 INR
 ```
 
-### Cashback — full payment + credit back
+### Cashback — deferred, accrues to a receivable
 
-Cashback is a real inflow. The instrument appears twice when the cashback lands on the same card/wallet that paid.
+A separately-redeemable credit (₹X back, redeemable later). Four postings:
+the purchase (2) + the receivable accrual (+) + the matching expense
+reduction (−). The expense leg is the contra — no `Income:Void`. The card
+pays the full amount; the ₹X owed sits in `Assets:Receivable:<Issuer>` until
+it lands; the expense nets to the post-cashback figure.
 
-Same-card cashback (10% HDFC offer on Zomato):
 ```beancount
-2026-04-16 * "Zomato" "dinner, 10% HDFC offer" #cashback
+2026-04-16 * "Zomato" "dinner, 10% HDFC cashback" #cashback
+  Expenses:Food:Restaurant               1000.00 INR
   Liabilities:CreditCards:HDFC:Infinia  -1000.00 INR
-  Expenses:Food:Restaurant               1000.00 INR
+  Assets:Receivable:HDFC                  100.00 INR
+  Expenses:Food:Restaurant               -100.00 INR
+```
+
+### Cashback settles (credited on a later statement)
+
+When the issuer credits it, the receivable is drawn down against whatever
+instrument it lands on — the card that earned it, a wallet, or bank. No
+expense, no plug; a pure receivable → instrument move.
+
+```beancount
+2026-04-30 * "HDFC" "Infinia statement cashback credited"
   Liabilities:CreditCards:HDFC:Infinia    100.00 INR
-  Income:Void                            -100.00 INR
+  Assets:Receivable:HDFC                 -100.00 INR
 ```
 
-Same-wallet cashback (Paytm 5% on a ride):
-```beancount
-2026-04-16 * "Zomato" "dinner + 5% Paytm cashback" #cashback
-  Assets:Loaded:Wallets:Paytm    -1000.00 INR
-  Expenses:Food:Restaurant        1000.00 INR
-  Assets:Loaded:Wallets:Paytm        50.00 INR
-  Income:Void                       -50.00 INR
-```
+Accrued-but-uncredited cashback stays visible in `Assets:Receivable:<Issuer>`
+until this settlement posts.
 
-Cross-instrument cashback (Amazon via Infinia, cashback to Amazon Pay):
-```beancount
-2026-04-16 * "Amazon" "headphones + ₹150 AmazonPay cashback" #cashback
-  Liabilities:CreditCards:HDFC:Infinia  -3000.00 INR
-  Expenses:Shopping:Electronics          3000.00 INR
-  Assets:Loaded:Wallets:AmazonPay         150.00 INR
-  Income:Void                            -150.00 INR
-```
+### Plug map
 
-Bill payment with app cashback (CRED pays into CRED wallet):
-```beancount
-2026-04-10 * "CRED" "HDFC bill + ₹25 CRED cashback" #cashback
-  Assets:Bank:HDFC:Savings              -10000.00 INR
-  Liabilities:CreditCards:HDFC:Infinia   10000.00 INR
-  Assets:Loaded:Wallets:CRED                 25.00 INR
-  Income:Void                               -25.00 INR
-```
-
-### Statement-level cashback (standalone)
-
-When cashback is credited later as a statement event rather than per-txn:
-```beancount
-2026-04-30 * "HDFC" "Infinia April statement cashback" #cashback
-  Liabilities:CreditCards:HDFC:Infinia    250.00 INR
-  Income:Void                            -250.00 INR
-```
-
-Pending/accrued cashback is not tracked.
-
-### Income/Expense map
-
-Single plug pair for everything non-cash; distinguish semantics via tags.
+Full split lives in "System plug accounts" above; distinguish semantics via tags.
 
 | account | role |
 |---|---|
-| `Income:Void` | all inbound plug entries (accrual, cashback, discount, gift-in) — any commodity |
-| `Expenses:Void` | all outbound plug entries (expiry, reset, forfeit, gift-out) — any commodity |
+| `Equity:Void` | reward-commodity mint/burn — accrual, expiry, reset, forfeit, clawback (points/miles/status) |
+| `Income:Void` | fiat inbound plug entries — cash gift-in (cashback/discount net against the expense, not here) |
+| `Expenses:Void` | fiat outbound plug entries — cash gift-out, fiat write-offs |
 
 ## Path-to-kind resolver
 

@@ -27,7 +27,7 @@ export function groupLabel(account: string): string {
 const GROUP_ORDER = [
   'Airline miles',
   'Points',
-  'Card rewards',
+  'Rewards',
   'Status',
   'Credit cards',
   'Bank',
@@ -87,9 +87,9 @@ export function accountLabel(account: string): { label: string; suffix: string |
     // <root>:<group>:<institution>:<name…> → "Institution · Name"
     return { label: `${parts[2]} · ${parts.slice(3).join(':')}`, suffix }
   }
-  // Card reward pools carry an issuer level (Assets:Rewards:Cards:HDFC:RewardPoints)
-  // — the bare leaf collides across issuers, qualify it. Same for any rewards
-  // subtree with an extra level.
+  // Issuer reward pools carry an issuer level (Assets:Rewards:HDFC:…, or the
+  // legacy Assets:Rewards:Cards:HDFC:RewardPoints) — the bare leaf collides
+  // across issuers, qualify it. Same for any rewards subtree with an extra level.
   if (account.startsWith('Assets:Rewards:') && parts.length >= 5) {
     return { label: `${parts[3]} · ${parts.slice(4).join(':')}`, suffix }
   }

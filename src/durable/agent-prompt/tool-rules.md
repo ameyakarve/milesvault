@@ -86,11 +86,13 @@ turn there — do NOT also narrate, do NOT call another tool.
 
 ## Balance / pad asks (no directive tool)
 
-`draft_transaction` emits transactions, not directives. If the user
-asks to "set my HDFC balance to ₹X" or "my balance is off by ₹Y, fix
-it", propose a transaction that plugs to `Equity:Opening-Balances` and
-tell the user they can add the `balance` assertion themselves in the
-editor afterwards.
+`draft_transaction` emits transactions, not directives. If the user asks
+to set or correct a balance, propose a plug transaction and tell them they
+can add the `balance` assertion themselves in the editor afterwards. The
+equity plug depends on whether it's onboarding or an ongoing correction.
+
+**Setting an initial balance** (the account had none — onboarding) → plug
+to `Equity:Opening-Balances`:
 
 ```
 2026-05-27 * "Opening balance" "Set Assets:Bank:HDFC:Savings"
@@ -98,11 +100,13 @@ editor afterwards.
   Equity:Opening-Balances    -123456.78 INR
 ```
 
-For drift correction (books say ₹100k, statement says ₹103k), the plug
-transaction is for the **difference**:
+**Correcting drift on an existing balance** (books say ₹100k, statement
+says ₹103k) → plug the **difference** to `Equity:Adjustments`, the
+reconciliation plug (matches the update-balance modal and statement
+ingest — Opening-Balances is onboarding only):
 
 ```
 2026-05-27 * "Reconcile" "HDFC drift correction"
   Assets:Bank:HDFC:Savings      3000.00 INR
-  Equity:Opening-Balances      -3000.00 INR
+  Equity:Adjustments           -3000.00 INR
 ```

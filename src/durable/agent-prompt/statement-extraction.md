@@ -42,18 +42,18 @@ Follow these rules when building that array.
 
    A **forex-markup fee** and its **GST** that follow a foreign-currency
    charge are NOT noise and are NOT standalone transactions — fold them
-   into the charge they belong to (next point). Never emit a bare
+   into the charge they belong to (see the forex-folding rule below). Never emit a bare
    `"GST"` or `"FOREIGN CURRENCY TRANSACTION FEE"` entry of its own.
-4. **Categorize from the open-accounts list.** Pick the best-fitting
+5. **Categorize from the open-accounts list.** Pick the best-fitting
    expense account (e.g. a grocery name → `Expenses:Food:Groceries`).
    Don't invent receivables, equity plugs, or accounts that aren't
    in the list unless no `Expenses:*` fits.
-5. **Currency follows the card.** If the open account is tagged
+6. **Currency follows the card.** If the open account is tagged
    `[INR]`, each posting is INR — don't infer FX from a merchant name
    unless the statement explicitly shows a foreign currency amount
    alongside the INR billed amount (in which case those become
    separate forex-markup legs per the existing rules).
-6. **Fold forex fee + GST into the charge.** When a row shows a foreign
+7. **Fold forex fee + GST into the charge.** When a row shows a foreign
    amount (e.g. `( USD 9.28 )`), the "FOREIGN CURRENCY TRANSACTION FEE" /
    "DCC MARKUP" and "GST" rows that follow it belong to it — emit ONE
    transaction: the foreign amount with `@@` set to the **billed INR
@@ -61,11 +61,11 @@ Follow these rules when building that array.
    INR legs, with the card debited for the sum. Pair stray fee/GST rows
    to their charge by the arithmetic (markup ≈ 2% of billed INR, GST ≈
    18% of markup). See the worked forex example.
-7. **Credits are refunds.** A `Cr` row that isn't a bill payment reverses
+8. **Credits are refunds.** A `Cr` row that isn't a bill payment reverses
    a purchase: negative expense leg, positive card leg. Keep each `Cr`
    row as its own transaction — never net two together or fold a refund
    into a receivable.
-8. **Every eligible spend carries its points legs.** For a credit-card
+9. **Every eligible spend carries its points legs.** For a credit-card
    statement, each spend entry follows the card guide's earn example:
    expense leg + card leg + `pool.account`:Pending points leg +
    `Equity:Void` contra, points = `floor(amount / per) * points` from the
@@ -91,7 +91,7 @@ Follow these rules when building that array.
    points leg. A spend OR refund entry missing its points legs is
    INCOMPLETE unless the guide gave you no rate at all — and then you must
    tell the user you skipped accruals.
-8b. **The points summary (almost every statement prints one).** Look for the
+10. **The points summary (almost every statement prints one).** Look for the
    reward/loyalty points summary — usually "Reward Points — Opening / Earned /
    Redeemed / Closing", or a "Points Balance". Two entries from it:
    - **EARNED → move it.** If it states the points EARNED this cycle (a number,
@@ -103,7 +103,7 @@ Follow these rules when building that array.
    - **CLOSING → assert it.** If it states a CLOSING points balance, emit ONE
      `balance` directive for `<pool.account>` in `<pool.ticker>` with that
      closing number, dated the statement close. Points, never rupees.
-9. **Assert ONLY the statement's CLOSING balance** (one per card). Do NOT
+11. **Assert ONLY the statement's CLOSING balance** (one per card). Do NOT
    assert an opening balance — this statement's opening is the previous
    statement's closing, which is already asserted; emit the closing only.
    Read the closing from the SUMMARY box of TOTALS (Previous Balance ·
@@ -123,7 +123,7 @@ Follow these rules when building that array.
    (bank owes you — overpayment/refund) → POSITIVE (e.g. "5,432.10 Cr" →
    +5432.10).
    The pad+balance pair is ONE element. Copy the figure digit-for-digit.
-10. **One transaction per element.** Each entry is a complete Beancount
+12. **One transaction per element.** Each entry is a complete Beancount
    block — header line plus 2+ postings, no leading/trailing blank
    lines, no comments narrating what the row is for. The postings
    must balance per currency under Beancount weight rules (`@@` puts
