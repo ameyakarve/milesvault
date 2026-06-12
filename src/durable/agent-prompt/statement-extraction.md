@@ -105,10 +105,15 @@ Follow these rules when building that array.
    rules by the merchant's actual category, not by keywords in its name (a
    "GAS" merchant may be a utility, which most cards still earn on — defer to
    the guide). When the guide doesn't clearly exclude it, the spend EARNS.
-   RECONCILE: the points you assign across all transactions should add up to
-   the statement's stated "Earned this cycle" figure. If your per-transaction
-   total falls short, you wrongly excluded a spend that actually earned — put
-   its points back so the totals agree.
+   RECONCILE to the stated "Earned this cycle": your accruals to `:Pending` must
+   total that figure. If they fall short, the gap is either a spend you wrongly
+   excluded (put its points back) or points earned outside any single purchase —
+   a bonus, promo, or milestone reward. Accrue that remainder as ONE more pending
+   entry (`<pool.account>:Pending +<gap>` / `Equity:Void −<gap>`, same ticker,
+   dated the statement close) so the total accrued equals Earned. Every earned
+   point reaches `:Pending` before the landing moves it out, so after the landing
+   `:Pending` nets to ZERO and is never negative — a negative `:Pending` means
+   you landed more than you accrued.
    Issuer fees never earn: interest, finance charges, late fees, and
    standalone GST (all under `Expenses:Financial:*`) carry NO points legs.
    REFUNDS REVERSE THEIR POINTS with mirrored signs — same four-posting
@@ -142,6 +147,11 @@ Follow these rules when building that array.
      statement close. Points, never rupees. This is INDEPENDENT of the move
      above — emit it whenever a balance is printed, even when no Earned figure
      is given and the points stay in `:Pending`.
+     EXACTLY ONE points balance — the account's closing/current total. The other
+     numbers in a points summary (points earned, redeemed, expiring, lapsed) are
+     flows or counts, NOT balances — never assert one as a second balance, and
+     never manufacture a balance (especially a 0) from a non-balance figure. A 0
+     balance is right only if the pool genuinely closes at zero.
 11. **Assert ONLY the statement's CLOSING balance** (one per card). Do NOT
    assert an opening balance — this statement's opening is the previous
    statement's closing, which is already asserted; emit the closing only.
@@ -155,8 +165,9 @@ Follow these rules when building that array.
    2026-05-07 pad Liabilities:CreditCards:Demo:Sample Equity:Adjustments
    2026-05-08 balance Liabilities:CreditCards:Demo:Sample  -8500.00 INR
    ```
-   EXACTLY ONE closing balance per card — never two, never the same balance on
-   two adjacent dates.
+   EXACTLY ONE closing balance per card — the closing outstanding. Never a second
+   balance: not on an adjacent date, and not manufactured from a non-balance
+   figure (a minimum due, a zeroed sub-total). One balance per account, full stop.
    SIGNS — read the Dr/Cr marker: amount OWED to the bank (normal "Dr") →
    NEGATIVE (e.g. "Net Outstanding 8,500.00" → -8500.00 INR); a "Cr" balance
    (bank owes you — overpayment/refund) → POSITIVE (e.g. "5,432.10 Cr" →
