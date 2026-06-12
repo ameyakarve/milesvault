@@ -5,6 +5,17 @@ When you have read the raw text of a card / bank statement (via
 `transactions` array is one complete Beancount transaction ready to review.
 Follow these rules when building that array.
 
+**The default shape of a credit-card PURCHASE is FOUR postings** — write all
+four AS YOU WRITE THE ROW, never as a later pass: the expense leg, the card
+leg, the `<pool.account>:Pending` points accrual, and the `Equity:Void` points
+contra. A purchase you wrote with only two postings (expense + card) is
+INCOMPLETE — you dropped its points. The ONLY genuinely two-posting entries
+are: a payment/credit to the card, an issuer fee / interest / standalone GST,
+and (mirror of the purchase shape) a refund. A purchase is two-posting ONLY
+when the card guide excludes its category or the points round to zero. On a
+long statement the points are the first thing to slip — they don't; every
+eligible row carries them. (Rules 9–10 give the points detail.)
+
 1. **Identify the account.** Scan the statement header for issuer +
    last-4 digits / account suffix and match against the open-accounts
    list in the ledger context. If the user has

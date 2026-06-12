@@ -367,7 +367,7 @@ const EXTRACT_MAX_TOKENS = 32768
 // (buildStatementIrSystem) carries every extraction rule. The user turn
 // just points the model at the images.
 const VISION_EXTRACT_INSTRUCTION =
-  'The attached images are the pages of a credit-card statement, and below is the text already extracted from the PDF. PREFER THE TEXT: it is reliable for anything legible in it (dates, amounts, merchant names) — use it as the source of truth there. Use the IMAGES only to read what the text is missing or garbled (e.g. labels the bank renders as images, like the reward-points summary). Output the single JSON object of entries per the rules above — every transaction and every stated balance, including the reward-points balance.'
+  'The attached images are the pages of a credit-card statement, and below is the text already extracted from the PDF. PREFER THE TEXT: it is reliable for anything legible in it (dates, amounts, merchant names) — use it as the source of truth there. Use the IMAGES only to read what the text is missing or garbled (e.g. labels the bank renders as images, like the reward-points summary). Output the single JSON object of entries per the rules above. EVERY eligible purchase is FOUR postings — expense + card + `<pool>:Pending` points accrual + `Equity:Void` — do NOT drop the points legs, especially on a long statement where they are the first thing to slip. Include every transaction WITH its points legs, every stated balance, and the reward-points balance.'
 
 export type PipelineResult = {
   ok: boolean
