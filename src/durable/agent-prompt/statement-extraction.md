@@ -117,9 +117,19 @@ Follow these rules when building that array.
      `<pool.account>:Pending` −N, same ticker, NO `Equity:Void`, NO price,
      dated the statement close. Whenever an Earned figure is printed, ALWAYS
      emit this move. (This is the only way to post pending points; a pad can't.)
-   - **CLOSING → assert it.** If it states a CLOSING points balance, emit ONE
-     `balance` directive for `<pool.account>` in `<pool.ticker>` with that
-     closing number, dated the statement close. Points, never rupees.
+   - **BALANCE → assert it (pad + balance, printed figure VERBATIM).** Whenever
+     the statement prints a points balance — the "Closing" in a Reward Points
+     summary, or a standalone "Points Balance" / "Balance as on date" — ALWAYS
+     emit ONE `balance` for `<pool.account>` in `<pool.ticker>` using that
+     printed number **exactly as shown**. Do NOT derive it from opening +
+     earned, and do NOT add the earned points to it — copy what the summary box
+     prints (that is the closing; deriving it is what produces a wrong total).
+     Like the card's closing balance it is a **pad + balance**: the pad absorbs
+     any gap between the printed total and what your earn/landing entries
+     posted, so assert the printed truth and let the pad reconcile. Date it the
+     statement close. Points, never rupees. This is INDEPENDENT of the move
+     above — emit it whenever a balance is printed, even when no Earned figure
+     is given and the points stay in `:Pending`.
 11. **Assert ONLY the statement's CLOSING balance** (one per card). Do NOT
    assert an opening balance — this statement's opening is the previous
    statement's closing, which is already asserted; emit the closing only.
