@@ -18,6 +18,7 @@ const promptDir = path.join(root, 'src/durable/agent-prompt')
 
 const FRAGMENTS = [
   { file: 'beancount-primer.md', name: 'BEANCOUNT_PRIMER' },
+  { file: 'ledger-rules.md', name: 'LEDGER_RULES' },
   { file: 'tool-rules.md', name: 'TOOL_RULES' },
   { file: 'examples.md', name: 'EXAMPLES' },
   { file: 'clarifications.md', name: 'CLARIFICATIONS' },

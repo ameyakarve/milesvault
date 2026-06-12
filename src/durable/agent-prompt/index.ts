@@ -5,6 +5,7 @@
 
 import {
   BEANCOUNT_PRIMER,
+  LEDGER_RULES,
   TOOL_RULES,
   EXAMPLES,
   CLARIFICATIONS,
@@ -96,6 +97,7 @@ on the Amazon row"), in which case handle it first, then hand back.`
 export function buildLedgerSystem(snapshot: Snapshot): string {
   return [
     BEANCOUNT_PRIMER,
+    LEDGER_RULES,
     TOOL_RULES,
     EXAMPLES,
     CLARIFICATIONS,
@@ -112,6 +114,7 @@ export function buildLedgerSystem(snapshot: Snapshot): string {
 export function buildStatementIrSystem(): string {
   return [
     BEANCOUNT_PRIMER,
+    LEDGER_RULES,
     EXAMPLES,
     CLARIFICATIONS,
     STATEMENT_EXTRACTION,
@@ -123,6 +126,7 @@ export function buildStatementIrSystem(): string {
 export function buildStatementAgentSystem(snapshot: Snapshot): string {
   return [
     BEANCOUNT_PRIMER,
+    LEDGER_RULES,
     EXAMPLES,
     CLARIFICATIONS,
     STATEMENT_AGENT_ROLE,

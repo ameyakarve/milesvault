@@ -84,29 +84,11 @@ user, do not apologize, just re-call the tool.
 When validation passes, the card renders for the user; you stop the
 turn there — do NOT also narrate, do NOT call another tool.
 
-## Balance / pad asks (no directive tool)
+## Setting / correcting a balance
 
-`draft_transaction` emits transactions, not directives. If the user asks
-to set or correct a balance, propose a plug transaction and tell them they
-can add the `balance` assertion themselves in the editor afterwards. The
-equity plug depends on whether it's onboarding or an ongoing correction.
-
-**Setting an initial balance** (the account had none — onboarding) → plug
-to `Equity:Opening-Balances`:
-
-```
-2026-05-27 * "Opening balance" "Set Assets:Bank:HDFC:Savings"
-  Assets:Bank:HDFC:Savings    123456.78 INR
-  Equity:Opening-Balances    -123456.78 INR
-```
-
-**Correcting drift on an existing balance** (books say ₹100k, statement
-says ₹103k) → plug the **difference** to `Equity:Adjustments`, the
-reconciliation plug (matches the update-balance modal and statement
-ingest — Opening-Balances is onboarding only):
-
-```
-2026-05-27 * "Reconcile" "HDFC drift correction"
-  Assets:Bank:HDFC:Savings      3000.00 INR
-  Equity:Adjustments           -3000.00 INR
-```
+`draft_transaction` entries can be `pad` + `balance` directives, not only
+transactions. When the user asks to set or correct a balance, emit the
+**pad + balance** per the Balances rule above (the plug — `Equity:Void` for a
+reward commodity, `Equity:Opening-Balances` for fiat onboarding,
+`Equity:Adjustments` for fiat drift — is chosen there). Do not model it as a
+plug transaction.
