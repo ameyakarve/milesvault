@@ -68,9 +68,16 @@ Follow these rules when building that array.
    follow the charge belong to it — emit ONE transaction: the foreign amount
    `@@` the **billed amount exactly as printed** (do not re-derive it), plus
    the markup and GST as legs in the billing currency, with the card debited
-   for the sum. Pair stray fee/GST rows to their charge by the arithmetic
-   (markup ≈ 2% of the billed amount, GST ≈ 18% of markup). See the worked
-   forex example.
+   for the sum. Pair stray fee/GST rows to their charge by the **arithmetic,
+   NOT by which row sits nearest.** When several foreign charges fall close
+   together the bank often prints all their fees and GSTs interleaved and
+   out of order — a GST can appear before its own markup, and two charges'
+   fees/GSTs can be mixed on the same date. Match by the chain: a charge's
+   markup is ≈ 2% of ITS billed amount, and its GST is ≈ 18% of THAT markup.
+   So tie each markup to the charge it's 2% of, then tie each GST to the
+   markup it's 18% of — never just grab the next fee/GST row in sequence. A
+   GST that is not ~18% of the markup you paired to the same charge means
+   you grabbed the wrong row. See the worked forex example.
 8. **Credits are refunds.** A `Cr` row that isn't a bill payment reverses
    a purchase: negative expense leg, positive card leg. Keep each `Cr`
    row as its own transaction — never net two together or fold a refund

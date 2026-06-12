@@ -352,6 +352,19 @@ A "DCC MARKUP" row works identically — same fold, same `Expenses:Bank:ForexMar
 leg — even when the merchant charge is billed straight in INR (no USD
 shown), in which case the expense leg is plain INR with no `@@`.
 
+**Interleaved fees — pair by arithmetic, never by adjacency.** When two
+foreign charges land close together the bank prints all their fees and
+GSTs mixed up and out of order (a GST can come before its own markup). Pair
+each one by the chain — markup is 2% of ITS charge, GST is 18% of THAT
+markup — not by which row is nearest. E.g. an ₹1,893.43 charge and a
+₹5,825.78 charge produce four rows printed `GST 20.97 / FEE 116.52 /
+GST 6.82 / FEE 37.87`:
+- ₹1,893.43 → markup 37.87 (2%) → GST 6.82 (18% of 37.87) → card 1,938.12
+- ₹5,825.78 → markup 116.52 (2%) → GST 20.97 (18% of 116.52) → card 5,963.27
+
+The GST printed nearest a charge is often the *other* charge's GST — the
+only reliable link is "GST ≈ 18% of the markup that is 2% of this charge."
+
 ## Gift cards / vouchers
 
 A gift card is an asset — value you hold until you spend it.
