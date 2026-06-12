@@ -196,6 +196,54 @@ export async function listCards(kb: KbHttp): Promise<Array<{ slug: string; name:
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
+// Every reward programme / loyalty currency in the KG, with its EXACT canonical
+// Beancount account and ticker — the closed set the editor picks from instead of
+// assembling account paths itself (gemma drops the `:Miles:`/`:Points:` segment
+// when handed only a beancountName + a prose convention). Same classification as
+// /api/kb/programmes (the add-dialog's Programmes tab): airline FFP slugs end in
+// `-miles` → Assets:Rewards:Miles; everything else → Assets:Rewards:Points.
+export type RewardAccount = { slug: string; name: string; account: string; ticker: string }
+
+export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
+  const listed = (await kb.list('currency', { limit: 1000 })) as { items?: string[] }
+  const slugs = listed.items ?? []
+  const items: RewardAccount[] = []
+  const CONC = 16
+  for (let i = 0; i < slugs.length; i += CONC) {
+    const got = await Promise.all(
+      slugs.slice(i, i + CONC).map(async (slug): Promise<RewardAccount | null> => {
+        try {
+          const n = (await kb.get(slug)) as {
+            display_name?: string | null
+            attrs?: Record<string, unknown> | null
+          }
+          const a = n?.attrs ?? {}
+          if (a.fiat === true) return null
+          const bn = typeof a.beancountName === 'string' ? a.beancountName : null
+          const ticker = typeof a.ticker === 'string' ? a.ticker : null
+          if (!bn || !ticker) return null
+          const kind = slug.endsWith('-miles') ? 'Miles' : 'Points'
+          return { slug, name: n?.display_name ?? bn, account: `Assets:Rewards:${kind}:${bn}`, ticker }
+        } catch {
+          return null
+        }
+      }),
+    )
+    for (const g of got) if (g) items.push(g)
+  }
+  items.sort((a, b) => a.name.localeCompare(b.name))
+  return items
+}
+
+export function rewardAccountsTool(kb: KbHttp) {
+  return tool({
+    description:
+      'List every reward programme / loyalty currency in the knowledge graph with its EXACT canonical Beancount account and commodity ticker (e.g. { name: "Maharaja Club Miles", account: "Assets:Rewards:Miles:MaharajaClub", ticker: "MAHARAJACLUB" }). Call this ONCE before drafting any miles/points entry — earn, transfer, redemption, or balance — then copy the `account` and `ticker` for the matching programme VERBATIM. Do NOT assemble reward account paths yourself and do NOT invent a ticker. If the programme is not in the list, ask the user rather than guessing an account.',
+    inputSchema: z.object({}),
+    execute: async () => ({ items: await listRewardAccounts(kb) }),
+  })
+}
+
 export function cardGuideTool(kb: KbHttp) {
   return tool({
     description:

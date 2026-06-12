@@ -12,6 +12,7 @@ import {
 } from './agents/registries/editor'
 import {
   cardGuideTool,
+  rewardAccountsTool,
   draftTransactionTool,
   clarifyTool,
   addCardTool,
@@ -520,10 +521,15 @@ entries, or draft corrections.`
     // The card drafting guide (earn rules + worked examples) — both agents
     // draft card transactions, so both get it.
     const card_guide = cardGuideTool(kbHttp)
+    // Closed-set reward-account list: the editor picks miles/points accounts from
+    // here (assembled in the KG) instead of building the path itself — gemma
+    // resolves the right programme but drops the `:Miles:` segment when assembling.
+    const list_reward_accounts = rewardAccountsTool(kbHttp)
     if (name === 'ledger') {
       return this.withToolLog(name, {
         ...kbLookup,
         card_guide,
+        list_reward_accounts,
         draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(),
         add_card: addCardTool(),

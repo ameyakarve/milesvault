@@ -24,7 +24,11 @@ export function makeEditorRegistry(host: AgentHost<EditorAgentName>): Registry {
   const ledger: AgentDef = {
     name: 'ledger',
     canHandoffTo: ['statement'],
-    model: { id: LEDGER_MODEL_ID, reasoning: 'off', maxOutputTokens: 16384 },
+    // Thinking ON (gemma enable_thinking) for the editor only: freeform edits —
+    // award-flight redemptions especially (deduct miles @@ cash, sign direction,
+    // currency on the right leg) — need reasoning the reasoning-off extractor
+    // doesn't. The statement specialist stays off (its evals were tuned there).
+    model: { id: LEDGER_MODEL_ID, reasoning: 'low', maxOutputTokens: 16384 },
     system: () => host.system('ledger'),
     tools: () => host.tools('ledger'),
   }
