@@ -288,8 +288,8 @@ expense lines.
 ```
 2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 markup + ₹26.64 GST)"
   Expenses:Travel:Food                       50.00 USD @@ 4225.00 INR
-  Expenses:Bank:ForexMarkup                 148.00 INR
-  Expenses:Tax:GST                           26.64 INR
+  Expenses:Financial:ForexMarkup                 148.00 INR
+  Expenses:Financial:GST                           26.64 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -4399.64 INR
 ```
 
@@ -297,7 +297,7 @@ expense lines.
 ```
 2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 forex markup)"
   Expenses:Travel:Food                       50.00 USD @@ 4225.00 INR
-  Expenses:Bank:ForexMarkup                 148.00 INR
+  Expenses:Financial:ForexMarkup                 148.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -4373.00 INR
 ```
 
@@ -331,7 +331,7 @@ They are ONE: fold the fee and GST back into the merchant's transaction.
   Re-deriving the rate is a common mistake; the billed figure is printed,
   use it verbatim.
 - The markup fee and its GST are their own plain INR legs
-  (`Expenses:Bank:ForexMarkup`, `Expenses:Tax:GST`).
+  (`Expenses:Financial:ForexMarkup`, `Expenses:Financial:GST`).
 - The card liability is the **sum of all three**: billed INR + markup +
   GST. The transaction balances on that sum, not on the billed amount
   alone.
@@ -344,11 +344,11 @@ debited 875.30 + 17.51 + 3.15 = 895.96:
 ```
 2026-04-26 * "Cloudflare" "Hosting (USD 9.28 + ₹17.51 markup + ₹3.15 GST)"
   Expenses:Software:Hosting                  9.28 USD @@ 875.30 INR
-  Expenses:Bank:ForexMarkup                 17.51 INR
-  Expenses:Tax:GST                           3.15 INR
+  Expenses:Financial:ForexMarkup                 17.51 INR
+  Expenses:Financial:GST                           3.15 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -895.96 INR
 ```
-A "DCC MARKUP" row works identically — same fold, same `Expenses:Bank:ForexMarkup`
+A "DCC MARKUP" row works identically — same fold, same `Expenses:Financial:ForexMarkup`
 leg — even when the merchant charge is billed straight in INR (no USD
 shown), in which case the expense leg is plain INR with no `@@`.
 

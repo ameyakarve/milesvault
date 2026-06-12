@@ -35,8 +35,8 @@ Follow these rules when building that array.
    - RECORD, but with NO reward points: interest / finance charges / late
      fees / standalone GST that the ISSUER levies (e.g. "FIN CHGS FOR THIS
      STMT", "IGST"). These are real charges that hit the card balance, so
-     record each as a plain two-posting expense (`Expenses:Bank:FinanceCharges`,
-     `Expenses:Bank:Fees`, `Expenses:Tax:GST`) + the card leg — never with
+     record each as a plain two-posting expense (`Expenses:Financial:Interest`,
+     `Expenses:Financial:Fees`, `Expenses:Financial:GST`) + the card leg — never with
      points legs. Do NOT skip them (the closing balance won't reconcile)
      and do NOT duplicate a row: each printed line is exactly ONE entry.
 
@@ -44,10 +44,22 @@ Follow these rules when building that array.
    charge are NOT noise and are NOT standalone transactions — fold them
    into the charge they belong to (see the forex-folding rule below). Never emit a bare
    `"GST"` or `"FOREIGN CURRENCY TRANSACTION FEE"` entry of its own.
-5. **Categorize from the open-accounts list.** Pick the best-fitting
-   expense account (e.g. a grocery name → `Expenses:Food:Groceries`).
-   Don't invent receivables, equity plugs, or accounts that aren't
-   in the list unless no `Expenses:*` fits.
+5. **Categorize.** First pick the best-fitting account from the user's
+   open-accounts list (e.g. a grocery name → an existing `Expenses:Food:*`).
+   When nothing in the list fits, create the account under one of the TEN
+   canonical expense roots — never invent your own root:
+   `Expenses:Housing` (rent, utilities, repairs), `Expenses:Food`,
+   `Expenses:Transport` (fuel, ride-share, parking, vehicle service),
+   `Expenses:Health` (doctor, pharmacy, gym), `Expenses:Shopping`,
+   `Expenses:Entertainment`, `Expenses:Personal` (grooming, education,
+   subscriptions), `Expenses:Financial` (fees, interest, taxes, FX markup),
+   `Expenses:Travel`, `Expenses:Misc`. Map to the nearest root — a medical
+   bill → `Expenses:Health`, fuel/vehicle → `Expenses:Transport`, a utility →
+   `Expenses:Housing`, any fee/tax/markup → `Expenses:Financial`; add a second
+   level for the specifics (`Expenses:Health:Pharmacy`). NEVER emit a
+   non-canonical root like `Expenses:Medical`, `Expenses:Automotive`,
+   `Expenses:Utilities`, `Expenses:Bank`, or `Expenses:Tax`. Don't invent
+   receivables or equity plugs that aren't in the list.
 6. **Currency follows the card.** If the open account is tagged
    `[INR]`, each posting is INR — don't infer FX from a merchant name
    unless the statement explicitly shows a foreign currency amount
@@ -98,7 +110,7 @@ Follow these rules when building that array.
    total falls short, you wrongly excluded a spend that actually earned — put
    its points back so the totals agree.
    Issuer fees never earn: interest, finance charges, late fees, and
-   standalone GST (Expenses:Bank:* / Expenses:Tax:*) carry NO points legs.
+   standalone GST (all under `Expenses:Financial:*`) carry NO points legs.
    REFUNDS REVERSE THEIR POINTS with mirrored signs — same four-posting
    shape, points computed on the refunded amount:
    `Expenses:… -877.82 INR / card +877.82 INR /
