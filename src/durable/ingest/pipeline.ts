@@ -69,8 +69,13 @@ const ZLoosePosting = z
     }
   })
 
+// Every entry carries a model-assigned stable `id` so corrections are
+// SURGICAL: a bad entry is re-requested by id and merged back, instead of
+// regenerating the whole batch (which shifts indices and re-rolls good
+// entries — the multi-round latency trap we measured).
 const ZLooseTxn = z
   .object({
+    id: z.string().min(1).max(24),
     kind: z.literal('transaction'),
     date: z.string().regex(DATE_RE),
     flag: z.enum(['*', '!']).optional(),
@@ -80,7 +85,8 @@ const ZLooseTxn = z
     postings: z.array(ZLoosePosting).min(2).max(8),
   })
   .transform(
-    (t): { kind: 'transaction'; txn: TransactionInput } => ({
+    (t): { id: string; kind: 'transaction'; txn: TransactionInput } => ({
+      id: t.id,
       kind: 'transaction',
       txn: {
         date: t.date,
@@ -94,9 +100,9 @@ const ZLooseTxn = z
   )
 
 // Balance directive — `plug_account` IS the pad (canonical schema's design).
-// currency "POINTS" is the reward-points sentinel, resolved downstream.
 const ZLooseBalance = z
   .object({
+    id: z.string().min(1).max(24),
     kind: z.literal('balance'),
     date: z.string().regex(DATE_RE),
     account: z.string().min(3),
@@ -105,6 +111,7 @@ const ZLooseBalance = z
     plug_account: z.string().optional(),
   })
   .transform((b) => ({
+    id: b.id,
     kind: 'balance' as const,
     date: b.date,
     account: b.account,
@@ -114,11 +121,34 @@ const ZLooseBalance = z
     plug_account: 'Equity:Adjustments',
   }))
 
+const ZEntry = z.discriminatedUnion('kind', [ZLooseTxn, ZLooseBalance])
+export type ExtractedEntry = z.infer<typeof ZEntry>
+
 const ZStatement = z.object({
   card_name: z.string().min(2).max(80),
-  entries: z.array(z.discriminatedUnion('kind', [ZLooseTxn, ZLooseBalance])).min(1).max(250),
+  entries: z.array(ZEntry).min(1).max(250),
 })
 export type ExtractedStatement = z.infer<typeof ZStatement>
+
+// Render ONE entry to canonical beancount (same formatter as journal saves).
+function renderEntry(e: ExtractedEntry): string {
+  if (e.kind === 'balance') {
+    return serializeJournal(
+      [],
+      [
+        {
+          kind: 'balance',
+          date: e.date,
+          account: e.account,
+          amount: e.amount,
+          currency: e.currency,
+          plug_account: e.plug_account ?? 'Equity:Adjustments',
+        },
+      ],
+    ).trim()
+  }
+  return serializeTransactionInput(e.txn).trim()
+}
 
 // ---- JSON-only model call ------------------------------------------------------
 
@@ -386,31 +416,73 @@ export async function runDraftPipeline(deps: {
     rate,
     instruction: deps.instruction,
   })
-  let entries: string[] = []
+  // Surgical extraction: parse entries individually, KEEP the good ones by id,
+  // and re-request ONLY the bad ones (by id). One malformed entry no longer
+  // costs a full-batch regeneration, and the entry an error names stays the
+  // same entry on the retry (the index-instability we measured caused the
+  // 3-round, 15-minute runs).
+  const accepted = new Map<string, ExtractedEntry>()
   let validation_issues: string[] = []
   let prompt = basePrompt
   let lastExtractError: string | null = null
   for (let attempt = 0; attempt < 3; attempt++) {
-    const ext = await genJson(deps.gen, ZStatement, deps.system, prompt, EXTRACT_MAX_TOKENS, deps.images)
-    if (ext.value === null) {
-      lastExtractError = ext.error ?? 'unknown'
-      stages.extract = { txns: 0, balances: 0, error: lastExtractError }
+    const text = await deps.gen({
+      system: deps.system,
+      prompt,
+      maxTokens: EXTRACT_MAX_TOKENS,
+      images: deps.images,
+    })
+    const block = firstJsonBlock(text)
+    if (!block) {
+      lastExtractError = 'no JSON object in output'
       continue
     }
-    const txns = ext.value.entries.filter((e) => e.kind === 'transaction').length
-    stages.extract = { txns, balances: ext.value.entries.length - txns }
+    let rawEntries: unknown[]
+    try {
+      const obj = JSON.parse(block) as { entries?: unknown }
+      rawEntries = Array.isArray(obj.entries) ? obj.entries : []
+    } catch (e) {
+      lastExtractError = `invalid JSON: ${String(e)}`
+      continue
+    }
     lastExtractError = null
 
-    const parts = toLedgerEntries({ extracted: ext.value })
-    entries = serializeEntries(parts)
-    // Generic validator only: parse + per-currency balance + account shape.
-    // Whatever it flags bounces back to the model verbatim — code never fixes
-    // the entries itself.
-    const v = validateDraftBatch(entries)
-    validation_issues = v.ok === true ? [] : v.issues.map((i) => i.message)
-    if (validation_issues.length === 0) break
-    prompt = `${basePrompt}\n\nYour previous output produced INVALID entries — fix these and output the corrected full JSON object:\n${validation_issues.join('\n')}`
+    const bad: { id: string; msg: string }[] = []
+    rawEntries.forEach((raw, i) => {
+      // Read the id off the RAW entry so even a malformed one is addressable.
+      const r0 = raw as { id?: unknown } | null
+      const id = r0 && typeof r0.id === 'string' && r0.id ? r0.id : `e${i}`
+      const parsed = ZEntry.safeParse(raw)
+      if (parsed.success) accepted.set(id, parsed.data)
+      else
+        bad.push({
+          id,
+          msg: parsed.error.issues.map((iss) => `${iss.path.join('.')}: ${iss.message}`).join('; '),
+        })
+    })
+
+    // Render the accepted set, run the GENERIC validator, map each issue back
+    // to its entry id (validateDraftBatch reports by index).
+    const idOrder = [...accepted.keys()]
+    const rendered = [...accepted.values()].map(renderEntry)
+    const v = validateDraftBatch(rendered)
+    if (v.ok === false)
+      for (const iss of v.issues) bad.push({ id: idOrder[iss.index] ?? '?', msg: iss.message })
+
+    const all = [...accepted.values()]
+    stages.extract = {
+      txns: all.filter((e) => e.kind === 'transaction').length,
+      balances: all.filter((e) => e.kind === 'balance').length,
+    }
+    validation_issues = bad.map((b) => `id ${b.id}: ${b.msg}`)
+    if (bad.length === 0) break
+
+    // Surgical re-request: ONLY the listed entries, by id; keep the rest.
+    prompt =
+      `${basePrompt}\n\nSome entries are INVALID. Return a JSON object {"entries":[...]} containing ONLY corrected versions of the entries listed below — keep each one's SAME "id", and do NOT resend any other entry:\n` +
+      bad.map((b) => `- id "${b.id}": ${b.msg}`).join('\n')
   }
+  const entries = [...accepted.values()].map(renderEntry)
   if (lastExtractError !== null && entries.length === 0) {
     return { ok: false, entries: [], error: `extract: ${lastExtractError}`, stages, validation_issues: [] }
   }
