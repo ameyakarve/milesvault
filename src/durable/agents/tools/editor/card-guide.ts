@@ -96,7 +96,10 @@ export async function fetchCardGuide(
     }
     const logging = /## Logging[\s\S]*?(?=\n## |$)/.exec(content)?.[0] ?? null
 
-    const rel = (await kb.related(top.slug, { direction: 'outgoing' })) as {
+    // High limit: cards with many per-MCC EARN_RULE edges (Swiggy HDFC has
+    // ~100) would otherwise truncate the default page and drop the ISSUED_BY /
+    // DENOMINATED_IN edges that carry the issuer + reward pool.
+    const rel = (await kb.related(top.slug, { direction: 'outgoing', limit: 500 })) as {
       items?: Array<{ edge_type: string; other: string; description_md: string | null }>
     }
     const items = rel.items ?? []
