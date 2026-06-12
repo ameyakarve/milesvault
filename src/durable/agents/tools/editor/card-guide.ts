@@ -176,9 +176,11 @@ export async function fetchCardGuideBySlug(
 // Every credit card in the KG, for the card-identify closed set: a readable
 // name (display_name, or a prettified slug) plus the slug to resolve by.
 export async function listCards(kb: KbHttp): Promise<Array<{ slug: string; name: string }>> {
-  const r = (await kb.list('cc', { limit: 250 })) as {
-    items?: Array<{ slug: string; display_name?: string | null }>
-  }
+  // kb.list returns `{ items: string[] }` — each item is a SLUG string, not an
+  // object. The readable name (for the model to match against) is derived from
+  // the slug; resolution is by slug, so the derived name only needs to be
+  // recognisable ("cc/swiggy-hdfc" → "Swiggy Hdfc").
+  const r = (await kb.list('cc', { limit: 250 })) as { items?: string[] }
   const pretty = (s: string) =>
     s
       .replace(/^cc\//, '')
@@ -186,8 +188,8 @@ export async function listCards(kb: KbHttp): Promise<Array<{ slug: string; name:
       .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
       .join(' ')
   return (r.items ?? [])
-    .filter((i) => typeof i.slug === 'string' && i.slug.startsWith('cc/'))
-    .map((i) => ({ slug: i.slug, name: i.display_name ?? pretty(i.slug) }))
+    .filter((s) => typeof s === 'string' && s.startsWith('cc/'))
+    .map((slug) => ({ slug, name: pretty(slug) }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
