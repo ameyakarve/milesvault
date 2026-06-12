@@ -343,7 +343,7 @@ the card's forex rate (commonly **2%**) of the billed INR, and the GST is
 debited 875.30 + 17.51 + 3.15 = 895.96:
 ```
 2026-04-26 * "Cloudflare" "Hosting (USD 9.28 + ₹17.51 markup + ₹3.15 GST)"
-  Expenses:Software:Hosting                  9.28 USD @@ 875.30 INR
+  Expenses:Personal:Software                 9.28 USD @@ 875.30 INR
   Expenses:Financial:ForexMarkup                 17.51 INR
   Expenses:Financial:GST                           3.15 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -895.96 INR
