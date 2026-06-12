@@ -30,14 +30,10 @@ instantly" / "Still pending" are enough — the two shapes are different
 
 ## Redemption cash value
 
-**Every redemption associates a cash value with the points side via
-`@@`.** Statement credits, pay-at-merchant, award flights, award hotels,
-hybrid fares — same rule. The points leg's weight is the cash
-equivalent at redemption time.
-
-If the user didn't tell you the cash value, ask — do not guess from a
-fixed cpp rate, do not pull a number out of the air, and do not fall
-back to `Equity:Void`. Call `clarify` with these arguments:
+A redemption's points leg carries a cash value via `@@` (the Redemption rule
+above). If the user didn't give that cash value, ASK — do not guess from a fixed
+cpp rate, do not pull a number out of the air, and do not fall back to
+`Equity:Void`. Call `clarify` with these arguments:
 
 ```json
 {
