@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { fetchCardGuide, type CardGuideResult } from '../agents/tools/editor/card-guide'
+import {
+  fetchCardGuide,
+  fetchCardGuideBySlug,
+  listCards,
+  type CardGuideResult,
+} from '../agents/tools/editor/card-guide'
 import type { KbHttp } from '../agents/tools/concierge/kb-tools'
 import type { TransactionInput, DirectiveInput } from '../ledger-types'
 import { serializeTransactionInput, serializeJournal } from '@/lib/beancount/ast'
@@ -296,8 +301,30 @@ export function serializeEntries(parts: {
 
 // ---- Prompts -------------------------------------------------------------------
 
-const CARD_SYSTEM = `Identify the credit card a statement belongs to. Output ONLY: {"card_name": "issuer + card name as printed"}`
-const ZCard = z.object({ card_name: z.string().min(2).max(80) })
+// Closed-set card identification: the model matches the statement against the
+// FULL KG card list and returns the exact slug — no fuzzy resolution, no
+// filler-word ("Bank", "Credit Card") dilution that mis-resolved cards like
+// "Swiggy HDFC Bank Credit Card" / "IndusInd Bank Platinum RuPay Credit Card".
+const ZCard = z.object({
+  card_name: z.string().min(2).max(80).nullable(),
+  slug: z.string().nullable(),
+})
+function buildCardSystem(cards: ReadonlyArray<{ slug: string; name: string }>): string {
+  return `Identify which credit card this statement belongs to. Match the statement's issuer + product name to the SINGLE best entry in the list below. Output ONLY JSON: {"card_name":"<that card's name>","slug":"<its exact slug from the list>"}. If none of the listed cards match, output {"card_name":null,"slug":null}.
+
+Known cards — "Name [slug]":
+${cards.map((c) => `${c.name} [${c.slug}]`).join('\n')}`
+}
+
+// The card list is static per deploy — load once per worker. A failed load is
+// not cached (so it retries next statement), and an empty list degrades to the
+// old fuzzy-by-name path rather than breaking every card.
+let cardListCache: Promise<Array<{ slug: string; name: string }>> | null = null
+const getCardList = (kb: KbHttp): Promise<Array<{ slug: string; name: string }>> =>
+  (cardListCache ??= listCards(kb).catch(() => {
+    cardListCache = null
+    return []
+  }))
 
 function extractPrompt(opts: {
   statementText: string
@@ -381,8 +408,15 @@ export async function runDraftPipeline(deps: {
   // 1. Identify the card → resolve its guide (rate, pool, exclusions).
   //    (A) The identify call runs on the NON-thinking gen — its 256-token
   //    budget gets starved by a thinking trace.
-  const cardRes = await genJson(genFast, ZCard, CARD_SYSTEM, deps.statementText.slice(0, 4000), 256)
-  stages.card = { name: cardRes.value?.card_name, error: cardRes.error ?? undefined }
+  const cards = await getCardList(deps.kb)
+  const cardRes = await genJson(
+    genFast,
+    ZCard,
+    buildCardSystem(cards),
+    deps.statementText.slice(0, 4000),
+    256,
+  )
+  stages.card = { name: cardRes.value?.card_name ?? undefined, error: cardRes.error ?? undefined }
 
   // (B) Prefer the user's EXISTING card account as the resolution anchor: its
   //     clean name ("Axis:MagnusBurgundy" → "Axis Magnus Burgundy") maps to the
@@ -405,7 +439,7 @@ export async function runDraftPipeline(deps: {
     )
   let anchor: string | null = null
   if (cardAccounts.length === 1) anchor = cardAccounts[0]!
-  else if (cardAccounts.length > 1 && cardRes.value) {
+  else if (cardAccounts.length > 1 && cardRes.value?.card_name) {
     const idTok = toks(cardRes.value.card_name)
     let best = 0
     for (const a of cardAccounts) {
@@ -417,12 +451,28 @@ export async function runDraftPipeline(deps: {
     }
     if (best < 1) anchor = null
   }
+  // A tracked card's account anchors deterministically; otherwise use the exact
+  // slug the model picked from the full card list (closed set — no fuzzy match).
+  const pickedSlug =
+    cardRes.value?.slug && cards.some((c) => c.slug === cardRes.value!.slug)
+      ? cardRes.value.slug
+      : null
   const resolveName = anchor ? cleanName(anchor) : (cardRes.value?.card_name ?? null)
-  let guide: CardGuideResult = resolveName
-    ? await fetchCardGuide(deps.kb, resolveName)
-    : { ok: false, error: 'card_not_identified' }
+  let guide: CardGuideResult = anchor
+    ? await fetchCardGuide(deps.kb, cleanName(anchor))
+    : pickedSlug
+      ? await fetchCardGuideBySlug(
+          deps.kb,
+          pickedSlug,
+          cards.find((c) => c.slug === pickedSlug)?.name ?? null,
+        )
+      : // Fallback (empty/failed card list, or a name without a valid slug):
+        // the old fuzzy-by-name resolution.
+        cardRes.value?.card_name
+        ? await fetchCardGuide(deps.kb, cardRes.value.card_name)
+        : { ok: false, error: 'card_not_identified' }
 
-  // Ambiguous resolution returns candidates — the model picks (non-thinking).
+  // Ambiguous resolution (anchor/name path) returns candidates — the model picks.
   if (guide.ok === false && guide.candidates?.length && resolveName) {
     const cands: Array<{ slug: string; name: string | null }> = guide.candidates
     const pick = await genJson(

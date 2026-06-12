@@ -26,7 +26,13 @@ export type CardGuideResult =
   | { ok: false; error: string; candidates?: Array<{ slug: string; name: string | null }>; hint?: string }
 
 // Shared by the agent tool AND the deterministic ingest pipeline.
-export async function fetchCardGuide(kb: KbHttp, card: string): Promise<CardGuideResult> {
+export async function fetchCardGuide(
+  kb: KbHttp,
+  card: string,
+  // Closed-set path: when card-identify matched the statement against the full
+  // card list (listCards) we already hold the exact node — skip fuzzy resolve.
+  knownTop?: { slug: string; display_name: string | null },
+): Promise<CardGuideResult> {
   try {
     type Item = { slug: string; display_name: string | null }
     const resolve = async (q: string): Promise<Item[]> => {
@@ -39,7 +45,7 @@ export async function fetchCardGuide(kb: KbHttp, card: string): Promise<CardGuid
     // the KG nodes omit. No hardcoded vocabulary: on a miss, gather
     // candidates by per-token recall — a single hit is used directly,
     // multiple go back as options.
-    let top: Item | undefined = (await resolve(card))[0]
+    let top: Item | undefined = knownTop ?? (await resolve(card))[0]
     if (!top) {
       // Score-based recall: every token (≥4 chars) votes; the card matching
       // the MOST tokens wins. A first-token cap here once truncated the
@@ -154,6 +160,35 @@ export async function fetchCardGuide(kb: KbHttp, card: string): Promise<CardGuid
   } catch (e) {
     return { ok: false as const, error: String(e) }
   }
+}
+
+// Closed-set fetch: card-identify already picked an exact card from the KG
+// list, so resolve by its slug directly — no fuzzy matching, no filler-word
+// dilution. `name` is the display name to echo back in the result.
+export async function fetchCardGuideBySlug(
+  kb: KbHttp,
+  slug: string,
+  name: string | null,
+): Promise<CardGuideResult> {
+  return fetchCardGuide(kb, name ?? slug, { slug, display_name: name })
+}
+
+// Every credit card in the KG, for the card-identify closed set: a readable
+// name (display_name, or a prettified slug) plus the slug to resolve by.
+export async function listCards(kb: KbHttp): Promise<Array<{ slug: string; name: string }>> {
+  const r = (await kb.list('cc', { limit: 250 })) as {
+    items?: Array<{ slug: string; display_name?: string | null }>
+  }
+  const pretty = (s: string) =>
+    s
+      .replace(/^cc\//, '')
+      .split('-')
+      .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
+      .join(' ')
+  return (r.items ?? [])
+    .filter((i) => typeof i.slug === 'string' && i.slug.startsWith('cc/'))
+    .map((i) => ({ slug: i.slug, name: i.display_name ?? pretty(i.slug) }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export function cardGuideTool(kb: KbHttp) {
