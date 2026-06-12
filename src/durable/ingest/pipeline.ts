@@ -99,17 +99,22 @@ const ZLooseTxn = z
     }),
   )
 
-// Balance directive — `plug_account` IS the pad (canonical schema's design).
+// Two closing-assertion kinds, mapping to the two beancount concepts:
+//   `pad`     → a pad + balance pair; the pad absorbs drift up to the asserted
+//               figure. Use for statement closings (card, points) — the printed
+//               total is the truth and the pad reconciles whatever the entries
+//               left behind.
+//   `balance` → a bare balance assertion (no pad); the running balance must
+//               already equal the figure exactly or the write is rejected.
+const ZBalanceBase = {
+  id: z.string().min(1).max(24),
+  date: z.string().regex(DATE_RE),
+  account: z.string().min(3),
+  amount: ZAmount,
+  currency: z.string().max(24),
+}
 const ZLooseBalance = z
-  .object({
-    id: z.string().min(1).max(24),
-    kind: z.literal('balance'),
-    date: z.string().regex(DATE_RE),
-    account: z.string().min(3),
-    amount: ZAmount,
-    currency: z.string().max(24),
-    plug_account: z.string().optional(),
-  })
+  .object({ kind: z.literal('balance'), ...ZBalanceBase })
   .transform((b) => ({
     id: b.id,
     kind: 'balance' as const,
@@ -117,11 +122,22 @@ const ZLooseBalance = z
     account: b.account,
     amount: String(b.amount),
     currency: b.currency,
+    plug_account: undefined as string | undefined, // bare assertion — no pad
+  }))
+const ZLoosePad = z
+  .object({ kind: z.literal('pad'), ...ZBalanceBase })
+  .transform((b) => ({
+    id: b.id,
+    kind: 'pad' as const,
+    date: b.date,
+    account: b.account,
+    amount: String(b.amount),
+    currency: b.currency,
     // One plug for all statement pads (owner ruling: don't complicate).
-    plug_account: 'Equity:Adjustments',
+    plug_account: 'Equity:Adjustments' as string | undefined,
   }))
 
-const ZEntry = z.discriminatedUnion('kind', [ZLooseTxn, ZLooseBalance])
+const ZEntry = z.discriminatedUnion('kind', [ZLooseTxn, ZLooseBalance, ZLoosePad])
 export type ExtractedEntry = z.infer<typeof ZEntry>
 
 const ZStatement = z.object({
@@ -132,7 +148,7 @@ export type ExtractedStatement = z.infer<typeof ZStatement>
 
 // Render ONE entry to canonical beancount (same formatter as journal saves).
 function renderEntry(e: ExtractedEntry): string {
-  if (e.kind === 'balance') {
+  if (e.kind === 'balance' || e.kind === 'pad') {
     return serializeJournal(
       [],
       [
@@ -142,7 +158,7 @@ function renderEntry(e: ExtractedEntry): string {
           account: e.account,
           amount: e.amount,
           currency: e.currency,
-          plug_account: e.plug_account ?? 'Equity:Adjustments',
+          plug_account: e.plug_account, // set for `pad`, undefined for bare `balance`
         },
       ],
     ).trim()
@@ -250,15 +266,14 @@ export function toLedgerEntries(opts: {
   const transactions: TransactionInput[] = []
   const directives: DirectiveInput[] = []
   for (const e of opts.extracted.entries) {
-    if (e.kind === 'balance') {
+    if (e.kind === 'balance' || e.kind === 'pad') {
       directives.push({
         kind: 'balance',
         date: e.date,
         account: e.account,
         amount: e.amount,
         currency: e.currency,
-        // One plug for all statement pads (owner ruling: don't complicate).
-        plug_account: e.plug_account ?? 'Equity:Adjustments',
+        plug_account: e.plug_account, // set for `pad`, undefined for bare `balance`
       })
     } else {
       transactions.push(e.txn)
@@ -513,7 +528,7 @@ export async function runDraftPipeline(deps: {
     const all = [...accepted.values()]
     stages.extract = {
       txns: all.filter((e) => e.kind === 'transaction').length,
-      balances: all.filter((e) => e.kind === 'balance').length,
+      balances: all.filter((e) => e.kind === 'balance' || e.kind === 'pad').length,
     }
     validation_issues = bad.map((b) => `id ${b.id}: ${b.msg}`)
     if (bad.length === 0) break

@@ -25,7 +25,7 @@ output a single JSON object and NOTHING else.
     },
     {
       "id": "b1",
-      "kind": "balance",
+      "kind": "pad",
       "date": "YYYY-MM-DD",
       "account": "Liabilities:CreditCards:Axis:SelectPlus:1234",
       "amount": 5432.10,
@@ -41,14 +41,25 @@ output a single JSON object and NOTHING else.
   `"t1"`, `"t2"`, `"b1"`). It is how the validator points at a specific entry:
   if some entries come back invalid you'll be asked to return ONLY those, by
   id — so keep each entry's id stable and don't reuse one.
-- **`kind`** — REQUIRED. Exactly `"transaction"` or `"balance"`. No other value.
+- **`kind`** — REQUIRED. Exactly `"transaction"`, `"pad"`, or `"balance"`.
 - **transaction** = `{ id, kind:"transaction", date (YYYY-MM-DD), payee,
   narration, tags (array, usually empty), postings (2–8) }`. Each posting is
   `{ account, amount (number), currency }`. Write EVERY posting in full,
   **including the card-leg amount** — postings must sum to zero per currency
   (the validator checks this; nothing is computed for you).
+- **pad** = `{ id, kind:"pad", date, account, amount (number), currency }` — a
+  reconciling closing assertion. It renders to a beancount **pad + balance**
+  pair FOR you: the pad absorbs any drift between the figure you assert and what
+  your entries actually left in the account, then the balance asserts the
+  figure. Use `pad` for every statement closing — the card's closing
+  outstanding and the points closing balance. It is ONE entry with ONE amount
+  (the printed closing). The pad is added downstream — there is no separate
+  "pad" entry to emit, and **never** emit a 0-amount opening pad alongside the
+  closing.
 - **balance** = `{ id, kind:"balance", date, account, amount (number),
-  currency }`. It is the pad+balance assertion of that account's balance.
+  currency }` — a BARE assertion (no pad). The running balance must already
+  equal the figure exactly or the write is rejected. Rarely needed in statement
+  ingest — prefer `pad` for closings.
 
 ## JSON-specific rules
 

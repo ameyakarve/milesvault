@@ -128,54 +128,43 @@ Follow these rules when building that array.
    points leg. A spend OR refund entry missing its points legs is
    INCOMPLETE unless the guide gave you no rate at all — and then you must
    tell the user you skipped accruals.
-10. **The points summary (almost every statement prints one).** Look for the
-   reward/loyalty points summary — usually "Reward Points — Opening / Earned /
-   Redeemed / Closing", or a "Points Balance". Two entries from it:
-   - **EARNED → move it.** If it states the points EARNED this cycle (a number,
-     call it N), emit exactly ONE `transaction` that moves N points from
-     `<pool.account>:Pending` to `<pool.account>` — `<pool.account>` +N,
-     `<pool.account>:Pending` −N, same ticker, NO `Equity:Void`, NO price,
-     dated the statement close. Whenever an Earned figure is printed, ALWAYS
-     emit this move. (This is the only way to post pending points; a pad can't.)
-   - **BALANCE → assert it (pad + balance, printed figure VERBATIM).** Whenever
-     the statement prints a points balance — the "Closing" in a Reward Points
-     summary, or a standalone "Points Balance" / "Balance as on date" — ALWAYS
-     emit ONE `balance` for `<pool.account>` in `<pool.ticker>` using that
-     printed number **exactly as shown**. Do NOT derive it from opening +
-     earned, and do NOT add the earned points to it — copy what the summary box
-     prints (that is the closing; deriving it is what produces a wrong total).
-     Like the card's closing balance it is a **pad + balance**: the pad absorbs
-     any gap between the printed total and what your earn/landing entries
-     posted, so assert the printed truth and let the pad reconcile. Date it the
-     statement close. Points, never rupees. This is INDEPENDENT of the move
-     above — emit it whenever a balance is printed, even when no Earned figure
-     is given and the points stay in `:Pending`.
-     EXACTLY ONE points balance — the account's closing/current total. The other
-     numbers in a points summary (points earned, redeemed, expiring, lapsed) are
-     flows or counts, NOT balances — never assert one as a second balance, and
-     never manufacture a balance (especially a 0) from a non-balance figure. A 0
-     balance is right only if the pool genuinely closes at zero.
-11. **Assert ONLY the statement's CLOSING balance** (one per card). Do NOT
-   assert an opening balance — this statement's opening is the previous
-   statement's closing, which is already asserted; emit the closing only.
+10. **The points summary (almost every statement prints one).** It yields up to
+   TWO INDEPENDENT entries — handle each on its own; one being absent never
+   suppresses the other.
+   - **A printed points BALANCE → assert it as a `pad` (ALWAYS — the primary
+     entry).** Whenever the statement prints a current/closing points balance —
+     a Reward Points "Closing", a "Points Balance", or a "Balance as on date" —
+     emit ONE `pad` entry for `<pool.account>` in `<pool.ticker>` with that
+     printed number **exactly as shown** (do NOT derive it from opening + earned,
+     do NOT add the earned points to it — copy what the box prints). The `pad`
+     reconciles whatever your earn/landing entries left to the printed truth.
+     Emit it whenever a balance is printed — even if NO "Earned" figure is given
+     and the points just sit in `:Pending`. EXACTLY ONE points balance — the
+     closing/current total; never a second, and never one manufactured
+     (especially a 0) from another figure (earned / redeemed / expiring / lapsed
+     are flows or counts, not balances).
+   - **A printed EARNED figure → move it (only when present).** Separately, if
+     the summary states the points EARNED this cycle (N), emit ONE `transaction`
+     moving N from `<pool.account>:Pending` to `<pool.account>` — `<pool.account>`
+     +N, `<pool.account>:Pending` −N, same ticker, NO `Equity:Void`, NO price,
+     dated the close. It's the only way to post pending points. If NO Earned
+     figure is printed, do NOT invent a landing — leave the points in `:Pending`.
+11. **Assert the card's CLOSING balance as a `pad`** (one per card). Emit ONE
+   `pad` entry for the card with the closing amount, dated the statement close.
+   Do NOT assert an opening balance — this statement's opening is the previous
+   statement's closing, already asserted; emit the closing only.
    Read the closing from the SUMMARY box of TOTALS (Previous Balance ·
    Purchases · Payments · Net Outstanding / Total Payment Due) — use the
    "Net Outstanding Balance" / "Total Payment Due" total, NOT a transaction
    amount, the minimum due, or the credit limit.
-   The closing asserts AFTER the cycle → date the balance the DAY AFTER the
-   statement period's last day, the pad on the last day:
-   ```
-   2026-05-07 pad Liabilities:CreditCards:Demo:Sample Equity:Adjustments
-   2026-05-08 balance Liabilities:CreditCards:Demo:Sample  -8500.00 INR
-   ```
-   EXACTLY ONE closing balance per card — the closing outstanding. Never a second
-   balance: not on an adjacent date, and not manufactured from a non-balance
-   figure (a minimum due, a zeroed sub-total). One balance per account, full stop.
+   EXACTLY ONE balance per card — the closing outstanding. It is a SINGLE `pad`
+   entry; the pad+balance is added downstream, so never emit a separate pad line,
+   never a 0-amount opening, and never a second balance manufactured from a
+   non-balance figure (a minimum due, a zeroed sub-total).
    SIGNS — read the Dr/Cr marker: amount OWED to the bank (normal "Dr") →
    NEGATIVE (e.g. "Net Outstanding 8,500.00" → -8500.00 INR); a "Cr" balance
    (bank owes you — overpayment/refund) → POSITIVE (e.g. "5,432.10 Cr" →
-   +5432.10).
-   The pad+balance pair is ONE element. Copy the figure digit-for-digit.
+   +5432.10). Copy the figure digit-for-digit.
 12. **One transaction per element.** Each entry is a complete Beancount
    block — header line plus 2+ postings, no leading/trailing blank
    lines, no comments narrating what the row is for. The postings
