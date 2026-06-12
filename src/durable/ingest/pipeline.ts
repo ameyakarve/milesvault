@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import {
-  fetchCardGuide,
   fetchCardGuideBySlug,
   listCards,
   type CardGuideResult,
@@ -418,74 +417,23 @@ export async function runDraftPipeline(deps: {
   )
   stages.card = { name: cardRes.value?.card_name ?? undefined, error: cardRes.error ?? undefined }
 
-  // (B) Prefer the user's EXISTING card account as the resolution anchor: its
-  //     clean name ("Axis:MagnusBurgundy" → "Axis Magnus Burgundy") maps to the
-  //     KG deterministically, where the noisy statement header ("Axis Bank
-  //     Magnus Burgundy Credit Card") ties on generic tokens. Falls back to the
-  //     header for cards the user doesn't track yet.
-  const cardAccounts = deps.accounts.filter((a) => a.startsWith('Liabilities:CreditCards:'))
-  const cleanName = (acct: string): string => {
-    const parts = acct.split(':')
-    const issuer = parts[2] ?? ''
-    const leaf = (parts[3] ?? '').replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    return `${issuer} ${leaf}`.trim()
-  }
-  const toks = (s: string) =>
-    new Set(
-      s
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((t) => t.length >= 3),
-    )
-  let anchor: string | null = null
-  if (cardAccounts.length === 1) anchor = cardAccounts[0]!
-  else if (cardAccounts.length > 1 && cardRes.value?.card_name) {
-    const idTok = toks(cardRes.value.card_name)
-    let best = 0
-    for (const a of cardAccounts) {
-      const n = [...toks(cleanName(a))].filter((t) => idTok.has(t)).length
-      if (n > best) {
-        best = n
-        anchor = a
-      }
-    }
-    if (best < 1) anchor = null
-  }
-  // A tracked card's account anchors deterministically; otherwise use the exact
-  // slug the model picked from the full card list (closed set — no fuzzy match).
+  // The model picked the card from the full KG card list (closed set); resolve
+  // its guide by that exact slug. No anchor, no fuzzy matching, no candidate
+  // re-pick — the model decides which card this is, and the extraction step
+  // matches each transaction to the user's existing accounts via the
+  // open-accounts list. (CLAUDE.md: this pipeline is LLM-first; code does not
+  // arbitrate the model's choices.)
   const pickedSlug =
     cardRes.value?.slug && cards.some((c) => c.slug === cardRes.value!.slug)
       ? cardRes.value.slug
       : null
-  const resolveName = anchor ? cleanName(anchor) : (cardRes.value?.card_name ?? null)
-  let guide: CardGuideResult = anchor
-    ? await fetchCardGuide(deps.kb, cleanName(anchor))
-    : pickedSlug
-      ? await fetchCardGuideBySlug(
-          deps.kb,
-          pickedSlug,
-          cards.find((c) => c.slug === pickedSlug)?.name ?? null,
-        )
-      : // Fallback (empty/failed card list, or a name without a valid slug):
-        // the old fuzzy-by-name resolution.
-        cardRes.value?.card_name
-        ? await fetchCardGuide(deps.kb, cardRes.value.card_name)
-        : { ok: false, error: 'card_not_identified' }
-
-  // Ambiguous resolution (anchor/name path) returns candidates — the model picks.
-  if (guide.ok === false && guide.candidates?.length && resolveName) {
-    const cands: Array<{ slug: string; name: string | null }> = guide.candidates
-    const pick = await genJson(
-      genFast,
-      z.object({ name: z.string().nullable() }),
-      'A statement names a credit card; the knowledge graph offers candidate cards. Output ONLY {"name": "<exact candidate name>"} for the matching card, or {"name": null} if none match.',
-      `Statement card: ${resolveName}\nCandidates:\n${cands.map((c) => `- ${c.name}`).join('\n')}`,
-      128,
-    )
-    if (pick.value?.name) {
-      guide = await fetchCardGuide(deps.kb, pick.value.name)
-    }
-  }
+  const guide: CardGuideResult = pickedSlug
+    ? await fetchCardGuideBySlug(
+        deps.kb,
+        pickedSlug,
+        cards.find((c) => c.slug === pickedSlug)?.name ?? null,
+      )
+    : { ok: false, error: 'card_not_identified' }
   const rate = parseBaseRate(guide)
   stages.guide = {
     found: guide.ok,
