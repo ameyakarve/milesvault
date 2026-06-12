@@ -95,12 +95,20 @@ export abstract class BaseAgentDO<
       binding: this.env.AI,
       ...(gatewayId ? { gateway: { id: gatewayId } } : {}),
     })
-    if (cfg.reasoning === 'off') {
-      const kwargs = cfg.id.includes('gemma')
-        ? { enable_thinking: false }
-        : { thinking: false }
+    // Gemma's thinking is a chat-template flag (enable_thinking), not
+    // reasoning_effort — so map on/off to the flag in BOTH directions. (Every
+    // current caller passes 'off'; only the statement-upload extraction opts
+    // into reasoning, so only it gets gemma thinking.)
+    if (cfg.id.includes('gemma')) {
       return workersai(cfg.id, {
-        chat_template_kwargs: kwargs as { enable_thinking?: boolean },
+        chat_template_kwargs: { enable_thinking: cfg.reasoning !== 'off' } as {
+          enable_thinking?: boolean
+        },
+      })
+    }
+    if (cfg.reasoning === 'off') {
+      return workersai(cfg.id, {
+        chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
       })
     }
     return workersai(cfg.id, { reasoning_effort: cfg.reasoning })

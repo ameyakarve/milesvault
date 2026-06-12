@@ -326,7 +326,11 @@ ${opts.text}`,
       // what the text can't (labels banks render as graphics — e.g. HSBC's
       // reward-points summary). One model does vision + structure.
       const gen: GenFn = async ({ system, prompt, maxTokens, images }) => {
-        const model = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' })
+        // Thinking ON for statement-upload extraction only (owner call): the
+        // careful "did I already fold this fee? which charge does this GST
+        // belong to?" reasoning that trips a non-thinking pass on long,
+        // forex-heavy statements.
+        const model = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'low' })
         const r =
           images && images.length > 0
             ? streamText({
