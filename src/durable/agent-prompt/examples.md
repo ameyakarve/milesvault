@@ -318,10 +318,18 @@ three separate rows — often dated a day or two apart, sometimes
 interleaved with other transactions. They are NOT three transactions.
 They are ONE: fold the fee and GST back into the merchant's transaction.
 
-- The `@@` INR weight is the merchant's billed INR amount **exactly as
-  shown on that row** — do NOT re-derive, round, or "back out" the fee
-  from it. Re-deriving the rate is the most common mistake; the billed
-  INR is printed, use it verbatim.
+- The row carries **two different numbers**: the foreign amount in the
+  `( CCY x.xx )` bracket by the merchant, and the billed amount (in the
+  card's billing currency) as the row's main figure. The foreign amount is
+  the posting's quantity; the billed amount is the `@@` total. They are
+  never equal — currencies don't convert 1:1, so never reuse the billed
+  figure as the foreign quantity. In the example below the bracket says
+  `USD 9.28` and the billed figure is `875.30` — the posting is
+  `9.28 USD @@ 875.30 INR`, NOT `875.30 USD @@ 875.30 INR`.
+- The `@@` weight is the merchant's billed amount **exactly as shown on
+  that row** — do NOT re-derive, round, or "back out" the fee from it.
+  Re-deriving the rate is a common mistake; the billed figure is printed,
+  use it verbatim.
 - The markup fee and its GST are their own plain INR legs
   (`Expenses:Bank:ForexMarkup`, `Expenses:Tax:GST`).
 - The card liability is the **sum of all three**: billed INR + markup +

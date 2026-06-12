@@ -53,14 +53,24 @@ Follow these rules when building that array.
    unless the statement explicitly shows a foreign currency amount
    alongside the INR billed amount (in which case those become
    separate forex-markup legs per the existing rules).
-7. **Fold forex fee + GST into the charge.** When a row shows a foreign
-   amount (e.g. `( USD 9.28 )`), the "FOREIGN CURRENCY TRANSACTION FEE" /
-   "DCC MARKUP" and "GST" rows that follow it belong to it — emit ONE
-   transaction: the foreign amount with `@@` set to the **billed INR
-   exactly as printed** (do not re-derive it), plus the markup and GST as
-   INR legs, with the card debited for the sum. Pair stray fee/GST rows
-   to their charge by the arithmetic (markup ≈ 2% of billed INR, GST ≈
-   18% of markup). See the worked forex example.
+7. **Fold forex fee + GST into the charge.** A foreign-currency row prints
+   **two different amounts in two different places**: the **transaction
+   amount in the foreign currency**, inside the `( CCY x.xx )` bracket next
+   to the merchant (e.g. `( USD 9.28 )` → `9.28 USD`), and the **billed
+   amount in the card's own billing currency**, as the row's main amount on
+   the right. They are NOT the same number and are **never equal** — two
+   currencies don't convert 1:1, so the foreign amount is always far smaller
+   (or larger) than the billed amount. The foreign amount is the posting's
+   quantity + commodity; the billed amount is the `@@` total. NEVER copy the
+   billed amount into the foreign slot (or vice-versa) — read each from its
+   own place.
+   The "FOREIGN CURRENCY TRANSACTION FEE" / "DCC MARKUP" and "GST" rows that
+   follow the charge belong to it — emit ONE transaction: the foreign amount
+   `@@` the **billed amount exactly as printed** (do not re-derive it), plus
+   the markup and GST as legs in the billing currency, with the card debited
+   for the sum. Pair stray fee/GST rows to their charge by the arithmetic
+   (markup ≈ 2% of the billed amount, GST ≈ 18% of markup). See the worked
+   forex example.
 8. **Credits are refunds.** A `Cr` row that isn't a bill payment reverses
    a purchase: negative expense leg, positive card leg. Keep each `Cr`
    row as its own transaction — never net two together or fold a refund
