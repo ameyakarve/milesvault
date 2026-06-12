@@ -105,15 +105,18 @@ Follow these rules when building that array.
    rules by the merchant's actual category, not by keywords in its name (a
    "GAS" merchant may be a utility, which most cards still earn on — defer to
    the guide). When the guide doesn't clearly exclude it, the spend EARNS.
-   RECONCILE to the stated "Earned this cycle": your accruals to `:Pending` must
-   total that figure. If they fall short, the gap is either a spend you wrongly
-   excluded (put its points back) or points earned outside any single purchase —
-   a bonus, promo, or milestone reward. Accrue that remainder as ONE more pending
-   entry (`<pool.account>:Pending +<gap>` / `Equity:Void −<gap>`, same ticker,
-   dated the statement close) so the total accrued equals Earned. Every earned
-   point reaches `:Pending` before the landing moves it out, so after the landing
-   `:Pending` nets to ZERO and is never negative — a negative `:Pending` means
-   you landed more than you accrued.
+   BONUS / PROMO points (a 5X promo, milestone, or sign-up reward — usually
+   listed in a rewards-program summary, not on a purchase row) are EARNED too.
+   Accrue each such line to `:Pending` with an `Equity:Void` contra, exactly like
+   a spend's points (`<pool.account>:Pending +<bonus>` / `Equity:Void −<bonus>`,
+   same ticker, dated the statement close).
+   RECONCILE to the stated "Earned this cycle": the total you accrue — per-spend
+   base points PLUS every bonus line — must EQUAL that figure exactly. If you
+   fall short you missed a bonus (or a spend) — add it. DEDUPE: never count a
+   bonus twice — if it's already inside a transaction's points, or listed in two
+   places, accrue it ONCE; the total must never EXCEED Earned. Earned is the
+   ground truth. Every earned point reaches `:Pending` before the landing moves
+   it out, so after the landing `:Pending` nets to ZERO and is never negative.
    Issuer fees never earn: interest, finance charges, late fees, and
    standalone GST (all under `Expenses:Financial:*`) carry NO points legs.
    REFUNDS REVERSE THEIR POINTS with mirrored signs — same four-posting
