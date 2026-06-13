@@ -4,6 +4,8 @@ One transaction captures the purchase AND the reward it earned. Cashback
 and points don't fall out of the sky — they always pair with the expense
 that generated them.
 
+Every entry also needs a unique short `id` (e.g. `"e1"`), omitted in these examples for brevity.
+
 The accounts below use `<Issuer>`/`<Card>` placeholders on purpose:
 these examples teach the *shape* of each entry, not how any specific
 card behaves. Fill in the real issuer and card from the transaction in
@@ -80,12 +82,20 @@ A separately-redeemable credit posted by the issuer (₹X back, redeemable
 later). Four postings: purchase (2) + receivable accrual (+) + matching
 expense reduction (−). The expense leg IS the contra — no `Equity:Void`.
 
-```
-2026-05-21 * "Starbucks" "Coffee — ₹3.70 cashback"
-  Expenses:Food:Coffee                       37.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>   -37.00 INR
-  Assets:Receivable:<Issuer>                  3.70 INR
-  Expenses:Food:Coffee                       -3.70 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-21",
+  "flag": "*",
+  "payee": "Starbucks",
+  "narration": "Coffee — ₹3.70 cashback",
+  "postings": [
+    { "account": "Expenses:Food:Coffee", "amount": 37.00, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -37.00, "currency": "INR" },
+    { "account": "Assets:Receivable:<Issuer>", "amount": 3.70, "currency": "INR" },
+    { "account": "Expenses:Food:Coffee", "amount": -3.70, "currency": "INR" }
+  ]
+}
 ```
 
 INR sums to zero. Net expense to dashboards = ₹33.30; card paid ₹37;
@@ -105,12 +115,20 @@ Multi-currency single transaction: purchase legs in INR/USD, points
 legs in the program's point currency. No expense-reduction leg —
 points' cash value isn't fixed at earn time.
 
-```
-2026-05-21 * "Taj" "Dinner — 250 reward points"
-  Expenses:Food:Restaurants                  2500.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>   -2500.00 INR
-  <RewardsAcct>:Pending                           250 RWD_PTS
-  Equity:Void                                    -250 RWD_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-21",
+  "flag": "*",
+  "payee": "Taj",
+  "narration": "Dinner — 250 reward points",
+  "postings": [
+    { "account": "Expenses:Food:Restaurants", "amount": 2500.00, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -2500.00, "currency": "INR" },
+    { "account": "<RewardsAcct>:Pending", "amount": 250, "currency": "RWD_PTS" },
+    { "account": "Equity:Void", "amount": -250, "currency": "RWD_PTS" }
+  ]
+}
 ```
 
 Each currency balances on its own. **The point currency MUST sum to
@@ -128,10 +146,18 @@ no `Equity:Void` — pending down, posted up, in the same point
 currency. Use the statement-close date (or whatever date the issuer
 posted them).
 
-```
-2026-06-01 * "Statement close" "Posted Apr–May reward points"
-  <RewardsAcct>                      1850 RWD_PTS
-  <RewardsAcct>:Pending             -1850 RWD_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-06-01",
+  "flag": "*",
+  "payee": "Statement close",
+  "narration": "Posted Apr–May reward points",
+  "postings": [
+    { "account": "<RewardsAcct>", "amount": 1850, "currency": "RWD_PTS" },
+    { "account": "<RewardsAcct>:Pending", "amount": -1850, "currency": "RWD_PTS" }
+  ]
+}
 ```
 
 ### Computing earn from a stated rate
@@ -161,11 +187,19 @@ ONLY when the user says the discount/cashback was applied at the point of
 sale — i.e. it reduced the bill they paid, nothing to redeem later. A
 negative posting on the same expense; no `Equity:Void`, no receivable.
 
-```
-2026-05-21 * "Swiggy" "Dinner — ₹50 instant cashback"
-  Expenses:Food:Restaurants                  500.00 INR
-  Expenses:Food:Restaurants                  -50.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>   -450.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-21",
+  "flag": "*",
+  "payee": "Swiggy",
+  "narration": "Dinner — ₹50 instant cashback",
+  "postings": [
+    { "account": "Expenses:Food:Restaurants", "amount": 500.00, "currency": "INR" },
+    { "account": "Expenses:Food:Restaurants", "amount": -50.00, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -450.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Transfers (money moves between your accounts — no expense)
@@ -173,34 +207,66 @@ negative posting on the same expense; no `Equity:Void`, no receivable.
 ### Salary received
 Income postings are negative — that's the Beancount sign convention for
 a credit to your books.
-```
-2026-05-25 * "ACME Corp" "May salary"
-  Assets:Bank:HDFC:Savings   125000.00 INR
-  Income:Salary             -125000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-25",
+  "flag": "*",
+  "payee": "ACME Corp",
+  "narration": "May salary",
+  "postings": [
+    { "account": "Assets:Bank:HDFC:Savings", "amount": 125000.00, "currency": "INR" },
+    { "account": "Income:Salary", "amount": -125000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Bank → bank (your own accounts)
 Pure shuffle between accounts you own. No expense, no income.
-```
-2026-05-26 * "Self" "Move to ICICI for rent"
-  Assets:Bank:ICICI:Savings   50000.00 INR
-  Assets:Bank:HDFC:Savings   -50000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "Self",
+  "narration": "Move to ICICI for rent",
+  "postings": [
+    { "account": "Assets:Bank:ICICI:Savings", "amount": 50000.00, "currency": "INR" },
+    { "account": "Assets:Bank:HDFC:Savings", "amount": -50000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### ATM withdrawal (bank → cash)
-```
-2026-05-26 * "ATM" "Cash withdrawal"
-  Assets:Cash                 2000.00 INR
-  Assets:Bank:HDFC:Savings   -2000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "ATM",
+  "narration": "Cash withdrawal",
+  "postings": [
+    { "account": "Assets:Cash", "amount": 2000.00, "currency": "INR" },
+    { "account": "Assets:Bank:HDFC:Savings", "amount": -2000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Credit-card bill payment (bank → card)
 Mirror of a purchase. The card leg is positive (reducing the liability),
 the bank leg is negative.
-```
-2026-05-26 * "Card payment" "May bill"
-  Liabilities:CreditCards:<Issuer>:<Card>   45000.00 INR
-  Assets:Bank:HDFC:Savings                 -45000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "Card payment",
+  "narration": "May bill",
+  "postings": [
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": 45000.00, "currency": "INR" },
+    { "account": "Assets:Bank:HDFC:Savings", "amount": -45000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Cash and UPI spends
@@ -212,16 +278,32 @@ on one side, bank/cash on the other.
 (UPI on a credit card is a separate case — that hits the card liability
 like any other charge.)
 
-```
-2026-05-26 * "Chai shop" "Tea"
-  Expenses:Food:Beverages    30.00 INR
-  Assets:Cash               -30.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "Chai shop",
+  "narration": "Tea",
+  "postings": [
+    { "account": "Expenses:Food:Beverages", "amount": 30.00, "currency": "INR" },
+    { "account": "Assets:Cash", "amount": -30.00, "currency": "INR" }
+  ]
+}
 ```
 
-```
-2026-05-26 * "Auto driver" "UPI — ride home"
-  Expenses:Travel:Auto       120.00 INR
-  Assets:Bank:HDFC:Savings  -120.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "Auto driver",
+  "narration": "UPI — ride home",
+  "postings": [
+    { "account": "Expenses:Travel:Auto", "amount": 120.00, "currency": "INR" },
+    { "account": "Assets:Bank:HDFC:Savings", "amount": -120.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Prepaid cards (food wallets, store wallets)
@@ -231,17 +313,33 @@ spend it down. Two moves: load (bank → prepaid) and spend (prepaid →
 expense).
 
 ### Load
-```
-2026-05-27 * "Sodexo" "Top-up food wallet"
-  Assets:Prepaid:Sodexo:Meal    2000.00 INR
-  Assets:Bank:HDFC:Savings     -2000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Sodexo",
+  "narration": "Top-up food wallet",
+  "postings": [
+    { "account": "Assets:Prepaid:Sodexo:Meal", "amount": 2000.00, "currency": "INR" },
+    { "account": "Assets:Bank:HDFC:Savings", "amount": -2000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Spend
-```
-2026-05-27 * "Cafe Coffee Day" "Lunch — Sodexo"
-  Expenses:Food:Restaurants     400.00 INR
-  Assets:Prepaid:Sodexo:Meal   -400.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Cafe Coffee Day",
+  "narration": "Lunch — Sodexo",
+  "postings": [
+    { "account": "Expenses:Food:Restaurants", "amount": 400.00, "currency": "INR" },
+    { "account": "Assets:Prepaid:Sodexo:Meal", "amount": -400.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Forex cards (prepaid, foreign currency)
@@ -251,17 +349,33 @@ it's forex. Loading is a conversion (₹ → foreign), so use `@@` for the
 rate. Spending abroad is single-currency in the foreign unit.
 
 ### Load
-```
-2026-05-27 * "Forex load" "Loaded forex card — 1000 USD @ ₹84.50"
-  Assets:Prepaid:HDFC:Forex:Multi    1000.00 USD @@ 84500.00 INR
-  Assets:Bank:HDFC:Savings         -84500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Forex load",
+  "narration": "Loaded forex card — 1000 USD @ ₹84.50",
+  "postings": [
+    { "account": "Assets:Prepaid:HDFC:Forex:Multi", "amount": 1000.00, "currency": "USD", "price_at_signs": 2, "price_amount": 84500.00, "price_currency": "INR" },
+    { "account": "Assets:Bank:HDFC:Savings", "amount": -84500.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Spend abroad (already in USD — no FX at point of sale)
-```
-2026-05-30 * "Whole Foods" "Groceries — NYC"
-  Expenses:Travel:Food                   50.00 USD
-  Assets:Prepaid:HDFC:Forex:Multi      -50.00 USD
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-30",
+  "flag": "*",
+  "payee": "Whole Foods",
+  "narration": "Groceries — NYC",
+  "postings": [
+    { "account": "Expenses:Travel:Food", "amount": 50.00, "currency": "USD" },
+    { "account": "Assets:Prepaid:HDFC:Forex:Multi", "amount": -50.00, "currency": "USD" }
+  ]
+}
 ```
 
 ## Forex spends on a regular INR credit card
@@ -285,30 +399,38 @@ weight in INR for the card balance. The markup and GST are plain INR
 expense lines.
 
 ### Full shape (markup + GST itemized — closest to what an Indian statement actually shows)
-```
-2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 markup + ₹26.64 GST)"
-  Expenses:Travel:Food                       50.00 USD @@ 4225.00 INR
-  Expenses:Financial:ForexMarkup                 148.00 INR
-  Expenses:Financial:GST                           26.64 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -4399.64 INR
-```
-
-### Markup only (when GST isn't broken out separately)
-```
-2026-05-30 * "Joe's Pizza" "Dinner — NYC ($50 + ₹148 forex markup)"
-  Expenses:Travel:Food                       50.00 USD @@ 4225.00 INR
-  Expenses:Financial:ForexMarkup                 148.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -4373.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-30",
+  "flag": "*",
+  "payee": "Joe's Pizza",
+  "narration": "Dinner — NYC ($50 + ₹148 markup + ₹26.64 GST)",
+  "postings": [
+    { "account": "Expenses:Travel:Food", "amount": 50.00, "currency": "USD", "price_at_signs": 2, "price_amount": 4225.00, "price_currency": "INR" },
+    { "account": "Expenses:Financial:ForexMarkup", "amount": 148.00, "currency": "INR" },
+    { "account": "Expenses:Financial:GST", "amount": 26.64, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -4399.64, "currency": "INR" }
+  ]
+}
 ```
 
 ### Short form (markup baked into a single INR total)
 Use this only when the user can't see the markup split out, or
 explicitly wants a single line. The `@@` rate ends up implicitly
 including the markup.
-```
-2026-05-30 * "Joe's Pizza" "Dinner — NYC"
-  Expenses:Travel:Food                       50.00 USD @@ 4373.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -4373.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-30",
+  "flag": "*",
+  "payee": "Joe's Pizza",
+  "narration": "Dinner — NYC",
+  "postings": [
+    { "account": "Expenses:Travel:Food", "amount": 50.00, "currency": "USD", "price_at_signs": 2, "price_amount": 4373.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -4373.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### When the statement itemizes the markup / GST on separate rows (fold them in)
@@ -341,12 +463,20 @@ the card's forex rate (commonly **2%**) of the billed INR, and the GST is
 **18% of that markup**. Match by that arithmetic. E.g. an ₹875.30 charge
 → ₹17.51 markup (2% of 875.30) → ₹3.15 GST (18% of 17.51), so the card is
 debited 875.30 + 17.51 + 3.15 = 895.96:
-```
-2026-04-26 * "Cloudflare" "Hosting (USD 9.28 + ₹17.51 markup + ₹3.15 GST)"
-  Expenses:Personal:Software                 9.28 USD @@ 875.30 INR
-  Expenses:Financial:ForexMarkup                 17.51 INR
-  Expenses:Financial:GST                           3.15 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -895.96 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-04-26",
+  "flag": "*",
+  "payee": "Cloudflare",
+  "narration": "Hosting (USD 9.28 + ₹17.51 markup + ₹3.15 GST)",
+  "postings": [
+    { "account": "Expenses:Personal:Software", "amount": 9.28, "currency": "USD", "price_at_signs": 2, "price_amount": 875.30, "price_currency": "INR" },
+    { "account": "Expenses:Financial:ForexMarkup", "amount": 17.51, "currency": "INR" },
+    { "account": "Expenses:Financial:GST", "amount": 3.15, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -895.96, "currency": "INR" }
+  ]
+}
 ```
 A "DCC MARKUP" row works identically — same fold, same `Expenses:Financial:ForexMarkup`
 leg — even when the merchant charge is billed straight in INR (no USD
@@ -370,33 +500,65 @@ only reliable link is "GST ≈ 18% of the markup that is 2% of this charge."
 A gift card is an asset — value you hold until you spend it.
 
 ### Bought with cash or card
-```
-2026-05-27 * "Amazon" "Bought ₹1000 Amazon gift card"
-  Assets:GiftCards:Amazon                   1000.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -1000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Amazon",
+  "narration": "Bought ₹1000 Amazon gift card",
+  "postings": [
+    { "account": "Assets:GiftCards:Amazon", "amount": 1000.00, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -1000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Received as a gift (income)
-```
-2026-05-27 * "Friend" "Birthday — Amazon gift card"
-  Assets:GiftCards:Amazon    1000.00 INR
-  Income:Gifts              -1000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Friend",
+  "narration": "Birthday — Amazon gift card",
+  "postings": [
+    { "account": "Assets:GiftCards:Amazon", "amount": 1000.00, "currency": "INR" },
+    { "account": "Income:Gifts", "amount": -1000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Redeemed at checkout
 Full:
-```
-2026-05-27 * "Amazon" "Book — paid with gift card"
-  Expenses:Shopping:Books     500.00 INR
-  Assets:GiftCards:Amazon    -500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Amazon",
+  "narration": "Book — paid with gift card",
+  "postings": [
+    { "account": "Expenses:Shopping:Books", "amount": 500.00, "currency": "INR" },
+    { "account": "Assets:GiftCards:Amazon", "amount": -500.00, "currency": "INR" }
+  ]
+}
 ```
 
 Partial (gift card + card):
-```
-2026-05-27 * "Amazon" "Book — ₹500 gift card + ₹300 on card"
-  Expenses:Shopping:Books                   800.00 INR
-  Assets:GiftCards:Amazon                  -500.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -300.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Amazon",
+  "narration": "Book — ₹500 gift card + ₹300 on card",
+  "postings": [
+    { "account": "Expenses:Shopping:Books", "amount": 800.00, "currency": "INR" },
+    { "account": "Assets:GiftCards:Amazon", "amount": -500.00, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -300.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Settling with people
@@ -408,37 +570,69 @@ the same sign convention as credit cards (negative = you owe).
 ### You paid the whole bill; friend owes their share
 Card got charged the full amount; half is your expense, half is owed to
 you and sits in `Receivable` until they pay.
-```
-2026-05-26 * "BBQ Nation" "Dinner — split 50/50 with Rohan"
-  Expenses:Food:Restaurants                 1500.00 INR
-  Assets:Receivable:Rohan                   1500.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -3000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "BBQ Nation",
+  "narration": "Dinner — split 50/50 with Rohan",
+  "postings": [
+    { "account": "Expenses:Food:Restaurants", "amount": 1500.00, "currency": "INR" },
+    { "account": "Assets:Receivable:Rohan", "amount": 1500.00, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -3000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Friend pays you back
 Clears the receivable to zero.
-```
-2026-05-27 * "Rohan" "UPI — dinner share"
-  Assets:Bank:HDFC:Savings    1500.00 INR
-  Assets:Receivable:Rohan    -1500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Rohan",
+  "narration": "UPI — dinner share",
+  "postings": [
+    { "account": "Assets:Bank:HDFC:Savings", "amount": 1500.00, "currency": "INR" },
+    { "account": "Assets:Receivable:Rohan", "amount": -1500.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Friend paid for both; you owe them
 You consumed the expense, but no card / cash of yours moved — the credit
 side is a `Payable`.
-```
-2026-05-26 * "Sneha" "Movie tickets she booked for both of us"
-  Expenses:Entertainment:Movies   750.00 INR
-  Liabilities:Payable:Sneha      -750.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "Sneha",
+  "narration": "Movie tickets she booked for both of us",
+  "postings": [
+    { "account": "Expenses:Entertainment:Movies", "amount": 750.00, "currency": "INR" },
+    { "account": "Liabilities:Payable:Sneha", "amount": -750.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### You pay friend back
 Cash leaves your bank; the payable posting is positive (reducing the
 liability back to zero).
-```
-2026-05-27 * "Sneha" "UPI — movie tickets"
-  Liabilities:Payable:Sneha    750.00 INR
-  Assets:Bank:HDFC:Savings    -750.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Sneha",
+  "narration": "UPI — movie tickets",
+  "postings": [
+    { "account": "Liabilities:Payable:Sneha", "amount": 750.00, "currency": "INR" },
+    { "account": "Assets:Bank:HDFC:Savings", "amount": -750.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Reimbursements (work expenses you'll claim back)
@@ -446,18 +640,34 @@ liability back to zero).
 ### Out of pocket now, claim later
 Record the receivable up front so the spend doesn't dilute personal P&L.
 Same shape as splitting a bill — company in place of friend.
-```
-2026-05-26 * "Uber" "Client meeting — claim from ACME"
-  Assets:Receivable:ACME                    500.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "Uber",
+  "narration": "Client meeting — claim from ACME",
+  "postings": [
+    { "account": "Assets:Receivable:ACME", "amount": 500.00, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -500.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Reimbursement lands
 Same shape as a friend paying you back.
-```
-2026-06-15 * "ACME" "May reimbursement payout"
-  Assets:Bank:HDFC:Savings    500.00 INR
-  Assets:Receivable:ACME     -500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-06-15",
+  "flag": "*",
+  "payee": "ACME",
+  "narration": "May reimbursement payout",
+  "postings": [
+    { "account": "Assets:Bank:HDFC:Savings", "amount": 500.00, "currency": "INR" },
+    { "account": "Assets:Receivable:ACME", "amount": -500.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Refunds (reverse an earlier purchase)
@@ -465,10 +675,18 @@ Same shape as a friend paying you back.
 Exact mirror of the original purchase — sign-flipped on both legs. If the
 refund hits a different card / bank than the original, swap the second
 leg accordingly.
-```
-2026-05-26 * "Amazon" "Refund — returned earphones"
-  Expenses:Shopping:Electronics            -3500.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>   3500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-26",
+  "flag": "*",
+  "payee": "Amazon",
+  "narration": "Refund — returned earphones",
+  "postings": [
+    { "account": "Expenses:Shopping:Electronics", "amount": -3500.00, "currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": 3500.00, "currency": "INR" }
+  ]
+}
 ```
 
 On a statement, a row marked **`Cr`** / **"Credit"** that is NOT a bill
@@ -491,29 +709,91 @@ both with the real programme accounts and KG tickers (e.g.
 `SRC_PTS`/`DST_PTS` literally in output.
 
 ### Instant landing (points show up in the destination right away)
-```
-2026-05-27 * "Transfer" "10000 source pts → 13000 dest (30% bonus)"
-  <DestAcct>                13000 DST_PTS @@ 10000 SRC_PTS
-  <SrcAcct>                -10000 SRC_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Transfer",
+  "narration": "10000 source pts → 13000 dest (30% bonus)",
+  "postings": [
+    { "account": "<DestAcct>", "amount": 13000, "currency": "DST_PTS", "price_at_signs": 2, "price_amount": 10000, "price_currency": "SRC_PTS" },
+    { "account": "<SrcAcct>", "amount": -10000, "currency": "SRC_PTS" }
+  ]
+}
 ```
 
 ### Pending (transfer initiated but points haven't landed yet)
 Until the destination programme posts the points, they sit in the
 destination's `:Pending` child.
-```
-2026-05-27 * "Transfer" "10000 source pts → 13000 dest (pending)"
-  <DestAcct>:Pending           13000 DST_PTS @@ 10000 SRC_PTS
-  <SrcAcct>        -10000 SRC_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Transfer",
+  "narration": "10000 source pts → 13000 dest (pending)",
+  "postings": [
+    { "account": "<DestAcct>:Pending", "amount": 13000, "currency": "DST_PTS", "price_at_signs": 2, "price_amount": 10000, "price_currency": "SRC_PTS" },
+    { "account": "<SrcAcct>", "amount": -10000, "currency": "SRC_PTS" }
+  ]
+}
 ```
 
 When the points land, settle the receivable:
-```
-2026-05-30 * "Transfer credited" "Dest program posted the points"
-  <DestAcct>        13000 DST_PTS
-  <DestAcct>:Pending    -13000 DST_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-30",
+  "flag": "*",
+  "payee": "Transfer credited",
+  "narration": "Dest program posted the points",
+  "postings": [
+    { "account": "<DestAcct>", "amount": 13000, "currency": "DST_PTS" },
+    { "account": "<DestAcct>:Pending", "amount": -13000, "currency": "DST_PTS" }
+  ]
+}
 ```
 
 ## Redemptions — always associate a cash value
+
+**The #1 mistake — never denominate the expense in points.** A flight/hotel/
+purchase is priced in CASH; the points are the payment, recorded on the rewards
+leg via `@@`.
+
+❌ WRONG (points on the expense leg — a flight is not priced in miles):
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Airline",
+  "narration": "Award flight",
+  "postings": [
+    { "account": "Expenses:Travel:Flights", "amount": 20000, "currency": "RWD_PTS" },
+    { "account": "<RewardsAcct>", "amount": -20000, "currency": "RWD_PTS" }
+  ]
+}
+```
+✅ RIGHT (expense is the CASH fare; the points leg carries that value via `@@`):
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Airline",
+  "narration": "Award flight",
+  "postings": [
+    { "account": "Expenses:Travel:Flights", "amount": 50000.00, "currency": "INR" },
+    { "account": "<RewardsAcct>", "amount": -20000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 50000.00, "price_currency": "INR" }
+  ]
+}
+```
+
+**If the source shows ONLY the points** (a bare loyalty statement: just a
+negative points line against a flight, no cash fare), you do NOT have the value.
+`clarify` and ask the user for each redemption's cash fare BEFORE drafting it —
+never fall back to ❌ and price the flight in points.
 
 **Hard rule:** every redemption associates a cash value with the points
 side via `@@`. There are no exceptions — statement credits, pay-at-
@@ -525,33 +805,65 @@ The points leg's weight is the cash equivalent at redemption time
 Settles the receivable from the Cashback pattern. Card liability goes
 down, receivable goes back to zero. (Same-currency, so no `@@` needed —
 the value is already in INR.)
-```
-2026-05-31 * "Statement credit" "Cashback credited to May statement"
-  Liabilities:CreditCards:<Issuer>:<Card>    3.70 INR
-  Assets:Receivable:<Issuer>                -3.70 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-31",
+  "flag": "*",
+  "payee": "Statement credit",
+  "narration": "Cashback credited to May statement",
+  "postings": [
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": 3.70, "currency": "INR" },
+    { "account": "Assets:Receivable:<Issuer>", "amount": -3.70, "currency": "INR" }
+  ]
+}
 ```
 
 ### Points redeemed for statement credit
 The statement-credit amount IS the cash value.
-```
-2026-05-31 * "Statement credit" "Redeem 1000 pts → ₹250 statement credit"
-  <RewardsAcct>                  -1000 RWD_PTS @@ 250.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>   250.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-31",
+  "flag": "*",
+  "payee": "Statement credit",
+  "narration": "Redeem 1000 pts → ₹250 statement credit",
+  "postings": [
+    { "account": "<RewardsAcct>", "amount": -1000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 250.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": 250.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Pay with points at a merchant
 Merchant's quoted price IS the cash value. Same shape for partial
 redemptions (points + card).
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Amazon",
+  "narration": "Headphones — paid 2500 pts",
+  "postings": [
+    { "account": "Expenses:Shopping:Electronics", "amount": 500.00, "currency": "INR" },
+    { "account": "<RewardsAcct>", "amount": -2500, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 500.00, "price_currency": "INR" }
+  ]
+}
 ```
-2026-05-27 * "Amazon" "Headphones — paid 2500 pts"
-  Expenses:Shopping:Electronics       500.00 INR
-  <RewardsAcct>            -2500 RWD_PTS @@ 500.00 INR
-```
-```
-2026-05-27 * "Amazon" "Headphones — 2500 pts + ₹500 on card"
-  Expenses:Shopping:Electronics            1000.00 INR
-  <RewardsAcct>                  -2500 RWD_PTS @@ 500.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Amazon",
+  "narration": "Headphones — 2500 pts + ₹500 on card",
+  "postings": [
+    { "account": "Expenses:Shopping:Electronics", "amount": 1000.00, "currency": "INR" },
+    { "account": "<RewardsAcct>", "amount": -2500, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 500.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -500.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Award flight (miles + taxes/fees)
@@ -561,32 +873,56 @@ fare minus the cash co-pay; card / bank pays the co-pay (taxes, fees).
 
 Example: 75k miles + ₹5k taxes for a DEL-SFO ticket whose cash fare
 is ₹100k → miles' cash value is ₹95k (100k − 5k).
-```
-2026-05-27 * "Airline" "Award DEL-SFO — 75k miles + ₹5k taxes (₹100k cash fare)"
-  Expenses:Travel:Flights                  100000.00 INR
-  <RewardsAcct>                   -75000 RWD_PTS @@ 95000.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>    -5000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Airline",
+  "narration": "Award DEL-SFO — 75k miles + ₹5k taxes (₹100k cash fare)",
+  "postings": [
+    { "account": "Expenses:Travel:Flights", "amount": 100000.00, "currency": "INR" },
+    { "account": "<RewardsAcct>", "amount": -75000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 95000.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -5000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Award hotel night
 Same shape — cash-equivalent room rate is the value the points unlocked.
 Resort fee / taxes hit the card.
-```
-2026-05-27 * "Hotel" "Award night — 40k pts + ₹500 resort fee (₹15k cash rate)"
-  Expenses:Travel:Hotels                    15000.00 INR
-  <RewardsAcct>                   -40000 RWD_PTS @@ 14500.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>    -500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Hotel",
+  "narration": "Award night — 40k pts + ₹500 resort fee (₹15k cash rate)",
+  "postings": [
+    { "account": "Expenses:Travel:Hotels", "amount": 15000.00, "currency": "INR" },
+    { "account": "<RewardsAcct>", "amount": -40000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 14500.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -500.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Hybrid cash + points fare (Pay-with-Miles / cash-and-points)
 Cash + points together cover the full fare. Each side's contribution is
 what it actually paid. Below, ₹6k cash fare, 15k points cover ₹5.5k,
 ₹500 convenience fee on card.
-```
-2026-05-27 * "Airline" "DEL-BLR — 15k pts + ₹500 fee (₹6k cash fare)"
-  Expenses:Travel:Flights                   6000.00 INR
-  <RewardsAcct>                   -15000 RWD_PTS @@ 5500.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>   -500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Airline",
+  "narration": "DEL-BLR — 15k pts + ₹500 fee (₹6k cash fare)",
+  "postings": [
+    { "account": "Expenses:Travel:Flights", "amount": 6000.00, "currency": "INR" },
+    { "account": "<RewardsAcct>", "amount": -15000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 5500.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -500.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Bonuses, expiry, and other point-balance adjustments
@@ -600,22 +936,46 @@ promised on a date, posted later. Expiry sweeps and clawbacks hit
 `<RewardsAcct>` directly (they're removing posted balance), not
 pending.
 
-```
-2026-05-27 * "Welcome bonus" "100k welcome bonus — qualifying spend hit"
-  <RewardsAcct>:Pending          100000 RWD_PTS
-  Equity:Void                   -100000 RWD_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Welcome bonus",
+  "narration": "100k welcome bonus — qualifying spend hit",
+  "postings": [
+    { "account": "<RewardsAcct>:Pending", "amount": 100000, "currency": "RWD_PTS" },
+    { "account": "Equity:Void", "amount": -100000, "currency": "RWD_PTS" }
+  ]
+}
 ```
 When it posts to the balance:
-```
-2026-06-15 * "Welcome bonus posted" "100k welcome bonus credited"
-  <RewardsAcct>                  100000 RWD_PTS
-  <RewardsAcct>:Pending         -100000 RWD_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-06-15",
+  "flag": "*",
+  "payee": "Welcome bonus posted",
+  "narration": "100k welcome bonus credited",
+  "postings": [
+    { "account": "<RewardsAcct>", "amount": 100000, "currency": "RWD_PTS" },
+    { "account": "<RewardsAcct>:Pending", "amount": -100000, "currency": "RWD_PTS" }
+  ]
+}
 ```
 Expiry sweep (removes already-posted balance — no pending involved):
-```
-2026-12-31 * "Points expiry" "Expired 2024 vintage points"
-  <RewardsAcct>               -3500 RWD_PTS
-  Equity:Void                  3500 RWD_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-12-31",
+  "flag": "*",
+  "payee": "Points expiry",
+  "narration": "Expired 2024 vintage points",
+  "postings": [
+    { "account": "<RewardsAcct>", "amount": -3500, "currency": "RWD_PTS" },
+    { "account": "Equity:Void", "amount": 3500, "currency": "RWD_PTS" }
+  ]
+}
 ```
 
 ## Referrals (you referred someone; reward landed for you)
@@ -629,41 +989,81 @@ Points pattern — accrue to `<RewardsAcct>:Pending` with
 to `<RewardsAcct>`.
 
 ### Cash referral credited to bank
-```
-2026-05-27 * "Niyo" "Referral bonus — Aman signed up"
-  Assets:Bank:HDFC:Savings    500.00 INR
-  Income:Referrals           -500.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Niyo",
+  "narration": "Referral bonus — Aman signed up",
+  "postings": [
+    { "account": "Assets:Bank:HDFC:Savings", "amount": 500.00, "currency": "INR" },
+    { "account": "Income:Referrals", "amount": -500.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Cash referral as a statement credit on the card
 Card liability goes down; income captures the realized value.
-```
-2026-05-27 * "Referral credit" "Referral statement credit — Aman signed up"
-  Liabilities:CreditCards:<Issuer>:<Card>   1000.00 INR
-  Income:Referrals                         -1000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Referral credit",
+  "narration": "Referral statement credit — Aman signed up",
+  "postings": [
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": 1000.00, "currency": "INR" },
+    { "account": "Income:Referrals", "amount": -1000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Pending cash referral (friend hasn't completed signup yet)
 Sit it in a receivable until the issuer actually pays out.
-```
-2026-05-27 * "Referral promised" "Aman card under review"
-  Assets:Receivable:<Issuer>   1000.00 INR
-  Income:Referrals            -1000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Referral promised",
+  "narration": "Aman card under review",
+  "postings": [
+    { "account": "Assets:Receivable:<Issuer>", "amount": 1000.00, "currency": "INR" },
+    { "account": "Income:Referrals", "amount": -1000.00, "currency": "INR" }
+  ]
+}
 ```
 When it lands, settle the receivable against the bank / card just like
 any other receivable payout.
 
 ### Points referral (announced)
-```
-2026-05-27 * "Referral bonus" "15000 pts for referring Aman"
-  <RewardsAcct>:Pending          15000 RWD_PTS
-  Equity:Void                   -15000 RWD_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Referral bonus",
+  "narration": "15000 pts for referring Aman",
+  "postings": [
+    { "account": "<RewardsAcct>:Pending", "amount": 15000, "currency": "RWD_PTS" },
+    { "account": "Equity:Void", "amount": -15000, "currency": "RWD_PTS" }
+  ]
+}
 ```
 When the points post to your balance:
-```
-2026-06-15 * "Referral bonus posted" "15000 pts credited"
-  <RewardsAcct>                  15000 RWD_PTS
-  <RewardsAcct>:Pending         -15000 RWD_PTS
+```json
+{
+  "kind": "transaction",
+  "date": "2026-06-15",
+  "flag": "*",
+  "payee": "Referral bonus posted",
+  "narration": "15000 pts credited",
+  "postings": [
+    { "account": "<RewardsAcct>", "amount": 15000, "currency": "RWD_PTS" },
+    { "account": "<RewardsAcct>:Pending", "amount": -15000, "currency": "RWD_PTS" }
+  ]
+}
 ```
 
 ## Buying points with cash
@@ -672,15 +1072,31 @@ Conversion at a defined rate → `@@` on the points leg. Same shape for
 program points and airline miles alike. No expense — you've shifted INR
 into a different asset (points).
 
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Buy points",
+  "narration": "Bought 10000 pts for ₹3000",
+  "postings": [
+    { "account": "<RewardsAcct>", "amount": 10000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 3000.00, "price_currency": "INR" },
+    { "account": "Assets:Bank:HDFC:Savings", "amount": -3000.00, "currency": "INR" }
+  ]
+}
 ```
-2026-05-27 * "Buy points" "Bought 10000 pts for ₹3000"
-  <RewardsAcct>    10000 RWD_PTS @@ 3000.00 INR
-  Assets:Bank:HDFC:Savings  -3000.00 INR
-```
-```
-2026-05-27 * "Buy points" "Bought 10000 pts for ₹3000 on card"
-  <RewardsAcct>                  10000 RWD_PTS @@ 3000.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -3000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Buy points",
+  "narration": "Bought 10000 pts for ₹3000 on card",
+  "postings": [
+    { "account": "<RewardsAcct>", "amount": 10000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 3000.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -3000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## Redemption refunds (mirror of the original)
@@ -690,18 +1106,34 @@ Sign-flipped copy of the original redemption — every redemption was
 redemption was booked at.
 
 ### Award flight cancelled (miles + taxes come back)
-```
-2026-05-27 * "Airline" "Cancelled DEL-SFO — miles + taxes refunded"
-  Expenses:Travel:Flights                  -100000.00 INR
-  <RewardsAcct>                    75000 RWD_PTS @@ 95000.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>     5000.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Airline",
+  "narration": "Cancelled DEL-SFO — miles + taxes refunded",
+  "postings": [
+    { "account": "Expenses:Travel:Flights", "amount": -100000.00, "currency": "INR" },
+    { "account": "<RewardsAcct>", "amount": 75000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 95000.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": 5000.00, "currency": "INR" }
+  ]
+}
 ```
 
 ### Statement-credit redemption reversed
-```
-2026-05-27 * "Statement credit" "Statement-credit redemption reversed"
-  <RewardsAcct>                   1000 RWD_PTS @@ 250.00 INR
-  Liabilities:CreditCards:<Issuer>:<Card>  -250.00 INR
+```json
+{
+  "kind": "transaction",
+  "date": "2026-05-27",
+  "flag": "*",
+  "payee": "Statement credit",
+  "narration": "Statement-credit redemption reversed",
+  "postings": [
+    { "account": "<RewardsAcct>", "amount": 1000, "currency": "RWD_PTS", "price_at_signs": 2, "price_amount": 250.00, "price_currency": "INR" },
+    { "account": "Liabilities:CreditCards:<Issuer>:<Card>", "amount": -250.00, "currency": "INR" }
+  ]
+}
 ```
 
 ## When to use `@@` vs `Equity:Void` on the point side
@@ -731,7 +1163,6 @@ account type; code sets it (you don't choose). The pair is the unit; a `pad`
 without a following `balance` for the same account is dropped. (Use a bare
 `kind:"balance"` when the running balance already equals the figure exactly.)
 
-```
-2026-01-01 pad Assets:Bank:HDFC:Savings   Equity:Void
-2026-06-01 balance Assets:Bank:HDFC:Savings   123456.78 INR
+```json
+{ "kind": "pad", "date": "2026-06-01", "account": "Assets:Bank:HDFC:Savings", "amount": 123456.78, "currency": "INR" }
 ```
