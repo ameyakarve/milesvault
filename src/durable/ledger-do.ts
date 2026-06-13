@@ -433,6 +433,41 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     }
   }
 
+  // Per-account Expenses totals over a date range (full account paths, by
+  // currency) — the expense-explorer treemap builds its hierarchy from these.
+  // Same source as account_overview's category roll-up, just NOT collapsed to
+  // the 2nd segment. Excludes Expenses:Void (the expiry/forfeit plug).
+  async expense_tree(
+    fromInt: number,
+    toInt: number,
+  ): Promise<Array<{ account: string; currency: string; total: number }>> {
+    const toDec = (scaled: number, scale: number) => scaled / 10 ** scale
+    const rows = this.db
+      .exec<{ account: string; currency: string; scale: number; s: number }>(
+        `SELECT account, currency, scale, SUM(amount_scaled) AS s
+         FROM postings
+         WHERE account LIKE 'Expenses:%' AND account NOT LIKE 'Expenses:Void%'
+           AND date >= ? AND date <= ?
+         GROUP BY account, currency, scale`,
+        fromInt,
+        toInt,
+      )
+      .toArray()
+    // Collapse the per-scale rows into one total per (account, currency).
+    const map = new Map<string, number>()
+    for (const r of rows) {
+      const key = `${r.account} ${r.currency}`
+      map.set(key, (map.get(key) ?? 0) + toDec(r.s, r.scale))
+    }
+    const out: Array<{ account: string; currency: string; total: number }> = []
+    for (const [key, total] of map) {
+      if (total === 0) continue
+      const [account, currency] = key.split(' ')
+      out.push({ account: account!, currency: currency!, total })
+    }
+    return out
+  }
+
   // The overview tab's data (docs/design/overview-tab.md). Balance math
   // stays in integer space per (currency, scale) until the end — balances
   // are materialized per scale and mixing them in SQL would corrupt sums.

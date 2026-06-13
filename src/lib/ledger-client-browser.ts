@@ -57,6 +57,13 @@ export const ledgerClient = {
   }> {
     return getJSON('/api/ledger/accounts', opts)
   },
+  getExpenseTree(
+    params: { from: string; to: string },
+    opts?: FetchOpts,
+  ): Promise<{ rows: Array<{ account: string; currency: string; total: number }> }> {
+    const q = new URLSearchParams({ from: params.from, to: params.to }).toString()
+    return getJSON(`/api/ledger/expense-tree?${q}`, opts)
+  },
   attachStatement(body: {
     mode?: 'inbox'
     filename: string

@@ -8,6 +8,7 @@ const PLAN_TABS = [
   { href: '/explore', label: 'Award Explorer' },
   { href: '/points', label: 'Points' },
   { href: '/status-match', label: 'Status Match' },
+  { href: '/expenses', label: 'Expenses' },
 ] as const
 
 export function PlanTabs() {
