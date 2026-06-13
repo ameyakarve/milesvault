@@ -33,7 +33,6 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
-  usePromptInputController,
   type PromptInputMessage,
 } from '@/components/ai-elements/prompt-input'
 import Link from 'next/link'
@@ -461,7 +460,6 @@ export function Chat({
                   onAddCard={addCardFlow}
                   onUpdateBalance={() => setUpdateBalanceOpen(true)}
                 />
-                <StarterChips />
               </div>
             </PromptInputProvider>
             <PendingCapturesHint />
@@ -706,38 +704,6 @@ function CopyMessageButton({ text }: { text: string }) {
         <Copy className="size-3.5" />
       )}
     </button>
-  )
-}
-
-// Teach the empty state: chips prefill the composer with editable templates
-// (via the PromptInput controller), the last one opens the statement picker.
-function StarterChips() {
-  const controller = usePromptInputController()
-  const chipCls =
-    'rounded-full border border-border bg-background px-3 py-1 text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground'
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
-      <button
-        type="button"
-        className={chipCls}
-        onClick={() =>
-          controller.textInput.setInput('Log: dinner 1,450 INR on my Axis Magnus yesterday')
-        }
-      >
-        Log a transaction
-      </button>
-      <button
-        type="button"
-        className={chipCls}
-        onClick={() =>
-          controller.textInput.setInput(
-            'I have 80,000 Amex Membership Rewards points. Record them.',
-          )
-        }
-      >
-        Record points I hold
-      </button>
-    </div>
   )
 }
 

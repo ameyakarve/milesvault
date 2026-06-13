@@ -53,46 +53,49 @@ export function UpdateBalanceModal({
   onClose: () => void
   onDone?: () => void
 }) {
-  const [accounts, setAccounts] = useState<string[]>([])
-  const [currencies, setCurrencies] = useState<string[]>([])
+  // Only accounts with activity (txns or balance assertions), each with the
+  // currencies seen on it — the currency is taken from the chosen account.
+  const [targets, setTargets] = useState<Array<{ account: string; currencies: string[] }>>([])
   const [account, setAccount] = useState('')
   const [acctOpen, setAcctOpen] = useState(false)
   const [date, setDate] = useState(ymd(new Date()))
   const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState('INR')
+  const [currency, setCurrency] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
-  // On open, load accounts + the ledger's current currencies for the pickers.
-  // (The date already defaults to today via useState init, and close() resets
-  // it — so it's today on every open.)
+  // On open, load the balance targets (active Assets/Liabilities accounts +
+  // their currencies). The date already defaults to today (useState init +
+  // close() reset), so it's today on every open.
   useEffect(() => {
     if (!open) return
     ledgerClient
       .getAccounts()
       .then((r) => {
-        setAccounts(
-          r.accounts.filter(
-            (a) => a.startsWith('Assets:') || a.startsWith('Liabilities:'),
+        setTargets(
+          (r.balanceTargets ?? []).filter(
+            (t) => t.account.startsWith('Assets:') || t.account.startsWith('Liabilities:'),
           ),
-        )
-        setCurrencies(r.currencies ?? [])
-        // Default to INR when present, else the first currency in the ledger.
-        setCurrency((c) =>
-          (r.currencies ?? []).includes(c)
-            ? c
-            : (r.currencies ?? []).includes('INR')
-              ? 'INR'
-              : ((r.currencies ?? [])[0] ?? c),
         )
       })
       .catch(() => {})
   }, [open])
 
-  // INR is the right default for bank/card accounts; rewards wallets carry the
-  // programme ticker (e.g. AXIS-EDGE-BURGUNDY).
-  const isRewards = account.startsWith('Assets:Rewards:')
+  // Currencies for the chosen account; the currency is fixed when there's one,
+  // a dropdown when there are several.
+  const acctCurrencies = useMemo(
+    () => targets.find((t) => t.account === account)?.currencies ?? [],
+    [targets, account],
+  )
+
+  // Pick an account: select it and set its currency (prefer INR, else first).
+  function pickAccount(a: string) {
+    setAccount(a)
+    setAcctOpen(false)
+    const curs = targets.find((t) => t.account === a)?.currencies ?? []
+    setCurrency(curs.includes('INR') ? 'INR' : (curs[0] ?? ''))
+  }
 
   const preview = useMemo(() => {
     if (!account || !amount || !currency) return null
@@ -103,7 +106,7 @@ export function UpdateBalanceModal({
     const ok = done
     setAccount('')
     setAmount('')
-    setCurrency('INR')
+    setCurrency('')
     setDate(ymd(new Date()))
     setError(null)
     setDone(false)
@@ -167,22 +170,19 @@ export function UpdateBalanceModal({
                     <CommandList>
                       <CommandEmpty>No matching account.</CommandEmpty>
                       <CommandGroup>
-                        {accounts.map((a) => (
+                        {targets.map((t) => (
                           <CommandItem
-                            key={a}
-                            value={a}
-                            onSelect={() => {
-                              setAccount(a)
-                              setAcctOpen(false)
-                            }}
+                            key={t.account}
+                            value={t.account}
+                            onSelect={() => pickAccount(t.account)}
                           >
                             <Check
                               className={cn(
                                 'size-4',
-                                account === a ? 'opacity-100' : 'opacity-0',
+                                account === t.account ? 'opacity-100' : 'opacity-0',
                               )}
                             />
-                            <span className="truncate font-mono text-[12px]">{a}</span>
+                            <span className="truncate font-mono text-[12px]">{t.account}</span>
                           </CommandItem>
                         ))}
                       </CommandGroup>
@@ -204,13 +204,14 @@ export function UpdateBalanceModal({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ub-ccy">Currency</Label>
-                {currencies.length > 1 ? (
+                {acctCurrencies.length > 1 ? (
+                  // Several currencies on this account → pick one.
                   <Select value={currency} onValueChange={setCurrency}>
                     <SelectTrigger id="ub-ccy">
                       <SelectValue placeholder="Currency" />
                     </SelectTrigger>
                     <SelectContent>
-                      {currencies.map((c) => (
+                      {acctCurrencies.map((c) => (
                         <SelectItem key={c} value={c}>
                           {c}
                         </SelectItem>
@@ -218,13 +219,12 @@ export function UpdateBalanceModal({
                     </SelectContent>
                   </Select>
                 ) : (
+                  // One currency (fixed) or no account chosen yet — not editable.
                   <Input
                     id="ub-ccy"
-                    placeholder={isRewards ? 'TICKER' : 'INR'}
                     value={currency}
-                    onChange={(e) =>
-                      setCurrency(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))
-                    }
+                    disabled
+                    placeholder={account ? '' : 'Pick an account'}
                   />
                 )}
               </div>

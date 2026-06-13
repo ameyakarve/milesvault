@@ -31,7 +31,7 @@ export type LedgerClient = {
   ): Promise<JournalGetResponse>
   journal_get_filtered(req: JournalGetFilteredRequest): Promise<JournalGetFilteredResponse>
   list_account_currencies(account: string): Promise<string[]>
-  list_currencies(): Promise<string[]>
+  list_balance_targets(): Promise<Array<{ account: string; currencies: string[] }>>
   list_account_children(account: string): Promise<string[]>
   list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
   search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse>
@@ -174,8 +174,8 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       return stub.list_account_currencies(account)
     },
 
-    async list_currencies() {
-      return stub.list_currencies()
+    async list_balance_targets() {
+      return stub.list_balance_targets()
     },
 
     async list_account_children(account) {

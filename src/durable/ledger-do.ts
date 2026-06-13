@@ -1289,23 +1289,36 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       .map(([cur]) => cur)
   }
 
-  // Every distinct commodity currently in the ledger (postings + balance
-  // assertions), for the balance-update UI's currency dropdown.
-  async list_currencies(): Promise<string[]> {
-    const set = new Set<string>()
+  // Accounts that have ANY activity — postings (txns) or balance assertions
+  // (opening statements) — each with the currencies seen on it. The balance-
+  // update UI lists only these (never an account with no activity) and takes
+  // the currency from the chosen account.
+  async list_balance_targets(): Promise<Array<{ account: string; currencies: string[] }>> {
+    const map = new Map<string, Set<string>>()
+    const add = (account: string, currency: string) => {
+      if (!account || !currency) return
+      let s = map.get(account)
+      if (!s) {
+        s = new Set()
+        map.set(account, s)
+      }
+      s.add(currency)
+    }
     for (const r of this.db
-      .exec<{ currency: string }>(
-        `SELECT DISTINCT currency FROM postings WHERE currency IS NOT NULL AND currency != ''`,
+      .exec<{ account: string; currency: string }>(
+        `SELECT DISTINCT account, currency FROM postings WHERE currency IS NOT NULL AND currency != ''`,
       )
       .toArray())
-      set.add(r.currency)
+      add(r.account, r.currency)
     for (const r of this.db
-      .exec<{ currency: string }>(
-        `SELECT DISTINCT currency FROM directives_balance WHERE currency IS NOT NULL AND currency != ''`,
+      .exec<{ account: string; currency: string }>(
+        `SELECT DISTINCT account, currency FROM directives_balance WHERE currency IS NOT NULL AND currency != ''`,
       )
       .toArray())
-      set.add(r.currency)
-    return [...set].sort()
+      add(r.account, r.currency)
+    return [...map.entries()]
+      .map(([account, set]) => ({ account, currencies: [...set].sort() }))
+      .sort((a, b) => a.account.localeCompare(b.account))
   }
 
   async search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse> {

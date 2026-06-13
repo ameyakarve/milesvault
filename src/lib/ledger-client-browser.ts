@@ -49,7 +49,12 @@ export const ledgerClient = {
   ): Promise<ReplaceBufferResponse> {
     return putJSON('/api/ledger/journal/batch', { knownIds, buffer })
   },
-  getAccounts(opts?: FetchOpts): Promise<{ accounts: string[]; currencies: string[] }> {
+  getAccounts(
+    opts?: FetchOpts,
+  ): Promise<{
+    accounts: string[]
+    balanceTargets: Array<{ account: string; currencies: string[] }>
+  }> {
     return getJSON('/api/ledger/accounts', opts)
   },
   attachStatement(body: {
