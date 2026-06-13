@@ -98,16 +98,14 @@ export function buildDraftFeedback(
     blocks.push(lines.join('\n'))
   }
 
-  // The escape hatch: an entry can be unfixable because a required value isn't
-  // in the source (the classic case: an award redemption whose CASH fare the
-  // statement never states). Re-drafting can't conjure it — the model must ASK.
-  // Without this, the model loops on the impossible entry and eventually emits
-  // an empty turn (no card, no question — a dead end for the user).
+  // The escape hatch: an entry can be unfixable because a required value is
+  // genuinely missing and can't be derived. Re-drafting can't conjure it — the
+  // model must ASK. Without this, the model loops on the impossible entry and
+  // eventually emits an empty turn (no card, no question — a dead end).
   const footer =
-    `If an entry keeps failing because a value is genuinely MISSING from the source ` +
-    `(e.g. an award redemption's cash fare isn't in the statement), do NOT keep ` +
-    `re-drafting it and do NOT reply with nothing: call \`clarify\` to ask the user ` +
-    `for that value (one short question, free-text). Never end your turn with no ` +
+    `If an entry keeps failing because a required value is genuinely missing and you ` +
+    `cannot derive it, do NOT keep re-drafting it and do NOT reply with nothing — ` +
+    `call \`clarify\` to ask the user for what's missing. Never end your turn with no ` +
     `tool call and no message.`
 
   const header =
