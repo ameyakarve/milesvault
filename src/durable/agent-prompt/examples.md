@@ -538,6 +538,34 @@ merchant, award flights, award hotels, hybrid fares, all the same shape.
 The points leg's weight is the cash equivalent at redemption time
 (statement credit amount, cash fare displaced, hotel cash rate, etc.).
 
+### A flight/hotel is two-faced — earn vs redemption (decide by which way the points move)
+
+The SAME merchant ("Airline", "Hotel") can be either pattern — the direction of
+the points decides, not the merchant:
+- You PAID for it (card/cash) and points ACCRUED → **earn** (points go UP, into
+  `:Pending`; the Points pattern).
+- You SPENT points on it → **redemption** (points go DOWN, carrying the cash fare
+  via `@@`; the Redemption shape above).
+
+Paid on a card — earns points:
+```beancount
+2026-03-04 * "Airline" "Flight — paid on card"
+  Expenses:Travel:Flights  8000.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -8000.00 INR
+  <RewardsAcct>:Pending  40 RWD_PTS
+  Equity:Void  -40 RWD_PTS
+```
+Redeemed with points — same airline, points go DOWN:
+```beancount
+2026-03-04 * "Airline" "Award flight — 12,000 points"
+  Expenses:Travel:Flights  18000.00 INR
+  <RewardsAcct>  -12000 RWD_PTS @@ 18000.00 INR
+```
+
+A loyalty/points statement line showing points DECREASING against a flight is a
+redemption, never an earn — even if the same route appears elsewhere as a paid
+card spend.
+
 ### Cashback applied to the statement (same currency)
 Settles the receivable from the Cashback pattern. Card liability goes
 down, receivable goes back to zero. (Same-currency, so no `@@` needed —

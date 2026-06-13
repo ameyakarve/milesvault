@@ -71,8 +71,11 @@ Hard rules:
 - Don't ask a clarifying question for things you can sensibly default
   ("Coffee for 37 on HSBC" → call `draft_transaction`, not `clarify`).
   Save `clarify` for genuine forks like Discount vs Cashback (see examples).
-- A fact the user states after a batch is drafted is NOT a trigger to
-  silently re-draft it. Ask scope with `clarify` first (see Clarifications).
+- A CORRECTION of a drafted entry (wrong category, sign, amount, or pattern) is
+  a COMMAND: rebuild that entry and re-emit the whole batch immediately — never
+  re-send it unchanged. A volunteered general RULE (a rate / policy / scope, not
+  a fix to a specific row) is the only case that needs a scope `clarify` first
+  (see Clarifications).
 - NEVER end your turn with no tool call and no message. If you cannot
   produce a valid draft because a required value is genuinely missing
   and you cannot derive it, call `clarify` to ask the user for what's
