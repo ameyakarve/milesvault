@@ -6,47 +6,29 @@ import {
 } from '../agents/tools/editor/card-guide'
 import type { KbHttp } from '../agents/tools/concierge/kb-tools'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
-import {
-  ZEntry,
-  type ExtractedEntry,
-  serializeIrEntry,
-  toLedgerEntries,
-  serializeEntries,
-} from './ir'
-
-// Re-exported for external consumers (eval harness) that imported them from here
-// before the IR was extracted into ./ir.
-export { toLedgerEntries, serializeEntries }
-export type { ExtractedEntry }
 
 // Statement-ingest pipeline.
 //
-//   The MODEL emits complete beancount; code validates and serializes.
+//   The MODEL emits complete beancount text; code validates and stores it.
 //
-// The IR is beancount itself (owner decision): the model emits an array of
-// entry objects — transactions as top line + postings, stated balances as
-// balance directives whose `plug_account` subsumes the pad — accepted by
-// LOOSE zod schemas that `.transform()` into the canonical zod-first types
-// in src/durable/ledger-types.ts. One definition of what an entry is; no
-// drifting mirrors. Forex prices, multi-leg fees and tags stay expressible.
+// There is no intermediate representation: the model emits an array of
+// { id, text } entries where each `text` is ONE beancount entry (the same shape
+// the editor's draft_transaction tool takes). The `id` is a transient handle so
+// a correction can be re-requested surgically — it never enters the ledger.
 //
 // Code is NOT an arbiter (owner ruling): it does not compute card legs, points
-// or signs, and does not rewrite accounts. The model authors every posting,
-// guided by the shared prompt (which carries the card's rate, pool and the
-// existing accounts). Code only: parses the JSON into the IR, splits it for
-// the canonical serializer, and runs the GENERIC validator (parse +
-// per-currency balance + account shape) — whose findings bounce verbatim back
-// to the model. Same conventions as the editor; the only delta is the output
-// channel (JSON IR here vs the draft_transaction tool there).
+// or signs, does not rewrite accounts, and does not inject any plug or tag. The
+// model authors every posting, guided by the shared prompt (which carries the
+// card's rate, pool and the existing accounts). Code only runs the GENERIC
+// validator (parse + per-currency balance + account shape + no silently-dropped
+// postings + no elided amounts) — whose findings bounce verbatim back to the
+// model. Same conventions as the editor; the only delta is the output channel
+// (a JSON envelope of beancount texts here vs the draft_transaction tool there).
 
-// The draft IR (entry schemas, helpers, serializer) lives in ./ir and is shared
-// VERBATIM with the editor's draft_transaction tool — one definition of an
-// entry, no drifting mirrors. Only the statement wrapper is pipeline-specific:
-const ZStatement = z.object({
-  card_name: z.string().min(2).max(80),
-  entries: z.array(ZEntry).min(1).max(250),
-})
-export type ExtractedStatement = z.infer<typeof ZStatement>
+// The model emits the SAME { id, text } entries the editor's draft_transaction
+// tool takes, wrapped in a JSON envelope: { card_name, entries: [{ id, text }] }.
+// The envelope is parsed leniently in the extract loop (manual JSON.parse so a
+// single malformed entry can be re-requested by id without rejecting the batch).
 
 // ---- JSON-only model call ------------------------------------------------------
 
@@ -198,12 +180,6 @@ ${opts.statementText}`
 // the long generation alive.
 const EXTRACT_MAX_TOKENS = 32768
 
-// Vision path: the page images are attached; the system prompt
-// (buildStatementIrSystem) carries every extraction rule. The user turn
-// just points the model at the images.
-const VISION_EXTRACT_INSTRUCTION =
-  'The attached images are the pages of a credit-card statement, and below is the text already extracted from the PDF. PREFER THE TEXT: it is reliable for anything legible in it (dates, amounts, merchant names) — use it as the source of truth there. Use the IMAGES only to read what the text is missing or garbled (e.g. labels the bank renders as images, like the reward-points summary). Output the single JSON object of entries per the rules above. EVERY eligible purchase is FOUR postings — expense + card + `<pool>:Pending` points accrual + `Equity:Void` — do NOT drop the points legs, especially on a long statement where they are the first thing to slip. Include every transaction WITH its points legs, every stated balance, and the reward-points balance.'
-
 export type PipelineResult = {
   ok: boolean
   entries: string[]
@@ -231,7 +207,7 @@ export async function runDraftPipeline(deps: {
   statementText: string
   images?: string[]
   accounts: readonly string[]
-  // The shared convention stack (buildStatementIrSystem) — injected so this
+  // The shared convention stack (buildStatementTextSystem) — injected so this
   // module stays free of the generated-prompt import cycle.
   system: string
   instruction?: string | null
@@ -311,7 +287,7 @@ export async function runDraftPipeline(deps: {
   // costs a full-batch regeneration, and the entry an error names stays the
   // same entry on the retry (the index-instability we measured caused the
   // 3-round, 15-minute runs).
-  const accepted = new Map<string, ExtractedEntry>()
+  const accepted = new Map<string, string>()
   let validation_issues: string[] = []
   let prompt = basePrompt
   let lastExtractError: string | null = null
@@ -339,30 +315,27 @@ export async function runDraftPipeline(deps: {
 
     const bad: { id: string; msg: string }[] = []
     rawEntries.forEach((raw, i) => {
-      // Read the id off the RAW entry so even a malformed one is addressable.
-      const r0 = raw as { id?: unknown } | null
+      // Read the id off the RAW entry so a malformed one is still addressable.
+      const r0 = raw as { id?: unknown; text?: unknown } | null
       const id = r0 && typeof r0.id === 'string' && r0.id ? r0.id : `e${i}`
-      const parsed = ZEntry.safeParse(raw)
-      if (parsed.success) accepted.set(id, parsed.data)
-      else
-        bad.push({
-          id,
-          msg: parsed.error.issues.map((iss) => `${iss.path.join('.')}: ${iss.message}`).join('; '),
-        })
+      const entryText = r0 && typeof r0.text === 'string' ? r0.text : ''
+      if (!entryText.trim()) bad.push({ id, msg: 'missing "text" (the beancount entry)' })
+      else accepted.set(id, entryText)
     })
 
-    // Render the accepted set, run the GENERIC validator, map each issue back
-    // to its entry id (validateDraftBatch reports by index).
+    // Run the GENERIC validator on the accepted texts in id order, mapping each
+    // issue back to its entry id (validateDraftBatch reports by index). No
+    // serialization, no rewriting — the model's text is validated as-is.
     const idOrder = [...accepted.keys()]
-    const rendered = [...accepted.values()].map(serializeIrEntry)
-    const v = validateDraftBatch(rendered)
+    const v = validateDraftBatch([...accepted.values()])
     if (v.ok === false)
       for (const iss of v.issues) bad.push({ id: idOrder[iss.index] ?? '?', msg: iss.message })
 
     const all = [...accepted.values()]
+    const isBalance = (t: string) => /^\s*\d{4}-\d{2}-\d{2}\s+(balance|pad)\b/m.test(t)
     stages.extract = {
-      txns: all.filter((e) => e.kind === 'transaction').length,
-      balances: all.filter((e) => e.kind === 'balance' || e.kind === 'pad').length,
+      txns: all.filter((t) => !isBalance(t)).length,
+      balances: all.filter(isBalance).length,
     }
     validation_issues = bad.map((b) => `id ${b.id}: ${b.msg}`)
     if (bad.length === 0) break
@@ -372,7 +345,7 @@ export async function runDraftPipeline(deps: {
       `${basePrompt}\n\nSome entries are INVALID. Return a JSON object {"entries":[...]} containing ONLY corrected versions of the entries listed below — keep each one's SAME "id", and do NOT resend any other entry:\n` +
       bad.map((b) => `- id "${b.id}": ${b.msg}`).join('\n')
   }
-  const entries = [...accepted.values()].map(serializeIrEntry)
+  const entries = [...accepted.values()]
   if (lastExtractError !== null && entries.length === 0) {
     return { ok: false, entries: [], error: `extract: ${lastExtractError}`, stages, validation_issues: [] }
   }

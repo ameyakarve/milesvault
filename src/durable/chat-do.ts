@@ -1,12 +1,10 @@
 import type { ChatResponseResult } from '@cloudflare/think'
 import { generateText, streamText, stepCountIs, tool, type ToolSet } from 'ai'
-import { z } from 'zod'
 import { draftTransactionBatchSchema } from './agent-ui-schemas'
-import { ZEntry, serializeIrEntries } from './ingest/ir'
 import {
   buildLedgerSystem,
   buildStatementAgentSystem,
-  buildStatementIrSystem,
+  buildStatementTextSystem,
   CLARIFICATIONS,
 } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
@@ -224,7 +222,7 @@ export class ChatDO
         'Propose one or more beancount transactions (dry run — they are recorded for preview, not committed).',
       inputSchema: draftTransactionBatchSchema,
       execute: async ({ entries }) => {
-        recorded.push(...serializeIrEntries(entries))
+        recorded.push(...entries.map((e) => e.text))
         return { ok: true, recorded: entries.length }
       },
     })
@@ -341,7 +339,7 @@ ${opts.text}`,
         accounts: snapshot.accounts.map((a) => a.account),
         // Same convention stack as the editor's statement agent — only the
         // output channel differs (JSON entries).
-        system: buildStatementIrSystem(),
+        system: buildStatementTextSystem(),
         instruction: capture?.prompt,
       })
 
@@ -535,16 +533,12 @@ entries, or draft corrections.`
         if (!isDraft) continue
         const input = part.input as { entries?: unknown[] } | undefined
         const ents = Array.isArray(input?.entries) ? input.entries : null
-        const ir = ents ? z.array(ZEntry).safeParse(ents) : null
         this.logTool({
           agent: 'turn-audit',
           tool: 'draft_transaction.part',
           input: {
             state: part.state ?? null,
             entries: ents ? ents.length : null,
-            has_accrual: ir?.success
-              ? serializeIrEntries(ir.data).some((t) => t.includes('#reward-accrual'))
-              : null,
           },
           output: part.errorText ?? null,
           ok: part.state !== 'output-error',

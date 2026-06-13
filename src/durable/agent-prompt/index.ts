@@ -11,7 +11,7 @@ import {
   CLARIFICATIONS,
   STATEMENT_HANDLING,
   STATEMENT_EXTRACTION,
-  STATEMENT_IR,
+  STATEMENT_TEXT,
   ANALYST_ROLE,
   GRAPH_WALKER_ROLE,
 } from './inline.generated'
@@ -116,16 +116,17 @@ export function buildLedgerSystem(snapshot: Snapshot): string {
 // System prompt for the headless ingest pipeline's extraction call: the
 // SAME convention stack the editor's statement agent runs on (primer,
 // examples, clarifications, extraction rules) — the only delta is the
-// output channel (STATEMENT_IR: JSON entries instead of a tool call).
-// One source of conventions; never fork prompts per surface.
-export function buildStatementIrSystem(): string {
+// output channel (STATEMENT_TEXT: a JSON envelope of beancount entries
+// instead of a tool call). One source of conventions; never fork prompts
+// per surface.
+export function buildStatementTextSystem(): string {
   return [
     BEANCOUNT_PRIMER,
     LEDGER_RULES,
     EXAMPLES,
     CLARIFICATIONS,
     STATEMENT_EXTRACTION,
-    STATEMENT_IR,
+    STATEMENT_TEXT,
   ].join('\n\n---\n\n')
 }
 

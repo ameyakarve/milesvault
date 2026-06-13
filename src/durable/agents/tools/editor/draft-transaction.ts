@@ -24,11 +24,16 @@ const SUSPENDING_EXECUTE = undefined as unknown as ToolExecuteFunction<
 export function draftTransactionTool() {
   return dynamicTool({
     description:
-      'Propose one or more journal entries for the user to review and approve, as STRUCTURED data under `entries` (NOT beancount text). Each entry has a unique short `id` and is ONE of:\n' +
-      '• a transaction: { "id", "kind":"transaction", "date":"YYYY-MM-DD", "flag"?:"*"|"!", "payee"?, "narration"?, "tags"?:[...], "postings":[ 2 or more { "account", "amount", "currency", "price_at_signs"?:0|1|2, "price_amount"?, "price_currency"? } ] }\n' +
-      '• a balance assertion: { "id", "kind":"balance", "date", "account", "amount", "currency" }\n' +
-      '• a pad+balance (lets a pad absorb drift up to the figure): { "id", "kind":"pad", "date", "account", "amount", "currency" }\n' +
-      'Postings must balance per currency. For a foreign-currency or points→points conversion, set `price_at_signs:2` (= `@@`, total price) with `price_amount`/`price_currency` — the price is denominated in the OTHER commodity (e.g. a 150→150 points transfer: the destination leg is `amount:150, currency:DEST, price_at_signs:2, price_amount:150, price_currency:SRC`). Batch related entries (statement uploads, splits, subscription series) into one call. On validation failure you get a compact tool-result naming the bad entries with a worked example — fix only those and call again in the same turn. Do NOT write beancount text, do NOT narrate, do NOT invent file paths.',
+      'Propose one or more journal entries for the user to review and approve. `entries` is an array; each element is { "id", "text" } where `text` is ONE beancount entry and `id` is a short unique handle (used only to address the entry on a correction — it is never written to the ledger). Each `text` is ONE of:\n' +
+      '• a transaction — a date header then 2+ posting lines:\n' +
+      '    2026-05-21 * "Payee" "Narration"\n' +
+      '      Expenses:Food:Groceries     42.10 USD\n' +
+      '      Assets:Bank:Chase:Checking -42.10 USD\n' +
+      '• a balance assertion: `2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD`\n' +
+      '• a pad+balance (lets a pad absorb drift up to the figure) — two lines, plug always Equity:Void:\n' +
+      '    2026-06-12 pad Assets:Bank:Chase:Checking Equity:Void\n' +
+      '    2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD\n' +
+      'Every posting needs an explicit amount and currency (no blanks), and postings must balance per currency. For a foreign-currency or points→points conversion, carry a total price with `@@` in the OTHER commodity (e.g. a 150→150 points transfer: `Assets:Rewards:...:Dest 150 DEST @@ 150 SRC`). Batch related entries (statement uploads, splits, subscription series) into one call. On validation failure you get a compact tool-result naming the bad entries with a worked example — fix only those and call again in the same turn. Do NOT narrate, do NOT invent file paths.',
     inputSchema: draftTransactionBatchSchema,
     execute: SUSPENDING_EXECUTE,
   })

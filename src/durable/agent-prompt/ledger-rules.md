@@ -2,8 +2,8 @@
 
 How money, rewards, and balances are modeled in this ledger. These rules apply
 EVERYWHERE — typing a transaction in the editor, importing a statement, any
-surface. (Beancount syntax and account-path shapes are in the primer; worked
-beancount examples are in the examples file.)
+surface. (Account-path shapes are in the primer; worked examples are in the
+examples file.)
 
 ## Transaction shape
 
@@ -22,12 +22,11 @@ two-posting ONLY when the card's earn rules exclude its category or the points
 round to zero. (A refund mirrors the purchase it reverses, so it carries the
 points legs too when the purchase earned points — see Refunds.)
 
-Each entry is ONE structured IR object — a `transaction` with its `postings`, or
-a `balance` / `pad` assertion — NOT raw beancount text; code serializes and
-validates it. Postings MUST balance per currency. For a foreign-currency or
-points→points conversion leg, set `price_at_signs:2` (the `@@` total price) with
-`price_amount` / `price_currency`, so its converted weight closes against the
-other leg.
+Each entry is ONE beancount entry — a `transaction` with its posting lines, or a
+`balance` / `pad` assertion — which code validates (it does not rewrite it).
+Postings MUST balance per currency. For a foreign-currency or points→points
+conversion leg, carry the total value with `@@` (in the OTHER commodity) so its
+converted value closes against the other leg.
 
 ## Payments to the card
 
@@ -102,12 +101,14 @@ A foreign-currency charge carries TWO DIFFERENT amounts: the transaction amount
 in the **foreign currency** and the billed amount in the card's **billing
 currency**. They are never equal (currencies don't convert 1:1). The foreign
 amount is the posting's quantity + commodity; the billed amount is the `@@`
-total. NEVER copy one into the other's slot. The "FOREIGN CURRENCY TRANSACTION
-FEE" / "DCC MARKUP" and "GST" that follow a foreign charge belong to it — fold
-them in: ONE entry, the foreign amount `@@` the billed amount exactly as given
-(do not re-derive), plus the markup and GST as legs in the billing currency, the
-card debited for the sum. Pair stray fee/GST to their charge by the **arithmetic,
-not adjacency** — markup ≈ 2% of ITS billed amount, GST ≈ 18% of THAT markup.
+total price (in the billing currency). NEVER copy one into the other's slot. The
+"FOREIGN CURRENCY TRANSACTION FEE" / "DCC MARKUP" and "GST" that follow a
+foreign charge belong to it — fold them in: ONE entry, the foreign amount with
+`@@ <billed amount> <billing currency>` exactly as given (do
+not re-derive), plus the markup and GST as legs in the billing currency, the
+card debited for the sum. Pair stray fee/GST to their charge by the
+**arithmetic, not adjacency** — markup ≈ 2% of ITS billed amount, GST ≈ 18% of
+THAT markup.
 
 ## Redemption
 
@@ -117,14 +118,16 @@ REDEMPTION. This holds even in a bare loyalty/points statement that shows only a
 negative points line against a flight/booking: that negative line is a
 redemption, NOT a generic points decrease to write off against `Equity:Void`.
 
-**Every redemption associates a cash value with the points side via `@@`** —
-statement credits, pay-at-merchant, award flights/hotels, hybrid fares alike. The
-points leg's weight is the cash equivalent at redemption time. Never guess it
-from a fixed cpp rate and never fall back to `Equity:Void` for a redemption.
+**Every redemption associates a cash value with the points side** —
+statement credits, pay-at-merchant, award flights/hotels, hybrid fares alike.
+On the points posting, carry the cash equivalent as an `@@` total price in the
+fiat currency. Never guess the cash value from a fixed cpp
+rate and never fall back to `Equity:Void` for a redemption.
 
-The shape: the points LEAVE their wallet (`Assets:Rewards:… -<points> COMMODITY @@
-<cash> FIAT`) and the **cash value is the expense** (`Expenses:… <cash> FIAT`). The
-points commodity NEVER sits on the expense leg — the expense is always in fiat.
+The shape: the points LEAVE their wallet (a negative points posting with an
+`@@` price carrying the cash equivalent) and the **cash value is the
+expense** (`Expenses:… <cash> FIAT`). The points commodity NEVER sits on the
+expense leg — the expense is always in fiat.
 
 **If you do not have the cash value, you MUST `clarify` and ask the user for it**
 (one question; the redemption clarify in your tool guidance). Do NOT invent a
@@ -134,12 +137,12 @@ value yet is a question, not a guess.
 
 ## Balances (assert with a pad)
 
-A balance is asserted as a **pad + balance** pair (IR `kind:"pad"`): the pad
+A balance is asserted as a **pad + balance** pair: the pad
 absorbs any drift between the figure and what your entries left in the account,
 then the balance asserts the figure. **The pad always plugs from `Equity:Void`**
-— for every account type (reward, bank, card, cash). You don't choose the plug;
-code sets it. (If the running balance already equals the figure exactly and needs
-no reconciliation, use a bare `kind:"balance"` instead — no pad.)
+— for every account type (reward, bank, card, cash). Write the plug as
+`Equity:Void` on the pad line. (If the running balance already equals the figure
+exactly and needs no reconciliation, use a bare `balance` line instead — no pad.)
 
 This is the PAD plug ONLY. It does NOT license burning points to `Equity:Void` in
 a normal transaction: a points balance going DOWN in a transaction is a

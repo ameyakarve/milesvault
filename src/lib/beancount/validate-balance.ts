@@ -84,7 +84,7 @@ export function validateTransactionBalance(
         payee: txn.payee ?? null,
         narration: txn.narration ?? null,
         residuals: [],
-        message: `posting ${p.account} prices ${p.currency} in ${p.currency} — a price (@ / @@) must be denominated in a DIFFERENT commodity. Either drop the price (plain amount) or use the correct other commodity.`,
+        message: `posting ${p.account} prices ${p.currency} in ${p.currency} — a price (@ / @@) must be in a DIFFERENT commodity. Either drop the price (plain amount) or use the correct other commodity.`,
       }
     }
   }
@@ -168,8 +168,8 @@ function formatBalanceMessage(
       }
     }
     lines.push(
-      `    fix: adjust postings so ${r.currency} weights sum to 0 (a single leg ` +
-        `off by ${signed(r.amount)}, OR a leg is missing/extra). Do not just retry the same numbers.`,
+      `    fix: adjust postings so ${r.currency} sums to 0 (a single leg ` +
+        `off by ${signed(r.amount)}, OR a leg is missing/extra, OR an @@/@ price is wrong). Do not just retry the same numbers.`,
     )
   }
   return lines.join('\n')

@@ -1,5 +1,3 @@
-import { validateDraftBatch } from './validate-draft-batch'
-
 // Builds the tool-feedback the editor model receives when a `draft_transaction`
 // batch fails validation. Replaces the AI SDK's default
 // "Type validation failed: Value: {entire batch}" echo (which dumps the whole
@@ -12,32 +10,47 @@ import { validateDraftBatch } from './validate-draft-batch'
 // The model still re-sends the full batch on its next call (the suspending card
 // renders the whole thing); this only governs what we tell it went wrong.
 
-// One worked example per failure class. The model picks the shape; we never
-// rewrite its accounting (LLM-first) — we just show the canonical pattern.
-const EX_CROSS_COMMODITY = `A transfer/conversion between two DIFFERENT commodities must carry the rate in @@,
-so each commodity nets to zero (the @@ total is denominated in the OTHER commodity):
-  2026-05-27 * "Transfer" "points moved between two programmes"
+// One worked beancount example per failure class. The model picks the shape; we
+// never rewrite its accounting (LLM-first) — we just show the canonical pattern.
+// These are shown to the model, so they are beancount text (the model emits
+// beancount text, one entry per draft element).
+const EX_CROSS_COMMODITY = `A conversion between two DIFFERENT commodities needs an @@ total price so each
+commodity nets to zero — the price is the total in the OTHER commodity:
+  2026-05-21 * "Transfer" "Points transfer"
     Assets:Rewards:Miles:<Dest>   10000 DST_PTS @@ 10000 SRC_PTS
     Assets:Rewards:Miles:<Src>   -10000 SRC_PTS`
 
-const EX_BALANCE_SINGLE = `For a SINGLE-commodity entry that doesn't sum to zero, decide which it is:
+// The entry already HAS an @@ price but still doesn't net to zero → the price
+// amount is wrong (often 0). Don't add a contra; correct the @@ amount so the
+// priced leg cancels the other leg.
+const EX_PRICE_RATE = `This entry already has an @@ price, but a currency still doesn't net to zero — the
+price amount is WRONG (e.g. 0). Do NOT add an Equity:Void contra and do NOT add or
+remove a leg. Set the @@ amount so the priced leg's value exactly cancels the
+other leg. To cancel a -150 SRC_PTS leg, the priced leg needs @@ 150 SRC_PTS:
+  2026-05-21 * "Transfer" "Points transfer"
+    Assets:Rewards:Miles:<Dest>   10000 DST_PTS @@ 150 SRC_PTS
+    Assets:Rewards:Miles:<Src>     -150 SRC_PTS`
+
+const EX_BALANCE_SINGLE = `For a SINGLE-commodity entry that doesn't net to zero, decide which it is:
 - EARN/accrual: add an Equity:Void contra so the points commodity nets to zero:
-    Assets:Rewards:<Issuer>:Pending   200 PTS
-    Equity:Void                      -200 PTS
-- REDEMPTION: the points leg carries its CASH value via @@, and the CASH is the
-  expense (in fiat) — do NOT put the points commodity on the expense leg:
-    Expenses:Travel:Flights        50000 INR
-    Assets:Rewards:Miles:<Prog>   -10000 PTS @@ 50000 INR`
+    2026-05-21 * "Merchant" "Purchase — points earned"
+      Assets:Rewards:<Issuer>:Pending   200 PTS
+      Equity:Void                      -200 PTS
+- REDEMPTION: the points leg carries its CASH value via an @@ price, and the CASH
+  is the expense (in fiat) — NEVER the points commodity on the expense leg:
+    2026-05-21 * "Airline" "Award flight"
+      Expenses:Travel:Flights        50000 INR
+      Assets:Rewards:Miles:<Prog>   -10000 PTS @@ 50000 INR`
 
-const EX_PARSE = `An entry must be ONE valid beancount transaction: a date/flag/payee line, then
-indented postings — no prose, parentheses, or commentary inside the string:
-  2026-05-13 * "Cloudflare" "Subscription"
-    Expenses:Personal:Software     2.36 USD @@ 225.98 INR
-    Liabilities:CreditCards:Axis:Magnus  -225.98 INR`
+const EX_PARSE = `Each entry's text must be ONE valid beancount entry: a date header
+\`YYYY-MM-DD * "Payee" "Narration"\` then 2+ indented posting lines
+\`Account  amount CURRENCY\`. Every leg needs an explicit amount AND currency (no
+blanks), and each account starts with a capital under Assets/Liabilities/Equity/
+Income/Expenses with NO spaces. No prose or commentary inside any field.`
 
-const EX_DIRECTIVE = `Only transactions and balance/pad assertions belong in a draft — not open/close/
-price/etc. To set a balance, emit pad + balance:
-  2026-06-12 pad Assets:Rewards:Miles:<Prog>  Equity:Void
+const EX_DIRECTIVE = `Only a transaction, a \`balance\` line, or a \`pad\`+\`balance\` pair belong in a draft.
+To set a balance, emit a pad+balance pair (plug Equity:Void):
+  2026-06-12 pad Assets:Rewards:Miles:<Prog> Equity:Void
   2026-06-12 balance Assets:Rewards:Miles:<Prog>  10000 PTS`
 
 const EX_ACCOUNT = `Use a canonical account path. Credit-card liabilities are exactly
@@ -60,13 +73,20 @@ function commodityCount(entry: string): number {
 }
 
 function pickExample(message: string, entry: string): string {
-  if (/parse error/i.test(message)) return EX_PARSE
-  if (/contains a directive/i.test(message)) return EX_DIRECTIVE
-  if (/exactly one transaction/i.test(message)) return EX_PARSE
-  if (/does not balance|unbalanced/i.test(message)) {
-    return commodityCount(entry) >= 2 && !/@@|@/.test(entry)
-      ? EX_CROSS_COMMODITY
-      : EX_BALANCE_SINGLE
+  if (/credit card accounts must be/i.test(message)) return EX_ACCOUNT
+  if (/only kind|allowed in a draft/i.test(message)) return EX_DIRECTIVE
+  if (
+    /could not parse|silently dropped|elided or blank|explicit numeric amount|exactly one transaction/i.test(
+      message,
+    )
+  )
+    return EX_PARSE
+  if (/does not balance|net = /i.test(message)) {
+    const priced = /@@|@/.test(entry)
+    const multi = commodityCount(entry) >= 2
+    if (priced) return EX_PRICE_RATE // has a price but it's wrong → fix the @@ amount
+    if (multi) return EX_CROSS_COMMODITY // two commodities, no price → add the @@
+    return EX_BALANCE_SINGLE // single commodity → contra (earn) or @@ cash (redemption)
   }
   return EX_ACCOUNT
 }

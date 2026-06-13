@@ -1,57 +1,72 @@
 import { z } from 'zod'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 import { entryFeedback } from '@/lib/beancount/draft-feedback'
-import { ZEntry, serializeIrEntries } from './ingest/ir'
 
 // The agent emits one or more drafted entries inside a `draft_transaction` tool
-// call as STRUCTURED IR — the SAME `ZEntry` the headless statement pipeline
-// uses (a transaction is a header + typed postings; a stated balance is a
-// `balance`/`pad` entry). The model fills fields (account, amount, currency,
-// price) instead of hand-writing beancount text, so it cannot fumble syntax,
-// indentation, or `@@` weight mechanics. Code serializes the IR to canonical
-// beancount; the user reviews each entry in a per-card CodeMirror editor and
+// call as BEANCOUNT TEXT — one entry per array element, the SAME representation
+// the headless statement pipeline emits (a transaction is a date header + its
+// posting lines; a stated balance is a `balance` line, optionally preceded by
+// its `pad`). Each element carries a short `id` so a correction can be surgical
+// (re-request that id) — the id is a transient handle and never enters the
+// ledger. The user reviews each entry in a per-card CodeMirror editor and
 // approves; we then concatenate the (possibly hand-edited) text and replaceBuffer.
 //
-// superRefine serializes the IR and runs the same generic validators
-// replaceBuffer runs (parse + per-currency balance + account shape). On failure
-// the AI SDK surfaces the issue to the model as a tool input-error; the repair
-// hook (chat-do) turns it into compact, example-rich feedback and the model
-// re-emits in the same turn. Requires `dynamicTool` registration — static tools
-// with invalid input get silently dropped by the SDK, never reaching the model.
+// superRefine runs the same generic validators replaceBuffer runs (parse +
+// per-currency balance + account shape + no-silent-drops + no-eliding) on each
+// entry's text. On failure the AI SDK surfaces the issue to the model as a tool
+// input-error; entryFeedback turns it into compact, example-rich feedback and
+// the model re-emits in the same turn. Requires `dynamicTool` registration —
+// static tools with invalid input get silently dropped by the SDK, never
+// reaching the model.
 export const draftTransactionBatchSchema = z
   .object({
     entries: z
-      .array(ZEntry)
+      .array(
+        z.object({
+          id: z
+            .string()
+            .min(1)
+            .max(24)
+            .describe('A short, unique handle for this entry (e.g. "t1", "b1") — used only to address it on a correction; never written to the ledger.'),
+          text: z
+            .string()
+            .min(1)
+            .describe('ONE beancount entry as text: a transaction (date header + 2+ posting lines) or a stated balance (a `balance` line, optionally preceded by its `pad` line).'),
+        }),
+      )
       .min(1)
       .max(250)
       .describe(
-        'Array of structured draft entries (the same IR the statement importer emits). ' +
-          'A one-off is an array of length 1; statement uploads / splits / subscription ' +
-          'series go in the same call. Each entry needs a unique short `id`.',
+        'Array of draft entries, one beancount entry each. A one-off is an array of ' +
+          'length 1; statement uploads / splits / subscription series go in the same call.',
       ),
   })
   .superRefine((value, ctx) => {
-    // value.entries are post-transform ExtractedEntry[]; serialize to canonical
-    // beancount and validate balance/shape. Each issue is added per-entry with
-    // an example for its failure class. The SDK surfaces these to the model on
-    // the standard tool-input-validation path — no separate feedback channel.
-    //
-    // zod runs superRefine even when some entries already FAILED the shape stage
-    // (their field issues are on the error). Those entries didn't transform, so
-    // serialization would throw — guard it and skip the balance check; the shape
-    // errors stand on their own.
-    let texts: string[]
-    try {
-      texts = serializeIrEntries(value.entries)
-    } catch {
-      return
-    }
+    // Reject duplicate ids: the pipeline keys entries by id, so a repeat would
+    // silently overwrite — surfaced here rather than swallowed.
+    const firstSeen = new Map<string, number>()
+    value.entries.forEach((e, i) => {
+      const prev = firstSeen.get(e.id)
+      if (prev !== undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['entries', i, 'id'],
+          message: `duplicate id "${e.id}" (also entry ${prev + 1}) — each entry needs a unique id`,
+        })
+      } else {
+        firstSeen.set(e.id, i)
+      }
+    })
+    // Validate each entry's text (parse + per-currency balance + account shape +
+    // no silently-dropped postings + no elided amounts). The SDK surfaces these
+    // to the model on the standard tool-input-validation path.
+    const texts = value.entries.map((e) => e.text)
     const result = validateDraftBatch(texts)
     if (result.ok === true) return
     for (const issue of result.issues) {
       ctx.addIssue({
         code: 'custom',
-        path: ['entries', issue.index],
+        path: ['entries', issue.index, 'text'],
         message: entryFeedback(texts[issue.index] ?? '', issue.message),
       })
     }

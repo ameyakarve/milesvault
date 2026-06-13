@@ -4,19 +4,21 @@ import {
   DraftTransactionBatchCard,
   type DraftTransactionBatchCardProps,
 } from './draft-transaction'
-import type { ExtractedEntry } from '@/durable/ingest/ir'
-import type { TransactionInput } from '@/durable/ledger-types'
 
-// The card takes structured IR entries (post-transform). Small builder so the
-// stories read like the old beancount text.
+// The card takes { id, text } entries where text is one beancount entry.
+type Entry = { id: string; text: string }
 function tx(
   id: string,
   date: string,
   payee: string,
   narration: string,
-  postings: TransactionInput['postings'],
-): ExtractedEntry {
-  return { id, kind: 'transaction', txn: { date, flag: '*', payee, narration, tags: [], postings } }
+  postings: Array<[account: string, amount: string, currency: string, price?: string]>,
+): Entry {
+  const lines = postings.map(
+    ([account, amount, currency, price]) =>
+      `  ${account}  ${amount} ${currency}${price ? ` ${price}` : ''}`,
+  )
+  return { id, text: `${date} * "${payee}" "${narration}"\n${lines.join('\n')}` }
 }
 
 const ACCOUNTS = [
@@ -33,47 +35,40 @@ const ACCOUNTS = [
 ]
 
 const BALANCED = tx('b1', '2026-05-26', 'Whole Foods', 'Weekly grocery run', [
-  { account: 'Expenses:Food:Groceries', amount: '42.10', currency: 'USD' },
-  { account: 'Assets:Bank:Chase:Checking', amount: '-42.10', currency: 'USD' },
+  ['Expenses:Food:Groceries', '42.10', 'USD'],
+  ['Assets:Bank:Chase:Checking', '-42.10', 'USD'],
 ])
 
 const UNBALANCED = tx('u1', '2026-05-26', 'Whole Foods', 'Weekly grocery run', [
-  { account: 'Expenses:Food:Groceries', amount: '42.10', currency: 'USD' },
-  { account: 'Assets:Bank:Chase:Checking', amount: '-38.00', currency: 'USD' },
+  ['Expenses:Food:Groceries', '42.10', 'USD'],
+  ['Assets:Bank:Chase:Checking', '-38.00', 'USD'],
 ])
 
 const SPLIT = tx('s1', '2026-05-26', 'Costco', 'Run', [
-  { account: 'Expenses:Food:Groceries', amount: '120.50', currency: 'USD' },
-  { account: 'Expenses:Household', amount: '79.99', currency: 'USD' },
-  { account: 'Liabilities:CreditCard:Amex', amount: '-200.49', currency: 'USD' },
+  ['Expenses:Food:Groceries', '120.50', 'USD'],
+  ['Expenses:Household', '79.99', 'USD'],
+  ['Liabilities:CreditCard:Amex', '-200.49', 'USD'],
 ])
 
 const FOREX = tx('f1', '2026-05-13', 'Cloudflare', 'Subscription', [
-  {
-    account: 'Expenses:Software:Subscriptions',
-    amount: '2.36',
-    currency: 'USD',
-    price_at_signs: 2,
-    price_amount: '225.98',
-    price_currency: 'INR',
-  },
-  { account: 'Expenses:Bank:ForexMarkup', amount: '4.52', currency: 'INR' },
-  { account: 'Expenses:Tax:GST', amount: '0.81', currency: 'INR' },
-  { account: 'Liabilities:CreditCards:Axis:Magnus', amount: '-231.31', currency: 'INR' },
+  ['Expenses:Software:Subscriptions', '2.36', 'USD', '@@ 225.98 INR'],
+  ['Expenses:Bank:ForexMarkup', '4.52', 'INR'],
+  ['Expenses:Tax:GST', '0.81', 'INR'],
+  ['Liabilities:CreditCards:Axis:Magnus', '-231.31', 'INR'],
 ])
 
-const STATEMENT_BATCH: ExtractedEntry[] = [
+const STATEMENT_BATCH: Entry[] = [
   tx('t1', '2026-05-02', 'Trader Joe’s', 'Groceries', [
-    { account: 'Expenses:Food:Groceries', amount: '58.20', currency: 'USD' },
-    { account: 'Liabilities:CreditCard:Amex', amount: '-58.20', currency: 'USD' },
+    ['Expenses:Food:Groceries', '58.20', 'USD'],
+    ['Liabilities:CreditCard:Amex', '-58.20', 'USD'],
   ]),
   tx('t2', '2026-05-05', 'Shell', 'Gas', [
-    { account: 'Expenses:Travel:Air', amount: '41.00', currency: 'USD' },
-    { account: 'Liabilities:CreditCard:Amex', amount: '-41.00', currency: 'USD' },
+    ['Expenses:Travel:Air', '41.00', 'USD'],
+    ['Liabilities:CreditCard:Amex', '-41.00', 'USD'],
   ]),
   tx('t3', '2026-05-07', 'Spotify', 'Monthly subscription', [
-    { account: 'Expenses:Food:Dining', amount: '9.99', currency: 'USD' },
-    { account: 'Liabilities:CreditCard:Amex', amount: '-9.99', currency: 'USD' },
+    ['Expenses:Food:Dining', '9.99', 'USD'],
+    ['Liabilities:CreditCard:Amex', '-9.99', 'USD'],
   ]),
 ]
 

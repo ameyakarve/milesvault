@@ -25,7 +25,6 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { parseJournalStrict } from '@/lib/beancount/parse-strict'
 import type { TransactionInput } from '@/durable/ledger-types'
-import { serializeIrEntries } from '@/durable/ingest/ir'
 import type { DraftTransactionBatch } from '@/durable/agent-ui-schemas'
 
 type CardStatus = 'idle' | 'submitting' | 'done' | 'failed' | 'rejected'
@@ -197,23 +196,15 @@ export function DraftTransactionBatchCard({
   onReject,
   onShowInJournal,
 }: DraftTransactionBatchCardProps) {
-  // The model emits structured IR; serialize it to canonical beancount once so
-  // the rest of the card (text editing, per-entry validation, approval) is
-  // unchanged. The user still hand-edits raw beancount before approving.
-  const serialized = useMemo(() => {
-    try {
-      return serializeIrEntries(input.entries)
-    } catch (e) {
-      console.error('[draft] failed to serialize IR entries', e)
-      return []
-    }
-  }, [input.entries])
-  const [texts, setTexts] = useState<string[]>(() => serialized.map((s) => s.trim()))
+  // The model emits one beancount entry per element; the card edits the text
+  // directly. The user still hand-edits raw beancount before approving.
+  const initial = useMemo(() => input.entries.map((e) => e.text.trim()), [input.entries])
+  const [texts, setTexts] = useState<string[]>(() => initial)
   // Per-entry decisions: excluded rows are skipped at approval — one bad row
   // never blocks the rest of a statement.
-  const [included, setIncluded] = useState<boolean[]>(() => serialized.map(() => true))
+  const [included, setIncluded] = useState<boolean[]>(() => initial.map(() => true))
   // Which row's editor is open. Single entries are always expanded.
-  const [expanded, setExpanded] = useState<number | null>(serialized.length === 1 ? 0 : null)
+  const [expanded, setExpanded] = useState<number | null>(initial.length === 1 ? 0 : null)
 
   const total = texts.length
   const isBatch = total > 1

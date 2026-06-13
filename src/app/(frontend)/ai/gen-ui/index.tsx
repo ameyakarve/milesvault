@@ -36,9 +36,9 @@ const RENDERERS: Record<
 > = {
   draft_transaction: (input, props) => {
     // `input` is the tool-call args the server already validated (the tool only
-    // suspends on valid input). Re-running the full IR schema here would fail —
-    // the server-parsed value is post-transform, which the raw schema rejects —
-    // so just confirm the shape and pass it through; the card serializes it.
+    // suspends on valid input): { entries: [{ id, text }] } where text is one
+    // beancount entry. Confirm the shape and pass it through; the card edits the
+    // text directly.
     const entries = (input as { entries?: unknown } | null)?.entries
     if (!Array.isArray(entries) || entries.length === 0) return null
     return (

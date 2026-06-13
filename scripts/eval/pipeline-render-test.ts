@@ -1,171 +1,74 @@
-import {
-  toLedgerEntries,
-  serializeEntries,
-  type ExtractedStatement,
-} from '../../src/durable/ingest/pipeline'
 import { validateDraftBatch } from '../../src/lib/beancount/validate-draft-batch'
 
-// Owner ruling: code is NOT an arbiter — the model emits complete beancount in
-// the IR; toLedgerEntries only splits it for the serializer, and the GENERIC
-// validator (parse + per-currency balance + account shape) bounces repairs.
-// So this test feeds a complete, model-authored IR and checks two things:
-//   1. it passes through unchanged and serializes to the expected beancount;
-//   2. the generic validator accepts a balanced batch and rejects a broken one.
+// Owner ruling: code is NOT an arbiter — the model emits complete beancount
+// text and the GENERIC validator (parse + per-currency balance + account shape
+// + no silently-dropped postings + no elided amounts) is the only guardrail.
+// There is no IR and nothing is serialized or rewritten. So this test feeds a
+// complete, model-authored beancount batch and checks two things:
+//   1. the validator ACCEPTS a balanced, well-formed batch unchanged;
+//   2. the validator REJECTS a broken (unbalanced) entry — the bounce.
 //
 // All data here is SYNTHETIC — fictional issuer/merchants/amounts. Never put
 // real statement data in tests.
 
 const CARD = 'Liabilities:CreditCards:Demo:Sample:0000'
-const POOL = 'Assets:Rewards:Demo'
-const TICKER = 'DEMO-PTS'
 
-// A complete batch exactly as the model authors it (balanced, real accounts,
-// real ticker, points legs, the landing, pad+balance bookends).
-const extracted: ExtractedStatement = {
-  card_name: 'Demo Sample Card',
-  entries: [
-    {
-      kind: 'balance', // bare assertion — no pad
-      date: '2026-04-01',
-      account: CARD,
-      amount: '1000.00',
-      currency: 'INR',
-    },
-    // A spend with its own points legs (model-authored).
-    {
-      kind: 'transaction',
-      txn: {
-        date: '2026-04-05',
-        flag: '*',
-        payee: 'SAMPLE STORE',
-        narration: 'Shopping',
-        tags: [],
-        postings: [
-          { account: 'Expenses:Shopping:General', amount: '2000.00', currency: 'INR' },
-          { account: CARD, amount: '-2000.00', currency: 'INR' },
-          { account: `${POOL}:Pending`, amount: '120', currency: TICKER },
-          { account: 'Equity:Void', amount: '-120', currency: TICKER },
-        ],
-      },
-    },
-    // A forex spend, model-balanced with @@ and the fee/GST legs.
-    {
-      kind: 'transaction',
-      txn: {
-        date: '2026-04-10',
-        flag: '*',
-        payee: 'EXAMPLE SAAS CO',
-        narration: 'Software (USD 10.00 + ₹19.00 markup + ₹3.42 GST)',
-        tags: [],
-        postings: [
-          {
-            account: 'Expenses:Software:SaaS',
-            amount: '10.00',
-            currency: 'USD',
-            price_at_signs: 2,
-            price_amount: '850.00',
-            price_currency: 'INR',
-          },
-          { account: 'Expenses:Financial:ForexMarkup', amount: '19.00', currency: 'INR' },
-          { account: 'Expenses:Financial:GST', amount: '3.42', currency: 'INR' },
-          { account: CARD, amount: '-872.42', currency: 'INR' },
-          { account: `${POOL}:Pending`, amount: '48', currency: TICKER },
-          { account: 'Equity:Void', amount: '-48', currency: TICKER },
-        ],
-      },
-    },
-    // A payment (clearing leg negative, no points), model-authored.
-    {
-      kind: 'transaction',
-      txn: {
-        date: '2026-04-15',
-        flag: '*',
-        payee: 'PAYMENT RECEIVED',
-        narration: 'Auto-debit',
-        tags: [],
-        postings: [
-          { account: 'Assets:Clearing:CardPayments', amount: '-5000.00', currency: 'INR' },
-          { account: CARD, amount: '5000.00', currency: 'INR' },
-        ],
-      },
-    },
-    // The landing: earned points credited at close (Pending → posted, no Void).
-    {
-      kind: 'transaction',
-      txn: {
-        date: '2026-04-30',
-        flag: '*',
-        payee: 'Statement close',
-        narration: 'Reward points credited',
-        tags: [],
-        postings: [
-          { account: POOL, amount: '168', currency: TICKER },
-          { account: `${POOL}:Pending`, amount: '-168', currency: TICKER },
-        ],
-      },
-    },
-    // Closing balances (card + points), model-authored with their pads.
-    {
-      kind: 'pad',
-      date: '2026-04-30',
-      account: CARD,
-      amount: '-2127.58',
-      currency: 'INR',
-      plug_account: 'Equity:Void',
-    },
-    {
-      kind: 'pad',
-      date: '2026-04-30',
-      account: POOL,
-      amount: '168',
-      currency: TICKER,
-      plug_account: 'Equity:Void',
-    },
-  ],
-}
+// A complete batch exactly as the model authors it: one entry per element,
+// balanced, real accounts/ticker, points legs, the landing, and pad+balance
+// closings (the plug Equity:Void written by the MODEL, not injected by code).
+const entries: string[] = [
+  // Opening balance — a bare assertion (no pad).
+  `2026-04-01 balance ${CARD}  1000.00 INR`,
+  // A spend with its own points accrual legs.
+  `2026-04-05 * "SAMPLE STORE" "Shopping"
+  Expenses:Shopping:General  2000.00 INR
+  ${CARD}  -2000.00 INR
+  Assets:Rewards:Demo:Pending  120 DEMO-PTS
+  Equity:Void  -120 DEMO-PTS`,
+  // A forex spend, balanced with @@ plus the fee/GST legs.
+  `2026-04-10 * "EXAMPLE SAAS CO" "Software (USD 10.00 + markup + GST)"
+  Expenses:Software:SaaS  10.00 USD @@ 850.00 INR
+  Expenses:Financial:ForexMarkup  19.00 INR
+  Expenses:Financial:GST  3.42 INR
+  ${CARD}  -872.42 INR
+  Assets:Rewards:Demo:Pending  48 DEMO-PTS
+  Equity:Void  -48 DEMO-PTS`,
+  // A payment (clearing leg negative, no points).
+  `2026-04-15 * "PAYMENT RECEIVED" "Auto-debit"
+  Assets:Clearing:CardPayments  -5000.00 INR
+  ${CARD}  5000.00 INR`,
+  // The landing: earned points credited at close (Pending → posted, no Void).
+  `2026-04-30 * "Statement close" "Reward points credited"
+  Assets:Rewards:Demo  168 DEMO-PTS
+  Assets:Rewards:Demo:Pending  -168 DEMO-PTS`,
+  // Closing balances (card + points), each a pad+balance pair.
+  `2026-04-30 pad ${CARD} Equity:Void
+2026-04-30 balance ${CARD}  -2127.58 INR`,
+  `2026-04-30 pad Assets:Rewards:Demo Equity:Void
+2026-04-30 balance Assets:Rewards:Demo  168 DEMO-PTS`,
+]
 
-const parts = toLedgerEntries(extracted.entries)
-const entries = serializeEntries(parts)
+const v = validateDraftBatch(entries)
 const joined = entries.join('\n\n')
 console.log(joined)
-const v = validateDraftBatch(entries)
 
 const checks: Array<[string, boolean]> = [
-  // Pass-through: nothing rewritten, amounts/accounts/tickers verbatim.
-  ['card amount verbatim (not recomputed)', joined.includes('-2000.00 INR')],
-  ['forex @@ preserved', joined.includes('10.00 USD @@ 850.00 INR')],
-  ['points legs verbatim', /Assets:Rewards:Demo:Pending\s+120 DEMO-PTS/.test(joined)],
-  ['landing present (pending → posted)', /Assets:Rewards:Demo\s+168 DEMO-PTS/.test(joined) && /Assets:Rewards:Demo:Pending\s+-168 DEMO-PTS/.test(joined)],
-  ['payment clearing negative', /Assets:Clearing:CardPayments\s+-5000\.00 INR/.test(joined)],
-  ['points balance verbatim', joined.includes('balance Assets:Rewards:Demo') && joined.includes('168 DEMO-PTS')],
-  ['pad kind renders pad+balance', joined.includes('pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Void')],
-  ['bare balance kind has NO pad (one card pad = the closing only)', (joined.match(/pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Void/g) || []).length === 1],
-  ['bare opening balance renders plain', /2026-04-01 balance Liabilities:CreditCards:Demo:Sample:0000\s+1000\.00 INR/.test(joined)],
   ['generic validator accepts the balanced batch', v.ok === true],
 ]
 
 // The validator must REJECT a broken (unbalanced) entry — that's the only
 // guardrail now, and it must bounce.
-const broken = serializeEntries(
-  toLedgerEntries([
-    {
-      id: 'x1',
-      kind: 'transaction',
-      txn: {
-        date: '2026-04-05',
-        flag: '*',
-        payee: 'UNBALANCED',
-        narration: '',
-        tags: [],
-        postings: [
-          { account: 'Expenses:Misc', amount: '100.00', currency: 'INR' },
-          { account: CARD, amount: '-90.00', currency: 'INR' },
-        ],
-      },
-    },
-  ]),
-)
-checks.push(['generic validator rejects an unbalanced entry', validateDraftBatch(broken).ok === false])
+const broken = `2026-04-05 * "UNBALANCED" ""
+  Expenses:Misc  100.00 INR
+  ${CARD}  -90.00 INR`
+checks.push(['generic validator rejects an unbalanced entry', validateDraftBatch([broken]).ok === false])
+
+// And it must reject an entry with a silently-droppable (lowercase) account
+// rather than letting the posting vanish.
+const dropped = `2026-04-06 * "DROPPED LEG" ""
+  expenses:misc  100.00 INR
+  ${CARD}  -100.00 INR`
+checks.push(['generic validator rejects a silently-dropped posting', validateDraftBatch([dropped]).ok === false])
 
 let fail = 0
 for (const [name, ok] of checks) {

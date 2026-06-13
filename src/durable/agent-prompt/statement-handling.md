@@ -15,8 +15,8 @@ transactions:
 2. The tool returns the statement inline:
    - `{ ok: true, filename, text }` — `text` is the full raw statement. Extract
      the transactions from it (see the extraction rules below) and call
-     `draft_transaction` **in this same turn**, passing each entry as a
-     structured IR object in the `entries` array.
+     `draft_transaction` **in this same turn**, passing each entry as
+     `{ id, text }` (one beancount entry per `text`) in the `entries` array.
    - `{ ok: false, error: "not_found" }` — the id is unknown. Tell the user
      briefly and stop.
 3. If the statement genuinely has nothing to record, say so briefly and do not
