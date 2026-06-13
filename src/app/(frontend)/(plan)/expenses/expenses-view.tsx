@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { hierarchy, treemap } from 'd3-hierarchy'
 import { ChevronRight } from 'lucide-react'
 import { ledgerClient } from '@/lib/ledger-client-browser'
@@ -117,14 +117,16 @@ function editorHref(account: string, from: string, to: string): string {
   return `/editor?account=${encodeURIComponent(account)}&from=${from}&to=${to}`
 }
 
-function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const [w, setW] = useState(880)
-  useEffect(() => {
-    const el = ref.current
+// Callback ref so we measure the moment the (conditionally-rendered) treemap
+// node mounts — a plain ref in a []-effect runs before the node exists and
+// would stick at the default width forever.
+function useWidth(): [(el: HTMLDivElement | null) => void, number] {
+  const [w, setW] = useState(0)
+  const roRef = useRef<ResizeObserver | null>(null)
+  const measure = useCallback((el: HTMLDivElement | null) => {
+    roRef.current?.disconnect()
+    roRef.current = null
     if (!el) return
-    // Measure immediately so the map fills the width on first paint, not just
-    // after the observer fires.
     const initial = el.getBoundingClientRect().width
     if (initial > 0) setW(initial)
     const ro = new ResizeObserver((entries) => {
@@ -132,9 +134,9 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
       if (cw && cw > 0) setW(cw)
     })
     ro.observe(el)
-    return () => ro.disconnect()
+    roRef.current = ro
   }, [])
-  return [ref, w]
+  return [measure, w]
 }
 
 export function ExpensesView() {
@@ -193,8 +195,10 @@ export function ExpensesView() {
   const tiles = level.children ?? []
   const levelTotal = level.value ?? 0
 
+  // Always descend — including into a leaf, which switches to the transaction
+  // list. (Previously this no-op'd on leaves, so the leaf view was unreachable.)
   function drill(child: Tree) {
-    if (child.children.length) setPath((p) => [...p, child.name])
+    setPath((p) => [...p, child.name])
   }
 
   // Leaf = an account with no sub-categories (and not the synthetic root). At a
@@ -352,7 +356,6 @@ export function ExpensesView() {
                 const w = (t.x1 ?? 0) - (t.x0 ?? 0)
                 const h = (t.y1 ?? 0) - (t.y0 ?? 0)
                 const pct = levelTotal > 0 ? ((t.value ?? 0) / levelTotal) * 100 : 0
-                const drillable = t.data.children.length > 0
                 const showLabel = w > 56 && h > 26
                 return (
                   <button
@@ -360,10 +363,7 @@ export function ExpensesView() {
                     type="button"
                     onClick={() => drill(t.data)}
                     title={`${t.data.name} · ${fmt(t.value ?? 0, activeCurrency)} · ${pct.toFixed(1)}%`}
-                    className={cn(
-                      'absolute overflow-hidden border border-background/40 text-left text-background',
-                      drillable ? 'cursor-pointer' : 'cursor-default',
-                    )}
+                    className="absolute cursor-pointer overflow-hidden border border-background/40 text-left text-background"
                     style={{
                       left: t.x0,
                       top: t.y0,
@@ -397,8 +397,7 @@ export function ExpensesView() {
                     <button
                       type="button"
                       onClick={() => drill(t.data)}
-                      disabled={!drillable}
-                      className="flex w-full items-center gap-3 px-3 py-2 text-left text-[13px] hover:bg-muted/60 disabled:cursor-default disabled:hover:bg-transparent"
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left text-[13px] hover:bg-muted/60"
                     >
                       <span
                         className="size-2.5 shrink-0 rounded-sm"
