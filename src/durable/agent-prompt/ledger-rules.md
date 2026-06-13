@@ -114,6 +114,16 @@ statement credits, pay-at-merchant, award flights/hotels, hybrid fares alike. Th
 points leg's weight is the cash equivalent at redemption time. Never guess it
 from a fixed cpp rate and never fall back to `Equity:Void` for a redemption.
 
+The shape: the points LEAVE their wallet (`Assets:Rewards:… -<points> COMMODITY @@
+<cash> FIAT`) and the **cash value is the expense** (`Expenses:… <cash> FIAT`). The
+points commodity NEVER sits on the expense leg — the expense is always in fiat.
+
+**If you do not have the cash value, you MUST `clarify` and ask the user for it**
+(one question; the redemption clarify in your tool guidance). Do NOT invent a
+number, do NOT book the points themselves as the expense, and do NOT contrive a
+points-only entry that balances just to avoid asking — a redemption you can't
+value yet is a question, not a guess.
+
 ## Balances (assert with a pad)
 
 A balance is asserted as a **pad + balance** pair: the pad absorbs any drift
