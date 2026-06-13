@@ -230,6 +230,29 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
   return items
 }
 
+// Resolve ONE card's canonical liability account from the KG — its
+// `beancountName` under its issuer's `beancountName`. The add-accounts UI uses
+// this so a card opened there gets the SAME account a statement would, instead
+// of munging it from the display name client-side.
+export async function resolveCardAccount(kb: KbHttp, slug: string): Promise<string | null> {
+  const card = (await kb.get(slug).catch((): null => null)) as {
+    attrs?: Record<string, unknown> | null
+  } | null
+  const cardBn = typeof card?.attrs?.beancountName === 'string' ? card.attrs.beancountName : null
+  if (!cardBn) return null
+  const rel = (await kb
+    .related(slug, { edge_type: 'ISSUED_BY', direction: 'outgoing' })
+    .catch((): null => null)) as { items?: Array<{ other: string }> } | null
+  const issuerSlug = rel?.items?.[0]?.other
+  if (!issuerSlug) return null
+  const bank = (await kb.get(issuerSlug).catch((): null => null)) as {
+    attrs?: Record<string, unknown> | null
+  } | null
+  const issuerBn = typeof bank?.attrs?.beancountName === 'string' ? bank.attrs.beancountName : null
+  if (!issuerBn) return null
+  return `Liabilities:CreditCards:${issuerBn}:${cardBn}`
+}
+
 export function rewardAccountsTool(kb: KbHttp) {
   return tool({
     description:

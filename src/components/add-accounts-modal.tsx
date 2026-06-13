@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,13 +9,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -23,31 +16,31 @@ import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 
-type Issuer = { slug: string; name: string }
-type Card = { slug: string; name: string }
+type CardHit = { slug: string; name: string }
+type PickedCard = { slug: string; name: string; account: string }
 type Programme = { slug: string; name: string; account: string; ticker: string }
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
-function issuerSegment(slug: string): string {
-  return slug.split('-').map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w)).join('')
-}
-function cardLeaf(name: string, issuerName: string): string {
-  const drop = new Set(['bank', 'credit', 'card', ...issuerName.toLowerCase().split(/\s+/)])
-  return name
-    .split(/[^A-Za-z0-9]+/)
-    .filter((t) => t && !drop.has(t.toLowerCase()))
-    .map((t) => t[0]!.toUpperCase() + t.slice(1))
-    .join('')
-}
 
-function CheckRow({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
+function CheckRow({
+  on,
+  loading,
+  label,
+  onClick,
+}: {
+  on: boolean
+  loading?: boolean
+  label: string
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+      disabled={loading}
+      className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-60"
     >
       <span
         className={cn(
@@ -55,17 +48,38 @@ function CheckRow({ on, label, onClick }: { on: boolean; label: string; onClick:
           on ? 'border-foreground bg-foreground text-background' : 'border-border',
         )}
       >
-        {on ? <Check className="size-3" strokeWidth={3} /> : null}
+        {loading ? (
+          <Spinner className="size-3" />
+        ) : on ? (
+          <Check className="size-3" strokeWidth={3} />
+        ) : null}
       </span>
       <span className="text-foreground">{label}</span>
     </button>
   )
 }
 
-// Add cards AND programmes: a tabbed multi-select. Cards → issuer then tick
-// (open directives, auto-opening their reward wallets). Programmes → tick
-// loyalty currencies (open directives in the right Miles/Points account with
-// the commodity). No balances — those come from statements or Update balance.
+function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 py-0.5 pl-2.5 pr-1 text-xs text-foreground">
+      <span className="max-w-44 truncate">{label}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${label}`}
+        className="flex size-4 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground"
+      >
+        <X className="size-3" />
+      </button>
+    </span>
+  )
+}
+
+// Add cards AND loyalty programmes: each tab is a search box over the whole KG
+// (no issuer gate) and your picks show as removable chips, visible across both
+// tabs. Cards resolve their canonical liability account from the KG on pick
+// (never a client-side guess); programmes carry their account + ticker. Opens
+// `open` directives only — balances come from statements or Update balance.
 export function AddAccountsModal({
   open,
   onClose,
@@ -80,40 +94,43 @@ export function AddAccountsModal({
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<number | null>(null)
 
-  // Cards
-  const [issuers, setIssuers] = useState<Issuer[]>([])
-  const [issuer, setIssuer] = useState<Issuer | null>(null)
-  const [cards, setCards] = useState<Card[]>([])
-  const [cardsLoading, setCardsLoading] = useState(false)
-  const [pickedCards, setPickedCards] = useState<
-    Map<string, Card & { issuerSlug: string; issuerName: string }>
-  >(new Map())
+  // Cards — typeahead over the KG, account resolved on pick.
+  const [cardQuery, setCardQuery] = useState('')
+  const [cardHits, setCardHits] = useState<CardHit[]>([])
+  const [cardSearching, setCardSearching] = useState(false)
+  const [resolving, setResolving] = useState<string | null>(null)
+  const [pickedCards, setPickedCards] = useState<Map<string, PickedCard>>(new Map())
 
-  // Programmes
+  // Programmes — full closed set, filtered client-side.
   const [programmes, setProgrammes] = useState<Programme[]>([])
   const [progLoading, setProgLoading] = useState(false)
   const [progQuery, setProgQuery] = useState('')
   const [pickedProg, setPickedProg] = useState<Map<string, Programme>>(new Map())
 
+  // Debounced card search (the KG typeahead needs ≥2 chars).
   useEffect(() => {
-    if (!open || issuers.length) return
-    fetch('/api/kb/issuers')
-      .then((r) => (r.ok ? (r.json() as Promise<{ items: Issuer[] }>) : null))
-      .then((d) => d && setIssuers(d.items))
-      .catch(() => {})
-  }, [open, issuers.length])
+    const q = cardQuery.trim()
+    if (q.length < 2) {
+      setCardHits([])
+      setCardSearching(false)
+      return
+    }
+    setCardSearching(true)
+    const ac = new AbortController()
+    const t = setTimeout(() => {
+      fetch(`/api/kb/cards/search?q=${encodeURIComponent(q)}`, { signal: ac.signal })
+        .then((r) => (r.ok ? (r.json() as Promise<{ items: CardHit[] }>) : null))
+        .then((d) => setCardHits(d?.items ?? []))
+        .catch(() => {})
+        .finally(() => setCardSearching(false))
+    }, 250)
+    return () => {
+      clearTimeout(t)
+      ac.abort()
+    }
+  }, [cardQuery])
 
-  useEffect(() => {
-    if (!issuer) return
-    setCards([])
-    setCardsLoading(true)
-    fetch(`/api/kb/cards/by-issuer?issuer=${encodeURIComponent(issuer.slug)}`)
-      .then((r) => (r.ok ? (r.json() as Promise<{ items: Card[] }>) : null))
-      .then((d) => d && setCards(d.items))
-      .catch(() => {})
-      .finally(() => setCardsLoading(false))
-  }, [issuer])
-
+  // Load programmes once when the tab is first opened.
   useEffect(() => {
     if (!open || tab !== 'programmes' || programmes.length) return
     setProgLoading(true)
@@ -129,12 +146,51 @@ export function AddAccountsModal({
     return q ? programmes.filter((p) => p.name.toLowerCase().includes(q)) : programmes
   }, [programmes, progQuery])
 
+  async function toggleCard(c: CardHit) {
+    if (pickedCards.has(c.slug)) {
+      setPickedCards((prev) => {
+        const next = new Map(prev)
+        next.delete(c.slug)
+        return next
+      })
+      return
+    }
+    setError(null)
+    setResolving(c.slug)
+    try {
+      const account = await fetch(`/api/kb/cards/account?slug=${encodeURIComponent(c.slug)}`)
+        .then(async (res): Promise<string | null> => {
+          if (!res.ok) return null
+          const d = (await res.json()) as { account: string | null }
+          return d.account
+        })
+        .catch((): null => null)
+      if (!account) {
+        setError(`Couldn't resolve an account for ${c.name}. Skip it or add via a statement.`)
+        return
+      }
+      setPickedCards((prev) => new Map(prev).set(c.slug, { slug: c.slug, name: c.name, account }))
+    } finally {
+      setResolving(null)
+    }
+  }
+
+  function toggleProg(p: Programme) {
+    setPickedProg((prev) => {
+      const next = new Map(prev)
+      if (next.has(p.slug)) next.delete(p.slug)
+      else next.set(p.slug, p)
+      return next
+    })
+  }
+
   const total = pickedCards.size + pickedProg.size
 
   function reset() {
     setTab('cards')
-    setIssuer(null)
-    setCards([])
+    setCardQuery('')
+    setCardHits([])
+    setResolving(null)
     setPickedCards(new Map())
     setProgQuery('')
     setPickedProg(new Map())
@@ -155,10 +211,7 @@ export function AddAccountsModal({
     try {
       const date = ymd(new Date())
       const lines = [
-        ...[...pickedCards.values()].map(
-          (p) =>
-            `${date} open Liabilities:CreditCards:${issuerSegment(p.issuerSlug)}:${cardLeaf(p.name, p.issuerName)} INR`,
-        ),
+        ...[...pickedCards.values()].map((c) => `${date} open ${c.account} INR`),
         ...[...pickedProg.values()].map((p) => `${date} open ${p.account} ${p.ticker}`),
       ]
       const resp = await ledgerClient.replaceBuffer([], lines.join('\n') + '\n')
@@ -200,7 +253,9 @@ export function AddAccountsModal({
                   onClick={() => setTab(t)}
                   className={cn(
                     'rounded px-3 py-1 capitalize',
-                    tab === t ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
+                    tab === t
+                      ? 'bg-foreground text-background'
+                      : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
                   {t}
@@ -210,43 +265,30 @@ export function AddAccountsModal({
 
             {tab === 'cards' ? (
               <>
-                <Select
-                  value={issuer?.slug ?? ''}
-                  onValueChange={(slug) => setIssuer(issuers.find((i) => i.slug === slug) ?? null)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose an issuer" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {issuers.map((i) => (
-                      <SelectItem key={i.slug} value={i.slug}>
-                        {i.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <ScrollArea className="h-52 rounded-md border border-border">
-                  {!issuer ? (
+                <Input
+                  placeholder="Search cards (Axis Magnus, HDFC Infinia…)"
+                  value={cardQuery}
+                  onChange={(e) => setCardQuery(e.target.value)}
+                  autoFocus
+                />
+                <ScrollArea className="h-48 rounded-md border border-border">
+                  {cardQuery.trim().length < 2 ? (
                     <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-                      Pick an issuer to see its cards.
+                      Type to search cards across all issuers.
                     </p>
-                  ) : cardsLoading ? (
-                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">Loading…</p>
+                  ) : cardSearching ? (
+                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">Searching…</p>
+                  ) : cardHits.length === 0 ? (
+                    <p className="px-3 py-8 text-center text-xs text-muted-foreground">No matching card.</p>
                   ) : (
                     <ul className="p-1">
-                      {cards.map((c) => (
+                      {cardHits.map((c) => (
                         <li key={c.slug}>
                           <CheckRow
                             on={pickedCards.has(c.slug)}
+                            loading={resolving === c.slug}
                             label={c.name}
-                            onClick={() =>
-                              setPickedCards((prev) => {
-                                const next = new Map(prev)
-                                if (next.has(c.slug)) next.delete(c.slug)
-                                else next.set(c.slug, { ...c, issuerSlug: issuer.slug, issuerName: issuer.name })
-                                return next
-                              })
-                            }
+                            onClick={() => void toggleCard(c)}
                           />
                         </li>
                       ))}
@@ -260,8 +302,9 @@ export function AddAccountsModal({
                   placeholder="Search programmes (KrisFlyer, Marriott…)"
                   value={progQuery}
                   onChange={(e) => setProgQuery(e.target.value)}
+                  autoFocus
                 />
-                <ScrollArea className="h-52 rounded-md border border-border">
+                <ScrollArea className="h-48 rounded-md border border-border">
                   {progLoading ? (
                     <p className="px-3 py-8 text-center text-xs text-muted-foreground">Loading…</p>
                   ) : (
@@ -271,14 +314,7 @@ export function AddAccountsModal({
                           <CheckRow
                             on={pickedProg.has(p.slug)}
                             label={p.name}
-                            onClick={() =>
-                              setPickedProg((prev) => {
-                                const next = new Map(prev)
-                                if (next.has(p.slug)) next.delete(p.slug)
-                                else next.set(p.slug, p)
-                                return next
-                              })
-                            }
+                            onClick={() => toggleProg(p)}
                           />
                         </li>
                       ))}
@@ -289,12 +325,37 @@ export function AddAccountsModal({
             )}
 
             {total > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {total} selected
-                {pickedCards.size && pickedProg.size
-                  ? ` (${pickedCards.size} card${pickedCards.size === 1 ? '' : 's'}, ${pickedProg.size} programme${pickedProg.size === 1 ? '' : 's'})`
-                  : ''}
-              </p>
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">{total} selected</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[...pickedCards.values()].map((c) => (
+                    <Chip
+                      key={c.slug}
+                      label={c.name}
+                      onRemove={() =>
+                        setPickedCards((prev) => {
+                          const next = new Map(prev)
+                          next.delete(c.slug)
+                          return next
+                        })
+                      }
+                    />
+                  ))}
+                  {[...pickedProg.values()].map((p) => (
+                    <Chip
+                      key={p.slug}
+                      label={p.name}
+                      onRemove={() =>
+                        setPickedProg((prev) => {
+                          const next = new Map(prev)
+                          next.delete(p.slug)
+                          return next
+                        })
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
             ) : null}
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
           </div>
