@@ -98,24 +98,6 @@ async function genJson<T>(
   return { value: null, error: lastError }
 }
 
-// ---- Rate parsing (code, not model) --------------------------------------------
-
-// "Base 12 EDGE RPs / ₹200", "Base earn: 5 RP / ₹150", "1 MR / ₹50" …
-export function parseBaseRate(guide: CardGuideResult): { pts: number; per: number } | null {
-  if (!guide.ok) return null
-  const sources = [guide.logging_guide, guide.pool?.rate_notes, guide.card_notes]
-  for (const src of sources) {
-    if (!src) continue
-    const m = /(\d+)\s*(?:[A-Za-z ]{0,16}?)\s*\/\s*₹\s*([\d,]+)/.exec(src)
-    if (m) {
-      const pts = Number(m[1])
-      const per = Number(m[2].replace(/,/g, ''))
-      if (pts > 0 && per > 0) return { pts, per }
-    }
-  }
-  return null
-}
-
 // ---- Prompts -------------------------------------------------------------------
 
 // Closed-set card identification: the model matches the statement against the
@@ -148,15 +130,14 @@ function extractPrompt(opts: {
   accounts: readonly string[]
   cardRules: string | null
   pool: { ticker: string | null; account: string | null } | null
-  rate: { pts: number; per: number } | null
   instruction?: string | null
 }): string {
   const reward =
-    opts.pool?.account && opts.pool?.ticker && opts.rate
+    opts.pool?.account && opts.pool?.ticker
       ? `Reward programme for this card (emit the points legs yourself, per the Points pattern):
 - points account: ${opts.pool.account}  (earn → ${opts.pool.account}:Pending; posted/landed → ${opts.pool.account})
 - points commodity (ticker): ${opts.pool.ticker}
-- base earn rate: ${opts.rate.pts} points per ${opts.rate.per} (floor(spend / ${opts.rate.per}) × ${opts.rate.pts}, purchase amount only)`
+- compute the points earned on each eligible purchase from the card's earn rules below — do NOT guess a rate.`
       : 'Reward programme: none resolved — DO NOT emit points legs.'
   return `${opts.instruction?.trim() ? `User instruction: ${opts.instruction.trim()}\n\n` : ''}Existing ledger accounts:
 ${opts.accounts.join('\n')}
@@ -186,7 +167,7 @@ export type PipelineResult = {
   error?: string
   stages: {
     card?: { name?: string; error?: string }
-    guide?: { found: boolean; rate?: string; error?: string }
+    guide?: { found: boolean; error?: string }
     extract?: { txns: number; balances: number; error?: string }
     validate?: { issues: number }
   }
@@ -246,10 +227,8 @@ export async function runDraftPipeline(deps: {
         cards.find((c) => c.slug === pickedSlug)?.name ?? null,
       )
     : { ok: false, error: 'card_not_identified' }
-  const rate = parseBaseRate(guide)
   stages.guide = {
     found: guide.ok,
-    rate: rate ? `${rate.pts}/${rate.per}` : undefined,
     error: guide.ok ? undefined : (guide as { error?: string }).error,
   }
 
@@ -279,7 +258,6 @@ export async function runDraftPipeline(deps: {
     accounts: deps.accounts,
     cardRules,
     pool: guide.ok ? guide.pool : null,
-    rate,
     instruction: deps.instruction,
   })
   // Surgical extraction: parse entries individually, KEEP the good ones by id,
@@ -352,10 +330,6 @@ export async function runDraftPipeline(deps: {
   if (!guide.ok) {
     validation_issues.unshift(
       `Reward points OMITTED: card guide not found for "${cardRes.value?.card_name ?? '?'}" (${(guide as { error?: string }).error ?? 'unknown'}${guide.ok === false && guide.candidates ? `; candidates: ${guide.candidates.map((c) => c.name).join(', ')}` : ''})`,
-    )
-  } else if (!rate) {
-    validation_issues.unshift(
-      `Reward points OMITTED: no base earn rate parsed from the card guide for "${guide.card.name}" — check the KG Logging section.`,
     )
   }
   stages.validate = { issues: validation_issues.length }

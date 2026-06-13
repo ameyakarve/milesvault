@@ -45,13 +45,12 @@ export async function fetchCardGuide(
     // the KG nodes omit. No hardcoded vocabulary: on a miss, gather
     // candidates by per-token recall — a single hit is used directly,
     // multiple go back as options.
-    let top: Item | undefined = knownTop ?? (await resolve(card))[0]
+    const top: Item | undefined = knownTop ?? (await resolve(card))[0]
     if (!top) {
-      // Score-based recall: every token (≥4 chars) votes; the card matching
-      // the MOST tokens wins. A first-token cap here once truncated the
-      // candidate set to six 'Axis…' cards that didn't include the right
-      // one, and an overlap-chooser then picked a plausible WRONG card —
-      // the worst failure mode. Discriminative tokens now always count.
+      // Direct resolve missed. Gather candidates by per-token recall and hand
+      // them BACK for the MODEL to pick — code never auto-selects a card (that
+      // overlap auto-pick once chose a plausible WRONG card, the worst failure
+      // mode, and is exactly the name-matching arbiter the owner banned).
       const votes = new Map<string, { item: Item; n: number }>()
       for (const token of card.split(/\s+/)) {
         if (token.length < 4) continue
@@ -62,15 +61,11 @@ export async function fetchCardGuide(
         }
       }
       const ranked = [...votes.values()].sort((a, b) => b.n - a.n)
-      const max = ranked[0]?.n ?? 0
-      const topScorers = ranked.filter((r) => r.n === max)
-      // ≥2 token agreement and a unique winner → confident pick.
-      if (max >= 2 && topScorers.length === 1) top = topScorers[0]!.item
-      else if (ranked.length > 0) {
+      if (ranked.length > 0) {
         return {
           ok: false as const,
           error: 'card_not_found' as const,
-          candidates: topScorers.slice(0, 6).map((r) => ({
+          candidates: ranked.slice(0, 6).map((r) => ({
             slug: r.item.slug,
             name: r.item.display_name,
           })),
