@@ -1,8 +1,7 @@
 import type { ChatResponseResult } from '@cloudflare/think'
-import { generateText, streamText, stepCountIs, tool, type ToolCallRepairFunction, type ToolSet } from 'ai'
+import { generateText, streamText, stepCountIs, tool, type ToolSet } from 'ai'
 import { z } from 'zod'
 import { draftTransactionBatchSchema } from './agent-ui-schemas'
-import { buildDraftFeedback } from '@/lib/beancount/draft-feedback'
 import { ZEntry, serializeIrEntries } from './ingest/ir'
 import {
   buildLedgerSystem,
@@ -44,80 +43,11 @@ type Snapshot = Awaited<ReturnType<LedgerDO['ledger_snapshot']>>
 
 export type ChatDOState = { draftProgress?: string }
 
-// Tool-call repair hook. Forwarded to streamText as `experimental_repairToolCall`
-// via TurnConfig.repairToolCall — see patches/@cloudflare__think@0.7.1.patch.
-//
-// TODO(upstream-repair): drop this whole indirection (and the patch file) when
-// `@cloudflare/think` exposes `repairToolCall` on TurnConfig upstream. The
-// rename target is whatever name they pick (current candidate: `repairToolCall`
-// to mirror the streamText `experimental_repairToolCall` option without the
-// experimental_ prefix). Track via the PR we file at
-// github.com/cloudflare/agents. When upstream lands:
-//   1. `pnpm patch-remove @cloudflare/think@<old>` (or delete patches/ entry)
-//   2. bump @cloudflare/think to the version that ships the field
-//   3. if upstream renamed the option, rename here at the single call site
-//
-// A draft_transaction (structured IR) that failed input validation is redirected
-// to the internal `_draft_feedback` tool, whose result is a COMPACT, actionable
-// message instead of the AI SDK's default "Type validation failed: Value: {whole
-// input}" echo. Two failure classes:
-//  - IR SHAPE wrong (missing/mistyped fields): report the bad fields per entry
-//    plus the entry shape, so the model fixes the structure.
-//  - balance/account-shape wrong (IR is well-formed): serialize to canonical
-//    beancount and run the generic validator; report only the failing entries,
-//    a worked example per failure class, and a flag on any entry resubmitted
-//    verbatim. Serialization is canonical, so the verbatim-repeat flag is exact.
-// `seen` is the per-turn set of rejected entry texts (DO state).
-function irShapeFeedback(err: z.ZodError): string {
-  const byEntry = new Map<number, string[]>()
-  for (const iss of err.issues) {
-    const idx = typeof iss.path[1] === 'number' ? iss.path[1] : -1
-    const field = iss.path.slice(2).join('.') || '(entry)'
-    const list = byEntry.get(idx) ?? []
-    list.push(`${field}: ${iss.message}`)
-    byEntry.set(idx, list)
-  }
-  const blocks = [...byEntry.entries()].map(
-    ([idx, msgs]) => `• Entry ${idx >= 0 ? idx + 1 : '?'}: ${msgs.join('; ')}`,
-  )
-  return (
-    `${blocks.length} entr${blocks.length === 1 ? 'y has' : 'ies have'} an invalid SHAPE — fix the fields, keep the rest:\n\n` +
-    `${blocks.join('\n')}\n\n` +
-    `Each entry is { "id", "kind":"transaction", "date":"YYYY-MM-DD", "payee"?, "narration"?, ` +
-    `"postings":[{ "account", "amount", "currency", "price_at_signs"?:0|1|2, "price_amount"?, "price_currency"? }] } ` +
-    `OR { "id", "kind":"balance"|"pad", "date", "account", "amount", "currency" }.`
-  )
-}
-
-function makeDraftTransactionRepair(seen: Set<string>): ToolCallRepairFunction<ToolSet> {
-  return async ({ toolCall }) => {
-    if (toolCall.toolName !== 'draft_transaction') return null
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(toolCall.input)
-    } catch {
-      return null
-    }
-    const rawEntries = (parsed as { entries?: unknown } | null)?.entries
-    if (!Array.isArray(rawEntries)) return null
-
-    let message: string
-    const ir = z.array(ZEntry).safeParse(rawEntries)
-    if (!ir.success) {
-      message = irShapeFeedback(ir.error)
-    } else {
-      const fb = buildDraftFeedback(serializeIrEntries(ir.data), (t) => seen.has(t))
-      if (fb.ok === true) return null // well-formed + balanced; let the SDK proceed
-      for (const t of fb.failingTexts) seen.add(t)
-      message = fb.message
-    }
-    return {
-      ...toolCall,
-      toolName: '_draft_feedback',
-      input: JSON.stringify({ feedback: message }),
-    }
-  }
-}
+// Draft validation is the SDK's standard tool-input path: the `draft_transaction`
+// inputSchema (draftTransactionBatchSchema.superRefine) validates the IR and
+// attaches per-entry issues; on failure the SDK surfaces them to the model and
+// the draft card renders as a failed/rejected call. No repair hook, no separate
+// feedback tool.
 
 function todayInt(): number {
   const now = new Date()
@@ -137,11 +67,6 @@ export class ChatDO
   // The ledger snapshot for the current turn, fetched once in beforeTurnFetch
   // (async RPC) and reused by the sync system-prompt builders + every step.
   private turnSnapshot: Snapshot | null = null
-
-  // Entry texts that failed draft_transaction validation this turn — so the
-  // repair feedback can flag a verbatim re-submission ("you already tried this").
-  // Reset per turn in beforeTurnFetch.
-  private rejectedDraftEntries = new Set<string>()
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
@@ -519,13 +444,6 @@ ${opts.text}`,
   // prompt builders can't `await`).
   protected override async beforeTurnFetch(): Promise<void> {
     this.turnSnapshot = await this.ledgerStub().ledger_snapshot()
-    this.rejectedDraftEntries.clear()
-  }
-
-  protected override getRepairToolCall():
-    | ToolCallRepairFunction<ToolSet>
-    | undefined {
-    return makeDraftTransactionRepair(this.rejectedDraftEntries)
   }
 
   // ---- AgentHost<EditorAgentName> ----
@@ -577,15 +495,6 @@ entries, or draft corrections.`
         draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(CLARIFICATIONS),
         add_card: addCardTool(),
-        // Internal (underscore = hidden from the model via activeToolNames). The
-        // repair hook redirects a validation-failed draft_transaction here; the
-        // result is the compact, example-rich feedback the model reads. Never
-        // called by the model directly.
-        _draft_feedback: tool({
-          description: 'internal: draft validation feedback',
-          inputSchema: z.object({ feedback: z.string() }),
-          execute: async ({ feedback }: { feedback: string }) => feedback,
-        }),
       })
     }
     return this.withToolLog(name, {

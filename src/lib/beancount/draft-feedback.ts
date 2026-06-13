@@ -71,49 +71,13 @@ function pickExample(message: string, entry: string): string {
   return EX_ACCOUNT
 }
 
-export type DraftFeedback = { ok: true } | { ok: false; message: string; failingTexts: string[] }
-
-// `seenBefore` returns true if this exact entry text was submitted and rejected
-// earlier in the same turn — used to tell the model to stop repeating it.
-export function buildDraftFeedback(
-  transactions: string[],
-  seenBefore: (entryText: string) => boolean,
-): DraftFeedback {
-  const result = validateDraftBatch(transactions)
-  if (result.ok === true) return { ok: true }
-
-  const failingTexts: string[] = []
-  const blocks: string[] = []
-  for (const issue of result.issues) {
-    const entry = transactions[issue.index] ?? ''
-    failingTexts.push(entry.trim())
-    const repeated = seenBefore(entry.trim())
-    const lines = [`• Entry ${issue.index + 1}: ${issue.message}`]
-    if (repeated) {
-      lines.push(
-        `  ⚠ You already submitted this entry verbatim and it was rejected. Repeating it WILL fail again — you MUST change it as shown below, OR call \`clarify\` if you're blocked (see the footer).`,
-      )
-    }
-    lines.push(indent(pickExample(issue.message, entry)))
-    blocks.push(lines.join('\n'))
-  }
-
-  // The escape hatch: an entry can be unfixable because a required value is
-  // genuinely missing and can't be derived. Re-drafting can't conjure it — the
-  // model must ASK. Without this, the model loops on the impossible entry and
-  // eventually emits an empty turn (no card, no question — a dead end).
-  const footer =
-    `If an entry keeps failing because a required value is genuinely missing and you ` +
-    `cannot derive it, do NOT keep re-drafting it and do NOT reply with nothing — ` +
-    `call \`clarify\` to ask the user for what's missing. Never end your turn with no ` +
-    `tool call and no message.`
-
-  const header =
-    result.issues.length === 1
-      ? `1 entry failed validation. Fix ONLY this entry, then re-call draft_transaction with the FULL batch (leave the passing entries unchanged):`
-      : `${result.issues.length} entries failed validation. Fix ONLY these entries, then re-call draft_transaction with the FULL batch (leave the passing entries unchanged):`
-
-  return { ok: false, message: `${header}\n\n${blocks.join('\n\n')}\n\n${footer}`, failingTexts }
+// Per-entry feedback: the validator's per-entry message PLUS a worked example
+// for that failure class. Surfaced through the schema's superRefine (the
+// standard tool-input-validation path) so the model gets actionable, example-
+// rich guidance on the failing entries — no separate feedback tool, no UI
+// plumbing. The validator already names the entry by date/payee.
+export function entryFeedback(entryText: string, message: string): string {
+  return `${message}\n${indent(pickExample(message, entryText))}`
 }
 
 function indent(s: string): string {

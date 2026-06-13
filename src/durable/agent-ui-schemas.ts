@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
+import { entryFeedback } from '@/lib/beancount/draft-feedback'
 import { ZEntry, serializeIrEntries } from './ingest/ir'
 
 // The agent emits one or more drafted entries inside a `draft_transaction` tool
@@ -31,14 +32,17 @@ export const draftTransactionBatchSchema = z
   })
   .superRefine((value, ctx) => {
     // value.entries are post-transform ExtractedEntry[]; serialize to canonical
-    // beancount and validate balance/shape, mapping each issue back to its entry.
-    const result = validateDraftBatch(serializeIrEntries(value.entries))
+    // beancount and validate balance/shape. Each issue is added per-entry with
+    // an example for its failure class. The SDK surfaces these to the model on
+    // the standard tool-input-validation path — no separate feedback channel.
+    const texts = serializeIrEntries(value.entries)
+    const result = validateDraftBatch(texts)
     if (result.ok === true) return
     for (const issue of result.issues) {
       ctx.addIssue({
         code: 'custom',
         path: ['entries', issue.index],
-        message: issue.message,
+        message: entryFeedback(texts[issue.index] ?? '', issue.message),
       })
     }
   })
