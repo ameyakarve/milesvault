@@ -1289,6 +1289,25 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       .map(([cur]) => cur)
   }
 
+  // Every distinct commodity currently in the ledger (postings + balance
+  // assertions), for the balance-update UI's currency dropdown.
+  async list_currencies(): Promise<string[]> {
+    const set = new Set<string>()
+    for (const r of this.db
+      .exec<{ currency: string }>(
+        `SELECT DISTINCT currency FROM postings WHERE currency IS NOT NULL AND currency != ''`,
+      )
+      .toArray())
+      set.add(r.currency)
+    for (const r of this.db
+      .exec<{ currency: string }>(
+        `SELECT DISTINCT currency FROM directives_balance WHERE currency IS NOT NULL AND currency != ''`,
+      )
+      .toArray())
+      set.add(r.currency)
+    return [...set].sort()
+  }
+
   async search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse> {
     const limit = Math.min(
       filter.limit ?? POSTING_SEARCH_DEFAULT_LIMIT,

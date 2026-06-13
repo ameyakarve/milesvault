@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Check, ChevronsUpDown } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -15,10 +16,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { cn } from '@/lib/utils'
 import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 
 function ymd(d: Date): string {
@@ -43,7 +54,9 @@ export function UpdateBalanceModal({
   onDone?: () => void
 }) {
   const [accounts, setAccounts] = useState<string[]>([])
+  const [currencies, setCurrencies] = useState<string[]>([])
   const [account, setAccount] = useState('')
+  const [acctOpen, setAcctOpen] = useState(false)
   const [date, setDate] = useState(ymd(new Date()))
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('INR')
@@ -51,23 +64,34 @@ export function UpdateBalanceModal({
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
+  // On open, load accounts + the ledger's current currencies for the pickers.
+  // (The date already defaults to today via useState init, and close() resets
+  // it — so it's today on every open.)
   useEffect(() => {
-    if (!open || accounts.length) return
+    if (!open) return
     ledgerClient
       .getAccounts()
-      .then((r) =>
+      .then((r) => {
         setAccounts(
           r.accounts.filter(
             (a) => a.startsWith('Assets:') || a.startsWith('Liabilities:'),
           ),
-        ),
-      )
+        )
+        setCurrencies(r.currencies ?? [])
+        // Default to INR when present, else the first currency in the ledger.
+        setCurrency((c) =>
+          (r.currencies ?? []).includes(c)
+            ? c
+            : (r.currencies ?? []).includes('INR')
+              ? 'INR'
+              : ((r.currencies ?? [])[0] ?? c),
+        )
+      })
       .catch(() => {})
-  }, [open, accounts.length])
+  }, [open])
 
-  // Default the currency to a rewards account's ticker leaf isn't known here;
-  // INR is the right default for bank/card accounts. Rewards wallets need the
-  // ticker typed (e.g. AXIS-EDGE-BURGUNDY).
+  // INR is the right default for bank/card accounts; rewards wallets carry the
+  // programme ticker (e.g. AXIS-EDGE-BURGUNDY).
   const isRewards = account.startsWith('Assets:Rewards:')
 
   const preview = useMemo(() => {
@@ -123,18 +147,49 @@ export function UpdateBalanceModal({
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <Label>Account</Label>
-              <Select value={account} onValueChange={setAccount}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose an account" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((a) => (
-                    <SelectItem key={a} value={a}>
-                      {a}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={acctOpen} onOpenChange={setAcctOpen}>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between font-normal"
+                    />
+                  }
+                >
+                  <span className={cn('truncate', !account && 'text-muted-foreground')}>
+                    {account || 'Choose an account'}
+                  </span>
+                  <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
+                </PopoverTrigger>
+                <PopoverContent className="w-[420px] max-w-[90vw] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search accounts…" />
+                    <CommandList>
+                      <CommandEmpty>No matching account.</CommandEmpty>
+                      <CommandGroup>
+                        {accounts.map((a) => (
+                          <CommandItem
+                            key={a}
+                            value={a}
+                            onSelect={() => {
+                              setAccount(a)
+                              setAcctOpen(false)
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                'size-4',
+                                account === a ? 'opacity-100' : 'opacity-0',
+                              )}
+                            />
+                            <span className="truncate font-mono text-[12px]">{a}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -149,12 +204,29 @@ export function UpdateBalanceModal({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ub-ccy">Currency</Label>
-                <Input
-                  id="ub-ccy"
-                  placeholder={isRewards ? 'TICKER' : 'INR'}
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
-                />
+                {currencies.length > 1 ? (
+                  <Select value={currency} onValueChange={setCurrency}>
+                    <SelectTrigger id="ub-ccy">
+                      <SelectValue placeholder="Currency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currencies.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    id="ub-ccy"
+                    placeholder={isRewards ? 'TICKER' : 'INR'}
+                    value={currency}
+                    onChange={(e) =>
+                      setCurrency(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))
+                    }
+                  />
+                )}
               </div>
             </div>
             <div className="space-y-1.5">

@@ -31,6 +31,7 @@ export type LedgerClient = {
   ): Promise<JournalGetResponse>
   journal_get_filtered(req: JournalGetFilteredRequest): Promise<JournalGetFilteredResponse>
   list_account_currencies(account: string): Promise<string[]>
+  list_currencies(): Promise<string[]>
   list_account_children(account: string): Promise<string[]>
   list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
   search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse>
@@ -171,6 +172,10 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
         throw new LedgerInputError(['account must be a non-empty string.'])
       }
       return stub.list_account_currencies(account)
+    },
+
+    async list_currencies() {
+      return stub.list_currencies()
     },
 
     async list_account_children(account) {
