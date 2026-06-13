@@ -1,48 +1,43 @@
 import { z } from 'zod'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
+import { ZEntry, serializeIrEntries } from './ingest/ir'
 
-// The agent emits one or more drafted transactions inside a `draft_transaction`
-// tool call. Each element is a complete Beancount entry (date / payee / narration
-// header + 2+ postings) — the model writes Beancount syntax directly so it can
-// use `@@` (forex), `@`, cost basis, metadata, and tags without us re-modelling
-// each feature in a JSON schema. The user reviews each entry in a per-card
-// CodeMirror editor and approves the batch; we then concatenate and replaceBuffer.
+// The agent emits one or more drafted entries inside a `draft_transaction` tool
+// call as STRUCTURED IR — the SAME `ZEntry` the headless statement pipeline
+// uses (a transaction is a header + typed postings; a stated balance is a
+// `balance`/`pad` entry). The model fills fields (account, amount, currency,
+// price) instead of hand-writing beancount text, so it cannot fumble syntax,
+// indentation, or `@@` weight mechanics. Code serializes the IR to canonical
+// beancount; the user reviews each entry in a per-card CodeMirror editor and
+// approves; we then concatenate the (possibly hand-edited) text and replaceBuffer.
 //
-// superRefine runs the same beancount validators replaceBuffer runs at the
-// journal-write boundary (parse + per-currency balance + account shape). When
-// it fails, the AI SDK surfaces the zod issues back to the model as a tool
-// input-error and the model re-emits in the same turn. Requires the tool to
-// be registered with `dynamicTool` — static tools with invalid input get
-// silently dropped by the SDK, never reaching the model.
+// superRefine serializes the IR and runs the same generic validators
+// replaceBuffer runs (parse + per-currency balance + account shape). On failure
+// the AI SDK surfaces the issue to the model as a tool input-error; the repair
+// hook (chat-do) turns it into compact, example-rich feedback and the model
+// re-emits in the same turn. Requires `dynamicTool` registration — static tools
+// with invalid input get silently dropped by the SDK, never reaching the model.
 export const draftTransactionBatchSchema = z
   .object({
-    transactions: z
-      .array(
-        z
-          .string()
-          .min(1)
-          .describe(
-            'One complete Beancount transaction as text. Example:\n' +
-              '2026-05-13 * "Cloudflare" "Workers subscription"\n' +
-              '  Expenses:Software:Subscriptions    2.36 USD @@ 225.98 INR\n' +
-              '  Expenses:Bank:ForexMarkup          4.52 INR\n' +
-              '  Expenses:Tax:GST                   0.81 INR\n' +
-              '  Liabilities:CreditCards:Axis:Magnus -231.31 INR',
-          ),
-      )
+    entries: z
+      .array(ZEntry)
       .min(1)
+      .max(250)
       .describe(
-        'Array of Beancount transaction strings. One-off entries are an array of length 1; ' +
-          'statement uploads / splits / subscription series go in the same call.',
+        'Array of structured draft entries (the same IR the statement importer emits). ' +
+          'A one-off is an array of length 1; statement uploads / splits / subscription ' +
+          'series go in the same call. Each entry needs a unique short `id`.',
       ),
   })
   .superRefine((value, ctx) => {
-    const result = validateDraftBatch(value.transactions)
+    // value.entries are post-transform ExtractedEntry[]; serialize to canonical
+    // beancount and validate balance/shape, mapping each issue back to its entry.
+    const result = validateDraftBatch(serializeIrEntries(value.entries))
     if (result.ok === true) return
     for (const issue of result.issues) {
       ctx.addIssue({
         code: 'custom',
-        path: ['transactions', issue.index],
+        path: ['entries', issue.index],
         message: issue.message,
       })
     }

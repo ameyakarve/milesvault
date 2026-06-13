@@ -5,9 +5,19 @@ import {
   type CardGuideResult,
 } from '../agents/tools/editor/card-guide'
 import type { KbHttp } from '../agents/tools/concierge/kb-tools'
-import type { TransactionInput, DirectiveInput } from '../ledger-types'
-import { serializeTransactionInput, serializeJournal } from '@/lib/beancount/ast'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
+import {
+  ZEntry,
+  type ExtractedEntry,
+  serializeIrEntry,
+  toLedgerEntries,
+  serializeEntries,
+} from './ir'
+
+// Re-exported for external consumers (eval harness) that imported them from here
+// before the IR was extracted into ./ir.
+export { toLedgerEntries, serializeEntries }
+export type { ExtractedEntry }
 
 // Statement-ingest pipeline.
 //
@@ -29,146 +39,14 @@ import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 // to the model. Same conventions as the editor; the only delta is the output
 // channel (JSON IR here vs the draft_transaction tool there).
 
-// ---- Amount parsing helpers ----------------------------------------------------
-
-function num(v: string | number | null | undefined): number | null {
-  if (v == null) return null
-  const n = typeof v === 'number' ? v : Number(String(v).replace(/,/g, ''))
-  return Number.isFinite(n) ? n : null
-}
-
-function fmt(n: number): string {
-  return n.toFixed(2)
-}
-
-// ---- Loose acceptors → canonical types -----------------------------------------
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-const ZAmount = z.union([z.string(), z.number()])
-
-// Accepts what a model plausibly emits; outputs a canonical PostingInput.
-const ZLoosePosting = z
-  .object({
-    account: z.string().min(3),
-    amount: ZAmount.nullable().optional(),
-    currency: z.string().max(24).nullable().optional(),
-    price_at_signs: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
-    price_amount: ZAmount.nullable().optional(),
-    price_currency: z.string().max(24).nullable().optional(),
-  })
-  .transform((p) => {
-    const amount = num(p.amount)
-    const priceAmount = num(p.price_amount)
-    return {
-      account: p.account,
-      amount: amount === null ? null : fmt(amount),
-      currency: p.currency ?? (amount === null ? null : 'INR'),
-      ...(p.price_at_signs && priceAmount !== null
-        ? {
-            price_at_signs: p.price_at_signs,
-            price_amount: fmt(priceAmount),
-            price_currency: p.price_currency ?? 'INR',
-          }
-        : {}),
-    }
-  })
-
-// Every entry carries a model-assigned stable `id` so corrections are
-// SURGICAL: a bad entry is re-requested by id and merged back, instead of
-// regenerating the whole batch (which shifts indices and re-rolls good
-// entries — the multi-round latency trap we measured).
-const ZLooseTxn = z
-  .object({
-    id: z.string().min(1).max(24),
-    kind: z.literal('transaction'),
-    date: z.string().regex(DATE_RE),
-    flag: z.enum(['*', '!']).optional(),
-    payee: z.string().max(120).optional(),
-    narration: z.string().max(200).optional(),
-    tags: z.array(z.string().max(40)).optional(),
-    postings: z.array(ZLoosePosting).min(2).max(8),
-  })
-  .transform(
-    (t): { id: string; kind: 'transaction'; txn: TransactionInput } => ({
-      id: t.id,
-      kind: 'transaction',
-      txn: {
-        date: t.date,
-        flag: t.flag ?? '*',
-        payee: t.payee ?? '',
-        narration: t.narration ?? '',
-        tags: (t.tags ?? []).map((x) => x.replace(/^#/, '')),
-        postings: t.postings,
-      },
-    }),
-  )
-
-// Two closing-assertion kinds, mapping to the two beancount concepts:
-//   `pad`     → a pad + balance pair; the pad absorbs drift up to the asserted
-//               figure. Use for statement closings (card, points) — the printed
-//               total is the truth and the pad reconciles whatever the entries
-//               left behind.
-//   `balance` → a bare balance assertion (no pad); the running balance must
-//               already equal the figure exactly or the write is rejected.
-const ZBalanceBase = {
-  id: z.string().min(1).max(24),
-  date: z.string().regex(DATE_RE),
-  account: z.string().min(3),
-  amount: ZAmount,
-  currency: z.string().max(24),
-}
-const ZLooseBalance = z
-  .object({ kind: z.literal('balance'), ...ZBalanceBase })
-  .transform((b) => ({
-    id: b.id,
-    kind: 'balance' as const,
-    date: b.date,
-    account: b.account,
-    amount: String(b.amount),
-    currency: b.currency,
-    plug_account: undefined as string | undefined, // bare assertion — no pad
-  }))
-const ZLoosePad = z
-  .object({ kind: z.literal('pad'), ...ZBalanceBase })
-  .transform((b) => ({
-    id: b.id,
-    kind: 'pad' as const,
-    date: b.date,
-    account: b.account,
-    amount: String(b.amount),
-    currency: b.currency,
-    // One plug for all statement pads (owner ruling: don't complicate).
-    plug_account: 'Equity:Adjustments' as string | undefined,
-  }))
-
-const ZEntry = z.discriminatedUnion('kind', [ZLooseTxn, ZLooseBalance, ZLoosePad])
-export type ExtractedEntry = z.infer<typeof ZEntry>
-
+// The draft IR (entry schemas, helpers, serializer) lives in ./ir and is shared
+// VERBATIM with the editor's draft_transaction tool — one definition of an
+// entry, no drifting mirrors. Only the statement wrapper is pipeline-specific:
 const ZStatement = z.object({
   card_name: z.string().min(2).max(80),
   entries: z.array(ZEntry).min(1).max(250),
 })
 export type ExtractedStatement = z.infer<typeof ZStatement>
-
-// Render ONE entry to canonical beancount (same formatter as journal saves).
-function renderEntry(e: ExtractedEntry): string {
-  if (e.kind === 'balance' || e.kind === 'pad') {
-    return serializeJournal(
-      [],
-      [
-        {
-          kind: 'balance',
-          date: e.date,
-          account: e.account,
-          amount: e.amount,
-          currency: e.currency,
-          plug_account: e.plug_account, // set for `pad`, undefined for bare `balance`
-        },
-      ],
-    ).trim()
-  }
-  return serializeTransactionInput(e.txn).trim()
-}
 
 // ---- JSON-only model call ------------------------------------------------------
 
@@ -254,48 +132,6 @@ export function parseBaseRate(guide: CardGuideResult): { pts: number; per: numbe
     }
   }
   return null
-}
-
-// ---- IR → entries (no arbiter): code only splits + serializes ---------------
-//
-// Owner ruling: code is NOT an arbiter. The model emits complete beancount
-// directives in the IR (balanced card legs, correct signs, canonical accounts,
-// points legs, the landing, pad+balance). Here we only split them for the
-// serializer; the generic validator (parse + per-currency balance + account
-// shape) bounces any repair back to the model. No points math, no card-leg
-// fill, no account rewriting, no sentinels.
-export function toLedgerEntries(opts: {
-  extracted: ExtractedStatement
-}): { transactions: TransactionInput[]; directives: DirectiveInput[] } {
-  const transactions: TransactionInput[] = []
-  const directives: DirectiveInput[] = []
-  for (const e of opts.extracted.entries) {
-    if (e.kind === 'balance' || e.kind === 'pad') {
-      directives.push({
-        kind: 'balance',
-        date: e.date,
-        account: e.account,
-        amount: e.amount,
-        currency: e.currency,
-        plug_account: e.plug_account, // set for `pad`, undefined for bare `balance`
-      })
-    } else {
-      transactions.push(e.txn)
-    }
-  }
-  return { transactions, directives }
-}
-
-// Serialize each entry standalone via the canonical serializer — identical
-// formatting to journal saves; the drafts contract is one string per entry.
-export function serializeEntries(parts: {
-  transactions: TransactionInput[]
-  directives: DirectiveInput[]
-}): string[] {
-  const out: string[] = []
-  for (const t of parts.transactions) out.push(serializeTransactionInput(t).trim())
-  for (const d of parts.directives) out.push(serializeJournal([], [d]).trim())
-  return out
 }
 
 // ---- Prompts -------------------------------------------------------------------
@@ -518,7 +354,7 @@ export async function runDraftPipeline(deps: {
     // Render the accepted set, run the GENERIC validator, map each issue back
     // to its entry id (validateDraftBatch reports by index).
     const idOrder = [...accepted.keys()]
-    const rendered = [...accepted.values()].map(renderEntry)
+    const rendered = [...accepted.values()].map(serializeIrEntry)
     const v = validateDraftBatch(rendered)
     if (v.ok === false)
       for (const iss of v.issues) bad.push({ id: idOrder[iss.index] ?? '?', msg: iss.message })
@@ -536,7 +372,7 @@ export async function runDraftPipeline(deps: {
       `${basePrompt}\n\nSome entries are INVALID. Return a JSON object {"entries":[...]} containing ONLY corrected versions of the entries listed below — keep each one's SAME "id", and do NOT resend any other entry:\n` +
       bad.map((b) => `- id "${b.id}": ${b.msg}`).join('\n')
   }
-  const entries = [...accepted.values()].map(renderEntry)
+  const entries = [...accepted.values()].map(serializeIrEntry)
   if (lastExtractError !== null && entries.length === 0) {
     return { ok: false, entries: [], error: `extract: ${lastExtractError}`, stages, validation_issues: [] }
   }

@@ -4,6 +4,20 @@ import {
   DraftTransactionBatchCard,
   type DraftTransactionBatchCardProps,
 } from './draft-transaction'
+import type { ExtractedEntry } from '@/durable/ingest/ir'
+import type { TransactionInput } from '@/durable/ledger-types'
+
+// The card takes structured IR entries (post-transform). Small builder so the
+// stories read like the old beancount text.
+function tx(
+  id: string,
+  date: string,
+  payee: string,
+  narration: string,
+  postings: TransactionInput['postings'],
+): ExtractedEntry {
+  return { id, kind: 'transaction', txn: { date, flag: '*', payee, narration, tags: [], postings } }
+}
 
 const ACCOUNTS = [
   'Assets:Bank:Chase:Checking',
@@ -18,35 +32,49 @@ const ACCOUNTS = [
   'Liabilities:CreditCard:Amex',
 ]
 
-const BALANCED = `2026-05-26 * "Whole Foods" "Weekly grocery run"
-  Expenses:Food:Groceries        42.10 USD
-  Assets:Bank:Chase:Checking    -42.10 USD`
+const BALANCED = tx('b1', '2026-05-26', 'Whole Foods', 'Weekly grocery run', [
+  { account: 'Expenses:Food:Groceries', amount: '42.10', currency: 'USD' },
+  { account: 'Assets:Bank:Chase:Checking', amount: '-42.10', currency: 'USD' },
+])
 
-const UNBALANCED = `2026-05-26 * "Whole Foods" "Weekly grocery run"
-  Expenses:Food:Groceries        42.10 USD
-  Assets:Bank:Chase:Checking    -38.00 USD`
+const UNBALANCED = tx('u1', '2026-05-26', 'Whole Foods', 'Weekly grocery run', [
+  { account: 'Expenses:Food:Groceries', amount: '42.10', currency: 'USD' },
+  { account: 'Assets:Bank:Chase:Checking', amount: '-38.00', currency: 'USD' },
+])
 
-const SPLIT = `2026-05-26 * "Costco" "Run"
-  Expenses:Food:Groceries       120.50 USD
-  Expenses:Household             79.99 USD
-  Liabilities:CreditCard:Amex  -200.49 USD`
+const SPLIT = tx('s1', '2026-05-26', 'Costco', 'Run', [
+  { account: 'Expenses:Food:Groceries', amount: '120.50', currency: 'USD' },
+  { account: 'Expenses:Household', amount: '79.99', currency: 'USD' },
+  { account: 'Liabilities:CreditCard:Amex', amount: '-200.49', currency: 'USD' },
+])
 
-const FOREX = `2026-05-13 * "Cloudflare" "Subscription"
-  Expenses:Software:Subscriptions    2.36 USD @@ 225.98 INR
-  Expenses:Bank:ForexMarkup          4.52 INR
-  Expenses:Tax:GST                   0.81 INR
-  Liabilities:CreditCards:Axis:Magnus -231.31 INR`
+const FOREX = tx('f1', '2026-05-13', 'Cloudflare', 'Subscription', [
+  {
+    account: 'Expenses:Software:Subscriptions',
+    amount: '2.36',
+    currency: 'USD',
+    price_at_signs: 2,
+    price_amount: '225.98',
+    price_currency: 'INR',
+  },
+  { account: 'Expenses:Bank:ForexMarkup', amount: '4.52', currency: 'INR' },
+  { account: 'Expenses:Tax:GST', amount: '0.81', currency: 'INR' },
+  { account: 'Liabilities:CreditCards:Axis:Magnus', amount: '-231.31', currency: 'INR' },
+])
 
-const STATEMENT_BATCH = [
-  `2026-05-02 * "Trader Joe’s" "Groceries"
-  Expenses:Food:Groceries       58.20 USD
-  Liabilities:CreditCard:Amex  -58.20 USD`,
-  `2026-05-05 * "Shell" "Gas"
-  Expenses:Travel:Air           41.00 USD
-  Liabilities:CreditCard:Amex  -41.00 USD`,
-  `2026-05-07 * "Spotify" "Monthly subscription"
-  Expenses:Food:Dining           9.99 USD
-  Liabilities:CreditCard:Amex   -9.99 USD`,
+const STATEMENT_BATCH: ExtractedEntry[] = [
+  tx('t1', '2026-05-02', 'Trader Joe’s', 'Groceries', [
+    { account: 'Expenses:Food:Groceries', amount: '58.20', currency: 'USD' },
+    { account: 'Liabilities:CreditCard:Amex', amount: '-58.20', currency: 'USD' },
+  ]),
+  tx('t2', '2026-05-05', 'Shell', 'Gas', [
+    { account: 'Expenses:Travel:Air', amount: '41.00', currency: 'USD' },
+    { account: 'Liabilities:CreditCard:Amex', amount: '-41.00', currency: 'USD' },
+  ]),
+  tx('t3', '2026-05-07', 'Spotify', 'Monthly subscription', [
+    { account: 'Expenses:Food:Dining', amount: '9.99', currency: 'USD' },
+    { account: 'Liabilities:CreditCard:Amex', amount: '-9.99', currency: 'USD' },
+  ]),
 ]
 
 function CardShell(props: Partial<DraftTransactionBatchCardProps>) {
@@ -57,7 +85,7 @@ function CardShell(props: Partial<DraftTransactionBatchCardProps>) {
       <div className="mx-auto max-w-2xl space-y-4">
         <div className="rounded-[12px] bg-slate-50 px-4 py-3 text-sm text-slate-900">
           <DraftTransactionBatchCard
-            input={{ transactions: [BALANCED] }}
+            input={{ entries: [BALANCED] }}
             accounts={ACCOUNTS}
             onApprove={(f: string) => push(`approve\n${f}`)}
             onReject={() => push('reject')}
@@ -84,19 +112,19 @@ export default meta
 export const Balanced: StoryObj<typeof CardShell> = {}
 
 export const Unbalanced: StoryObj<typeof CardShell> = {
-  args: { input: { transactions: [UNBALANCED] } },
+  args: { input: { entries: [UNBALANCED] } },
 }
 
 export const ThreePostingSplit: StoryObj<typeof CardShell> = {
-  args: { input: { transactions: [SPLIT] } },
+  args: { input: { entries: [SPLIT] } },
 }
 
 export const Forex: StoryObj<typeof CardShell> = {
-  args: { input: { transactions: [FOREX] } },
+  args: { input: { entries: [FOREX] } },
 }
 
 export const Batch: StoryObj<typeof CardShell> = {
-  args: { input: { transactions: STATEMENT_BATCH } },
+  args: { input: { entries: STATEMENT_BATCH } },
 }
 
 export const Submitting: StoryObj<typeof CardShell> = {

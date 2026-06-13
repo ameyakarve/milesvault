@@ -2,8 +2,8 @@ import type { ChatResponseResult } from '@cloudflare/think'
 import { generateText, streamText, stepCountIs, tool, type ToolCallRepairFunction, type ToolSet } from 'ai'
 import { z } from 'zod'
 import { draftTransactionBatchSchema } from './agent-ui-schemas'
-import { repairDraftBatch } from '@/lib/beancount/repair-draft-batch'
 import { buildDraftFeedback } from '@/lib/beancount/draft-feedback'
+import { ZEntry, serializeIrEntries } from './ingest/ir'
 import {
   buildLedgerSystem,
   buildStatementAgentSystem,
@@ -57,19 +57,38 @@ export type ChatDOState = { draftProgress?: string }
 //   2. bump @cloudflare/think to the version that ships the field
 //   3. if upstream renamed the option, rename here at the single call site
 //
-// Today the repair handles two things:
-//  1. the forex-rounding class deterministically (LLMs round off by ₹0.01 on
-//     `@@`-priced INR statements and can't fix it on retry — see
-//     src/lib/beancount/repair-draft-batch.ts), and
-//  2. all OTHER validation failures: it redirects the bad call to the internal
-//     `_draft_feedback` tool, whose result is a COMPACT, actionable message
-//     (only the failing entries, a worked example per failure class, and a flag
-//     on any entry the model already submitted verbatim). This replaces the AI
-//     SDK's default "Type validation failed: Value: {whole batch}" echo, which
-//     dumped the entire beancount back and let the model re-emit the identical
-//     broken line every step until the step cap.
-// `seen` is the per-turn set of entry texts already rejected this turn (DO
-// state) — used to tell the model to stop repeating an entry verbatim.
+// A draft_transaction (structured IR) that failed input validation is redirected
+// to the internal `_draft_feedback` tool, whose result is a COMPACT, actionable
+// message instead of the AI SDK's default "Type validation failed: Value: {whole
+// input}" echo. Two failure classes:
+//  - IR SHAPE wrong (missing/mistyped fields): report the bad fields per entry
+//    plus the entry shape, so the model fixes the structure.
+//  - balance/account-shape wrong (IR is well-formed): serialize to canonical
+//    beancount and run the generic validator; report only the failing entries,
+//    a worked example per failure class, and a flag on any entry resubmitted
+//    verbatim. Serialization is canonical, so the verbatim-repeat flag is exact.
+// `seen` is the per-turn set of rejected entry texts (DO state).
+function irShapeFeedback(err: z.ZodError): string {
+  const byEntry = new Map<number, string[]>()
+  for (const iss of err.issues) {
+    const idx = typeof iss.path[1] === 'number' ? iss.path[1] : -1
+    const field = iss.path.slice(2).join('.') || '(entry)'
+    const list = byEntry.get(idx) ?? []
+    list.push(`${field}: ${iss.message}`)
+    byEntry.set(idx, list)
+  }
+  const blocks = [...byEntry.entries()].map(
+    ([idx, msgs]) => `• Entry ${idx >= 0 ? idx + 1 : '?'}: ${msgs.join('; ')}`,
+  )
+  return (
+    `${blocks.length} entr${blocks.length === 1 ? 'y has' : 'ies have'} an invalid SHAPE — fix the fields, keep the rest:\n\n` +
+    `${blocks.join('\n')}\n\n` +
+    `Each entry is { "id", "kind":"transaction", "date":"YYYY-MM-DD", "payee"?, "narration"?, ` +
+    `"postings":[{ "account", "amount", "currency", "price_at_signs"?:0|1|2, "price_amount"?, "price_currency"? }] } ` +
+    `OR { "id", "kind":"balance"|"pad", "date", "account", "amount", "currency" }.`
+  )
+}
+
 function makeDraftTransactionRepair(seen: Set<string>): ToolCallRepairFunction<ToolSet> {
   return async ({ toolCall }) => {
     if (toolCall.toolName !== 'draft_transaction') return null
@@ -79,32 +98,23 @@ function makeDraftTransactionRepair(seen: Set<string>): ToolCallRepairFunction<T
     } catch {
       return null
     }
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      !Array.isArray((parsed as { transactions?: unknown }).transactions)
-    ) {
-      return null
-    }
-    const transactions = (parsed as { transactions: unknown[] }).transactions
-    if (!transactions.every((t): t is string => typeof t === 'string')) return null
+    const rawEntries = (parsed as { entries?: unknown } | null)?.entries
+    if (!Array.isArray(rawEntries)) return null
 
-    // Deterministic forex-rounding fix first — re-emit the corrected batch so
-    // the card renders without bothering the model.
-    const repaired = repairDraftBatch(transactions)
-    if (repaired.changed) {
-      return { ...toolCall, input: JSON.stringify({ transactions: repaired.transactions }) }
+    let message: string
+    const ir = z.array(ZEntry).safeParse(rawEntries)
+    if (!ir.success) {
+      message = irShapeFeedback(ir.error)
+    } else {
+      const fb = buildDraftFeedback(serializeIrEntries(ir.data), (t) => seen.has(t))
+      if (fb.ok === true) return null // well-formed + balanced; let the SDK proceed
+      for (const t of fb.failingTexts) seen.add(t)
+      message = fb.message
     }
-
-    // Everything else: build the compact feedback and deliver it via the
-    // internal tool. `seen` lets the message call out verbatim repeats.
-    const feedback = buildDraftFeedback(transactions, (t) => seen.has(t))
-    if (feedback.ok === true) return null // shape error the validator doesn't model; let the SDK handle it
-    for (const t of feedback.failingTexts) seen.add(t)
     return {
       ...toolCall,
       toolName: '_draft_feedback',
-      input: JSON.stringify({ feedback: feedback.message }),
+      input: JSON.stringify({ feedback: message }),
     }
   }
 }
@@ -288,9 +298,9 @@ export class ChatDO
       description:
         'Propose one or more beancount transactions (dry run — they are recorded for preview, not committed).',
       inputSchema: draftTransactionBatchSchema,
-      execute: async ({ transactions }) => {
-        recorded.push(...transactions)
-        return { ok: true, recorded: transactions.length }
+      execute: async ({ entries }) => {
+        recorded.push(...serializeIrEntries(entries))
+        return { ok: true, recorded: entries.length }
       },
     })
     const result = await generateText({
@@ -614,16 +624,17 @@ entries, or draft corrections.`
           type === 'tool-draft_transaction' ||
           (type === 'dynamic-tool' && part.toolName === 'draft_transaction')
         if (!isDraft) continue
-        const input = part.input as { transactions?: unknown[] } | undefined
-        const txns = Array.isArray(input?.transactions) ? input.transactions : null
+        const input = part.input as { entries?: unknown[] } | undefined
+        const ents = Array.isArray(input?.entries) ? input.entries : null
+        const ir = ents ? z.array(ZEntry).safeParse(ents) : null
         this.logTool({
           agent: 'turn-audit',
           tool: 'draft_transaction.part',
           input: {
             state: part.state ?? null,
-            entries: txns ? txns.length : null,
-            has_accrual: txns
-              ? txns.some((t) => typeof t === 'string' && t.includes('#reward-accrual'))
+            entries: ents ? ents.length : null,
+            has_accrual: ir?.success
+              ? serializeIrEntries(ir.data).some((t) => t.includes('#reward-accrual'))
               : null,
           },
           output: part.errorText ?? null,

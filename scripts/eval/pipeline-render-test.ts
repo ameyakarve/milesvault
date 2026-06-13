@@ -124,7 +124,7 @@ const extracted: ExtractedStatement = {
   ],
 }
 
-const parts = toLedgerEntries({ extracted })
+const parts = toLedgerEntries(extracted.entries)
 const entries = serializeEntries(parts)
 const joined = entries.join('\n\n')
 console.log(joined)
@@ -147,27 +147,23 @@ const checks: Array<[string, boolean]> = [
 // The validator must REJECT a broken (unbalanced) entry — that's the only
 // guardrail now, and it must bounce.
 const broken = serializeEntries(
-  toLedgerEntries({
-    extracted: {
-      card_name: 'x',
-      entries: [
-        {
-          kind: 'transaction',
-          txn: {
-            date: '2026-04-05',
-            flag: '*',
-            payee: 'UNBALANCED',
-            narration: '',
-            tags: [],
-            postings: [
-              { account: 'Expenses:Misc', amount: '100.00', currency: 'INR' },
-              { account: CARD, amount: '-90.00', currency: 'INR' },
-            ],
-          },
-        },
-      ],
+  toLedgerEntries([
+    {
+      id: 'x1',
+      kind: 'transaction',
+      txn: {
+        date: '2026-04-05',
+        flag: '*',
+        payee: 'UNBALANCED',
+        narration: '',
+        tags: [],
+        postings: [
+          { account: 'Expenses:Misc', amount: '100.00', currency: 'INR' },
+          { account: CARD, amount: '-90.00', currency: 'INR' },
+        ],
+      },
     },
-  }),
+  ]),
 )
 checks.push(['generic validator rejects an unbalanced entry', validateDraftBatch(broken).ok === false])
 

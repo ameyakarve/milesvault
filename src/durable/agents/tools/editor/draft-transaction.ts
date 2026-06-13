@@ -24,7 +24,11 @@ const SUSPENDING_EXECUTE = undefined as unknown as ToolExecuteFunction<
 export function draftTransactionTool() {
   return dynamicTool({
     description:
-      'Propose one or more beancount transactions for the user to review and approve. Always pass an array under `transactions` — a one-off entry is just a batch of length 1. Batch related entries (statement uploads, splits across categories, subscription series) into a single call; the user pages through them and approves the whole batch at once. Input is validated server-side (parse + per-currency balance + account shape); on validation failure you will receive a tool-error describing each bad entry by index — fix the listed entries and call this tool again in the same turn. Do NOT narrate the proposal in prose, do NOT invent file paths, do NOT pretend you have already written to the journal — just call this tool with the structured fields.',
+      'Propose one or more journal entries for the user to review and approve, as STRUCTURED data under `entries` (NOT beancount text). Each entry has a unique short `id` and is ONE of:\n' +
+      '• a transaction: { "id", "kind":"transaction", "date":"YYYY-MM-DD", "flag"?:"*"|"!", "payee"?, "narration"?, "tags"?:[...], "postings":[ 2 or more { "account", "amount", "currency", "price_at_signs"?:0|1|2, "price_amount"?, "price_currency"? } ] }\n' +
+      '• a balance assertion: { "id", "kind":"balance", "date", "account", "amount", "currency" }\n' +
+      '• a pad+balance (lets a pad absorb drift up to the figure): { "id", "kind":"pad", "date", "account", "amount", "currency" }\n' +
+      'Postings must balance per currency. For a foreign-currency or points→points conversion, set `price_at_signs:2` (= `@@`, total price) with `price_amount`/`price_currency` — the price is denominated in the OTHER commodity (e.g. a 150→150 points transfer: the destination leg is `amount:150, currency:DEST, price_at_signs:2, price_amount:150, price_currency:SRC`). Batch related entries (statement uploads, splits, subscription series) into one call. On validation failure you get a compact tool-result naming the bad entries with a worked example — fix only those and call again in the same turn. Do NOT write beancount text, do NOT narrate, do NOT invent file paths.',
     inputSchema: draftTransactionBatchSchema,
     execute: SUSPENDING_EXECUTE,
   })
