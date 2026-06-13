@@ -48,6 +48,13 @@ This applies equally to award flights (ask for the cash fare displaced),
 award hotels (ask for the cash room rate), and hybrid cash + points
 fares (ask what the points side covered).
 
+When SEVERAL redemptions need a cash value, ask for EACH one separately —
+enumerate them in the question by their own date / payee / route so the user
+can give a value per line. Do NOT ask once and reuse a single number across
+multiple redemptions: distinct flights/stays have distinct cash values even
+when they cost the same points. Apply the value the user gives for a line to
+that line only.
+
 ## A rule the user states after you've drafted (earn rate, fee policy, scope)
 
 When the user volunteers a rule once a batch is already on screen —

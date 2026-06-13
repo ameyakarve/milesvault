@@ -238,7 +238,7 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
 export function rewardAccountsTool(kb: KbHttp) {
   return tool({
     description:
-      'List every reward programme / loyalty currency in the knowledge graph with its EXACT canonical Beancount account and commodity ticker (e.g. { name: "Maharaja Club Miles", account: "Assets:Rewards:Miles:MaharajaClub", ticker: "MAHARAJACLUB" }). Call this ONCE before drafting any miles/points entry — earn, transfer, redemption, or balance — then copy the `account` and `ticker` for the matching programme VERBATIM. Do NOT assemble reward account paths yourself and do NOT invent a ticker. If the programme is not in the list, ask the user rather than guessing an account.',
+      'List every reward programme / loyalty currency in the knowledge graph with its EXACT canonical Beancount account and commodity ticker (each item is shaped { name, account, ticker } — e.g. account "Assets:Rewards:Miles:<Programme>", ticker "<TICKER>"). Call this ONCE before drafting any miles/points entry — earn, transfer, redemption, or balance — then copy the `account` and `ticker` for the matching programme VERBATIM. Do NOT assemble reward account paths yourself and do NOT invent a ticker. If the programme is not in the list, ask the user rather than guessing an account.',
     inputSchema: z.object({}),
     execute: async () => ({ items: await listRewardAccounts(kb) }),
   })
