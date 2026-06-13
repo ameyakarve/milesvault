@@ -67,6 +67,27 @@ export function validateTransactionBalance(
   txn: TransactionInput,
   txnIndex?: number,
 ): BalanceIssue | null {
+  // A price in the SAME commodity as the posting (X CUR @@/@ Y CUR with Y == X)
+  // is meaningless — a commodity can't be priced in itself. Reject it so it
+  // can't be used to fake a zero balance (e.g. miles @@ the same miles).
+  for (const p of txn.postings) {
+    if (
+      p.price_at_signs &&
+      p.currency != null &&
+      p.price_currency != null &&
+      p.price_currency === p.currency
+    ) {
+      return {
+        kind: 'unbalanced',
+        txnIndex,
+        date: txn.date,
+        payee: txn.payee ?? null,
+        narration: txn.narration ?? null,
+        residuals: [],
+        message: `posting ${p.account} prices ${p.currency} in ${p.currency} — a price (@ / @@) must be denominated in a DIFFERENT commodity. Either drop the price (plain amount) or use the correct other commodity.`,
+      }
+    }
+  }
   const sums = new Map<string, Scaled>()
   const weights: { account: string; currency: string; amount: Scaled; via: 'native' | '@' | '@@' }[] = []
   for (const p of txn.postings) {

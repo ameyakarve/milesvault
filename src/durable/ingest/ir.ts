@@ -153,9 +153,18 @@ export function serializeIrEntry(e: ExtractedEntry): string {
   return serializeTransactionInput(e.txn).trim()
 }
 
+// Accept either RAW entries (as the model emits them) or already-transformed
+// ExtractedEntry (as a server parse produces). The tool-call input that reaches
+// the client may be in either form depending on where it was parsed, so coerce
+// before serializing rather than assuming one shape.
+function coerce(e: unknown): ExtractedEntry {
+  const r = ZEntry.safeParse(e)
+  return r.success ? r.data : (e as ExtractedEntry)
+}
+
 // Order-preserving: one string per entry, in the order the model emitted them.
-export function serializeIrEntries(entries: ExtractedEntry[]): string[] {
-  return entries.map(serializeIrEntry)
+export function serializeIrEntries(entries: readonly unknown[]): string[] {
+  return entries.map((e) => serializeIrEntry(coerce(e)))
 }
 
 // Split an entry list for the canonical journal serializer (transactions first,

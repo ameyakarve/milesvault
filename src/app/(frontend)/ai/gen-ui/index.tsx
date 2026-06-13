@@ -7,8 +7,8 @@ import { ExploreLinkCard } from './explore-link'
 import {
   addCardInputSchema,
   clarifyInputSchema,
-  draftTransactionBatchSchema,
   showAwardOptionsSchema,
+  type DraftTransactionBatch,
 } from '@/durable/agent-ui-schemas'
 
 export type GenUiProps = {
@@ -35,11 +35,15 @@ const RENDERERS: Record<
   (input: unknown, props: GenUiProps) => React.ReactElement | null
 > = {
   draft_transaction: (input, props) => {
-    const parsed = draftTransactionBatchSchema.safeParse(input)
-    if (!parsed.success) return null
+    // `input` is the tool-call args the server already validated (the tool only
+    // suspends on valid input). Re-running the full IR schema here would fail —
+    // the server-parsed value is post-transform, which the raw schema rejects —
+    // so just confirm the shape and pass it through; the card serializes it.
+    const entries = (input as { entries?: unknown } | null)?.entries
+    if (!Array.isArray(entries) || entries.length === 0) return null
     return (
       <DraftTransactionBatchCard
-        input={parsed.data}
+        input={{ entries } as DraftTransactionBatch}
         accounts={props.accounts}
         status={
           props.status === 'idle' || props.status === undefined
