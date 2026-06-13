@@ -57,60 +57,63 @@ export function VaultView() {
   const [names, setNames] = useState<Names>({})
   const [stats, setStats] = useState<VaultStats | null>(null)
 
+  // Load all home data, and REFETCH whenever the page regains focus/visibility
+  // — balances change in the editor (statements, Update balance, Add accounts),
+  // so returning to the home must show fresh values, not the mount-time
+  // snapshot. `no-store` defeats the HTTP cache; the focus listener defeats the
+  // router cache keeping this component mounted across navigations.
   useEffect(() => {
-    let cancelled = false
-    fetch('/api/ledger/vault-stats')
-      .then((r) => (r.ok ? (r.json() as Promise<VaultStats>) : null))
-      .then((d) => !cancelled && d && setStats(d))
-      .catch(() => {})
-    return () => {
-      cancelled = true
+    let alive = true
+    const noStore = { cache: 'no-store' as const }
+    function load() {
+      fetch('/api/ledger/vault-stats', noStore)
+        .then((r) => (r.ok ? (r.json() as Promise<VaultStats>) : null))
+        .then((d) => alive && d && setStats(d))
+        .catch(() => {})
+      fetch('/api/concierge/account-names', noStore)
+        .then((r) => (r.ok ? (r.json() as Promise<{ names?: Names }>) : null))
+        .then((d) => alive && d?.names && setNames(d.names))
+        .catch(() => {})
+      fetch('/api/ledger/captures', noStore)
+        .then((r) =>
+          r.ok
+            ? (r.json() as Promise<{ rows?: Array<{ state: string; draft_error: string | null }> }>)
+            : null,
+        )
+        .then((d) => {
+          if (!alive || !d) return
+          const all = d.rows ?? []
+          setPendingCaptures(
+            all.filter(
+              (c) =>
+                c.state === 'extracted' ||
+                (c.draft_error != null && c.state !== 'posted' && c.state !== 'dismissed'),
+            ).length,
+          )
+        })
+        .catch(() => {})
+      fetch('/api/ledger/summaries', noStore)
+        .then((r) =>
+          r.ok
+            ? (r.json() as Promise<{ rows: AccountSummaryRow[] }>)
+            : Promise.reject(new Error(`${r.status}`)),
+        )
+        .then((d) => alive && setState({ status: 'ok', rows: d.rows ?? [] }))
+        .catch((e: unknown) => {
+          if (alive)
+            setState({ status: 'error', message: e instanceof Error ? e.message : String(e) })
+        })
     }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/concierge/account-names')
-      .then((r) => (r.ok ? (r.json() as Promise<{ names?: Names }>) : null))
-      .then((d) => !cancelled && d?.names && setNames(d.names))
-      .catch(() => {})
-    return () => {
-      cancelled = true
+    load()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load()
     }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/ledger/captures')
-      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string; draft_error: string | null }> }>) : null))
-      .then((d) => {
-        if (cancelled || !d) return
-        const all = d.rows ?? []
-        setPendingCaptures(all.filter((c) => (c.state === 'extracted' || (c.draft_error != null && c.state !== 'posted' && c.state !== 'dismissed'))).length)
-      })
-      .catch(() => {})
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', load)
     return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/ledger/summaries')
-      .then((r) =>
-        r.ok
-          ? (r.json() as Promise<{ rows: AccountSummaryRow[] }>)
-          : Promise.reject(new Error(`${r.status}`)),
-      )
-      .then((d) => {
-        if (!cancelled) setState({ status: 'ok', rows: d.rows ?? [] })
-      })
-      .catch((e: unknown) => {
-        if (!cancelled)
-          setState({ status: 'error', message: e instanceof Error ? e.message : String(e) })
-      })
-    return () => {
-      cancelled = true
+      alive = false
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', load)
     }
   }, [])
 
