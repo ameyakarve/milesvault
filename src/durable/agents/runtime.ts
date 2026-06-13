@@ -30,9 +30,12 @@ export function allAgentNames(registry: Registry): string[] {
 }
 
 // Tools the active agent may call this turn: its own tools, plus the global
-// handoff tool when its handoff graph has any outgoing edge.
+// handoff tool when its handoff graph has any outgoing edge. Names starting with
+// `_` are internal (e.g. `_draft_feedback`, which the repair hook redirects a
+// failed draft into) — registered for execution/repair but never advertised to
+// the model, so it can't call them directly.
 export function activeToolNames(agent: AgentDef): string[] {
-  const names = Object.keys(agent.tools())
+  const names = Object.keys(agent.tools()).filter((n) => !n.startsWith('_'))
   if (agent.canHandoffTo.length > 0) names.push(HANDOFF_TOOL_NAME)
   return names
 }

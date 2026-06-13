@@ -1,0 +1,109 @@
+import { validateDraftBatch } from './validate-draft-batch'
+
+// Builds the tool-feedback the editor model receives when a `draft_transaction`
+// batch fails validation. Replaces the AI SDK's default
+// "Type validation failed: Value: {entire batch}" echo (which dumps the whole
+// beancount back and drowns the actionable part) with a compact, actionable
+// message that:
+//   1. lists ONLY the failing entries (never the whole batch),
+//   2. attaches a worked example for each failure CLASS, and
+//   3. flags any entry the model already submitted verbatim and got rejected —
+//      so it stops re-emitting the identical broken line.
+// The model still re-sends the full batch on its next call (the suspending card
+// renders the whole thing); this only governs what we tell it went wrong.
+
+// One worked example per failure class. The model picks the shape; we never
+// rewrite its accounting (LLM-first) — we just show the canonical pattern.
+const EX_CROSS_COMMODITY = `A transfer/conversion between two DIFFERENT commodities must carry the rate in @@,
+so each commodity nets to zero (the @@ total is denominated in the OTHER commodity):
+  2026-05-27 * "Transfer" "150 Mag Miles -> 150 Maharaja"
+    Assets:Rewards:Miles:MaharajaClub   150 MAHARAJACLUB @@ 150 MAGMILES
+    Assets:Rewards:Miles:MagMiles      -150 MAGMILES`
+
+const EX_BALANCE_SINGLE = `For a SINGLE-commodity entry that doesn't sum to zero, decide which it is:
+- EARN/accrual: add an Equity:Void contra so the points commodity nets to zero:
+    Assets:Rewards:Axis:Pending   250 AXIS-EDGE
+    Equity:Void                  -250 AXIS-EDGE
+- REDEMPTION: the points leg carries its CASH value via @@, and the CASH is the
+  expense (in fiat) — do NOT put the points commodity on the expense leg:
+    Expenses:Travel:Flights        95000 INR
+    Assets:Rewards:Miles:MaharajaClub  -13500 MAHARAJACLUB @@ 95000 INR`
+
+const EX_PARSE = `An entry must be ONE valid beancount transaction: a date/flag/payee line, then
+indented postings — no prose, parentheses, or commentary inside the string:
+  2026-05-13 * "Cloudflare" "Subscription"
+    Expenses:Personal:Software     2.36 USD @@ 225.98 INR
+    Liabilities:CreditCards:Axis:Magnus  -225.98 INR`
+
+const EX_DIRECTIVE = `Only transactions and balance/pad assertions belong in a draft — not open/close/
+price/etc. To set a balance, emit pad + balance:
+  2026-06-12 pad Assets:Rewards:Miles:MaharajaClub  Equity:Void
+  2026-06-12 balance Assets:Rewards:Miles:MaharajaClub  35810 MAHARAJACLUB`
+
+const EX_ACCOUNT = `Use a canonical account path. Credit-card liabilities are exactly
+Liabilities:CreditCards:<Issuer>:<Card> (fold tier/variant into <Card>); reward
+accounts come from list_reward_accounts — copy them verbatim.`
+
+// Distinct commodity tickers used as posting amounts in one entry. Two or more
+// (with no @@/@ converting between them) is the cross-commodity signature.
+function commodityCount(entry: string): number {
+  const set = new Set<string>()
+  for (const m of entry.matchAll(/-?\d[\d,]*\.?\d*\s+([A-Z][A-Z0-9'._-]*)/g)) {
+    set.add(m[1]!)
+  }
+  return set.size
+}
+
+function pickExample(message: string, entry: string): string {
+  if (/parse error/i.test(message)) return EX_PARSE
+  if (/contains a directive/i.test(message)) return EX_DIRECTIVE
+  if (/exactly one transaction/i.test(message)) return EX_PARSE
+  if (/does not balance|unbalanced/i.test(message)) {
+    return commodityCount(entry) >= 2 && !/@@|@/.test(entry)
+      ? EX_CROSS_COMMODITY
+      : EX_BALANCE_SINGLE
+  }
+  return EX_ACCOUNT
+}
+
+export type DraftFeedback = { ok: true } | { ok: false; message: string; failingTexts: string[] }
+
+// `seenBefore` returns true if this exact entry text was submitted and rejected
+// earlier in the same turn — used to tell the model to stop repeating it.
+export function buildDraftFeedback(
+  transactions: string[],
+  seenBefore: (entryText: string) => boolean,
+): DraftFeedback {
+  const result = validateDraftBatch(transactions)
+  if (result.ok === true) return { ok: true }
+
+  const failingTexts: string[] = []
+  const blocks: string[] = []
+  for (const issue of result.issues) {
+    const entry = transactions[issue.index] ?? ''
+    failingTexts.push(entry.trim())
+    const repeated = seenBefore(entry.trim())
+    const lines = [`• Entry ${issue.index + 1}: ${issue.message}`]
+    if (repeated) {
+      lines.push(
+        `  ⚠ You already submitted this entry verbatim and it was rejected. Repeating it WILL fail again — you MUST change it as shown below.`,
+      )
+    }
+    lines.push(indent(pickExample(issue.message, entry)))
+    blocks.push(lines.join('\n'))
+  }
+
+  const header =
+    result.issues.length === 1
+      ? `1 entry failed validation. Fix ONLY this entry, then re-call draft_transaction with the FULL batch (leave the passing entries unchanged):`
+      : `${result.issues.length} entries failed validation. Fix ONLY these entries, then re-call draft_transaction with the FULL batch (leave the passing entries unchanged):`
+
+  return { ok: false, message: `${header}\n\n${blocks.join('\n\n')}`, failingTexts }
+}
+
+function indent(s: string): string {
+  return s
+    .split('\n')
+    .map((l) => `    ${l}`)
+    .join('\n')
+}

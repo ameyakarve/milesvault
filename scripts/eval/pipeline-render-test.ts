@@ -25,12 +25,11 @@ const extracted: ExtractedStatement = {
   card_name: 'Demo Sample Card',
   entries: [
     {
-      kind: 'balance',
+      kind: 'balance', // bare assertion — no pad
       date: '2026-04-01',
       account: CARD,
       amount: '1000.00',
       currency: 'INR',
-      plug_account: 'Equity:Adjustments',
     },
     // A spend with its own points legs (model-authored).
     {
@@ -67,8 +66,8 @@ const extracted: ExtractedStatement = {
             price_amount: '850.00',
             price_currency: 'INR',
           },
-          { account: 'Expenses:Bank:ForexMarkup', amount: '19.00', currency: 'INR' },
-          { account: 'Expenses:Tax:GST', amount: '3.42', currency: 'INR' },
+          { account: 'Expenses:Financial:ForexMarkup', amount: '19.00', currency: 'INR' },
+          { account: 'Expenses:Financial:GST', amount: '3.42', currency: 'INR' },
           { account: CARD, amount: '-872.42', currency: 'INR' },
           { account: `${POOL}:Pending`, amount: '48', currency: TICKER },
           { account: 'Equity:Void', amount: '-48', currency: TICKER },
@@ -107,7 +106,7 @@ const extracted: ExtractedStatement = {
     },
     // Closing balances (card + points), model-authored with their pads.
     {
-      kind: 'balance',
+      kind: 'pad',
       date: '2026-04-30',
       account: CARD,
       amount: '-2127.58',
@@ -115,7 +114,7 @@ const extracted: ExtractedStatement = {
       plug_account: 'Equity:Adjustments',
     },
     {
-      kind: 'balance',
+      kind: 'pad',
       date: '2026-04-30',
       account: POOL,
       amount: '168',
@@ -139,7 +138,9 @@ const checks: Array<[string, boolean]> = [
   ['landing present (pending → posted)', /Assets:Rewards:Demo\s+168 DEMO-PTS/.test(joined) && /Assets:Rewards:Demo:Pending\s+-168 DEMO-PTS/.test(joined)],
   ['payment clearing negative', /Assets:Clearing:CardPayments\s+-5000\.00 INR/.test(joined)],
   ['points balance verbatim', joined.includes('balance Assets:Rewards:Demo') && joined.includes('168 DEMO-PTS')],
-  ['pads plug Adjustments', joined.includes('pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Adjustments')],
+  ['pad kind renders pad+balance', joined.includes('pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Adjustments')],
+  ['bare balance kind has NO pad (one card pad = the closing only)', (joined.match(/pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Adjustments/g) || []).length === 1],
+  ['bare opening balance renders plain', /2026-04-01 balance Liabilities:CreditCards:Demo:Sample:0000\s+1000\.00 INR/.test(joined)],
   ['generic validator accepts the balanced batch', v.ok === true],
 ]
 

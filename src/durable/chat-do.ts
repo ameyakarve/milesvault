@@ -1,7 +1,9 @@
 import type { ChatResponseResult } from '@cloudflare/think'
 import { generateText, streamText, stepCountIs, tool, type ToolCallRepairFunction, type ToolSet } from 'ai'
+import { z } from 'zod'
 import { draftTransactionBatchSchema } from './agent-ui-schemas'
 import { repairDraftBatch } from '@/lib/beancount/repair-draft-batch'
+import { buildDraftFeedback } from '@/lib/beancount/draft-feedback'
 import { buildLedgerSystem, buildStatementAgentSystem, buildStatementIrSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
@@ -50,34 +52,55 @@ export type ChatDOState = { draftProgress?: string }
 //   2. bump @cloudflare/think to the version that ships the field
 //   3. if upstream renamed the option, rename here at the single call site
 //
-// Today the repair handles the forex-rounding class only (LLMs round off by
-// ₹0.01 on `@@`-priced INR statements and can't fix it on retry — see
-// src/lib/beancount/repair-draft-batch.ts). Genuinely-bad batches fall through
-// to the SDK's tool-error path (and the existing spiral bound by maxSteps).
-const draftTransactionRepair: ToolCallRepairFunction<ToolSet> = async ({
-  toolCall,
-}) => {
-  if (toolCall.toolName !== 'draft_transaction') return null
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(toolCall.input)
-  } catch {
-    return null
-  }
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    !Array.isArray((parsed as { transactions?: unknown }).transactions)
-  ) {
-    return null
-  }
-  const transactions = (parsed as { transactions: unknown[] }).transactions
-  if (!transactions.every((t): t is string => typeof t === 'string')) return null
-  const repaired = repairDraftBatch(transactions)
-  if (!repaired.changed) return null
-  return {
-    ...toolCall,
-    input: JSON.stringify({ transactions: repaired.transactions }),
+// Today the repair handles two things:
+//  1. the forex-rounding class deterministically (LLMs round off by ₹0.01 on
+//     `@@`-priced INR statements and can't fix it on retry — see
+//     src/lib/beancount/repair-draft-batch.ts), and
+//  2. all OTHER validation failures: it redirects the bad call to the internal
+//     `_draft_feedback` tool, whose result is a COMPACT, actionable message
+//     (only the failing entries, a worked example per failure class, and a flag
+//     on any entry the model already submitted verbatim). This replaces the AI
+//     SDK's default "Type validation failed: Value: {whole batch}" echo, which
+//     dumped the entire beancount back and let the model re-emit the identical
+//     broken line every step until the step cap.
+// `seen` is the per-turn set of entry texts already rejected this turn (DO
+// state) — used to tell the model to stop repeating an entry verbatim.
+function makeDraftTransactionRepair(seen: Set<string>): ToolCallRepairFunction<ToolSet> {
+  return async ({ toolCall }) => {
+    if (toolCall.toolName !== 'draft_transaction') return null
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(toolCall.input)
+    } catch {
+      return null
+    }
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      !Array.isArray((parsed as { transactions?: unknown }).transactions)
+    ) {
+      return null
+    }
+    const transactions = (parsed as { transactions: unknown[] }).transactions
+    if (!transactions.every((t): t is string => typeof t === 'string')) return null
+
+    // Deterministic forex-rounding fix first — re-emit the corrected batch so
+    // the card renders without bothering the model.
+    const repaired = repairDraftBatch(transactions)
+    if (repaired.changed) {
+      return { ...toolCall, input: JSON.stringify({ transactions: repaired.transactions }) }
+    }
+
+    // Everything else: build the compact feedback and deliver it via the
+    // internal tool. `seen` lets the message call out verbatim repeats.
+    const feedback = buildDraftFeedback(transactions, (t) => seen.has(t))
+    if (feedback.ok === true) return null // shape error the validator doesn't model; let the SDK handle it
+    for (const t of feedback.failingTexts) seen.add(t)
+    return {
+      ...toolCall,
+      toolName: '_draft_feedback',
+      input: JSON.stringify({ feedback: feedback.message }),
+    }
   }
 }
 
@@ -99,6 +122,11 @@ export class ChatDO
   // The ledger snapshot for the current turn, fetched once in beforeTurnFetch
   // (async RPC) and reused by the sync system-prompt builders + every step.
   private turnSnapshot: Snapshot | null = null
+
+  // Entry texts that failed draft_transaction validation this turn — so the
+  // repair feedback can flag a verbatim re-submission ("you already tried this").
+  // Reset per turn in beforeTurnFetch.
+  private rejectedDraftEntries = new Set<string>()
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
@@ -476,12 +504,13 @@ ${opts.text}`,
   // prompt builders can't `await`).
   protected override async beforeTurnFetch(): Promise<void> {
     this.turnSnapshot = await this.ledgerStub().ledger_snapshot()
+    this.rejectedDraftEntries.clear()
   }
 
   protected override getRepairToolCall():
     | ToolCallRepairFunction<ToolSet>
     | undefined {
-    return draftTransactionRepair
+    return makeDraftTransactionRepair(this.rejectedDraftEntries)
   }
 
   // ---- AgentHost<EditorAgentName> ----
@@ -533,6 +562,15 @@ entries, or draft corrections.`
         draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(),
         add_card: addCardTool(),
+        // Internal (underscore = hidden from the model via activeToolNames). The
+        // repair hook redirects a validation-failed draft_transaction here; the
+        // result is the compact, example-rich feedback the model reads. Never
+        // called by the model directly.
+        _draft_feedback: tool({
+          description: 'internal: draft validation feedback',
+          inputSchema: z.object({ feedback: z.string() }),
+          execute: async ({ feedback }: { feedback: string }) => feedback,
+        }),
       })
     }
     return this.withToolLog(name, {

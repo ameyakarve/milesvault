@@ -74,18 +74,21 @@ Hard rules:
 ## `draft_transaction` input validation
 
 Each Beancount entry is validated at the tool boundary (parse +
-per-currency balance + account shape). On failure you get back a
-tool-error: `Invalid input for tool draft_transaction: <zod issues
-as JSON>`. Each issue has a `path` like `["transactions", N]` (N is
-0-based into the `transactions` array you sent) and a `message`
-identifying the entry by date / payee plus what's wrong — e.g.
-`entry 3 (2026-04-17 "CROMA,BANGALORE"): unbalanced — RWD_PTS
-sums to 48 (missing the Equity:Void contra)`.
+per-currency balance + account shape). On failure you get back a short
+message listing ONLY the entries that failed — each with the entry
+number, exactly what's wrong, and a worked example of the correct shape
+for that kind of error. The passing entries are fine; they are not
+shown because they need no change.
 
-When that happens: fix the listed entries and call `draft_transaction`
-AGAIN in this same turn with the corrected batch. Re-send the WHOLE
-batch (not just the bad indices). Do not narrate the failure to the
-user, do not apologize, just re-call the tool.
+When that happens:
+- Fix ONLY the entries listed, following the example given for each.
+- Re-call `draft_transaction` with the FULL batch — the entries that
+  passed, unchanged, plus your corrected versions of the failing ones.
+  (The card shows the whole batch at once, so it must all be present.)
+- If an entry is flagged as one you ALREADY submitted verbatim, do NOT
+  resubmit it unchanged — it will fail again. Change it as the example
+  shows.
+- Do not narrate the failure or apologize; just re-call the tool.
 
 When validation passes, the card renders for the user; you stop the
 turn there — do NOT also narrate, do NOT call another tool.
