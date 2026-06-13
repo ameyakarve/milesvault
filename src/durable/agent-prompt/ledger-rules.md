@@ -16,16 +16,18 @@ write the entry, never as a later pass:
 4. the `Equity:Void` points contra.
 
 A purchase written with only two postings (expense + card) is INCOMPLETE — you
-dropped its points. The ONLY genuinely two-posting entries are: a payment/credit
-to the card, an issuer fee / interest / standalone GST, and (the purchase shape
-mirrored) a refund. A purchase is two-posting ONLY when the card's earn rules
-exclude its category or the points round to zero.
+dropped its points. The genuinely two-posting entries are: a payment/credit to
+the card, and an issuer fee / interest / standalone GST. A purchase is
+two-posting ONLY when the card's earn rules exclude its category or the points
+round to zero. (A refund mirrors the purchase it reverses, so it carries the
+points legs too when the purchase earned points — see Refunds.)
 
-Each entry is ONE complete beancount block — a header line plus 2+ postings, no
-leading/trailing blank lines, no comments narrating what the entry is for. The
-postings MUST balance per currency under beancount weight rules (`@@` puts the
-total in the price currency; `@` is per-unit). A foreign-currency leg on an INR
-card MUST use `@@` so its INR weight closes against the card's INR posting.
+Each entry is ONE structured IR object — a `transaction` with its `postings`, or
+a `balance` / `pad` assertion — NOT raw beancount text; code serializes and
+validates it. Postings MUST balance per currency. For a foreign-currency or
+points→points conversion leg, set `price_at_signs:2` (the `@@` total price) with
+`price_amount` / `price_currency`, so its converted weight closes against the
+other leg.
 
 ## Payments to the card
 
