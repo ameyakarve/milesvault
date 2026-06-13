@@ -40,10 +40,11 @@ function rangeDates(key: RangeKey): { from: string; to: string } {
   return { from: ymd(f), to }
 }
 
-// Stable hue per category name — distinct, repeatable tile colors.
+// Stable hue per category name — a cohesive mid-tone categorical palette,
+// all dark enough for white tile labels (in light AND dark mode).
 const PALETTE = [
-  '#4d6e60', '#8c5e3c', '#5b7185', '#7a5b80', '#3f7d77',
-  '#996b3d', '#5566a3', '#7d8a3c', '#a3555f', '#456b8c',
+  '#4e79a7', '#e1813c', '#5a9e5a', '#cf5b5b', '#8a6cbf', '#3fa39a',
+  '#c2628a', '#b58a3e', '#6f8fc4', '#7d9e44', '#c06f4f', '#5aa1bf',
 ]
 function colorFor(name: string): string {
   let h = 0
@@ -363,7 +364,7 @@ export function ExpensesView() {
                     type="button"
                     onClick={() => drill(t.data)}
                     title={`${t.data.name} · ${fmt(t.value ?? 0, activeCurrency)} · ${pct.toFixed(1)}%`}
-                    className="absolute cursor-pointer overflow-hidden border border-background/40 text-left text-background"
+                    className="absolute cursor-pointer overflow-hidden rounded-sm border border-black/10 text-left text-white"
                     style={{
                       left: t.x0,
                       top: t.y0,
