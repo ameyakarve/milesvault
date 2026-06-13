@@ -6,11 +6,11 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
+import { MessageResponse } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import type { ClarifyInput } from '@/durable/agent-ui-schemas'
 
@@ -68,7 +68,9 @@ export function ClarifyCard({
   return (
     <Card size="sm">
       <CardHeader>
-        <CardTitle className="text-sm font-normal">{input.question}</CardTitle>
+        <MessageResponse className="text-sm [&_table]:my-2 [&_table]:w-full [&_table]:text-xs [&_th]:border [&_th]:px-2 [&_th]:py-0.5 [&_th]:text-left [&_td]:border [&_td]:px-2 [&_td]:py-0.5 [&_ul]:my-1 [&_li]:my-0">
+          {input.question}
+        </MessageResponse>
       </CardHeader>
 
       {done && resolvedAnswers && resolvedAnswers.length > 0 ? (

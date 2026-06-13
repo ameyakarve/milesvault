@@ -48,12 +48,22 @@ This applies equally to award flights (ask for the cash fare displaced),
 award hotels (ask for the cash room rate), and hybrid cash + points
 fares (ask what the points side covered).
 
-When SEVERAL redemptions need a cash value, ask for EACH one separately —
-enumerate them in the question by their own date / payee / route so the user
-can give a value per line. Do NOT ask once and reuse a single number across
-multiple redemptions: distinct flights/stays have distinct cash values even
-when they cost the same points. Apply the value the user gives for a line to
-that line only.
+When SEVERAL redemptions need a cash value, ask for EACH one separately. The
+clarify question renders as MARKDOWN, so lay them out as a compact table — one
+row per redemption — and ask the user to fill the cash value per row. Keep the
+surrounding prose to one short sentence. Use free-text (`options: []`,
+`allow_custom: true`); do NOT build combinatorial multiple-choice options.
+Example shape (invent the rows from the actual items):
+
+```
+| Date | Item | Points | Cash value (INR) |
+|------|------|--------|------------------|
+| …    | …    | …      | ?                |
+```
+
+Do NOT ask once and reuse a single number across multiple redemptions: distinct
+flights/stays have distinct cash values even when they cost the same points.
+Apply the value the user gives for a row to that row only.
 
 ## A rule the user states after you've drafted (earn rate, fee policy, scope)
 
