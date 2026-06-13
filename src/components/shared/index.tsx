@@ -37,7 +37,7 @@ export function StatTile({
   negative?: boolean
 }) {
   return (
-    <div className="space-y-1 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm">
+    <div className="space-y-1 rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
       <SectionLabel>{label}</SectionLabel>
       <p
         className={cn(
