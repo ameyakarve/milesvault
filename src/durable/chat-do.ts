@@ -292,10 +292,13 @@ ${opts.text}`,
       // layer). The PDF text carries exact amounts; the images let gemma read
       // what the text can't (labels banks render as graphics — e.g. HSBC's
       // reward-points summary). One model does vision + structure.
-      // Two gens: the heavy multimodal EXTRACTION runs with thinking ON (the
-      // careful fee-fold/charge-match reasoning); the small card-identify /
-      // candidate-pick calls run thinking OFF — a 256-token budget gets
-      // STARVED by a thinking trace, which silently broke card resolution.
+      // Both gens run thinking OFF. Correctness is enforced in CODE now — the
+      // draft validator bounces any entry that fails to parse/balance, has a
+      // silently-dropped posting, or an elided amount, with a worked example —
+      // so the model's long reasoning trace (which made each gemma extract call
+      // run 2.5–5 min and emit 10–15k output tokens) is redundant overhead. The
+      // card-identify call was always thinking-off (a 256-token budget gets
+      // starved by a trace); extraction now matches it.
       const makeGen =
         (reasoning: 'low' | 'off'): GenFn =>
         async ({ system, prompt, maxTokens, images }) => {
