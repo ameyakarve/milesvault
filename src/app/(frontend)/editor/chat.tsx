@@ -548,6 +548,10 @@ export function Chat({
                         if (isToolPart(p)) {
                           const toolCallId = p.toolCallId ?? `${m.id}-${i}`
                           const toolName = toolNameOf(p)
+                          // Internal tools (underscore-prefixed, e.g. the
+                          // `_draft_feedback` the repair hook redirects a failed
+                          // draft into) are plumbing — never show them in the chat.
+                          if (toolName?.startsWith('_')) return null
                           const subState = submitStatus[toolCallId] ?? 'idle'
                           const outputObj =
                             p.output && typeof p.output === 'object'
