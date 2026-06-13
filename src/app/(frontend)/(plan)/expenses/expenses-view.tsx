@@ -91,12 +91,42 @@ function nodeAt(root: Tree, path: string[]): Tree {
   return cur
 }
 
+type Txn = { date: string; label: string; amount: string | null }
+// Split a filtered-journal text blob into per-entry summaries (date, payee/
+// narration, and the amount on the given account's posting line).
+function parseTxns(text: string, account: string): Txn[] {
+  if (!text.trim()) return []
+  const out: Txn[] = []
+  for (const block of text.trim().split(/\n(?=\d{4}-\d{2}-\d{2})/)) {
+    const lines = block.split('\n')
+    const m = /^(\d{4}-\d{2}-\d{2})\s+[*!]\s+(.*)$/.exec(lines[0] ?? '')
+    if (!m) continue
+    let amount: string | null = null
+    for (const l of lines.slice(1)) {
+      if (l.includes(account)) {
+        const am = /-?[\d,]+\.?\d*/.exec(l.replace(account, ''))
+        if (am) amount = am[0]
+        break
+      }
+    }
+    out.push({ date: m[1]!, label: m[2]!.replace(/"/g, ' ').replace(/\s+/g, ' ').trim(), amount })
+  }
+  return out
+}
+function editorHref(account: string, from: string, to: string): string {
+  return `/editor?account=${encodeURIComponent(account)}&from=${from}&to=${to}`
+}
+
 function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
   const ref = useRef<HTMLDivElement | null>(null)
   const [w, setW] = useState(880)
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    // Measure immediately so the map fills the width on first paint, not just
+    // after the observer fires.
+    const initial = el.getBoundingClientRect().width
+    if (initial > 0) setW(initial)
     const ro = new ResizeObserver((entries) => {
       const cw = entries[0]?.contentRect.width
       if (cw && cw > 0) setW(cw)
@@ -167,6 +197,30 @@ export function ExpensesView() {
     if (child.children.length) setPath((p) => [...p, child.name])
   }
 
+  // Leaf = an account with no sub-categories (and not the synthetic root). At a
+  // leaf we list the actual transactions and link them into the editor journal.
+  const isLeaf = node.children.length === 0 && node.full !== 'Expenses'
+  const { from: rangeFrom, to: rangeTo } = rangeDates(range)
+  const [leafTxns, setLeafTxns] = useState<Txn[]>([])
+  const [leafLoading, setLeafLoading] = useState(false)
+  useEffect(() => {
+    if (!isLeaf) {
+      setLeafTxns([])
+      return
+    }
+    setLeafLoading(true)
+    const ac = new AbortController()
+    ledgerClient
+      .getJournalFiltered(
+        { account: node.full, dateFrom: rangeFrom, dateTo: rangeTo, limit: 200 },
+        { signal: ac.signal },
+      )
+      .then((d) => setLeafTxns(parseTxns(d.text ?? '', node.full)))
+      .catch(() => {})
+      .finally(() => setLeafLoading(false))
+    return () => ac.abort()
+  }, [isLeaf, node.full, rangeFrom, rangeTo])
+
   return (
     <>
       <PlanToolbar
@@ -207,9 +261,9 @@ export function ExpensesView() {
         ) : null}
       </PlanToolbar>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto py-4">
         {/* Breadcrumb */}
-        <div className="mb-3 flex flex-wrap items-center gap-1 text-sm">
+        <div className="mb-3 flex flex-wrap items-center gap-1 px-4 text-sm">
           <button
             type="button"
             onClick={() => setPath([])}
@@ -239,18 +293,61 @@ export function ExpensesView() {
           ))}
         </div>
 
-        {tiles.length === 0 ? (
-          <div className="flex h-[460px] items-center justify-center rounded-lg border border-border text-sm text-muted-foreground">
-            {loading
-              ? 'Loading…'
-              : node.self > 0
-                ? `${node.name} has no sub-categories — ${fmt(node.self, activeCurrency)} total.`
-                : 'No expenses in this period.'}
+        {tiles.length === 0 && isLeaf ? (
+          // Bottom level: list the actual transactions, each linking into the
+          // editor journal (filtered to this account + range).
+          <div className="mx-4 rounded-lg border border-border">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-2">
+              <span className="text-sm font-medium text-foreground">
+                {node.name}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {leafTxns.length} txn{leafTxns.length === 1 ? '' : 's'} · {fmt(node.self, activeCurrency)}
+                </span>
+              </span>
+              <a
+                href={editorHref(node.full, rangeFrom, rangeTo)}
+                className="shrink-0 text-xs font-medium text-foreground underline underline-offset-4 hover:no-underline"
+              >
+                Open in editor →
+              </a>
+            </div>
+            {leafLoading ? (
+              <p className="px-3 py-8 text-center text-xs text-muted-foreground">Loading…</p>
+            ) : leafTxns.length === 0 ? (
+              <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+                No transactions in this period.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {leafTxns.map((t, i) => (
+                  <li key={i}>
+                    <a
+                      href={editorHref(node.full, rangeFrom, rangeTo)}
+                      className="flex items-center gap-3 px-3 py-2 text-[13px] hover:bg-muted/60"
+                    >
+                      <span className="w-20 shrink-0 font-mono text-[11px] text-muted-foreground">
+                        {t.date}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-foreground">{t.label}</span>
+                      {t.amount ? (
+                        <span className="shrink-0 font-medium text-foreground">
+                          {fmt(Number(t.amount.replace(/,/g, '')) || 0, activeCurrency)}
+                        </span>
+                      ) : null}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : tiles.length === 0 ? (
+          <div className="mx-4 flex h-[460px] items-center justify-center rounded-lg border border-border text-sm text-muted-foreground">
+            {loading ? 'Loading…' : 'No expenses in this period.'}
           </div>
         ) : (
           <>
             {/* Treemap */}
-            <div ref={boxRef} className="relative w-full overflow-hidden rounded-lg" style={{ height }}>
+            <div ref={boxRef} className="relative w-full overflow-hidden" style={{ height }}>
               {tiles.map((t) => {
                 const w = (t.x1 ?? 0) - (t.x0 ?? 0)
                 const h = (t.y1 ?? 0) - (t.y0 ?? 0)
@@ -291,7 +388,7 @@ export function ExpensesView() {
             </div>
 
             {/* Ranked list for the current level */}
-            <ul className="mt-4 divide-y divide-border rounded-lg border border-border">
+            <ul className="mx-4 mt-4 divide-y divide-border rounded-lg border border-border">
               {tiles.map((t) => {
                 const pct = levelTotal > 0 ? ((t.value ?? 0) / levelTotal) * 100 : 0
                 const drillable = t.data.children.length > 0
