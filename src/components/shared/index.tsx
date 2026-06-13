@@ -37,7 +37,7 @@ export function StatTile({
   negative?: boolean
 }) {
   return (
-    <div className="space-y-1 rounded-xl border border-border bg-card px-4 py-3">
+    <div className="space-y-1 rounded-2xl border border-border bg-card px-4 py-3.5 shadow-sm">
       <SectionLabel>{label}</SectionLabel>
       <p
         className={cn(
@@ -128,6 +128,19 @@ function hashStr(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
   return Math.abs(h)
+}
+
+// Accent tint paired 1:1 (same hash, same index) with the monogram tone, so a
+// card's top hairline matches its monogram. Low-saturation, dark-aware.
+const ACCENT_TONES = [
+  'bg-slate-400/60 dark:bg-slate-500/50',
+  'bg-amber-400/70 dark:bg-amber-500/50',
+  'bg-emerald-400/70 dark:bg-emerald-500/50',
+  'bg-rose-400/70 dark:bg-rose-500/50',
+]
+
+export function accentTone(name: string): string {
+  return ACCENT_TONES[hashStr(name) % ACCENT_TONES.length]!
 }
 
 export function Monogram({

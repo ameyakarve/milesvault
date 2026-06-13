@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ArrowUpRight, CreditCard } from 'lucide-react'
 import { AddAccountsModal } from '@/components/add-accounts-modal'
+import { cn } from '@/lib/utils'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
 import type { VaultStats } from '@/durable/ledger-do'
 import {
@@ -14,7 +16,20 @@ import {
   isHolding,
   isPending,
 } from '@/lib/ledger-core/account-display'
-import { SectionLabel, StatTile, CenteredState, Monogram } from '@/components/shared'
+import { SectionLabel, StatTile, CenteredState, Monogram, StateChip, accentTone } from '@/components/shared'
+
+// Shared card frame: rounded, hairline border, subtle depth, and a hover lift.
+// The accented top rule keys off the monogram hash so each card is quietly
+// branded. Reused by the programme + credit-card heroes.
+const CARD_FRAME =
+  'group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-md'
+
+// The minting-source subtree → a short human label for the card's sublabel.
+function rewardKind(account: string): string {
+  if (account.startsWith('Assets:Rewards:Miles:')) return 'Airline miles'
+  if (account.startsWith('Assets:Rewards:Points:')) return 'Hotel points'
+  return 'Card rewards'
+}
 
 // KG display names (cards, points) fetched once and overlaid on the
 // path-derived labels — account path → display name.
@@ -263,6 +278,7 @@ export function CreditCardCard({
 }) {
   const { name, suffix } = displayName(row.account, names)
   const bal = balanceOf(row)
+  const owed = bal < 0
   const expensesText = (spend && spend.length > 0
     ? spend
     : [{ currency: row.currency, total: 0 }]
@@ -273,33 +289,45 @@ export function CreditCardCard({
     )
     .join(' + ')
   return (
-    <Link
-      href={accountHref(row)}
-      className="group block rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/25"
-    >
-      <span className="flex items-center gap-3">
-        <Monogram name={name} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {name}
-          {suffix ? (
-            <span className="ml-1.5 font-mono text-[10px] font-normal text-muted-foreground">
-              ··{suffix}
+    <Link href={accountHref(row)} className={cn(CARD_FRAME, 'gap-4 p-5')}>
+      <span aria-hidden className={cn('absolute inset-x-0 top-0 h-0.5', accentTone(name))} />
+      <span className="flex items-start justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-3">
+          <Monogram name={name} size="lg" />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-foreground">{name}</span>
+            <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              {suffix ? `···· ${suffix}` : 'Credit card'}
             </span>
-          ) : null}
-        </span>
-        <span className="shrink-0 text-right">
-          <span
-            className={`block whitespace-nowrap font-mono text-lg font-semibold ${bal < 0 ? 'text-foreground' : 'text-muted-foreground'}`}
-          >
-            {formatBalance(row.balance_scaled, row.scale)}
-            <span className="ml-1 text-xs font-normal text-muted-foreground">{row.currency}</span>
           </span>
-          <span className="block text-[11px] leading-4 text-muted-foreground">balance</span>
         </span>
+        <CreditCard className="size-4 shrink-0 text-muted-foreground/40" aria-hidden />
       </span>
-      <span className="mt-3 flex items-center justify-between border-t border-border pt-2 text-[11px] text-muted-foreground">
-        <span>Expenses · 90d</span>
-        <span className="font-mono">{expensesText} {row.currency}</span>
+      <span className="mt-auto block space-y-3">
+        <span className="block">
+          <span className="flex items-baseline gap-1.5">
+            <span
+              className={cn(
+                'font-mono text-2xl font-semibold leading-none tracking-tight',
+                owed ? 'text-foreground' : 'text-emerald-600 dark:text-emerald-400',
+              )}
+            >
+              {formatBalance(row.balance_scaled, row.scale)}
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">{row.currency}</span>
+          </span>
+          <span className="mt-1 block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            {owed ? 'Balance owed' : 'Credit balance'}
+          </span>
+        </span>
+        <span className="flex items-center justify-between border-t border-border pt-2.5">
+          <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+            Spent · 90d
+          </span>
+          <span className="font-mono text-[11px] text-foreground/70">
+            {expensesText} {row.currency}
+          </span>
+        </span>
       </span>
     </Link>
   )
@@ -317,7 +345,7 @@ function HoldingsCard({
   names: Names
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-2">
+    <div className="rounded-2xl border border-border bg-card px-4 py-3 space-y-2 shadow-sm">
       <SectionLabel>{title}</SectionLabel>
       <ul className="space-y-1">
         {rows.map((r) => {
@@ -393,7 +421,7 @@ function SpendingBreakdown({ stats }: { stats: VaultStats }) {
           {fmtAmt(main.total)} {main.currency}
         </span>
       </div>
-      <div className="space-y-2 rounded-xl border border-border bg-card p-5">
+      <div className="space-y-2.5 rounded-2xl border border-border bg-card p-5 shadow-sm">
         {cats.map((c) => (
           <Link
             key={c.category}
@@ -540,26 +568,37 @@ function RewardsSections({ holdings, names, onAdd }: { holdings: Holding[]; name
 function ProgrammeCard({ holding, names }: { holding: Holding; names: Names }) {
   const { name } = displayName(holding.account, names)
   const fmtPts = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
+  const ticker = currencyRedundant(name, holding.currency) ? 'pts' : holding.currency
   return (
     <Link
       href={`/vault/account?account=${encodeURIComponent(holding.account)}&ccy=${encodeURIComponent(holding.currency)}`}
-      className="group flex flex-col gap-3 rounded-xl border border-border bg-card p-5 transition-colors hover:border-foreground/25"
+      className={cn(CARD_FRAME, 'gap-5 p-5')}
     >
-      <div className="flex items-center gap-3">
-        <Monogram name={name} size="lg" />
-        <span className="truncate text-sm font-medium text-foreground">{name}</span>
+      <span aria-hidden className={cn('absolute inset-x-0 top-0 h-0.5', accentTone(name))} />
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <Monogram name={name} size="lg" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">{name}</p>
+            <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              {rewardKind(holding.account)}
+            </p>
+          </div>
+        </div>
+        <ArrowUpRight
+          className="size-4 shrink-0 text-muted-foreground/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
+          aria-hidden
+        />
       </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="font-mono text-3xl font-semibold leading-none text-foreground">
-          {fmtPts(holding.posted)}
-        </span>
-        <span className="font-mono text-xs text-muted-foreground">
-          {currencyRedundant(name, holding.currency) ? 'pts' : holding.currency}
-        </span>
-        {holding.pending > 0 ? (
-          <span className="ml-auto font-mono text-xs text-muted-foreground">
-            +{fmtPts(holding.pending)} pending
+      <div className="mt-auto flex items-end justify-between gap-2">
+        <div className="flex items-baseline gap-1.5">
+          <span className="font-mono text-[2rem] font-semibold leading-none tracking-tight text-foreground">
+            {fmtPts(holding.posted)}
           </span>
+          <span className="font-mono text-xs text-muted-foreground">{ticker}</span>
+        </div>
+        {holding.pending > 0 ? (
+          <StateChip tone="pending">+{fmtPts(holding.pending)} pending</StateChip>
         ) : null}
       </div>
     </Link>
