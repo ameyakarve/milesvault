@@ -62,6 +62,15 @@ pad absorbs the drift up to the asserted figure. The plug is always
 whitespace-tolerant; just keep at least one space between account, amount, and
 currency.
 
+**No comments — ever.** Beancount is NOT code: it has no `#`, `//`, or `;`
+comment syntax, and a `#` at the start of a line is a parse error (it is NOT a
+comment). An entry is ONLY its date header and posting lines — nothing else.
+Never add explanatory lines, notes, or your own reasoning to an entry (no
+`# I'll treat this as…`, no `# the user said…`). Do your thinking BEFORE you
+write the entry; the entry itself is pure data. (A `#tag` is allowed only inline
+on the date/header line, e.g. `2026-05-21 * "Payee" "Narration" #trip` — never
+as its own line.)
+
 ## Credit-card accounts (strict — validated)
 
 Credit-card liabilities MUST be exactly `Liabilities:CreditCards:<Issuer>:<Card>`
