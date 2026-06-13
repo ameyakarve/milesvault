@@ -663,6 +663,40 @@ Expiry sweep (removes already-posted balance — no pending involved):
   Equity:Void  3500 RWD_PTS
 ```
 
+## Status counters (nights, tier points) — auxiliary, never merged
+
+A hotel / loyalty statement can show several columns per row — spendable reward
+points, status (tier-qualifying) points, qualifying nights. They are SEPARATE
+commodities; book every non-empty column, never collapse them into one number.
+A single stay crediting all three (synthetic "Acme Rewards", spendable ticker
+`ACMEREWARDS`, status counters under the SAME `Acme` segment):
+
+```beancount
+2026-03-14 * "Acme Downtown" "Stay — 2 nights"
+  Assets:Rewards:Points:Acme:Pending  500 ACMEREWARDS
+  Equity:Void  -500 ACMEREWARDS
+  Assets:Rewards:Status:Acme  500 ACME-STATUS
+  Equity:Void  -500 ACME-STATUS
+  Assets:Rewards:Status:Acme  2 ACME-NIGHTS
+  Equity:Void  -2 ACME-NIGHTS
+```
+
+Spendable points follow the usual earn → `:Pending` path (they land later, when
+an earned-this-cycle total is known). Status points and nights are AUXILIARY —
+straight to `Assets:Rewards:Status:Acme`, each its own commodity, `Equity:Void`
+contra, no `:Pending`, no `@@`, no cash value. A row that fills only one column
+(e.g. a "bonus status nights" promo: `+30` nights, points blank) is just that
+one accrual leg plus its contra — two postings:
+
+```beancount
+2026-03-14 * "Acme Rewards" "Bonus status nights — promo"
+  Assets:Rewards:Status:Acme  30 ACME-NIGHTS
+  Equity:Void  -30 ACME-NIGHTS
+```
+
+A closing status total is asserted with a pad + balance like any other balance
+(plug `Equity:Void`), in that counter's commodity.
+
 ## Referrals (you referred someone; reward landed for you)
 
 Shape depends on what the reward actually is. If it's **cash** (lands in

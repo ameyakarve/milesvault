@@ -86,6 +86,32 @@ moves it out, so after the landing `:Pending` nets to ZERO and is never negative
 A **points balance** (a known closing / current total) is asserted as a pad +
 balance — see "Balances" below.
 
+## Status & auxiliary counters
+
+Some programmes track MORE than one quantity. A loyalty statement can show
+several parallel columns per row: the spendable reward currency AND one or more
+**status counters** — tier-qualifying points, qualifying nights, segments, and
+the like. These are INDEPENDENT quantities in DIFFERENT commodities. NEVER sum
+them, merge them, convert one into another, or fold a status counter into the
+spendable balance — a "+384 / +384 / +2" row is three different things, not one.
+
+- The **spendable reward currency** earns and redeems as usual → `<pool.account>`
+  and its `:Pending`, the programme's ticker (Points section above).
+- A **status counter is AUXILIARY**: it only accrues, expires, or resets toward a
+  tier — it never transfers out, never lands, and never redeems for cash. Book it
+  straight to `Assets:Rewards:Status:<Programme>` (the SAME `<Programme>` segment
+  as that programme's `Assets:Rewards:Points:<Programme>` account, so the two
+  stay aligned), each counter its own commodity, with an `Equity:Void` contra —
+  the same mint/burn plug points use. No `:Pending`, no `@@`, no cash value: it is
+  a count, not money. Name each counter commodity `<PROG>-NIGHTS`, `<PROG>-STATUS`,
+  etc. (short caps programme prefix, plural where the unit is) and REUSE whatever
+  ticker already exists for that programme so the balance keeps accumulating.
+
+A single statement row may move several columns at once (one stay can add reward
+points, status points, AND nights). Emit ONE transaction with one accrual leg
+(+ its `Equity:Void` contra) PER non-empty column — a row with three filled
+columns is six postings, not two. A blank / "–" column contributes nothing.
+
 ## Cashback vs discount
 
 The split is timing. A **discount** is immediate — it reduced the bill, nothing
