@@ -32,7 +32,39 @@ export function fmt(n: number): string {
 // ---- Loose acceptors → canonical types -----------------------------------------
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-export const ZAmount = z.union([z.string(), z.number()])
+
+// An amount is a number, or a numeric STRING (digits, optional leading minus,
+// thousands commas, decimal) — NOT free text. Without this, a string like
+// "13,500 pts" passes and num() silently turns it into null (an elided amount),
+// hiding the model's mistake instead of surfacing it.
+const NUMERIC_RE = /^-?\d[\d,]*(\.\d+)?$/
+export const ZAmount = z.union([
+  z.number(),
+  z
+    .string()
+    .regex(
+      NUMERIC_RE,
+      'amount must be a number — digits with an optional leading minus, thousands commas, and decimal; no other text',
+    ),
+])
+
+// A valid beancount commodity/currency ticker: starts with a capital, then
+// capitals / digits / - . _ ', no spaces. Same class of fix as the account —
+// a garbled ticker ("MAHARAJA CLUB", lowercase) is now a clear field error, not
+// a vague parse failure after serialization.
+const COMMODITY_RE = /^[A-Z][A-Z0-9'._-]{0,22}[A-Z0-9]$|^[A-Z]$/
+const ZCommodity = z
+  .string()
+  .regex(
+    COMMODITY_RE,
+    "invalid commodity/currency — uppercase, starting with a capital, made of capitals/digits/-._' with NO spaces (e.g. INR, MAHARAJACLUB, AXIS-EDGE)",
+  )
+
+// A beancount tag: a short label, no spaces (the `#` is added on serialize).
+const ZTag = z
+  .string()
+  .max(40)
+  .regex(/^#?[A-Za-z0-9][A-Za-z0-9\-_/.]*$/, 'invalid tag — no spaces; letters/digits/-_/. only (optional leading #)')
 
 // A valid beancount account: a top-level type, then colon-separated segments,
 // each starting with a capital or digit, with NO spaces. Validating the format
@@ -56,10 +88,10 @@ export const ZLoosePosting = z
   .object({
     account: ZAccount,
     amount: ZAmount.nullable().optional(),
-    currency: z.string().max(24).nullable().optional(),
+    currency: ZCommodity.nullable().optional(),
     price_at_signs: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
     price_amount: ZAmount.nullable().optional(),
-    price_currency: z.string().max(24).nullable().optional(),
+    price_currency: ZCommodity.nullable().optional(),
   })
   .transform((p) => {
     const amount = num(p.amount)
@@ -89,7 +121,7 @@ export const ZLooseTxn = z
     flag: z.enum(['*', '!']).optional(),
     payee: z.string().max(120).optional(),
     narration: z.string().max(200).optional(),
-    tags: z.array(z.string().max(40)).optional(),
+    tags: z.array(ZTag).optional(),
     postings: z.array(ZLoosePosting).min(2).max(8),
   })
   .transform(
@@ -117,7 +149,7 @@ const ZBalanceBase = {
   date: z.string().regex(DATE_RE),
   account: ZAccount,
   amount: ZAmount,
-  currency: z.string().max(24),
+  currency: ZCommodity,
 }
 export const ZLooseBalance = z
   .object({ kind: z.literal('balance'), ...ZBalanceBase })
