@@ -334,7 +334,7 @@ ${opts.text}`,
 
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
       const result = await runDraftPipeline({
-        gen: makeGen('low'),
+        gen: makeGen('off'),
         genFast: makeGen('off'),
         kb: kbHttp,
         statementText: stmt.text,
