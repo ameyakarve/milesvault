@@ -91,19 +91,31 @@ export function buildDraftFeedback(
     const lines = [`• Entry ${issue.index + 1}: ${issue.message}`]
     if (repeated) {
       lines.push(
-        `  ⚠ You already submitted this entry verbatim and it was rejected. Repeating it WILL fail again — you MUST change it as shown below.`,
+        `  ⚠ You already submitted this entry verbatim and it was rejected. Repeating it WILL fail again — you MUST change it as shown below, OR call \`clarify\` if you're blocked (see the footer).`,
       )
     }
     lines.push(indent(pickExample(issue.message, entry)))
     blocks.push(lines.join('\n'))
   }
 
+  // The escape hatch: an entry can be unfixable because a required value isn't
+  // in the source (the classic case: an award redemption whose CASH fare the
+  // statement never states). Re-drafting can't conjure it — the model must ASK.
+  // Without this, the model loops on the impossible entry and eventually emits
+  // an empty turn (no card, no question — a dead end for the user).
+  const footer =
+    `If an entry keeps failing because a value is genuinely MISSING from the source ` +
+    `(e.g. an award redemption's cash fare isn't in the statement), do NOT keep ` +
+    `re-drafting it and do NOT reply with nothing: call \`clarify\` to ask the user ` +
+    `for that value (one short question, free-text). Never end your turn with no ` +
+    `tool call and no message.`
+
   const header =
     result.issues.length === 1
       ? `1 entry failed validation. Fix ONLY this entry, then re-call draft_transaction with the FULL batch (leave the passing entries unchanged):`
       : `${result.issues.length} entries failed validation. Fix ONLY these entries, then re-call draft_transaction with the FULL batch (leave the passing entries unchanged):`
 
-  return { ok: false, message: `${header}\n\n${blocks.join('\n\n')}`, failingTexts }
+  return { ok: false, message: `${header}\n\n${blocks.join('\n\n')}\n\n${footer}`, failingTexts }
 }
 
 function indent(s: string): string {
