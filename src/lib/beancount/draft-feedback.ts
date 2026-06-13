@@ -44,12 +44,17 @@ const EX_ACCOUNT = `Use a canonical account path. Credit-card liabilities are ex
 Liabilities:CreditCards:<Issuer>:<Card> (fold tier/variant into <Card>); reward
 accounts come from list_reward_accounts — copy them verbatim.`
 
-// Distinct commodity tickers used as posting amounts in one entry. Two or more
+// Distinct commodity tickers on the posting AMOUNTS of one entry. Two or more
 // (with no @@/@ converting between them) is the cross-commodity signature.
+// Only indented posting lines are scanned, and only the first amount+commodity
+// per line — so flight numbers / airport codes in the narration ("UA 2094 MCO
+// - SFO") and the @@-price commodity don't get miscounted as commodities.
 function commodityCount(entry: string): number {
   const set = new Set<string>()
-  for (const m of entry.matchAll(/-?\d[\d,]*\.?\d*\s+([A-Z][A-Z0-9'._-]*)/g)) {
-    set.add(m[1]!)
+  for (const line of entry.split('\n')) {
+    if (!/^\s/.test(line)) continue // skip the date/payee header; postings are indented
+    const m = line.match(/-?[\d,]+\.?\d*\s+([A-Z][A-Z0-9'._-]*)/)
+    if (m) set.add(m[1]!)
   }
   return set.size
 }
