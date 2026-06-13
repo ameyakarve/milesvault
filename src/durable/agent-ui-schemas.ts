@@ -35,7 +35,17 @@ export const draftTransactionBatchSchema = z
     // beancount and validate balance/shape. Each issue is added per-entry with
     // an example for its failure class. The SDK surfaces these to the model on
     // the standard tool-input-validation path — no separate feedback channel.
-    const texts = serializeIrEntries(value.entries)
+    //
+    // zod runs superRefine even when some entries already FAILED the shape stage
+    // (their field issues are on the error). Those entries didn't transform, so
+    // serialization would throw — guard it and skip the balance check; the shape
+    // errors stand on their own.
+    let texts: string[]
+    try {
+      texts = serializeIrEntries(value.entries)
+    } catch {
+      return
+    }
     const result = validateDraftBatch(texts)
     if (result.ok === true) return
     for (const issue of result.issues) {

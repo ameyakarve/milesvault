@@ -34,12 +34,27 @@ export function fmt(n: number): string {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 export const ZAmount = z.union([z.string(), z.number()])
 
+// A valid beancount account: a top-level type, then colon-separated segments,
+// each starting with a capital or digit, with NO spaces. Validating the format
+// here (with a readable message) turns a garbled account — e.g. the gemma glitch
+// "Assets:Rewards:Miles:Mah MaharajaClub:Pending" — into an actionable field
+// error, instead of a vague "parse error" after serialization that the model
+// can't trace back.
+const ACCOUNT_RE = /^(Assets|Liabilities|Equity|Income|Expenses)(:[A-Z0-9][A-Za-z0-9-]*)+$/
+const ZAccount = z
+  .string()
+  .min(3)
+  .regex(
+    ACCOUNT_RE,
+    'invalid account — must be a top-level type (Assets/Liabilities/Equity/Income/Expenses) then colon-separated segments, each starting with a capital or digit and with NO spaces (e.g. Assets:Rewards:Miles:MaharajaClub)',
+  )
+
 // Accepts what a model plausibly emits; outputs a canonical PostingInput.
 // (`amount` is optional in the schema, but the generic balance validator still
 // requires every currency to net to zero, so provide explicit amounts.)
 export const ZLoosePosting = z
   .object({
-    account: z.string().min(3),
+    account: ZAccount,
     amount: ZAmount.nullable().optional(),
     currency: z.string().max(24).nullable().optional(),
     price_at_signs: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
@@ -100,7 +115,7 @@ export const ZLooseTxn = z
 const ZBalanceBase = {
   id: z.string().min(1).max(24),
   date: z.string().regex(DATE_RE),
-  account: z.string().min(3),
+  account: ZAccount,
   amount: ZAmount,
   currency: z.string().max(24),
 }
