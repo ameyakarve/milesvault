@@ -17,6 +17,11 @@ import {
 } from './inline.generated'
 
 export { BEANCOUNT_PRIMER }
+// Domain-specific clarify scenarios (when/what to ask). Passed to `clarifyTool`
+// at construction — the clarify tool's CORE is generic; this is the ledger
+// domain's knowledge of which choices warrant a question. Not part of the
+// interactive system prompts anymore (it travels with the tool that uses it).
+export { CLARIFICATIONS }
 
 type Snapshot = {
   today: number
@@ -95,12 +100,14 @@ on the Amazon row"), in which case handle it first, then hand back.`
 
 // System prompt for the `ledger` agent in the handoff-based editor registry.
 export function buildLedgerSystem(snapshot: Snapshot): string {
+  // CLARIFICATIONS is NOT here — it's domain hints for the clarify tool, passed
+  // at construction (see clarifyTool). Keeps the generic mechanism and its
+  // domain triggers from getting tangled in the system prompt.
   return [
     BEANCOUNT_PRIMER,
     LEDGER_RULES,
     TOOL_RULES,
     EXAMPLES,
-    CLARIFICATIONS,
     HANDOFF_TO_STATEMENT,
     renderSnapshotBlock(snapshot),
   ].join('\n\n---\n\n')
@@ -124,11 +131,12 @@ export function buildStatementIrSystem(): string {
 
 // System prompt for the `statement` specialist agent.
 export function buildStatementAgentSystem(snapshot: Snapshot): string {
+  // CLARIFICATIONS travels with the clarify tool (passed at construction), not
+  // in this prompt — see clarifyTool / buildLedgerSystem.
   return [
     BEANCOUNT_PRIMER,
     LEDGER_RULES,
     EXAMPLES,
-    CLARIFICATIONS,
     STATEMENT_AGENT_ROLE,
     STATEMENT_HANDLING,
     STATEMENT_EXTRACTION,

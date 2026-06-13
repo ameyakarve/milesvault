@@ -4,7 +4,12 @@ import { z } from 'zod'
 import { draftTransactionBatchSchema } from './agent-ui-schemas'
 import { repairDraftBatch } from '@/lib/beancount/repair-draft-batch'
 import { buildDraftFeedback } from '@/lib/beancount/draft-feedback'
-import { buildLedgerSystem, buildStatementAgentSystem, buildStatementIrSystem } from './agent-prompt'
+import {
+  buildLedgerSystem,
+  buildStatementAgentSystem,
+  buildStatementIrSystem,
+  CLARIFICATIONS,
+} from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
 import {
@@ -560,7 +565,7 @@ entries, or draft corrections.`
         card_guide,
         list_reward_accounts,
         draft_transaction: draftTransactionTool(),
-        clarify: clarifyTool(),
+        clarify: clarifyTool(CLARIFICATIONS),
         add_card: addCardTool(),
         // Internal (underscore = hidden from the model via activeToolNames). The
         // repair hook redirects a validation-failed draft_transaction here; the
@@ -577,7 +582,7 @@ entries, or draft corrections.`
       ...kbLookup,
       card_guide,
       draft_transaction: draftTransactionTool(),
-      clarify: clarifyTool(),
+      clarify: clarifyTool(CLARIFICATIONS),
       read_statement: readStatementTool(async (id) => {
         const stub = this.ledgerStub()
         const blob = await stub.get_statement(id)

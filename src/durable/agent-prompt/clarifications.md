@@ -51,15 +51,7 @@ fares (ask what the points side covered).
 When SEVERAL redemptions need a cash value, ask for EACH one separately and
 apply the value the user gives for one to that one only — do NOT ask once and
 reuse a single number across redemptions (distinct flights/stays have distinct
-cash values even at the same points cost). The clarify question renders as
-MARKDOWN, so a compact table — one row per redemption, a column for the cash
-value, free-text answers — is usually the clearest way to present them. That's
-a suggestion, not a mandate: use your judgement on the format that reads best
-for the situation. Example only (invent rows from the actual items):
-
-| Date | Item | Points | Cash value (INR) |
-|------|------|--------|------------------|
-| …    | …    | …      | ?                |
+cash values even at the same points cost).
 
 ## A rule the user states after you've drafted (earn rate, fee policy, scope)
 
