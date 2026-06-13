@@ -349,22 +349,22 @@ function HoldingsCard({
   )
 }
 
-// The three headline numbers (per primary currency; extra currencies noted):
-// what you owe on cards, what you've spent this month, what's in the bank.
+// Two headline numbers relevant to a rewards/spend tracker: what you owe on
+// cards and what you've spent this month. (No "net worth / in the bank" — this
+// isn't a net-worth app; account balances live on the cards and Accounts tab.)
 function HeadlineStrip({ stats }: { stats: VaultStats }) {
   const cards = primaryOf(stats.card_outstanding)
   const spend = primaryOf(stats.expense_total)
-  const bank = primaryOf(stats.bank_total)
   // Liabilities are negative in beancount — owed is the flipped sign.
   const owed = cards.main ? -cards.main.total : 0
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <StatTile
         label="Card balances"
         value={cards.main ? `${fmtAmt(cards.main.total)} ${cards.main.currency}` : '—'}
         sub={
           cards.main
-            ? `${cards.main.accounts} card${cards.main.accounts === 1 ? '' : 's'}${cards.others ? ` · +${cards.others} ${cards.others === 1 ? 'currency' : 'currencies'}` : ''}`
+            ? `${cards.main.accounts} card${cards.main.accounts === 1 ? '' : 's'}`
             : 'no cards yet'
         }
         negative={owed > 0}
@@ -372,12 +372,7 @@ function HeadlineStrip({ stats }: { stats: VaultStats }) {
       <StatTile
         label="Spent this month"
         value={spend.main ? `${fmtAmt(spend.main.total)} ${spend.main.currency}` : '0'}
-        sub={spend.others ? `+${spend.others} more ${spend.others === 1 ? 'currency' : 'currencies'}` : 'month to date'}
-      />
-      <StatTile
-        label="In the bank"
-        value={bank.main ? `${fmtAmt(bank.main.total)} ${bank.main.currency}` : '—'}
-        sub={bank.others ? `+${bank.others} more ${bank.others === 1 ? 'currency' : 'currencies'}` : 'across bank accounts'}
+        sub="month to date"
       />
     </div>
   )
