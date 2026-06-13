@@ -78,7 +78,7 @@ export type LedgerClient = {
   account_overview(
     opts: Parameters<LedgerDO['account_overview']>[0],
   ): ReturnType<LedgerDO['account_overview']>
-  expense_tree(from: string, to: string): ReturnType<LedgerDO['expense_tree']>
+  account_flows(root: string, from: string, to: string): ReturnType<LedgerDO['account_flows']>
   vault_stats(
     opts: Parameters<LedgerDO['vault_stats']>[0],
   ): ReturnType<LedgerDO['vault_stats']>
@@ -243,13 +243,16 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       return stub.account_overview(opts)
     },
 
-    async expense_tree(from, to) {
+    async account_flows(root, from, to) {
+      if (!/^(Assets|Liabilities|Equity|Income|Expenses)$/.test(root)) {
+        throw new LedgerInputError(['root must be a top-level account type.'])
+      }
       for (const d of [from, to]) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
           throw new LedgerInputError(['from/to must be YYYY-MM-DD.'])
         }
       }
-      return stub.expense_tree(Number(from.replaceAll('-', '')), Number(to.replaceAll('-', '')))
+      return stub.account_flows(root, Number(from.replaceAll('-', '')), Number(to.replaceAll('-', '')))
     },
 
     async save_email_rule(rule) {

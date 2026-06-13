@@ -26,6 +26,9 @@ const RANGES = [
 ] as const
 type RangeKey = (typeof RANGES)[number]['key']
 
+const ACCOUNT_TYPES = ['Expenses', 'Income', 'Assets', 'Liabilities'] as const
+type AccountType = (typeof ACCOUNT_TYPES)[number]
+
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -59,14 +62,16 @@ function fmt(n: number, ccy: string): string {
     : v.toLocaleString('en-US') + ' ' + ccy
 }
 
-// Build the Expenses hierarchy from full account paths; each account's own
-// total lands on its node, parents roll up via d3's .sum().
-function buildTree(rows: Row[]): Tree {
-  const root: Tree = { name: 'Expenses', full: 'Expenses', self: 0, children: [] }
-  const index = new Map<string, Tree>([['Expenses', root]])
+// Build the account hierarchy under `rootName` (Expenses/Income/Assets/…) from
+// full account paths; each account's MAGNITUDE lands on its node (abs, so
+// income/liability credits and negative balances size correctly), parents roll
+// up via d3's .sum().
+function buildTree(rows: Row[], rootName: string): Tree {
+  const root: Tree = { name: rootName, full: rootName, self: 0, children: [] }
+  const index = new Map<string, Tree>([[rootName, root]])
   for (const r of rows) {
     const segs = r.account.split(':')
-    let parentFull = 'Expenses'
+    let parentFull = rootName
     for (let i = 1; i < segs.length; i++) {
       const full = segs.slice(0, i + 1).join(':')
       let node = index.get(full)
@@ -78,7 +83,7 @@ function buildTree(rows: Row[]): Tree {
       parentFull = full
     }
     const exact = index.get(r.account)
-    if (exact) exact.self += r.total
+    if (exact) exact.self += Math.abs(r.total)
   }
   return root
 }
@@ -140,27 +145,41 @@ function useWidth(): [(el: HTMLDivElement | null) => void, number] {
   return [measure, w]
 }
 
-export function ExpensesView() {
+export function AccountsView() {
+  const [type, setType] = useState<AccountType>('Expenses')
   const [range, setRange] = useState<RangeKey>('3m')
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(false)
   const [currency, setCurrency] = useState('INR')
   const [path, setPath] = useState<string[]>([])
 
+  // Income/Expenses explore FLOWS over the range; Assets/Liabilities explore
+  // BALANCES as of the range end.
+  const isFlow = type === 'Expenses' || type === 'Income'
+
   useEffect(() => {
     const { from, to } = rangeDates(range)
     setLoading(true)
     const ac = new AbortController()
-    ledgerClient
-      .getExpenseTree({ from, to }, { signal: ac.signal })
-      .then((d) => {
-        setRows(d.rows ?? [])
-        setPath([])
-      })
+    const p: Promise<Row[]> = isFlow
+      ? ledgerClient.getAccountFlows({ root: type, from, to }, { signal: ac.signal }).then((d) => d.rows ?? [])
+      : ledgerClient.getAccountSummaries(to, { signal: ac.signal }).then((d) =>
+          (d.rows ?? [])
+            .filter((r) => r.account === type || r.account.startsWith(type + ':'))
+            .map((r) => ({
+              account: r.account,
+              currency: r.currency,
+              total: Number(r.balance_scaled) / 10 ** r.scale,
+            })),
+        )
+    p.then((rs) => {
+      setRows(rs)
+      setPath([])
+    })
       .catch(() => {})
       .finally(() => setLoading(false))
     return () => ac.abort()
-  }, [range])
+  }, [type, range, isFlow])
 
   const currencies = useMemo(() => [...new Set(rows.map((r) => r.currency))].sort(), [rows])
   // Derived so we never setState-in-effect: honour the user's pick when it's
@@ -176,8 +195,8 @@ export function ExpensesView() {
   )
 
   const tree = useMemo(
-    () => buildTree(rows.filter((r) => r.currency === activeCurrency)),
-    [rows, activeCurrency],
+    () => buildTree(rows.filter((r) => r.currency === activeCurrency), type),
+    [rows, activeCurrency, type],
   )
   const node = useMemo(() => nodeAt(tree, path), [tree, path])
 
@@ -204,7 +223,7 @@ export function ExpensesView() {
 
   // Leaf = an account with no sub-categories (and not the synthetic root). At a
   // leaf we list the actual transactions and link them into the editor journal.
-  const isLeaf = node.children.length === 0 && node.full !== 'Expenses'
+  const isLeaf = node.children.length === 0 && node.full !== type
   const { from: rangeFrom, to: rangeTo } = rangeDates(range)
   const [leafTxns, setLeafTxns] = useState<Txn[]>([])
   const [leafLoading, setLeafLoading] = useState(false)
@@ -234,22 +253,46 @@ export function ExpensesView() {
         }
       >
         <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
-          {RANGES.map((r) => (
+          {ACCOUNT_TYPES.map((t) => (
             <button
-              key={r.key}
+              key={t}
               type="button"
-              onClick={() => setRange(r.key)}
+              onClick={() => {
+                setType(t)
+                setPath([])
+              }}
               className={cn(
                 'rounded px-2.5 py-1',
-                range === r.key
+                type === t
                   ? 'bg-foreground text-background'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              {r.label}
+              {t}
             </button>
           ))}
         </div>
+        {isFlow ? (
+          <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
+            {RANGES.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRange(r.key)}
+                className={cn(
+                  'rounded px-2.5 py-1',
+                  range === r.key
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">balance as of today</span>
+        )}
         {currencies.length > 1 ? (
           <Select value={activeCurrency} onValueChange={setCurrency}>
             <SelectTrigger className="h-8 w-28">
@@ -277,7 +320,7 @@ export function ExpensesView() {
               path.length === 0 ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            Expenses
+            {type}
           </button>
           {path.map((seg, i) => (
             <span key={i} className="flex items-center gap-1">

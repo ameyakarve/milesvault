@@ -433,11 +433,12 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     }
   }
 
-  // Per-account Expenses totals over a date range (full account paths, by
-  // currency) — the expense-explorer treemap builds its hierarchy from these.
-  // Same source as account_overview's category roll-up, just NOT collapsed to
-  // the 2nd segment. Excludes Expenses:Void (the expiry/forfeit plug).
-  async expense_tree(
+  // Per-account FLOW totals over a date range under one root (Expenses, Income,
+  // …), full account paths, by currency — the accounts-explorer treemap builds
+  // its hierarchy from these. Same source as account_overview's category
+  // roll-up, just not collapsed. Excludes the root's :Void plug.
+  async account_flows(
+    root: string,
     fromInt: number,
     toInt: number,
   ): Promise<Array<{ account: string; currency: string; total: number }>> {
@@ -446,9 +447,11 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       .exec<{ account: string; currency: string; scale: number; s: number }>(
         `SELECT account, currency, scale, SUM(amount_scaled) AS s
          FROM postings
-         WHERE account LIKE 'Expenses:%' AND account NOT LIKE 'Expenses:Void%'
+         WHERE account LIKE ? AND account NOT LIKE ?
            AND date >= ? AND date <= ?
          GROUP BY account, currency, scale`,
+        `${root}:%`,
+        `${root}:Void%`,
         fromInt,
         toInt,
       )

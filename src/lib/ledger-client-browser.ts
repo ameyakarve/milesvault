@@ -6,6 +6,7 @@ import type {
   ReplaceBufferConflict,
   ReplaceBufferResponse,
 } from '@/durable/ledger-do'
+import type { AccountSummaryRow } from '@/durable/ledger-types'
 
 type FetchOpts = { signal?: AbortSignal }
 
@@ -57,12 +58,19 @@ export const ledgerClient = {
   }> {
     return getJSON('/api/ledger/accounts', opts)
   },
-  getExpenseTree(
-    params: { from: string; to: string },
+  getAccountFlows(
+    params: { root: string; from: string; to: string },
     opts?: FetchOpts,
   ): Promise<{ rows: Array<{ account: string; currency: string; total: number }> }> {
-    const q = new URLSearchParams({ from: params.from, to: params.to }).toString()
-    return getJSON(`/api/ledger/expense-tree?${q}`, opts)
+    const q = new URLSearchParams(params).toString()
+    return getJSON(`/api/ledger/account-flows?${q}`, opts)
+  },
+  getAccountSummaries(
+    asOf?: string,
+    opts?: FetchOpts,
+  ): Promise<{ rows: AccountSummaryRow[] }> {
+    const q = asOf ? `?asOf=${asOf}` : ''
+    return getJSON(`/api/ledger/summaries${q}`, opts)
   },
   attachStatement(body: {
     mode?: 'inbox'
