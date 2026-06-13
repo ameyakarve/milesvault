@@ -27,7 +27,6 @@ import {
 } from '@/components/ai-elements/tool'
 import {
   PromptInput,
-  PromptInputButton,
   PromptInputFooter,
   PromptInputProvider,
   PromptInputSubmit,
@@ -437,12 +436,18 @@ export function Chat({
       <AddAccountsModal
         open={addCardOpen}
         onClose={() => setAddCardOpen(false)}
-        onDone={() => void refreshAccounts()}
+        onDone={() => {
+          void refreshAccounts()
+          onAppended?.()
+        }}
       />
       <UpdateBalanceModal
         open={updateBalanceOpen}
         onClose={() => setUpdateBalanceOpen(false)}
-        onDone={() => void refreshAccounts()}
+        onDone={() => {
+          void refreshAccounts()
+          onAppended?.()
+        }}
       />
       {isEmpty ? (
         <div className="flex flex-1 items-center justify-center px-4">

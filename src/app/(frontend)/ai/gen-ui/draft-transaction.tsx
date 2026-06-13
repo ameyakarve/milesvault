@@ -74,6 +74,12 @@ const THEME = EditorView.theme({
     fontFamily: "'JetBrains Mono', monospace",
   },
   '.cm-content': { padding: '8px 0', caretColor: 'var(--cm-caret)', color: 'var(--cm-text)' },
+  // CodeMirror draws the caret as a bordered element and ignores caretColor —
+  // without this it defaults to black, invisible in dark mode.
+  '.cm-cursor, .cm-dropCursor': {
+    borderLeftColor: 'var(--cm-caret)',
+    borderLeftWidth: '1.5px',
+  },
   '.cm-line': { padding: '0 12px', lineHeight: '22px' },
   '.cm-focused': { outline: 'none' },
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':

@@ -239,11 +239,6 @@ export function UpdateBalanceModal({
                 className="[color-scheme:light] dark:[color-scheme:dark]"
               />
             </div>
-            {preview ? (
-              <pre className="overflow-x-auto rounded-md bg-muted/50 px-3 py-2 font-mono text-[11px] leading-4 text-foreground">
-                {preview}
-              </pre>
-            ) : null}
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
           </div>
         )}
