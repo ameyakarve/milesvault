@@ -109,6 +109,12 @@ not adjacency** — markup ≈ 2% of ITS billed amount, GST ≈ 18% of THAT mark
 
 ## Redemption
 
+**Recognise it:** points/miles going DOWN because you SPENT them on something —
+an award flight or hotel, a voucher, a statement credit, pay-at-merchant — is a
+REDEMPTION. This holds even in a bare loyalty/points statement that shows only a
+negative points line against a flight/booking: that negative line is a
+redemption, NOT a generic points decrease to write off against `Equity:Void`.
+
 **Every redemption associates a cash value with the points side via `@@`** —
 statement credits, pay-at-merchant, award flights/hotels, hybrid fares alike. The
 points leg's weight is the cash equivalent at redemption time. Never guess it
@@ -131,7 +137,11 @@ between the figure and what your entries left in the account, then the balance
 asserts the figure. The pad's plug account is chosen by the ACCOUNT TYPE:
 
 - **Reward commodity** (a points / miles balance under `Assets:Rewards:*`) →
-  `Equity:Void` — the same contra rewards are minted and burned through.
+  `Equity:Void`. This is the PAD plug ONLY — inside a `pad`+`balance`, Void
+  absorbs the reconciling drift in either direction. It does NOT license burning
+  points to Void in a normal transaction: a points balance going DOWN in a
+  transaction is a redemption / transfer-out / expiry (see Redemption), never a
+  bare burn to `Equity:Void`.
 - **Fiat onboarding** (first-time set of a bank / card / cash balance the account
   never had) → `Equity:Opening-Balances`.
 - **Fiat drift correction** (the books disagree with reality on an EXISTING fiat
