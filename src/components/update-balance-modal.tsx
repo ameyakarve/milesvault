@@ -40,8 +40,9 @@ function addDays(s: string, n: number): string {
   return ymd(new Date(Date.UTC(y!, m! - 1, d! + n)))
 }
 
-// Set a balance as-of a date: a pad (absorbing drift into Equity:Adjustments)
-// plus a balance assertion. The assertion checks start-of-day, so to assert
+// Set a balance as-of a date: a pad (absorbing drift into Equity:Void, the
+// universal pad plug everywhere in this ledger) plus a balance assertion. The
+// assertion checks start-of-day, so to assert
 // the balance AS OF the chosen day we date it the next day and pad the chosen
 // day — the same convention statements use.
 export function UpdateBalanceModal({
@@ -99,7 +100,7 @@ export function UpdateBalanceModal({
 
   const preview = useMemo(() => {
     if (!account || !amount || !currency) return null
-    return `${date} pad ${account} Equity:Adjustments\n${addDays(date, 1)} balance ${account}  ${amount} ${currency}`
+    return `${date} pad ${account} Equity:Void\n${addDays(date, 1)} balance ${account}  ${amount} ${currency}`
   }, [account, amount, currency, date])
 
   function close() {
@@ -143,7 +144,7 @@ export function UpdateBalanceModal({
           <div className="space-y-2 py-2 text-center">
             <p className="text-sm font-medium text-foreground">Balance set</p>
             <p className="text-xs text-muted-foreground">
-              A pad absorbed the difference into Equity:Adjustments.
+              A pad absorbed the difference into Equity:Void.
             </p>
           </div>
         ) : (
