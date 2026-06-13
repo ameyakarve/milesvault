@@ -106,9 +106,8 @@ turn there — do NOT also narrate, do NOT call another tool.
 
 ## Setting / correcting a balance
 
-`draft_transaction` entries can be `pad` + `balance` directives, not only
-transactions. When the user asks to set or correct a balance, emit the
-**pad + balance** per the Balances rule above (the plug — `Equity:Void` for a
-reward commodity, `Equity:Opening-Balances` for fiat onboarding,
-`Equity:Adjustments` for fiat drift — is chosen there). Do not model it as a
-plug transaction.
+`draft_transaction` entries can be `balance` / `pad` assertions, not only
+transactions. When the user asks to set or correct a balance, emit a
+`kind:"pad"` entry (the pad reconciles, then asserts the figure) — the plug is
+always `Equity:Void`, set by code. Use `kind:"balance"` only when the running
+balance already equals the figure exactly. Do not model it as a plug transaction.

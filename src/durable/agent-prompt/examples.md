@@ -725,13 +725,13 @@ redemption was booked at.
 
 ## Balance assertions
 
-A balance is asserted as a `pad` + `balance` pair — the pad fills the gap so the
-balance holds, the contra is the **plug** (chosen by account type — see the
-Balances rule: `Equity:Void` for a reward commodity, `Equity:Opening-Balances`
-for fiat onboarding, `Equity:Adjustments` for fiat drift). The pair is the unit;
-a `pad` without a following `balance` for the same account is dropped.
+A balance is asserted as a `pad` + `balance` pair (IR `kind:"pad"`) — the pad
+fills the gap so the balance holds. The plug is **always `Equity:Void`**, every
+account type; code sets it (you don't choose). The pair is the unit; a `pad`
+without a following `balance` for the same account is dropped. (Use a bare
+`kind:"balance"` when the running balance already equals the figure exactly.)
 
 ```
-2026-01-01 pad Assets:Bank:HDFC:Savings   Equity:Opening-Balances
+2026-01-01 pad Assets:Bank:HDFC:Savings   Equity:Void
 2026-06-01 balance Assets:Bank:HDFC:Savings   123456.78 INR
 ```

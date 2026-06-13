@@ -22,11 +22,6 @@ transactions:
 3. If the statement genuinely has nothing to record, say so briefly and do not
    call `draft_transaction` — never fabricate entries.
 
-For LARGE statements (more than ~10 transactions), do not put everything in
-one giant `draft_transaction` call — emit MULTIPLE calls of at most 10
-entries each, in statement order, in the same turn. Oversized single calls
-get truncated mid-JSON and rejected; batches of 10 always go through.
-
 If the user message has both a statement reference and an in-line instruction
 ("ignore the small ones", "skip Amazon refunds"), read the statement and apply
 that filter before drafting.

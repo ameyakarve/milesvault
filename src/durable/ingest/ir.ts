@@ -124,8 +124,8 @@ export const ZLoosePad = z
     account: b.account,
     amount: String(b.amount),
     currency: b.currency,
-    // One plug for all pads (owner ruling: don't complicate).
-    plug_account: 'Equity:Adjustments' as string | undefined,
+    // One plug for ALL pads — Equity:Void, every account type (owner ruling).
+    plug_account: 'Equity:Void' as string | undefined,
   }))
 
 export const ZEntry = z.discriminatedUnion('kind', [ZLooseTxn, ZLooseBalance, ZLoosePad])

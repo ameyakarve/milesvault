@@ -111,7 +111,7 @@ const extracted: ExtractedStatement = {
       account: CARD,
       amount: '-2127.58',
       currency: 'INR',
-      plug_account: 'Equity:Adjustments',
+      plug_account: 'Equity:Void',
     },
     {
       kind: 'pad',
@@ -119,7 +119,7 @@ const extracted: ExtractedStatement = {
       account: POOL,
       amount: '168',
       currency: TICKER,
-      plug_account: 'Equity:Adjustments',
+      plug_account: 'Equity:Void',
     },
   ],
 }
@@ -138,8 +138,8 @@ const checks: Array<[string, boolean]> = [
   ['landing present (pending → posted)', /Assets:Rewards:Demo\s+168 DEMO-PTS/.test(joined) && /Assets:Rewards:Demo:Pending\s+-168 DEMO-PTS/.test(joined)],
   ['payment clearing negative', /Assets:Clearing:CardPayments\s+-5000\.00 INR/.test(joined)],
   ['points balance verbatim', joined.includes('balance Assets:Rewards:Demo') && joined.includes('168 DEMO-PTS')],
-  ['pad kind renders pad+balance', joined.includes('pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Adjustments')],
-  ['bare balance kind has NO pad (one card pad = the closing only)', (joined.match(/pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Adjustments/g) || []).length === 1],
+  ['pad kind renders pad+balance', joined.includes('pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Void')],
+  ['bare balance kind has NO pad (one card pad = the closing only)', (joined.match(/pad Liabilities:CreditCards:Demo:Sample:0000 Equity:Void/g) || []).length === 1],
   ['bare opening balance renders plain', /2026-04-01 balance Liabilities:CreditCards:Demo:Sample:0000\s+1000\.00 INR/.test(joined)],
   ['generic validator accepts the balanced batch', v.ok === true],
 ]

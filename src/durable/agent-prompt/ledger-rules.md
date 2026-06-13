@@ -134,20 +134,16 @@ value yet is a question, not a guess.
 
 ## Balances (assert with a pad)
 
-A balance is asserted as a **pad + balance** pair: the pad absorbs any drift
-between the figure and what your entries left in the account, then the balance
-asserts the figure. The pad's plug account is chosen by the ACCOUNT TYPE:
+A balance is asserted as a **pad + balance** pair (IR `kind:"pad"`): the pad
+absorbs any drift between the figure and what your entries left in the account,
+then the balance asserts the figure. **The pad always plugs from `Equity:Void`**
+— for every account type (reward, bank, card, cash). You don't choose the plug;
+code sets it. (If the running balance already equals the figure exactly and needs
+no reconciliation, use a bare `kind:"balance"` instead — no pad.)
 
-- **Reward commodity** (a points / miles balance under `Assets:Rewards:*`) →
-  `Equity:Void`. This is the PAD plug ONLY — inside a `pad`+`balance`, Void
-  absorbs the reconciling drift in either direction. It does NOT license burning
-  points to Void in a normal transaction: a points balance going DOWN in a
-  transaction is a redemption / transfer-out / expiry (see Redemption), never a
-  bare burn to `Equity:Void`.
-- **Fiat onboarding** (first-time set of a bank / card / cash balance the account
-  never had) → `Equity:Opening-Balances`.
-- **Fiat drift correction** (the books disagree with reality on an EXISTING fiat
-  balance) → `Equity:Adjustments`.
+This is the PAD plug ONLY. It does NOT license burning points to `Equity:Void` in
+a normal transaction: a points balance going DOWN in a transaction is a
+redemption / transfer-out / expiry (see Redemption), never a bare burn to Void.
 
 Assert the figure exactly as given, digit-for-digit. Date the `balance` the day
 the figure is as-of (for a statement closing, the day AFTER the period ends), the
