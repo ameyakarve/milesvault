@@ -66,7 +66,7 @@ function firstJsonBlock(text: string): string | null {
   return null
 }
 
-async function genJson<T>(
+export async function genJson<T>(
   gen: GenFn,
   schema: z.ZodType<T>,
   system: string,

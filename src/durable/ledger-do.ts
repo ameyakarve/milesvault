@@ -1450,22 +1450,31 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     return { rows, truncated, limit }
   }
 
-  // Read ONE existing entry's full canonical text + OCC version, by kind+id.
-  // The edit flow calls this per target after find_entries; null if it's gone.
-  async get_entry(ref: { kind: EntryKind; id: number }): Promise<EntryRow | null> {
-    if (ref.kind === 'txn') {
-      const e = this.readTxnEntry(ref.id)
-      if (!e) return null
-      const raw = serializeJournal([entryTxnToInput(e)], [], {
-        descending: false,
-      }).trimEnd()
-      return { kind: 'txn', id: ref.id, raw_text: raw, updated_at: e.updated_at }
+
+  // Existing entries (canonical text) on each of the given dates — the
+  // per-date buckets the incorporation engine rewrites. Few per date, so
+  // loading whole days keeps each shard's context small and complete.
+  async entries_on_dates(dates: string[]): Promise<Record<string, string[]>> {
+    const out: Record<string, string[]> = {}
+    for (const d of dates) {
+      const di = dateToInt(d)
+      const bucket: string[] = []
+      for (const { id } of this.db
+        .exec<{ id: number }>('SELECT id FROM transactions WHERE date = ? ORDER BY id', di)
+        .toArray()) {
+        const e = this.readTxnEntry(id)
+        if (e) bucket.push(serializeJournal([entryTxnToInput(e)], [], { descending: false }).trimEnd())
+      }
+      for (const kind of ALL_DIRECTIVE_KINDS) {
+        for (const row of this.readDirectivesByKind(kind)) {
+          if (dateToInt(row.input.date) === di) {
+            bucket.push(serializeJournal([], [row.input], { descending: false }).trimEnd())
+          }
+        }
+      }
+      out[d] = bucket
     }
-    const row = this.readDirectivesByKind(ref.kind).find((r) => r.id === ref.id)
-    if (!row) return null
-    const updated_at = this.readUpdatedAt(ref.kind, ref.id) ?? 0
-    const raw = serializeJournal([], [row.input], { descending: false }).trimEnd()
-    return { kind: ref.kind, id: ref.id, raw_text: raw, updated_at }
+    return out
   }
 
   async list_account_summaries(

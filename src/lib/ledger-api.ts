@@ -1,7 +1,5 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type {
-  EntryKind,
-  EntryRow,
   JournalGetFilteredRequest,
   JournalGetFilteredResponse,
   JournalGetResponse,
@@ -37,7 +35,6 @@ export type LedgerClient = {
   list_account_children(account: string): Promise<string[]>
   list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
   search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse>
-  get_entry(ref: { kind: EntryKind; id: number }): Promise<EntryRow | null>
   query_sql(
     sql: string,
     params?: ReadonlyArray<string | number | null>,
@@ -199,9 +196,6 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async search_postings(filter) {
       return stub.search_postings(filter)
-    },
-    async get_entry(ref) {
-      return stub.get_entry(ref)
     },
 
     async query_sql(sql, params = []) {

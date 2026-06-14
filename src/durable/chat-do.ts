@@ -21,10 +21,9 @@ import {
   clarifyTool,
   addCardTool,
   readStatementTool,
-  getEntryTool,
-  selectEntriesTool,
+  incorporateTool,
 } from './agents/tools/editor'
-import { querySqlTool } from './agents/tools/concierge/query-sql'
+import { runIncorporation } from './ingest/incorporate'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
 import { runDraftPipeline, type GenFn } from './ingest/pipeline'
 import type { AgentHost, Registry } from './agents/types'
@@ -56,6 +55,10 @@ function todayInt(): number {
   const mm = (now.getUTCMonth() + 1).toString().padStart(2, '0')
   const dd = now.getUTCDate().toString().padStart(2, '0')
   return Number(`${yyyy}${mm}${dd}`)
+}
+
+function isoFromInt(d: number): string {
+  return `${Math.floor(d / 10000)}-${String(Math.floor((d % 10000) / 100)).padStart(2, '0')}-${String(d % 100).padStart(2, '0')}`
 }
 
 export class ChatDO
@@ -432,6 +435,18 @@ ${opts.text}`,
     return ns.get(ns.idFromName(this.ownerEmail()))
   }
 
+  // Plain JSON-text generation for the incorporation engine — non-thinking,
+  // no tools (same model/path the statement pipeline uses).
+  private editGen(): GenFn {
+    return async ({ system, prompt, maxTokens }) => {
+      const model = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' })
+      const r = streamText({ model, system, prompt, maxOutputTokens: maxTokens })
+      let text = ''
+      for await (const delta of r.textStream) text += delta
+      return text
+    }
+  }
+
   private snapshot(): Snapshot {
     return (
       this.turnSnapshot ?? {
@@ -491,20 +506,27 @@ entries, or draft corrections.`
     // here (assembled in the KG) instead of building the path itself — gemma
     // resolves the right programme but drops the `:Miles:` segment when assembling.
     const list_reward_accounts = rewardAccountsTool(kbHttp)
-    // Edit/delete-existing flow (codemode): query_sql (read-only, model composes
-    // the search) → get_entry (full text per target) → draft_transaction with a
-    // `target`. Both read the user's own LedgerDO over RPC.
-    const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
-    const get_entry = getEntryTool((ref) => this.ledgerStub().get_entry(ref))
+    // Add / edit / delete via the date-bucketed incorporation workflow: the
+    // model relays its returned entries into draft_transaction (like
+    // read_statement). The model never sees ids or searches — incorporation
+    // reads the affected dates' existing entries itself.
+    const incorporate = incorporateTool((intent) =>
+      runIncorporation({
+        gen: this.editGen(),
+        intent,
+        today: isoFromInt(this.snapshot().today),
+        accounts: this.snapshot().accounts.map((a) => a.account),
+        cardContext: null,
+        readDates: (dates) => this.ledgerStub().entries_on_dates(dates),
+      }),
+    )
     if (name === 'ledger') {
       return this.withToolLog(name, {
         ...kbLookup,
         card_guide,
         list_reward_accounts,
         draft_transaction: draftTransactionTool(),
-        query_sql,
-        get_entry,
-        select_entries: selectEntriesTool(),
+        incorporate,
         clarify: clarifyTool(CLARIFICATIONS),
         add_card: addCardTool(),
       })

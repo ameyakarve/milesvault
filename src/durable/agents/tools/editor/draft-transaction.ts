@@ -24,7 +24,7 @@ const SUSPENDING_EXECUTE = undefined as unknown as ToolExecuteFunction<
 export function draftTransactionTool() {
   return dynamicTool({
     description:
-      'Propose one or more journal entries for the user to review and approve — to ADD, EDIT, or DELETE. `entries` is an array; each element is { "id", "text"?, "replaces"? }. `id` is a short unique handle (used only to address the entry on a correction — never written to the ledger). ADD = `text` only. EDIT an existing entry = `replaces` (its exact current text, copied verbatim from get_entry) + `text` (the full replacement). DELETE = `replaces` with empty `text`. To edit/delete, first locate the entry with query_sql and read it with get_entry — never append a new entry to "fix" an existing one. Each `text` is ONE beancount entry — ONE of:\n' +
+      'Render proposed journal entries for the user to review and approve — to ADD, EDIT, or DELETE. `entries` is an array; each element is { "id", "text"?, "replaces"? }. `id` is a short unique handle (used only to address the entry on a correction — never written to the ledger). ADD = `text` only. EDIT = `replaces` (the existing entry\'s exact text) + `text` (the full replacement). DELETE = `replaces` with empty `text`. For any change to existing entries, call `incorporate({ intent })` first and pass its returned entries here VERBATIM — do not hand-write edits or hunt for entries. Each `text` is ONE beancount entry — ONE of:\n' +
       '• a transaction — a date header then 2+ posting lines:\n' +
       '    2026-05-21 * "Payee" "Narration"\n' +
       '      Expenses:Food:Groceries     42.10 USD\n' +

@@ -35,7 +35,7 @@ export const draftTransactionBatchSchema = z
           replaces: z
             .string()
             .optional()
-            .describe('To EDIT or DELETE an existing entry: the exact beancount text of the entry being replaced, copied verbatim from its `get_entry` result. Omit for a brand-new entry. (edit = replaces + new text · delete = replaces + empty text · add = text only.)'),
+            .describe('To EDIT or DELETE an existing entry: the exact beancount text being replaced, copied verbatim from the `incorporate` result. Omit for a brand-new entry. (edit = replaces + new text · delete = replaces + empty text · add = text only.)'),
         }),
       )
       .min(1)
@@ -153,33 +153,3 @@ export const showAwardOptionsSchema = z.object({
 })
 
 export type ShowAwardOptionsInput = z.infer<typeof showAwardOptionsSchema>
-
-// select_entries — when an edit/delete request matches MORE than a handful of
-// entries, the model hands the candidates (id + a one-line title it builds from
-// its query_sql rows) to the user, who ticks the ones to act on. The tool
-// resolves to the chosen ids; the model then get_entry's each and drafts.
-export const selectEntriesInputSchema = z.object({
-  prompt: z
-    .string()
-    .max(200)
-    .optional()
-    .describe('Short context line shown above the list, e.g. "Which Swiggy charges to recategorize?".'),
-  candidates: z
-    .array(
-      z.object({
-        id: z.number().int().positive().describe('transactions.id from your query_sql result.'),
-        title: z
-          .string()
-          .min(1)
-          .max(200)
-          .describe('One-line label for the row, e.g. "2026-06-08 · Swiggy · 650 INR".'),
-      }),
-    )
-    .min(1)
-    .max(200),
-})
-export type SelectEntriesInput = z.infer<typeof selectEntriesInputSchema>
-
-export const selectEntriesOutputSchema = z.object({
-  ids: z.array(z.number().int().positive()),
-})

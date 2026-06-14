@@ -98,25 +98,8 @@ summarizing what was done in \`context\` — UNLESS that message is a direct
 correction or follow-up to the statement you just handled (e.g. "fix the date
 on the Amazon row"), in which case handle it first, then hand back.`
 
-// The editor can locate existing entries to edit/delete by writing read-only
-// SQL (query_sql) — so it needs the schema. Detailed edit/delete tool rules
-// live in TOOL_RULES; this is just the data shape to anchor SELECTs on.
-function renderLedgerSchemaBlock(ddl: string): string {
-  return `# Finding existing entries (read-only SQL)
-
-To EDIT or DELETE an existing entry you must first locate it. Use \`query_sql\`
-(SELECT/WITH only) against the schema below — SELECT narrow columns
-(\`transactions.id\`, date, payee) with a \`LIMIT\`, never \`SELECT *\`. Then read
-the chosen entry's full text with \`get_entry\` and edit/delete it via
-\`draft_transaction\` (see Tool use). Never append a duplicate to "change" something.
-
-\`\`\`sql
-${ddl.trim()}
-\`\`\``
-}
-
 // System prompt for the `ledger` agent in the handoff-based editor registry.
-export function buildLedgerSystem(snapshot: Snapshot & { schema_ddl?: string }): string {
+export function buildLedgerSystem(snapshot: Snapshot): string {
   // CLARIFICATIONS is NOT here — it's domain hints for the clarify tool, passed
   // at construction (see clarifyTool). Keeps the generic mechanism and its
   // domain triggers from getting tangled in the system prompt.
@@ -127,10 +110,7 @@ export function buildLedgerSystem(snapshot: Snapshot & { schema_ddl?: string }):
     EXAMPLES,
     HANDOFF_TO_STATEMENT,
     renderSnapshotBlock(snapshot),
-    snapshot.schema_ddl?.trim() ? renderLedgerSchemaBlock(snapshot.schema_ddl) : '',
-  ]
-    .filter(Boolean)
-    .join('\n\n---\n\n')
+  ].join('\n\n---\n\n')
 }
 
 // System prompt for the headless ingest pipeline's extraction call: the
