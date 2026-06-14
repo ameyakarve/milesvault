@@ -5,6 +5,7 @@ import {
   buildLedgerSystem,
   buildStatementAgentSystem,
   buildStatementTextSystem,
+  buildIncorporationConventions,
   CLARIFICATIONS,
 } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
@@ -448,7 +449,7 @@ ${opts.text}`,
       intent,
       today: isoFromInt(snap.today),
       accounts: snap.accounts.map((a) => a.account),
-      cardContext: null,
+      conventions: buildIncorporationConventions(),
       readDates: (dates) => this.ledgerStub().entries_on_dates(dates),
     })
   }
@@ -524,30 +525,30 @@ entries, or draft corrections.`
     // here (assembled in the KG) instead of building the path itself — gemma
     // resolves the right programme but drops the `:Miles:` segment when assembling.
     const list_reward_accounts = rewardAccountsTool(kbHttp)
-    // Add / edit / delete via the date-bucketed incorporation workflow: the
-    // model relays its returned entries into draft_transaction (like
-    // read_statement). The model never sees ids or searches — incorporation
-    // reads the affected dates' existing entries itself.
+    // Add / edit / delete via the date-bucketed incorporation workflow. Its
+    // OUTPUT renders the review card DIRECTLY — the model emits only the short
+    // `intent`; the long entry texts never pass back through it (relaying them
+    // into draft_transaction corrupted them — gemma can't copy them verbatim).
+    // The editor agent therefore has NO draft_transaction tool: no relay path.
     const incorporate = incorporateTool((intent) =>
       runIncorporation({
         gen: this.editGen(),
         intent,
         today: isoFromInt(this.snapshot().today),
         accounts: this.snapshot().accounts.map((a) => a.account),
-        cardContext: null,
+        conventions: buildIncorporationConventions(),
         readDates: (dates) => this.ledgerStub().entries_on_dates(dates),
       }),
     )
     // Read-only lookups so the editor can ANSWER questions about existing
     // entries ("which of my Accor txns are redemptions?") itself — it reads to
-    // write anyway. Writes still go only through incorporate → draft_transaction.
+    // write anyway. Writes still go only through incorporate.
     const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
     if (name === 'ledger') {
       return this.withToolLog(name, {
         ...kbLookup,
         card_guide,
         list_reward_accounts,
-        draft_transaction: draftTransactionTool(),
         incorporate,
         query_sql,
         clarify: clarifyTool(CLARIFICATIONS),

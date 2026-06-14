@@ -133,6 +133,13 @@ export function buildLedgerSystem(snapshot: Snapshot & { schema_ddl?: string }):
     .join('\n\n---\n\n')
 }
 
+// The convention stack the incorporation shard authors against — the same
+// primer + rules + examples the statement extractor uses (the shard does the
+// same job: produce correct beancount). No snapshot/handoff/tool sections.
+export function buildIncorporationConventions(): string {
+  return [BEANCOUNT_PRIMER, LEDGER_RULES, EXAMPLES].join('\n\n---\n\n')
+}
+
 // System prompt for the headless ingest pipeline's extraction call: the
 // SAME convention stack the editor's statement agent runs on (primer,
 // examples, clarifications, extraction rules) — the only delta is the

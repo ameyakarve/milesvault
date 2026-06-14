@@ -12,7 +12,7 @@ export function incorporateTool(
 ) {
   return tool({
     description:
-      'Apply the user\'s request to ADD, EDIT, or DELETE journal entries. Pass the user\'s request verbatim as `intent`. It locates the affected dates, reconciles each day\'s entries with the request, and returns `{ ok: true, entries: [{ id, text?, replaces? }] }` — the proposed changes (add = text; delete/edited-away = replaces). Then call `draft_transaction` with EXACTLY those entries (verbatim) so the user can review and approve. If `{ ok: true, entries: [] }`, nothing needed changing — tell the user briefly. Use this for any change to existing entries; do not hand-write edits or hunt for entries yourself.',
+      'Apply the user\'s request to ADD, EDIT, or DELETE journal entries. Pass the user\'s request verbatim as `intent`. It locates the affected dates, reconciles each day\'s entries with the request, and proposes the changes — which are shown to the user as a review card AUTOMATICALLY. You do NOT re-emit or relay the result anywhere; after calling this, just stop (or one short sentence like "Review the proposed changes"). If it reports nothing changed, tell the user briefly. Use this for ANY change to entries.',
     inputSchema: z.object({
       intent: z
         .string()

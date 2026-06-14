@@ -57,6 +57,25 @@ const RENDERERS: Record<
       />
     )
   },
+  // incorporate's OUTPUT (not input) carries the proposed entries — the chat
+  // passes p.output here. Render the same review card; no model relay involved.
+  incorporate: (output, props) => {
+    const out = output as { ok?: boolean; entries?: unknown } | null
+    if (!out || out.ok !== true) return null
+    const entries = Array.isArray(out.entries) ? out.entries : []
+    if (entries.length === 0) return null
+    return (
+      <DraftTransactionBatchCard
+        input={{ entries } as DraftTransactionBatch}
+        accounts={props.accounts}
+        status={props.status === 'idle' || props.status === undefined ? 'idle' : props.status}
+        errorMessage={props.errorMessage}
+        onApprove={props.onApprove ?? noop}
+        onReject={props.onReject}
+        onShowInJournal={props.onShowInJournal}
+      />
+    )
+  },
   show_award_options: (input) => {
     const parsed = showAwardOptionsSchema.safeParse(input)
     if (!parsed.success) return null

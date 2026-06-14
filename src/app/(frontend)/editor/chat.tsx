@@ -347,7 +347,12 @@ export function Chat({
     toolCallId: string,
     ops: DraftOp[],
     meta?: { approved: number; skipped: number },
+    opts?: { resolveTool?: boolean },
   ) {
+    // draft_transaction is a suspending tool — approval resolves it via
+    // addToolOutput. incorporate already resolved server-side; its approval
+    // ONLY writes (resolveTool=false), so we never re-resolve the tool.
+    const resolveTool = opts?.resolveTool ?? true
     setSubmitStatus((s) => ({ ...s, [toolCallId]: 'submitting' }))
     setSubmitError((s) => {
       const { [toolCallId]: _drop, ...rest } = s
@@ -359,12 +364,8 @@ export function Chat({
         const err = committed.error
         setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
         setSubmitError((s) => ({ ...s, [toolCallId]: err }))
-        addToolOutput({
-          toolCallId,
-          output: { ok: false, error: err },
-          state: 'output-error',
-          errorText: err,
-        })
+        if (resolveTool)
+          addToolOutput({ toolCallId, output: { ok: false, error: err }, state: 'output-error', errorText: err })
         return
       }
       const { result: r, finalText } = committed
@@ -372,35 +373,28 @@ export function Chat({
         const message = 'message' in r ? r.message : 'Save conflict'
         setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
         setSubmitError((s) => ({ ...s, [toolCallId]: message }))
-        addToolOutput({
-          toolCallId,
-          output: { ok: false, error: message },
-          state: 'output-error',
-          errorText: message,
-        })
+        if (resolveTool)
+          addToolOutput({ toolCallId, output: { ok: false, error: message }, state: 'output-error', errorText: message })
         return
       }
       setSubmitStatus((s) => ({ ...s, [toolCallId]: 'done' }))
-      addToolOutput({
-        toolCallId,
-        output: {
-          ok: true,
-          committed: finalText.trim(),
-          ...(meta && meta.skipped > 0 ? { skipped_by_user: meta.skipped } : {}),
-        },
-      })
+      if (resolveTool)
+        addToolOutput({
+          toolCallId,
+          output: {
+            ok: true,
+            committed: finalText.trim(),
+            ...(meta && meta.skipped > 0 ? { skipped_by_user: meta.skipped } : {}),
+          },
+        })
       void refreshAccounts()
       onAppended?.()
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Save failed'
       setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
       setSubmitError((s) => ({ ...s, [toolCallId]: msg }))
-      addToolOutput({
-        toolCallId,
-        output: { ok: false, error: msg },
-        state: 'output-error',
-        errorText: msg,
-      })
+      if (resolveTool)
+        addToolOutput({ toolCallId, output: { ok: false, error: msg }, state: 'output-error', errorText: msg })
     }
   }
 
@@ -574,6 +568,10 @@ export function Chat({
                         if (isToolPart(p)) {
                           const toolCallId = p.toolCallId ?? `${m.id}-${i}`
                           const toolName = toolNameOf(p)
+                          // incorporate is a server tool: it's output-available
+                          // the moment its engine returns — that's NOT "approved".
+                          // Its card status comes from the user's action only.
+                          const isIncorporate = toolName === 'incorporate'
                           const subState = submitStatus[toolCallId] ?? 'idle'
                           const outputObj =
                             p.output && typeof p.output === 'object'
@@ -593,13 +591,18 @@ export function Chat({
                                 outputObj.reason === 'superseded'))
                           const cardStatus = isRejection
                             ? 'rejected'
-                            : p.state === 'output-available' || subState === 'done'
+                            : subState === 'done'
                               ? 'done'
                               : subState === 'submitting'
                                 ? 'submitting'
                                 : subState === 'failed' || p.state === 'output-error'
                                   ? 'failed'
-                                  : 'idle'
+                                  : // suspending tools: output-available == approved.
+                                    // incorporate resolves server-side BEFORE approval,
+                                    // so its card stays idle until the user acts.
+                                    !isIncorporate && p.state === 'output-available'
+                                    ? 'done'
+                                    : 'idle'
                           const toolState: ToolUIPart['state'] =
                             cardStatus === 'done' || cardStatus === 'rejected'
                               ? 'output-available'
@@ -622,14 +625,18 @@ export function Chat({
                           // show the Preparing… placeholder until then.
                           const rendered =
                             toolName && isGenUiTool(toolName) && toolState !== 'input-streaming'
-                              ? renderGenUi(toolName, p.input, {
+                              ? renderGenUi(toolName, isIncorporate ? p.output : p.input, {
                                   accounts,
                                   status: cardStatus,
                                   errorMessage:
                                     submitError[toolCallId] ?? p.errorText,
                                   resolvedAnswers: clarifyAnswers[toolCallId],
                                   onApprove: (final, meta) =>
-                                    void handleApprove(toolCallId, final, meta),
+                                    // incorporate resolved server-side already —
+                                    // approval only writes, it doesn't resolve the tool.
+                                    void handleApprove(toolCallId, final, meta, {
+                                      resolveTool: !isIncorporate,
+                                    }),
                                   onShowInJournal,
                                   onAnswer: (answers) =>
                                     handleClarifyAnswer(toolCallId, answers),

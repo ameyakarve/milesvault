@@ -52,7 +52,11 @@ export async function runIncorporation(deps: {
   intent: string
   today: string // YYYY-MM-DD
   accounts: readonly string[]
-  cardContext?: string | null
+  // The shared beancount conventions (primer + ledger rules + examples) — the
+  // shard AUTHORS entries, so it needs the same rules the statement extractor
+  // uses (4-posting purchases, card leg = Liabilities:CreditCards, reward/
+  // redemption shapes). Injected by the caller (which owns the prompt fragments).
+  conventions: string
   readDates: (dates: string[]) => Promise<Record<string, string[]>>
 }): Promise<{ ops: IncorporationOp[]; dates: string[]; error: string | null }> {
   // 1. Plan — which dates does the request touch?
@@ -68,9 +72,7 @@ export async function runIncorporation(deps: {
   const perDate = await Promise.all(
     dates.map(async (date) => {
       const old = existing[date] ?? []
-      const system = `You revise ONE day of a beancount ledger. Given that day's EXISTING entries and the user's request, return the COMPLETE set of entries the day should have AFTERWARD: copy unchanged entries VERBATIM, modify only what the request changes, drop entries it removes, add entries it introduces. Each entry is one transaction, or a balance/pad assertion. Output ONLY JSON: {"entries":["<full beancount entry text>", ...]} (empty array if the day should end with no entries).${
-        deps.cardContext ? `\n\n${deps.cardContext}` : ''
-      }\n\nOpen accounts:\n${acct}`
+      const system = `${deps.conventions}\n\n---\n\nYou revise ONE day of a beancount ledger, applying the conventions above. Given that day's EXISTING entries and the user's request, return the COMPLETE set of entries the day should have AFTERWARD: copy unchanged entries VERBATIM, modify only what the request changes, drop entries it removes, add entries it introduces. Return each entry as its OWN array element (never several entries in one string). Output ONLY JSON: {"entries":["<full beancount entry text>", ...]} (empty array if the day should end with no entries).\n\nOpen accounts (use these; don't invent new ones unless none fits):\n${acct}`
       const prompt = `Date: ${date}\nUser request: ${deps.intent}\n\nExisting entries on ${date}:\n${
         old.length ? old.join('\n\n') : '(none)'
       }`
