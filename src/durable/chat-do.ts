@@ -435,6 +435,23 @@ ${opts.text}`,
     return ns.get(ns.idFromName(this.ownerEmail()))
   }
 
+  // E2E harness only: run the incorporation engine against this user's ledger
+  // for a given intent and return the ops (no draft card, no write). Lets the
+  // test route exercise the REAL model + real entries end-to-end.
+  async __test_runIncorporation(
+    intent: string,
+  ): Promise<{ ops: Array<{ id: string; text?: string; replaces?: string }>; dates: string[]; error: string | null }> {
+    const snap = await this.ledgerStub().ledger_snapshot()
+    return runIncorporation({
+      gen: this.editGen(),
+      intent,
+      today: isoFromInt(snap.today),
+      accounts: snap.accounts.map((a) => a.account),
+      cardContext: null,
+      readDates: (dates) => this.ledgerStub().entries_on_dates(dates),
+    })
+  }
+
   // Plain JSON-text generation for the incorporation engine — non-thinking,
   // no tools (same model/path the statement pipeline uses).
   private editGen(): GenFn {
