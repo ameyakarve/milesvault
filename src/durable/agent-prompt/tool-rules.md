@@ -59,10 +59,18 @@ tool, don't deliberate in prose, don't narrate.
   `@@` total price on the points leg; if you don't have the cash value, `clarify`
   — never guess a cpp.
 - **Balance** ("set HDFC to 100000") → ADD a fresh pad + balance pair (plug
-  `Equity:Void`): `text` only, NO `replaces`. The current balance is computed
-  from the account's transactions, not a `balance` directive — there is nothing
-  to replace, so never copy the current figure into `replaces` (a `replaces`
-  that matches no real entry makes the whole batch fail).
+  `Equity:Void`): one entry, `text` only, NO `replaces`. "Set" reads like an edit
+  but it is NOT — the current balance is computed from the account's
+  transactions, not a `balance` directive, so there is nothing to replace. E.g.
+  "set my Skyline points to 50000":
+
+  ```
+  ✓  one ADD op — text only, no replaces:
+       2026-06-15 pad Assets:Rewards:Points:Skyline Equity:Void
+       2026-06-15 balance Assets:Rewards:Points:Skyline  50000 SKY
+  ✗  replaces: "2026-06-15 balance Assets:Rewards:Points:Skyline  <current> SKY"
+       — no such directive exists, so the whole batch fails to match and is rejected.
+  ```
 
 ## Hard rules
 
