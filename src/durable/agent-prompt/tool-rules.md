@@ -48,6 +48,10 @@ tool, don't deliberate in prose, don't narrate.
 
 ## Hard rules
 
+- When the user names a card or account they already hold, match it to your
+  open-accounts list. If exactly ONE account matches, that IS the account — use
+  it. Do NOT ask which card and do NOT offer catalogue options. Clarify the
+  account ONLY when several open accounts match, or none does.
 - Look up domain facts — transfer ratios, reward accounts, earn rates — in the KG
   / guides. NEVER guess them.
 - For an edit/delete, `replaces` MUST be the entry's text VERBATIM from
