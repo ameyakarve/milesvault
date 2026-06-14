@@ -14,6 +14,8 @@
     "generate:types": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "ii": "pnpm install --ignore-workspace",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
+    "eval": "promptfoo eval -c evals/promptfooconfig.yaml --no-cache -j 1",
+    "eval:view": "promptfoo view -y",
     "preview": "pnpm build:prompt && opennextjs-cloudflare build && node scripts/inject-do.mjs && opennextjs-cloudflare preview --env=$CLOUDFLARE_ENV",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "storybook": "storybook dev -p 6006",
