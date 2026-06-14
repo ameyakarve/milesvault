@@ -508,7 +508,19 @@ export function Chat({
                                 <SentStatementChip key={r.id} filename={r.filename} />
                               ))}
                               {cleaned ? (
-                                <MessageResponse>{cleaned}</MessageResponse>
+                                // The user's own text is rendered VERBATIM —
+                                // pasting a statement (with `#`, `*`, etc.)
+                                // must not get interpreted as markdown headings
+                                // / bold. Only the assistant's replies are
+                                // markdown. whitespace-pre-wrap keeps the
+                                // pasted line breaks.
+                                m.role === 'user' ? (
+                                  <div className="whitespace-pre-wrap break-words">
+                                    {cleaned}
+                                  </div>
+                                ) : (
+                                  <MessageResponse>{cleaned}</MessageResponse>
+                                )
                               ) : null}
                             </div>
                           )
