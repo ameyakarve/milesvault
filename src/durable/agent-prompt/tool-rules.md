@@ -33,12 +33,22 @@ tool, don't deliberate in prose, don't narrate.
 
 - **Question** ("which Accor txns are redemptions?", "what did I spend on food?")
   → `query_sql` → answer in prose. No draft.
-- **Add** a transaction → the card leg is the account in your open-accounts list
-  that matches the card the user named (per the hard rule — if exactly one
-  matches, use it, don't re-ask, don't browse the catalogue). Reach for
-  `card_guide` / `list_reward_accounts` only for that card's earn rule when it
-  accrues rewards, or when the named card is NOT among the user's accounts →
-  `draft_transaction` (full entry, per Ledger rules).
+- **Add** a transaction → then `draft_transaction` (full balanced entry). Two
+  legs to get right:
+  1. **Card leg** = the user's HELD account for that card — the exact path from
+     your open-accounts list. Per the hard rules: if exactly one matches, use it
+     verbatim; never the catalogue/canonical name, never a clarify.
+  2. **Reward leg** = whatever the card's guide says it EARNS on this spend.
+     Match the reward TYPE to the card: a CASHBACK card accrues cashback (the
+     cashback pattern — `Assets:Receivable:<Issuer>` + a matching expense
+     reduction); a POINTS/MILES card accrues to its points pool. NEVER accrue
+     points for a cashback card, NEVER invent a reward currency, and do NOT
+     silently drop an earn the card actually gives. Only when the card earns
+     nothing on this spend (or no rate is documented anywhere) do you draft the
+     plain spend with no reward leg.
+  Use `card_guide` / `list_reward_accounts` for that earn rule + the canonical
+  reward account; the card's own liability leg still comes from the held account
+  above, not the guide.
 - **Edit / delete** an existing entry → `query_sql` to find it → `get_entry` to
   read its exact text → `draft_transaction` with `replaces` (+ `text` for an edit).
   NEVER append a new entry to "fix" or "change" an existing one.
