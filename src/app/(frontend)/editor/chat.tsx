@@ -640,6 +640,12 @@ export function Chat({
                                     // (draft the open directives next).
                                     void sendMessage({ text: '' })
                                   },
+                                  onSelectEntries: (ids) => {
+                                    setSubmitStatus((s) => ({ ...s, [toolCallId]: 'done' }))
+                                    addToolOutput({ toolCallId, output: { ids } })
+                                    // model continues: get_entry each chosen id, then draft.
+                                    void sendMessage({ text: '' })
+                                  },
                                   onReject: () => handleReject(toolCallId),
                                 })
                               : null

@@ -177,6 +177,11 @@ export function InboxThreadChat({
                             status: cardStatus,
                             errorMessage: submitError[toolCallId] ?? p.errorText,
                             onApprove: (final) => void approve(toolCallId, final),
+                            onSelectEntries: (ids) => {
+                              setSubmitState((s) => ({ ...s, [toolCallId]: 'done' }))
+                              addToolOutput({ toolCallId, output: { ids } })
+                              void sendMessage({ text: '' })
+                            },
                             onReject: () => reject(toolCallId),
                           })
                         : null

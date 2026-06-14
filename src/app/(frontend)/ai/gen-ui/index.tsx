@@ -4,9 +4,11 @@ import { DraftTransactionBatchCard, type DraftOp } from './draft-transaction'
 import { ClarifyCard } from './clarify'
 import { AddCardCard, type AddCardResult } from './add-card'
 import { ExploreLinkCard } from './explore-link'
+import { SelectEntriesCard } from './select-entries'
 import {
   addCardInputSchema,
   clarifyInputSchema,
+  selectEntriesInputSchema,
   showAwardOptionsSchema,
   type DraftTransactionBatch,
 } from '@/durable/agent-ui-schemas'
@@ -24,6 +26,8 @@ export type GenUiProps = {
   onAnswer?: (answers: string[]) => void
   // For add_card — the confirmed selection becomes the tool output.
   onAddCard?: (result: AddCardResult) => void
+  // For select_entries — the ticked ids become the tool output.
+  onSelectEntries?: (ids: number[]) => void
   // Both
   onReject: () => void
 }
@@ -70,6 +74,20 @@ const RENDERERS: Record<
         input={parsed.data}
         status={props.status}
         onResult={props.onAddCard}
+        onReject={props.onReject}
+      />
+    )
+  },
+  select_entries: (input, props) => {
+    const parsed = selectEntriesInputSchema.safeParse(input)
+    if (!parsed.success) return null
+    const status: 'idle' | 'done' | 'rejected' =
+      props.status === 'done' ? 'done' : props.status === 'rejected' ? 'rejected' : 'idle'
+    return (
+      <SelectEntriesCard
+        input={parsed.data}
+        status={status}
+        onSelect={props.onSelectEntries ?? noop}
         onReject={props.onReject}
       />
     )

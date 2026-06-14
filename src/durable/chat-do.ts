@@ -22,6 +22,7 @@ import {
   addCardTool,
   readStatementTool,
   getEntryTool,
+  selectEntriesTool,
 } from './agents/tools/editor'
 import { querySqlTool } from './agents/tools/concierge/query-sql'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
@@ -503,6 +504,7 @@ entries, or draft corrections.`
         draft_transaction: draftTransactionTool(),
         query_sql,
         get_entry,
+        select_entries: selectEntriesTool(),
         clarify: clarifyTool(CLARIFICATIONS),
         add_card: addCardTool(),
       })
