@@ -230,6 +230,40 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
   return items
 }
 
+// For the user's held reward accounts, surface the KG's aliases for each — so
+// the editor's account manifest can show "Assets:Rewards:Points:AllRewards …
+// (aka accor, all)" and the model maps a programme word the user types to the
+// exact account. PURE READ: every currency has a `currency/<ticker-lowercased>`
+// alias slug, so kb_get by ticker returns the canonical node's display name +
+// every alias pointing to it (kb_get.aliases). No derivation, no matching.
+export async function rewardAccountAliases(
+  kb: KbHttp,
+  accounts: ReadonlyArray<{ account: string; currencies: string[] }>,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  await Promise.all(
+    accounts
+      .filter((a) => a.account.startsWith('Assets:Rewards:'))
+      .map(async (a) => {
+        const names = new Set<string>()
+        for (const ccy of a.currencies) {
+          const node = (await kb.get(`currency/${ccy.toLowerCase()}`).catch((): null => null)) as {
+            display_name?: string | null
+            aliases?: string[]
+          } | null
+          if (!node) continue
+          if (node.display_name) names.add(node.display_name)
+          for (const al of node.aliases ?? []) {
+            const short = al.split('/').pop()
+            if (short) names.add(short)
+          }
+        }
+        if (names.size > 0) out[a.account] = [...names].join(', ')
+      }),
+  )
+  return out
+}
+
 // Resolve ONE card's canonical liability account from the KG — its
 // `beancountName` under its issuer's `beancountName`. The add-accounts UI uses
 // this so a card opened there gets the SAME account a statement would, instead

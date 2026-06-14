@@ -23,6 +23,7 @@ import {
 import {
   cardGuideTool,
   rewardAccountsTool,
+  rewardAccountAliases,
   draftTransactionTool,
   clarifyTool,
   addCardTool,
@@ -78,6 +79,9 @@ export class ChatDO
   // The ledger snapshot for the current turn, fetched once in beforeTurnFetch
   // (async RPC) and reused by the sync system-prompt builders + every step.
   private turnSnapshot: Snapshot | null = null
+  // account → "also known as" (KG aliases), for the editor account manifest.
+  // Cached by the set of accounts so we don't re-fetch the KG every turn.
+  private aliasCache: { key: string; map: Record<string, string> } | null = null
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
@@ -484,6 +488,10 @@ ${opts.text}`,
     const snapshot = await this.ledgerStub().ledger_snapshot()
     const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
     const kb = makeKbTools(kbHttp)
+    const aliases = await rewardAccountAliases(
+      kbHttp,
+      snapshot.accounts.map((a) => ({ account: a.account, currencies: a.currencies })),
+    ).catch((): Record<string, string> => ({}))
     const trace: Array<{ tool: string; input: unknown }> = []
     // Capture (don't apply) the write/ask tools — same schemas as the real ones,
     // so the model is constrained identically; we just record the call.
@@ -508,7 +516,7 @@ ${opts.text}`,
     try {
       const result = await generateText({
         model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
-        system: buildLedgerSystem(snapshot),
+        system: buildLedgerSystem(snapshot, aliases),
         prompt: message,
         tools,
         stopWhen: stepCountIs(8),
@@ -537,9 +545,23 @@ ${opts.text}`,
   }
 
   // Pull the live ledger snapshot for this turn over RPC (the sync system-
-  // prompt builders can't `await`).
+  // prompt builders can't `await`). Also refresh the account-alias map (KG
+  // read) so the editor manifest names what each account is — cached by the
+  // account set so we hit the KG only when accounts change.
   protected override async beforeTurnFetch(): Promise<void> {
     this.turnSnapshot = await this.ledgerStub().ledger_snapshot()
+    const accts = this.turnSnapshot.accounts.map((a) => ({
+      account: a.account,
+      currencies: a.currencies,
+    }))
+    const key = accts.map((a) => a.account).join('|')
+    if (this.aliasCache?.key !== key) {
+      const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
+      const map = await rewardAccountAliases(kbHttp, accts).catch(
+        (): Record<string, string> => ({}),
+      )
+      this.aliasCache = { key, map }
+    }
   }
 
   // ---- AgentHost<EditorAgentName> ----
@@ -547,7 +569,7 @@ ${opts.text}`,
   system(name: EditorAgentName): string {
     const base =
       name === 'ledger'
-        ? buildLedgerSystem(this.snapshot())
+        ? buildLedgerSystem(this.snapshot(), this.aliasCache?.map)
         : buildStatementAgentSystem(this.snapshot())
     return base + this.threadContextBlock() + this.handoffContextBlock()
   }

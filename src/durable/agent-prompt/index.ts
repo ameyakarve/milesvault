@@ -38,22 +38,24 @@ function isoToday(today: number): string {
   return `${Math.floor(today / 10000)}-${String(Math.floor((today % 10000) / 100)).padStart(2, '0')}-${String(today % 100).padStart(2, '0')}`
 }
 
-function renderAccounts(snapshot: Snapshot): string {
+function renderAccounts(snapshot: Snapshot, aliases?: Record<string, string>): string {
   return snapshot.accounts
     .filter((a) => a.close_date == null)
     .map((a) => {
       const ccys = a.currencies.length ? ` [${a.currencies.join(',')}]` : ''
-      return `- ${a.account}${ccys}`
+      const aka = aliases?.[a.account] ? ` — ${aliases[a.account]}` : ''
+      return `- ${a.account}${ccys}${aka}`
     })
     .join('\n')
 }
 
-function renderSnapshotBlock(snapshot: Snapshot): string {
+function renderSnapshotBlock(snapshot: Snapshot, aliases?: Record<string, string>): string {
   return `# Ledger context
 
 - Today: ${isoToday(snapshot.today)}
-- Open accounts (use these — don't invent new ones unless none fits):
-${renderAccounts(snapshot) || '- (none yet)'}`
+- Open accounts (use these — don't invent new ones unless none fits; the names
+  after "—" are what the account is also known by, e.g. its programme):
+${renderAccounts(snapshot, aliases) || '- (none yet)'}`
 }
 
 // Ledger (general editor) agent: handles freeform Beancount edits. It does NOT
@@ -116,7 +118,10 @@ ${ddl.trim()}
 }
 
 // System prompt for the `ledger` agent in the handoff-based editor registry.
-export function buildLedgerSystem(snapshot: Snapshot & { schema_ddl?: string }): string {
+export function buildLedgerSystem(
+  snapshot: Snapshot & { schema_ddl?: string },
+  aliases?: Record<string, string>,
+): string {
   // CLARIFICATIONS is NOT here — it's domain hints for the clarify tool, passed
   // at construction (see clarifyTool). Keeps the generic mechanism and its
   // domain triggers from getting tangled in the system prompt.
@@ -126,7 +131,7 @@ export function buildLedgerSystem(snapshot: Snapshot & { schema_ddl?: string }):
     TOOL_RULES,
     EXAMPLES,
     HANDOFF_TO_STATEMENT,
-    renderSnapshotBlock(snapshot),
+    renderSnapshotBlock(snapshot, aliases),
     snapshot.schema_ddl?.trim() ? renderQueryBlock(snapshot.schema_ddl) : '',
   ]
     .filter(Boolean)
