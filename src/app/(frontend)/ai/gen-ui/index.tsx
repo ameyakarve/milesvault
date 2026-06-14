@@ -62,8 +62,14 @@ const RENDERERS: Record<
   incorporate: (output, props) => {
     const out = output as { ok?: boolean; entries?: unknown } | null
     if (!out || out.ok !== true) return null
-    const entries = Array.isArray(out.entries) ? out.entries : []
-    if (entries.length === 0) return null
+    const raw = Array.isArray(out.entries) ? out.entries : []
+    if (raw.length === 0) return null
+    // Normalize to the card's contract: `text` is a string (a delete op carries
+    // only `replaces`, so default text to '') — the card never sees undefined.
+    const entries = raw.map((e) => {
+      const o = e as { id?: string; text?: string; replaces?: string }
+      return { id: o.id ?? '', text: o.text ?? '', replaces: o.replaces }
+    })
     return (
       <DraftTransactionBatchCard
         input={{ entries } as DraftTransactionBatch}

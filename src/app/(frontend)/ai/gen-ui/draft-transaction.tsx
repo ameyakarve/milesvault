@@ -178,7 +178,8 @@ export function DraftTransactionBatchCard({
 }: DraftTransactionBatchCardProps) {
   // The model emits one beancount entry per element; the card edits the text
   // directly. The user still hand-edits raw beancount before approving.
-  const initial = useMemo(() => input.entries.map((e) => e.text.trim()), [input.entries])
+  // `text` is absent on a delete op ({ id, replaces } only) — default to ''.
+  const initial = useMemo(() => input.entries.map((e) => (e.text ?? '').trim()), [input.entries])
   const [texts, setTexts] = useState<string[]>(() => initial)
   // Per-entry decisions: excluded rows are skipped at approval — one bad row
   // never blocks the rest of a statement.
