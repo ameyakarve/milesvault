@@ -66,24 +66,28 @@ const BENCH_JUDGE_MODEL_ID = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
 // Pull the eval-relevant signals out of a tool-call trace so promptfoo's
 // javascript asserts read flat fields instead of re-parsing the trace each
 // time: the drafted entries, the clarify calls, and the SQL queries.
+//
+// `drafts` is ONLY the LAST draft_transaction call's entries — the final
+// proposal the user would approve. The schema's superRefine bounces invalid
+// drafts back to the model, which repairs them in-turn (same as production);
+// grading must judge the repaired result, not the rejected intermediate
+// attempts, so earlier draft calls are intentionally dropped here.
 function deriveBenchSignals(trace: Array<{ tool: string; input: unknown }>): {
   drafts: Array<{ replaces: string | null; text: string }>
   clarifies: unknown[]
   sqls: string[]
 } {
-  const drafts: Array<{ replaces: string | null; text: string }> = []
+  let drafts: Array<{ replaces: string | null; text: string }> = []
   const clarifies: unknown[] = []
   const sqls: string[] = []
   for (const t of trace) {
     const input = (t.input ?? {}) as Record<string, unknown>
     if (t.tool === 'draft_transaction') {
       const entries = Array.isArray(input.entries) ? input.entries : []
-      for (const e of entries as Array<Record<string, unknown>>) {
-        drafts.push({
-          replaces: typeof e.replaces === 'string' ? e.replaces : null,
-          text: typeof e.text === 'string' ? e.text : '',
-        })
-      }
+      drafts = (entries as Array<Record<string, unknown>>).map((e) => ({
+        replaces: typeof e.replaces === 'string' ? e.replaces : null,
+        text: typeof e.text === 'string' ? e.text : '',
+      }))
     } else if (t.tool === 'clarify') {
       clarifies.push(input)
     } else if (t.tool === 'query_sql') {
