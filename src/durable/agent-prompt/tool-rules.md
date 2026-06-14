@@ -48,7 +48,11 @@ tool, don't deliberate in prose, don't narrate.
 - **Redemption** (points → flight / hotel / credit) → carry the cash value as an
   `@@` total price on the points leg; if you don't have the cash value, `clarify`
   — never guess a cpp.
-- **Balance** ("set HDFC to 100000") → a pad + balance pair, plug `Equity:Void`.
+- **Balance** ("set HDFC to 100000") → ADD a fresh pad + balance pair (plug
+  `Equity:Void`): `text` only, NO `replaces`. The current balance is computed
+  from the account's transactions, not a `balance` directive — there is nothing
+  to replace, so never copy the current figure into `replaces` (a `replaces`
+  that matches no real entry makes the whole batch fail).
 
 ## Hard rules
 
