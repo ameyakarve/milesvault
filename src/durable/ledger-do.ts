@@ -1470,20 +1470,20 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     const wheres: string[] = []
     const binds: unknown[] = []
     if (filter.date?.from) {
-      wheres.push('t.date >= ?')
+      wheres.push('date >= ?')
       binds.push(dateToInt(filter.date.from))
     }
     if (filter.date?.to) {
-      wheres.push('t.date < ?')
+      wheres.push('date < ?')
       binds.push(dateToInt(filter.date.to))
     }
     if (filter.payee_q) {
-      wheres.push('(t.payee LIKE ? OR t.narration LIKE ?)')
+      wheres.push('(payee LIKE ? OR narration LIKE ?)')
       const q = `%${filter.payee_q}%`
       binds.push(q, q)
     }
     if (filter.flag) {
-      wheres.push('t.flag = ?')
+      wheres.push('flag = ?')
       binds.push(filter.flag)
     }
     // Posting-level filters (account / currency / amount / sign) gate the txn
@@ -1513,19 +1513,18 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     }
     if (filter.sign === 'debit') pConds.push('p.amount_scaled < 0')
     if (filter.sign === 'credit') pConds.push('p.amount_scaled > 0')
-    // The EXISTS subquery's binds must follow the header binds in order — push
-    // the posting binds (above, into `binds`) only AFTER the header ones; the
-    // acct/currency/amount binds were already pushed in source order, so the
-    // EXISTS clause is appended last and its placeholders line up.
+    // Posting filters correlate to the outer row via transactions.id. Their
+    // binds were pushed in source order and the EXISTS clause is appended last,
+    // so the placeholders line up.
     if (pConds.length) {
       wheres.push(
-        `EXISTS (SELECT 1 FROM postings p WHERE p.txn_id = t.id AND ${pConds.join(' AND ')})`,
+        `EXISTS (SELECT 1 FROM postings p WHERE p.txn_id = transactions.id AND ${pConds.join(' AND ')})`,
       )
     }
     const whereSql = wheres.length ? 'WHERE ' + wheres.join(' AND ') : ''
     const total =
       this.db
-        .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM transactions t ${whereSql}`, ...binds)
+        .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM transactions ${whereSql}`, ...binds)
         .toArray()[0]?.n ?? 0
     const heads = this.db
       .exec<{
@@ -1536,9 +1535,9 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         narration: string
         updated_at: number
       }>(
-        `SELECT t.id, t.date, t.flag, t.payee, t.narration, t.updated_at
-         FROM transactions t ${whereSql}
-         ORDER BY t.date DESC, t.id DESC LIMIT ?`,
+        `SELECT id, date, flag, payee, narration, updated_at
+         FROM transactions ${whereSql}
+         ORDER BY date DESC, id DESC LIMIT ?`,
         ...binds,
         FIND_ENTRIES_MAX,
       )
