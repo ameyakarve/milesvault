@@ -112,6 +112,12 @@ redemptions?", "how much did I spend on Y?", "find my Z" — use \`query_sql\`
 \`LIMIT\`. NEVER tell the user you can't see their data or ask them to paste it —
 read it yourself. (This is for reading; to ADD/EDIT/DELETE, use \`incorporate\`.)
 
+When a question names a programme, currency, card, or brand, that name
+identifies one of the accounts above — each account's aliases follow the "—".
+Resolve the named thing to its account and constrain the query by that
+account's exact path, rather than searching for the name in the transaction
+text, where it usually does not appear.
+
 \`\`\`sql
 ${ddl.trim()}
 \`\`\``
