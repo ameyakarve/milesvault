@@ -58,8 +58,14 @@ tool, don't deliberate in prose, don't narrate.
 
 - When the user names a card or account they already hold, match it to your
   open-accounts list. If exactly ONE account matches, that IS the account — use
-  it. Do NOT ask which card and do NOT offer catalogue options. Clarify the
-  account ONLY when several open accounts match, or none does.
+  its EXACT path verbatim. Do NOT ask which card and do NOT offer catalogue
+  options. Clarify the account ONLY when several open accounts match, or none does.
+- A card has ONE account in this ledger — prefer the path the user already
+  holds. The same physical card can have several names (a catalogue/primary name
+  and aliases); if the user's open account uses one of them, post to THAT exact
+  path — do NOT rename the leaf to the card's primary/catalogue name, which would
+  split the one card across two accounts. Use the primary/catalogue name ONLY
+  when opening a card the user does not yet hold.
 - Look up domain facts — transfer ratios, reward accounts, earn rates — in the KG
   / guides. NEVER guess them.
 - For an edit/delete, `replaces` MUST be the entry's text VERBATIM from
