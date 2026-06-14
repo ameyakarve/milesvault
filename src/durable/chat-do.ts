@@ -21,9 +21,9 @@ import {
   clarifyTool,
   addCardTool,
   readStatementTool,
-  findEntriesTool,
   getEntryTool,
 } from './agents/tools/editor'
+import { querySqlTool } from './agents/tools/concierge/query-sql'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
 import { runDraftPipeline, type GenFn } from './ingest/pipeline'
 import type { AgentHost, Registry } from './agents/types'
@@ -490,10 +490,10 @@ entries, or draft corrections.`
     // here (assembled in the KG) instead of building the path itself — gemma
     // resolves the right programme but drops the `:Miles:` segment when assembling.
     const list_reward_accounts = rewardAccountsTool(kbHttp)
-    // Edit/delete-existing flow: find_entries (compact txn search) → get_entry
-    // (full text per target) → draft_transaction with a `target`. Both read the
-    // user's own LedgerDO over RPC.
-    const find_entries = findEntriesTool((filter) => this.ledgerStub().find_entries(filter))
+    // Edit/delete-existing flow (codemode): query_sql (read-only, model composes
+    // the search) → get_entry (full text per target) → draft_transaction with a
+    // `target`. Both read the user's own LedgerDO over RPC.
+    const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
     const get_entry = getEntryTool((ref) => this.ledgerStub().get_entry(ref))
     if (name === 'ledger') {
       return this.withToolLog(name, {
@@ -501,7 +501,7 @@ entries, or draft corrections.`
         card_guide,
         list_reward_accounts,
         draft_transaction: draftTransactionTool(),
-        find_entries,
+        query_sql,
         get_entry,
         clarify: clarifyTool(CLARIFICATIONS),
         add_card: addCardTool(),

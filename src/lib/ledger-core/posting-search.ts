@@ -66,24 +66,3 @@ export type PostingSearchResponse = {
   limit: number
 }
 
-// find_entries — TXN-level search for the edit/delete flow. Same filter shape
-// as posting search, but returns whole transactions (compact, NO raw_text — the
-// model pulls full text per-target via get_entry) so context stays lean.
-export const FIND_ENTRIES_MAX = 50
-
-export type FindEntryRow = {
-  kind: 'txn'
-  id: number
-  updated_at: number // OCC version — carried into the edit target
-  date: string
-  payee: string
-  narration: string
-  flag: '*' | '!' | null
-  postings: { account: string; amount: string; currency: string }[]
-}
-
-export type FindEntriesResponse = {
-  rows: FindEntryRow[]
-  total: number // total matches before the FIND_ENTRIES_MAX cap
-  truncated: boolean
-}

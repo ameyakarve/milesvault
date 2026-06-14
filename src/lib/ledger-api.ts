@@ -13,7 +13,6 @@ import type {
 import type { ChatDO } from '@/durable/chat-do'
 import type { AccountEntriesResponse, AccountSummaryRow } from '@/durable/ledger-types'
 import type {
-  FindEntriesResponse,
   PostingSearchFilter,
   PostingSearchResponse,
 } from '@/lib/ledger-core/posting-search'
@@ -38,7 +37,6 @@ export type LedgerClient = {
   list_account_children(account: string): Promise<string[]>
   list_account_summaries(asOf: string): Promise<AccountSummaryRow[]>
   search_postings(filter: PostingSearchFilter): Promise<PostingSearchResponse>
-  find_entries(filter: PostingSearchFilter): Promise<FindEntriesResponse>
   get_entry(ref: { kind: EntryKind; id: number }): Promise<EntryRow | null>
   query_sql(
     sql: string,
@@ -201,9 +199,6 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async search_postings(filter) {
       return stub.search_postings(filter)
-    },
-    async find_entries(filter) {
-      return stub.find_entries(filter)
     },
     async get_entry(ref) {
       return stub.get_entry(ref)

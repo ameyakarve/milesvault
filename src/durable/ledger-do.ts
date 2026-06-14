@@ -31,11 +31,8 @@ import type {
   TransactionInput,
 } from './ledger-types'
 import {
-  FIND_ENTRIES_MAX,
   POSTING_SEARCH_DEFAULT_LIMIT,
   POSTING_SEARCH_MAX_LIMIT,
-  type FindEntriesResponse,
-  type FindEntryRow,
   type PostingSearchFilter,
   type PostingSearchResponse,
   type PostingSearchRow,
@@ -1459,105 +1456,6 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       currency: r.currency,
     }))
     return { rows, truncated, limit }
-  }
-
-  // TXN-level search for the chat-driven edit/delete flow. Same filters as
-  // search_postings, but resolves whole transactions and returns compact rows
-  // (no raw_text — the model pulls full text per-target via get_entry). `total`
-  // is the true match count (so the caller can branch ≤10 → draft, >10 → make
-  // the user pick); `rows` is capped at FIND_ENTRIES_MAX.
-  async find_entries(filter: PostingSearchFilter): Promise<FindEntriesResponse> {
-    const wheres: string[] = []
-    const binds: unknown[] = []
-    if (filter.date?.from) {
-      wheres.push('date >= ?')
-      binds.push(dateToInt(filter.date.from))
-    }
-    if (filter.date?.to) {
-      wheres.push('date < ?')
-      binds.push(dateToInt(filter.date.to))
-    }
-    if (filter.payee_q) {
-      wheres.push('(payee LIKE ? OR narration LIKE ?)')
-      const q = `%${filter.payee_q}%`
-      binds.push(q, q)
-    }
-    if (filter.flag) {
-      wheres.push('flag = ?')
-      binds.push(filter.flag)
-    }
-    // Posting-level filters (account / currency / amount / sign) gate the txn
-    // via EXISTS — a transaction matches if ANY of its postings qualifies.
-    const pConds: string[] = []
-    const acctOr: string[] = []
-    for (const a of filter.accounts?.exact ?? []) {
-      acctOr.push('p.account = ?')
-      binds.push(a)
-    }
-    for (const pre of filter.accounts?.prefix ?? []) {
-      acctOr.push('(p.account = ? OR p.account GLOB ?)')
-      binds.push(pre, pre + ':*')
-    }
-    if (acctOr.length) pConds.push('(' + acctOr.join(' OR ') + ')')
-    if (filter.currencies?.length) {
-      pConds.push(`p.currency IN (${filter.currencies.map(() => '?').join(',')})`)
-      binds.push(...filter.currencies)
-    }
-    if (filter.amount?.signed?.gte != null) {
-      pConds.push('CAST(p.amount AS REAL) >= ?')
-      binds.push(filter.amount.signed.gte)
-    }
-    if (filter.amount?.signed?.lte != null) {
-      pConds.push('CAST(p.amount AS REAL) <= ?')
-      binds.push(filter.amount.signed.lte)
-    }
-    if (filter.sign === 'debit') pConds.push('p.amount_scaled < 0')
-    if (filter.sign === 'credit') pConds.push('p.amount_scaled > 0')
-    // Posting filters correlate to the outer row via transactions.id. Their
-    // binds were pushed in source order and the EXISTS clause is appended last,
-    // so the placeholders line up.
-    if (pConds.length) {
-      wheres.push(
-        `EXISTS (SELECT 1 FROM postings p WHERE p.txn_id = transactions.id AND ${pConds.join(' AND ')})`,
-      )
-    }
-    const whereSql = wheres.length ? 'WHERE ' + wheres.join(' AND ') : ''
-    const total =
-      this.db
-        .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM transactions ${whereSql}`, ...binds)
-        .toArray()[0]?.n ?? 0
-    const heads = this.db
-      .exec<{
-        id: number
-        date: number
-        flag: string | null
-        payee: string
-        narration: string
-        updated_at: number
-      }>(
-        `SELECT id, date, flag, payee, narration, updated_at
-         FROM transactions ${whereSql}
-         ORDER BY date DESC, id DESC LIMIT ?`,
-        ...binds,
-        FIND_ENTRIES_MAX,
-      )
-      .toArray()
-    const rows: FindEntryRow[] = heads.map((t) => ({
-      kind: 'txn',
-      id: t.id,
-      updated_at: t.updated_at,
-      date: dateFromInt(t.date),
-      payee: t.payee,
-      narration: t.narration,
-      flag: t.flag === '*' || t.flag === '!' ? t.flag : null,
-      postings: this.db
-        .exec<{ account: string; amount: string; currency: string }>(
-          'SELECT account, amount, currency FROM postings WHERE txn_id = ? ORDER BY idx ASC',
-          t.id,
-        )
-        .toArray(),
-    }))
-    return { rows, total, truncated: total > rows.length }
   }
 
   // Read ONE existing entry's full canonical text + OCC version, by kind+id.
