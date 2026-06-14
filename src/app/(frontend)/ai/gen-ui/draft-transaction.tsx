@@ -23,8 +23,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { parseJournalStrict } from '@/lib/beancount/parse-strict'
-import type { TransactionInput } from '@/durable/ledger-types'
+import { classifyDraftEntry, type DraftEntryVerdict } from '@/lib/beancount/validate-draft-batch'
 import type { DraftTransactionBatch } from '@/durable/agent-ui-schemas'
 
 type CardStatus = 'idle' | 'submitting' | 'done' | 'failed' | 'rejected'
@@ -86,83 +85,53 @@ const THEME = EditorView.theme({
     { backgroundColor: 'var(--cm-selection)' },
 })
 
-type Validation =
-  | { kind: 'ok'; txn: TransactionInput }
-  | { kind: 'parse_error' }
-  | { kind: 'wrong_count'; count: number }
-  | { kind: 'unbalanced'; issue: string }
+// Validity is classified by the SHARED validator (validate-draft-batch) — the
+// same one the tool boundary and the write path use — so the card never
+// disagrees with the server about what's approvable (a pad/balance entry, a
+// dropped posting, a bad account shape all classify identically here and there).
 
-// Beancount weight: `@@` total price replaces foreign-currency weight with
-// price_amount in price_currency; `@` per-unit price multiplies; no price
-// posts in its own currency. We sum weights per currency and flag any
-// currency with >0.005 absolute drift.
-function validate(text: string): Validation {
-  const trimmed = text.trim()
-  if (!trimmed) return { kind: 'parse_error' }
-  const parsed = parseJournalStrict(trimmed)
-  if (!parsed.ok) return { kind: 'parse_error' }
-  if (parsed.transactions.length + parsed.directives.length !== 1 || parsed.transactions.length !== 1) {
-    return {
-      kind: 'wrong_count',
-      count: parsed.transactions.length + parsed.directives.length,
-    }
+// A one-line human reason for a non-ok verdict — used for the badge and the
+// "why can't I approve" summary.
+function reasonOf(v: DraftEntryVerdict): string {
+  switch (v.kind) {
+    case 'ok':
+      return ''
+    case 'unbalanced':
+      return `off by ${v.residuals.map((r) => `${r.amount} ${r.currency}`).join(', ')}`
+    case 'wrong_count':
+      return v.count === 0 ? 'no transaction' : `${v.count} transactions in one entry`
+    case 'parse_error':
+      return 'parse error'
+    case 'dropped_posting':
+      return 'a posting was dropped'
+    case 'elided':
+      return 'a posting is missing its amount'
+    case 'account_shape':
+      return 'invalid account name'
+    case 'wrong_kind':
+      return 'unsupported directive'
   }
-  const txn = parsed.transactions[0]
-  const totals = new Map<string, number>()
-  for (const p of txn.postings) {
-    if (!p.amount || !p.currency) continue
-    const amount = Number(p.amount)
-    if (!Number.isFinite(amount)) continue
-    let ccy: string
-    let weight: number
-    if (p.price_amount && p.price_currency) {
-      const pa = Number(p.price_amount)
-      if (!Number.isFinite(pa)) continue
-      ccy = p.price_currency
-      // @@ is total price, @ is per-unit; sign carries from the posting amount.
-      weight = p.price_at_signs === 2 ? Math.sign(amount) * pa : amount * pa
-    } else {
-      ccy = p.currency
-      weight = amount
-    }
-    totals.set(ccy, (totals.get(ccy) ?? 0) + weight)
-  }
-  const issues: string[] = []
-  for (const [ccy, v] of totals) {
-    if (Math.abs(v) > 0.005) {
-      issues.push(`${v > 0 ? '+' : ''}${v.toFixed(2)} ${ccy}`)
-    }
-  }
-  if (issues.length > 0) return { kind: 'unbalanced', issue: issues.join(', ') }
-  return { kind: 'ok', txn }
 }
 
-function StatusBadge({ v }: { v: Validation }) {
+function StatusBadge({ v }: { v: DraftEntryVerdict }) {
   if (v.kind === 'ok') {
     return (
       <Badge variant="secondary" className="gap-1 bg-emerald-50 text-emerald-700">
         <Check size={12} weight="bold" />
-        balanced
+        {v.isBalance ? 'balance' : 'balanced'}
       </Badge>
     )
   }
-  if (v.kind === 'unbalanced') {
-    return (
-      <Badge variant="secondary" className="bg-amber-50 text-amber-800">
-        off by {v.issue}
-      </Badge>
-    )
-  }
-  if (v.kind === 'wrong_count') {
-    return (
-      <Badge variant="secondary" className="bg-amber-50 text-amber-800">
-        {v.count === 0 ? 'no transaction' : `${v.count} entries in one card`}
-      </Badge>
-    )
-  }
+  // Imbalances are amber (a fixable arithmetic slip); structural problems are
+  // rose (the entry is malformed). The full message rides in the tooltip.
+  const amber = v.kind === 'unbalanced' || v.kind === 'wrong_count'
   return (
-    <Badge variant="secondary" className="bg-rose-50 text-rose-700">
-      parse error
+    <Badge
+      variant="secondary"
+      className={amber ? 'bg-amber-50 text-amber-800' : 'bg-rose-50 text-rose-700'}
+      title={v.messages[0]}
+    >
+      {reasonOf(v)}
     </Badge>
   )
 }
@@ -214,11 +183,16 @@ export function DraftTransactionBatchCard({
 
   const total = texts.length
   const isBatch = total > 1
-  const validations = useMemo(() => texts.map((t) => validate(t)), [texts])
+  const validations = useMemo(() => texts.map((t) => classifyDraftEntry(t)), [texts])
   const includedIdx = texts.map((_, i) => i).filter((i) => included[i])
   const approvedCount = includedIdx.length
   const skippedCount = total - approvedCount
-  const allIncludedValid = includedIdx.every((i) => validations[i].kind === 'ok')
+  // The selected entries that aren't approvable, with a one-line reason each —
+  // surfaced inline so "why can't I approve" never depends on a hover tooltip.
+  const blocking = includedIdx
+    .filter((i) => validations[i].kind !== 'ok')
+    .map((i) => ({ i, reason: reasonOf(validations[i]) }))
+  const allIncludedValid = blocking.length === 0
   const canApprove = approvedCount > 0 && allIncludedValid
 
   const done = status === 'done'
@@ -378,6 +352,28 @@ export function DraftTransactionBatchCard({
           <Separator />
           <CardContent className="text-sm text-destructive">
             {errorMessage}
+          </CardContent>
+        </>
+      ) : null}
+
+      {!disabled && blocking.length > 0 ? (
+        <>
+          <Separator />
+          <CardContent className="space-y-1 text-xs text-amber-700 dark:text-amber-400">
+            <p className="font-medium">
+              {blocking.length === 1
+                ? "1 selected entry needs fixing before you can approve:"
+                : `${blocking.length} selected entries need fixing before you can approve:`}
+            </p>
+            <ul className="space-y-0.5">
+              {blocking.map(({ i, reason }) => (
+                <li key={i} className="flex gap-1.5">
+                  <span className="font-mono text-muted-foreground">{summaryOf(texts[i]).date || `#${i + 1}`}</span>
+                  <span>— {reason}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-muted-foreground">Edit the entry, or untick it to approve the rest.</p>
           </CardContent>
         </>
       ) : null}

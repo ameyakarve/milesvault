@@ -50,74 +50,105 @@ export type DraftValidationResult =
   | { ok: true }
   | { ok: false; issues: DraftValidationIssue[] }
 
+// Per-entry verdict — the SINGLE source of truth for "is this draft entry
+// approvable, and if not, why". Both the tool boundary (validateDraftBatch,
+// which feeds the model actionable messages) and the approval card (which
+// renders the badge + gates the Approve button) classify through this, so the
+// two can never disagree on what's valid. `messages` carries the full
+// human/LLM-facing strings; the structured fields (`isBalance`, `count`,
+// `residuals`) drive the card's badge without re-parsing the message text.
+export type DraftEntryVerdict =
+  | { kind: 'ok'; isBalance: boolean }
+  | { kind: 'parse_error'; messages: string[] }
+  | { kind: 'wrong_kind'; messages: string[] }
+  | { kind: 'wrong_count'; count: number; messages: string[] }
+  | { kind: 'dropped_posting'; messages: string[] }
+  | { kind: 'elided'; messages: string[] }
+  | {
+      kind: 'unbalanced'
+      residuals: { currency: string; amount: string }[]
+      messages: string[]
+    }
+  | { kind: 'account_shape'; messages: string[] }
+
+// Classify ONE draft entry. `label` is the prefix for the LLM-facing messages
+// (the tool passes "entry N"); the card leaves it default and reads the
+// structured fields instead.
+export function classifyDraftEntry(text: string, label = 'entry'): DraftEntryVerdict {
+  const parsed = parseJournalStrict(text)
+  if (isStrictParseErr(parsed)) {
+    return { kind: 'parse_error', messages: [`${label}: ${parsed.message}`] }
+  }
+  // Balance assertions (optionally with their pad folded in — the parser
+  // absorbs a same-account pad into the balance's plug_account) are first-
+  // class draft entries: statements state opening/closing balances and the
+  // import should assert them. Other directive kinds stay out of drafts.
+  const onlyBalances =
+    parsed.transactions.length === 0 &&
+    parsed.directives.length > 0 &&
+    parsed.directives.every((d) => d.kind === 'balance')
+  if (onlyBalances) return { kind: 'ok', isBalance: true }
+  if (parsed.directives.length > 0) {
+    return {
+      kind: 'wrong_kind',
+      messages: [
+        `${label}: only kind "transaction", "balance", or "pad" entries are allowed in a draft`,
+      ],
+    }
+  }
+  if (parsed.transactions.length !== 1) {
+    return {
+      kind: 'wrong_count',
+      count: parsed.transactions.length,
+      messages: [
+        `${label}: each element must contain exactly one transaction (got ${parsed.transactions.length})`,
+      ],
+    }
+  }
+  const txn = parsed.transactions[0]!
+  const tag = txn.payee ? ` "${txn.payee}"` : ''
+  // No silent drops: every posting line in the source must have parsed.
+  const dropped = countPostingLines(text) - txn.postings.length
+  if (dropped > 0) {
+    return {
+      kind: 'dropped_posting',
+      messages: [
+        `${label}${tag}: ${dropped} posting line(s) failed to parse and were silently dropped — each posting must start with a capitalized account (Assets/Liabilities/Equity/Income/Expenses) with NO spaces, followed by a numeric amount and currency`,
+      ],
+    }
+  }
+  // No eliding: beancount would infer a blank amount, but we require every
+  // posting to state an explicit, numeric amount AND currency.
+  const incomplete = txn.postings.filter(
+    (p) => p.amount == null || p.currency == null || decimalToScaled(p.amount) == null,
+  )
+  if (incomplete.length > 0) {
+    return {
+      kind: 'elided',
+      messages: incomplete.map(
+        (p) =>
+          `${label}${tag}: posting ${p.account} must state an explicit numeric amount and currency — no elided or blank amounts`,
+      ),
+    }
+  }
+  // Balance and account-shape both run (an entry can fail both) — preserve the
+  // tool's full message stream, but lead the verdict with the imbalance.
+  const balance = validateTransactionBalance(txn)
+  const shape = validateAccountShapes([txn], [])
+  const messages: string[] = []
+  if (balance) messages.push(`${label} (${txn.date}${tag}): ${balance.message}`)
+  for (const s of shape) messages.push(`${label}: ${s.message}`)
+  if (balance) return { kind: 'unbalanced', residuals: balance.residuals, messages }
+  if (shape.length > 0) return { kind: 'account_shape', messages }
+  return { kind: 'ok', isBalance: false }
+}
+
 export function validateDraftBatch(entries: string[]): DraftValidationResult {
   const issues: DraftValidationIssue[] = []
   entries.forEach((text, index) => {
-    const label = `entry ${index + 1}`
-    const parsed = parseJournalStrict(text)
-    if (isStrictParseErr(parsed)) {
-      issues.push({ index, message: `${label}: ${parsed.message}` })
-      return
-    }
-    // Balance assertions (optionally with their pad folded in — the parser
-    // absorbs a same-account pad into the balance's plug_account) are first-
-    // class draft entries: statements state opening/closing balances and the
-    // import should assert them. Other directive kinds stay out of drafts.
-    const onlyBalances =
-      parsed.transactions.length === 0 &&
-      parsed.directives.length > 0 &&
-      parsed.directives.every((d) => d.kind === 'balance')
-    if (onlyBalances) return
-    if (parsed.directives.length > 0) {
-      issues.push({
-        index,
-        message: `${label}: only kind "transaction", "balance", or "pad" entries are allowed in a draft`,
-      })
-      return
-    }
-    if (parsed.transactions.length !== 1) {
-      issues.push({
-        index,
-        message: `${label}: each element must contain exactly one transaction (got ${parsed.transactions.length})`,
-      })
-      return
-    }
-    const txn = parsed.transactions[0]!
-    const tag = txn.payee ? ` "${txn.payee}"` : ''
-    // No silent drops: every posting line in the source must have parsed.
-    const dropped = countPostingLines(text) - txn.postings.length
-    if (dropped > 0) {
-      issues.push({
-        index,
-        message: `${label}${tag}: ${dropped} posting line(s) failed to parse and were silently dropped — each posting must start with a capitalized account (Assets/Liabilities/Equity/Income/Expenses) with NO spaces, followed by a numeric amount and currency`,
-      })
-      return
-    }
-    // No eliding: beancount would infer a blank amount, but we require every
-    // posting to state an explicit, numeric amount AND currency.
-    const incomplete = txn.postings.filter(
-      (p) => p.amount == null || p.currency == null || decimalToScaled(p.amount) == null,
-    )
-    if (incomplete.length > 0) {
-      for (const p of incomplete) {
-        issues.push({
-          index,
-          message: `${label}${tag}: posting ${p.account} must state an explicit numeric amount and currency — no elided or blank amounts`,
-        })
-      }
-      return
-    }
-    const balance = validateTransactionBalance(txn)
-    if (balance) {
-      issues.push({
-        index,
-        message: `${label} (${txn.date}${tag}): ${balance.message}`,
-      })
-    }
-    const shape = validateAccountShapes([txn], [])
-    for (const s of shape) {
-      issues.push({ index, message: `${label}: ${s.message}` })
-    }
+    const verdict = classifyDraftEntry(text, `entry ${index + 1}`)
+    if (verdict.kind === 'ok') return
+    for (const message of verdict.messages) issues.push({ index, message })
   })
   if (issues.length === 0) return { ok: true }
   return { ok: false, issues }
