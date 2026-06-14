@@ -30,6 +30,22 @@ function canon(text: string): string {
   return serializeJournal(p.transactions, p.directives, { descending: false }).trim()
 }
 
+// The shard returns the day's entries — but the model may lump several into one
+// array element (one big blob) or separate them. Don't trust its chunking:
+// parse the whole returned text and re-serialize each transaction / directive
+// on its own, so downstream always sees INDIVIDUAL entries (and unchanged ones
+// then match the old bucket instead of churning).
+function splitEntries(texts: string[]): string[] {
+  const joined = texts.join('\n\n').trim()
+  if (!joined) return []
+  const p = parseJournalStrict(joined)
+  if (isStrictParseErr(p)) return texts.map((t) => t.trim()).filter(Boolean)
+  const out: string[] = []
+  for (const t of p.transactions) out.push(serializeJournal([t], [], { descending: false }).trimEnd())
+  for (const d of p.directives) out.push(serializeJournal([], [d], { descending: false }).trimEnd())
+  return out
+}
+
 export async function runIncorporation(deps: {
   gen: GenFn
   intent: string
@@ -58,7 +74,7 @@ export async function runIncorporation(deps: {
         old.length ? old.join('\n\n') : '(none)'
       }`
       const res = await genJson(deps.gen, ZEntries, system, prompt, 2048)
-      return { old, next: res.value?.entries ?? [] }
+      return { old, next: splitEntries(res.value?.entries ?? []) }
     }),
   )
 
