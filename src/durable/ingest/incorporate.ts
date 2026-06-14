@@ -30,42 +30,21 @@ function canon(text: string): string {
   return serializeJournal(p.transactions, p.directives, { descending: false }).trim()
 }
 
-// The shard returns the day's entries — but the model may lump several into one
-// array element (one big blob) or separate them. Don't trust its chunking:
-// parse the whole returned text and re-serialize each transaction / directive
-// on its own, so downstream always sees INDIVIDUAL entries (and unchanged ones
-// then match the old bucket instead of churning).
+// Normalize the shard's returned entries into individual ones — using ONLY the
+// parser + serializer (the sanctioned mechanical steps), so a multi-entry array
+// element is split the same way the journal itself parses. If it doesn't parse,
+// we DON'T guess a split in code — the model's own elements pass through and a
+// malformed one bounces at draft validation, like any entry. (The model is told
+// to return one entry per element; that's a prompt rule, not a code patch.)
 function splitEntries(texts: string[]): string[] {
   const joined = texts.join('\n\n').trim()
   if (!joined) return []
   const p = parseJournalStrict(joined)
-  if (!isStrictParseErr(p)) {
-    const out: string[] = []
-    for (const t of p.transactions) out.push(serializeJournal([t], [], { descending: false }).trimEnd())
-    for (const d of p.directives) out.push(serializeJournal([], [d], { descending: false }).trimEnd())
-    return out
-  }
-  // Fallback (the blob didn't parse): chunk at each date header so we never
-  // return a whole multi-entry blob (which would churn the diff). A `balance`
-  // header right after a `pad` stays glued — that pair is one logical entry.
-  // Malformed chunks just fail the draft validator downstream, as any entry does.
-  const isHeader = (l: string) => /^\d{4}-\d{2}-\d{2}\b/.test(l)
-  const isBalance = (l: string) => /^\d{4}-\d{2}-\d{2}\s+balance\b/.test(l)
-  const isPad = (l: string) => /^\d{4}-\d{2}-\d{2}\s+pad\b/.test(l)
-  const chunks: string[] = []
-  let cur: string[] = []
-  const flush = () => {
-    const s = cur.join('\n').trim()
-    if (s) chunks.push(s)
-    cur = []
-  }
-  for (const line of joined.split('\n')) {
-    const startsNew = isHeader(line) && !(isBalance(line) && cur.some(isPad)) && cur.some((l) => l.trim())
-    if (startsNew) flush()
-    cur.push(line)
-  }
-  flush()
-  return chunks
+  if (isStrictParseErr(p)) return texts.map((t) => t.trim()).filter(Boolean)
+  const out: string[] = []
+  for (const t of p.transactions) out.push(serializeJournal([t], [], { descending: false }).trimEnd())
+  for (const d of p.directives) out.push(serializeJournal([], [d], { descending: false }).trimEnd())
+  return out
 }
 
 export async function runIncorporation(deps: {
