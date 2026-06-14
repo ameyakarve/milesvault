@@ -1,5 +1,6 @@
 import type { ChatResponseResult } from '@cloudflare/think'
 import { generateText, streamText, stepCountIs, tool, type ToolSet } from 'ai'
+import { createWorkersAI } from 'workers-ai-provider'
 import { z } from 'zod'
 import {
   draftTransactionBatchSchema,
@@ -30,6 +31,7 @@ import {
   readStatementTool,
   getEntryTool,
 } from './agents/tools/editor'
+import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 import { runIncorporation } from './ingest/incorporate'
 import { querySqlTool } from './agents/tools/concierge/query-sql'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
@@ -56,6 +58,57 @@ export type ChatDOState = { draftProgress?: string }
 // attaches per-entry issues; on failure the SDK surfaces them to the model and
 // the draft card renders as a failed/rejected call. No repair hook, no separate
 // feedback tool.
+
+// Eval-bench judge model — a stronger, non-gemma instruct model (the editor
+// runs gemma; it cannot grade itself). Used only by __bench_judge.
+const BENCH_JUDGE_MODEL_ID = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+
+// Pull the eval-relevant signals out of a tool-call trace so promptfoo's
+// javascript asserts read flat fields instead of re-parsing the trace each
+// time: the drafted entries, the clarify calls, and the SQL queries.
+function deriveBenchSignals(trace: Array<{ tool: string; input: unknown }>): {
+  drafts: Array<{ replaces: string | null; text: string }>
+  clarifies: unknown[]
+  sqls: string[]
+} {
+  const drafts: Array<{ replaces: string | null; text: string }> = []
+  const clarifies: unknown[] = []
+  const sqls: string[] = []
+  for (const t of trace) {
+    const input = (t.input ?? {}) as Record<string, unknown>
+    if (t.tool === 'draft_transaction') {
+      const entries = Array.isArray(input.entries) ? input.entries : []
+      for (const e of entries as Array<Record<string, unknown>>) {
+        drafts.push({
+          replaces: typeof e.replaces === 'string' ? e.replaces : null,
+          text: typeof e.text === 'string' ? e.text : '',
+        })
+      }
+    } else if (t.tool === 'clarify') {
+      clarifies.push(input)
+    } else if (t.tool === 'query_sql') {
+      if (typeof input.sql === 'string') sqls.push(input.sql)
+    }
+  }
+  return { drafts, clarifies, sqls }
+}
+
+// Validate the drafted entries with the REAL draft validator (parse, shape,
+// per-currency balance) — the same gate the editor's draft_transaction tool
+// enforces. Delete ops (empty text) carry nothing to validate. Empty draft set
+// is valid by default (a read turn has no drafts; assert presence separately).
+function validateBenchDrafts(drafts: Array<{ replaces: string | null; text: string }>): {
+  draftsValid: boolean
+  draftIssues: string[]
+} {
+  const texts = drafts.map((d) => d.text).filter((t) => t.trim().length > 0)
+  if (texts.length === 0) return { draftsValid: true, draftIssues: [] }
+  const result = validateDraftBatch(texts)
+  if ('issues' in result) {
+    return { draftsValid: false, draftIssues: result.issues.map((i) => i.message) }
+  }
+  return { draftsValid: true, draftIssues: [] }
+}
 
 function todayInt(): number {
   const now = new Date()
@@ -483,6 +536,11 @@ ${opts.text}`,
   async __bench_run(message: string): Promise<{
     text: string
     trace: Array<{ tool: string; input: unknown }>
+    drafts: Array<{ replaces: string | null; text: string }>
+    clarifies: unknown[]
+    sqls: string[]
+    draftsValid: boolean
+    draftIssues: string[]
     aliases: Record<string, string>
     error: string | null
   }> {
@@ -527,9 +585,53 @@ ${opts.text}`,
           trace.push({ tool: call.toolName, input: call.input })
         }
       }
-      return { text: result.text, trace, aliases, error: null }
+      const { drafts, clarifies, sqls } = deriveBenchSignals(trace)
+      const { draftsValid, draftIssues } = validateBenchDrafts(drafts)
+      return {
+        text: result.text,
+        trace,
+        drafts,
+        clarifies,
+        sqls,
+        draftsValid,
+        draftIssues,
+        aliases,
+        error: null,
+      }
     } catch (e) {
-      return { text: '', trace, aliases, error: e instanceof Error ? e.message : String(e) }
+      const { drafts, clarifies, sqls } = deriveBenchSignals(trace)
+      const { draftsValid, draftIssues } = validateBenchDrafts(drafts)
+      return {
+        text: '',
+        trace,
+        drafts,
+        clarifies,
+        sqls,
+        draftsValid,
+        draftIssues,
+        aliases,
+        error: e instanceof Error ? e.message : String(e),
+      }
+    }
+  }
+
+  // Grader model for the eval bench's llm-rubric assertions. promptfoo renders
+  // its grading prompt and sends it here; we run a STRONGER model than the
+  // editor (gemma is the thing under test — it can't grade itself) over the
+  // Workers AI binding and return the raw text for promptfoo to parse. Keeps
+  // the eval self-contained — no external grader API key. Remove with the rest
+  // of the bench scaffolding.
+  async __bench_judge(prompt: string): Promise<{ output: string }> {
+    const gatewayId = this.env.AI_GATEWAY_ID
+    const workersai = createWorkersAI({
+      binding: this.env.AI,
+      ...(gatewayId ? { gateway: { id: gatewayId } } : {}),
+    })
+    try {
+      const { text } = await generateText({ model: workersai(BENCH_JUDGE_MODEL_ID), prompt })
+      return { output: text }
+    } catch (e) {
+      return { output: `JUDGE_ERROR: ${e instanceof Error ? e.message : String(e)}` }
     }
   }
 

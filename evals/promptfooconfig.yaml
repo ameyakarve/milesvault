@@ -1,0 +1,209 @@
+# MilesVault editor eval — runs the REAL editor turn (gemma + real prompt +
+# real read tools, write tools captured not applied) on the deployed staging
+# worker, and grades the result structurally + with an LLM judge.
+#
+# Run:  pnpm eval         (needs TEST_USER_TOKEN in env; see evals/README.md)
+# View: pnpm eval:view
+#
+# Each case POSTs {seed, message} to /api/test/bench, which resets+seeds the
+# test ledger then runs one turn. The provider output is the full JSON:
+#   { text, trace, drafts:[{replaces,text}], clarifies, sqls, draftsValid,
+#     draftIssues, aliases, error }
+# Structural asserts are inline JS over that object; the judge (llm-rubric)
+# grades correctness via a stronger model served by /api/test/judge.
+#
+# NOTE: one shared test ledger → cases MUST run serially. pnpm eval passes -j 1.
+
+description: MilesVault editor behavior eval
+
+prompts:
+  - '{{message}}'
+
+providers:
+  - id: 'https://staging.milesvault.com/api/test/bench'
+    label: editor
+    config:
+      method: POST
+      headers:
+        'Content-Type': 'application/json'
+        'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
+      body:
+        message: '{{message}}'
+        seed: '{{seed}}'
+      transformResponse: 'json'
+
+# Grade llm-rubric assertions with a stronger model (llama via Workers AI),
+# served by our judge endpoint — keeps the eval self-contained (no OpenAI key).
+defaultTest:
+  options:
+    provider:
+      id: 'https://staging.milesvault.com/api/test/judge'
+      config:
+        method: POST
+        headers:
+          'Content-Type': 'application/json'
+          'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
+        body:
+          prompt: '{{prompt}}'
+        transformResponse: 'json.output'
+  assert:
+    # Global guard: the gemma tool-call tokens must never leak into the text
+    # channel (the known Workers AI serialization flake).
+    - type: javascript
+      value: "!String(output.text || '').includes('tool_call')"
+      metric: no-garble
+
+tests:
+  # ---- READ: resolve a programme name to its account, not text-match it ----
+  - description: 'read — which Accor txns are redemptions'
+    vars:
+      seed: |
+        2026-01-03 * "Pullman Chennai" "Stay paid with points"
+          Expenses:Travel:Hotels                9487 INR
+          Assets:Rewards:Points:AllRewards    -18000 ALLREWARDS @@ 9487 INR
+
+        2026-02-10 * "Accor" "Bonus points"
+          Assets:Rewards:Points:AllRewards      2000 ALLREWARDS
+          Equity:Void                          -2000 ALLREWARDS
+      message: 'check my accor txns from this year -- tell me which of these are redemptions'
+    assert:
+      - type: javascript
+        value: "output.sqls.some(s => s.includes('AllRewards'))"
+        metric: queries-by-account
+      - type: javascript
+        value: "!output.sqls.some(s => /like\\s+'%accor%'/i.test(s))"
+        metric: not-text-match
+      - type: llm-rubric
+        value: >
+          The assistant identified the Pullman Chennai stay (the -18000 ALLREWARDS
+          posting with an @@ price) as a redemption, and the +2000 ALLREWARDS bonus
+          as NOT a redemption (it is an accrual). It must NOT have missed the Pullman
+          redemption.
+
+  # ---- ADD: use the held card; correct cashback accrual ----
+  - description: 'add — coffee paid on HSBC (single held card)'
+    vars:
+      seed: |
+        2026-06-10 * "Amazon" "Household"
+          Expenses:Shopping                      1200 INR
+          Liabilities:CreditCards:HSBC:Cashback -1200 INR
+      message: 'add a 350 INR coffee at Blue Tokai today, paid on HSBC'
+    assert:
+      - type: javascript
+        value: 'output.draftsValid === true'
+        metric: balances
+      - type: javascript
+        value: 'output.drafts.length > 0 && output.clarifies.length === 0'
+        metric: no-clarify
+      - type: javascript
+        value: "output.drafts.some(d => d.text.includes('Liabilities:CreditCards:HSBC:Cashback'))"
+        metric: uses-held-card
+      - type: llm-rubric
+        value: >
+          The draft records a 350 INR purchase at Blue Tokai paid on the existing
+          HSBC Cashback card, plus 10% (35 INR) cashback recorded as the documented
+          cashback pattern: an Assets:Receivable:HSBC accrual of 35 INR and a matching
+          -35 INR reduction of the expense. It did NOT ask the user which HSBC card.
+
+  # ---- EDIT: minimal amount change via replaces ----
+  - description: 'edit — change Starbucks amount to 500'
+    vars:
+      seed: |
+        2026-06-12 * "Starbucks" "Morning coffee"
+          Expenses:Food:Coffee                   420 INR
+          Liabilities:CreditCards:HSBC:Cashback -420 INR
+
+        2026-06-12 * "Uber" "Ride to office"
+          Expenses:Transport                     300 INR
+          Liabilities:CreditCards:HSBC:Cashback -300 INR
+      message: 'change the Starbucks coffee on 2026-06-12 to 500'
+    assert:
+      - type: javascript
+        value: 'output.draftsValid === true'
+        metric: balances
+      - type: javascript
+        value: "output.drafts.some(d => (d.replaces || '').includes('Starbucks') && d.text.includes('Starbucks'))"
+        metric: edits-via-replaces
+      - type: javascript
+        value: "!output.drafts.some(d => (d.replaces || '').includes('Uber') || d.text.includes('Uber'))"
+        metric: leaves-uber-alone
+      - type: llm-rubric
+        value: >
+          The draft is an EDIT of the existing Starbucks transaction (it carries a
+          `replaces` holding the original Starbucks entry) whose amount is changed to
+          500 INR on both postings so it still balances. The Uber transaction is
+          untouched. It did not append a new entry to "fix" the old one.
+
+  # ---- DELETE: remove via replaces + empty text ----
+  - description: 'delete — remove the Uber ride'
+    vars:
+      seed: |
+        2026-06-12 * "Starbucks" "Morning coffee"
+          Expenses:Food:Coffee                   420 INR
+          Liabilities:CreditCards:HSBC:Cashback -420 INR
+
+        2026-06-12 * "Uber" "Ride to office"
+          Expenses:Transport                     300 INR
+          Liabilities:CreditCards:HSBC:Cashback -300 INR
+      message: 'delete the Uber ride on 2026-06-12'
+    assert:
+      - type: javascript
+        value: "output.drafts.some(d => (d.replaces || '').includes('Uber') && !String(d.text).trim())"
+        metric: deletes-via-replaces
+      - type: javascript
+        value: "!output.drafts.some(d => (d.replaces || '').includes('Starbucks'))"
+        metric: leaves-starbucks-alone
+      - type: llm-rubric
+        value: >
+          The draft DELETES the Uber transaction — exactly one op whose `replaces`
+          is the Uber entry and whose `text` is empty. The Starbucks transaction is
+          untouched.
+
+  # ---- BALANCE: pure ADD of pad+balance, no phantom replaces ----
+  - description: 'balance — set Accor points to 163316'
+    vars:
+      seed: |
+        2026-02-10 * "Accor" "Bonus points"
+          Assets:Rewards:Points:AllRewards      2000 ALLREWARDS
+          Equity:Void                          -2000 ALLREWARDS
+      message: 'set my Accor reward points balance to 163316'
+    assert:
+      - type: javascript
+        value: 'output.drafts.length > 0 && output.drafts.every(d => !d.replaces)'
+        metric: is-add-not-edit
+      - type: javascript
+        value: "output.drafts.some(d => d.text.includes('pad') && d.text.includes('balance') && d.text.includes('163316'))"
+        metric: pad-and-balance
+      - type: llm-rubric
+        value: >
+          The draft is a fresh pad + balance pair on Assets:Rewards:Points:AllRewards
+          asserting 163316 ALLREWARDS, plugging from Equity:Void, dated today. It is an
+          ADD (no `replaces`) — it did NOT fabricate a `replaces` for a balance
+          directive that does not exist.
+
+  # ---- REDEMPTION: points leg @@ cash value; credit lands on the card ----
+  - description: 'redemption — 5000 points for 2500 statement credit'
+    vars:
+      seed: |
+        2026-01-01 * "Accor" "Opening points"
+          Assets:Rewards:Points:AllRewards      50000 ALLREWARDS
+          Equity:Void                          -50000 ALLREWARDS
+
+        2026-06-10 * "Amazon" "Household"
+          Expenses:Shopping                      1200 INR
+          Liabilities:CreditCards:HSBC:Cashback -1200 INR
+      message: 'I redeemed 5000 Accor points today for a 2500 INR statement credit'
+    assert:
+      - type: javascript
+        value: 'output.draftsValid === true'
+        metric: balances
+      - type: javascript
+        value: "output.drafts.some(d => /-5000\\s+ALLREWARDS\\s+@@\\s+2500/.test(d.text))"
+        metric: points-leg-priced
+      - type: llm-rubric
+        value: >
+          The draft records a redemption: the points leg removes 5000 ALLREWARDS
+          carrying the cash value via `@@ 2500 INR`, and the 2500 INR statement credit
+          lands on the user's HSBC card liability (reducing what is owed). It did NOT
+          ask for the cash value (the user gave it: 2500) and did NOT denominate any
+          expense in points.
