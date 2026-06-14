@@ -1,6 +1,11 @@
 import type { ChatResponseResult } from '@cloudflare/think'
 import { generateText, streamText, stepCountIs, tool, type ToolSet } from 'ai'
-import { draftTransactionBatchSchema } from './agent-ui-schemas'
+import { z } from 'zod'
+import {
+  draftTransactionBatchSchema,
+  clarifyInputSchema,
+  addCardInputSchema,
+} from './agent-ui-schemas'
 import {
   buildLedgerSystem,
   buildStatementAgentSystem,
@@ -463,6 +468,59 @@ ${opts.text}`,
       let text = ''
       for await (const delta of r.textStream) text += delta
       return text
+    }
+  }
+
+  // E2E benchmark harness: run ONE editor turn headlessly with the REAL ledger
+  // system prompt + REAL editor tools. Read tools (kb_*, card_guide,
+  // list_reward_accounts, query_sql, get_entry) execute for real; the write/ask
+  // tools (draft_transaction, clarify, add_card) are captured (not applied) so
+  // we can see exactly what the model proposed. Returns the tool-call trace.
+  async __bench_run(message: string): Promise<{
+    text: string
+    trace: Array<{ tool: string; input: unknown }>
+    error: string | null
+  }> {
+    const snapshot = await this.ledgerStub().ledger_snapshot()
+    const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
+    const kb = makeKbTools(kbHttp)
+    const trace: Array<{ tool: string; input: unknown }> = []
+    // Capture (don't apply) the write/ask tools — same schemas as the real ones,
+    // so the model is constrained identically; we just record the call.
+    const capture = (label: string, schema: z.ZodTypeAny) =>
+      tool({
+        description: `Propose (${label}). Fill it exactly as you would for the user.`,
+        inputSchema: schema,
+        execute: async () => ({ ok: true as const }),
+      })
+    const tools: ToolSet = {
+      kb_resolve: kb.kb_resolve,
+      kb_get: kb.kb_get,
+      kb_related: kb.kb_related,
+      card_guide: cardGuideTool(kbHttp),
+      list_reward_accounts: rewardAccountsTool(kbHttp),
+      query_sql: querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params)),
+      get_entry: getEntryTool((ref) => this.ledgerStub().get_entry(ref)),
+      draft_transaction: capture('draft_transaction', draftTransactionBatchSchema),
+      clarify: capture('clarify', clarifyInputSchema),
+      add_card: capture('add_card', addCardInputSchema),
+    }
+    try {
+      const result = await generateText({
+        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+        system: buildLedgerSystem(snapshot),
+        prompt: message,
+        tools,
+        stopWhen: stepCountIs(8),
+      })
+      for (const step of result.steps) {
+        for (const call of step.toolCalls ?? []) {
+          trace.push({ tool: call.toolName, input: call.input })
+        }
+      }
+      return { text: result.text, trace, error: null }
+    } catch (e) {
+      return { text: '', trace, error: e instanceof Error ? e.message : String(e) }
     }
   }
 
