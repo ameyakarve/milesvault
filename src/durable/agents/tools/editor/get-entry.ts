@@ -1,22 +1,9 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-
-const ENTRY_KINDS = [
-  'txn',
-  'open',
-  'close',
-  'commodity',
-  'balance',
-  'price',
-  'note',
-  'document',
-  'event',
-] as const
-
-export type EntryKindT = (typeof ENTRY_KINDS)[number]
+import { ENTRY_KINDS, type EntryKind } from '@/durable/ledger-types'
 
 export type EntryBlob = {
-  kind: EntryKindT
+  kind: EntryKind
   id: number
   updated_at: number
   raw_text: string
@@ -27,7 +14,7 @@ export type EntryBlob = {
 // DO closure). raw_text enters context only for the entries the model is about
 // to change — the whole point of the query_sql → get_entry → draft split.
 export function getEntryTool(
-  fetchEntry: (ref: { kind: EntryKindT; id: number }) => Promise<EntryBlob | null>,
+  fetchEntry: (ref: { kind: EntryKind; id: number }) => Promise<EntryBlob | null>,
 ) {
   return tool({
     description:

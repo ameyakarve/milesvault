@@ -23,6 +23,7 @@ import type {
   EntryBalance,
   EntryClose,
   EntryDocument,
+  EntryKind,
   EntryNote,
   EntryOpen,
   EntryTxn,
@@ -108,16 +109,7 @@ export type CommitJournalEditResponse =
   | JournalPutError
   | { ok: false; error: 'no_such_proposal' | 'already_resolved'; message: string }
 
-export type EntryKind =
-  | 'txn'
-  | 'open'
-  | 'close'
-  | 'commodity'
-  | 'balance'
-  | 'price'
-  | 'note'
-  | 'document'
-  | 'event'
+export type { EntryKind } from './ledger-types'
 
 export type EntryRow = {
   kind: EntryKind

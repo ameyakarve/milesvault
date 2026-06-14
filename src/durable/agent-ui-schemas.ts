@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
+import { classifyDraftEntry } from '@/lib/beancount/validate-draft-batch'
 import { entryFeedback } from '@/lib/beancount/draft-feedback'
 
 // The agent emits one or more drafted entries inside a `draft_transaction` tool
@@ -30,15 +30,19 @@ export const draftTransactionBatchSchema = z
             .describe('A short, unique handle for this entry (e.g. "t1", "b1") — used only to address it on a correction; never written to the ledger.'),
           text: z
             .string()
-            .min(1)
-            .describe('ONE beancount entry as text: a transaction (date header + 2+ posting lines) or a stated balance (a `balance` line, optionally preceded by its `pad` line).'),
+            .default('')
+            .describe('The NEW beancount entry as text (a transaction, or a stated balance with optional `pad`). Present for an add or an edit; leave EMPTY for a delete.'),
+          replaces: z
+            .string()
+            .optional()
+            .describe('To EDIT or DELETE an existing entry: the exact beancount text of the entry being replaced, copied verbatim from its `get_entry` result. Omit for a brand-new entry. (edit = replaces + new text · delete = replaces + empty text · add = text only.)'),
         }),
       )
       .min(1)
       .max(250)
       .describe(
-        'Array of draft entries, one beancount entry each. A one-off is an array of ' +
-          'length 1; statement uploads / splits / subscription series go in the same call.',
+        'Array of draft entries — add (text only), edit (replaces + new text), or delete (replaces, empty text). ' +
+          'A one-off is length 1; statement uploads / splits / subscription series / bulk edits go in the same call.',
       ),
   })
   .superRefine((value, ctx) => {
@@ -57,19 +61,35 @@ export const draftTransactionBatchSchema = z
         firstSeen.set(e.id, i)
       }
     })
-    // Validate each entry's text (parse + per-currency balance + account shape +
-    // no silently-dropped postings + no elided amounts). The SDK surfaces these
-    // to the model on the standard tool-input-validation path.
-    const texts = value.entries.map((e) => e.text)
-    const result = validateDraftBatch(texts)
-    if (result.ok === true) return
-    for (const issue of result.issues) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['entries', issue.index, 'text'],
-        message: entryFeedback(texts[issue.index] ?? '', issue.message),
-      })
-    }
+    // Validate the NEW text per entry (the SAME validator replaceBuffer uses):
+    //  - delete (empty text + `replaces`): nothing to validate.
+    //  - add / edit (text present): classify it (parse + per-currency balance +
+    //    account shape + no silent drops + no eliding).
+    //  - empty text with no `replaces`: not an entry at all — surface it.
+    // `replaces` is existing ledger text (already valid) — matched to a real
+    // entry at write time; nothing to validate here.
+    value.entries.forEach((e, i) => {
+      if (e.text.trim().length === 0) {
+        if (e.replaces == null || e.replaces.trim().length === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['entries', i, 'text'],
+            message:
+              'an entry needs `text` (a new or edited entry) OR a `replaces` with empty text (to delete an existing entry)',
+          })
+        }
+        return // delete — no new text to validate
+      }
+      const verdict = classifyDraftEntry(e.text, `entry ${i + 1}`)
+      if (verdict.kind === 'ok') return
+      for (const message of verdict.messages) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['entries', i, 'text'],
+          message: entryFeedback(e.text, message),
+        })
+      }
+    })
   })
 
 export type DraftTransactionBatch = z.infer<typeof draftTransactionBatchSchema>

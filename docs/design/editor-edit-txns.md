@@ -33,25 +33,31 @@ Principle: **a tool that returns a finite, curated list is safe at any tier; a
 tool that walks edges is orchestrator-only.** Codemode reads the user's ledger;
 the orchestrator combines that with KG meaning, then drafts.
 
-## The edit primitive
+## The edit primitive — text, not storage ids
 
-Extend `draft_transaction`. Each entry `{ target?, text? }`:
-- add → no target + text
-- edit → target + text
-- delete → target + no text
+The model works in beancount TEXT; it must NOT touch SQLite ids/kinds. So each
+`draft_transaction` entry is `{ id, text?, replaces? }`:
+- add → `text` only
+- edit → `replaces` (the original entry's text, copied from `get_entry`) + new `text`
+- delete → `replaces`, empty `text`
 
-`target` = `EntryRef2 { kind, id, expected_updated_at }` (from `get_entry`).
-Approval composes one `replaceBuffer`: targets → `knownIds` (delete), texts →
-buffer (insert). OCC (`expected_updated_at`) makes every edit/delete
-conflict-safe; stale → existing `occ_conflict` message.
+`replaces` is matched to the real entry by canonical text at write time — the
+SAME mechanism the manual Journal editor's `diffBuffer` already uses (text →
+delete-by-id → `replaceBuffer`). No `kind`, no `id`, no `expected_updated_at` in
+the model surface. Natural OCC: if the original text no longer exists (changed
+underneath), the edit simply doesn't apply.
+
+Discovery rides on the LIVE schema manifest — `schema_ddl` is built from
+`sqlite_master` in `ledger_snapshot`, self-maintaining; nothing about the tables
+or entry kinds is hand-listed in the model surface.
 
 ## The loop (one shape; branches only on discovery)
 
 - Classify intent: add / edit / delete / mixed (model, from the message).
-- **Add** → knowledge tools as needed → `draft_transaction` with `text`, no target.
+- **Add** → knowledge tools as needed → `draft_transaction` with `text` only.
 - **Edit / delete** → `query_sql` to find candidates (count + id/title):
   - 0 → tell the user, stop
-  - 1–10 → `get_entry` each → `draft_transaction` with `target`
+  - 1–10 → `get_entry` each → `draft_transaction` with `replaces` (the original text) + new text
   - > 10 → `select_entries` (titles only) → user ticks → `get_entry` chosen → draft
   - genuinely ambiguous → `clarify`
 - **Approve** → one `replaceBuffer` (inserts adds, deletes+reinserts edits by id,
@@ -62,21 +68,21 @@ conflict-safe; stale → existing `occ_conflict` message.
 1. **Wire codemode reads to the ledger agent** — add `query_sql` (read-only,
    already capped) + `get_entry` + the `list_*` resolvers to the `ledger` agent's
    tool set. Include `schema_ddl` in the editor snapshot. Remove `find_entries`.
-2. **Schema** — `draftTransactionBatchSchema`: optional
-   `target { kind, id, expected_updated_at }` per entry.
-3. **Validator** — `classifyDraftEntry`: empty text allowed iff `target` present
-   (= delete); else classify text as today.
-4. **draft_transaction + prompt** — add/edit/delete semantics; tool-rules: on a
+2. **Schema** — `draftTransactionBatchSchema`: optional `replaces` (string) per
+   entry. Text-only validation, target-aware (empty text allowed iff `replaces`).
+3. **draft_transaction + prompt** — add/edit/delete semantics; tool-rules: on a
    change/fix/delete request, `query_sql` to locate (narrow SELECT + LIMIT),
-   `get_entry` per target, draft with `target` — never append a duplicate.
-5. **Gen-UI card** — edit rows as before→after diff, delete rows struck through;
-   approve builds `knownIds` from targets + buffer from texts → one `replaceBuffer`.
-6. **`select_entries` gen-UI** — >10 path: checkbox list (titles only) → chosen
+   `get_entry` to read the chosen entry's text, draft with `replaces` = that
+   text — never append a duplicate.
+4. **Gen-UI card** — edit rows as before→after diff, delete rows struck through;
+   approve resolves each `replaces` → entry id (canonical-text match, like
+   diffBuffer) → one `replaceBuffer` (knownIds = matched + buffer = new texts).
+5. **`select_entries` gen-UI** — >10 path: checkbox list (titles only) → chosen
    ids feed the diff card.
 
 ## Invariants
 
-- The model NEVER writes — every mutation is a drafted `target?/text` the user approves.
+- The model NEVER writes — every mutation is a drafted `replaces?/text` the user approves.
 - `query_sql` read-only + row-capped; writes only via `replaceBuffer`.
 - Context stays lean: `query_sql` SELECTs ids/titles with `LIMIT`; full text pulled
   per-target via `get_entry`.

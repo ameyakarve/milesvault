@@ -6,6 +6,23 @@ import { z } from 'zod'
 // maintains a drifting mirror. All hand-written types below the schemas are
 // z.infer re-exports with identical shapes to the original declarations.
 
+// The kinds of entry the ledger stores — the SINGLE source for both the
+// runtime list (z.enum, agent tool schemas) and the EntryKind type. Anything
+// that needs the kinds imports from here; no hand-copied mirror.
+export const ENTRY_KINDS = [
+  'txn',
+  'open',
+  'close',
+  'commodity',
+  'balance',
+  'price',
+  'note',
+  'document',
+  'event',
+] as const
+
+export type EntryKind = (typeof ENTRY_KINDS)[number]
+
 const ZMeta = z.record(z.string(), z.string()).nullable()
 
 export const ZPostingInput = z.object({
