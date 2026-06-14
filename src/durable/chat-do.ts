@@ -24,6 +24,7 @@ import {
   incorporateTool,
 } from './agents/tools/editor'
 import { runIncorporation } from './ingest/incorporate'
+import { querySqlTool } from './agents/tools/concierge/query-sql'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
 import { runDraftPipeline, type GenFn } from './ingest/pipeline'
 import type { AgentHost, Registry } from './agents/types'
@@ -537,6 +538,10 @@ entries, or draft corrections.`
         readDates: (dates) => this.ledgerStub().entries_on_dates(dates),
       }),
     )
+    // Read-only lookups so the editor can ANSWER questions about existing
+    // entries ("which of my Accor txns are redemptions?") itself — it reads to
+    // write anyway. Writes still go only through incorporate → draft_transaction.
+    const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
     if (name === 'ledger') {
       return this.withToolLog(name, {
         ...kbLookup,
@@ -544,6 +549,7 @@ entries, or draft corrections.`
         list_reward_accounts,
         draft_transaction: draftTransactionTool(),
         incorporate,
+        query_sql,
         clarify: clarifyTool(CLARIFICATIONS),
         add_card: addCardTool(),
       })

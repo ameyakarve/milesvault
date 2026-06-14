@@ -98,8 +98,25 @@ summarizing what was done in \`context\` — UNLESS that message is a direct
 correction or follow-up to the statement you just handled (e.g. "fix the date
 on the Amazon row"), in which case handle it first, then hand back.`
 
+// Read-only SQL is how the editor ANSWERS questions about existing entries
+// ("which of my Accor txns are redemptions?") — it reads its own ledger rather
+// than asking the user to paste. Changes still go through incorporate, never SQL.
+function renderQueryBlock(ddl: string): string {
+  return `# Answering questions about existing entries (read-only SQL)
+
+To ANSWER a question about what's already in the ledger — "which of my X are
+redemptions?", "how much did I spend on Y?", "find my Z" — use \`query_sql\`
+(SELECT/WITH only) against the schema below; SELECT narrow columns with a
+\`LIMIT\`. NEVER tell the user you can't see their data or ask them to paste it —
+read it yourself. (This is for reading; to ADD/EDIT/DELETE, use \`incorporate\`.)
+
+\`\`\`sql
+${ddl.trim()}
+\`\`\``
+}
+
 // System prompt for the `ledger` agent in the handoff-based editor registry.
-export function buildLedgerSystem(snapshot: Snapshot): string {
+export function buildLedgerSystem(snapshot: Snapshot & { schema_ddl?: string }): string {
   // CLARIFICATIONS is NOT here — it's domain hints for the clarify tool, passed
   // at construction (see clarifyTool). Keeps the generic mechanism and its
   // domain triggers from getting tangled in the system prompt.
@@ -110,7 +127,10 @@ export function buildLedgerSystem(snapshot: Snapshot): string {
     EXAMPLES,
     HANDOFF_TO_STATEMENT,
     renderSnapshotBlock(snapshot),
-  ].join('\n\n---\n\n')
+    snapshot.schema_ddl?.trim() ? renderQueryBlock(snapshot.schema_ddl) : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n---\n\n')
 }
 
 // System prompt for the headless ingest pipeline's extraction call: the
