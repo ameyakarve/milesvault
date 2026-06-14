@@ -39,11 +39,33 @@ function splitEntries(texts: string[]): string[] {
   const joined = texts.join('\n\n').trim()
   if (!joined) return []
   const p = parseJournalStrict(joined)
-  if (isStrictParseErr(p)) return texts.map((t) => t.trim()).filter(Boolean)
-  const out: string[] = []
-  for (const t of p.transactions) out.push(serializeJournal([t], [], { descending: false }).trimEnd())
-  for (const d of p.directives) out.push(serializeJournal([], [d], { descending: false }).trimEnd())
-  return out
+  if (!isStrictParseErr(p)) {
+    const out: string[] = []
+    for (const t of p.transactions) out.push(serializeJournal([t], [], { descending: false }).trimEnd())
+    for (const d of p.directives) out.push(serializeJournal([], [d], { descending: false }).trimEnd())
+    return out
+  }
+  // Fallback (the blob didn't parse): chunk at each date header so we never
+  // return a whole multi-entry blob (which would churn the diff). A `balance`
+  // header right after a `pad` stays glued — that pair is one logical entry.
+  // Malformed chunks just fail the draft validator downstream, as any entry does.
+  const isHeader = (l: string) => /^\d{4}-\d{2}-\d{2}\b/.test(l)
+  const isBalance = (l: string) => /^\d{4}-\d{2}-\d{2}\s+balance\b/.test(l)
+  const isPad = (l: string) => /^\d{4}-\d{2}-\d{2}\s+pad\b/.test(l)
+  const chunks: string[] = []
+  let cur: string[] = []
+  const flush = () => {
+    const s = cur.join('\n').trim()
+    if (s) chunks.push(s)
+    cur = []
+  }
+  for (const line of joined.split('\n')) {
+    const startsNew = isHeader(line) && !(isBalance(line) && cur.some(isPad)) && cur.some((l) => l.trim())
+    if (startsNew) flush()
+    cur.push(line)
+  }
+  flush()
+  return chunks
 }
 
 export async function runIncorporation(deps: {
