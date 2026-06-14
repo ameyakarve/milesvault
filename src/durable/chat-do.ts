@@ -483,6 +483,7 @@ ${opts.text}`,
   async __bench_run(message: string): Promise<{
     text: string
     trace: Array<{ tool: string; input: unknown }>
+    aliases: Record<string, string>
     error: string | null
   }> {
     const snapshot = await this.ledgerStub().ledger_snapshot()
@@ -526,9 +527,9 @@ ${opts.text}`,
           trace.push({ tool: call.toolName, input: call.input })
         }
       }
-      return { text: result.text, trace, error: null }
+      return { text: result.text, trace, aliases, error: null }
     } catch (e) {
-      return { text: '', trace, error: e instanceof Error ? e.message : String(e) }
+      return { text: '', trace, aliases, error: e instanceof Error ? e.message : String(e) }
     }
   }
 
