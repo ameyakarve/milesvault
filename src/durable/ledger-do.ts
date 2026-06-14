@@ -2211,6 +2211,23 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
          ORDER BY o.account`,
       )
       .toArray()
+    // Currencies each account ACTUALLY holds, observed from its postings. The
+    // open-directive constraint is often empty (accounts opened bare, or
+    // brought in by a posting with no explicit open), so the constraint alone
+    // under-reports what an account contains. This is a factual ledger read.
+    const observedCurrencies = new Map<string, Set<string>>()
+    for (const r of this.db
+      .exec<{ account: string; currency: string }>(
+        `SELECT DISTINCT account, currency FROM postings`,
+      )
+      .toArray()) {
+      let set = observedCurrencies.get(r.account)
+      if (!set) {
+        set = new Set<string>()
+        observedCurrencies.set(r.account, set)
+      }
+      set.add(r.currency)
+    }
     const closes = new Map<string, number>()
     for (const r of this.db
       .exec<{ account: string; date: number }>(
@@ -2220,16 +2237,17 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       closes.set(r.account, r.date)
     }
     const accountList = accounts.map((r) => {
-      let currencies: string[] = []
+      const currencies = new Set<string>()
       try {
         const parsed = JSON.parse(r.constraint_currencies)
-        if (Array.isArray(parsed)) currencies = parsed.map(String)
+        if (Array.isArray(parsed)) for (const c of parsed) currencies.add(String(c))
       } catch {
         // ignore malformed metadata
       }
+      for (const c of observedCurrencies.get(r.account) ?? []) currencies.add(c)
       return {
         account: r.account,
-        currencies,
+        currencies: [...currencies].sort(),
         open_date: r.date,
         close_date: closes.get(r.account) ?? null,
       }
@@ -2249,7 +2267,12 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       .toArray()) {
       if (!known.has(r.account)) {
         known.add(r.account)
-        accountList.push({ account: r.account, currencies: [], open_date: 0, close_date: null })
+        accountList.push({
+          account: r.account,
+          currencies: [...(observedCurrencies.get(r.account) ?? [])].sort(),
+          open_date: 0,
+          close_date: null,
+        })
       }
     }
     accountList.sort((a, b) => a.account.localeCompare(b.account))
