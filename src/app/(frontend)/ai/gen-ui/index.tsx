@@ -1,6 +1,6 @@
 'use client'
 
-import { DraftTransactionBatchCard } from './draft-transaction'
+import { DraftTransactionBatchCard, type DraftOp } from './draft-transaction'
 import { ClarifyCard } from './clarify'
 import { AddCardCard, type AddCardResult } from './add-card'
 import { ExploreLinkCard } from './explore-link'
@@ -17,7 +17,7 @@ export type GenUiProps = {
   status?: 'idle' | 'submitting' | 'done' | 'failed' | 'rejected'
   errorMessage?: string
   // For draft_transaction
-  onApprove?: (finalText: string, meta: { approved: number; skipped: number }) => void
+  onApprove?: (ops: DraftOp[], meta: { approved: number; skipped: number }) => void
   onShowInJournal?: (range: { from: string; to: string } | null) => void
   // For clarify
   resolvedAnswers?: string[]

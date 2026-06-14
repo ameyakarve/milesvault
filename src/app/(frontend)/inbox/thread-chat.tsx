@@ -5,7 +5,8 @@ import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
 import type { ToolUIPart } from 'ai'
 import type { ChatDOState } from '@/durable/chat-do'
-import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
+import { ledgerClient, isReplaceBufferError, commitDraftOps } from '@/lib/ledger-client-browser'
+import type { DraftOp } from '@/app/(frontend)/ai/gen-ui/draft-transaction'
 import { isGenUiTool, renderGenUi } from '../ai/gen-ui'
 import { Conversation, ConversationContent } from '@/components/ai-elements/conversation'
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
@@ -57,10 +58,23 @@ export function InboxThreadChat({
   >({})
   const [submitError, setSubmitError] = useState<Record<string, string>>({})
 
-  async function approve(toolCallId: string, finalText: string) {
+  async function approve(toolCallId: string, ops: DraftOp[]) {
     setSubmitState((s) => ({ ...s, [toolCallId]: 'submitting' }))
     try {
-      const r = await ledgerClient.replaceBuffer([], finalText)
+      const committed = await commitDraftOps(ops)
+      if (committed.ok === false) {
+        const err = committed.error
+        setSubmitState((s) => ({ ...s, [toolCallId]: 'failed' }))
+        setSubmitError((s) => ({ ...s, [toolCallId]: err }))
+        addToolOutput({
+          toolCallId,
+          output: { ok: false, error: err },
+          state: 'output-error',
+          errorText: err,
+        })
+        return
+      }
+      const { result: r, finalText } = committed
       if (isReplaceBufferError(r)) {
         const message = 'message' in r ? r.message : 'Save conflict'
         setSubmitState((s) => ({ ...s, [toolCallId]: 'failed' }))

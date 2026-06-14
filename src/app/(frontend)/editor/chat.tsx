@@ -39,9 +39,10 @@ import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
 import { StatementUploadModal } from '@/components/statement-upload-modal'
 import { AddAccountsModal } from '@/components/add-accounts-modal'
 import { UpdateBalanceModal } from '@/components/update-balance-modal'
-import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
+import { ledgerClient, isReplaceBufferError, commitDraftOps } from '@/lib/ledger-client-browser'
 import type { ToolUIPart } from 'ai'
 import type { ChatDOState } from '@/durable/chat-do'
+import type { DraftOp } from '@/app/(frontend)/ai/gen-ui/draft-transaction'
 
 type Part = {
   type: string
@@ -344,7 +345,7 @@ export function Chat({
 
   async function handleApprove(
     toolCallId: string,
-    finalText: string,
+    ops: DraftOp[],
     meta?: { approved: number; skipped: number },
   ) {
     setSubmitStatus((s) => ({ ...s, [toolCallId]: 'submitting' }))
@@ -353,10 +354,20 @@ export function Chat({
       return rest
     })
     try {
-      // Append-only: knownIds: [] tells the server "delete nothing, just
-      // parse-and-insert what's in buffer". Avoids re-sending the full
-      // journal text and side-steps OCC races against a user-side edit.
-      const r = await ledgerClient.replaceBuffer([], finalText)
+      const committed = await commitDraftOps(ops)
+      if (committed.ok === false) {
+        const err = committed.error
+        setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))
+        setSubmitError((s) => ({ ...s, [toolCallId]: err }))
+        addToolOutput({
+          toolCallId,
+          output: { ok: false, error: err },
+          state: 'output-error',
+          errorText: err,
+        })
+        return
+      }
+      const { result: r, finalText } = committed
       if (isReplaceBufferError(r)) {
         const message = 'message' in r ? r.message : 'Save conflict'
         setSubmitStatus((s) => ({ ...s, [toolCallId]: 'failed' }))

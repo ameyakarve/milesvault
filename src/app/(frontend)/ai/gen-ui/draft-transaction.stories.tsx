@@ -82,7 +82,7 @@ function CardShell(props: Partial<DraftTransactionBatchCardProps>) {
           <DraftTransactionBatchCard
             input={{ entries: [BALANCED] }}
             accounts={ACCOUNTS}
-            onApprove={(f: string) => push(`approve\n${f}`)}
+            onApprove={(ops) => push(`approve\n${ops.map((o) => o.text).join('\n\n')}`)}
             onReject={() => push('reject')}
             {...props}
           />

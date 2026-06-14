@@ -28,6 +28,11 @@ import type { DraftTransactionBatch } from '@/durable/agent-ui-schemas'
 
 type CardStatus = 'idle' | 'submitting' | 'done' | 'failed' | 'rejected'
 
+// One approved operation: add (text, no replaces), edit (replaces + new text),
+// or delete (replaces, empty text). The chat resolves `replaces` → the existing
+// entry and commits via replaceBuffer.
+export type DraftOp = { replaces?: string; text: string }
+
 export type DraftTransactionBatchCardProps = {
   input: DraftTransactionBatch
   // accepted but unused — kept in the signature so the call-site stays
@@ -35,7 +40,7 @@ export type DraftTransactionBatchCardProps = {
   accounts?: string[]
   status?: CardStatus
   errorMessage?: string
-  onApprove: (finalText: string, meta: { approved: number; skipped: number }) => void
+  onApprove: (ops: DraftOp[], meta: { approved: number; skipped: number }) => void
   onReject: () => void
   // Opens the Journal filtered to a date range (split pane on desktop, tab
   // switch on mobile) — the "view what I just committed" loop-closer.
@@ -183,14 +188,24 @@ export function DraftTransactionBatchCard({
 
   const total = texts.length
   const isBatch = total > 1
+  // An entry's `replaces` (the original text it edits/deletes) comes from the
+  // model, isn't user-editable here, and drives the row's mode:
+  //   add → no replaces · edit → replaces + new text · delete → replaces, empty text.
+  const replacesAt = (i: number) => (input.entries[i]?.replaces ?? '').trim()
+  const modeAt = (i: number): 'add' | 'edit' | 'delete' => {
+    const hasRep = replacesAt(i).length > 0
+    return hasRep ? (texts[i].trim().length > 0 ? 'edit' : 'delete') : 'add'
+  }
   const validations = useMemo(() => texts.map((t) => classifyDraftEntry(t)), [texts])
+  // A delete row has empty text by design — nothing to validate; it's always ok.
+  const rowOk = (i: number) => modeAt(i) === 'delete' || validations[i].kind === 'ok'
   const includedIdx = texts.map((_, i) => i).filter((i) => included[i])
   const approvedCount = includedIdx.length
   const skippedCount = total - approvedCount
   // The selected entries that aren't approvable, with a one-line reason each —
   // surfaced inline so "why can't I approve" never depends on a hover tooltip.
   const blocking = includedIdx
-    .filter((i) => validations[i].kind !== 'ok')
+    .filter((i) => !rowOk(i))
     .map((i) => ({ i, reason: reasonOf(validations[i]) }))
   const allIncludedValid = blocking.length === 0
   const canApprove = approvedCount > 0 && allIncludedValid
@@ -211,6 +226,82 @@ export function DraftTransactionBatchCard({
 
   const updateAt = (idx: number, next: string) => {
     setTexts((arr) => arr.map((t, i) => (i === idx ? next : t)))
+  }
+
+  // The editable surface for one entry. A delete shows only the struck-through
+  // original; an edit shows the original (struck) above the editor for the new
+  // text (a before→after diff); an add is just the editor.
+  const renderBody = (i: number) => {
+    const mode = modeAt(i)
+    const original = (
+      <pre className="overflow-x-auto whitespace-pre-wrap rounded-md border bg-muted/40 p-2 font-mono text-[11px] leading-5 text-muted-foreground line-through">
+        {replacesAt(i)}
+      </pre>
+    )
+    if (mode === 'delete') {
+      return (
+        <div className="space-y-1">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400">
+            Will delete
+          </p>
+          {original}
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-1.5">
+        {mode === 'edit' ? (
+          <>
+            <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              Replaces
+            </p>
+            {original}
+            <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              With
+            </p>
+          </>
+        ) : null}
+        <div className="overflow-hidden rounded-md border bg-background">
+          <CodeMirror
+            theme="none"
+            value={texts[i] ?? ''}
+            onChange={(next) => updateAt(i, next)}
+            extensions={extensions}
+            basicSetup={{
+              lineNumbers: false,
+              foldGutter: false,
+              highlightActiveLine: false,
+              highlightActiveLineGutter: false,
+              highlightSelectionMatches: false,
+              searchKeymap: false,
+            }}
+            readOnly={disabled}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  // Badge for a row: edit/delete get their own tag; add/balance falls through to
+  // the shared StatusBadge (balanced / off by … / parse error).
+  const rowBadge = (i: number) => {
+    const mode = modeAt(i)
+    if (mode === 'delete') {
+      return (
+        <Badge variant="secondary" className="bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+          delete
+        </Badge>
+      )
+    }
+    if (mode === 'edit' && validations[i].kind === 'ok') {
+      return (
+        <Badge variant="secondary" className="gap-1 bg-emerald-50 text-emerald-700">
+          <Check size={12} weight="bold" />
+          edit
+        </Badge>
+      )
+    }
+    return <StatusBadge v={validations[i]} />
   }
 
   // Resolved cards collapse to a one-line summary — history stays readable
@@ -256,19 +347,15 @@ export function DraftTransactionBatchCard({
             </span>
           ) : null}
         </CardTitle>
-        {!isBatch ? (
-          <CardAction>
-            <StatusBadge v={validations[0]} />
-          </CardAction>
-        ) : null}
+        {!isBatch ? <CardAction>{rowBadge(0)}</CardAction> : null}
       </CardHeader>
 
       <CardContent className="p-0">
         {isBatch ? (
           <div className="divide-y divide-border border-y bg-card">
             {texts.map((text, i) => {
-              const v = validations[i]
-              const sum = summaryOf(text)
+              const mode = modeAt(i)
+              const sum = summaryOf(mode === 'delete' ? replacesAt(i) : text)
               const isOpen = expanded === i
               return (
                 <div key={i}>
@@ -288,38 +375,24 @@ export function DraftTransactionBatchCard({
                       onClick={() => setExpanded(isOpen ? null : i)}
                       className={`flex min-w-0 flex-1 items-center gap-2 text-left ${included[i] ? '' : 'opacity-40'}`}
                     >
-                      <ValidityDot ok={v.kind === 'ok'} />
+                      <ValidityDot ok={rowOk(i)} />
                       <span className="font-mono text-[11px] text-muted-foreground whitespace-nowrap">
                         {sum.date}
                       </span>
-                      <span className="truncate text-[12px] text-foreground/80">{sum.rest}</span>
+                      <span
+                        className={`truncate text-[12px] ${mode === 'delete' ? 'text-foreground/80 line-through' : 'text-foreground/80'}`}
+                      >
+                        {sum.rest}
+                      </span>
                       <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
-                        {isOpen ? 'close' : 'edit'}
+                        {isOpen ? 'close' : mode === 'delete' ? 'view' : 'edit'}
                       </span>
                     </button>
                   </div>
                   {isOpen ? (
                     <div className="border-t border-border bg-muted/30 px-2 pb-2 pt-1">
-                      <div className="overflow-hidden rounded-md border bg-background">
-                        <CodeMirror
-          theme="none"
-                          value={text}
-                          onChange={(next) => updateAt(i, next)}
-                          extensions={extensions}
-                          basicSetup={{
-                            lineNumbers: false,
-                            foldGutter: false,
-                            highlightActiveLine: false,
-                            highlightActiveLineGutter: false,
-                            highlightSelectionMatches: false,
-                            searchKeymap: false,
-                          }}
-                          readOnly={disabled}
-                        />
-                      </div>
-                      <div className="pt-1">
-                        <StatusBadge v={v} />
-                      </div>
+                      {renderBody(i)}
+                      <div className="pt-1">{rowBadge(i)}</div>
                     </div>
                   ) : null}
                 </div>
@@ -327,23 +400,7 @@ export function DraftTransactionBatchCard({
             })}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-md border bg-background">
-            <CodeMirror
-          theme="none"
-              value={texts[0] ?? ''}
-              onChange={(next) => updateAt(0, next)}
-              extensions={extensions}
-              basicSetup={{
-                lineNumbers: false,
-                foldGutter: false,
-                highlightActiveLine: false,
-                highlightActiveLineGutter: false,
-                highlightSelectionMatches: false,
-                searchKeymap: false,
-              }}
-              readOnly={disabled}
-            />
-          </div>
+          <div className="px-0.5">{renderBody(0)}</div>
         )}
       </CardContent>
 
@@ -393,7 +450,10 @@ export function DraftTransactionBatchCard({
           size="sm"
           onClick={() =>
             onApprove(
-              includedIdx.map((i) => texts[i].trim()).join('\n\n'),
+              includedIdx.map((i) => ({
+                replaces: replacesAt(i) || undefined,
+                text: texts[i].trim(),
+              })),
               { approved: approvedCount, skipped: skippedCount },
             )
           }
