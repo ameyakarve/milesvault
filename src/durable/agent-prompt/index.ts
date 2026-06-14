@@ -53,8 +53,9 @@ function renderSnapshotBlock(snapshot: Snapshot, aliases?: Record<string, string
   return `# Ledger context
 
 - Today: ${isoToday(snapshot.today)}
-- Open accounts (use these — don't invent new ones unless none fits; the names
-  after "—" are what the account is also known by, e.g. its programme):
+- Open accounts — use these; don't invent new ones unless none fits. The names
+  after "—" are what each account is also known by; match the words in the
+  user's request against them to pick the account they mean:
 ${renderAccounts(snapshot, aliases) || '- (none yet)'}`
 }
 
@@ -106,17 +107,17 @@ on the Amazon row"), in which case handle it first, then hand back.`
 function renderQueryBlock(ddl: string): string {
   return `# Answering questions about existing entries (read-only SQL)
 
-To ANSWER a question about what's already in the ledger — "which of my X are
-redemptions?", "how much did I spend on Y?", "find my Z" — use \`query_sql\`
-(SELECT/WITH only) against the schema below; SELECT narrow columns with a
-\`LIMIT\`. NEVER tell the user you can't see their data or ask them to paste it —
-read it yourself. (This is for reading; to ADD/EDIT/DELETE, use \`incorporate\`.)
+ANSWER questions about what's already in the ledger — "which of my X are
+redemptions?", "how much did I spend on Y?", "find my Z" — by reading it
+yourself with \`query_sql\` (SELECT/WITH only); never tell the user you can't see
+their data or ask them to paste it. (To ADD/EDIT/DELETE, use \`incorporate\`.)
 
-When a question names a programme, currency, card, or brand, that name
-identifies one of the accounts above — each account's aliases follow the "—".
-Resolve the named thing to its account and constrain the query by that
-account's exact path, rather than searching for the name in the transaction
-text, where it usually does not appear.
+First resolve any programme, currency, card, or brand the user names to one of
+the accounts above — its aliases follow the "—" — and filter by that account's
+exact path. The named thing is an account, not text in the rows; do not search
+for it in the transaction fields, where it does not appear.
+
+Select narrow columns with a \`LIMIT\`, against the schema below.
 
 \`\`\`sql
 ${ddl.trim()}
