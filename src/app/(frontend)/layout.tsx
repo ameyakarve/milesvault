@@ -1,6 +1,7 @@
 import React from 'react'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import './styles.css'
+import { VersionWatcher } from '@/components/version-watcher'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -35,6 +36,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
         className={`${inter.variable} ${jetbrainsMono.variable} bg-background font-sans text-foreground antialiased`}
       >
         {children}
+        <VersionWatcher />
       </body>
     </html>
   )
