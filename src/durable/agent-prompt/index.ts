@@ -112,24 +112,19 @@ redemptions?", "how much did I spend on Y?", "find my Z" — by reading it
 yourself with \`query_sql\` (SELECT/WITH only); never tell the user you can't see
 their data or ask them to paste it. (To ADD/EDIT/DELETE, use \`incorporate\`.)
 
-First resolve any programme, currency, card, or brand the user names to one of
-the accounts above — its aliases follow the "—" — and filter by that account's
-exact path. The named thing is an account, not text in the rows; do not search
-for it in the transaction fields, where it does not appear.
-
-For example, if the account list shows
-\`Assets:Rewards:Points:Skyline — Skyline Rewards\` and the user asks about their
-"Skyline" activity:
+Writing the WHERE clause: when the question is about a programme, currency,
+card, or brand, its rows live in that ACCOUNT — find it in the list above
+(aliases after "—") and filter \`p.account\`, not the row text. E.g. for a
+question about "Skyline" when the list shows
+\`Assets:Rewards:Points:Skyline — Skyline Rewards\`:
 
 \`\`\`
 ✓  WHERE p.account = 'Assets:Rewards:Points:Skyline'
 ✗  WHERE t.payee LIKE '%Skyline%' OR t.narration LIKE '%Skyline%'
 \`\`\`
 
-The ✗ form silently misses rows: a programme's spends carry the MERCHANT on the
-row (a specific hotel, a flight), never the programme's name — so matching the
-name against \`payee\`/\`narration\` finds nothing but the odd coincidental row.
-Filter by the account; that is where the programme actually lives.
+The ✗ misses rows — a programme's spends carry the MERCHANT (a hotel, a flight),
+never the programme name. Filter by the account.
 
 Select narrow columns with a \`LIMIT\`, against the schema below.
 
