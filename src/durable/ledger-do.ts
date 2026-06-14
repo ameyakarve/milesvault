@@ -1451,6 +1451,23 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
   }
 
 
+  // Read ONE existing entry's full canonical text + OCC version, by kind+id.
+  // The editor reads an entry this way before editing/deleting it (the model
+  // copies raw_text into draft_transaction's `replaces`). Null if it's gone.
+  async get_entry(ref: { kind: EntryKind; id: number }): Promise<EntryRow | null> {
+    if (ref.kind === 'txn') {
+      const e = this.readTxnEntry(ref.id)
+      if (!e) return null
+      const raw = serializeJournal([entryTxnToInput(e)], [], { descending: false }).trimEnd()
+      return { kind: 'txn', id: ref.id, raw_text: raw, updated_at: e.updated_at }
+    }
+    const row = this.readDirectivesByKind(ref.kind).find((r) => r.id === ref.id)
+    if (!row) return null
+    const updated_at = this.readUpdatedAt(ref.kind, ref.id) ?? 0
+    const raw = serializeJournal([], [row.input], { descending: false }).trimEnd()
+    return { kind: ref.kind, id: ref.id, raw_text: raw, updated_at }
+  }
+
   // Existing entries (canonical text) on each of the given dates — the
   // per-date buckets the incorporation engine rewrites. Few per date, so
   // loading whole days keeps each shard's context small and complete.

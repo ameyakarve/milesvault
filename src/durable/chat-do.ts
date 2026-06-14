@@ -22,7 +22,7 @@ import {
   clarifyTool,
   addCardTool,
   readStatementTool,
-  incorporateTool,
+  getEntryTool,
 } from './agents/tools/editor'
 import { runIncorporation } from './ingest/incorporate'
 import { querySqlTool } from './agents/tools/concierge/query-sql'
@@ -517,7 +517,9 @@ entries, or draft corrections.`
     // account segments (bank/cc/currency `beancountName`) for what it writes.
     const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
     const kb = makeKbTools(kbHttp)
-    const kbLookup = { kb_resolve: kb.kb_resolve, kb_get: kb.kb_get }
+    // Editor gets full KG access incl. edge traversal (kb_related) — that's
+    // where transfer ratios / reward-pool / card relationships live.
+    const kbLookup = { kb_resolve: kb.kb_resolve, kb_get: kb.kb_get, kb_related: kb.kb_related }
     // The card drafting guide (earn rules + worked examples) — both agents
     // draft card transactions, so both get it.
     const card_guide = cardGuideTool(kbHttp)
@@ -525,32 +527,21 @@ entries, or draft corrections.`
     // here (assembled in the KG) instead of building the path itself — gemma
     // resolves the right programme but drops the `:Miles:` segment when assembling.
     const list_reward_accounts = rewardAccountsTool(kbHttp)
-    // Add / edit / delete via the date-bucketed incorporation workflow. Its
-    // OUTPUT renders the review card DIRECTLY — the model emits only the short
-    // `intent`; the long entry texts never pass back through it (relaying them
-    // into draft_transaction corrupted them — gemma can't copy them verbatim).
-    // The editor agent therefore has NO draft_transaction tool: no relay path.
-    const incorporate = incorporateTool((intent) =>
-      runIncorporation({
-        gen: this.editGen(),
-        intent,
-        today: isoFromInt(this.snapshot().today),
-        accounts: this.snapshot().accounts.map((a) => a.account),
-        conventions: buildIncorporationConventions(),
-        readDates: (dates) => this.ledgerStub().entries_on_dates(dates),
-      }),
-    )
-    // Read-only lookups so the editor can ANSWER questions about existing
-    // entries ("which of my Accor txns are redemptions?") itself — it reads to
-    // write anyway. Writes still go only through incorporate.
+    // Codemode read (find entries + answer questions) and per-entry read (the
+    // model copies raw_text into draft_transaction's `replaces` to edit/delete).
     const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
+    const get_entry = getEntryTool((ref) => this.ledgerStub().get_entry(ref))
     if (name === 'ledger') {
+      // Tool-using authoring agent: look things up (kb_*, card_guide,
+      // list_reward_accounts, query_sql, get_entry) and author directly via
+      // draft_transaction (add = text; edit = replaces + text; delete = replaces).
       return this.withToolLog(name, {
         ...kbLookup,
         card_guide,
         list_reward_accounts,
-        incorporate,
         query_sql,
+        get_entry,
+        draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(CLARIFICATIONS),
         add_card: addCardTool(),
       })

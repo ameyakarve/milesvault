@@ -568,10 +568,6 @@ export function Chat({
                         if (isToolPart(p)) {
                           const toolCallId = p.toolCallId ?? `${m.id}-${i}`
                           const toolName = toolNameOf(p)
-                          // incorporate is a server tool: it's output-available
-                          // the moment its engine returns — that's NOT "approved".
-                          // Its card status comes from the user's action only.
-                          const isIncorporate = toolName === 'incorporate'
                           const subState = submitStatus[toolCallId] ?? 'idle'
                           const outputObj =
                             p.output && typeof p.output === 'object'
@@ -591,18 +587,13 @@ export function Chat({
                                 outputObj.reason === 'superseded'))
                           const cardStatus = isRejection
                             ? 'rejected'
-                            : subState === 'done'
+                            : p.state === 'output-available' || subState === 'done'
                               ? 'done'
                               : subState === 'submitting'
                                 ? 'submitting'
                                 : subState === 'failed' || p.state === 'output-error'
                                   ? 'failed'
-                                  : // suspending tools: output-available == approved.
-                                    // incorporate resolves server-side BEFORE approval,
-                                    // so its card stays idle until the user acts.
-                                    !isIncorporate && p.state === 'output-available'
-                                    ? 'done'
-                                    : 'idle'
+                                  : 'idle'
                           const toolState: ToolUIPart['state'] =
                             cardStatus === 'done' || cardStatus === 'rejected'
                               ? 'output-available'
@@ -625,18 +616,14 @@ export function Chat({
                           // show the Preparing… placeholder until then.
                           const rendered =
                             toolName && isGenUiTool(toolName) && toolState !== 'input-streaming'
-                              ? renderGenUi(toolName, isIncorporate ? p.output : p.input, {
+                              ? renderGenUi(toolName, p.input, {
                                   accounts,
                                   status: cardStatus,
                                   errorMessage:
                                     submitError[toolCallId] ?? p.errorText,
                                   resolvedAnswers: clarifyAnswers[toolCallId],
                                   onApprove: (final, meta) =>
-                                    // incorporate resolved server-side already —
-                                    // approval only writes, it doesn't resolve the tool.
-                                    void handleApprove(toolCallId, final, meta, {
-                                      resolveTool: !isIncorporate,
-                                    }),
+                                    void handleApprove(toolCallId, final, meta),
                                   onShowInJournal,
                                   onAnswer: (answers) =>
                                     handleClarifyAnswer(toolCallId, answers),
