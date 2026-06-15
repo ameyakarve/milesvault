@@ -325,7 +325,7 @@ tests:
         value: "!output.drafts.some(d => /Expenses/.test(d.text))"
         metric: no-fabricated-fare
       - type: javascript
-        value: "output.drafts.some(d => /418\\s+SKYLINE-STATUS/.test(d.text))"
+        value: "output.drafts.some(d => /Assets:Rewards:Status:Skyline\\s+418\\s+[A-Z][A-Z-]*STATUS/.test(d.text))"
         metric: status-counter-accrues
       - type: llm-rubric
         value: >
