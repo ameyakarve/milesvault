@@ -250,3 +250,42 @@ tests:
           carried via `@@`. It did NOT inject the points from a generic
           `Assets:Rewards:Axis` pool with no currency basis, did NOT invent a different
           ratio, and did NOT denominate the accrual as a plain Equity:Void contra.
+
+  # ---- POINTS-ONLY STATEMENT: a points credit with NO fiat amount is a plain
+  #      accrual (never a fabricated fiat spend); an award redemption with NO
+  #      cash value must clarify (never @@ 0.00, validator-enforced) ----
+  - description: 'points statement — credit accrues, unvalued redemption clarifies'
+    vars:
+      seed: |
+        2026-01-01 * "Skyline" "Opening miles"
+          Assets:Rewards:Miles:Skyline      50000 SKYMILES
+          Equity:Void                      -50000 SKYMILES
+      message: |
+        add these from my Skyline loyalty statement:
+        - 2026-03-10  Credit card spends   +2,000 Skyline miles
+        - 2026-03-12  Award flight XY 100 (no cash value shown)   -15,000 Skyline miles
+    assert:
+      - type: javascript
+        value: 'output.draftsValid === true'
+        metric: balances
+      - type: javascript
+        value: "!output.drafts.some(d => /@@\\s*0(\\.0+)?(\\s|$)/.test(d.text))"
+        metric: no-zero-price
+      - type: javascript
+        value: 'output.clarifies.length > 0'
+        metric: redemption-clarifies
+      - type: javascript
+        value: "!output.drafts.some(d => /Expenses\\S*\\s+2000/.test(d.text))"
+        metric: no-fabricated-fiat
+      - type: javascript
+        value: "output.drafts.some(d => /2000\\s+SKYMILES/.test(d.text) && d.text.includes('Equity:Void'))"
+        metric: credit-is-plain-accrual
+      - type: llm-rubric
+        value: >
+          The +2,000 Skyline miles credit is recorded as a PLAIN points accrual
+          (2000 SKYMILES to a Skyline rewards account with an Equity:Void contra),
+          with NO fiat/INR expense leg, and it did NOT treat 2000 as a rupee amount
+          or fabricate an Expenses purchase. The -15,000 award redemption has no
+          cash value given, so the assistant called `clarify` to ask for it — it did
+          NOT record the redemption with an `@@ 0.00` price or any zero/placeholder
+          value just to make it balance.

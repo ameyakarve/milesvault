@@ -32,8 +32,9 @@ instantly" / "Still pending" are enough — the two shapes are different
 
 A redemption's points leg carries a cash value via `@@` (the Redemption rule
 above). If the user didn't give that cash value, ASK — do not guess from a fixed
-cpp rate, do not pull a number out of the air, and do not fall back to
-`Equity:Void`. Call `clarify` with these arguments:
+cpp rate, do not pull a number out of the air, do not fall back to `Equity:Void`,
+and never record it as `@@ 0.00` or any zero/placeholder value (the validator
+rejects a zero `@@` price). Call `clarify` with these arguments:
 
 ```json
 {

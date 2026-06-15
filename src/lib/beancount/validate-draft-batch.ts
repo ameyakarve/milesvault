@@ -1,4 +1,4 @@
-import { decimalToScaled } from './decimal'
+import { decimalToScaled, scaledIsZero } from './decimal'
 import { isStrictParseErr, parseJournalStrict } from './parse-strict'
 import { validateAccountShapes } from './validate-account-shape'
 import { validateTransactionBalance } from './validate-balance'
@@ -146,6 +146,25 @@ export function classifyDraftEntry(text: string, label = 'entry'): DraftEntryVer
       messages: samePrice.map(
         (p) =>
           `${label}${tag}: posting ${p.account} has an @@/@ price in its OWN currency (${p.currency}) — a conversion price must be in a DIFFERENT commodity (the value it converts TO)`,
+      ),
+    }
+  }
+  // A conversion price (`@`/`@@`) of ZERO values the priced leg at nothing —
+  // the trick the model reaches for to "balance" a redemption or transfer it
+  // couldn't value (e.g. `-13500 MAHARAJACLUB @@ 0.00 INR`). A zero price is
+  // never a real conversion: the value is UNKNOWN, not nil. Bounce it so the
+  // model asks (`clarify`) instead of recording the points as worthless.
+  const zeroPrice = txn.postings.filter((p) => {
+    if (!p.price_at_signs || p.price_amount == null) return false
+    const scaled = decimalToScaled(p.price_amount)
+    return scaled != null && scaledIsZero(scaled)
+  })
+  if (zeroPrice.length > 0) {
+    return {
+      kind: 'bad_price',
+      messages: zeroPrice.map(
+        (p) =>
+          `${label}${tag}: posting ${p.account} carries a ZERO @@/@ price (${p.price_amount} ${p.price_currency ?? ''}) — a conversion/redemption price must be a non-zero cash value. A redemption or transfer is never worth 0: if you don't have the value, ask the user with \`clarify\` — do NOT record it as 0.`,
       ),
     }
   }
