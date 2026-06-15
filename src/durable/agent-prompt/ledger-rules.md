@@ -63,7 +63,7 @@ leg). Which way you're going decides which number is fixed:
     Assets:Rewards:Points:Src  -1800 SRC @@ 1200 DST
   ```
   NEVER change the destination amount when attributing it to a source, and never
-  write `@@` in the destination's own currency (`8000 DST @@ … DST` is wrong).
+  write `@@` in the destination's own currency (`1200 DST @@ … DST` is wrong).
 
 ## Payments to the card
 
