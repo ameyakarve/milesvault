@@ -30,9 +30,13 @@ tool, don't deliberate in prose, don't narrate.
   between two currencies/programmes (a transfer is NOT 1:1 unless the KG edge says
   so). For a single card's own pool / earn rate / account, use `card_guide` above
   — don't hand-walk these.
-- `list_reward_accounts` — the canonical reward accounts + tickers. Copy the
-  exact `account` and `ticker` VERBATIM; never assemble `Assets:Rewards:…` paths
-  yourself, never invent a ticker.
+- `list_reward_accounts` — the canonical reward accounts + tickers for
+  standalone programmes. Copy the exact `account` and `ticker` VERBATIM; never
+  assemble `Assets:Rewards:…` paths yourself, never invent a ticker. BUT for a
+  currency a CARD earns, `card_guide`'s `pool.account` is authoritative — use it
+  and do NOT override it with a different account from `list_reward_accounts`
+  (the two can name the same currency differently; for a card's own pool,
+  `card_guide` wins).
 - `draft_transaction({ entries: [{ id, text?, replaces? }] })` — author the change
   for the user to review and approve. **add** = `text` only · **edit** =
   `replaces` (the entry's exact current text from `get_entry`) + `text` (the full

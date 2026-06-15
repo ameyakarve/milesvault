@@ -31,10 +31,33 @@ converted value closes against the other leg.
 A conversion/transfer **ratio `A:B`** means A units of the SOURCE become B units
 of the DESTINATION — `1:1` is one source → one destination; `5:4` is 5 source →
 4 destination (you end up with fewer). The arithmetic: `destination = source ×
-B/A`, and `source = destination × A/B`. Example at `5:4`: 10000 source → 8000
-destination (10000 × 4/5); equivalently, to land 8000 destination you spend
-10000 source (8000 × 5/4). Do this division exactly — don't approximate or flip
-the direction.
+B/A`, and `source = destination × A/B`. Do this division exactly — don't
+approximate or flip the direction. The two legs are in DIFFERENT commodities; the
+`@@` price is in the OTHER leg's commodity (never the same commodity as its own
+leg). Two scenarios:
+
+- **Forward — you have the SOURCE and convert it.** You hold N source; you get
+  `N × B/A` destination. Source leg negative, destination positive. At `5:4`,
+  10000 SRC → 8000 DST:
+  ```beancount
+  2026-05-01 * "Programme" "Transfer"
+    Assets:Rewards:Points:Dst    8000 DST
+    Assets:Rewards:Points:Src  -10000 SRC @@ 8000 DST
+  ```
+
+- **Backward — you ALREADY have the DESTINATION and are recording where it came
+  FROM** (e.g. attributing an existing accrual to its source card/programme).
+  The destination amount STAYS EXACTLY AS IT IS — do NOT recompute or shrink it.
+  Compute the source that produced it (`source = destination × A/B`) and make it
+  the contra leg, replacing the generic `Equity:Void`/contra. An existing 8000
+  DST accrual, from a `5:4` transfer, came from `8000 × 5/4 = 10000` SRC:
+  ```beancount
+  2026-05-01 * "Programme" "Earn"
+    Assets:Rewards:Points:Dst    8000 DST          ; unchanged — this is what you held
+    Assets:Rewards:Points:Src  -10000 SRC @@ 8000 DST
+  ```
+  NEVER change the destination amount when attributing it to a source, and never
+  write `@@` in the destination's own currency (`8000 DST @@ … DST` is wrong).
 
 ## Payments to the card
 
