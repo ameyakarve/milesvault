@@ -316,7 +316,7 @@ tests:
         value: 'output.drafts.length > 0 && output.clarifies.length === 0'
         metric: drafts-no-clarify
       - type: javascript
-        value: "output.drafts.some(d => /(^|\\s)557\\s+SKYMILES/.test(d.text)) && !output.drafts.some(d => /-557\\s+SKYMILES/.test(d.text))"
+        value: "output.drafts.some(d => /Assets:Rewards:Miles:Skyline(:Pending)?\\s+557\\s+SKYMILES/.test(d.text)) && !output.drafts.some(d => /Assets:Rewards:Miles:Skyline(:Pending)?\\s+-/.test(d.text))"
         metric: miles-earned-positive
       - type: javascript
         value: "!output.drafts.some(d => /SKYMILES\\s+@@/.test(d.text))"
