@@ -105,34 +105,28 @@ on the Amazon row"), in which case handle it first, then hand back.`
 // ("which of my Accor txns are redemptions?") — it reads its own ledger rather
 // than asking the user to paste. Changes still go through draft_transaction, never SQL.
 function renderQueryBlock(ddl: string): string {
-  return `# Answering questions about existing entries (read-only SQL)
+  return `# Reading existing entries — \`search\` to find, \`query_sql\` to analyze
 
-ANSWER questions about what's already in the ledger — "which of my X are
-redemptions?", "how much did I spend on Y?", "find my Z" — by reading it
-yourself with \`query_sql\` (SELECT/WITH only); never tell the user you can't see
-their data or ask them to paste it. (To ADD/EDIT/DELETE, use \`draft_transaction\`.)
-
-Writing the WHERE clause: when the question is about a programme, currency,
-card, or brand, its rows live in that ACCOUNT — find it in the list above
-(aliases after "—") and filter \`p.account\`, not the row text. E.g. for a
-question about "Skyline" when the list shows
-\`Assets:Rewards:Points:Skyline — Skyline Rewards\`:
+To FIND entries (to read, edit, or attribute), use \`search\` — a structured
+lookup over the ledger. Resolve a programme/card/brand to its ACCOUNT from the
+list above (aliases after "—"), then filter by \`accounts.prefix\`; add \`sign\`
+(debit/credit), \`date\`, \`currencies\`, or \`payee_q\` (full-text over payee +
+narration) as needed. ONE \`search\` call returns the matching rows with their
+\`txn_id\` — read the full entry with \`get_entry\`, then edit via
+\`draft_transaction\`. Do NOT hand-write \`query_sql\` to find entries, and do NOT
+probe with \`LIKE '%name%'\`: a programme's rows live in its ACCOUNT, not its
+display text (its spends carry the MERCHANT — a hotel, a flight — never the
+programme name).
 
 \`\`\`
-✓  WHERE p.account = 'Assets:Rewards:Points:Skyline'
-✗  WHERE t.payee LIKE '%Skyline%' OR t.narration LIKE '%Skyline%'
+✓  search({ accounts: { prefix: ["Assets:Rewards:Points:Skyline"] }, sign: "credit" })
+✗  query_sql … WHERE t.payee LIKE '%Skyline%'
 \`\`\`
 
-The ✗ misses rows — a programme's spends carry the MERCHANT (a hotel, a flight),
-never the programme name. Filter by the account.
-
-Be EFFICIENT — query calls are budgeted. Resolve the account ONCE from the list
-above and read its rows in a SINGLE \`query_sql\`; do NOT probe with a series of
-\`LIKE '%...%'\` variants. If a query returns nothing, re-read the accounts list and
-pick the right path — don't keep guessing name variants. Once you have the rows
-you need, stop querying and move to \`draft_transaction\`.
-
-Select narrow columns with a \`LIMIT\`, against the schema below.
+Use \`query_sql\` (SELECT/WITH only) for ANALYTICS that \`search\` can't do —
+aggregates, sums, group-by ("how much did I spend on Y?", "total points earned
+this year"). Never tell the user you can't see their data or ask them to paste
+it. (To ADD/EDIT/DELETE, use \`draft_transaction\`.) The query_sql schema:
 
 \`\`\`sql
 ${ddl.trim()}

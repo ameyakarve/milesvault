@@ -600,4 +600,36 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
             GROUP BY account, currency, scale, date
           )`,
   },
+  // Full-text index over transaction payee + narration, for the `search` tool's
+  // payee_q. Standalone FTS5 (keeps its own copy; rowid = transactions.id) kept
+  // in sync by triggers; backfilled once for existing rows.
+  {
+    label: 'transactions_fts',
+    sql: `CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(payee, narration)`,
+  },
+  {
+    label: 'transactions_fts_ai',
+    sql: `CREATE TRIGGER IF NOT EXISTS transactions_fts_ai AFTER INSERT ON transactions BEGIN
+            INSERT INTO transactions_fts(rowid, payee, narration) VALUES (new.id, new.payee, new.narration);
+          END`,
+  },
+  {
+    label: 'transactions_fts_ad',
+    sql: `CREATE TRIGGER IF NOT EXISTS transactions_fts_ad AFTER DELETE ON transactions BEGIN
+            DELETE FROM transactions_fts WHERE rowid = old.id;
+          END`,
+  },
+  {
+    label: 'transactions_fts_au',
+    sql: `CREATE TRIGGER IF NOT EXISTS transactions_fts_au AFTER UPDATE ON transactions BEGIN
+            DELETE FROM transactions_fts WHERE rowid = old.id;
+            INSERT INTO transactions_fts(rowid, payee, narration) VALUES (new.id, new.payee, new.narration);
+          END`,
+  },
+  {
+    label: 'transactions_fts_backfill_once',
+    sql: `INSERT INTO transactions_fts(rowid, payee, narration)
+          SELECT id, payee, narration FROM transactions
+          WHERE (SELECT COUNT(*) FROM transactions_fts) = 0`,
+  },
 ]
