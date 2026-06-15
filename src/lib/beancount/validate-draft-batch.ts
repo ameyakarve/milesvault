@@ -138,7 +138,7 @@ export function classifyDraftEntry(text: string, label = 'entry'): DraftEntryVer
   // message so the model fixes the conversion instead of chasing a phantom
   // imbalance.
   const samePrice = txn.postings.filter(
-    (p) => p.priceCurrency != null && p.priceCurrency === p.currency,
+    (p) => p.price_currency != null && p.price_currency === p.currency,
   )
   if (samePrice.length > 0) {
     return {
