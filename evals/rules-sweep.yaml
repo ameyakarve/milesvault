@@ -95,13 +95,12 @@ tests:
           points earned.
 
   # ---- RULE: instant discount (negative leg on the expense, no receivable) ----
+  # Paid CASH so the instrument doesn't trigger a card-guide/earn-rate lookup —
+  # isolates the discount logic.
   - description: 'discount — instant, reduces the bill'
     vars:
-      seed: |
-        2026-01-03 * "Corner Store" "Setup"
-          Expenses:Misc                            100 INR
-          Liabilities:CreditCards:Skybank:Rewards -100 INR
-      message: 'add a 500 INR dinner at Olive Bistro on my Skybank Rewards card, with a 50 INR instant discount applied to the bill'
+      seed: ''
+      message: 'add a 500 INR dinner at Olive Bistro, paid cash, with a 50 INR instant discount applied to the bill'
     assert:
       - type: javascript
         value: 'output.draftsValid === true'
