@@ -42,8 +42,9 @@ converted value closes against the other leg.
 a ratio) — NOT a redemption (points → cash/flight/hotel; see Redemption, where a
 cash value is given, not a ratio). A ratio `A:B` means A SOURCE → B DESTINATION:
 `source = destination × A/B`, `destination = source × B/A` (divide exactly; don't
-flip the ratio). The `@@` price sits on the SOURCE (negative) leg, in the
-DESTINATION's commodity, and equals the destination amount.
+flip the ratio). The `@@` price ALWAYS sits on the leg that DECREASES — the SOURCE
+(negative) leg — in the DESTINATION's commodity, equal to the destination amount.
+NEVER put the `@@` on the destination (positive) leg.
 
 Most transfers are a FIX — re-attributing an existing accrual to the source it
 actually came from. The currency already in the entry is the DESTINATION. Do it
@@ -77,9 +78,12 @@ WRONG — scaling the destination, pricing the wrong leg, or keeping `Equity:Voi
 ## Payments to the card
 
 A payment/credit to the card REDUCES what you owe, so the card leg is POSITIVE
-and the counter leg `Assets:Clearing:CardPayments` is NEGATIVE — equal
-magnitudes, opposite signs, summing to zero (a later bank-statement import
-mirrors the clearing leg). Payments earn no points.
+and the counter leg is `Assets:Clearing:CardPayments` (NEGATIVE) — equal
+magnitudes, opposite signs, summing to zero. Use the clearing account ALWAYS,
+even when the user says they paid "from my bank" — do NOT debit a bank account
+(e.g. `Assets:Bank:…`) directly; the bank side arrives via its own statement
+import and settles the clearing leg, so debiting the bank here double-counts.
+Payments earn no points.
 
 ## Refunds
 
@@ -198,8 +202,11 @@ columns is six postings, not two. A blank / "–" column contributes nothing.
 ## Cashback vs discount
 
 The split is timing. A **discount** is immediate — it reduced the bill, nothing
-to redeem later: a NEGATIVE leg on the same expense, the instrument pays the net,
-no plug. **Cashback** is deferred — ₹X posted back separately, redeemable later:
+to redeem later: the FULL bill on the expense + a NEGATIVE discount leg on the
+SAME expense, and the instrument pays the NET (bill − discount — a SMALLER figure
+than the bill), no plug. E.g. a ₹500 bill with ₹50 off → `Expenses:… 500`,
+`Expenses:… -50`, card `-450`. The discount leg is NEGATIVE; never record both
+legs positive (that charges the full bill and applies no discount). **Cashback** is deferred — ₹X posted back separately, redeemable later:
 the full purchase (the expense is NOT reduced) + an `Assets:Receivable:<Issuer>`
 accrual minted against an `Equity:Void` contra (the same mint/burn plug points
 use — NOT a reduction of the expense, NOT `Income:Void`); when the issuer credits
