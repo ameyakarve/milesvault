@@ -80,7 +80,8 @@ tests:
           as NOT a redemption (it is an accrual). It must NOT have missed the Pullman
           redemption.
 
-  # ---- ADD: use the held card; correct cashback accrual ----
+  # ---- ADD: use the held card; cashback minted from Equity:Void (NOT an
+  #          expense reduction) — the documented cashback pattern ----
   - description: 'add — coffee paid on HSBC (single held card)'
     vars:
       seed: |
@@ -98,12 +99,21 @@ tests:
       - type: javascript
         value: "output.drafts.some(d => d.text.includes('Liabilities:CreditCards:HSBC:Cashback'))"
         metric: uses-held-card
+      - type: javascript
+        value: "output.drafts.some(d => d.text.includes('Assets:Receivable:HSBC') && d.text.includes('Equity:Void'))"
+        metric: cashback-minted-from-void
+      - type: javascript
+        value: "!output.drafts.some(d => /Expenses:\\S+\\s+-/.test(d.text))"
+        metric: expense-not-reduced
       - type: llm-rubric
         value: >
           The draft records a 350 INR purchase at Blue Tokai paid on the existing
           HSBC Cashback card, plus 10% (35 INR) cashback recorded as the documented
-          cashback pattern: an Assets:Receivable:HSBC accrual of 35 INR and a matching
-          -35 INR reduction of the expense. It did NOT ask the user which HSBC card.
+          cashback pattern: the FULL 350 INR expense is NOT reduced, and an
+          Assets:Receivable:HSBC accrual of 35 INR is minted against an Equity:Void
+          contra of -35 INR (the same mint plug points use). It did NOT reduce the
+          expense by the cashback, did NOT use Income:Void, and did NOT ask the user
+          which HSBC card.
 
   # ---- EDIT: minimal amount change via replaces ----
   - description: 'edit — change Starbucks amount to 500'

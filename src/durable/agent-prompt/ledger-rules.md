@@ -133,9 +133,10 @@ columns is six postings, not two. A blank / "–" column contributes nothing.
 The split is timing. A **discount** is immediate — it reduced the bill, nothing
 to redeem later: a NEGATIVE leg on the same expense, the instrument pays the net,
 no plug. **Cashback** is deferred — ₹X posted back separately, redeemable later:
-the full purchase + an `Assets:Receivable:<Issuer>` accrual + a matching expense
-reduction (the expense leg is the contra — no `Income:Void`); when the issuer
-credits it, draw the receivable down against the instrument it lands on.
+the full purchase (the expense is NOT reduced) + an `Assets:Receivable:<Issuer>`
+accrual minted against an `Equity:Void` contra (the same mint/burn plug points
+use — NOT a reduction of the expense, NOT `Income:Void`); when the issuer credits
+it, draw the receivable down against the instrument it lands on.
 
 ## Forex (a charge in a foreign currency)
 
