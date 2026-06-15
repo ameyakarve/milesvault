@@ -19,6 +19,7 @@ import { BaseAgentDO } from './base-agent-do'
 import {
   makeEditorRegistry,
   STATEMENT_MODEL_ID,
+  EDITOR_MAX_STEPS,
   type EditorAgentName,
 } from './agents/registries/editor'
 import {
@@ -582,7 +583,7 @@ ${opts.text}`,
         system: buildLedgerSystem(snapshot, aliases),
         prompt: message,
         tools,
-        stopWhen: stepCountIs(8),
+        stopWhen: stepCountIs(EDITOR_MAX_STEPS),
       })
       for (const step of result.steps) {
         for (const call of step.toolCalls ?? []) {
