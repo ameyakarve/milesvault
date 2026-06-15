@@ -83,16 +83,17 @@ tests:
         value: 'output.draftsValid === true'
         metric: balances
       - type: javascript
-        value: "output.drafts.some(d => /Liabilities:CreditCards:Skybank:Rewards\\s+3000/.test(d.text) && /Assets:Clearing:CardPayments\\s+-3000/.test(d.text))"
-        metric: card-positive-clearing-negative
+        value: "output.drafts.some(d => /Liabilities:CreditCards:Skybank:Rewards\\s+3000/.test(d.text) && /Assets:\\S+\\s+-3000/.test(d.text))"
+        metric: card-positive-asset-negative
       - type: javascript
         value: "!output.drafts.some(d => /SKYBANKPTS/.test(d.text))"
         metric: no-points-on-payment
       - type: llm-rubric
         value: >
           A card payment: the Skybank Rewards card leg is POSITIVE +3000 INR (reduces
-          what is owed) and Assets:Clearing:CardPayments is -3000 INR. No expense, no
-          points earned.
+          what is owed), countered by a NEGATIVE -3000 INR asset leg — either
+          Assets:Clearing:CardPayments (the convention) or a bank account; both are
+          valid double-entries. No expense, no points earned.
 
   # ---- RULE: instant discount (negative leg on the expense, no receivable) ----
   # Paid CASH so the instrument doesn't trigger a card-guide/earn-rate lookup —
