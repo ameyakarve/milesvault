@@ -28,6 +28,14 @@ Postings MUST balance per currency. For a foreign-currency or points→points
 conversion leg, carry the total value with `@@` (in the OTHER commodity) so its
 converted value closes against the other leg.
 
+A conversion/transfer **ratio `A:B`** means A units of the SOURCE become B units
+of the DESTINATION — `1:1` is one source → one destination; `5:4` is 5 source →
+4 destination (you end up with fewer). The arithmetic: `destination = source ×
+B/A`, and `source = destination × A/B`. Example at `5:4`: 10000 source → 8000
+destination (10000 × 4/5); equivalently, to land 8000 destination you spend
+10000 source (8000 × 5/4). Do this division exactly — don't approximate or flip
+the direction.
+
 ## Payments to the card
 
 A payment/credit to the card REDUCES what you owe, so the card leg is POSITIVE
