@@ -278,6 +278,12 @@ tests:
         value: "!output.drafts.some(d => /Expenses\\S*\\s+2000/.test(d.text))"
         metric: no-fabricated-fiat
       - type: javascript
+        value: "!output.drafts.some(d => /Liabilities:CreditCards/.test(d.text))"
+        metric: no-card-leg
+      - type: javascript
+        value: "!output.drafts.some(d => /(Expenses|Liabilities)\\S*\\s+-?\\d[\\d.]*\\s+SKYMILES/.test(d.text))"
+        metric: no-points-on-fiat-leg
+      - type: javascript
         value: "output.drafts.length === 0 || output.drafts.some(d => /SKYMILES/.test(d.text) && d.text.includes('Equity:Void'))"
         metric: credit-accrual-or-deferred
       - type: llm-rubric
@@ -290,3 +296,42 @@ tests:
           the clarify is answered if the assistant chose to ask first. Either way it
           did NOT treat 2000 as a rupee amount or fabricate an Expenses/INR purchase
           for the credit.
+
+  # ---- EARN ON A FLIGHT: a +miles / +tier row is an accrual, NOT a priced
+  #      redemption — no invented fare, no sign flip ----
+  - description: 'points statement — flight earn accrues, not a redemption'
+    vars:
+      seed: |
+        2026-01-01 * "Skyline" "Opening miles"
+          Assets:Rewards:Miles:Skyline      50000 SKYMILES
+          Equity:Void                      -50000 SKYMILES
+      message: |
+        add this row from my Skyline loyalty statement (I already paid for the ticket):
+        - 2026-08-06  SA 100 BLR-DEL (Economy, flew)   +557 Skyline miles   +418 tier points
+    assert:
+      - type: javascript
+        value: 'output.draftsValid === true'
+        metric: balances
+      - type: javascript
+        value: 'output.drafts.length > 0 && output.clarifies.length === 0'
+        metric: drafts-no-clarify
+      - type: javascript
+        value: "output.drafts.some(d => /(^|\\s)557\\s+SKYMILES/.test(d.text)) && !output.drafts.some(d => /-557\\s+SKYMILES/.test(d.text))"
+        metric: miles-earned-positive
+      - type: javascript
+        value: "!output.drafts.some(d => /SKYMILES\\s+@@/.test(d.text))"
+        metric: no-price-on-earn
+      - type: javascript
+        value: "!output.drafts.some(d => /Expenses/.test(d.text))"
+        metric: no-fabricated-fare
+      - type: javascript
+        value: "output.drafts.some(d => /418\\s+SKYLINE-STATUS/.test(d.text))"
+        metric: status-counter-accrues
+      - type: llm-rubric
+        value: >
+          The flight row EARNED points, so it is recorded as a plain accrual: +557
+          SKYMILES with an Equity:Void contra, and +418 in a status counter
+          (SKYLINE-STATUS) with its own Equity:Void contra. There is NO expense leg,
+          NO credit-card leg, NO `@@` price, and the miles are POSITIVE (earned), not
+          a negative redemption. The assistant did NOT invent a fare/cash value and
+          did NOT flip the sign to treat the earn as a redemption.

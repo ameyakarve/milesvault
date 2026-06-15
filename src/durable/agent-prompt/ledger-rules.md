@@ -102,19 +102,37 @@ moves it out, so after the landing `:Pending` nets to ZERO and is never negative
 A **points balance** (a known closing / current total) is asserted as a pad +
 balance — see "Balances" below.
 
-## Points credited with NO fiat amount (loyalty-statement rows)
+## Loyalty-statement rows — classify by the SIGN
 
-A loyalty/points statement (NOT a card statement) lists POINTS movements, and many
-rows carry NO rupee/fiat figure at all — a pooling credit, a promo or transfer-in,
-points posted from a partner programme or a co-brand card. Record each as a PLAIN
-accrual: the points to `<pool.account>` (or `:Pending` if the row marks them not
-yet posted) with an `Equity:Void` contra — exactly like an earned/bonus accrual.
-If the row names another loyalty currency it converted FROM, make it a TRANSFER
-instead (source leg with an `@@` price; see Transfers). There is NO expense leg —
-nothing was bought. NEVER reconstruct a fiat purchase for such a row, and NEVER
-read the points count as a fiat amount: `+3,576 points` is `3576` in the pool's
-commodity, NOT `₹3576` — manufacturing an `Expenses:… 3576 INR` leg (with or
-without a cancelling contra) from a points count is always wrong.
+A loyalty/points statement (NOT a card statement) lists POINTS movements, and the
+SIGN is the classifier: a `+N` row CREDITS points (an EARN), a `-N` row SPENDS them
+(a REDEMPTION — see Redemption). NEVER flip an earn into a redemption: a `+N` line is
+never a redemption, gets NO `@@` price, and you never invent a fare or cash value
+for it. (A flight that EARNED you miles — `AI 123 … +557 Maharaja Points` — is an
+EARN: you already paid for that ticket elsewhere. It is NOT an award redemption and
+has no fare on this statement to book.)
+
+Most `+N` rows carry NO rupee/fiat figure — a pooling credit, a promo or transfer-in,
+points earned on a FLIGHT you flew, points posted from a partner programme or a
+co-brand card's spend. A `+N` row is a CREDIT OF POINTS, not a purchase. Record it as
+a PLAIN accrual: the points to `<pool.account>` (or `:Pending` if not yet posted) and
+an `Equity:Void` contra, both in the pool's commodity — plus a SECOND
+`+status / Equity:Void` pair if the row also shows tier/status points (Status counters
+below). That is the whole entry.
+
+- NO `Expenses:…` leg and NO `Liabilities:CreditCards:…` leg — in ANY commodity.
+  Nothing was bought on this row; the card's actual purchases are recorded from the
+  CARD statement, never reconstructed from a loyalty row. This holds even when the
+  row is LABELLED "… Credit Card Spends" — that label only says where the points
+  came from, not that a purchase belongs here.
+- NEVER read the points count as a fiat amount (`+3,576 points` is `3576 <TICKER>`,
+  never `₹3576`), and NEVER paper over that by putting the POINTS commodity on an
+  expense or card leg. `Expenses:Travel 3576 MAHARAJACLUB` and
+  `Liabilities:CreditCards:… -3576 MAHARAJACLUB` are BOTH nonsense: an expense/card
+  leg is fiat; a points quantity only ever lives on an `Assets:Rewards:…` (or
+  `Equity:Void` contra) leg.
+- If the row names another loyalty currency it converted FROM, make it a TRANSFER
+  instead (source leg with an `@@` price; see Transfers).
 
 ## Status & auxiliary counters
 
@@ -169,11 +187,16 @@ THAT markup.
 
 ## Redemption
 
-**Recognise it:** points/miles going DOWN because you SPENT them on something —
-an award flight or hotel, a voucher, a statement credit, pay-at-merchant — is a
-REDEMPTION. This holds even in a bare loyalty/points statement that shows only a
-negative points line against a flight/booking: that negative line is a
-redemption, NOT a generic points decrease to write off against `Equity:Void`.
+**Recognise it by the SIGN:** points/miles going DOWN (a NEGATIVE points line)
+because you SPENT them on something — an award flight or hotel, a voucher, a
+statement credit, pay-at-merchant — is a REDEMPTION. This holds even in a bare
+loyalty/points statement that shows only a negative points line against a
+flight/booking: that negative line is a redemption, NOT a generic points decrease
+to write off against `Equity:Void`. A POSITIVE points line is the OPPOSITE — an
+EARN (you flew a paid ticket, or got a credit/bonus); it is NEVER a redemption, so
+never flip its sign, never give it an `@@` price, and never invent a fare for it
+(see "Loyalty-statement rows" above). A flight row earning `+557 miles` is an earn;
+do NOT book it as `-557 @@ <made-up fare>`.
 
 **Every redemption associates a cash value with the points side** —
 statement credits, pay-at-merchant, award flights/hotels, hybrid fares alike.
@@ -187,8 +210,11 @@ expense** (`Expenses:… <cash> FIAT`). The points commodity NEVER sits on the
 expense leg — the expense is always in fiat.
 
 **If you do not have the cash value, you MUST `clarify` and ask the user for it.**
-Do NOT invent a number, do NOT use `@@ 0.00` or any zero / placeholder value (a
-redemption is never worth nothing — the validator REJECTS a zero `@@`/`@` price),
+Do NOT invent a number — not `@@ 0.00`, and equally not a made-up round figure like
+a `10000` fare pulled from nowhere (inventing a non-zero value is the SAME sin as
+zeroing it; the validator only catches the zero). Do NOT use any zero / placeholder
+value (a redemption is never worth nothing — the validator REJECTS a zero `@@`/`@`
+price),
 do NOT book the points themselves as the expense, do NOT fall back to
 `Equity:Void`, and do NOT contrive a points-only entry that balances just to avoid
 asking — a redemption you can't value yet is a question, not a guess. This holds
