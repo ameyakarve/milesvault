@@ -206,11 +206,18 @@ to redeem later: the FULL bill on the expense + a NEGATIVE discount leg on the
 SAME expense, and the instrument pays the NET (bill − discount — a SMALLER figure
 than the bill), no plug. E.g. a ₹500 bill with ₹50 off → `Expenses:… 500`,
 `Expenses:… -50`, card `-450`. The discount leg is NEGATIVE; never record both
-legs positive (that charges the full bill and applies no discount). **Cashback** is deferred — ₹X posted back separately, redeemable later:
-the full purchase (the expense is NOT reduced) + an `Assets:Receivable:<Issuer>`
-accrual minted against an `Equity:Void` contra (the same mint/burn plug points
-use — NOT a reduction of the expense, NOT `Income:Void`); when the issuer credits
-it, draw the receivable down against the instrument it lands on.
+legs positive (that charges the full bill and applies no discount).
+
+**Cashback** is deferred — ₹X posted back separately, redeemable later. UNLIKE a
+discount, cashback does NOT touch the expense or the card: the expense is the FULL
+bill, the card pays the FULL bill, and the cashback is a SEPARATE
+`Assets:Receivable:<Issuer>` accrual minted against an `Equity:Void` contra (the
+same mint/burn plug points use — NOT a reduction of the expense, NOT a smaller
+card amount, NOT `Income:Void`). There is NO negative leg on the expense — that is
+the discount shape, not cashback. E.g. a ₹1000 spend with ₹50 cashback →
+`Expenses:… 1000`, card `-1000`, `Assets:Receivable:<Issuer> 50`, `Equity:Void -50`
+(the card pays 1000, NOT 950). When the issuer credits it, draw the receivable
+down against the instrument it lands on.
 
 ## Forex (a charge in a foreign currency)
 
