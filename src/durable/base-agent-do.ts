@@ -6,8 +6,10 @@ import {
   type TurnConfig,
 } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
+import { wrapLanguageModel } from 'ai'
 import type {
   LanguageModel,
+  LanguageModelMiddleware,
   ToolCallRepairFunction,
   ToolSet,
   UIMessage,
@@ -28,6 +30,66 @@ import type {
 } from './agents/types'
 
 type UIMessagePart = UIMessage['parts'][number]
+
+// Gemma on Workers AI intermittently serializes a tool call into the TEXT
+// channel as its raw chat-template tokens (`<|tool_call>:name{…}<tool_call|>`)
+// instead of a structured tool call — the SDK then sees plain text and the turn
+// dies with no tool executed. There's no detected tool call for repairToolCall
+// to fix, so we intercept at the model layer: if a result has NO tool call but
+// its text carries the sentinel, the generation garbled — re-run it. Applied via
+// buildModel, so it covers both the streaming (prod) and generate (bench) paths.
+const TOOL_CALL_GARBLE = /<\|?tool_call|tool_call\|>/
+const GARBLE_RETRIES = 2
+
+function isGarbled(hasToolCall: boolean, text: string): boolean {
+  return !hasToolCall && TOOL_CALL_GARBLE.test(text)
+}
+
+const garbleRetryMiddleware: LanguageModelMiddleware = {
+  specificationVersion: 'v3',
+  async wrapGenerate({ doGenerate }) {
+    let res = await doGenerate()
+    for (let i = 0; i < GARBLE_RETRIES; i++) {
+      const hasToolCall = res.content.some((p) => p.type === 'tool-call')
+      const text = res.content.map((p) => (p.type === 'text' ? p.text : '')).join('')
+      if (!isGarbled(hasToolCall, text)) break
+      res = await doGenerate()
+    }
+    return res
+  },
+  async wrapStream({ doStream }) {
+    // Buffer each step's stream so a garbled one can be retried cleanly (we
+    // can't un-emit a partial stream). One step's worth of buffering; the turn
+    // never streams the garbage to the user.
+    for (let attempt = 0; ; attempt++) {
+      const result = await doStream()
+      const { stream } = result
+      type Part = typeof stream extends ReadableStream<infer T> ? T : never
+      const parts: Part[] = []
+      let hasToolCall = false
+      let text = ''
+      const reader = stream.getReader()
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+        const t = (value as { type?: string }).type
+        if (t === 'tool-call') hasToolCall = true
+        else if (t === 'text-delta') text += (value as { delta?: string }).delta ?? ''
+      }
+      if (attempt < GARBLE_RETRIES && isGarbled(hasToolCall, text)) continue
+      return {
+        ...result,
+        stream: new ReadableStream<Part>({
+          start(controller) {
+            for (const p of parts) controller.enqueue(p)
+            controller.close()
+          },
+        }),
+      }
+    }
+  },
+}
 
 // Framework-shaped DO that owns the Think runtime, the agent registry
 // resolution, the handoff plumbing, and the off-websocket entry points
@@ -99,19 +161,21 @@ export abstract class BaseAgentDO<
     // reasoning_effort — so map on/off to the flag in BOTH directions. (Every
     // current caller passes 'off'; only the statement-upload extraction opts
     // into reasoning, so only it gets gemma thinking.)
-    if (cfg.id.includes('gemma')) {
-      return workersai(cfg.id, {
-        chat_template_kwargs: { enable_thinking: cfg.reasoning !== 'off' } as {
-          enable_thinking?: boolean
-        },
-      })
-    }
-    if (cfg.reasoning === 'off') {
-      return workersai(cfg.id, {
-        chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
-      })
-    }
-    return workersai(cfg.id, { reasoning_effort: cfg.reasoning })
+    const base =
+      cfg.id.includes('gemma')
+        ? workersai(cfg.id, {
+            chat_template_kwargs: { enable_thinking: cfg.reasoning !== 'off' } as {
+              enable_thinking?: boolean
+            },
+          })
+        : cfg.reasoning === 'off'
+          ? workersai(cfg.id, {
+              chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
+            })
+          : workersai(cfg.id, { reasoning_effort: cfg.reasoning })
+    // Recover from gemma's tool-call-into-text serialization flake (see
+    // garbleRetryMiddleware).
+    return wrapLanguageModel({ model: base, middleware: garbleRetryMiddleware })
   }
 
   // ---- Think per-turn config ----
