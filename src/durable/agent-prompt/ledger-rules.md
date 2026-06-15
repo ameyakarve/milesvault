@@ -102,6 +102,20 @@ moves it out, so after the landing `:Pending` nets to ZERO and is never negative
 A **points balance** (a known closing / current total) is asserted as a pad +
 balance — see "Balances" below.
 
+## Points credited with NO fiat amount (loyalty-statement rows)
+
+A loyalty/points statement (NOT a card statement) lists POINTS movements, and many
+rows carry NO rupee/fiat figure at all — a pooling credit, a promo or transfer-in,
+points posted from a partner programme or a co-brand card. Record each as a PLAIN
+accrual: the points to `<pool.account>` (or `:Pending` if the row marks them not
+yet posted) with an `Equity:Void` contra — exactly like an earned/bonus accrual.
+If the row names another loyalty currency it converted FROM, make it a TRANSFER
+instead (source leg with an `@@` price; see Transfers). There is NO expense leg —
+nothing was bought. NEVER reconstruct a fiat purchase for such a row, and NEVER
+read the points count as a fiat amount: `+3,576 points` is `3576` in the pool's
+commodity, NOT `₹3576` — manufacturing an `Expenses:… 3576 INR` leg (with or
+without a cancelling contra) from a points count is always wrong.
+
 ## Status & auxiliary counters
 
 Some programmes track MORE than one quantity. A loyalty statement can show
@@ -172,11 +186,17 @@ The shape: the points LEAVE their wallet (a negative points posting with an
 expense** (`Expenses:… <cash> FIAT`). The points commodity NEVER sits on the
 expense leg — the expense is always in fiat.
 
-**If you do not have the cash value, you MUST `clarify` and ask the user for it**
-(one question; the redemption clarify in your tool guidance). Do NOT invent a
-number, do NOT book the points themselves as the expense, and do NOT contrive a
-points-only entry that balances just to avoid asking — a redemption you can't
-value yet is a question, not a guess.
+**If you do not have the cash value, you MUST `clarify` and ask the user for it.**
+Do NOT invent a number, do NOT use `@@ 0.00` or any zero / placeholder value (a
+redemption is never worth nothing — the validator REJECTS a zero `@@`/`@` price),
+do NOT book the points themselves as the expense, do NOT fall back to
+`Equity:Void`, and do NOT contrive a points-only entry that balances just to avoid
+asking — a redemption you can't value yet is a question, not a guess. This holds
+**mid-batch**: when the rest of a statement is fine but a redemption has no cash
+value, draft the other rows and hold the redemption back for the clarify (or draft
+it flagged `!`) — never zero it to keep the batch moving. When SEVERAL redemptions
+lack a value, ask for EACH one separately and apply each answer to its own row
+only; never reuse one number across distinct flights/stays.
 
 ## Balances (assert with a pad)
 
