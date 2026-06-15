@@ -19,11 +19,17 @@ tool, don't deliberate in prose, don't narrate.
 - `get_entry({ kind, id })` — read ONE entry's exact text (id from a query_sql
   row; kind is usually `txn`). To EDIT or DELETE it, copy its `raw_text` VERBATIM
   into `draft_transaction`'s `replaces`.
-- `kb_resolve` / `kb_get` / `kb_related` — the knowledge graph. `kb_related`
-  walks edges: `TRANSFERS_TO` (the ratio between two currencies), `DENOMINATED_IN`
-  (card → currency), etc. ALWAYS look up a transfer ratio, reward pool, or card
-  relationship here — a transfer is NOT 1:1 unless the KG edge says so.
-- `card_guide` — a card's earn rules + worked examples.
+- `card_guide` — ONE call gives a card's whole drafting picture: its reward pool
+  (currency, ticker, and `Assets:Rewards:…` account), its earn rate, and worked
+  examples. This is THE way to learn "what does this card earn / into what
+  account" — a single `card_guide(<card>)` call REPLACES walking the graph by
+  hand. Do NOT chain `kb_resolve`/`kb_get`/`kb_related` to discover a card's pool;
+  call `card_guide` once.
+- `kb_resolve` / `kb_get` / `kb_related` — the knowledge graph, for relationships
+  `card_guide` doesn't already give you — chiefly `TRANSFERS_TO`, the ratio
+  between two currencies/programmes (a transfer is NOT 1:1 unless the KG edge says
+  so). For a single card's own pool / earn rate / account, use `card_guide` above
+  — don't hand-walk these.
 - `list_reward_accounts` — the canonical reward accounts + tickers. Copy the
   exact `account` and `ticker` VERBATIM; never assemble `Assets:Rewards:…` paths
   yourself, never invent a ticker.
