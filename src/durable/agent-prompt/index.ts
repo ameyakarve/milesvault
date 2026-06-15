@@ -101,37 +101,26 @@ summarizing what was done in \`context\` — UNLESS that message is a direct
 correction or follow-up to the statement you just handled (e.g. "fix the date
 on the Amazon row"), in which case handle it first, then hand back.`
 
-// Read-only SQL is how the editor ANSWERS questions about existing entries
-// ("which of my Accor txns are redemptions?") — it reads its own ledger rather
-// than asking the user to paste. Changes still go through draft_transaction, never SQL.
-function renderQueryBlock(ddl: string): string {
-  return `# Reading existing entries — \`search\` to find, \`query_sql\` to analyze
+// How the editor finds + reads its own entries: `search` (structured find) →
+// `get_entry` (read one) → `draft_transaction`. No query_sql in the editor —
+// finding is search's job; analytics lives on the concierge/analyst surface.
+const SEARCH_GUIDANCE = `# Reading existing entries — use \`search\`
 
 To FIND entries (to read, edit, or attribute), use \`search\` — a structured
 lookup over the ledger. Resolve a programme/card/brand to its ACCOUNT from the
 list above (aliases after "—"), then filter by \`accounts.prefix\`; add \`sign\`
-(debit/credit), \`date\`, \`currencies\`, or \`payee_q\` (full-text over payee +
-narration) as needed. ONE \`search\` call returns the matching rows with their
-\`txn_id\` — read the full entry with \`get_entry\`, then edit via
-\`draft_transaction\`. Do NOT hand-write \`query_sql\` to find entries, and do NOT
-probe with \`LIKE '%name%'\`: a programme's rows live in its ACCOUNT, not its
-display text (its spends carry the MERCHANT — a hotel, a flight — never the
-programme name).
+("debit" = negative, "credit" = positive), \`date\`, \`currencies\`, or \`payee_q\`
+(full-text over payee + narration) as needed. ONE \`search\` call returns the
+matching rows with their \`txn_id\` — read the full entry with \`get_entry\` (kind
+"txn"), then edit/delete via \`draft_transaction\`. Don't probe with the display
+name: a programme's rows live in its ACCOUNT, not its text (its spends carry the
+MERCHANT — a hotel, a flight — never the programme name).
 
-\`\`\`
 ✓  search({ accounts: { prefix: ["Assets:Rewards:Points:Skyline"] }, sign: "credit" })
-✗  query_sql … WHERE t.payee LIKE '%Skyline%'
-\`\`\`
 
-Use \`query_sql\` (SELECT/WITH only) for ANALYTICS that \`search\` can't do —
-aggregates, sums, group-by ("how much did I spend on Y?", "total points earned
-this year"). Never tell the user you can't see their data or ask them to paste
-it. (To ADD/EDIT/DELETE, use \`draft_transaction\`.) The query_sql schema:
-
-\`\`\`sql
-${ddl.trim()}
-\`\`\``
-}
+Once a \`search\` returns the rows you need, STOP searching and act — read with
+\`get_entry\` and draft. Never tell the user you can't see their data or ask them
+to paste it.`
 
 // System prompt for the `ledger` agent in the handoff-based editor registry.
 export function buildLedgerSystem(
@@ -148,7 +137,7 @@ export function buildLedgerSystem(
     EXAMPLES,
     HANDOFF_TO_STATEMENT,
     renderSnapshotBlock(snapshot, aliases),
-    snapshot.schema_ddl?.trim() ? renderQueryBlock(snapshot.schema_ddl) : '',
+    SEARCH_GUIDANCE,
   ]
     .filter(Boolean)
     .join('\n\n---\n\n')

@@ -36,7 +36,6 @@ import {
 } from './agents/tools/editor'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 import { runIncorporation } from './ingest/incorporate'
-import { querySqlTool } from './agents/tools/concierge/query-sql'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
 import { runDraftPipeline, type GenFn } from './ingest/pipeline'
 import type { AgentHost, Registry } from './agents/types'
@@ -573,7 +572,6 @@ ${opts.text}`,
       kb_related: kb.kb_related,
       card_guide: cardGuideTool(kbHttp),
       list_reward_accounts: rewardAccountsTool(kbHttp),
-      query_sql: querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params)),
       get_entry: getEntryTool((ref) => this.ledgerStub().get_entry(ref)),
       search: searchTool((filter) => this.ledgerStub().search_postings(filter)),
       draft_transaction: capture('draft_transaction', draftTransactionBatchSchema),
@@ -722,19 +720,19 @@ entries, or draft corrections.`
     const list_reward_accounts = rewardAccountsTool(kbHttp)
     // Codemode read (find entries + answer questions) and per-entry read (the
     // model copies raw_text into draft_transaction's `replaces` to edit/delete).
-    const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
     const get_entry = getEntryTool((ref) => this.ledgerStub().get_entry(ref))
     const search = searchTool((filter) => this.ledgerStub().search_postings(filter))
     if (name === 'ledger') {
       // Tool-using authoring agent: look things up (kb_*, card_guide,
-      // list_reward_accounts, search/query_sql, get_entry) and author directly via
+      // list_reward_accounts, search, get_entry) and author directly via
       // draft_transaction (add = text; edit = replaces + text; delete = replaces).
+      // No query_sql — finding entries is search's job; analytics is the
+      // concierge/analyst surface.
       return this.withToolLog(name, {
         ...kbLookup,
         card_guide,
         list_reward_accounts,
         search,
-        query_sql,
         get_entry,
         draft_transaction: draftTransactionTool(),
         clarify: clarifyTool(CLARIFICATIONS),
