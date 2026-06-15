@@ -39,19 +39,39 @@ conversion leg, carry the total value with `@@` (in the OTHER commodity) so its
 converted value closes against the other leg.
 
 **Transferring points between two programmes** (one loyalty currency → another at
-a ratio) — this is NOT a redemption (points → cash/flight/hotel; see Redemption,
-where the cash value is given, not a ratio). A ratio `A:B` = A source → B
-destination: `destination = source × B/A`, `source = destination × A/B` (divide
-exactly; don't flip it). The `@@` price sits on the SOURCE (negative) leg, in the
-destination's commodity. Most transfers are a FIX — attributing an existing
-accrual to where it came from: the currency already in the entry is the
-DESTINATION, so keep that leg unchanged and just replace its `Equity:Void` contra
-with the source leg. At `3:2`, an existing 1200 DST accrual came from
-`1200 × 3/2 = 1800` SRC:
+a ratio) — NOT a redemption (points → cash/flight/hotel; see Redemption, where a
+cash value is given, not a ratio). A ratio `A:B` means A SOURCE → B DESTINATION:
+`source = destination × A/B`, `destination = source × B/A` (divide exactly; don't
+flip the ratio). The `@@` price sits on the SOURCE (negative) leg, in the
+DESTINATION's commodity, and equals the destination amount.
+
+Most transfers are a FIX — re-attributing an existing accrual to the source it
+actually came from. The currency already in the entry is the DESTINATION. Do it
+EXACTLY as a TWO-leg entry:
+1. KEEP the destination leg byte-for-byte — same account, amount, AND commodity.
+   NEVER recompute, scale, or re-price it; it is what was actually earned.
+2. The source leg REPLACES the `Equity:Void` contra — delete the `Equity:Void`,
+   it is NEVER kept alongside the source leg (an extra `Equity:Void` leaves the
+   source commodity unbalanced). Final entry has exactly 2 legs: destination +
+   source.
+3. The source leg is NEGATIVE, in the source commodity, carrying
+   `@@ <destination amount> <destination commodity>`. Source amount =
+   destination × A/B. Use the source programme's REAL pool account + ticker
+   (from `card_guide` / `list_reward_accounts`) — never a generic
+   `Assets:Rewards:<Issuer>`.
+
+At `3:2` (3 SRC → 2 DST), an existing 1200 DST accrual came from `1200 × 3/2 =
+1800` SRC:
 ```beancount
 2026-05-01 * "Programme" "Earn"
-  Assets:Rewards:Points:Dst   1200 DST            ; unchanged
-  Assets:Rewards:Points:Src  -1800 SRC @@ 1200 DST
+  Assets:Rewards:Points:Dst   1200 DST             ; KEPT, untouched
+  Assets:Rewards:Points:Src  -1800 SRC @@ 1200 DST ; replaces the Equity:Void contra
+```
+WRONG — scaling the destination, pricing the wrong leg, or keeping `Equity:Void`:
+```beancount
+  Assets:Rewards:Points:Dst    800 DST @@ 1800 SRC  ; ✗ dest recomputed; @@ on dest
+  Assets:Rewards:Points:Src  -1800 SRC              ; ✗
+  Equity:Void                -1800 SRC              ; ✗ extra leg → unbalanced
 ```
 
 ## Payments to the card
