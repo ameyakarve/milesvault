@@ -137,6 +137,31 @@ posted them).
   <RewardsAcct>:Pending  -1850 RWD_PTS
 ```
 
+### Loyalty-statement rows: go by the SIGN (`+` earn, `−` redemption)
+
+On a points/loyalty statement (not a card statement) the sign classifies the
+row. A `+N` row is an EARN — a plain accrual, NO expense, NO card leg, NO
+price — even for a flight you flew (you paid that fare elsewhere) and even when
+the row is labelled "… Credit Card Spends". A row showing both reward points
+and tier/status points is two accrual pairs:
+
+```beancount
+2026-08-06 * "Skyline Air" "SA 100 — earned miles + status"
+  Assets:Rewards:Miles:Skyline          557 SKYMILES
+  Equity:Void                          -557 SKYMILES
+  Assets:Rewards:Status:Skyline         418 SKYLINE-STATUS
+  Equity:Void                          -418 SKYLINE-STATUS
+```
+
+WRONG — flipping a `+557` earn into a redemption and inventing a fare:
+```beancount
+  Expenses:Travel:Flights        10000.00 INR              ; ✗ no fare on this statement
+  Assets:Rewards:Miles:Skyline       -557 SKYMILES @@ 10000.00 INR  ; ✗ earn, not a spend; price made up
+```
+
+A `−N` row is a REDEMPTION — see the Redemption rule (carry the real cash value
+via `@@`, or `clarify`; never invent or zero it).
+
 ### Computing earn from a stated rate
 
 Two different shapes — don't conflate them:
