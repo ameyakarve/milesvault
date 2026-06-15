@@ -126,6 +126,12 @@ question about "Skyline" when the list shows
 The ✗ misses rows — a programme's spends carry the MERCHANT (a hotel, a flight),
 never the programme name. Filter by the account.
 
+Be EFFICIENT — query calls are budgeted. Resolve the account ONCE from the list
+above and read its rows in a SINGLE \`query_sql\`; do NOT probe with a series of
+\`LIKE '%...%'\` variants. If a query returns nothing, re-read the accounts list and
+pick the right path — don't keep guessing name variants. Once you have the rows
+you need, stop querying and move to \`draft_transaction\`.
+
 Select narrow columns with a \`LIMIT\`, against the schema below.
 
 \`\`\`sql
