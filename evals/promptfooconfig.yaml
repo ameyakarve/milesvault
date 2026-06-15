@@ -55,29 +55,29 @@ defaultTest:
 
 tests:
   # ---- READ: resolve a programme name to its account, not text-match it ----
-  - description: 'read — which Accor txns are redemptions'
+  - description: 'read — which Skyline txns are redemptions'
     vars:
       seed: |
-        2026-01-03 * "Pullman Chennai" "Stay paid with points"
-          Expenses:Travel:Hotels                9487 INR
-          Assets:Rewards:Points:AllRewards    -18000 ALLREWARDS @@ 9487 INR
+        2026-01-03 * "Grand Coastal Hotel" "Stay paid with points"
+          Expenses:Travel:Hotels             9487 INR
+          Assets:Rewards:Miles:Skyline     -18000 SKYMILES @@ 9487 INR
 
-        2026-02-10 * "Accor" "Bonus points"
-          Assets:Rewards:Points:AllRewards      2000 ALLREWARDS
-          Equity:Void                          -2000 ALLREWARDS
-      message: 'check my accor txns from this year -- tell me which of these are redemptions'
+        2026-02-10 * "Skyline" "Bonus points"
+          Assets:Rewards:Miles:Skyline       2000 SKYMILES
+          Equity:Void                       -2000 SKYMILES
+      message: 'check my skyline txns from this year -- tell me which of these are redemptions'
     assert:
       - type: javascript
-        value: "output.trace.some(t => t.tool === 'search' && /AllRewards/.test(JSON.stringify(t.input)))"
+        value: "output.trace.some(t => t.tool === 'search' && /Skyline/.test(JSON.stringify(t.input)))"
         metric: searches-by-account
       - type: javascript
-        value: "!output.trace.some(t => t.tool === 'search' && /accor/i.test(JSON.stringify(t.input)))"
+        value: "!output.trace.some(t => t.tool === 'search' && /payee_q/.test(JSON.stringify(t.input)))"
         metric: not-text-match
       - type: llm-rubric
         value: >
-          The assistant identified the Pullman Chennai stay (the -18000 ALLREWARDS
-          posting with an @@ price) as a redemption, and the +2000 ALLREWARDS bonus
-          as NOT a redemption (it is an accrual). It must NOT have missed the Pullman
+          The assistant identified the Grand Coastal Hotel stay (the -18000 SKYMILES
+          posting with an @@ price) as a redemption, and the +2000 SKYMILES bonus
+          as NOT a redemption (it is an accrual). It must NOT have missed the hotel
           redemption.
 
   # ---- ADD: use the held card; cashback minted from Equity:Void (NOT an
@@ -170,13 +170,13 @@ tests:
           untouched.
 
   # ---- BALANCE: pure ADD of pad+balance, no phantom replaces ----
-  - description: 'balance — set Accor points to 163316'
+  - description: 'balance — set Skyline points to 163316'
     vars:
       seed: |
-        2026-02-10 * "Accor" "Bonus points"
-          Assets:Rewards:Points:AllRewards      2000 ALLREWARDS
-          Equity:Void                          -2000 ALLREWARDS
-      message: 'set my Accor reward points balance to 163316'
+        2026-02-10 * "Skyline" "Bonus points"
+          Assets:Rewards:Miles:Skyline      2000 SKYMILES
+          Equity:Void                      -2000 SKYMILES
+      message: 'set my Skyline reward points balance to 163316'
     assert:
       - type: javascript
         value: 'output.drafts.length > 0 && output.drafts.every(d => !d.replaces)'
@@ -186,8 +186,8 @@ tests:
         metric: pad-and-balance
       - type: llm-rubric
         value: >
-          The draft is a fresh pad + balance pair on Assets:Rewards:Points:AllRewards
-          asserting 163316 ALLREWARDS, plugging from Equity:Void, dated today. It is an
+          The draft is a fresh pad + balance pair on Assets:Rewards:Miles:Skyline
+          asserting 163316 SKYMILES, plugging from Equity:Void, dated today. It is an
           ADD (no `replaces`) — it did NOT fabricate a `replaces` for a balance
           directive that does not exist.
 
@@ -195,61 +195,64 @@ tests:
   - description: 'redemption — 5000 points for 2500 statement credit'
     vars:
       seed: |
-        2026-01-01 * "Accor" "Opening points"
-          Assets:Rewards:Points:AllRewards      50000 ALLREWARDS
-          Equity:Void                          -50000 ALLREWARDS
+        2026-01-01 * "Skyline" "Opening points"
+          Assets:Rewards:Miles:Skyline       50000 SKYMILES
+          Equity:Void                       -50000 SKYMILES
 
-        2026-06-10 * "Amazon" "Household"
-          Expenses:Shopping                      1200 INR
-          Liabilities:CreditCards:HSBC:Cashback -1200 INR
-      message: 'I redeemed 5000 Accor points today for a 2500 INR statement credit'
+        2026-06-10 * "Corner Store" "Household"
+          Expenses:Shopping                       1200 INR
+          Liabilities:CreditCards:Skybank:Rewards -1200 INR
+      message: 'I redeemed 5000 Skyline points today for a 2500 INR statement credit'
     assert:
       - type: javascript
         value: 'output.draftsValid === true'
         metric: balances
       - type: javascript
-        value: "output.drafts.some(d => /-5000\\s+ALLREWARDS\\s+@@\\s+2500/.test(d.text))"
+        value: "output.drafts.some(d => /-5000\\s+SKYMILES\\s+@@\\s+2500/.test(d.text))"
         metric: points-leg-priced
       - type: llm-rubric
         value: >
-          The draft records a redemption: the points leg removes 5000 ALLREWARDS
+          The draft records a redemption: the points leg removes 5000 SKYMILES
           carrying the cash value via `@@ 2500 INR`, and the 2500 INR statement credit
-          lands on the user's HSBC card liability (reducing what is owed). It did NOT
+          lands on the user's Skybank card liability (reducing what is owed). It did NOT
           ask for the cash value (the user gave it: 2500) and did NOT denominate any
           expense in points.
 
-  # ---- ATTRIBUTE earn to a card: resolve the card's real currency, don't guess ----
-  - description: 'attribute — accor accruals are from magnus burgundy (look up the pool, 5:4)'
+  # ---- ATTRIBUTE earn to its source pool: transfer-FIX at a ratio, keep dest ----
+  - description: 'attribute — Skyline accruals are transferred from Horizon (5:4)'
     vars:
       seed: |
-        2025-03-10 * "AXIS BANK" "Earn"
-          Assets:Rewards:Points:AllRewards      8000 ALLREWARDS
-          Equity:Void                          -8000 ALLREWARDS
+        2025-01-01 * "Horizon" "Opening miles"
+          Assets:Rewards:Miles:Horizon      100000 HORIZON
+          Equity:Void                      -100000 HORIZON
 
-        2025-05-20 * "AXIS BANK" "Earn"
-          Assets:Rewards:Points:AllRewards      4000 ALLREWARDS
-          Equity:Void                          -4000 ALLREWARDS
-      message: 'the accor accruals coming from axis are from my magnus burgundy card, it used to transfer 5:4. fix them'
+        2025-03-10 * "Partner Bank" "Earn"
+          Assets:Rewards:Miles:Skyline      8000 SKYMILES
+          Equity:Void                      -8000 SKYMILES
+
+        2025-05-20 * "Partner Bank" "Earn"
+          Assets:Rewards:Miles:Skyline      4000 SKYMILES
+          Equity:Void                      -4000 SKYMILES
+      message: 'the Skyline accruals coming from Partner Bank are actually transferred from my Horizon miles, it used to transfer 5:4. fix them'
     assert:
       - type: javascript
         value: 'output.draftsValid === true'
         metric: balances
       - type: javascript
-        value: "output.drafts.some(d => d.text.includes('AXIS-EDGE-BURGUNDY'))"
+        value: "output.drafts.some(d => d.text.includes('HORIZON'))"
         metric: real-currency
       - type: javascript
         value: "output.drafts.some(d => d.text.includes('@@'))"
         metric: transfer-priced
       - type: llm-rubric
         value: >
-          The model looked up the Axis Magnus Burgundy card (it did NOT guess) and
-          re-drafted the two "AXIS BANK" Accor accruals as TRANSFERS from the card's
-          actual reward pool — EDGE Rewards Burgundy, ticker AXIS-EDGE-BURGUNDY — into
-          Accor ALLREWARDS, at the 5:4 ratio the user gave (5 EDGE → 4 Accor). So the
-          8000 ALLREWARDS came from 10000 AXIS-EDGE-BURGUNDY and the 4000 from 5000,
-          carried via `@@`. It did NOT inject the points from a generic
-          `Assets:Rewards:Axis` pool with no currency basis, did NOT invent a different
-          ratio, and did NOT denominate the accrual as a plain Equity:Void contra.
+          The model re-drafted the two "Partner Bank" Skyline accruals as TRANSFERS
+          from the user's Horizon pool (ticker HORIZON, found in the ledger — not
+          guessed) into Skyline SKYMILES, at the 5:4 ratio given (5 HORIZON → 4
+          SKYMILES). The destination leg is KEPT unchanged (8000 / 4000 SKYMILES); the
+          source leg replaces the Equity:Void contra, so 8000 SKYMILES came from 10000
+          HORIZON and 4000 from 5000, carried via `@@`. It did NOT scale the
+          destination, did NOT keep an extra Equity:Void, and did NOT invent a ratio.
 
   # ---- POINTS-ONLY STATEMENT: a points credit with NO fiat amount is a plain
   #      accrual (never a fabricated fiat spend); an award redemption with NO
