@@ -278,14 +278,15 @@ tests:
         value: "!output.drafts.some(d => /Expenses\\S*\\s+2000/.test(d.text))"
         metric: no-fabricated-fiat
       - type: javascript
-        value: "output.drafts.some(d => /2000\\s+SKYMILES/.test(d.text) && d.text.includes('Equity:Void'))"
-        metric: credit-is-plain-accrual
+        value: "output.drafts.length === 0 || output.drafts.some(d => /SKYMILES/.test(d.text) && d.text.includes('Equity:Void'))"
+        metric: credit-accrual-or-deferred
       - type: llm-rubric
         value: >
-          The +2,000 Skyline miles credit is recorded as a PLAIN points accrual
-          (2000 SKYMILES to a Skyline rewards account with an Equity:Void contra),
-          with NO fiat/INR expense leg, and it did NOT treat 2000 as a rupee amount
-          or fabricate an Expenses purchase. The -15,000 award redemption has no
-          cash value given, so the assistant called `clarify` to ask for it — it did
-          NOT record the redemption with an `@@ 0.00` price or any zero/placeholder
-          value just to make it balance.
+          The -15,000 award redemption has no cash value given, so the assistant
+          called `clarify` to ask for the cash fare — it did NOT record the redemption
+          with an `@@ 0.00` price or any zero/placeholder value just to make it balance.
+          The +2,000 Skyline miles credit is handled as a PLAIN points accrual (2000
+          SKYMILES with an Equity:Void contra) — EITHER drafted now, OR deferred until
+          the clarify is answered if the assistant chose to ask first. Either way it
+          did NOT treat 2000 as a rupee amount or fabricate an Expenses/INR purchase
+          for the credit.

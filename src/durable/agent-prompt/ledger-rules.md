@@ -193,10 +193,11 @@ do NOT book the points themselves as the expense, do NOT fall back to
 `Equity:Void`, and do NOT contrive a points-only entry that balances just to avoid
 asking — a redemption you can't value yet is a question, not a guess. This holds
 **mid-batch**: when the rest of a statement is fine but a redemption has no cash
-value, draft the other rows and hold the redemption back for the clarify (or draft
-it flagged `!`) — never zero it to keep the batch moving. When SEVERAL redemptions
-lack a value, ask for EACH one separately and apply each answer to its own row
-only; never reuse one number across distinct flights/stays.
+value, EITHER draft the other rows now and hold the redemption back for the clarify
+(or draft it flagged `!`), OR ask first and draft the whole batch once you have the
+value — either is fine; what is NOT fine is zeroing the redemption to keep the batch
+moving. When SEVERAL redemptions lack a value, ask for EACH one separately and apply
+each answer to its own row only; never reuse one number across distinct flights/stays.
 
 ## Balances (assert with a pad)
 
