@@ -7,6 +7,16 @@ examples file.)
 
 ## Transaction shape
 
+**First, what KIND of source is this?** A CARD statement / receipt records
+PURCHASES (the four-posting shape below). A LOYALTY / POINTS statement records
+POINTS MOVEMENTS, classified by SIGN: a `+N` row EARNS — a PLAIN accrual (the
+points leg + an `Equity:Void` contra, and NOTHING else: NO `Expenses` leg, NO
+`Liabilities:CreditCards` leg, NO `@@` price — even for a flight you flew or a row
+labelled "… Credit Card Spends") — and a `-N` row REDEEMS (priced points; see
+Redemption). NEVER reconstruct a purchase, invent a fare, or attach a card/expense
+leg to a `+N` points-statement row. (Full rules: "Loyalty-statement rows — classify
+by the SIGN" below.)
+
 A credit-card **PURCHASE is FOUR postings** by default — write all four as you
 write the entry, never as a later pass:
 
