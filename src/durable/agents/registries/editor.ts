@@ -5,7 +5,7 @@ import type { AgentDef, AgentHost, Registry } from '../types'
 // ran Kimi (freeform reasoning over
 // edits); the statement specialist runs Gemma (cheap, fast, reasoning-off
 // extraction — the shape the extractor evals were tuned on).
-const LEDGER_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
+const LEDGER_MODEL_ID = '@cf/moonshotai/kimi-k2.6'
 // Exported for the headless rules-playground preview (ChatDO.previewDrafts).
 export const STATEMENT_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 
