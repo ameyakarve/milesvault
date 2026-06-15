@@ -20,16 +20,26 @@ commodity nets to zero — the price is the total in the OTHER commodity:
     Assets:Rewards:Miles:<Dest>   10000 DST_PTS @@ 10000 SRC_PTS
     Assets:Rewards:Miles:<Src>   -10000 SRC_PTS`
 
-// The entry already HAS an @@ price but still doesn't net to zero → the price
-// amount is wrong (often 0). Don't add a contra; correct the @@ amount so the
-// priced leg cancels the other leg.
-const EX_PRICE_RATE = `This entry already has an @@ price, but a currency still doesn't net to zero — the
-price amount is WRONG (e.g. 0). Do NOT add an Equity:Void contra and do NOT add or
-remove a leg. Set the @@ amount so the priced leg's value exactly cancels the
-other leg. To cancel a -150 SRC_PTS leg, the priced leg needs @@ 150 SRC_PTS:
-  2026-05-21 * "Transfer" "Points transfer"
-    Assets:Rewards:Miles:<Dest>   10000 DST_PTS @@ 150 SRC_PTS
-    Assets:Rewards:Miles:<Src>     -150 SRC_PTS`
+// The entry HAS an @@ price but still doesn't net to zero. TWO possible causes —
+// the wrong @@ amount, OR a spurious/missing leg (e.g. an EARN row wrongly carrying
+// an expense or card leg). Do NOT assert "just fix the price, never touch a leg":
+// that traps an over-legged earn that can never balance by tweaking the price.
+const EX_PRICE_RATE = `This entry has an @@/@ price but a currency still doesn't net to zero. Two
+possible causes — work out which, don't just retry the same numbers:
+(a) The @@ price AMOUNT is wrong (e.g. 0). Set it so the priced leg's value exactly
+    cancels the other leg — to cancel a -150 SRC_PTS leg the priced leg needs @@ 150 SRC_PTS:
+      2026-05-21 * "Transfer" "Points transfer"
+        Assets:Rewards:Miles:<Dest>   10000 DST_PTS @@ 150 SRC_PTS
+        Assets:Rewards:Miles:<Src>     -150 SRC_PTS
+(b) There is a SPURIOUS or MISSING leg. A points EARN (the points line is POSITIVE,
+    +N) is a plain accrual — points + an Equity:Void contra, and NOTHING else: NO
+    Expenses leg, NO Liabilities:CreditCards leg, NO @@ price. If you gave an earn an
+    expense, a card leg, or a price, REMOVE them:
+      2026-08-06 * "Airline" "Flight — miles earned"
+        Assets:Rewards:Miles:<Prog>   557 PTS
+        Equity:Void                  -557 PTS
+    A redemption (points NEGATIVE) carries its cash value via @@ with the cash as the
+    expense — and NO separate card leg.`
 
 const EX_BALANCE_SINGLE = `For a SINGLE-commodity entry that doesn't net to zero, decide which it is:
 - EARN/accrual: add an Equity:Void contra so the points commodity nets to zero:

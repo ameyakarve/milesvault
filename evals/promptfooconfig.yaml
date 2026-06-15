@@ -335,3 +335,48 @@ tests:
           NO credit-card leg, NO `@@` price, and the miles are POSITIVE (earned), not
           a negative redemption. The assistant did NOT invent a fare/cash value and
           did NOT flip the sign to treat the earn as a redemption.
+
+  # ---- MULTI-ROW EARN BATCH (under-load repro): a whole loyalty statement of
+  #      earns/credits must all stay plain accruals — none flipped to a priced
+  #      redemption with a fabricated fare + card leg (the rejection-loop bug) ----
+  - description: 'points statement — multi-row earn batch stays accruals'
+    vars:
+      seed: |
+        2026-01-01 * "Skyline" "Opening miles"
+          Assets:Rewards:Miles:Skyline      50000 SKYMILES
+          Equity:Void                      -50000 SKYMILES
+      message: |
+        add all of these from my Skyline loyalty statement (I already paid for the tickets in cash):
+        - 2026-08-06  SA 100 BLR-DEL (flew)    +557 Skyline miles   +418 tier points
+        - 2026-08-03  SA 200 DEL-BLR (flew)    +579 Skyline miles   +347 tier points
+        - 2026-07-05  Family pool credit       +9204 Skyline miles
+    assert:
+      - type: javascript
+        value: 'output.draftsValid === true'
+        metric: balances
+      - type: javascript
+        value: 'output.drafts.length > 0 && output.clarifies.length === 0'
+        metric: drafts-no-clarify
+      - type: javascript
+        value: "!output.drafts.some(d => /Liabilities:CreditCards/.test(d.text))"
+        metric: no-card-legs
+      - type: javascript
+        value: "!output.drafts.some(d => /Expenses/.test(d.text))"
+        metric: no-fabricated-fare
+      - type: javascript
+        value: "!output.drafts.some(d => /SKYMILES\\s+@@/.test(d.text))"
+        metric: no-price-on-earns
+      - type: javascript
+        value: "!output.drafts.some(d => /Assets:Rewards:Miles:Skyline(:Pending)?\\s+-/.test(d.text))"
+        metric: earns-stay-positive
+      - type: javascript
+        value: "output.drafts.some(d => /9204\\s+SKYMILES/.test(d.text))"
+        metric: pooling-credit-accrues
+      - type: llm-rubric
+        value: >
+          All three rows are EARNS/credits, recorded as plain accruals: each points
+          amount POSITIVE to a Skyline miles account with an Equity:Void contra, the
+          two flights also accruing their tier points to a status counter. NONE of the
+          rows is turned into a redemption: no negative miles leg, no `@@` price, no
+          fabricated INR fare, and no credit-card or expense leg anywhere. The whole
+          batch balances.
