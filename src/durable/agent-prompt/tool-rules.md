@@ -65,7 +65,11 @@ tool, don't deliberate in prose, don't narrate.
      plain spend with no reward leg.
   Use `card_guide` / `list_reward_accounts` for that earn rule + the canonical
   reward account; the card's own liability leg still comes from the held account
-  above, not the guide.
+  above, not the guide. A MISSING card guide or unknown earn rate NEVER blocks
+  the draft and is NEVER a reason to `clarify` or stall: draft the plain spend
+  (expense + held card, no reward leg) and briefly note you skipped points. And a
+  payment or a forex charge needs no earn rate at all — never let a missing guide
+  stop those.
 - **Edit / delete** an existing entry → `query_sql` to find it → `get_entry` to
   read its exact text → `draft_transaction` with `replaces` (+ `text` for an edit).
   NEVER append a new entry to "fix" or "change" an existing one.
