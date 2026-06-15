@@ -19,6 +19,7 @@ import { BaseAgentDO } from './base-agent-do'
 import {
   makeEditorRegistry,
   STATEMENT_MODEL_ID,
+  LEDGER_MODEL_ID,
   EDITOR_MAX_STEPS,
   type EditorAgentName,
 } from './agents/registries/editor'
@@ -579,7 +580,9 @@ ${opts.text}`,
     }
     try {
       const result = await generateText({
-        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+        // Mirror the real ledger agent's model (the bench runs buildLedgerSystem
+        // + the ledger tools) — NOT the statement model.
+        model: this.buildModel({ id: LEDGER_MODEL_ID, reasoning: 'off' }),
         system: buildLedgerSystem(snapshot, aliases),
         prompt: message,
         tools,
