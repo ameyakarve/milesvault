@@ -111,6 +111,8 @@ function reasonOf(v: DraftEntryVerdict): string {
       return 'a posting was dropped'
     case 'elided':
       return 'a posting is missing its amount'
+    case 'bad_price':
+      return 'price in the same currency'
     case 'account_shape':
       return 'invalid account name'
     case 'wrong_kind':

@@ -64,6 +64,7 @@ export type DraftEntryVerdict =
   | { kind: 'wrong_count'; count: number; messages: string[] }
   | { kind: 'dropped_posting'; messages: string[] }
   | { kind: 'elided'; messages: string[] }
+  | { kind: 'bad_price'; messages: string[] }
   | {
       kind: 'unbalanced'
       residuals: { currency: string; amount: string }[]
@@ -128,6 +129,23 @@ export function classifyDraftEntry(text: string, label = 'entry'): DraftEntryVer
       messages: incomplete.map(
         (p) =>
           `${label}${tag}: posting ${p.account} must state an explicit numeric amount and currency — no elided or blank amounts`,
+      ),
+    }
+  }
+  // A conversion price (`@`/`@@`) must be in a DIFFERENT commodity than the
+  // posting's own amount — pricing a currency in itself is meaningless (the
+  // model's `8000 ALLREWARDS @@ 4000 ALLREWARDS`). Bounce it with a targeted
+  // message so the model fixes the conversion instead of chasing a phantom
+  // imbalance.
+  const samePrice = txn.postings.filter(
+    (p) => p.priceCurrency != null && p.priceCurrency === p.currency,
+  )
+  if (samePrice.length > 0) {
+    return {
+      kind: 'bad_price',
+      messages: samePrice.map(
+        (p) =>
+          `${label}${tag}: posting ${p.account} has an @@/@ price in its OWN currency (${p.currency}) — a conversion price must be in a DIFFERENT commodity (the value it converts TO)`,
       ),
     }
   }
