@@ -103,14 +103,14 @@ on the Amazon row"), in which case handle it first, then hand back.`
 
 // Read-only SQL is how the editor ANSWERS questions about existing entries
 // ("which of my Accor txns are redemptions?") — it reads its own ledger rather
-// than asking the user to paste. Changes still go through incorporate, never SQL.
+// than asking the user to paste. Changes still go through draft_transaction, never SQL.
 function renderQueryBlock(ddl: string): string {
   return `# Answering questions about existing entries (read-only SQL)
 
 ANSWER questions about what's already in the ledger — "which of my X are
 redemptions?", "how much did I spend on Y?", "find my Z" — by reading it
 yourself with \`query_sql\` (SELECT/WITH only); never tell the user you can't see
-their data or ask them to paste it. (To ADD/EDIT/DELETE, use \`incorporate\`.)
+their data or ask them to paste it. (To ADD/EDIT/DELETE, use \`draft_transaction\`.)
 
 Writing the WHERE clause: when the question is about a programme, currency,
 card, or brand, its rows live in that ACCOUNT — find it in the list above
