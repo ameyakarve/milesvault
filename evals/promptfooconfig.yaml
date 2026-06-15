@@ -207,3 +207,36 @@ tests:
           lands on the user's HSBC card liability (reducing what is owed). It did NOT
           ask for the cash value (the user gave it: 2500) and did NOT denominate any
           expense in points.
+
+  # ---- ATTRIBUTE earn to a card: resolve the card's real currency, don't guess ----
+  - description: 'attribute — accor accruals are from magnus burgundy (look up the pool, 5:4)'
+    vars:
+      seed: |
+        2025-03-10 * "AXIS BANK" "Earn"
+          Assets:Rewards:Points:AllRewards      8000 ALLREWARDS
+          Equity:Void                          -8000 ALLREWARDS
+
+        2025-05-20 * "AXIS BANK" "Earn"
+          Assets:Rewards:Points:AllRewards      4000 ALLREWARDS
+          Equity:Void                          -4000 ALLREWARDS
+      message: 'the accor accruals coming from axis are from my magnus burgundy card, it used to transfer 5:4. fix them'
+    assert:
+      - type: javascript
+        value: 'output.draftsValid === true'
+        metric: balances
+      - type: javascript
+        value: "output.drafts.some(d => d.text.includes('AXIS-EDGE-BURGUNDY'))"
+        metric: real-currency
+      - type: javascript
+        value: "output.drafts.some(d => d.text.includes('@@'))"
+        metric: transfer-priced
+      - type: llm-rubric
+        value: >
+          The model looked up the Axis Magnus Burgundy card (it did NOT guess) and
+          re-drafted the two "AXIS BANK" Accor accruals as TRANSFERS from the card's
+          actual reward pool — EDGE Rewards Burgundy, ticker AXIS-EDGE-BURGUNDY — into
+          Accor ALLREWARDS, at the 5:4 ratio the user gave (5 EDGE → 4 Accor). So the
+          8000 ALLREWARDS came from 10000 AXIS-EDGE-BURGUNDY and the 4000 from 5000,
+          carried via `@@`. It did NOT inject the points from a generic
+          `Assets:Rewards:Axis` pool with no currency basis, did NOT invent a different
+          ratio, and did NOT denominate the accrual as a plain Equity:Void contra.
