@@ -264,7 +264,10 @@ each answer to its own row only; never reuse one number across distinct flights/
 
 A balance is asserted as a **pad + balance** pair: the pad
 absorbs any drift between the figure and what your entries left in the account,
-then the balance asserts the figure. **The pad always plugs from `Equity:Void`**
+then the balance asserts the figure. A balance-set is always a FRESH entry — emit
+the pad + balance as a NEW draft with NO `replaces`; never frame it as an edit of
+an existing entry, even if you `search`ed and found related rows in that account.
+**The pad always plugs from `Equity:Void`**
 — for every account type (reward, bank, card, cash). Write the plug as
 `Equity:Void` on the pad line. (If the running balance already equals the figure
 exactly and needs no reconciliation, use a bare `balance` line instead — no pad.)
