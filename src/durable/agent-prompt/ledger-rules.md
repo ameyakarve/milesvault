@@ -209,15 +209,27 @@ than the bill), no plug. E.g. a ₹500 bill with ₹50 off → `Expenses:… 500
 legs positive (that charges the full bill and applies no discount).
 
 **Cashback** is deferred — ₹X posted back separately, redeemable later. UNLIKE a
-discount, cashback does NOT touch the expense or the card: the expense is the FULL
-bill, the card pays the FULL bill, and the cashback is a SEPARATE
+discount, cashback does NOT touch the expense or the card: the expense stays the
+FULL bill, the card pays the FULL bill, and the cashback is a SEPARATE
 `Assets:Receivable:<Issuer>` accrual minted against an `Equity:Void` contra (the
-same mint/burn plug points use — NOT a reduction of the expense, NOT a smaller
-card amount, NOT `Income:Void`). There is NO negative leg on the expense — that is
-the discount shape, not cashback. E.g. a ₹1000 spend with ₹50 cashback →
-`Expenses:… 1000`, card `-1000`, `Assets:Receivable:<Issuer> 50`, `Equity:Void -50`
-(the card pays 1000, NOT 950). When the issuer credits it, draw the receivable
-down against the instrument it lands on.
+same mint/burn plug points use — NOT `Income:Void`). When the issuer credits it,
+draw the receivable down against the instrument it lands on.
+
+```beancount
+2026-05-21 * "Store" "Groceries — ₹50 cashback"
+  Expenses:Food:Groceries          1000 INR
+  Liabilities:CreditCards:<Card>  -1000 INR
+  Assets:Receivable:<Issuer>         50 INR
+  Equity:Void                       -50 INR
+```
+WRONG — reducing the bill (that is a DISCOUNT) AND adding the receivable
+double-counts the cashback:
+```beancount
+  Expenses:Food:Groceries          1000 INR
+  Expenses:Food:Groceries           -50 INR   ; ✗ no negative expense leg on cashback
+  Liabilities:CreditCards:<Card>   -950 INR   ; ✗ card pays the FULL 1000, not 950
+  Assets:Receivable:<Issuer>         50 INR
+```
 
 ## Forex (a charge in a foreign currency)
 
