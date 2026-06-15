@@ -28,7 +28,7 @@ ignore it. Decide by what the reward did to THIS purchase:
   the bill", "cashback at POS".
 - Is it a separate credit the user can redeem later (lands on a future
   statement / accumulates in a cashback pool)? → **Cashback** pattern
-  (4 postings with `Assets:Receivable:<Issuer>` + expense reduction).
+  (4 postings with `Assets:Receivable:<Issuer>` + `Equity:Void` contra).
 - Is it in a non-cash unit (points, miles)? → **Points** pattern
   (4 postings, multi-currency, `Equity:Void` contra).
 
@@ -79,19 +79,20 @@ when the KG has no match for the card/programme.
 ## Cashback pattern (word: "cashback")
 
 A separately-redeemable credit posted by the issuer (₹X back, redeemable
-later). Four postings: purchase (2) + receivable accrual (+) + matching
-expense reduction (−). The expense leg IS the contra — no `Equity:Void`.
+later). Four postings: purchase (2) + receivable accrual (+) + an
+`Equity:Void` contra (−). The expense is NOT reduced — the cashback is
+minted from `Equity:Void`, the same plug points use.
 
 ```beancount
 2026-05-21 * "Starbucks" "Coffee — ₹3.70 cashback"
   Expenses:Food:Coffee  37.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -37.00 INR
   Assets:Receivable:<Issuer>  3.70 INR
-  Expenses:Food:Coffee  -3.70 INR
+  Equity:Void  -3.70 INR
 ```
 
-INR sums to zero. Net expense to dashboards = ₹33.30; card paid ₹37;
-receivable accrues ₹3.70.
+INR sums to zero. Expense to dashboards = ₹37 (full price, not reduced);
+card paid ₹37; receivable accrues ₹3.70 until the issuer credits it.
 
 ## Points pattern (words: "points", "miles")
 

@@ -57,8 +57,8 @@ tool, don't deliberate in prose, don't narrate.
      verbatim; never the catalogue/canonical name, never a clarify.
   2. **Reward leg** = whatever the card's guide says it EARNS on this spend.
      Match the reward TYPE to the card: a CASHBACK card accrues cashback (the
-     cashback pattern — `Assets:Receivable:<Issuer>` + a matching expense
-     reduction); a POINTS/MILES card accrues to its points pool. NEVER accrue
+     cashback pattern — `Assets:Receivable:<Issuer>` + an `Equity:Void`
+     contra); a POINTS/MILES card accrues to its points pool. NEVER accrue
      points for a cashback card, NEVER invent a reward currency, and do NOT
      silently drop an earn the card actually gives. Only when the card earns
      nothing on this spend (or no rate is documented anywhere) do you draft the
