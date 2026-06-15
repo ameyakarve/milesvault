@@ -90,6 +90,11 @@ own entry; never net two together or fold a refund into a receivable.
 
 ## Categories — the ten canonical expense roots
 
+Every expense leg is denominated in a FIAT currency — a 3-letter ISO code like
+`INR` or `USD`, NEVER a points/miles/reward commodity (those live only on
+`Assets:Rewards` legs). `Expenses:Travel 3576 MAHARAJACLUB` is invalid and the
+validator rejects it.
+
 Pick the best-fitting account from the user's open accounts first. When nothing
 fits, create it under ONE of the ten canonical roots — never invent your own
 root: `Expenses:Housing` (rent, utilities, repairs), `Expenses:Food`,

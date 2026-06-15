@@ -67,6 +67,17 @@ const EX_ACCOUNT = `Use a canonical account path. Credit-card liabilities are ex
 Liabilities:CreditCards:<Issuer>:<Card> (fold tier/variant into <Card>); reward
 accounts come from list_reward_accounts — copy them verbatim.`
 
+// An expense leg carried a non-fiat (points/reward) commodity. Expenses are
+// fiat only; reward commodities live on Assets:Rewards legs.
+const EX_FIAT_EXPENSE = `An expense leg is ALWAYS fiat (a 3-letter code like INR/USD) — a points/reward
+commodity (ALLREWARDS, MAHARAJACLUB, …) only ever sits on an Assets:Rewards leg.
+A points EARN/credit has NO expense leg at all (just the accrual + Equity:Void).
+A REDEMPTION puts the CASH value (fiat) on the expense and the points on the
+Assets:Rewards leg:
+  2026-05-21 * "Airline" "Award flight"
+    Expenses:Travel:Flights        50000 INR
+    Assets:Rewards:Miles:<Prog>   -10000 PTS @@ 50000 INR`
+
 // Distinct commodity tickers on the posting AMOUNTS of one entry. Two or more
 // (with no @@/@ converting between them) is the cross-commodity signature.
 // Only indented posting lines are scanned, and only the first amount+commodity
@@ -84,6 +95,7 @@ function commodityCount(entry: string): number {
 
 function pickExample(message: string, entry: string): string {
   if (/credit card accounts must be/i.test(message)) return EX_ACCOUNT
+  if (/expense leg must be a fiat/i.test(message)) return EX_FIAT_EXPENSE
   if (/only kind|allowed in a draft/i.test(message)) return EX_DIRECTIVE
   if (
     /could not parse|silently dropped|elided or blank|explicit numeric amount|exactly one transaction/i.test(

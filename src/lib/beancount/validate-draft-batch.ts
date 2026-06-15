@@ -65,6 +65,7 @@ export type DraftEntryVerdict =
   | { kind: 'dropped_posting'; messages: string[] }
   | { kind: 'elided'; messages: string[] }
   | { kind: 'bad_price'; messages: string[] }
+  | { kind: 'non_fiat_expense'; messages: string[] }
   | {
       kind: 'unbalanced'
       residuals: { currency: string; amount: string }[]
@@ -165,6 +166,24 @@ export function classifyDraftEntry(text: string, label = 'entry'): DraftEntryVer
       messages: zeroPrice.map(
         (p) =>
           `${label}${tag}: posting ${p.account} carries a ZERO @@/@ price (${p.price_amount} ${p.price_currency ?? ''}) — a conversion/redemption price must be a non-zero cash value. A redemption or transfer is never worth 0: if you don't have the value, ask the user with \`clarify\` — do NOT record it as 0.`,
+      ),
+    }
+  }
+  // Expense legs are FIAT only. Fiat currencies are ISO-4217 three-letter codes
+  // (INR, USD, …); a points/reward commodity (ALLREWARDS, MAHARAJACLUB,
+  // AXIS-EDGE-BURGUNDY, MAHARAJACLUB-STATUS, …) is longer or carries a hyphen/
+  // digit and only ever belongs on an Assets:Rewards leg. Bounce an expense
+  // priced in a non-fiat commodity (the model's `Expenses:Travel 3576 MAHARAJACLUB`).
+  const FIAT = /^[A-Z]{3}$/
+  const nonFiatExpense = txn.postings.filter(
+    (p) => p.account.startsWith('Expenses:') && p.currency != null && !FIAT.test(p.currency),
+  )
+  if (nonFiatExpense.length > 0) {
+    return {
+      kind: 'non_fiat_expense',
+      messages: nonFiatExpense.map(
+        (p) =>
+          `${label}${tag}: expense posting ${p.account} is in '${p.currency}', but an expense leg must be a fiat currency (a 3-letter ISO code like INR/USD). A points/reward commodity only ever sits on an Assets:Rewards leg — never on an expense.`,
       ),
     }
   }
