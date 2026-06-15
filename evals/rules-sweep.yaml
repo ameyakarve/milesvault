@@ -243,16 +243,17 @@ tests:
         value: 'output.draftsValid === true'
         metric: balances
       - type: javascript
-        value: "output.drafts.some(d => /-10000\\s+SKYBANKPTS\\s+@@\\s+5000\\s+SKYMILES/.test(d.text))"
-        metric: source-priced-in-dest
+        value: "output.drafts.some(d => /@@/.test(d.text) && /10000\\s+SKYBANKPTS/.test(d.text) && /5000\\s+SKYMILES/.test(d.text))"
+        metric: priced-conversion
       - type: javascript
-        value: "output.drafts.some(d => /Assets:Rewards:Miles:Skyline\\s+5000\\s+SKYMILES/.test(d.text))"
-        metric: dest-credited
+        value: "output.drafts.some(d => /Assets:Rewards:Miles:Skyline\\s+5000\\s+SKYMILES/.test(d.text)) && !output.drafts.some(d => d.text.includes('Equity:Void'))"
+        metric: dest-credited-no-void
       - type: llm-rubric
         value: >
-          A points transfer at 2:1: -10000 SKYBANKPTS leaves the Skybank pool carrying
-          `@@ 5000 SKYMILES`, and +5000 SKYMILES lands in the Skyline pool (10000 / 2 =
-          5000). No Equity:Void, no expense. Two legs.
+          A points transfer at 2:1: -10000 SKYBANKPTS leaves the Skybank pool and
+          +5000 SKYMILES lands in the Skyline pool (10000 / 2 = 5000), the two legs
+          tied by an `@@` price between SKYBANKPTS and SKYMILES. (The `@@` may sit on
+          either leg — both balance.) No Equity:Void, no expense. Two legs.
 
   # ---- RULE: refund mirrors the purchase (negative expense, positive card) ----
   - description: 'refund — reverses a purchase'
