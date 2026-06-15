@@ -69,7 +69,7 @@ export async function fetchCardGuide(
             slug: r.item.slug,
             name: r.item.display_name,
           })),
-          hint: 'Pick the matching card and call card_guide again with its exact `name`.',
+          hint: 'If one of these candidates is the SAME card, call card_guide again with its exact `name`. If none of them is this card, it has NO guide — do NOT call card_guide again; draft the spend with no reward leg (and note you skipped points).',
         }
       }
     }
