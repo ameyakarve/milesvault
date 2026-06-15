@@ -10,12 +10,12 @@ export const LEDGER_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 export const STATEMENT_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 
 // Editor tool-loop step budget. Multi-step turns (find rows → read them → look
-// up a card's pool → draft) need more than Think's default 10. A lookup-heavy
-// attribution turn (resolve card → resolve currencies → find + read accruals →
-// draft) can spend a dozen calls before drafting, so 18 leaves room to actually
-// draft without letting a flailing turn run forever. The headless bench uses the
-// SAME value so it measures what production does.
-export const EDITOR_MAX_STEPS = 18
+// up a card's pool → draft) need more than Think's default 10; 14 gives headroom
+// without letting a flailing turn run forever. (Bumping to 18 did NOT help the
+// magnus attribution case — gemma just fills the bigger budget with more
+// redundant queries, never converging to a draft; the cap isn't the bottleneck.)
+// The headless bench uses the SAME value so it measures what production does.
+export const EDITOR_MAX_STEPS = 14
 
 export type EditorAgentName = 'ledger' | 'statement'
 
