@@ -218,6 +218,36 @@ tests:
           ask for the cash value (the user gave it: 2500) and did NOT denominate any
           expense in points.
 
+  # ---- AWARD-FLIGHT REDEMPTION (rich row, no cash value): redemption, NOT a
+  #      reconstructed paid ticket — no card leg, no invented fare, clarify ----
+  - description: 'redemption — award flight (no value) is not a purchase'
+    vars:
+      seed: |
+        2026-01-01 * "Skyline" "Opening miles"
+          Assets:Rewards:Miles:Skyline      50000 SKYMILES
+          Equity:Void                      -50000 SKYMILES
+      message: |
+        add this from my Skyline statement:
+        - SA 100  Skyline Air  LAX - JFK  12 Mar 2026  Economy  Flight  -13,500 Skyline miles
+    assert:
+      - type: javascript
+        value: "!output.drafts.some(d => /Liabilities:CreditCards/.test(d.text))"
+        metric: no-card-leg
+      - type: javascript
+        value: "!output.drafts.some(d => /@@\\s*0(\\.0+)?(\\s|$)/.test(d.text))"
+        metric: no-zero-price
+      - type: javascript
+        value: "output.clarifies.length > 0 || output.drafts.some(d => /-13500\\s+SKYMILES\\s+@@/.test(d.text))"
+        metric: clarified-or-priced
+      - type: llm-rubric
+        value: >
+          The -13,500 Skyline miles award flight is treated as a REDEMPTION, not a
+          paid ticket. No cash value was given, so the assistant called `clarify` for
+          the cash equivalent (or, if it had a value, priced the points leg
+          `-13500 SKYMILES @@ <cash> INR` with the cash as the expense). It did NOT
+          reconstruct a purchase — NO `Liabilities:CreditCards` card leg, NO invented
+          fare, NO `@@ 0`. The points are the payment.
+
   # ---- ATTRIBUTE earn to its source pool: transfer-FIX at a ratio, keep dest ----
   - description: 'attribute — Skyline accruals are transferred from Horizon (5:4)'
     vars:

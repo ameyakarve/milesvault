@@ -239,10 +239,25 @@ On the points posting, carry the cash equivalent as an `@@` total price in the
 fiat currency. Never guess the cash value from a fixed cpp
 rate and never fall back to `Equity:Void` for a redemption.
 
-The shape: the points LEAVE their wallet (a negative points posting with an
-`@@` price carrying the cash equivalent) and the **cash value is the
-expense** (`Expenses:… <cash> FIAT`). The points commodity NEVER sits on the
-expense leg — the expense is always in fiat.
+The shape is EXACTLY TWO legs — no more: the **cash value as the expense**
+(`Expenses:… <cash> FIAT`) and the points LEAVING their wallet
+(`Assets:Rewards:… -N PTS @@ <cash> FIAT`). The points ARE the payment, so there
+is **NO card leg, NO `Equity:Void`, NO points accrual** — you did not pay a card
+and you earned nothing. An award flight or hotel is a REDEMPTION, NOT a purchase:
+do NOT reconstruct a paid-ticket entry, and do NOT invent the card it was "paid"
+on — there is no card. The points commodity NEVER sits on the expense leg; the
+expense is always fiat.
+
+```beancount
+2026-01-16 * "Airline" "Award flight — points redemption"
+  Expenses:Travel:Flights        <cash> INR
+  Assets:Rewards:Miles:<Prog>   -13500 PTS @@ <cash> INR
+```
+WRONG — reconstructing a paid ticket (a `-N` flight is a redemption, not a buy):
+```beancount
+  Expenses:Travel:Flights         <made-up> INR  ; ✗ invented fare
+  Liabilities:CreditCards:<Card>  -<made-up> INR ; ✗ NO card — the points paid
+```
 
 **If you do not have the cash value, you MUST `clarify` and ask the user for it.**
 Do NOT invent a number — not `@@ 0.00`, and equally not a made-up round figure like
