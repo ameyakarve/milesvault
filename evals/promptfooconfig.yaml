@@ -68,10 +68,10 @@ tests:
       message: 'check my accor txns from this year -- tell me which of these are redemptions'
     assert:
       - type: javascript
-        value: "output.sqls.some(s => s.includes('AllRewards'))"
-        metric: queries-by-account
+        value: "output.trace.some(t => t.tool === 'search' && /AllRewards/.test(JSON.stringify(t.input)))"
+        metric: searches-by-account
       - type: javascript
-        value: "!output.sqls.some(s => /like\\s+'%accor%'/i.test(s))"
+        value: "!output.trace.some(t => t.tool === 'search' && /accor/i.test(JSON.stringify(t.input)))"
         metric: not-text-match
       - type: llm-rubric
         value: >
