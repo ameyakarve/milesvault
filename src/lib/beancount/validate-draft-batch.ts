@@ -135,7 +135,7 @@ export function classifyDraftEntry(text: string, label = 'entry'): DraftEntryVer
   }
   // A conversion price (`@`/`@@`) must be in a DIFFERENT commodity than the
   // posting's own amount — pricing a currency in itself is meaningless (the
-  // model's `8000 ALLREWARDS @@ 4000 ALLREWARDS`). Bounce it with a targeted
+  // model's `8000 RWD_PTS @@ 4000 RWD_PTS`). Bounce it with a targeted
   // message so the model fixes the conversion instead of chasing a phantom
   // imbalance.
   const samePrice = txn.postings.filter(
@@ -152,7 +152,7 @@ export function classifyDraftEntry(text: string, label = 'entry'): DraftEntryVer
   }
   // A conversion price (`@`/`@@`) of ZERO values the priced leg at nothing —
   // the trick the model reaches for to "balance" a redemption or transfer it
-  // couldn't value (e.g. `-13500 MAHARAJACLUB @@ 0.00 INR`). A zero price is
+  // couldn't value (e.g. `-13500 MILES @@ 0.00 INR`). A zero price is
   // never a real conversion: the value is UNKNOWN, not nil. Bounce it so the
   // model asks (`clarify`) instead of recording the points as worthless.
   const zeroPrice = txn.postings.filter((p) => {
@@ -170,10 +170,10 @@ export function classifyDraftEntry(text: string, label = 'entry'): DraftEntryVer
     }
   }
   // Expense legs are FIAT only. Fiat currencies are ISO-4217 three-letter codes
-  // (INR, USD, …); a points/reward commodity (ALLREWARDS, MAHARAJACLUB,
-  // AXIS-EDGE-BURGUNDY, MAHARAJACLUB-STATUS, …) is longer or carries a hyphen/
+  // (INR, USD, …); a points/reward commodity (RWD_PTS, MILES,
+  // SRC_PTS, MILES-STATUS, …) is longer or carries a hyphen/
   // digit and only ever belongs on an Assets:Rewards leg. Bounce an expense
-  // priced in a non-fiat commodity (the model's `Expenses:Travel 3576 MAHARAJACLUB`).
+  // priced in a non-fiat commodity (the model's `Expenses:Travel 3576 MILES`).
   const FIAT = /^[A-Z]{3}$/
   const nonFiatExpense = txn.postings.filter(
     (p) => p.account.startsWith('Expenses:') && p.currency != null && !FIAT.test(p.currency),

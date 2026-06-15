@@ -92,7 +92,7 @@ own entry; never net two together or fold a refund into a receivable.
 
 Every expense leg is denominated in a FIAT currency — a 3-letter ISO code like
 `INR` or `USD`, NEVER a points/miles/reward commodity (those live only on
-`Assets:Rewards` legs). `Expenses:Travel 3576 MAHARAJACLUB` is invalid and the
+`Assets:Rewards` legs). `Expenses:Travel 3576 RWD_PTS` is invalid and the
 validator rejects it.
 
 Pick the best-fitting account from the user's open accounts first. When nothing
@@ -143,7 +143,7 @@ A loyalty/points statement (NOT a card statement) lists POINTS movements, and th
 SIGN is the classifier: a `+N` row CREDITS points (an EARN), a `-N` row SPENDS them
 (a REDEMPTION — see Redemption). NEVER flip an earn into a redemption: a `+N` line is
 never a redemption, gets NO `@@` price, and you never invent a fare or cash value
-for it. (A flight that EARNED you miles — `AI 123 … +557 Maharaja Points` — is an
+for it. (A flight that EARNED you miles — `SA 123 … +557 reward miles` — is an
 EARN: you already paid for that ticket elsewhere. It is NOT an award redemption and
 has no fare on this statement to book.)
 
@@ -162,8 +162,8 @@ below). That is the whole entry.
   came from, not that a purchase belongs here.
 - NEVER read the points count as a fiat amount (`+3,576 points` is `3576 <TICKER>`,
   never `₹3576`), and NEVER paper over that by putting the POINTS commodity on an
-  expense or card leg. `Expenses:Travel 3576 MAHARAJACLUB` and
-  `Liabilities:CreditCards:… -3576 MAHARAJACLUB` are BOTH nonsense: an expense/card
+  expense or card leg. `Expenses:Travel 3576 RWD_PTS` and
+  `Liabilities:CreditCards:… -3576 RWD_PTS` are BOTH nonsense: an expense/card
   leg is fiat; a points quantity only ever lives on an `Assets:Rewards:…` (or
   `Equity:Void` contra) leg.
 - If the row names another loyalty currency it converted FROM, make it a TRANSFER

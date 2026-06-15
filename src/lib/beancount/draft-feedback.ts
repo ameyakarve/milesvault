@@ -70,7 +70,7 @@ accounts come from list_reward_accounts — copy them verbatim.`
 // An expense leg carried a non-fiat (points/reward) commodity. Expenses are
 // fiat only; reward commodities live on Assets:Rewards legs.
 const EX_FIAT_EXPENSE = `An expense leg is ALWAYS fiat (a 3-letter code like INR/USD) — a points/reward
-commodity (ALLREWARDS, MAHARAJACLUB, …) only ever sits on an Assets:Rewards leg.
+commodity (RWD_PTS, MILES, …) only ever sits on an Assets:Rewards leg.
 A points EARN/credit has NO expense leg at all (just the accrual + Equity:Void).
 A REDEMPTION puts the CASH value (fiat) on the expense and the points on the
 Assets:Rewards leg:
