@@ -28,42 +28,21 @@ Postings MUST balance per currency. For a foreign-currency or points→points
 conversion leg, carry the total value with `@@` (in the OTHER commodity) so its
 converted value closes against the other leg.
 
-A conversion/transfer **ratio `A:B`** means A units of the SOURCE become B units
-of the DESTINATION — `1:1` is one source → one destination; `3:2` is 3 source →
-2 destination (you end up with fewer). The arithmetic: `destination = source ×
-B/A`, and `source = destination × A/B`. Do this division exactly — don't
-approximate or flip the direction. The two legs are in DIFFERENT commodities; the
-`@@` price is in the OTHER leg's commodity (never the same commodity as its own
-leg). Which way you're going decides which number is fixed:
-
-- **Forward — you HOLD the source and convert it now.** You have N source; you
-  get `N × B/A` destination. Source leg negative, destination positive. At `3:2`,
-  holding 900 SRC → 600 DST:
-  ```beancount
-  2026-05-01 * "Programme" "Transfer"
-    Assets:Rewards:Points:Dst    600 DST
-    Assets:Rewards:Points:Src   -900 SRC @@ 600 DST
-  ```
-
-- **Backward — you are EDITING an existing accrual to record where it came FROM**
-  ("these points came from card X", "attribute these"). This is the common case
-  for a fix. The currency ALREADY in the entry is the DESTINATION — it already
-  landed, so **keep that leg byte-for-byte; do NOT recompute or shrink its
-  amount.** The only change is the contra: **replace the `Equity:Void` line with
-  the source leg**, `source = destination × A/B`. At `3:2`, an existing 1200 DST
-  accrual came from `1200 × 3/2 = 1800` SRC:
-  ```beancount
-  ; before — the existing accrual you're fixing:
-  2026-05-01 * "Programme" "Earn"
-    Assets:Rewards:Points:Dst   1200 DST
-    Equity:Void                -1200 DST
-  ; after — Dst leg UNCHANGED, Equity:Void swapped for the source:
-  2026-05-01 * "Programme" "Earn"
-    Assets:Rewards:Points:Dst   1200 DST
-    Assets:Rewards:Points:Src  -1800 SRC @@ 1200 DST
-  ```
-  NEVER change the destination amount when attributing it to a source, and never
-  write `@@` in the destination's own currency (`1200 DST @@ … DST` is wrong).
+**Transferring points between two programmes** (one loyalty currency → another at
+a ratio) — this is NOT a redemption (points → cash/flight/hotel; see Redemption,
+where the cash value is given, not a ratio). A ratio `A:B` = A source → B
+destination: `destination = source × B/A`, `source = destination × A/B` (divide
+exactly; don't flip it). The `@@` price sits on the SOURCE (negative) leg, in the
+destination's commodity. Most transfers are a FIX — attributing an existing
+accrual to where it came from: the currency already in the entry is the
+DESTINATION, so keep that leg unchanged and just replace its `Equity:Void` contra
+with the source leg. At `3:2`, an existing 1200 DST accrual came from
+`1200 × 3/2 = 1800` SRC:
+```beancount
+2026-05-01 * "Programme" "Earn"
+  Assets:Rewards:Points:Dst   1200 DST            ; unchanged
+  Assets:Rewards:Points:Src  -1800 SRC @@ 1200 DST
+```
 
 ## Payments to the card
 
