@@ -32,6 +32,7 @@ import {
   addCardTool,
   readStatementTool,
   getEntryTool,
+  searchTool,
 } from './agents/tools/editor'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 import { runIncorporation } from './ingest/incorporate'
@@ -574,6 +575,7 @@ ${opts.text}`,
       list_reward_accounts: rewardAccountsTool(kbHttp),
       query_sql: querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params)),
       get_entry: getEntryTool((ref) => this.ledgerStub().get_entry(ref)),
+      search: searchTool((filter) => this.ledgerStub().search_postings(filter)),
       draft_transaction: capture('draft_transaction', draftTransactionBatchSchema),
       clarify: capture('clarify', clarifyInputSchema),
       add_card: capture('add_card', addCardInputSchema),
@@ -722,14 +724,16 @@ entries, or draft corrections.`
     // model copies raw_text into draft_transaction's `replaces` to edit/delete).
     const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
     const get_entry = getEntryTool((ref) => this.ledgerStub().get_entry(ref))
+    const search = searchTool((filter) => this.ledgerStub().search_postings(filter))
     if (name === 'ledger') {
       // Tool-using authoring agent: look things up (kb_*, card_guide,
-      // list_reward_accounts, query_sql, get_entry) and author directly via
+      // list_reward_accounts, search/query_sql, get_entry) and author directly via
       // draft_transaction (add = text; edit = replaces + text; delete = replaces).
       return this.withToolLog(name, {
         ...kbLookup,
         card_guide,
         list_reward_accounts,
+        search,
         query_sql,
         get_entry,
         draft_transaction: draftTransactionTool(),

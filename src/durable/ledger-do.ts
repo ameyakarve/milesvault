@@ -39,6 +39,15 @@ import {
   type PostingSearchRow,
 } from '@/lib/ledger-core/posting-search'
 
+// Build a safe FTS5 MATCH query from free text: alphanumeric tokens, prefix-
+// matched (`*`) and AND-joined, so "air india" matches "Air India Ltd". Strips
+// FTS operator characters so user text can't produce a MATCH syntax error.
+function toFtsMatchQuery(text: string): string {
+  const tokens = text.match(/[A-Za-z0-9]+/g)
+  if (!tokens || tokens.length === 0) return '""'
+  return tokens.map((t) => `${t}*`).join(' ')
+}
+
 // Order matters for clear(): we DELETE in this order. transactions first so
 // the FK cascade tears down postings (which fires the materialized-balance
 // triggers); the balance_totals / daily_balances entries at the end then
@@ -1399,9 +1408,11 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     if (filter.sign === 'credit') wheres.push('p.amount_scaled > 0')
 
     if (filter.payee_q) {
-      wheres.push('(t.payee LIKE ? OR t.narration LIKE ?)')
-      const q = `%${filter.payee_q}%`
-      binds.push(q, q)
+      // Prefix-token FTS match over payee+narration (see toFtsMatchQuery).
+      wheres.push(
+        't.id IN (SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ?)',
+      )
+      binds.push(toFtsMatchQuery(filter.payee_q))
     }
 
     if (filter.flag) {
