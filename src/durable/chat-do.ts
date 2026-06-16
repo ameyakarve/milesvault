@@ -375,14 +375,13 @@ ${opts.text}`,
       // thinking, is what stopped the prose/```python escape). buildModel still
       // wraps the toolCallRescueMiddleware, which recovers any tool-call-token
       // leak; this just drops the reasoning trace.
-      // Stream like the editor (Think runs streamText) — streaming keeps a long
-      // generation alive (a blocking generateText once hung 710s and returned
-      // nothing). Same middleware/tool-loop; consume the stream to drive it.
-      const stream = streamText({
+      // NON-streaming generateText (owner call): the earlier streamText path
+      // returned garbled + duplicated tool-call args in the gateway log (→ args
+      // failed to parse → 0 drafts), while generateText returned them clean.
+      // A hard 120s abort still bounds a runaway/stalled call (→ capture errors,
+      // retryable) without needing the stream.
+      const result = await generateText({
         model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
-        // Hard ceiling so a runaway/stalled call can't outlive the DO (→ capture
-        // stuck in 'processing'): abort at 120s — well above a healthy ~30-60s
-        // draft, well below the hangs we saw — so it errors cleanly + retryable.
         abortSignal: AbortSignal.timeout(120_000),
         system: buildLedgerSystem(snapshot, aliases, { statement: true }),
         messages: [
@@ -420,12 +419,9 @@ ${stmt.text}`,
         // retry still runs; lookups (card_guide, read_statement) are non-terminal.
         stopWhen: [() => recorded.length > 0, stepCountIs(EDITOR_MAX_STEPS)],
       })
-      // Drain the stream to run the tool loop to completion, then resolve the
-      // final values (these are promises on a streamText result).
-      await stream.consumeStream()
-      const text = await stream.text
-      const steps = await stream.steps
-      const finishReason = await stream.finishReason
+      const text = result.text
+      const steps = result.steps
+      const finishReason = result.finishReason
 
       try {
         this.setState({})
