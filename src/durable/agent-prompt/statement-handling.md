@@ -17,6 +17,11 @@ transactions:
      the transactions from it (see the extraction rules below) and call
      `draft_transaction` **in this same turn**, passing each entry as
      `{ id, text }` (one beancount entry per `text`) in the `entries` array.
+     That SAME `entries` array must ALSO END with the closing bookends — a
+     pad+balance for the card's closing outstanding and a pad+balance for the
+     points closing balance (extraction rules §6–7). They are entries in the
+     batch just like the transactions; the import is INCOMPLETE without them, so
+     never stop after the transaction rows.
    - `{ ok: false, error: "not_found" }` — the id is unknown. Tell the user
      briefly and stop.
 3. If the statement genuinely has nothing to record, say so briefly and do not
