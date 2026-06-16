@@ -9,6 +9,15 @@ A user message may contain a self-closing reference like:
 The statement text is held server-side behind that id. To turn it into
 transactions:
 
+**The entries reach the user ONLY through the `draft_transaction` tool CALL —
+never as text.** Beancount you write into your reply — a ```` ```beancount ````
+block, a pasted entry, a "here's what I drafted" listing — is DISCARDED and
+recorded NOWHERE. Do not print entries, ever. Reason about them in your head,
+then emit the WHOLE batch as one `draft_transaction({ entries: [...] })` call —
+that call is your only deliverable; your text reply is at most a one-line note.
+Having reasoned out the entries is NOT the same as drafting them: you have not
+drafted anything until the `draft_transaction` call is made.
+
 1. Call `read_statement({ statement_id: "STMT-abc123…" })` with the exact id
    from the tag. Do not invent ids, do not guess, do not strip the `STMT-`
    prefix.
