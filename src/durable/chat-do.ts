@@ -332,7 +332,15 @@ ${opts.text}`,
     return { ok: true, entries: 0 }
   }
 
-  async runDraftStatement(statementId: string): Promise<{ ok: boolean; entries: number }> {
+  async runDraftStatement(statementId: string): Promise<{
+    ok: boolean
+    entries: number
+    drafts?: string[]
+    questions?: string[]
+    text?: string
+    draftsValid?: boolean
+    trace?: { tool: string }[]
+  }> {
     const ledger = this.ledgerStub()
     const t0 = Date.now()
     try {
@@ -428,10 +436,7 @@ ${stmt.text}`,
         // Generous budget: a thinking trace over a long statement plus the full
         // entry batch can run well past 16k; capping low truncates mid-output.
         maxOutputTokens: 32768,
-        // Stop the moment the batch is recorded — no trailing narration step. A
-        // draft that fails validation records nothing, so the validator's
-        // bounce-and-retry still runs until a valid batch lands.
-        stopWhen: [() => recorded.length > 0, stepCountIs(EDITOR_MAX_STEPS)],
+        stopWhen: stepCountIs(EDITOR_MAX_STEPS),
       })
 
       try {
@@ -462,7 +467,20 @@ ${stmt.text}`,
         ok: recorded.length > 0,
         ms: Date.now() - t0,
       })
-      return { ok: recorded.length > 0, entries: recorded.length }
+      // Rich detail (ignored by the scheduler; consumed by the test harness so
+      // the eval can assert on the REAL ingest output — drafts, validity, the
+      // tools the agent actually called, its closing prose).
+      return {
+        ok: recorded.length > 0,
+        entries: recorded.length,
+        drafts: recorded,
+        questions,
+        text: result.text,
+        draftsValid: recorded.length > 0 ? validateDraftBatch(recorded).ok === true : false,
+        trace: result.steps.flatMap((s) =>
+          (s.toolCalls ?? []).map((tc) => ({ tool: tc.toolName })),
+        ),
+      }
     } catch (e) {
       await this.ledgerStub()
         .set_capture_error(statementId, String(e))
