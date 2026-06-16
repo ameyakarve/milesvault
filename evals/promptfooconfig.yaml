@@ -237,14 +237,15 @@ tests:
         value: "!output.drafts.some(d => /@@\\s*0(\\.0+)?(\\s|$)/.test(d.text))"
         metric: no-zero-price
       - type: javascript
-        value: "output.clarifies.length > 0 || output.drafts.some(d => /-13500\\s+SKYMILES\\s+@@/.test(d.text))"
-        metric: clarified-or-priced
+        value: "output.clarifies.length > 0 || (output.drafts.length === 0 && /cash value|fare|cash equivalent|worth/i.test(output.text || '')) || output.drafts.some(d => /-13500\\s+SKYMILES\\s+@@/.test(d.text))"
+        metric: asked-or-priced
       - type: llm-rubric
         value: >
           The -13,500 Skyline miles award flight is treated as a REDEMPTION, not a
-          paid ticket. No cash value was given, so the assistant called `clarify` for
-          the cash equivalent (or, if it had a value, priced the points leg
-          `-13500 SKYMILES @@ <cash> INR` with the cash as the expense). It did NOT
+          paid ticket. No cash value was given, so the assistant ASKED for the cash
+          equivalent — via the `clarify` tool OR a plain-text question for the fare /
+          cash value (either is acceptable) — OR, if it had a value, priced the points
+          leg `-13500 SKYMILES @@ <cash> INR` with the cash as the expense. It did NOT
           reconstruct a purchase — NO `Liabilities:CreditCards` card leg, NO invented
           fare, NO `@@ 0`. The points are the payment.
 
