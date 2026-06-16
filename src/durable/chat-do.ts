@@ -378,12 +378,10 @@ ${opts.text}`,
             return { ok: true, recorded: entries.length }
           },
         }),
-        // Plain fetch (no 'extracted' state-flip; this run owns the state
-        // machine). The statement text is also injected inline below.
-        read_statement: readStatementTool(async (id) => {
-          const blob = await ledger.get_statement(id)
-          return blob ? { filename: blob.filename, text: blob.text } : null
-        }),
+        // NO read_statement: this run ALWAYS starts with the statement (its text
+        // is injected inline in the message below). A fetch-by-id tool here only
+        // made the model flail with a junk "STMT-" id — the statement is the one
+        // thing we always have.
       }
 
       // gemma-4-26b is multimodal: pass the page images straight to the model
@@ -408,7 +406,7 @@ ${opts.text}`,
                 type: 'text',
                 text: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
 
-You have BOTH the extracted statement TEXT (below) and its page IMAGES (attached) — the text carries the exact amounts/dates/merchants; use the images for anything the bank renders as graphics (e.g. a reward-points summary box). Reason over both together.
+The statement's extracted TEXT is below and its page IMAGES are attached — the text carries the exact amounts/dates/merchants; use the images for anything rendered as graphics (e.g. a reward-points box). Reason over both together.
 
 --- statement: ${stmt.filename} ---
 ${stmt.text}`,
