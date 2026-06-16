@@ -152,14 +152,10 @@ function AffordChip({ afford }: { afford: Afford }) {
       </Badge>
     )
   }
-  // Collapsed row: a compact, generic chip — the source programme name (e.g.
-  // "EDGE Rewards — Burgundy tier") is long and eats the row; it's shown in the
-  // expanded detail (AffordDetail) instead.
-  return (
-    <Badge className="text-[10px] font-medium bg-foreground/5 text-foreground border-border dark:bg-foreground/10">
-      Via transfer
-    </Badge>
-  )
+  // Transfer tier: NO chip on the collapsed row — the source programme name
+  // (e.g. "EDGE Rewards — Burgundy tier") just eats real estate. The transfer
+  // path is shown in the expanded detail (AffordDetail).
+  return null
 }
 
 // Expanded-row detail card: concise have vs need + transfer path for the
