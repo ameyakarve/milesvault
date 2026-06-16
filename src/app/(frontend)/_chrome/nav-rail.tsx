@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { type Icon as PhosphorIcon } from '@phosphor-icons/react'
 import { ChatCircleDots, NotePencil } from '@phosphor-icons/react/dist/ssr'
-import { Inbox, Map, Menu, Vault } from 'lucide-react'
+import { FileText, Inbox, Map, Menu, Vault } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -25,23 +25,38 @@ type NavItem =
 const ITEMS: NavItem[] = [
   { kind: 'lucide', href: '/vault', label: 'Vault', LIcon: Vault },
   { kind: 'lucide', href: '/inbox', label: 'Inbox', LIcon: Inbox },
+  { kind: 'lucide', href: '/statements', label: 'Statements', LIcon: FileText },
   { kind: 'plan', href: '/explore', label: 'Plan' },
   { kind: 'link', href: '/concierge', label: 'Assistant', Icon: ChatCircleDots },
   { kind: 'link', href: '/editor', label: 'Journal', Icon: NotePencil },
 ]
 
-// Pending Inbox work (captured/extracted, not yet posted or dismissed) for
-// the nav badge. One fetch per mount; failures read as zero.
-function usePendingCaptures(): number {
-  const [n, setN] = useState(0)
+// Pending capture work (extracted/errored, not yet posted or dismissed) for
+// the nav badges — split by source so Inbox (email) and Statements (upload)
+// each badge only their own queue. One fetch per mount; failures read as zero.
+function usePendingCaptures(): { email: number; upload: number } {
+  const [n, setN] = useState({ email: 0, upload: 0 })
   useEffect(() => {
     let cancelled = false
     fetch('/api/ledger/captures')
-      .then((r) => (r.ok ? (r.json() as Promise<{ rows?: Array<{ state: string; draft_error: string | null }> }>) : null))
+      .then((r) =>
+        r.ok
+          ? (r.json() as Promise<{
+              rows?: Array<{ source: string; state: string; draft_error: string | null }>
+            }>)
+          : null,
+      )
       .then((d) => {
         if (cancelled || !d) return
         const rows = d.rows ?? []
-        setN(rows.filter((r) => r.state === 'extracted' || (r.draft_error != null && r.state !== 'posted' && r.state !== 'dismissed')).length)
+        const pending = (src: string) =>
+          rows.filter(
+            (r) =>
+              r.source === src &&
+              (r.state === 'extracted' ||
+                (r.draft_error != null && r.state !== 'posted' && r.state !== 'dismissed')),
+          ).length
+        setN({ email: pending('email'), upload: pending('upload') })
       })
       .catch(() => {})
     return () => {
@@ -123,7 +138,9 @@ export function NavRail() {
                 >
                   <LIcon size={24} />
                   {href === '/inbox' ? (
-                    <InboxBadge count={pending} className="absolute right-0 top-0" />
+                    <InboxBadge count={pending.email} className="absolute right-0 top-0" />
+                  ) : href === '/statements' ? (
+                    <InboxBadge count={pending.upload} className="absolute right-0 top-0" />
                   ) : null}
                 </Link>
               )
@@ -206,7 +223,11 @@ export function NavRail() {
                   >
                     <LIcon size={20} />
                     {label}
-                    {href === '/inbox' ? <InboxBadge count={pending} className="ml-auto" /> : null}
+                    {href === '/inbox' ? (
+                      <InboxBadge count={pending.email} className="ml-auto" />
+                    ) : href === '/statements' ? (
+                      <InboxBadge count={pending.upload} className="ml-auto" />
+                    ) : null}
                   </Link>
                 )
               }

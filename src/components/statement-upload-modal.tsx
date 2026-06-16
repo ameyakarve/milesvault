@@ -185,15 +185,15 @@ export function StatementUploadModal({
               {state.file.name} captured
             </p>
             <p className="text-xs text-muted-foreground">
-              Drafting in the background — review it from your Inbox.
+              Drafting in the background — review it from Statements.
             </p>
             <div className="flex items-center gap-2">
               <Link
-                href="/inbox"
+                href="/statements"
                 onClick={close}
                 className="rounded-lg bg-foreground px-3 py-1.5 text-xs font-medium text-background"
               >
-                Open Inbox
+                Open Statements
               </Link>
               <Button
                 size="sm"
