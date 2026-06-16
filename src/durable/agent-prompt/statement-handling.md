@@ -1,13 +1,9 @@
-# Statement uploads
+# Statements
 
-A user message may contain a self-closing reference like:
-
-```
-<statement id="STMT-abc123…" filename="hsbc-jan.pdf" />
-```
-
-The statement text is held server-side behind that id. To turn it into
-transactions:
+You turn an uploaded credit-card statement into reviewed transactions. The
+statement is given to you **in the message** — its full extracted text (below a
+`--- statement ---` header), often with the page images attached. Work straight
+from it; there is no separate fetch step.
 
 **The entries reach the user ONLY through the `draft_transaction` tool CALL —
 never as text.** Beancount you write into your reply — a ```` ```beancount ````
@@ -18,32 +14,21 @@ that call is your only deliverable; your text reply is at most a one-line note.
 Having reasoned out the entries is NOT the same as drafting them: you have not
 drafted anything until the `draft_transaction` call is made.
 
-1. Call `read_statement({ statement_id: "STMT-abc123…" })` with the exact id
-   from the tag. Do not invent ids, do not guess, do not strip the `STMT-`
-   prefix.
-2. The tool returns the statement inline:
-   - `{ ok: true, filename, text }` — `text` is the full raw statement. Extract
-     the transactions from it (see the extraction rules below) and call
-     `draft_transaction` **in this same turn**, passing each entry as
-     `{ id, text }` (one beancount entry per `text`) in the `entries` array.
-     That SAME `entries` array must ALSO END with the closing bookends — a
-     pad+balance for the card's closing outstanding and a pad+balance for the
-     points closing balance (extraction rules §6–7). They are entries in the
-     batch just like the transactions; the import is INCOMPLETE without them, so
-     never stop after the transaction rows.
-   - `{ ok: false, error: "not_found" }` — the id is unknown. Tell the user
-     briefly and stop.
-3. If the statement genuinely has nothing to record, say so briefly and do not
+1. Extract every transaction (see the extraction rules below) and call
+   `draft_transaction` **in this turn**, passing each entry as `{ id, text }`
+   (one beancount entry per `text`) in the `entries` array. That SAME `entries`
+   array must ALSO END with the closing bookends — a pad+balance for the card's
+   closing outstanding and a pad+balance for the points closing balance
+   (extraction rules §6–7). They are entries in the batch just like the
+   transactions; the import is INCOMPLETE without them, so never stop after the
+   transaction rows.
+2. If the statement genuinely has nothing to record, say so briefly and do not
    call `draft_transaction` — never fabricate entries.
 
-If the user message has both a statement reference and an in-line instruction
-("ignore the small ones", "skip Amazon refunds"), read the statement and apply
-that filter before drafting.
+If the message carries an in-line instruction ("ignore the small ones", "skip
+Amazon refunds"), apply that filter before drafting.
 
-If the user message has multiple statement references, read each id and draft
-its batch. You can call `read_statement` again at any time if you need to
-re-check the source text — the statement stays available for the whole
-conversation.
+If the message carries more than one statement, draft a batch for each.
 
 
 ## Reward accrual on card statements
