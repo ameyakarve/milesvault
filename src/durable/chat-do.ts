@@ -414,9 +414,10 @@ ${opts.text}`,
                 type: 'text',
                 text: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
 
-<statement id="${statementId}" filename="${stmt.filename}" />
+You have BOTH the extracted statement TEXT (below) and its page IMAGES (attached) — the text carries the exact amounts/dates/merchants; use the images for anything the bank renders as graphics (e.g. a reward-points summary box). Reason over both together.
 
-The statement's page images are attached below — use them for anything the text renders as graphics (e.g. a reward-points summary).`,
+--- statement: ${stmt.filename} ---
+${stmt.text}`,
               },
               ...images.map((url) => ({
                 type: 'file' as const,
