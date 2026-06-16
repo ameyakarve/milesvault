@@ -144,7 +144,7 @@ function CostChip({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
 // Affordability chip shown in the results table (no-source branch only).
 // tier 'hold'     → emerald chip: "You have the points"
 // tier 'transfer' → sky chip:     "Via <src display name>"
-function AffordChip({ afford, names }: { afford: Afford; names: Names }) {
+function AffordChip({ afford }: { afford: Afford }) {
   if (afford.tier === 'hold') {
     return (
       <Badge className="text-[10px] font-medium bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60">
@@ -152,9 +152,12 @@ function AffordChip({ afford, names }: { afford: Afford; names: Names }) {
       </Badge>
     )
   }
+  // Collapsed row: a compact, generic chip — the source programme name (e.g.
+  // "EDGE Rewards — Burgundy tier") is long and eats the row; it's shown in the
+  // expanded detail (AffordDetail) instead.
   return (
     <Badge className="text-[10px] font-medium bg-foreground/5 text-foreground border-border dark:bg-foreground/10">
-      Via {nameOf(afford.src, names)}
+      Via transfer
     </Badge>
   )
 }
@@ -513,7 +516,7 @@ function ResultSection({
                           {nameOf(row.programme, names)}
                         </span>
                         {!source && afford ? (
-                          <AffordChip afford={afford} names={names} />
+                          <AffordChip afford={afford} />
                         ) : null}
                       </div>
                     </TableCell>
