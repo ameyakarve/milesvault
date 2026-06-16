@@ -1,5 +1,5 @@
 import type { ChatResponseResult } from '@cloudflare/think'
-import { generateText, streamText, stepCountIs, tool, type ToolSet } from 'ai'
+import { generateText, streamText, stepCountIs, tool, type ToolSet, type ModelMessage } from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
 import { z } from 'zod'
 import {
@@ -9,7 +9,6 @@ import {
 } from './agent-ui-schemas'
 import {
   buildLedgerSystem,
-  buildStatementAgentSystem,
   buildIncorporationConventions,
   CLARIFICATIONS,
 } from './agent-prompt'
@@ -29,7 +28,6 @@ import {
   draftTransactionTool,
   clarifyTool,
   addCardTool,
-  readStatementTool,
   getEntryTool,
   searchTool,
 } from './agents/tools/editor'
@@ -291,24 +289,17 @@ export class ChatDO
     instruction?: string | null
   }): Promise<{ entries: string[]; note: string }> {
     const snapshot = await this.ledgerStub().ledger_snapshot()
-    const recorded: string[] = []
-    const draft_transaction = tool({
-      description:
-        'Propose one or more beancount transactions (dry run — they are recorded for preview, not committed).',
-      inputSchema: draftTransactionBatchSchema,
-      execute: async ({ entries }) => {
-        recorded.push(...entries.map((e) => e.text))
-        return { ok: true, recorded: entries.length }
-      },
-    })
+    // Same shared brain as the real ingest: the editor system prompt + the
+    // capture toolset (recording draft_transaction).
+    const { tools, recorded } = this.captureDraftTools()
     const result = await generateText({
       model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
-      system: buildStatementAgentSystem(snapshot),
+      system: buildLedgerSystem(snapshot),
       prompt: `${opts.instruction?.trim() || 'Extract the transaction(s) from this forwarded email and draft journal entries.'}
 
 --- forwarded email ---
 ${opts.text}`,
-      tools: { draft_transaction },
+      tools,
       maxOutputTokens: 16384,
       stopWhen: stepCountIs(4),
     })
@@ -350,39 +341,24 @@ ${opts.text}`,
       await ledger.set_capture_state(statementId, 'processing')
       const snapshot = await ledger.ledger_snapshot()
 
-      // Spin the editor's OWN brain off THIS capture's object (owner call):
-      // the per-capture DO runs the same editor agent — same system prompt,
-      // model, KG / card_guide lookups, and the standard per-entry draft
-      // validation (draftTransactionBatchSchema bounces a malformed entry back
-      // in-loop). draft_transaction RECORDS the proposed entries (committed
-      // later when the user approves in the editor). First-turn contract: assume
-      // the statement is good enough and produce ONE draft batch — no clarify
-      // here (the user iterates after). draft_transaction is TERMINAL (stops the
-      // loop) and tool_choice is 'required', so the model must emit a real tool
-      // call — it cannot bail to a prose / ```python / ```beancount "answer".
-      const recorded: string[] = []
+      // Spin the editor's OWN brain off THIS capture's object (owner call): the
+      // per-capture DO runs the same editor agent via the SHARED builders — the
+      // SAME system prompt the live editor uses (buildLedgerSystem, with the
+      // account alias map) and the SAME lookup tools — so the two paths can't
+      // drift. The only deltas are headless ones: draft_transaction RECORDS
+      // (captureDraftTools) instead of suspending on a client, tool_choice is
+      // 'required' so the model can't bail to a prose/```python "answer", and
+      // draft_transaction is TERMINAL. First-turn contract: assume the statement
+      // is good enough, produce ONE batch, no clarify (the user iterates after).
+      const { tools: draftingTools, recorded } = this.captureDraftTools()
+      // Same alias map the editor turn builds (beforeTurnFetch doesn't run for a
+      // scheduled task) — tells the model each held account's canonical pool /
+      // ticker so it doesn't drift the reward currency.
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
-      const kb = makeKbTools(kbHttp)
-      const draftingTools: ToolSet = {
-        kb_resolve: kb.kb_resolve,
-        kb_get: kb.kb_get,
-        kb_related: kb.kb_related,
-        card_guide: cardGuideTool(kbHttp),
-        list_reward_accounts: rewardAccountsTool(kbHttp),
-        draft_transaction: tool({
-          description:
-            'Propose one or more balanced beancount transactions for this statement. They are recorded for the user to review and approve — not committed here.',
-          inputSchema: draftTransactionBatchSchema,
-          execute: async ({ entries }) => {
-            recorded.push(...entries.map((e) => e.text))
-            return { ok: true, recorded: entries.length }
-          },
-        }),
-        // NO read_statement: this run ALWAYS starts with the statement (its text
-        // is injected inline in the message below). A fetch-by-id tool here only
-        // made the model flail with a junk "STMT-" id — the statement is the one
-        // thing we always have.
-      }
+      const aliases = await rewardAccountAliases(
+        kbHttp,
+        snapshot.accounts.map((a) => ({ account: a.account, currencies: a.currencies })),
+      ).catch((): Record<string, string> => ({}))
 
       // gemma-4-26b is multimodal: pass the page images straight to the model
       // as file parts alongside the statement text (owner call — no separate
@@ -404,7 +380,7 @@ ${opts.text}`,
         // stuck in 'processing'): abort at 120s — well above a healthy ~30-60s
         // draft, well below the hangs we saw — so it errors cleanly + retryable.
         abortSignal: AbortSignal.timeout(120_000),
-        system: buildStatementAgentSystem(snapshot),
+        system: buildLedgerSystem(snapshot, aliases),
         messages: [
           {
             role: 'user',
@@ -587,7 +563,6 @@ ${stmt.text}`,
   }> {
     const snapshot = await this.ledgerStub().ledger_snapshot()
     const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
-    const kb = makeKbTools(kbHttp)
     const aliases = await rewardAccountAliases(
       kbHttp,
       snapshot.accounts.map((a) => ({ account: a.account, currencies: a.currencies })),
@@ -601,14 +576,9 @@ ${stmt.text}`,
         inputSchema: schema,
         execute: async () => ({ ok: true as const }),
       })
+    // Shared lookup tools (same as the live editor + ingest) + captured writes.
     const tools: ToolSet = {
-      kb_resolve: kb.kb_resolve,
-      kb_get: kb.kb_get,
-      kb_related: kb.kb_related,
-      card_guide: cardGuideTool(kbHttp),
-      list_reward_accounts: rewardAccountsTool(kbHttp),
-      get_entry: getEntryTool((ref) => this.ledgerStub().get_entry(ref)),
-      search: searchTool((filter) => this.ledgerStub().search_postings(filter)),
+      ...this.lookupTools(),
       draft_transaction: capture('draft_transaction', draftTransactionBatchSchema),
       clarify: capture('clarify', clarifyInputSchema),
       add_card: capture('add_card', addCardInputSchema),
@@ -740,51 +710,103 @@ the whole statement unless the user asks; answer questions, adjust specific
 entries, or draft corrections.`
   }
 
-  tools(name: EditorAgentName): ToolSet {
-    // Read-only KG lookup so the editor can resolve the canonical Beancount
-    // account segments (bank/cc/currency `beancountName`) for what it writes.
+  // The SHARED read/lookup toolset. Built identically for every place that runs
+  // this agent — the live editor turn, the headless statement capture
+  // (runDraftStatement), and the bench — so they CANNOT drift. KG lookups
+  // (kb_*, card_guide, list_reward_accounts) + ledger reads (search, get_entry).
+  private lookupTools(): ToolSet {
     const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
     const kb = makeKbTools(kbHttp)
-    // Editor gets full KG access incl. edge traversal (kb_related) — that's
-    // where transfer ratios / reward-pool / card relationships live.
-    const kbLookup = { kb_resolve: kb.kb_resolve, kb_get: kb.kb_get, kb_related: kb.kb_related }
-    // The card drafting guide (earn rules + worked examples) — both agents
-    // draft card transactions, so both get it.
-    const card_guide = cardGuideTool(kbHttp)
-    // Closed-set reward-account list: the editor picks miles/points accounts from
-    // here (assembled in the KG) instead of building the path itself — gemma
-    // resolves the right programme but drops the `:Miles:` segment when assembling.
-    const list_reward_accounts = rewardAccountsTool(kbHttp)
-    // Codemode read (find entries + answer questions) and per-entry read (the
-    // model copies raw_text into draft_transaction's `replaces` to edit/delete).
-    const get_entry = getEntryTool((ref) => this.ledgerStub().get_entry(ref))
-    const search = searchTool((filter) => this.ledgerStub().search_postings(filter))
-    // ONE editor agent (no handoff): it does freeform edits AND statement
-    // uploads. Full read/author toolset — look things up (kb_*, card_guide,
-    // list_reward_accounts, search, get_entry), read an uploaded statement
-    // (read_statement), and author via draft_transaction. No query_sql —
-    // finding entries is search's job; analytics is the concierge/analyst surface.
+    return {
+      kb_resolve: kb.kb_resolve,
+      kb_get: kb.kb_get,
+      kb_related: kb.kb_related,
+      card_guide: cardGuideTool(kbHttp),
+      list_reward_accounts: rewardAccountsTool(kbHttp),
+      search: searchTool((filter) => this.ledgerStub().search_postings(filter)),
+      get_entry: getEntryTool((ref) => this.ledgerStub().get_entry(ref)),
+    }
+  }
+
+  // Headless CAPTURE variant of the drafting toolset: the SAME lookups, with
+  // draft_transaction RECORDING into a buffer instead of suspending on a live
+  // client. Used by runDraftStatement (and previewDrafts) — the statement is
+  // injected inline, so there's no read_statement, and clarify/add_card (client
+  // tools) have no headless equivalent. Returns the buffer for the caller.
+  private captureDraftTools(): { tools: ToolSet; recorded: string[] } {
+    const recorded: string[] = []
+    const tools = this.withToolLog('ledger', {
+      ...this.lookupTools(),
+      draft_transaction: tool({
+        description:
+          'Propose one or more balanced beancount transactions for this statement. They are recorded for the user to review and approve — not committed here.',
+        inputSchema: draftTransactionBatchSchema,
+        execute: async ({ entries }) => {
+          recorded.push(...entries.map((e) => e.text))
+          return { ok: true, recorded: entries.length }
+        },
+      }),
+    })
+    return { tools, recorded }
+  }
+
+  // ONE editor agent (no handoff): freeform edits AND statement uploads. The
+  // shared lookups + author tools (draft_transaction suspends for client
+  // approval; add = text, edit = replaces + text, delete = replaces), clarify,
+  // add_card, and read_statement (for a statement referenced by id in chat).
+  tools(name: EditorAgentName): ToolSet {
     return this.withToolLog(name, {
-      ...kbLookup,
-      card_guide,
-      list_reward_accounts,
-      search,
-      get_entry,
+      ...this.lookupTools(),
       draft_transaction: draftTransactionTool(),
       clarify: clarifyTool(CLARIFICATIONS),
       add_card: addCardTool(),
-      read_statement: readStatementTool(async (id) => {
-        const stub = this.ledgerStub()
-        const blob = await stub.get_statement(id)
-        // The agent reading the statement is the extraction step starting —
-        // advance the Inbox capture state (best-effort; reads must not fail).
-        if (blob) await stub.set_capture_state(id, 'extracted').catch(() => {})
-        return blob
-      }),
     })
   }
 
-  // ---- History hygiene: redact heavy statement-text outputs ----
+  // The statement always reaches the model AS TEXT — no read_statement tool.
+  // The client embeds a compact `<statement id="STMT-…" filename="…" />` tag in
+  // its message (rendered as a chip in the UI, kept small in stored history).
+  // Here, per turn, we expand that tag into the full statement text for the
+  // model only — so the model sees the statement inline without a fetch tool,
+  // and the stored message / UI stay a chip (no token bloat in history).
+  protected override async transformTurnMessages(
+    messages: ModelMessage[],
+  ): Promise<ModelMessage[] | undefined> {
+    const has = (s: string) => s.includes('<statement id="STMT-')
+    const ids = new Set<string>()
+    for (const m of messages) {
+      if (m.role !== 'user') continue
+      const text =
+        typeof m.content === 'string'
+          ? m.content
+          : m.content.map((p) => (p.type === 'text' ? p.text : '')).join('\n')
+      for (const x of text.matchAll(/<statement\s+id="(STMT-[^"]+)"[^>]*\/>/g)) ids.add(x[1]!)
+    }
+    if (ids.size === 0) return undefined
+    const blobs = new Map<string, string>()
+    for (const id of ids) {
+      const blob = await this.ledgerStub().get_statement(id).catch((): null => null)
+      blobs.set(
+        id,
+        blob ? `--- statement: ${blob.filename} ---\n${blob.text}` : '[statement not found]',
+      )
+      if (blob) await this.ledgerStub().set_capture_state(id, 'extracted').catch(() => {})
+    }
+    const expand = (s: string) =>
+      s.replace(/<statement\s+id="(STMT-[^"]+)"[^>]*\/>/g, (m, id) => blobs.get(id) ?? m)
+    return messages.map((m) => {
+      if (m.role !== 'user') return m
+      if (typeof m.content === 'string') {
+        return has(m.content) ? { ...m, content: expand(m.content) } : m
+      }
+      const parts = m.content.map((p) =>
+        p.type === 'text' && has(p.text) ? { ...p, text: expand(p.text) } : p,
+      )
+      return { ...m, content: parts }
+    })
+  }
+
+  // ---- History hygiene ----
 
   override async onChatResponse(result: ChatResponseResult): Promise<void> {
     await super.onChatResponse(result)
@@ -820,48 +842,6 @@ entries, or draft corrections.`
       }
     } catch (e) {
       console.warn('[turn-audit] failed', { err: String(e) })
-    }
-
-    // Redact the raw statement text that read_statement injected into history.
-    // The model has used it this turn; leaving the full blob (often tens of KB)
-    // re-pays its token cost on every subsequent turn. The blob still lives in LedgerDO storage, so the model
-    // can simply call read_statement again if it genuinely needs it.
-    const messages = await this.syncMessagesFromStorage()
-    for (const msg of messages) {
-      const msgParts = Array.isArray(msg.parts) ? msg.parts : []
-      let mutated = false
-      const nextParts = msgParts.map((p) => {
-        if (
-          typeof p !== 'object' ||
-          p === null ||
-          (p as { type?: unknown }).type !== 'tool-read_statement'
-        ) {
-          return p
-        }
-        const part = p as { output?: { ok?: boolean; text?: unknown } }
-        const out = part.output
-        if (
-          !out ||
-          typeof out.text !== 'string' ||
-          out.text.startsWith('[statement text')
-        ) {
-          return p
-        }
-        mutated = true
-        return {
-          ...p,
-          output: {
-            ...out,
-            text: '[statement text omitted from history — call read_statement again if you need it]',
-          },
-        }
-      })
-      if (mutated) {
-        await this.updateMessageInHistory({
-          ...msg,
-          parts: nextParts as typeof msg.parts,
-        })
-      }
     }
   }
 }

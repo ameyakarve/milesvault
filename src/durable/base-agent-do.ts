@@ -4,12 +4,14 @@ import {
   type StepConfig,
   type ThinkSubmissionInspection,
   type TurnConfig,
+  type TurnContext,
 } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
 import { wrapLanguageModel } from 'ai'
 import type {
   LanguageModel,
   LanguageModelMiddleware,
+  ModelMessage,
   ToolCallRepairFunction,
   ToolSet,
   UIMessage,
@@ -245,9 +247,22 @@ export abstract class BaseAgentDO<
     }
   }
 
-  override async beforeTurn(): Promise<TurnConfig> {
+  override async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
     await this.beforeTurnFetch()
-    return this.activeAgentConfig()
+    const cfg = this.activeAgentConfig()
+    // Let a subclass rewrite the assembled model messages for this turn only
+    // (e.g. expand an inline statement reference into its text) without touching
+    // stored history.
+    const messages = await this.transformTurnMessages(ctx.messages)
+    return messages ? { ...cfg, messages } : cfg
+  }
+
+  // Override to rewrite the model messages for THIS turn (return undefined to
+  // leave them unchanged). The result is sent to the model but not persisted.
+  protected async transformTurnMessages(
+    _messages: ModelMessage[],
+  ): Promise<ModelMessage[] | undefined> {
+    return undefined
   }
 
   override beforeStep(): StepConfig {

@@ -108,23 +108,6 @@ export function buildIncorporationConventions(): string {
   return [BEANCOUNT_PRIMER, LEDGER_RULES, EXAMPLES].join('\n\n---\n\n')
 }
 
-
-// System prompt for the HEADLESS statement-ingest run (ChatDO.runDraftStatement).
-// Same conventions as the editor, scoped to statement extraction — no handoff
-// (nothing to hand off to in an async run), no editor search/tool guidance (the
-// headless toolset has none of those). CLARIFICATIONS travels with the clarify
-// tool (passed at construction), not in this prompt.
-export function buildStatementAgentSystem(snapshot: Snapshot): string {
-  return [
-    BEANCOUNT_PRIMER,
-    LEDGER_RULES,
-    EXAMPLES,
-    STATEMENT_HANDLING,
-    STATEMENT_EXTRACTION,
-    renderSnapshotBlock(snapshot),
-  ].join('\n\n---\n\n')
-}
-
 // Fuller snapshot block for the analyst: it writes SQL, so it needs the
 // schema DDL and a few sample transactions to anchor on the data shape.
 function renderAnalystSnapshotBlock(snapshot: AnalystSnapshot): string {
