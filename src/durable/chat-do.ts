@@ -395,8 +395,16 @@ ${opts.text}`,
       // OCR layer). The text carries exact amounts; the images let it read
       // what the text can't (labels banks render as graphics).
       const images = stmt.images ?? []
+      // Async statement mode is not time-bound (owner call): run the FIRST step
+      // with thinking ON so the model reasons through the whole statement in one
+      // pass — every row, the reward math, and the pad+balance closings — then
+      // drop to thinking OFF for the cheaper tool-loop follow-up steps (which
+      // only need to re-emit corrected entries the validator bounced).
+      const thinkOn = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'low' })
+      const thinkOff = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' })
       const result = await generateText({
-        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+        model: thinkOff,
+        prepareStep: ({ stepNumber }) => ({ model: stepNumber === 0 ? thinkOn : thinkOff }),
         system: buildStatementAgentSystem(snapshot),
         messages: [
           {
@@ -419,7 +427,9 @@ The statement's page images are attached below — use them for anything the tex
           },
         ],
         tools: draftingTools,
-        maxOutputTokens: 16384,
+        // Generous budget: a thinking trace over a long statement plus the full
+        // entry batch can run well past 16k; capping low truncates mid-output.
+        maxOutputTokens: 32768,
         stopWhen: stepCountIs(EDITOR_MAX_STEPS),
       })
 
