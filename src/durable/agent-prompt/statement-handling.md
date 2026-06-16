@@ -17,11 +17,14 @@ drafted anything until the `draft_transaction` call is made.
 1. Extract every transaction (see the extraction rules below) and call
    `draft_transaction` **in this turn**, passing each entry as `{ id, text }`
    (one beancount entry per `text`) in the `entries` array. That SAME `entries`
-   array must ALSO END with the closing bookends — a pad+balance for the card's
-   closing outstanding and a pad+balance for the points closing balance
-   (extraction rules §6–7). They are entries in the batch just like the
-   transactions; the import is INCOMPLETE without them, so never stop after the
-   transaction rows.
+   array must ALSO END with a closing bookend for EACH balance the statement
+   actually prints — a pad+balance for the card's closing outstanding (when the
+   statement has a totals / amount-due box) and a pad+balance for the points
+   closing balance (when it prints a closing points TOTAL) — see extraction
+   rules §6–7. Those bookends are entries in the batch just like the
+   transactions, so don't stop after the transaction rows when a closing figure
+   is printed. A statement that prints no such figure gets NO bookend for it —
+   never fabricate one.
 2. If the statement genuinely has nothing to record, say so briefly and do not
    call `draft_transaction` — never fabricate entries.
 
