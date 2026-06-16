@@ -395,16 +395,13 @@ ${opts.text}`,
       // OCR layer). The text carries exact amounts; the images let it read
       // what the text can't (labels banks render as graphics).
       const images = stmt.images ?? []
-      // Async statement mode is not time-bound (owner call): run the FIRST step
-      // with thinking ON so the model reasons through the whole statement in one
-      // pass — every row, the reward math, and the pad+balance closings — then
-      // drop to thinking OFF for the cheaper tool-loop follow-up steps (which
-      // only need to re-emit corrected entries the validator bounced).
-      const thinkOn = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'low' })
-      const thinkOff = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' })
+      // Thinking ON for the whole statement turn (owner call): async ingest is
+      // not time-bound, and the reasoning must land on the DRAFTING step — the
+      // one that captures every row, the reward math, and the pad+balance
+      // closings in a single pass. (A prior per-step prepareStep swap silently
+      // no-op'd — thinking stayed off everywhere — so set the model directly.)
       const result = await generateText({
-        model: thinkOff,
-        prepareStep: ({ stepNumber }) => ({ model: stepNumber === 0 ? thinkOn : thinkOff }),
+        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'low' }),
         system: buildStatementAgentSystem(snapshot),
         messages: [
           {
@@ -431,7 +428,10 @@ ${stmt.text}`,
         // Generous budget: a thinking trace over a long statement plus the full
         // entry batch can run well past 16k; capping low truncates mid-output.
         maxOutputTokens: 32768,
-        stopWhen: stepCountIs(EDITOR_MAX_STEPS),
+        // Stop the moment the batch is recorded — no trailing narration step. A
+        // draft that fails validation records nothing, so the validator's
+        // bounce-and-retry still runs until a valid batch lands.
+        stopWhen: [() => recorded.length > 0, stepCountIs(EDITOR_MAX_STEPS)],
       })
 
       try {

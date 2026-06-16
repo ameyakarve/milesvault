@@ -39,9 +39,14 @@ conversation.
 
 ## Reward accrual on card statements
 
-Before drafting a card statement's transactions, call `card_guide` ONCE with
-the card's name and follow its `logging_guide` examples exactly — accounts,
-commodity tickers, `:Pending` accruals.
+If you ALREADY hold the card's reward pool — an `Assets:Rewards:…` account in
+the open-accounts list — draft directly: you have the pool account and its
+ticker there, and a card statement prints the points earned PER ROW, so you
+have the amounts too. Do NOT call `card_guide` in that case; just use the held
+pool. Call `card_guide` ONCE only when the reward pool is NOT among your held
+accounts (a card you don't yet track) — to get its pool account + ticker, which
+you must never guess. Either way, follow the guide's `logging_guide` shape —
+accounts, commodity tickers, `:Pending` accruals.
 
 - EVERY eligible spend entry carries its own points legs (the guide's
   earn example): `pool.account`:Pending + `Equity:Void` contra in
