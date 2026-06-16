@@ -375,12 +375,13 @@ ${opts.text}`,
       // thinking, is what stopped the prose/```python escape). buildModel still
       // wraps the toolCallRescueMiddleware, which recovers any tool-call-token
       // leak; this just drops the reasoning trace.
-      // NON-streaming generateText (owner call): the earlier streamText path
-      // returned garbled + duplicated tool-call args in the gateway log (→ args
-      // failed to parse → 0 drafts), while generateText returned them clean.
-      // A hard 120s abort still bounds a runaway/stalled call (→ capture errors,
-      // retryable) without needing the stream.
-      const result = await generateText({
+      // Run EXACTLY like the editor (Think uses streamText, tool_choice 'auto').
+      // The ONLY request difference that had crept in was tool_choice:'required'
+      // — forcing the call corrupted gemma's streamed tool-call args (garbled +
+      // duplicated → unparseable → 0 drafts). Dropping it back to 'auto' (the
+      // editor's setting) is the fix; the dynamicTool bounce + the prompt's
+      // "only via draft_transaction" rule keep adherence without forcing.
+      const stream = streamText({
         model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
         abortSignal: AbortSignal.timeout(120_000),
         system: buildLedgerSystem(snapshot, aliases, { statement: true }),
@@ -406,22 +407,19 @@ ${stmt.text}`,
           },
         ],
         tools: draftingTools,
-        // Force a real tool call — the model cannot end the turn with a prose /
-        // ```python / ```beancount "answer" (gemma's tool-call decoding gets
-        // fragile after a long thinking trace and sometimes types the call as
-        // text). It must emit an actual draft_transaction call.
-        toolChoice: 'required',
-        // Generous budget: a thinking trace over a long statement plus the full
-        // entry batch can run well past 16k; capping low truncates mid-output.
+        // NO toolChoice → 'auto', exactly like the editor. (Forcing 'required'
+        // is what corrupted the args.)
+        // Generous budget: the full entry batch can run past 16k.
         maxOutputTokens: 32768,
         // draft_transaction is TERMINAL: stop the moment a valid batch is
         // recorded. A bounced (invalid) draft records nothing, so the validator
-        // retry still runs; lookups (card_guide, read_statement) are non-terminal.
+        // retry still runs; lookups (card_guide) are non-terminal.
         stopWhen: [() => recorded.length > 0, stepCountIs(EDITOR_MAX_STEPS)],
       })
-      const text = result.text
-      const steps = result.steps
-      const finishReason = result.finishReason
+      await stream.consumeStream()
+      const text = await stream.text
+      const steps = await stream.steps
+      const finishReason = await stream.finishReason
 
       try {
         this.setState({})
