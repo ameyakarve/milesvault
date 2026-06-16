@@ -391,13 +391,14 @@ ${opts.text}`,
       // OCR layer). The text carries exact amounts; the images let it read
       // what the text can't (labels banks render as graphics).
       const images = stmt.images ?? []
-      // Thinking ON for the whole statement turn (owner call): async ingest is
-      // not time-bound, and the reasoning must land on the DRAFTING step — the
-      // one that captures every row, the reward math, and the pad+balance
-      // closings in a single pass. (A prior per-step prepareStep swap silently
-      // no-op'd — thinking stayed off everywhere — so set the model directly.)
+      // Thinking OFF (gateway timeline showed it was a flat latency tax on
+      // EVERY step — a read_statement lookup ran 4.4 min purely on its reasoning
+      // trace — without buying accuracy; tool_choice:'required' below, not
+      // thinking, is what stopped the prose/```python escape). buildModel still
+      // wraps the toolCallRescueMiddleware, which recovers any tool-call-token
+      // leak; this just drops the reasoning trace.
       const result = await generateText({
-        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'low' }),
+        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
         system: buildStatementAgentSystem(snapshot),
         messages: [
           {
