@@ -1,4 +1,4 @@
-import type { ChatResponseResult } from '@cloudflare/think'
+import type { ChatResponseResult, TurnConfig, TurnContext } from '@cloudflare/think'
 import { generateText, streamText, stepCountIs, tool, type ToolSet, type ModelMessage } from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
 import { z } from 'zod'
@@ -10,6 +10,7 @@ import {
 import {
   buildLedgerSystem,
   buildIncorporationConventions,
+  turnInvolvesStatement,
   CLARIFICATIONS,
 } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
@@ -138,6 +139,9 @@ export class ChatDO
   // account → "also known as" (KG aliases), for the editor account manifest.
   // Cached by the set of accounts so we don't re-fetch the KG every turn.
   private aliasCache: { key: string; map: Record<string, string> } | null = null
+  // Whether THIS turn involves a statement (set in beforeTurn from the turn's
+  // messages) — gates the statement shards into the system prompt.
+  private turnHasStatement = false
 
   constructor(state: DurableObjectState, env: Cloudflare.Env) {
     super(state, env)
@@ -380,7 +384,7 @@ ${opts.text}`,
         // stuck in 'processing'): abort at 120s — well above a healthy ~30-60s
         // draft, well below the hangs we saw — so it errors cleanly + retryable.
         abortSignal: AbortSignal.timeout(120_000),
-        system: buildLedgerSystem(snapshot, aliases),
+        system: buildLedgerSystem(snapshot, aliases, { statement: true }),
         messages: [
           {
             role: 'user',
@@ -588,7 +592,9 @@ ${stmt.text}`,
         // Mirror the real ledger agent's model (the bench runs buildLedgerSystem
         // + the ledger tools) — NOT the statement model.
         model: this.buildModel({ id: LEDGER_MODEL_ID, reasoning: 'off' }),
-        system: buildLedgerSystem(snapshot, aliases),
+        system: buildLedgerSystem(snapshot, aliases, {
+          statement: turnInvolvesStatement(message),
+        }),
         prompt: message,
         tools,
         stopWhen: stepCountIs(EDITOR_MAX_STEPS),
@@ -680,13 +686,33 @@ ${stmt.text}`,
     }
   }
 
+  // Detect whether this turn involves a statement (so system() gates the
+  // statement shards in), then run the base turn prep (which also expands any
+  // <statement id> into the model message via transformTurnMessages).
+  override async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
+    this.turnHasStatement = (ctx.messages ?? []).some((m) => {
+      const c = m.content
+      const text =
+        typeof c === 'string'
+          ? c
+          : Array.isArray(c)
+            ? c.map((p) => (p.type === 'text' ? p.text : '')).join('\n')
+            : ''
+      return turnInvolvesStatement(text)
+    })
+    return super.beforeTurn(ctx)
+  }
+
   // ---- AgentHost<EditorAgentName> ----
 
   system(_name: EditorAgentName): string {
-    // One editor agent (no handoff): the ledger system now carries the statement
-    // handling + extraction shards, so it ingests statements itself.
+    // One editor agent (no handoff): it ingests statements itself, so the
+    // statement shards are included only when THIS turn involves a statement
+    // (set in beforeTurn) — plain edits get a leaner prompt.
     return (
-      buildLedgerSystem(this.snapshot(), this.aliasCache?.map) +
+      buildLedgerSystem(this.snapshot(), this.aliasCache?.map, {
+        statement: this.turnHasStatement,
+      }) +
       this.threadContextBlock() +
       this.handoffContextBlock()
     )

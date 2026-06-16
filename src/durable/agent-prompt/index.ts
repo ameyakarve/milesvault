@@ -83,22 +83,33 @@ to paste it.`
 export function buildLedgerSystem(
   snapshot: Snapshot & { schema_ddl?: string },
   aliases?: Record<string, string>,
+  opts?: { statement?: boolean },
 ): string {
   // CLARIFICATIONS is NOT here — it's domain hints for the clarify tool, passed
   // at construction (see clarifyTool). Keeps the generic mechanism and its
   // domain triggers from getting tangled in the system prompt.
+  // The statement shards (handling + extraction rules: pad+balance closings,
+  // "assert the card's closing balance", forex folding) are included ONLY when
+  // the turn actually involves a statement — they'd otherwise leak statement
+  // framing into plain edits (add/edit/delete/refund).
   return [
     BEANCOUNT_PRIMER,
     LEDGER_RULES,
     TOOL_RULES,
     EXAMPLES,
-    STATEMENT_HANDLING,
-    STATEMENT_EXTRACTION,
+    ...(opts?.statement ? [STATEMENT_HANDLING, STATEMENT_EXTRACTION] : []),
     renderSnapshotBlock(snapshot, aliases),
     SEARCH_GUIDANCE,
   ]
     .filter(Boolean)
     .join('\n\n---\n\n')
+}
+
+// A turn "involves a statement" when the message carries the editor's statement
+// chip (`<statement id="STMT-…"/>`) or plainly references one. Used to gate the
+// statement shards above into the prompt only when relevant.
+export function turnInvolvesStatement(text: string): boolean {
+  return text.includes('<statement id="STMT-') || /\bstatement\b/i.test(text)
 }
 
 // The convention stack the incorporation shard authors against — the same
