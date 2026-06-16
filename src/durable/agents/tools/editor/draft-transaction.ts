@@ -21,7 +21,22 @@ const SUSPENDING_EXECUTE = undefined as unknown as ToolExecuteFunction<
   unknown
 >
 
-export function draftTransactionTool() {
+// ONE draft-transaction tool for every surface (editor + headless ingest).
+// ALWAYS a `dynamicTool` — so invalid/garbled args bounce a tool-error back to
+// the model and it re-emits in the same turn (the self-correction the editor
+// relies on). The only difference is the output channel, injected via `opts`:
+//   - default: SUSPENDING (no execute) — the editor's client tool, resolved by
+//     the UI via addToolResult.
+//   - `opts.record`: RECORDING — the headless ingest captures the entry texts
+//     (committed later on approval), no live client to suspend on.
+// A static `tool()` would SILENTLY DROP bad input (no bounce/retry) — that was
+// the parity gap that lost gemma's garbled batches. Don't reintroduce it.
+export function draftTransactionTool(opts?: { record?: (entryTexts: string[]) => void }) {
+  const recordingExecute: ToolExecuteFunction<unknown, unknown> = async (input) => {
+    const entries = (input as { entries?: Array<{ text?: string }> }).entries ?? []
+    opts!.record!(entries.map((e) => e.text ?? '').filter(Boolean))
+    return { ok: true, recorded: entries.length }
+  }
   return dynamicTool({
     description:
       'Render proposed journal entries for the user to review and approve — to ADD, EDIT, or DELETE. `entries` is an array; each element is { "id", "text"?, "replaces"? }. `id` is a short unique handle (used only to address the entry on a correction — never written to the ledger). ADD = `text` only. EDIT = `replaces` (the existing entry\'s exact text) + `text` (the full replacement). DELETE = `replaces` with empty `text`. For any change to existing entries, call `incorporate({ intent })` first and pass its returned entries here VERBATIM — do not hand-write edits or hunt for entries. Each `text` is ONE beancount entry — ONE of:\n' +
@@ -35,6 +50,6 @@ export function draftTransactionTool() {
       '    2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD\n' +
       'Every posting needs an explicit amount and currency (no blanks), and postings must balance per currency. For a foreign-currency or points→points conversion, carry a total price with `@@` in the OTHER commodity (e.g. a 150→150 points transfer: `Assets:Rewards:...:Dest 150 DEST @@ 150 SRC`). Batch related entries (statement uploads, splits, subscription series) into one call. On validation failure you get a compact tool-result naming the bad entries with a worked example — fix only those and call again in the same turn. Do NOT narrate, do NOT invent file paths.',
     inputSchema: draftTransactionBatchSchema,
-    execute: SUSPENDING_EXECUTE,
+    execute: opts?.record ? recordingExecute : SUSPENDING_EXECUTE,
   })
 }
