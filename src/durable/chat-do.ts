@@ -351,18 +351,16 @@ ${opts.text}`,
       const snapshot = await ledger.ledger_snapshot()
 
       // Spin the editor's OWN brain off THIS capture's object (owner call):
-      // the per-capture DO runs the same statement agent the live editor
-      // hosts — same system prompt, model, KG / card_guide lookups, and the
-      // standard per-entry draft validation (draftTransactionBatchSchema
-      // bounces a malformed entry back to the model in-loop). The ONE swap is
-      // the output channel: with no live client to suspend on during this
-      // async pass, draft_transaction is a RECORDING tool that collects the
-      // proposed entries, and clarify records its question instead of
-      // blocking. Nothing is committed here — the entries land on the capture
-      // row; the user approves them by opening this same object in the editor.
-      // No bespoke pipeline; this IS the editor mechanism.
+      // the per-capture DO runs the same editor agent — same system prompt,
+      // model, KG / card_guide lookups, and the standard per-entry draft
+      // validation (draftTransactionBatchSchema bounces a malformed entry back
+      // in-loop). draft_transaction RECORDS the proposed entries (committed
+      // later when the user approves in the editor). First-turn contract: assume
+      // the statement is good enough and produce ONE draft batch — no clarify
+      // here (the user iterates after). draft_transaction is TERMINAL (stops the
+      // loop) and tool_choice is 'required', so the model must emit a real tool
+      // call — it cannot bail to a prose / ```python / ```beancount "answer".
       const recorded: string[] = []
-      const questions: string[] = []
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
       const kb = makeKbTools(kbHttp)
       const draftingTools: ToolSet = {
@@ -380,18 +378,8 @@ ${opts.text}`,
             return { ok: true, recorded: entries.length }
           },
         }),
-        clarify: tool({
-          description:
-            'Record ONE short question when something required is genuinely ambiguous. There is no live user during this pass — the question rides along for the reviewer; it does NOT block drafting, so draft your best entries regardless.',
-          inputSchema: clarifyInputSchema,
-          execute: async ({ question }) => {
-            questions.push(question)
-            return { ok: true, recorded: true }
-          },
-        }),
-        // Same read_statement the live statement agent uses — the prompt tells
-        // the model to read the statement by id first. Plain fetch here (no
-        // 'extracted' state-flip; this run owns the state machine).
+        // Plain fetch (no 'extracted' state-flip; this run owns the state
+        // machine). The statement text is also injected inline below.
         read_statement: readStatementTool(async (id) => {
           const blob = await ledger.get_statement(id)
           return blob ? { filename: blob.filename, text: blob.text } : null
@@ -433,10 +421,18 @@ ${stmt.text}`,
           },
         ],
         tools: draftingTools,
+        // Force a real tool call — the model cannot end the turn with a prose /
+        // ```python / ```beancount "answer" (gemma's tool-call decoding gets
+        // fragile after a long thinking trace and sometimes types the call as
+        // text). It must emit an actual draft_transaction call.
+        toolChoice: 'required',
         // Generous budget: a thinking trace over a long statement plus the full
         // entry batch can run well past 16k; capping low truncates mid-output.
         maxOutputTokens: 32768,
-        stopWhen: stepCountIs(EDITOR_MAX_STEPS),
+        // draft_transaction is TERMINAL: stop the moment a valid batch is
+        // recorded. A bounced (invalid) draft records nothing, so the validator
+        // retry still runs; lookups (card_guide, read_statement) are non-terminal.
+        stopWhen: [() => recorded.length > 0, stepCountIs(EDITOR_MAX_STEPS)],
       })
 
       try {
@@ -447,11 +443,11 @@ ${stmt.text}`,
       if (recorded.length > 0) {
         await ledger.set_capture_drafts(statementId, recorded, null)
       } else {
-        // No entries proposed: surface the agent's own reason (a clarify
-        // question, or its closing prose) rather than a generic message.
+        // No entries recorded (tool_choice:'required' makes this rare): surface
+        // the agent's closing prose rather than a generic message.
         await ledger.set_capture_error(
           statementId,
-          questions[0] || result.text.trim() || 'the agent proposed no entries',
+          result.text.trim() || 'the agent proposed no entries',
         )
       }
       this.logTool({
@@ -460,7 +456,6 @@ ${stmt.text}`,
         input: { statement_id: statementId, filename: stmt.filename },
         output: {
           entries: recorded.length,
-          questions,
           steps: result.steps.length,
           finish: result.finishReason,
         },
@@ -474,7 +469,6 @@ ${stmt.text}`,
         ok: recorded.length > 0,
         entries: recorded.length,
         drafts: recorded,
-        questions,
         text: result.text,
         draftsValid: recorded.length > 0 ? validateDraftBatch(recorded).ok === true : false,
         trace: result.steps.flatMap((s) =>
