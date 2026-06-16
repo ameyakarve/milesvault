@@ -97,18 +97,27 @@ export function EditorShell() {
   )
   const filteredDirty = filteredBuffer !== filteredBaseline
 
-  useEffect(() => {
-    let alive = true
+  // Account typeahead source. Refetched on mount AND after every mutation
+  // (see onMutated) — getAccounts returns the FULL account set, so a new/renamed
+  // account from an update shows up in the typeahead immediately.
+  const refreshAccounts = useCallback(() => {
     ledgerClient
       .getAccounts()
-      .then((r) => {
-        if (alive) setAccounts(r.accounts)
-      })
+      .then((r) => setAccounts(r.accounts))
       .catch(() => {})
-    return () => {
-      alive = false
-    }
   }, [])
+
+  useEffect(() => {
+    refreshAccounts()
+  }, [refreshAccounts])
+
+  // Any successful mutation (chat-approved draft, manual/filtered save,
+  // add-card, balance update) must refresh BOTH editor contents AND the
+  // account typeahead — they're separate sources that fall out of sync.
+  const onMutated = useCallback(() => {
+    void entries.refetch()
+    refreshAccounts()
+  }, [entries, refreshAccounts])
 
   // Refetch filtered view whenever filter or unfiltered save bumps the
   // entries snapshot. We piggyback on entries.rows so any global change
@@ -160,10 +169,13 @@ export function EditorShell() {
   const save = useCallback(async (): Promise<boolean> => {
     setSaveError(null)
     const r = await entries.save()
-    if (r.ok === true) return true
+    if (r.ok === true) {
+      refreshAccounts()
+      return true
+    }
     setSaveError(r.message)
     return false
-  }, [entries])
+  }, [entries, refreshAccounts])
 
   const saveFiltered = useCallback(async (): Promise<boolean> => {
     if (filteredSaving) return false
@@ -194,6 +206,7 @@ export function EditorShell() {
       // Server returns the new global rows. Refresh the unfiltered hook;
       // the filtered-view effect will rebuild filteredRows from entries.rows.
       await entries.refetch().catch(() => {})
+      refreshAccounts()
       return true
     } catch (e) {
       setFilteredError(e instanceof Error ? e.message : 'Save failed')
@@ -201,7 +214,7 @@ export function EditorShell() {
     } finally {
       setFilteredSaving(false)
     }
-  }, [filteredSaving, filteredRows, filteredBuffer, entries])
+  }, [filteredSaving, filteredRows, filteredBuffer, entries, refreshAccounts])
 
   const requestTab = useCallback(
     (next: Tab) => {
@@ -302,7 +315,7 @@ export function EditorShell() {
               <Chat
                 onBusyChange={setChatBusy}
                 onClearableChange={setChatClear}
-                onAppended={() => void entries.refetch()}
+                onAppended={onMutated}
                 onShowInJournal={showInJournal}
               />
             </>
