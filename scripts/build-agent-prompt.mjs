@@ -24,7 +24,6 @@ const FRAGMENTS = [
   { file: 'clarifications.md', name: 'CLARIFICATIONS' },
   { file: 'statement-handling.md', name: 'STATEMENT_HANDLING' },
   { file: 'statement-extraction.md', name: 'STATEMENT_EXTRACTION' },
-  { file: 'statement-text.md', name: 'STATEMENT_TEXT' },
   { file: 'analyst.md', name: 'ANALYST_ROLE' },
   { file: 'graph-walker.md', name: 'GRAPH_WALKER_ROLE' },
 ]
