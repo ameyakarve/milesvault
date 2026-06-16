@@ -737,15 +737,10 @@ entries, or draft corrections.`
     const recorded: string[] = []
     const tools = this.withToolLog('ledger', {
       ...this.lookupTools(),
-      draft_transaction: tool({
-        description:
-          'Propose one or more balanced beancount transactions for this statement. They are recorded for the user to review and approve — not committed here.',
-        inputSchema: draftTransactionBatchSchema,
-        execute: async ({ entries }) => {
-          recorded.push(...entries.map((e) => e.text))
-          return { ok: true, recorded: entries.length }
-        },
-      }),
+      // The SAME draftTransactionTool the editor uses (dynamicTool — so garbled
+      // args bounce a tool-error and the model re-emits), in RECORD mode: the
+      // entry texts are captured here instead of suspending on a client.
+      draft_transaction: draftTransactionTool({ record: (texts) => recorded.push(...texts) }),
     })
     return { tools, recorded }
   }
