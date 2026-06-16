@@ -10,7 +10,6 @@ import {
 import {
   buildLedgerSystem,
   buildStatementAgentSystem,
-  buildStatementTextSystem,
   buildIncorporationConventions,
   CLARIFICATIONS,
 } from './agent-prompt'
@@ -37,7 +36,7 @@ import {
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
 import { runIncorporation } from './ingest/incorporate'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
-import { runDraftPipeline, type GenFn } from './ingest/pipeline'
+import { type GenFn } from './ingest/pipeline'
 import type { AgentHost, Registry } from './agents/types'
 
 // The chat/agent runtime for the `/editor` surface. Hosts the `ledger ↔
@@ -343,83 +342,85 @@ ${opts.text}`,
       await ledger.set_capture_state(statementId, 'processing')
       const snapshot = await ledger.ledger_snapshot()
 
-      // Deterministic pipeline (owner decision): two small JSON-only model
-      // calls (extract, classify) — no tools, no bulk payloads over the
-      // flaky tool-call channel — then code renders the beancount: points
-      // floor math, refund mirroring, pad+balance bookends, Cr signs.
-      // Stream the trace into Think state (Inbox reads it via useAgent on
-      // select). Shared by both gen paths.
-      const trace = (() => {
-        let last = 0
-        return (text: string) => {
-          const now = Date.now()
-          if (now - last < 1000) return
-          last = now
-          try {
-            this.setState({ draftProgress: text.slice(-700) })
-          } catch {
-            /* no-op */
-          }
-        }
-      })()
-
-      // gemma-4-26b is multimodal: pass the page images straight to the
-      // extraction model alongside the PDF text (owner call — no separate OCR
-      // layer). The PDF text carries exact amounts; the images let gemma read
-      // what the text can't (labels banks render as graphics — e.g. HSBC's
-      // reward-points summary). One model does vision + structure.
-      // Both gens run thinking OFF. Correctness is enforced in CODE now — the
-      // draft validator bounces any entry that fails to parse/balance, has a
-      // silently-dropped posting, or an elided amount, with a worked example —
-      // so the model's long reasoning trace (which made each gemma extract call
-      // run 2.5–5 min and emit 10–15k output tokens) is redundant overhead. The
-      // card-identify call was always thinking-off (a 256-token budget gets
-      // starved by a trace); extraction now matches it.
-      const makeGen =
-        (reasoning: 'low' | 'off'): GenFn =>
-        async ({ system, prompt, maxTokens, images }) => {
-          const model = this.buildModel({ id: STATEMENT_MODEL_ID, reasoning })
-          const r =
-            images && images.length > 0
-              ? streamText({
-                  model,
-                  system,
-                  maxOutputTokens: maxTokens,
-                  messages: [
-                    {
-                      role: 'user',
-                      content: [
-                        { type: 'text', text: prompt },
-                        ...images.map((url) => ({
-                          type: 'file' as const,
-                          data: url.replace(/^data:[^,]+,/, ''),
-                          mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
-                        })),
-                      ],
-                    },
-                  ],
-                })
-              : streamText({ model, system, prompt, maxOutputTokens: maxTokens })
-          let text = ''
-          for await (const delta of r.textStream) {
-            text += delta
-            if (reasoning === 'low') trace(text)
-          }
-          return text
-        }
-
+      // Spin the editor's OWN brain off THIS capture's object (owner call):
+      // the per-capture DO runs the same statement agent the live editor
+      // hosts — same system prompt, model, KG / card_guide lookups, and the
+      // standard per-entry draft validation (draftTransactionBatchSchema
+      // bounces a malformed entry back to the model in-loop). The ONE swap is
+      // the output channel: with no live client to suspend on during this
+      // async pass, draft_transaction is a RECORDING tool that collects the
+      // proposed entries, and clarify records its question instead of
+      // blocking. Nothing is committed here — the entries land on the capture
+      // row; the user approves them by opening this same object in the editor.
+      // No bespoke pipeline; this IS the editor mechanism.
+      const recorded: string[] = []
+      const questions: string[] = []
       const kbHttp = kbHttpOverFetch('https://kb', this.env.KB)
-      const result = await runDraftPipeline({
-        gen: makeGen('off'),
-        genFast: makeGen('off'),
-        kb: kbHttp,
-        statementText: stmt.text,
-        images: stmt.images,
-        accounts: snapshot.accounts.map((a) => a.account),
-        // Same convention stack as the editor's statement agent — only the
-        // output channel differs (JSON entries).
-        system: buildStatementTextSystem(),
-        instruction: capture?.prompt,
+      const kb = makeKbTools(kbHttp)
+      const draftingTools: ToolSet = {
+        kb_resolve: kb.kb_resolve,
+        kb_get: kb.kb_get,
+        kb_related: kb.kb_related,
+        card_guide: cardGuideTool(kbHttp),
+        list_reward_accounts: rewardAccountsTool(kbHttp),
+        draft_transaction: tool({
+          description:
+            'Propose one or more balanced beancount transactions for this statement. They are recorded for the user to review and approve — not committed here.',
+          inputSchema: draftTransactionBatchSchema,
+          execute: async ({ entries }) => {
+            recorded.push(...entries.map((e) => e.text))
+            return { ok: true, recorded: entries.length }
+          },
+        }),
+        clarify: tool({
+          description:
+            'Record ONE short question when something required is genuinely ambiguous. There is no live user during this pass — the question rides along for the reviewer; it does NOT block drafting, so draft your best entries regardless.',
+          inputSchema: clarifyInputSchema,
+          execute: async ({ question }) => {
+            questions.push(question)
+            return { ok: true, recorded: true }
+          },
+        }),
+        // Same read_statement the live statement agent uses — the prompt tells
+        // the model to read the statement by id first. Plain fetch here (no
+        // 'extracted' state-flip; this run owns the state machine).
+        read_statement: readStatementTool(async (id) => {
+          const blob = await ledger.get_statement(id)
+          return blob ? { filename: blob.filename, text: blob.text } : null
+        }),
+      }
+
+      // gemma-4-26b is multimodal: pass the page images straight to the model
+      // as file parts alongside the statement text (owner call — no separate
+      // OCR layer). The text carries exact amounts; the images let it read
+      // what the text can't (labels banks render as graphics).
+      const images = stmt.images ?? []
+      const result = await generateText({
+        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+        system: buildStatementAgentSystem(snapshot),
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
+
+<statement id="${statementId}" filename="${stmt.filename}" />
+
+The statement's page images are attached below — use them for anything the text renders as graphics (e.g. a reward-points summary).`,
+              },
+              ...images.map((url) => ({
+                type: 'file' as const,
+                data: url.replace(/^data:[^,]+,/, ''),
+                mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
+              })),
+            ],
+          },
+        ],
+        tools: draftingTools,
+        maxOutputTokens: 16384,
+        stopWhen: stepCountIs(EDITOR_MAX_STEPS),
       })
 
       try {
@@ -427,31 +428,30 @@ ${opts.text}`,
       } catch {
         /* no-op */
       }
-      if (result.ok && result.entries.length > 0) {
-        // Pipeline diagnostics (validation issues, omission reasons) are
-        // internal: they go to the tool log in full, never onto the
-        // product surface (owner call).
-        await ledger.set_capture_drafts(statementId, result.entries, null)
+      if (recorded.length > 0) {
+        await ledger.set_capture_drafts(statementId, recorded, null)
       } else {
+        // No entries proposed: surface the agent's own reason (a clarify
+        // question, or its closing prose) rather than a generic message.
         await ledger.set_capture_error(
           statementId,
-          result.error || 'pipeline produced no entries',
+          questions[0] || result.text.trim() || 'the agent proposed no entries',
         )
       }
       this.logTool({
         agent: 'async-ingest',
-        tool: 'draft_pipeline',
+        tool: 'statement_agent',
         input: { statement_id: statementId, filename: stmt.filename },
         output: {
-          entries: result.entries.length,
-          stages: result.stages,
-          error: result.error,
-          validation_issues: result.validation_issues,
+          entries: recorded.length,
+          questions,
+          steps: result.steps.length,
+          finish: result.finishReason,
         },
-        ok: result.ok,
+        ok: recorded.length > 0,
         ms: Date.now() - t0,
       })
-      return { ok: result.ok, entries: result.entries.length }
+      return { ok: recorded.length > 0, entries: recorded.length }
     } catch (e) {
       await this.ledgerStub()
         .set_capture_error(statementId, String(e))

@@ -65,8 +65,16 @@ function chipLabel(state: string): string {
 
 // The capture review workspace — same anatomy as the editor: a bordered
 // header strip, a list rail, and a detail pane whose drafts open in the real
-// Journal (CodeMirror) for in-place fixes before posting.
-export function InboxView() {
+// Journal (CodeMirror) for in-place fixes before posting. One component, two
+// homes (owner split): `source='upload'` is the Statements page (paperclip /
+// drop imports + the upload button); `source='email'` is the Inbox (forwarded
+// mail + the forwarding-address controls). Each shows only its own captures.
+// A capture is CONSUMED on the first approve or delete: it leaves the active
+// list and the pane returns to the queue — the surface is a one-shot import,
+// not a place to keep editing.
+export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
+  const isEmail = source === 'email'
+  const title = isEmail ? 'Inbox' : 'Statements'
   const [allRows, setAllRows] = useState<CaptureRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [address, setAddress] = useState<string | null>(null)
@@ -81,6 +89,7 @@ export function InboxView() {
   const [draftBuffers, setDraftBuffers] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    if (!isEmail) return
     let cancelled = false
     fetch('/api/ledger/forwarding-address')
       .then((r) => (r.ok ? (r.json() as Promise<{ address?: string }>) : null))
@@ -89,7 +98,7 @@ export function InboxView() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isEmail])
 
   function copyAddress() {
     if (!address) return
@@ -145,11 +154,17 @@ export function InboxView() {
       .finally(() => setRotateOpen(false))
   }
 
-  const rows = useMemo(
-    () => allRows?.filter((r) => r.state !== 'dismissed') ?? null,
-    [allRows],
+  // Only this home's captures, and only the still-actionable ones: a posted
+  // (approved) or dismissed item is consumed — it drops out of the queue.
+  const sourceRows = useMemo(
+    () => allRows?.filter((r) => r.source === source) ?? null,
+    [allRows, source],
   )
-  const dismissedCount = (allRows?.length ?? 0) - (rows?.length ?? 0)
+  const rows = useMemo(
+    () => sourceRows?.filter((r) => r.state !== 'dismissed' && r.state !== 'posted') ?? null,
+    [sourceRows],
+  )
+  const dismissedCount = (sourceRows?.length ?? 0) - (rows?.length ?? 0)
   const selected = rows?.find((r) => r.id === selectedId) ?? null
 
   function deleteItem(id: string) {
@@ -219,9 +234,12 @@ export function InboxView() {
         body: JSON.stringify({ id: row.id, action: 'post' }),
       }).catch((): null => null)
       if (!post?.ok) {
-        setApproveError('Posted to the journal, but the Inbox update failed — refresh.')
+        setApproveError('Posted to the journal, but the update failed — refresh.')
       }
+      // Consumed on approve: flip to 'posted' (filtered out of the queue) and
+      // return to the list — the one-shot import is done.
       setAllRows((prev) => prev?.map((x) => (x.id === row.id ? { ...x, state: 'posted' } : x)) ?? prev)
+      setSelectedId(null)
     } finally {
       setApproveBusy(false)
     }
@@ -234,7 +252,7 @@ export function InboxView() {
     return <CenteredState>Loading…</CenteredState>
   }
 
-  const addressLine = address ? (
+  const addressLine = isEmail && address ? (
     <p className="text-xs leading-5 text-muted-foreground">
       Forward transaction emails to{' '}
       <button
@@ -269,16 +287,23 @@ export function InboxView() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6">
-        <SectionLabel>Inbox{rows.length > 0 ? ` · ${rows.length} to review` : ''}</SectionLabel>
-        <Button size="sm" onClick={() => setUploadOpen(true)}>
-          Upload statement
-        </Button>
+        <SectionLabel>
+          {title}
+          {rows.length > 0 ? ` · ${rows.length} to review` : ''}
+        </SectionLabel>
+        {source === 'upload' ? (
+          <Button size="sm" onClick={() => setUploadOpen(true)}>
+            Upload statement
+          </Button>
+        ) : null}
       </header>
 
       {rows.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4">
           <p className="text-sm text-muted-foreground">
-            Nothing to review. Dropped statements and forwarded emails queue here.
+            {isEmail
+              ? 'Nothing to review. Forwarded emails queue here.'
+              : 'Nothing to review. Upload a statement or drop a PDF to import it.'}
           </p>
           {addressLine ? <div className="max-w-md text-center">{addressLine}</div> : null}
         </div>
@@ -316,7 +341,9 @@ export function InboxView() {
                 </li>
               ))}
             </ul>
-            <div className="border-t border-border px-4 py-3">{addressLine}</div>
+            {addressLine ? (
+              <div className="border-t border-border px-4 py-3">{addressLine}</div>
+            ) : null}
           </aside>
 
           {/* Detail pane */}
@@ -349,6 +376,7 @@ export function InboxView() {
                         x.id === selected.id ? { ...x, state: 'posted' } : x,
                       ) ?? prev,
                   )
+                  setSelectedId(null)
                 }}
               />
             )}
