@@ -17,33 +17,23 @@ export const STATEMENT_MODEL_ID = '@cf/google/gemma-4-26b-a4b-it'
 // The headless bench uses the SAME value so it measures what production does.
 export const EDITOR_MAX_STEPS = 14
 
-export type EditorAgentName = 'ledger' | 'statement'
+export type EditorAgentName = 'ledger'
 
-// The `/editor` surface. `ledger` (entry) handles freeform edits and hands
-// statement uploads to `statement`, which owns the extract → clarify → draft
-// conversation and hands back when done. Graph: ledger ↔ statement.
+// The `/editor` surface. ONE agent (`ledger`): it handles freeform edits AND
+// statement uploads itself (read_statement → extract → draft) — no handoff, no
+// separate statement specialist (owner call: the ledger↔statement split added a
+// dead-end the headless ingest had no tool for, and bought nothing). Headless
+// statement ingest runs this same brain via ChatDO.runDraftStatement.
 //
-// The host (a `BaseAgentDO`) supplies system prompt + tools per agent name,
-// closing over the live DO instance. The registry just names agents and
-// wires the handoff graph, so it stays free of any DO-specific imports.
-// The agents' `tools()` exclude the handoff tool — that one is registered
-// globally by the base DO and gated per-agent via activeTools (see runtime).
+// The host (a `BaseAgentDO`) supplies system prompt + tools, closing over the
+// live DO instance.
 export function makeEditorRegistry(host: AgentHost<EditorAgentName>): Registry {
   const ledger: AgentDef = {
     name: 'ledger',
-    canHandoffTo: ['statement'],
+    canHandoffTo: [],
     model: { id: LEDGER_MODEL_ID, reasoning: 'off', maxOutputTokens: 16384, maxSteps: EDITOR_MAX_STEPS },
     system: () => host.system('ledger'),
     tools: () => host.tools('ledger'),
   }
-  const statement: AgentDef = {
-    name: 'statement',
-    canHandoffTo: ['ledger'],
-    // Gemma with reasoning OFF — the extractor evals were tuned on this; the
-    // thinking trace mostly added latency, not accuracy.
-    model: { id: STATEMENT_MODEL_ID, reasoning: 'off', maxOutputTokens: 16384 },
-    system: () => host.system('statement'),
-    tools: () => host.tools('statement'),
-  }
-  return { name: 'editor', entry: 'ledger', agents: { ledger, statement } }
+  return { name: 'editor', entry: 'ledger', agents: { ledger } }
 }

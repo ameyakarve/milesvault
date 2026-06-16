@@ -58,48 +58,6 @@ function renderSnapshotBlock(snapshot: Snapshot, aliases?: Record<string, string
 ${renderAccounts(snapshot, aliases) || '- (none yet)'}`
 }
 
-// Ledger (general editor) agent: handles freeform Beancount edits. It does NOT
-// process statement uploads itself — it hands those to the statement
-// specialist (see HANDOFF_TO_STATEMENT). So STATEMENT_HANDLING is omitted here.
-const HANDOFF_TO_STATEMENT = `# Statement uploads — hand off
-
-A user message may contain a self-closing reference like:
-
-\`\`\`
-<statement id="STMT-abc123…" filename="hsbc-jan.pdf" />
-\`\`\`
-
-You do NOT process statements yourself. The moment a message references one (or
-the user clearly wants a statement turned into transactions), call
-\`handoff({ to: "statement", context })\`. Put the exact statement id(s) and any
-inline instructions the user gave ("skip Amazon refunds", "ignore the small
-ones") into \`context\`. The statement specialist then owns the conversation —
-it extracts, clarifies if needed, and drafts. Do NOT call \`read_statement\`
-or \`draft_transaction\` for an upload yourself.`
-
-// Statement specialist agent: owns the conversation after a handoff, reads the
-// statement text inline via read_statement, clarifies, and drafts.
-// STATEMENT_HANDLING carries the read_statement flow; STATEMENT_EXTRACTION the
-// output rules; HANDOFF_BACK tells it to return control when done.
-const STATEMENT_AGENT_ROLE = `# You are the statement specialist
-
-The conversation was handed to you to turn an uploaded statement into reviewed
-transactions. Drive that to completion: read the statement, clarify any
-genuinely ambiguous accounting choice, then draft the transactions for approval.`
-
-const HANDOFF_BACK = `# Returning control
-
-Once you have finished the statement work — drafted the transactions, found
-nothing to extract, or failed — your job is done. Stay in control ONLY while
-that work is still unfinished (mid-extraction, or you still owe a clarification
-or a draft).
-
-After it's done, returning to \`ledger\` is the DEFAULT. On the user's next
-message, hand the conversation back with \`handoff({ to: "ledger", context })\`,
-summarizing what was done in \`context\` — UNLESS that message is a direct
-correction or follow-up to the statement you just handled (e.g. "fix the date
-on the Amazon row"), in which case handle it first, then hand back.`
-
 // How the editor finds + reads its own entries: `search` (structured find) →
 // `get_entry` (read one) → `draft_transaction`. No query_sql in the editor —
 // finding is search's job; analytics lives on the concierge/analyst surface.
@@ -134,7 +92,8 @@ export function buildLedgerSystem(
     LEDGER_RULES,
     TOOL_RULES,
     EXAMPLES,
-    HANDOFF_TO_STATEMENT,
+    STATEMENT_HANDLING,
+    STATEMENT_EXTRACTION,
     renderSnapshotBlock(snapshot, aliases),
     SEARCH_GUIDANCE,
   ]
@@ -150,18 +109,18 @@ export function buildIncorporationConventions(): string {
 }
 
 
-// System prompt for the `statement` specialist agent.
+// System prompt for the HEADLESS statement-ingest run (ChatDO.runDraftStatement).
+// Same conventions as the editor, scoped to statement extraction — no handoff
+// (nothing to hand off to in an async run), no editor search/tool guidance (the
+// headless toolset has none of those). CLARIFICATIONS travels with the clarify
+// tool (passed at construction), not in this prompt.
 export function buildStatementAgentSystem(snapshot: Snapshot): string {
-  // CLARIFICATIONS travels with the clarify tool (passed at construction), not
-  // in this prompt — see clarifyTool / buildLedgerSystem.
   return [
     BEANCOUNT_PRIMER,
     LEDGER_RULES,
     EXAMPLES,
-    STATEMENT_AGENT_ROLE,
     STATEMENT_HANDLING,
     STATEMENT_EXTRACTION,
-    HANDOFF_BACK,
     renderSnapshotBlock(snapshot),
   ].join('\n\n---\n\n')
 }
