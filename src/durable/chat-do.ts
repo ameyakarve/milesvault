@@ -395,8 +395,15 @@ ${opts.text}`,
       // thinking, is what stopped the prose/```python escape). buildModel still
       // wraps the toolCallRescueMiddleware, which recovers any tool-call-token
       // leak; this just drops the reasoning trace.
-      const result = await generateText({
+      // Stream like the editor (Think runs streamText) — streaming keeps a long
+      // generation alive (a blocking generateText once hung 710s and returned
+      // nothing). Same middleware/tool-loop; consume the stream to drive it.
+      const stream = streamText({
         model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+        // Hard ceiling so a runaway/stalled call can't outlive the DO (→ capture
+        // stuck in 'processing'): abort at 120s — well above a healthy ~30-60s
+        // draft, well below the hangs we saw — so it errors cleanly + retryable.
+        abortSignal: AbortSignal.timeout(120_000),
         system: buildStatementAgentSystem(snapshot),
         messages: [
           {
@@ -433,6 +440,12 @@ ${stmt.text}`,
         // retry still runs; lookups (card_guide, read_statement) are non-terminal.
         stopWhen: [() => recorded.length > 0, stepCountIs(EDITOR_MAX_STEPS)],
       })
+      // Drain the stream to run the tool loop to completion, then resolve the
+      // final values (these are promises on a streamText result).
+      await stream.consumeStream()
+      const text = await stream.text
+      const steps = await stream.steps
+      const finishReason = await stream.finishReason
 
       try {
         this.setState({})
@@ -446,7 +459,7 @@ ${stmt.text}`,
         // the agent's closing prose rather than a generic message.
         await ledger.set_capture_error(
           statementId,
-          result.text.trim() || 'the agent proposed no entries',
+          text.trim() || 'the agent proposed no entries',
         )
       }
       this.logTool({
@@ -455,8 +468,8 @@ ${stmt.text}`,
         input: { statement_id: statementId, filename: stmt.filename },
         output: {
           entries: recorded.length,
-          steps: result.steps.length,
-          finish: result.finishReason,
+          steps: steps.length,
+          finish: finishReason,
         },
         ok: recorded.length > 0,
         ms: Date.now() - t0,
@@ -468,9 +481,9 @@ ${stmt.text}`,
         ok: recorded.length > 0,
         entries: recorded.length,
         drafts: recorded,
-        text: result.text,
+        text,
         draftsValid: recorded.length > 0 ? validateDraftBatch(recorded).ok === true : false,
-        trace: result.steps.flatMap((s) =>
+        trace: steps.flatMap((s) =>
           (s.toolCalls ?? []).map((tc) => ({ tool: tc.toolName })),
         ),
       }
