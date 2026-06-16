@@ -706,12 +706,14 @@ ${stmt.text}`,
 
   // ---- AgentHost<EditorAgentName> ----
 
-  system(name: EditorAgentName): string {
-    const base =
-      name === 'ledger'
-        ? buildLedgerSystem(this.snapshot(), this.aliasCache?.map)
-        : buildStatementAgentSystem(this.snapshot())
-    return base + this.threadContextBlock() + this.handoffContextBlock()
+  system(_name: EditorAgentName): string {
+    // One editor agent (no handoff): the ledger system now carries the statement
+    // handling + extraction shards, so it ingests statements itself.
+    return (
+      buildLedgerSystem(this.snapshot(), this.aliasCache?.map) +
+      this.threadContextBlock() +
+      this.handoffContextBlock()
+    )
   }
 
   // Inbox-item threads are anchored to one statement: tell the agent which
@@ -751,28 +753,20 @@ entries, or draft corrections.`
     // model copies raw_text into draft_transaction's `replaces` to edit/delete).
     const get_entry = getEntryTool((ref) => this.ledgerStub().get_entry(ref))
     const search = searchTool((filter) => this.ledgerStub().search_postings(filter))
-    if (name === 'ledger') {
-      // Tool-using authoring agent: look things up (kb_*, card_guide,
-      // list_reward_accounts, search, get_entry) and author directly via
-      // draft_transaction (add = text; edit = replaces + text; delete = replaces).
-      // No query_sql — finding entries is search's job; analytics is the
-      // concierge/analyst surface.
-      return this.withToolLog(name, {
-        ...kbLookup,
-        card_guide,
-        list_reward_accounts,
-        search,
-        get_entry,
-        draft_transaction: draftTransactionTool(),
-        clarify: clarifyTool(CLARIFICATIONS),
-        add_card: addCardTool(),
-      })
-    }
+    // ONE editor agent (no handoff): it does freeform edits AND statement
+    // uploads. Full read/author toolset — look things up (kb_*, card_guide,
+    // list_reward_accounts, search, get_entry), read an uploaded statement
+    // (read_statement), and author via draft_transaction. No query_sql —
+    // finding entries is search's job; analytics is the concierge/analyst surface.
     return this.withToolLog(name, {
       ...kbLookup,
       card_guide,
+      list_reward_accounts,
+      search,
+      get_entry,
       draft_transaction: draftTransactionTool(),
       clarify: clarifyTool(CLARIFICATIONS),
+      add_card: addCardTool(),
       read_statement: readStatementTool(async (id) => {
         const stub = this.ledgerStub()
         const blob = await stub.get_statement(id)
