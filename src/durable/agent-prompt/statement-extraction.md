@@ -49,6 +49,25 @@ specific to READING a statement.
    amount, the minimum due, or the credit limit. Emit it as a pad + balance dated
    the day AFTER the statement period's last day.
 
+7. **Pad + balance — the exact form, and don't skip it.** Every ingest ends with
+   these bookends: ONE pad+balance for the card's closing (step 6) and ONE for the
+   points closing (step 5). Each is TWO lines — a `pad` naming the account with the
+   `Equity:Void` plug, then a `balance` asserting the printed figure verbatim. The
+   pad absorbs any drift between the figure and what your transactions left in the
+   account, so the balance reconciles the whole import; a missing bookend means a
+   misread row passes silently. ONE pad+balance per closing figure — never a
+   0-amount opening pad. Sign the card balance per the rules above (amount owed →
+   NEGATIVE; a "Cr" balance → POSITIVE); the points balance is the settled-pool
+   total. E.g. a period ending 31 May 2026 with ₹54,321 owed and 12,500 points:
+
+   ```
+   2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
+   2026-06-01 balance Liabilities:CreditCards:Skybank:Plus:1234  -54321.00 INR
+
+   2026-06-01 pad Assets:Rewards:Points:Skybank Equity:Void
+   2026-06-01 balance Assets:Rewards:Points:Skybank  12500 SKYBANKPTS
+   ```
+
 Prefer the extracted TEXT for anything legible in it (dates, amounts, merchant
 names); use the page IMAGES only for what the text is missing or garbles (labels
 the bank renders as images, like the reward-points summary box). Do not echo or

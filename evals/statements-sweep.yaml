@@ -49,6 +49,12 @@ defaultTest:
     - type: javascript
       value: 'output.draftsValid === true'
       metric: balances
+    # Every ingest bookends with pad + balance (the closing reconciliation that
+    # catches a misread row): at least one pad and one balance directive, landing
+    # the printed closing figures the statements include below.
+    - type: javascript
+      value: "(output.drafts||[]).some(d=>/\\bpad\\b/.test(d.text||'')) && (output.drafts||[]).some(d=>/\\bbalance\\b/.test(d.text||''))"
+      metric: pad-balance-bookends
 
 tests:
   # ---- A: points card, reward column, ₹-as-"C" glyph, membership fee + tax,
@@ -80,6 +86,8 @@ tests:
         05/03/2026| 08:43      AUTOPAY THANK YOU                       + C 41,800.00             l
         07/03/2026| 12:48      VOUCHERHUB SMARTDEALS NEW DELHI         + 50         C 1,500.00   l
         10/03/2026| 18:22      BRIGHTMART PHARMACY                     + 15         C 480.00     l
+        Reward Points — Opening 1,000 · Earned this cycle 2,055 · Closing Balance 3,055
+        Total Amount Due  C 58,420.00
     assert:
       - type: javascript
         value: 'output.drafts.length >= 8 && output.clarifies.length === 0'
@@ -87,9 +95,11 @@ tests:
       - type: javascript
         value: "output.drafts.some(d => d.text.includes('Liabilities:CreditCards:Zenith'))"
         metric: card-leg
+      # No card_guide for a fictional issuer, so the model improvises the currency
+      # name — assert it accrues SOME reward leg, not an exact ticker.
       - type: javascript
-        value: "output.drafts.some(d => d.text.includes('ZENPTS'))"
-        metric: points-accrue
+        value: "output.drafts.some(d => /Assets:Rewards/.test(d.text))"
+        metric: reward-leg
       # The autopay credit is a payment, not a spend — no Expenses leg for it.
       - type: javascript
         value: "!output.drafts.some(d => /Expenses\\S*\\s+-?41[,.]?800/.test(d.text))"
@@ -128,6 +138,8 @@ tests:
         20/04/2026| 00:00      10% MUNCH CASHBACK                   + C 350.00   l
         23/04/2026| 00:00      FINANCE CHARGES                      C 298.48     l
         23/04/2026| 00:00      IGST-RATE 18.0                       C 53.73      l
+        Cashback this cycle  C 596.50
+        Total Amount Due  C 1,140.21
     assert:
       - type: javascript
         value: 'output.drafts.length >= 6 && output.clarifies.length === 0'
@@ -176,6 +188,8 @@ tests:
         02/02/2026   PAYMENT RECEIVED                                       0         4,500.00 CR
         08/02/2026   GLOWWELL PHARMACY                Health                8         410.00
         12/02/2026   TRAILGEAR OUTDOORS               Sports                36        1,800.00
+        Rewards: Opening 500 · Earned 152 · Redeemed 0 · Closing Balance(Points) 652
+        Total Amount Due  3,955.00
     assert:
       - type: javascript
         value: 'output.drafts.length >= 5 && output.clarifies.length === 0'
@@ -221,6 +235,8 @@ tests:
         09/05/2026   SUNDRY BAZAAR                    21               2,150.00
         14/05/2026   PAYMENT - THANK YOU              0                12,000.00 CR
         18/05/2026   FRESHLEAF GROCERS                9                940.00
+        Reward Points Balance as on 25 May 2026: 2,289
+        Net Outstanding / Total Payment Due  17,030.00
     assert:
       - type: javascript
         value: 'output.drafts.length >= 5 && output.clarifies.length === 0'
@@ -228,9 +244,11 @@ tests:
       - type: javascript
         value: "output.drafts.some(d => d.text.includes('Liabilities:CreditCards:Crown'))"
         metric: card-leg
+      # Fictional issuer → no card_guide → model improvises the currency name;
+      # assert it accrues SOME reward leg, not an exact ticker.
       - type: javascript
-        value: "output.drafts.some(d => d.text.includes('CROWNPTS'))"
-        metric: points-accrue
+        value: "output.drafts.some(d => /Assets:Rewards/.test(d.text))"
+        metric: reward-leg
       - type: llm-rubric
         value: |
           The drafts ingest a rewards card statement. Each purchase posts to
@@ -263,6 +281,8 @@ tests:
         02/05/2026   CITYLINE GROCERS                    Grocery              1,460.00 Dr
         05/05/2026   THE READING ROOM                    Retail               840.00 Dr
         08/05/2026   PAYMENT RECEIVED                                         6,000.00 Cr
+        eDGE REWARD POINTS BALANCE AS ON DATE: 1,044
+        Total Payment Due  9,557.72
     assert:
       - type: javascript
         value: 'output.drafts.length >= 5 && output.clarifies.length === 0'
