@@ -1,5 +1,16 @@
 import type { ChatResponseResult, TurnConfig, TurnContext } from '@cloudflare/think'
-import { generateText, streamText, stepCountIs, tool, type ToolSet, type ModelMessage } from 'ai'
+import {
+  generateText,
+  generateObject,
+  streamText,
+  stepCountIs,
+  tool,
+  jsonSchema,
+  NoSuchToolError,
+  type ToolSet,
+  type ModelMessage,
+  type ToolCallRepairFunction,
+} from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
 import { z } from 'zod'
 import {
@@ -788,6 +799,49 @@ entries, or draft corrections.`
       list_reward_accounts: rewardAccountsTool(kbHttp),
       search: searchTool((filter) => this.ledgerStub().search_postings(filter)),
       get_entry: getEntryTool((ref) => this.ledgerStub().get_entry(ref)),
+    }
+  }
+
+  // Generic, model-driven tool-call repair (applies to EVERY turn — editor AND
+  // the headless ingest, since both run through modelInvocation). When the model
+  // emits a tool call whose arguments don't parse/validate, the AI SDK's in-turn
+  // bounce only fires if the generation finished cleanly with `tool-calls`; gemma
+  // GARBLES large structured args (collapsed JSON, mashed account paths) and ends
+  // the step with `finishReason: 'other'`, killing the loop before the bounce can
+  // run. This hook intercepts that: it RE-ASKS the model to regenerate the
+  // arguments for the SAME tool, given the tool's JSON schema and the parse error
+  // — it never hand-repairs the garbled string (that would be exactly the kind of
+  // arbiter/repair code the pipeline bans; the MODEL fixes its own output). It is
+  // GENERIC: no card/beancount/draft specifics — just "your args were invalid,
+  // here's the schema and the error, emit them again". Returns null to give up
+  // (the caller then surfaces a real failure) if the re-ask itself fails.
+  protected override getRepairToolCall(): ToolCallRepairFunction<ToolSet> {
+    return async ({ toolCall, inputSchema, error, system, messages }) => {
+      // Can't repair a call to a tool that doesn't exist — only invalid input.
+      if (NoSuchToolError.isInstance(error)) return null
+      try {
+        const schema = await inputSchema(toolCall)
+        const { object } = await generateObject({
+          model: this.modelInvocation(this.registry.agents[this.registry.entry]!.model).model,
+          schema: jsonSchema(schema),
+          system,
+          messages: [
+            ...messages,
+            {
+              role: 'user',
+              content:
+                `Your previous \`${toolCall.toolName}\` call had INVALID arguments and was rejected:\n${error.message}\n\n` +
+                `Re-emit the corrected arguments now — the SAME content, fixed to satisfy the schema. ` +
+                `Output only the arguments object.`,
+            },
+          ],
+        })
+        return { ...toolCall, input: JSON.stringify(object) }
+      } catch {
+        // Re-ask failed (provider error, or the regeneration garbled too) — give
+        // up cleanly; the turn ends and the caller surfaces it.
+        return null
+      }
     }
   }
 
