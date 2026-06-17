@@ -51,12 +51,15 @@ specific to READING a statement.
    - When it prints "Earned this cycle" (N), that is the landing amount (move N
      from `:Pending` to posted) and the figure your per-row accruals must
      reconcile to. This is the cycle's DELTA, NOT a balance — never assert it.
-   - ONLY when it prints a CLOSING points balance — the pool's standing total,
-     "points balance as on <date>" / "total available points" — assert THAT
-     number (pad + balance, verbatim). Do not confuse it with "earned this
-     cycle": closing balance = opening + earned − redeemed (the running total),
-     a much larger number than the cycle's earnings. If the statement prints no
-     closing points balance, emit no points bookend.
+   - When — and ONLY when — it prints a CLOSING points balance (the pool's
+     standing total: "points balance as on <date>" / "total available points"),
+     assert THAT number with a pad + balance, verbatim. Whenever that total IS
+     printed the bookend is REQUIRED — including when it appears only in the
+     rewards summary box or the page image — do not skip it. Do not confuse it
+     with "earned this cycle": closing balance = opening + earned − redeemed (the
+     running total), a much larger number than the cycle's earnings. If the
+     statement prints NO closing points balance, emit no points bookend (never
+     fabricate or infer one).
 
 6. **Assert the card's closing balance — when the statement prints one.** Most
    statements carry a SUMMARY box of TOTALS (Previous Balance · Purchases ·
@@ -75,8 +78,13 @@ specific to READING a statement.
    the points closing balance (step 5) — and NONE for a figure it doesn't print
    (never a fabricated figure, never a 0-amount opening pad). Sign the card
    balance per the rules above (amount owed → NEGATIVE; a "Cr" balance →
-   POSITIVE); the points balance is the settled-pool total. E.g. a period ending
-   31 May 2026 that prints ₹54,321 owed and a 12,500-point closing balance:
+   POSITIVE); the points balance is the settled-pool total. The "Cr"/"Dr" marker
+   on the closing total decides the sign, NOT the figure: a plain or "Dr" total is
+   money you OWE → NEGATIVE; a total marked "Cr" means the issuer owes YOU (you
+   overpaid / carry a credit balance) → POSITIVE. A credit balance is rare but
+   real — when the closing total says "Cr", do not default it to negative. E.g. a
+   period ending 31 May 2026 that prints ₹54,321 owed and a 12,500-point closing
+   balance:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
@@ -84,6 +92,14 @@ specific to READING a statement.
 
    2026-06-01 pad Assets:Rewards:Points:Skybank Equity:Void
    2026-06-01 balance Assets:Rewards:Points:Skybank  12500 SKYBANKPTS
+   ```
+
+   And a different card whose closing total prints "7,500.00 Cr" (a credit
+   balance — the issuer owes you) → the balance is POSITIVE:
+
+   ```
+   2026-06-01 pad Liabilities:CreditCards:Harbor:Signature:5678 Equity:Void
+   2026-06-01 balance Liabilities:CreditCards:Harbor:Signature:5678  7500.00 INR
    ```
 
 Prefer the extracted TEXT for anything legible in it (dates, amounts, merchant
