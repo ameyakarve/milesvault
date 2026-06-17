@@ -59,9 +59,11 @@ Statement drafting runs the editor's statement agent off the per-capture
   prompt + the pad+balance closings), hit **`/api/test/ingest`**, which runs the
   production `runDraftStatement` and returns `{ drafts, draftsValid, clarifies,
   trace, text, error }`.
-- **Synthetic sweep (committed):** `statements-sweep.yaml` — multi-txn statements
-  mirroring real issuer layouts with invented data, to stress the agentic draft
-  loop and pin per-layout quirks. Run: `pnpm eval -- -c evals/statements-sweep.yaml`.
+- **Statement ingest is evaluated ONLY against REAL statements** (text + page
+  images, with secrets) — there is NO committed synthetic statement sweep. A
+  synthetic statement eval is misleading: fictional issuers aren't in the KG, so
+  `card_guide` misses and the model improvises, and a text-only case never
+  exercises the multimodal (image) path production runs.
 - **Real-statement eval (LOCAL ONLY, never committed):** the owner's real
   statements live in **`~/milesvault-verify/`** (a sibling of the repo, outside
   git — per the CLAUDE.md privacy decree): source PDFs, decrypted `extracts/`,
