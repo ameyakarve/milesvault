@@ -76,15 +76,13 @@ specific to READING a statement.
    missing bookend means a misread row passes silently. Emit ONE bookend for EACH
    closing figure the statement actually prints — the card's closing (step 6) and
    the points closing balance (step 5) — and NONE for a figure it doesn't print
-   (never a fabricated figure, never a 0-amount opening pad). Sign the card
-   balance per the rules above (amount owed → NEGATIVE; a "Cr" balance →
-   POSITIVE); the points balance is the settled-pool total. The "Cr"/"Dr" marker
-   on the closing total decides the sign, NOT the figure: a plain or "Dr" total is
-   money you OWE → NEGATIVE; a total marked "Cr" means the issuer owes YOU (you
-   overpaid / carry a credit balance) → POSITIVE. A credit balance is rare but
-   real — when the closing total says "Cr", do not default it to negative. E.g. a
-   period ending 31 May 2026 that prints ₹54,321 owed and a 12,500-point closing
-   balance:
+   (never a fabricated figure, never a 0-amount opening pad). The points balance
+   is the settled-pool total. Sign the CARD balance from the total's Cr/Dr suffix,
+   exactly as you sign transactions: a "Dr" or unmarked total is what you OWE →
+   NEGATIVE; a "Cr" total means you have OVERPAID and the issuer must refund you →
+   POSITIVE — never negate a "Cr" total (it is uncommon, so don't default it to
+   negative). E.g. a period ending 31 May 2026 that prints ₹54,321 owed and a
+   12,500-point closing balance:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
@@ -94,8 +92,8 @@ specific to READING a statement.
    2026-06-01 balance Assets:Rewards:Points:Skybank  12500 SKYBANKPTS
    ```
 
-   And a different card whose closing total prints "7,500.00 Cr" (a credit
-   balance — the issuer owes you) → the balance is POSITIVE:
+   And a different card whose closing total prints "7,500.00 Cr" (overpaid — the
+   issuer owes you) → the balance is POSITIVE, NOT negated:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Harbor:Signature:5678 Equity:Void
