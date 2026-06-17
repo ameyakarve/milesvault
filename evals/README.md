@@ -66,15 +66,20 @@ Statement drafting runs the editor's statement agent off the per-capture
   exercises the multimodal (image) path production runs.
 - **Real-statement eval (LOCAL ONLY, never committed):** the owner's real
   statements live in **`~/milesvault-verify/`** (a sibling of the repo, outside
-  git — per the CLAUDE.md privacy decree): source PDFs, decrypted `extracts/`,
-  `passwords.json`, `rebuild.sh` (regenerates extracts), and `statements-real.yaml`
-  (points at `/api/test/ingest`). Run:
+  git — per the CLAUDE.md privacy decree): source PDFs, decrypted `extracts/`
+  (text), rendered `images/` (page JPEG data-URLs), `passwords.json`,
+  `render-images.mjs` (PDF pages → `images/<label>.json`, matching the website's
+  client render), `rebuild.sh` (regenerates BOTH extracts and images), and
+  `statements-real.yaml`. The eval sends **text + page images** to
+  `/api/test/ingest`, exactly like a real upload — so it exercises the multimodal
+  path, not text-only. Run:
   ```sh
-  ~/milesvault-verify/rebuild.sh    # (re)decrypt the extracts
+  ~/milesvault-verify/rebuild.sh    # (re)decrypt extracts AND re-render page images
   export TEST_USER_TOKEN=$(grep '^TEST_USER_TOKEN=' .dev.vars | cut -d= -f2-)
   npx promptfoo eval -c ~/milesvault-verify/statements-real.yaml --no-cache -j 1
   ```
-  Never copy anything from `~/milesvault-verify` into the repo.
+  Never copy anything from `~/milesvault-verify` into the repo. See its own
+  README for layout + how to add a statement.
 
 ### Debugging with the AI Gateway
 
