@@ -183,17 +183,37 @@ export abstract class BaseAgentDO<
     return resolveActiveAgent(this.registry, this.getConfig<AgentState>())
   }
 
+  // The canonical model-invocation knobs for an agent's ModelConfig — the
+  // SINGLE source the framework turn (activeAgentConfig, below) and any headless
+  // run (e.g. the dedicated statement-ingest path, ChatDO.runDraftStatement)
+  // both read. A headless path MUST build its streamText/generateText call from
+  // this so it can't drift from the live turn on model build, output-token
+  // budget, step budget, or tool-call repair — the exact drift that let the
+  // hand-rolled ingest call diverge (32768 vs 16384 tokens, no repair hook).
+  protected modelInvocation(model: ModelConfig): {
+    model: LanguageModel
+    maxOutputTokens?: number
+    maxSteps?: number
+    repairToolCall: ToolCallRepairFunction<ToolSet> | undefined
+  } {
+    return {
+      model: this.buildModel(model),
+      repairToolCall: this.getRepairToolCall(),
+      ...(model.maxSteps !== undefined ? { maxSteps: model.maxSteps } : {}),
+      ...(model.maxOutputTokens !== undefined ? { maxOutputTokens: model.maxOutputTokens } : {}),
+    }
+  }
+
   protected activeAgentConfig(): TurnConfig {
     const agent = this.activeAgent()
+    const inv = this.modelInvocation(agent.model)
     return {
       system: agent.system(),
-      model: this.buildModel(agent.model),
+      model: inv.model,
       activeTools: activeToolNames(agent),
-      repairToolCall: this.getRepairToolCall(),
-      ...(agent.model.maxSteps !== undefined ? { maxSteps: agent.model.maxSteps } : {}),
-      ...(agent.model.maxOutputTokens !== undefined
-        ? { maxOutputTokens: agent.model.maxOutputTokens }
-        : {}),
+      repairToolCall: inv.repairToolCall,
+      ...(inv.maxSteps !== undefined ? { maxSteps: inv.maxSteps } : {}),
+      ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
     }
   }
 

@@ -369,18 +369,17 @@ ${opts.text}`,
       // OCR layer). The text carries exact amounts; the images let it read
       // what the text can't (labels banks render as graphics).
       const images = stmt.images ?? []
-      // Thinking OFF (gateway timeline showed it was a flat latency tax on
-      // EVERY step — a read_statement lookup ran 4.4 min purely on its reasoning
-      // trace — without buying accuracy; tool_choice:'required' below, not
-      // thinking, is what stopped the prose/```python escape). buildModel still
-      // wraps the toolCallRescueMiddleware, which recovers any tool-call-token
-      // leak; this just drops the reasoning trace.
-      // Run EXACTLY like the editor (Think uses streamText, tool_choice 'auto').
-      // The ONLY request difference that had crept in was tool_choice:'required'
-      // — forcing the call corrupted gemma's streamed tool-call args (garbled +
-      // duplicated → unparseable → 0 drafts). Dropping it back to 'auto' (the
-      // editor's setting) is the fix; the dynamicTool bounce + the prompt's
-      // "only via draft_transaction" rule keep adherence without forcing.
+      // SHARED INVOCATION, SEPARATE PATH. This is the dedicated statement-ingest
+      // path — NOT an editor turn (the editor's in-chat statement handling is a
+      // UI convenience, not the supported route). But the way it CALLS the model
+      // must not drift from the live turn, so we build the invocation from the
+      // SAME single source the framework uses: `modelInvocation(<entry agent's
+      // ModelConfig>)` gives the identical model build, output-token budget
+      // (16384, not the bespoke 32768 that crept in), step budget, and tool-call
+      // repair hook. The only DELIBERATE deltas here are headless ones: the
+      // statement system shards, the recording draft_transaction (no client to
+      // suspend on), and draft_transaction being TERMINAL.
+      const inv = this.modelInvocation(this.registry.agents[this.registry.entry]!.model)
       // Capture any mid-stream model/gateway error instead of letting
       // consumeStream() swallow it. Without this, a failed generation AFTER a
       // successful lookup (e.g. a transient workers-ai error on the draft step)
@@ -389,8 +388,12 @@ ${opts.text}`,
       // and not surfaced as the retryable error it actually is.
       let streamError: unknown = null
       const stream = streamText({
-        model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
+        model: inv.model,
         abortSignal: AbortSignal.timeout(120_000),
+        // Same tool-call repair the live turn gets — recovers a malformed/garbled
+        // tool call instead of letting the loop die on it (gemma garbles large
+        // draft_transaction args). NO toolChoice → 'auto', exactly like the turn.
+        experimental_repairToolCall: inv.repairToolCall,
         onError: ({ error }) => {
           streamError = error
         },
@@ -417,14 +420,12 @@ ${stmt.text}`,
           },
         ],
         tools: draftingTools,
-        // NO toolChoice → 'auto', exactly like the editor. (Forcing 'required'
-        // is what corrupted the args.)
-        // Generous budget: the full entry batch can run past 16k.
-        maxOutputTokens: 32768,
+        ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
         // draft_transaction is TERMINAL: stop the moment a valid batch is
         // recorded. A bounced (invalid) draft records nothing, so the validator
-        // retry still runs; lookups (card_guide) are non-terminal.
-        stopWhen: [() => recorded.length > 0, stepCountIs(EDITOR_MAX_STEPS)],
+        // retry still runs; lookups (card_guide) are non-terminal. The step
+        // budget is the SHARED one (inv.maxSteps), not a separate cap.
+        stopWhen: [() => recorded.length > 0, stepCountIs(inv.maxSteps ?? EDITOR_MAX_STEPS)],
       })
       // Surface (don't swallow) a stream error: consumeStream's own onError
       // keeps it from throwing, but `streamError` above still captures it.
@@ -820,12 +821,15 @@ entries, or draft corrections.`
     })
   }
 
-  // The statement always reaches the model AS TEXT — no read_statement tool.
-  // The client embeds a compact `<statement id="STMT-…" filename="…" />` tag in
-  // its message (rendered as a chip in the UI, kept small in stored history).
-  // Here, per turn, we expand that tag into the full statement text for the
-  // model only — so the model sees the statement inline without a fetch tool,
-  // and the stored message / UI stay a chip (no token bloat in history).
+  // UI-ONLY CONVENIENCE — NOT the supported statement-ingest path. The canonical
+  // path for statements is the dedicated capture/Inbox flow (runDraftStatement).
+  // This only handles the incidental case of a user pasting a statement chip into
+  // the editor chat: the client embeds a compact `<statement id="STMT-…"
+  // filename="…" />` tag (rendered as a chip in the UI, kept small in stored
+  // history) and here, per turn, we expand that tag into the full statement text
+  // for the model only — so the model sees it inline without a fetch tool, and
+  // the stored message / UI stay a chip (no token bloat). Do not grow features
+  // onto this; statement ingest belongs on the dedicated path.
   protected override async transformTurnMessages(
     messages: ModelMessage[],
   ): Promise<ModelMessage[] | undefined> {
