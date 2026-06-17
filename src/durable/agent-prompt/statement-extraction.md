@@ -77,20 +77,17 @@ specific to READING a statement.
    closing figure the statement actually prints — the card's closing (step 6) and
    the points closing balance (step 5) — and NONE for a figure it doesn't print
    (never a fabricated figure, never a 0-amount opening pad). The points balance
-   is the settled-pool total. **Sign the card balance by who owes whom.** Almost
-   always you OWE the issuer → the balance is NEGATIVE. The rare flip is when the
-   statement shows the closing balance is in YOUR favour — you have OVERPAID, so the
-   issuer owes you and must refund you (it shows the total as a credit balance, an
-   amount in credit, or a refund due rather than an amount payable) → then, and only
-   then, the balance is POSITIVE. This never comes from the transactions: a
-   statement can be nothing but purchases and STILL close in your favour, so a page
-   of charges must not drag the closing balance negative — assert what the statement
-   says the balance IS. **Then write it as a money amount: `<number> <CURRENCY>`,
-   where CURRENCY is INR (or, for a points balance, the points ticker). A
-   credit/debit direction word a statement prints beside a figure is a SIGN cue, not
-   a currency — it decides positive vs negative and is then dropped; it NEVER becomes
-   the commodity on a posting.** E.g. a period ending 31 May 2026 that prints ₹54,321
-   owed and a 12,500-point closing balance:
+   is the settled-pool total. Sign the CARD balance from the total's printed Cr/Dr
+   suffix — find that suffix and let it ALONE decide the sign: a "Dr" or unmarked
+   total is what you OWE → NEGATIVE; a "Cr" total means you have OVERPAID and the
+   issuer must refund you → POSITIVE. The suffix is INDEPENDENT of the transactions:
+   a statement can be a full page of "Dr" purchases and still CLOSE "Cr". Those
+   purchase signs sign their own card legs and say NOTHING about the closing balance,
+   so never let a page of "Dr" rows drag it negative — the closing total carries its
+   OWN suffix; obey that. "Cr" closings are uncommon, so the reflex is to default
+   negative; do NOT — when the printed suffix is "Cr", the balance is POSITIVE, never
+   negated. E.g. a period ending 31 May 2026 that prints ₹54,321 owed and a
+   12,500-point closing balance:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
@@ -100,8 +97,8 @@ specific to READING a statement.
    2026-06-01 balance Assets:Rewards:Points:Skybank  12500 SKYBANKPTS
    ```
 
-   And a card you have OVERPAID — its statement shows the closing balance in your
-   favour, 7,500.00 owed back to you — asserts POSITIVE, in the real currency:
+   And a different card whose closing total prints "7,500.00 Cr" (overpaid — the
+   issuer owes you) → the balance is POSITIVE, NOT negated:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Harbor:Signature:5678 Equity:Void
