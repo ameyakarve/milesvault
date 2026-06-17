@@ -326,14 +326,12 @@ statement's notation: the currency symbol, the thousand-separators, and the Cr/D
 mark are not part of the amount (the Cr/Dr only sets the sign, per below). Date the `balance` the day
 the figure is as-of (for a statement closing, the day AFTER the period ends), the
 `pad` the day before. EXACTLY ONE balance per account — never two, never a `0`
-lifted from a non-balance figure. SIGN a card/liability balance from the figure's
-printed Cr/Dr suffix — find that suffix and let it ALONE decide the sign: a plain
-or "Dr" amount (what you OWE) asserts NEGATIVE; a "Cr" amount (you have OVERPAID, so
-the issuer must refund you) asserts POSITIVE. The suffix is INDEPENDENT of the
-transactions: a card whose every charge is a "Dr" purchase can still CLOSE "Cr", and
-those purchase signs say NOTHING about the closing balance — never let a page of
-"Dr" rows drag it negative. Read the total's Cr/Dr suffix, never the bare number;
-"Cr" closings are uncommon, so resist the reflex to default negative. The suffix
-sets only the SIGN: the amount you write is ALWAYS `<number> <CURRENCY>` (INR, or
-the points ticker). The Cr/Dr mark is a sign cue, NEVER the commodity — drop it
-once it has set the sign; it never appears on the `balance` line.
+lifted from a non-balance figure. SIGN a card/liability balance by a DIRECT lookup on
+the figure's printed Cr/Dr suffix — no reasoning:
+- suffix `Cr` ⇒ POSITIVE number (e.g. `7500.00 INR`)
+- suffix `Dr`, or no suffix ⇒ NEGATIVE number (e.g. `-54321.00 INR`)
+Apply the lookup; nothing else decides the sign. It is INDEPENDENT of the
+transactions: a card whose every charge is a `Dr` purchase can still close `Cr`, and
+the purchase signs never change the closing balance's sign. The suffix sets ONLY the
+sign — the amount is ALWAYS `<number> <CURRENCY>` (INR, or the points ticker), and the
+Cr/Dr mark is NEVER the commodity; it never appears on the `balance` line.
