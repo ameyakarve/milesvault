@@ -439,14 +439,13 @@ ${opts.text}`,
           for (const tc of toolCalls ?? []) {
             let label: string = tc.toolName
             if (tc.toolName === 'draft_transaction') {
-              // Recording variant's input is an id→text MAP, so the entry count
-              // is the key count (the editor's array variant would be .entries).
-              const inp = tc.input as { entries?: unknown[] } | Record<string, unknown> | undefined
-              const arr = (inp as { entries?: unknown[] })?.entries
-              const n = Array.isArray(arr)
-                ? arr.length
-                : inp && typeof inp === 'object'
-                  ? Object.keys(inp).length
+              // `entries` is an ARRAY for the editor tool, an id→text MAP for the
+              // recording tool — count accordingly.
+              const e = (tc.input as { entries?: unknown } | undefined)?.entries
+              const n = Array.isArray(e)
+                ? e.length
+                : e && typeof e === 'object'
+                  ? Object.keys(e).length
                   : undefined
               label = `draft_transaction${typeof n === 'number' ? ` (${n} entries)` : ''}`
             }

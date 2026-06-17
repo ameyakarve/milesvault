@@ -30,27 +30,27 @@ const ENTRY_SHAPES =
   '    2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD\n' +
   'Every posting needs an explicit amount and currency (no blanks), and postings must balance per currency. For a foreign-currency or points→points conversion, carry a total price with `@@` in the OTHER commodity (e.g. a 150→150 points transfer: `Assets:Rewards:...:Dest 150 DEST @@ 150 SRC`). On validation failure you get a compact tool-result naming the bad entries with a worked example — fix only those and call again in the same turn. Do NOT narrate, do NOT invent file paths.'
 
-// Validate an id→text map the SAME way replaceBuffer validates at the journal
-// boundary (classifyDraftEntry per value), surfacing example-rich feedback the
-// model can act on. Returns the trimmed map on success, an aggregated error on
-// failure (the SDK turns it into a tool-error → the model re-emits in-turn).
+type EntriesMap = { entries: Record<string, string> }
+
+// Validate `{ entries: { id: text } }` the SAME way replaceBuffer validates at the
+// journal boundary (classifyDraftEntry per value), surfacing example-rich feedback
+// the model can act on. The `entries` WRAPPER matches the shape gemma actually
+// emits (it won't drop it); the map inside (id→text) is far fewer JSON strings
+// than the editor's array-of-objects. Returns the trimmed map on success, an
+// aggregated error on failure (the SDK turns it into a tool-error → re-emit).
 function validateEntryMap(
   value: unknown,
-): { success: true; value: Record<string, string> } | { success: false; error: Error } {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {
-      success: false,
-      error: new Error('Pass an OBJECT mapping a short id to ONE beancount entry, e.g. { "t1": "<entry>", "t2": "<entry>" }.'),
-    }
+): { success: true; value: EntriesMap } | { success: false; error: Error } {
+  const ex = '{ "entries": { "t1": "<beancount entry text>", "t2": "…" } }'
+  const map = (value as { entries?: unknown } | null)?.entries
+  if (!map || typeof map !== 'object' || Array.isArray(map)) {
+    return { success: false, error: new Error(`Pass ${ex} — an object whose "entries" maps a short id to ONE beancount entry's text.`) }
   }
-  const map = value as Record<string, unknown>
-  const ids = Object.keys(map)
-  if (ids.length === 0) {
-    return { success: false, error: new Error('Provide at least one entry: { "t1": "<beancount entry text>" }.') }
-  }
+  const ids = Object.keys(map as Record<string, unknown>)
+  if (ids.length === 0) return { success: false, error: new Error(`Provide at least one entry: ${ex}`) }
   const issues: string[] = []
   const out: Record<string, string> = {}
-  for (const [id, raw] of Object.entries(map)) {
+  for (const [id, raw] of Object.entries(map as Record<string, unknown>)) {
     const text = typeof raw === 'string' ? raw.trim() : ''
     if (!text) {
       issues.push(`entry "${id}": empty — each value must be ONE beancount entry's text`)
@@ -62,7 +62,7 @@ function validateEntryMap(
     for (const message of verdict.messages) issues.push(entryFeedback(text, message))
   }
   if (issues.length) return { success: false, error: new Error(issues.join('\n')) }
-  return { success: true, value: out }
+  return { success: true, value: { entries: out } }
 }
 
 // TWO draft-transaction tools, picked by the output channel (`opts.record`):
@@ -75,12 +75,13 @@ function validateEntryMap(
 //   - `opts.record` (RECORDING): the headless statement-ingest tool. A first
 //     draft is ADDS-ONLY, so no `replaces`. It takes an id→text MAP
 //     `{ "t1": "<entry>", … }` — half the JSON strings of the array-of-objects
-//     (gemma <|"|>-encodes every key AND value). NOTE: the schema is declared via
-//     `jsonSchema()` with an explicit `additionalProperties: { type: 'string' }`,
-//     because Zod-4's `z.record(...)` mis-converts to `additionalProperties:false`
-//     (drops the value type) — which sends the model an impossible schema that
-//     rejects EVERY object. Validation runs in the `validate` hook so invalid
-//     entries still bounce.
+//     (gemma <|"|>-encodes every key AND value). NOTE on shape: gemma will NOT
+//     drop the `entries` wrapper (strong prior from the editor's array tool), so
+//     the schema is `{ entries: { <id>: <text> } }` — the wrapper it emits, with
+//     a MAP inside instead of array-of-objects. Declared via `jsonSchema()` (not
+//     Zod): Zod-4's `z.record(...)` mis-converts to `additionalProperties:false`
+//     (drops the value type), sending the model an impossible schema. Validation
+//     runs in the `validate` hook so invalid entries still bounce.
 //
 // BOTH are `dynamicTool` so invalid/garbled args bounce a tool-error and the
 // model re-emits in the same turn.
@@ -89,14 +90,21 @@ export function draftTransactionTool(opts?: { record?: (entryTexts: string[]) =>
   if (record) {
     return dynamicTool({
       description:
-        'Render the proposed journal entries for the user to review and approve. Pass an OBJECT that maps a short unique id (e.g. "t1", "t2") to ONE entry\'s beancount text — { "t1": "<entry>", "t2": "<entry>" }. The id is a transient handle (used only to name an entry in validation feedback; never written to the ledger). Put EVERY entry from the statement in this ONE object — the transaction rows AND any pad+balance closing bookends. ' +
+        'Render the proposed journal entries for the user to review and approve. Call with { "entries": { "t1": "<entry>", "t2": "<entry>" } } — an object whose `entries` maps a short unique id (e.g. "t1", "t2") to ONE entry\'s beancount text. The id is a transient handle (used only to name an entry in validation feedback; never written to the ledger). Put EVERY entry from the statement in `entries` — the transaction rows AND any pad+balance closing bookends. ' +
         ENTRY_SHAPES,
-      inputSchema: jsonSchema<Record<string, string>>(
-        { type: 'object', additionalProperties: { type: 'string' }, minProperties: 1 },
+      inputSchema: jsonSchema<EntriesMap>(
+        {
+          type: 'object',
+          properties: {
+            entries: { type: 'object', additionalProperties: { type: 'string' }, minProperties: 1 },
+          },
+          required: ['entries'],
+          additionalProperties: false,
+        },
         { validate: validateEntryMap },
       ),
       execute: async (input) => {
-        const texts = Object.values((input ?? {}) as Record<string, string>)
+        const texts = Object.values((input as EntriesMap | undefined)?.entries ?? {})
           .map((t) => String(t ?? '').trim())
           .filter(Boolean)
         record(texts)
