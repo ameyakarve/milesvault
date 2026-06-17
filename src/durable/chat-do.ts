@@ -345,6 +345,7 @@ ${opts.text}`,
     text?: string
     draftsValid?: boolean
     trace?: { tool: string }[]
+    error?: string | null
   }> {
     const ledger = this.ledgerStub()
     const t0 = Date.now()
@@ -397,9 +398,15 @@ ${opts.text}`,
       // entries" — indistinguishable from the model genuinely drafting nothing,
       // and not surfaced as the retryable error it actually is.
       let streamError: unknown = null
+      // 120s wall-clock cap. Hoisted (not inline) so we can inspect `.aborted`
+      // after the run: a timeout fires the SDK's onAbort, NOT onError — so an
+      // abort leaves `streamError` null and `finishReason` non-'error', and the
+      // run would otherwise be misclassified as "the model drafted nothing"
+      // instead of the real, retryable timeout it is.
+      const draftAbort = AbortSignal.timeout(120_000)
       const stream = streamText({
         model: inv.model,
-        abortSignal: AbortSignal.timeout(120_000),
+        abortSignal: draftAbort,
         // Same tool-call repair the live turn gets — recovers a malformed/garbled
         // tool call instead of letting the loop die on it (gemma garbles large
         // draft_transaction args). NO toolChoice → 'auto', exactly like the turn.
@@ -450,10 +457,21 @@ ${stmt.text}`,
       const trace = steps.flatMap((s) =>
         (s.toolCalls ?? []).map((tc) => ({ tool: tc.toolName })),
       )
-      // An errored generation (provider/gateway failure, abort/timeout) is NOT
-      // the same as "the model drafted nothing" — the first is a real, retryable
-      // failure; only the second is a genuine empty proposal.
-      const errored = streamError != null || finishReason === 'error'
+      // An errored generation (provider/gateway failure, OR a 120s timeout/abort)
+      // is NOT the same as "the model drafted nothing" — the first is a real,
+      // retryable failure; only the second is a genuine empty proposal. A timeout
+      // fires onAbort (not onError) and leaves finishReason non-'error', so it
+      // MUST be detected via the abort signal — otherwise it falls through here
+      // and gets mislabeled "the agent proposed no entries".
+      const timedOut = draftAbort.aborted
+      const errored = streamError != null || finishReason === 'error' || timedOut
+      // The retryable failure reason, surfaced on the capture row AND returned to
+      // the caller (the eval harness, so it stops reporting a generic message).
+      const failReason = timedOut
+        ? 'timed out after 120s (statement too large/complex to draft in one pass)'
+        : streamError != null
+          ? String(streamError)
+          : 'model generation failed'
 
       try {
         this.setState({})
@@ -463,18 +481,18 @@ ${stmt.text}`,
       if (recorded.length > 0) {
         await ledger.set_capture_drafts(statementId, recorded, null)
       } else if (errored) {
-        // Real model/gateway error mid-run — record it verbatim so the Inbox
-        // shows the actual cause (and offers Retry) instead of a misleading
+        // Real model/gateway error or timeout mid-run — record the actual cause so
+        // the Inbox shows it (and offers Retry) instead of a misleading
         // "proposed no entries".
-        const msg = streamError != null ? String(streamError) : 'model generation failed'
         console.error('[async-ingest] statement draft errored', {
           statement_id: statementId,
           finishReason,
+          timedOut,
           steps: steps.length,
           trace,
-          error: msg,
+          error: failReason,
         })
-        await ledger.set_capture_error(statementId, `draft failed: ${msg}`)
+        await ledger.set_capture_error(statementId, `draft failed: ${failReason}`)
       } else {
         // No error and no entries: the model genuinely proposed nothing. Surface
         // its closing prose if any, else a generic note.
@@ -500,12 +518,13 @@ ${stmt.text}`,
           trace,
         },
         ok: recorded.length > 0,
-        error: errored ? (streamError != null ? String(streamError) : 'model generation failed') : null,
+        error: errored ? failReason : null,
         ms: Date.now() - t0,
       })
       // Rich detail (ignored by the scheduler; consumed by the test harness so
       // the eval can assert on the REAL ingest output — drafts, validity, the
-      // tools the agent actually called, its closing prose).
+      // tools the agent actually called, its closing prose, and the real failure
+      // reason when there are no drafts — timeout vs error vs genuine-empty).
       return {
         ok: recorded.length > 0,
         entries: recorded.length,
@@ -513,6 +532,7 @@ ${stmt.text}`,
         text,
         draftsValid: recorded.length > 0 ? validateDraftBatch(recorded).ok === true : false,
         trace,
+        error: errored ? failReason : null,
       }
     } catch (e) {
       await this.ledgerStub()

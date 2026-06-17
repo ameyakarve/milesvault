@@ -65,6 +65,8 @@ export async function POST(req: Request): Promise<Response> {
     clarifies: (result.questions ?? []).map((question) => ({ question })),
     trace: result.trace ?? [],
     text: result.text ?? '',
-    error: result.ok ? null : (result.questions?.[0] ?? result.text ?? 'no entries proposed'),
+    error: result.ok
+      ? null
+      : (result.error ?? result.questions?.[0] ?? result.text ?? 'no entries proposed'),
   })
 }
