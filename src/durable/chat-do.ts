@@ -29,7 +29,6 @@ import { BaseAgentDO } from './base-agent-do'
 import {
   makeEditorRegistry,
   STATEMENT_MODEL_ID,
-  LEDGER_MODEL_ID,
   EDITOR_MAX_STEPS,
   type EditorAgentName,
 } from './agents/registries/editor'
@@ -636,16 +635,23 @@ ${stmt.text}`,
       add_card: capture('add_card', addCardInputSchema),
     }
     try {
+      // Drive the bench through the SAME shared invocation production uses
+      // (modelInvocation) — identical model build, output-token budget, step
+      // budget, AND tool-call repair hook — so the eval actually MEASURES the
+      // live turn instead of a hand-rolled approximation. (Previously this
+      // generateText omitted maxOutputTokens and the repair hook, so the eval
+      // silently graded a weaker config than production ran.)
+      const inv = this.modelInvocation(this.registry.agents[this.registry.entry]!.model)
       const result = await generateText({
-        // Mirror the real ledger agent's model (the bench runs buildLedgerSystem
-        // + the ledger tools) — NOT the statement model.
-        model: this.buildModel({ id: LEDGER_MODEL_ID, reasoning: 'off' }),
+        model: inv.model,
+        experimental_repairToolCall: inv.repairToolCall,
         system: buildLedgerSystem(snapshot, aliases, {
           statement: turnInvolvesStatement(message),
         }),
         prompt: message,
         tools,
-        stopWhen: stepCountIs(EDITOR_MAX_STEPS),
+        ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
+        stopWhen: stepCountIs(inv.maxSteps ?? EDITOR_MAX_STEPS),
       })
       for (const step of result.steps) {
         for (const call of step.toolCalls ?? []) {
