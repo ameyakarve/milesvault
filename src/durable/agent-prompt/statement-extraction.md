@@ -71,7 +71,11 @@ specific to READING a statement.
 
 7. **Pad + balance — the exact form.** A closing bookend is TWO lines — a `pad`
    naming the account with the `Equity:Void` plug, then a `balance` asserting the
-   printed figure verbatim. The pad absorbs any drift between the figure and what
+   figure's DIGITS exactly as printed (never rounded or recomputed) but written in
+   beancount form as `<number> <CURRENCY>` — you do NOT transcribe the statement's
+   notation: the `₹`/currency symbol, the thousand-separators, and the Cr/Dr mark
+   are not part of the amount (the Cr/Dr only sets the sign, per the rule below).
+   The pad absorbs any drift between the figure and what
    your transactions left in the account, so the balance reconciles the import; a
    missing bookend means a misread row passes silently. Emit ONE bookend for EACH
    closing figure the statement actually prints — the card's closing (step 6) and
