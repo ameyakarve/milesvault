@@ -398,17 +398,31 @@ ${opts.text}`,
       // entries" — indistinguishable from the model genuinely drafting nothing,
       // and not surfaced as the retryable error it actually is.
       let streamError: unknown = null
-      // 240s wall-clock cap. Bumped from 120s: the worst case on the LARGEST
-      // statements is gemma garbling the big draft_transaction args, the repair
-      // hook re-asking (generateObject), and a couple of slow MULTIMODAL
-      // generations (15–38s each) — that chain can legitimately exceed 120s and
-      // was aborting mid-rescue (the Axis timeout). 240s gives the repair path
-      // room to converge; the per-capture DO runs on its own alarm, so a longer
-      // draft doesn't block other uploads. Hoisted (not inline) so we can inspect
+      // Live progress for the Inbox's DraftTrace: a draft can run minutes on a
+      // big statement, so stream a line per tool call as the loop runs to show
+      // the user something IS happening. The agents framework broadcasts setState
+      // to the connected per-capture websocket; DraftTrace renders state.draftProgress.
+      const progress: string[] = []
+      const pushProgress = (line: string) => {
+        progress.push(line)
+        try {
+          this.setState({ draftProgress: progress.join('\n') })
+        } catch {
+          /* no-op (no client connected) */
+        }
+      }
+      pushProgress('Reading the statement…')
+      // 360s wall-clock cap. Drafting is OFFLINE-ish (background, on the
+      // per-capture DO's own alarm — a longer draft never blocks the user or
+      // other uploads), so we favour completing over a tight clock. The worst
+      // case on the LARGEST statements is gemma garbling the big draft_transaction
+      // args, the repair hook re-asking (generateObject), and several slow
+      // MULTIMODAL generations (15–38s each); measured Axis runs ranged 51s–285s,
+      // so 240s still clipped the tail. Hoisted (not inline) so we can inspect
       // `.aborted` after the run: a timeout fires the SDK's onAbort, NOT onError,
       // so an abort leaves `streamError` null and `finishReason` non-'error' and
       // must be detected via the signal or it gets mislabeled "drafted nothing".
-      const draftAbort = AbortSignal.timeout(240_000)
+      const draftAbort = AbortSignal.timeout(360_000)
       const stream = streamText({
         model: inv.model,
         abortSignal: draftAbort,
@@ -418,6 +432,18 @@ ${opts.text}`,
         experimental_repairToolCall: inv.repairToolCall,
         onError: ({ error }) => {
           streamError = error
+        },
+        // Per-step progress: name each tool the model called so the trace shows
+        // the actual work (looking up the card guide, drafting the batch, …).
+        onStepFinish: ({ toolCalls }) => {
+          for (const tc of toolCalls ?? []) {
+            let label: string = tc.toolName
+            if (tc.toolName === 'draft_transaction') {
+              const n = (tc.input as { entries?: unknown[] } | undefined)?.entries?.length
+              label = `draft_transaction${typeof n === 'number' ? ` (${n} entries)` : ''}`
+            }
+            pushProgress(`→ ${label}`)
+          }
         },
         system: buildLedgerSystem(snapshot, aliases, { statement: true }),
         messages: [
@@ -473,7 +499,7 @@ ${stmt.text}`,
       // The retryable failure reason, surfaced on the capture row AND returned to
       // the caller (the eval harness, so it stops reporting a generic message).
       const failReason = timedOut
-        ? 'timed out after 240s (statement too large/complex to draft in one pass)'
+        ? 'timed out after 360s (statement too large/complex to draft in one pass)'
         : streamError != null
           ? String(streamError)
           : 'model generation failed'
