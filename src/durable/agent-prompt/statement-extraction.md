@@ -77,11 +77,16 @@ specific to READING a statement.
    closing figure the statement actually prints — the card's closing (step 6) and
    the points closing balance (step 5) — and NONE for a figure it doesn't print
    (never a fabricated figure, never a 0-amount opening pad). The points balance
-   is the settled-pool total. Sign the CARD balance from the total's Cr/Dr suffix,
-   exactly as you sign transactions: a "Dr" or unmarked total is what you OWE →
-   NEGATIVE; a "Cr" total means you have OVERPAID and the issuer must refund you →
-   POSITIVE — never negate a "Cr" total (it is uncommon, so don't default it to
-   negative). E.g. a period ending 31 May 2026 that prints ₹54,321 owed and a
+   is the settled-pool total. **The card balance's sign comes from the closing
+   total's printed Cr/Dr suffix ALONE.** Before you write the number, COPY the
+   suffix as printed; that suffix is the only input to the sign. "Cr" → POSITIVE
+   (you have OVERPAID — the issuer owes YOU); "Dr" or unmarked → NEGATIVE (what you
+   OWE). Do NOT derive the sign from the transactions: a statement can be all "Dr"
+   purchases and still CLOSE "Cr". Each purchase's "Dr" signs its OWN card leg
+   negative — it says NOTHING about the closing balance, which carries its own
+   suffix. "Cr" closings are uncommon, so the pull after a page of "Dr" rows is to
+   default the balance negative; resist it — if the printed suffix is "Cr", the
+   balance is POSITIVE. E.g. a period ending 31 May 2026 that prints ₹54,321 owed and a
    12,500-point closing balance:
 
    ```
