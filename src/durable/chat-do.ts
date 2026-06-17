@@ -381,9 +381,19 @@ ${opts.text}`,
       // duplicated → unparseable → 0 drafts). Dropping it back to 'auto' (the
       // editor's setting) is the fix; the dynamicTool bounce + the prompt's
       // "only via draft_transaction" rule keep adherence without forcing.
+      // Capture any mid-stream model/gateway error instead of letting
+      // consumeStream() swallow it. Without this, a failed generation AFTER a
+      // successful lookup (e.g. a transient workers-ai error on the draft step)
+      // leaves `recorded` empty and the run gets mislabeled "proposed no
+      // entries" — indistinguishable from the model genuinely drafting nothing,
+      // and not surfaced as the retryable error it actually is.
+      let streamError: unknown = null
       const stream = streamText({
         model: this.buildModel({ id: STATEMENT_MODEL_ID, reasoning: 'off' }),
         abortSignal: AbortSignal.timeout(120_000),
+        onError: ({ error }) => {
+          streamError = error
+        },
         system: buildLedgerSystem(snapshot, aliases, { statement: true }),
         messages: [
           {
@@ -416,10 +426,23 @@ ${stmt.text}`,
         // retry still runs; lookups (card_guide) are non-terminal.
         stopWhen: [() => recorded.length > 0, stepCountIs(EDITOR_MAX_STEPS)],
       })
-      await stream.consumeStream()
-      const text = await stream.text
-      const steps = await stream.steps
-      const finishReason = await stream.finishReason
+      // Surface (don't swallow) a stream error: consumeStream's own onError
+      // keeps it from throwing, but `streamError` above still captures it.
+      await stream.consumeStream({ onError: (e) => (streamError = streamError ?? e) })
+      const text = await Promise.resolve(stream.text).catch(() => '')
+      const steps = await Promise.resolve(stream.steps).catch(
+        () => [] as Awaited<typeof stream.steps>,
+      )
+      const finishReason = await Promise.resolve(stream.finishReason).catch(
+        () => 'error' as const,
+      )
+      const trace = steps.flatMap((s) =>
+        (s.toolCalls ?? []).map((tc) => ({ tool: tc.toolName })),
+      )
+      // An errored generation (provider/gateway failure, abort/timeout) is NOT
+      // the same as "the model drafted nothing" — the first is a real, retryable
+      // failure; only the second is a genuine empty proposal.
+      const errored = streamError != null || finishReason === 'error'
 
       try {
         this.setState({})
@@ -428,9 +451,28 @@ ${stmt.text}`,
       }
       if (recorded.length > 0) {
         await ledger.set_capture_drafts(statementId, recorded, null)
+      } else if (errored) {
+        // Real model/gateway error mid-run — record it verbatim so the Inbox
+        // shows the actual cause (and offers Retry) instead of a misleading
+        // "proposed no entries".
+        const msg = streamError != null ? String(streamError) : 'model generation failed'
+        console.error('[async-ingest] statement draft errored', {
+          statement_id: statementId,
+          finishReason,
+          steps: steps.length,
+          trace,
+          error: msg,
+        })
+        await ledger.set_capture_error(statementId, `draft failed: ${msg}`)
       } else {
-        // No entries recorded (tool_choice:'required' makes this rare): surface
-        // the agent's closing prose rather than a generic message.
+        // No error and no entries: the model genuinely proposed nothing. Surface
+        // its closing prose if any, else a generic note.
+        console.warn('[async-ingest] statement draft produced no entries', {
+          statement_id: statementId,
+          finishReason,
+          steps: steps.length,
+          trace,
+        })
         await ledger.set_capture_error(
           statementId,
           text.trim() || 'the agent proposed no entries',
@@ -444,8 +486,10 @@ ${stmt.text}`,
           entries: recorded.length,
           steps: steps.length,
           finish: finishReason,
+          trace,
         },
         ok: recorded.length > 0,
+        error: errored ? (streamError != null ? String(streamError) : 'model generation failed') : null,
         ms: Date.now() - t0,
       })
       // Rich detail (ignored by the scheduler; consumed by the test harness so
@@ -457,9 +501,7 @@ ${stmt.text}`,
         drafts: recorded,
         text,
         draftsValid: recorded.length > 0 ? validateDraftBatch(recorded).ok === true : false,
-        trace: steps.flatMap((s) =>
-          (s.toolCalls ?? []).map((tc) => ({ tool: tc.toolName })),
-        ),
+        trace,
       }
     } catch (e) {
       await this.ledgerStub()
