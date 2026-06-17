@@ -93,45 +93,10 @@ export const draftTransactionBatchSchema = z
   })
 
 export type DraftTransactionBatch = z.infer<typeof draftTransactionBatchSchema>
-
-// RECORDING (statement-ingest) variant: an OBJECT mapping a short id → ONE
-// beancount entry's text — { "t1": "<entry>", "t2": "<entry>" }. Ingest is
-// ADDS-ONLY (a first draft of a statement), so there is no `replaces`. Dropping
-// the per-entry `{ … }` object (and the "id"/"text" KEY strings) roughly halves
-// the JSON string count — gemma <|"|>-encodes every key AND value, and that
-// density is what collapsed the array-of-objects mid-batch. Same per-value
-// validation as the array schema, so invalid entries still bounce; the id is the
-// key (unique by construction), a transient handle never written to the ledger.
-export const draftTransactionDictSchema = z
-  .record(z.string(), z.string())
-  .superRefine((value, ctx) => {
-    const ids = Object.keys(value)
-    if (ids.length === 0) {
-      ctx.addIssue({
-        code: 'custom',
-        path: [],
-        message: 'provide at least one entry: { "t1": "<beancount entry text>" }',
-      })
-      return
-    }
-    for (const [id, text] of Object.entries(value)) {
-      if (text.trim().length === 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: [id],
-          message: `entry "${id}": empty — every value must be ONE beancount entry's text`,
-        })
-        continue
-      }
-      const verdict = classifyDraftEntry(text, `entry "${id}"`)
-      if (verdict.kind === 'ok') continue
-      for (const message of verdict.messages) {
-        ctx.addIssue({ code: 'custom', path: [id], message: entryFeedback(text, message) })
-      }
-    }
-  })
-
-export type DraftTransactionDict = z.infer<typeof draftTransactionDictSchema>
+// NB: the RECORDING (statement-ingest) variant uses an id→text MAP, declared via
+// `jsonSchema()` in editor/draft-transaction.ts — NOT Zod. Zod-4's `z.record`
+// mis-converts to `additionalProperties:false` (drops the value type), which
+// sends the model a schema that rejects every object.
 
 // Ask the user a clarifying question when the agent can't decide between
 // genuinely ambiguous paths (e.g. instant discount vs separately-redeemable
