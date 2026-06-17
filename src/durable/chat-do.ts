@@ -884,7 +884,17 @@ entries, or draft corrections.`
     return async ({ toolCall, inputSchema, error, system, messages }) => {
       // Can't repair a call to a tool that doesn't exist — only invalid input.
       if (NoSuchToolError.isInstance(error)) return null
-      const inputLen = String((toolCall as { input?: unknown }).input ?? '').length
+      const rawInput = String((toolCall as { input?: unknown }).input ?? '')
+      const inputLen = rawInput.length
+      // TEMP DEBUG: dump the EXACT bytes the model emitted so we can see the
+      // shape (dict vs array vs garbled) and the precise validation error.
+      console.error('[repair] bounced-input', {
+        tool: toolCall.toolName,
+        errName: (error as { name?: string }).name,
+        errMsg: String(error.message).slice(0, 160),
+        inputLen,
+        head: rawInput.slice(0, 220),
+      })
       try {
         const schema = await inputSchema(toolCall)
         const { object } = await generateObject({
