@@ -91,7 +91,10 @@ export function buildLedgerSystem(
   // The statement shards (handling + extraction rules: pad+balance closings,
   // "assert the card's closing balance", forex folding) are included ONLY when
   // the turn actually involves a statement — they'd otherwise leak statement
-  // framing into plain edits (add/edit/delete/refund).
+  // framing into plain edits (add/edit/delete/refund). The dedicated ingest path
+  // (ChatDO.runDraftStatement) passes `statement: true` explicitly; the editor
+  // turn only gates them in for the UI-only convenience case (a pasted statement
+  // chip, via turnInvolvesStatement) — statement ingest is NOT an editor feature.
   return [
     BEANCOUNT_PRIMER,
     LEDGER_RULES,
