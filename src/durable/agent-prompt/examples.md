@@ -492,11 +492,11 @@ leg accordingly.
   Liabilities:CreditCards:<Issuer>:<Card>  3500.00 INR
 ```
 
-On a statement, a row marked as a **credit** that is NOT a bill
+On a statement, a row marked **`Cr`** / **"Credit"** that is NOT a bill
 payment is a refund — it follows this shape: the expense leg is
 **negative**, the card leg **positive** (a credit reduces what you owe).
-Each credit row is its own transaction; do NOT net two credits into one, and
-do NOT collapse a refund into a receivable. Two identical ₹877.82 credit
+Each `Cr` row is its own transaction; do NOT net two credits into one, and
+do NOT collapse a refund into a receivable. Two identical ₹877.82 `Cr`
 rows are two separate refunds, each `−877.82` expense / `+877.82` card.
 
 ## Points transfers between programs
