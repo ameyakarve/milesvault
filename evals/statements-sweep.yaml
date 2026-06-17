@@ -7,8 +7,11 @@
 # cashback posted as a credit, finance charges + tax, a returned payment, and a
 # forex markup fee.
 #
-# Same harness as promptfooconfig.yaml (real editor turn on staging, structural +
-# judge). Run:  pnpm eval -- -c evals/statements-sweep.yaml   (needs TEST_USER_TOKEN)
+# Runs the DEDICATED statement-ingest path on staging — /api/test/ingest, which
+# drives the SAME ChatDO.runDraftStatement the upload/Inbox flow uses (NOT the
+# editor turn; statement ingest is its own path, the editor's in-chat handling is
+# UI-only). Structural asserts + judge (same judge as promptfooconfig.yaml).
+# Run:  pnpm eval -- -c evals/statements-sweep.yaml   (needs TEST_USER_TOKEN)
 
 description: MilesVault statements-sweep (multi-txn ingest)
 
@@ -16,16 +19,19 @@ prompts:
   - '{{message}}'
 
 providers:
-  - id: 'https://staging.milesvault.com/api/test/bench'
-    label: editor
+  - id: 'https://staging.milesvault.com/api/test/ingest'
+    label: ingest
     config:
       method: POST
       headers:
         'Content-Type': 'application/json'
         'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
       body:
-        message: '{{message}}'
+        # The dedicated path stores the statement blob then drafts off it — the
+        # statement text goes in `text` (not an editor `message`).
+        text: '{{message}}'
         seed: '{{seed}}'
+        filename: 'statement.txt'
       transformResponse: 'json'
 
 defaultTest:
