@@ -86,8 +86,11 @@ specific to READING a statement.
    so never let a page of "Dr" rows drag it negative — the closing total carries its
    OWN suffix; obey that. "Cr" closings are uncommon, so the reflex is to default
    negative; do NOT — when the printed suffix is "Cr", the balance is POSITIVE, never
-   negated. E.g. a period ending 31 May 2026 that prints ₹54,321 owed and a
-   12,500-point closing balance:
+   negated. The suffix sets only the SIGN: the amount you write is ALWAYS
+   `<number> <CURRENCY>`, where CURRENCY is INR or the points ticker. The Cr/Dr mark
+   is a sign cue, NEVER the commodity — once it has decided positive vs negative,
+   drop it; it never appears on the `balance` line. E.g. a period ending 31 May 2026
+   that prints ₹54,321 owed and a 12,500-point closing balance:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
@@ -97,8 +100,9 @@ specific to READING a statement.
    2026-06-01 balance Assets:Rewards:Points:Skybank  12500 SKYBANKPTS
    ```
 
-   And a different card whose closing total prints "7,500.00 Cr" (overpaid — the
-   issuer owes you) → the balance is POSITIVE, NOT negated:
+   And a different card whose closing total carries a "Cr" suffix — overpaid, the
+   issuer owes you 7,500.00 → the balance is POSITIVE, and the commodity is INR (the
+   "Cr" set the sign and is gone), NOT negated:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Harbor:Signature:5678 Equity:Void

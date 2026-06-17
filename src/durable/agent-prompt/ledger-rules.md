@@ -330,4 +330,7 @@ the issuer must refund you) asserts POSITIVE. The suffix is INDEPENDENT of the
 transactions: a card whose every charge is a "Dr" purchase can still CLOSE "Cr", and
 those purchase signs say NOTHING about the closing balance — never let a page of
 "Dr" rows drag it negative. Read the total's Cr/Dr suffix, never the bare number;
-"Cr" closings are uncommon, so resist the reflex to default negative.
+"Cr" closings are uncommon, so resist the reflex to default negative. The suffix
+sets only the SIGN: the amount you write is ALWAYS `<number> <CURRENCY>` (INR, or
+the points ticker). The Cr/Dr mark is a sign cue, NEVER the commodity — drop it
+once it has set the sign; it never appears on the `balance` line.
