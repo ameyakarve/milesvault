@@ -65,7 +65,10 @@ specific to READING a statement.
    statements carry a SUMMARY box of TOTALS (Previous Balance · Purchases ·
    Payments · Net Outstanding / Total Payment Due) — use the "Net Outstanding" /
    "Total Payment Due" total, NOT a transaction amount, the minimum due, or the
-   credit limit. Emit it as a pad + balance dated the day AFTER the statement
+   credit limit. The "Due" / "Outstanding" LABEL does NOT mean the figure is owed:
+   when it carries a `Cr` suffix the card is in credit — nothing is due, the issuer
+   owes YOU — and the figure is POSITIVE. The printed suffix, not the label, sets
+   the sign (step 7). Emit it as a pad + balance dated the day AFTER the statement
    period's last day. If the statement has no totals / amount-due box, emit no
    card bookend — don't reconstruct a figure.
 
