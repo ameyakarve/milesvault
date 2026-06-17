@@ -439,7 +439,15 @@ ${opts.text}`,
           for (const tc of toolCalls ?? []) {
             let label: string = tc.toolName
             if (tc.toolName === 'draft_transaction') {
-              const n = (tc.input as { entries?: unknown[] } | undefined)?.entries?.length
+              // Recording variant's input is an id→text MAP, so the entry count
+              // is the key count (the editor's array variant would be .entries).
+              const inp = tc.input as { entries?: unknown[] } | Record<string, unknown> | undefined
+              const arr = (inp as { entries?: unknown[] })?.entries
+              const n = Array.isArray(arr)
+                ? arr.length
+                : inp && typeof inp === 'object'
+                  ? Object.keys(inp).length
+                  : undefined
               label = `draft_transaction${typeof n === 'number' ? ` (${n} entries)` : ''}`
             }
             pushProgress(`→ ${label}`)
@@ -876,7 +884,17 @@ entries, or draft corrections.`
     return async ({ toolCall, inputSchema, error, system, messages }) => {
       // Can't repair a call to a tool that doesn't exist — only invalid input.
       if (NoSuchToolError.isInstance(error)) return null
-      const inputLen = String((toolCall as { input?: unknown }).input ?? '').length
+      const rawInput = String((toolCall as { input?: unknown }).input ?? '')
+      const inputLen = rawInput.length
+      // TEMP DEBUG: dump the EXACT bytes the model emitted so we can see the
+      // shape (dict vs array vs garbled) and the precise validation error.
+      console.error('[repair] bounced-input', {
+        tool: toolCall.toolName,
+        errName: (error as { name?: string }).name,
+        errMsg: String(error.message).slice(0, 160),
+        inputLen,
+        head: rawInput.slice(0, 220),
+      })
       try {
         const schema = await inputSchema(toolCall)
         const { object } = await generateObject({
