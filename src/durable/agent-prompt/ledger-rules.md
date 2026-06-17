@@ -323,5 +323,9 @@ redemption / transfer-out / expiry (see Redemption), never a bare burn to Void.
 Assert the figure exactly as given, digit-for-digit. Date the `balance` the day
 the figure is as-of (for a statement closing, the day AFTER the period ends), the
 `pad` the day before. EXACTLY ONE balance per account — never two, never a `0`
-lifted from a non-balance figure. SIGNS for a card/liability balance: amount owed
-(normal "Dr") → NEGATIVE; a "Cr" balance (the bank owes you) → POSITIVE.
+lifted from a non-balance figure. SIGN a card/liability balance the SAME way you
+sign its transactions: spending (a "Dr" amount) makes the card leg NEGATIVE and a
+payment/refund (a "Cr" amount) makes it POSITIVE — so a closing total that is a
+plain or "Dr" amount (what you OWE) asserts NEGATIVE, and a "Cr" total (you have
+OVERPAID, so the issuer must refund you) asserts POSITIVE. Read the total's Cr/Dr
+suffix, never the bare number.
