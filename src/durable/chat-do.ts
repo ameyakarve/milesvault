@@ -843,10 +843,23 @@ entries, or draft corrections.`
   // (the caller then surfaces a real failure) if the re-ask itself fails.
   protected override getRepairToolCall(): ToolCallRepairFunction<ToolSet> {
     return async ({ toolCall, inputSchema, error, system, messages }) => {
+      // INSTRUMENTATION (temporary): prove whether this hook is even entered and,
+      // if so, exactly where it bails — so we stop guessing why repair never
+      // fired on the Axis garble.
+      console.error('[repair] ENTER', {
+        tool: toolCall.toolName,
+        errorName: (error as { name?: string })?.name,
+        errorMsg: String((error as { message?: string })?.message ?? error).slice(0, 200),
+        inputLen: String((toolCall as { input?: unknown }).input ?? '').length,
+      })
       // Can't repair a call to a tool that doesn't exist — only invalid input.
-      if (NoSuchToolError.isInstance(error)) return null
+      if (NoSuchToolError.isInstance(error)) {
+        console.error('[repair] BAIL no-such-tool')
+        return null
+      }
       try {
         const schema = await inputSchema(toolCall)
+        console.error('[repair] schema-ok', { hasSchema: schema != null, keys: schema && typeof schema === 'object' ? Object.keys(schema).slice(0, 8) : null })
         const { object } = await generateObject({
           model: this.modelInvocation(this.registry.agents[this.registry.entry]!.model).model,
           schema: jsonSchema(schema),
@@ -862,8 +875,10 @@ entries, or draft corrections.`
             },
           ],
         })
+        console.error('[repair] generateObject-ok', { objKeys: object && typeof object === 'object' ? Object.keys(object as object).slice(0, 8) : typeof object })
         return { ...toolCall, input: JSON.stringify(object) }
-      } catch {
+      } catch (e) {
+        console.error('[repair] THREW', { where: 'inputSchema-or-generateObject', err: String(e).slice(0, 300) })
         // Re-ask failed (provider error, or the regeneration garbled too) — give
         // up cleanly; the turn ends and the caller surfaces it.
         return null
