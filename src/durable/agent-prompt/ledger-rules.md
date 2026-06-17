@@ -320,7 +320,10 @@ This is the PAD plug ONLY. It does NOT license burning points to `Equity:Void` i
 a normal transaction: a points balance going DOWN in a transaction is a
 redemption / transfer-out / expiry (see Redemption), never a bare burn to Void.
 
-Assert the figure exactly as given, digit-for-digit. Date the `balance` the day
+Assert the figure's DIGITS exactly as given, digit-for-digit (never rounded or
+recomputed) — but in beancount form `<number> <CURRENCY>`, NOT transcribed with the
+statement's notation: the currency symbol, the thousand-separators, and the Cr/Dr
+mark are not part of the amount (the Cr/Dr only sets the sign, per below). Date the `balance` the day
 the figure is as-of (for a statement closing, the day AFTER the period ends), the
 `pad` the day before. EXACTLY ONE balance per account — never two, never a `0`
 lifted from a non-balance figure. SIGN a card/liability balance from the figure's
