@@ -398,12 +398,17 @@ ${opts.text}`,
       // entries" — indistinguishable from the model genuinely drafting nothing,
       // and not surfaced as the retryable error it actually is.
       let streamError: unknown = null
-      // 120s wall-clock cap. Hoisted (not inline) so we can inspect `.aborted`
-      // after the run: a timeout fires the SDK's onAbort, NOT onError — so an
-      // abort leaves `streamError` null and `finishReason` non-'error', and the
-      // run would otherwise be misclassified as "the model drafted nothing"
-      // instead of the real, retryable timeout it is.
-      const draftAbort = AbortSignal.timeout(120_000)
+      // 240s wall-clock cap. Bumped from 120s: the worst case on the LARGEST
+      // statements is gemma garbling the big draft_transaction args, the repair
+      // hook re-asking (generateObject), and a couple of slow MULTIMODAL
+      // generations (15–38s each) — that chain can legitimately exceed 120s and
+      // was aborting mid-rescue (the Axis timeout). 240s gives the repair path
+      // room to converge; the per-capture DO runs on its own alarm, so a longer
+      // draft doesn't block other uploads. Hoisted (not inline) so we can inspect
+      // `.aborted` after the run: a timeout fires the SDK's onAbort, NOT onError,
+      // so an abort leaves `streamError` null and `finishReason` non-'error' and
+      // must be detected via the signal or it gets mislabeled "drafted nothing".
+      const draftAbort = AbortSignal.timeout(240_000)
       const stream = streamText({
         model: inv.model,
         abortSignal: draftAbort,
@@ -468,7 +473,7 @@ ${stmt.text}`,
       // The retryable failure reason, surfaced on the capture row AND returned to
       // the caller (the eval harness, so it stops reporting a generic message).
       const failReason = timedOut
-        ? 'timed out after 120s (statement too large/complex to draft in one pass)'
+        ? 'timed out after 240s (statement too large/complex to draft in one pass)'
         : streamError != null
           ? String(streamError)
           : 'model generation failed'
@@ -843,23 +848,11 @@ entries, or draft corrections.`
   // (the caller then surfaces a real failure) if the re-ask itself fails.
   protected override getRepairToolCall(): ToolCallRepairFunction<ToolSet> {
     return async ({ toolCall, inputSchema, error, system, messages }) => {
-      // INSTRUMENTATION (temporary): prove whether this hook is even entered and,
-      // if so, exactly where it bails — so we stop guessing why repair never
-      // fired on the Axis garble.
-      console.error('[repair] ENTER', {
-        tool: toolCall.toolName,
-        errorName: (error as { name?: string })?.name,
-        errorMsg: String((error as { message?: string })?.message ?? error).slice(0, 200),
-        inputLen: String((toolCall as { input?: unknown }).input ?? '').length,
-      })
       // Can't repair a call to a tool that doesn't exist — only invalid input.
-      if (NoSuchToolError.isInstance(error)) {
-        console.error('[repair] BAIL no-such-tool')
-        return null
-      }
+      if (NoSuchToolError.isInstance(error)) return null
+      const inputLen = String((toolCall as { input?: unknown }).input ?? '').length
       try {
         const schema = await inputSchema(toolCall)
-        console.error('[repair] schema-ok', { hasSchema: schema != null, keys: schema && typeof schema === 'object' ? Object.keys(schema).slice(0, 8) : null })
         const { object } = await generateObject({
           model: this.modelInvocation(this.registry.agents[this.registry.entry]!.model).model,
           schema: jsonSchema(schema),
@@ -875,12 +868,14 @@ entries, or draft corrections.`
             },
           ],
         })
-        console.error('[repair] generateObject-ok', { objKeys: object && typeof object === 'object' ? Object.keys(object as object).slice(0, 8) : typeof object })
+        // Keep a single observability line: repair DID fire and succeeded — this
+        // is the path that rescues gemma's garbled large draft_transaction args.
+        console.log('[repair] fired', { tool: toolCall.toolName, inputLen, ok: true })
         return { ...toolCall, input: JSON.stringify(object) }
       } catch (e) {
-        console.error('[repair] THREW', { where: 'inputSchema-or-generateObject', err: String(e).slice(0, 300) })
         // Re-ask failed (provider error, or the regeneration garbled too) — give
-        // up cleanly; the turn ends and the caller surfaces it.
+        // up cleanly; the turn ends and the caller surfaces the real failure.
+        console.warn('[repair] fired', { tool: toolCall.toolName, inputLen, ok: false, err: String(e).slice(0, 200) })
         return null
       }
     }
