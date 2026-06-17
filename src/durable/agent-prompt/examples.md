@@ -199,8 +199,9 @@ negative posting on the same expense; no `Equity:Void`, no receivable.
 ## Transfers (money moves between your accounts — no expense)
 
 ### Salary received
-Income postings are negative — that's the sign convention for
-a credit to your books.
+Income postings are negative — beancount's sign convention for income
+(this is the accounting sense of "credit", unrelated to a statement's `Cr`
+balance marker, which signs a card balance POSITIVE).
 ```beancount
 2026-05-25 * "ACME Corp" "May salary"
   Assets:Bank:HDFC:Savings  125000.00 INR
