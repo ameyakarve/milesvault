@@ -1,15 +1,15 @@
 import { dynamicTool, type ToolExecuteFunction } from 'ai'
-import { draftTransactionBatchSchema } from '../../../agent-ui-schemas'
+import { draftTransactionBatchSchema, draftTransactionDictSchema } from '../../../agent-ui-schemas'
 
 // CLIENT tool — no runtime `execute`, the SDK loop suspends after the call
 // until the UI resolves it via addToolResult (approve / reject). Registered
 // with `dynamicTool` (not `tool`) on purpose: the AI SDK silently drops
 // invalid input for static client tools, but surfaces a `tool-error` to the
 // model for dynamic ones (parseToolCall in ai/dist/index.mjs:4521). Validation
-// lives in `draftTransactionBatchSchema.superRefine` (same `validateDraftBatch`
-// used by replaceBuffer at the journal-write boundary) — on bad input the
-// model gets per-entry issues back and re-emits in the same turn, without an
-// empty approval card cluttering history.
+// lives in the schema's superRefine (same `validateDraftBatch` used by
+// replaceBuffer at the journal-write boundary) — on bad input the model gets
+// per-entry issues back and re-emits in the same turn, without an empty approval
+// card cluttering history.
 //
 // `dynamicTool`'s TypeScript signature requires `execute`, but the runtime
 // (executeToolCall: `if (tool?.execute == null) return void 0`) short-circuits
@@ -21,35 +21,60 @@ const SUSPENDING_EXECUTE = undefined as unknown as ToolExecuteFunction<
   unknown
 >
 
-// ONE draft-transaction tool for every surface (editor + headless ingest).
-// ALWAYS a `dynamicTool` — so invalid/garbled args bounce a tool-error back to
-// the model and it re-emits in the same turn (the self-correction the editor
-// relies on). The only difference is the output channel, injected via `opts`:
-//   - default: SUSPENDING (no execute) — the editor's client tool, resolved by
-//     the UI via addToolResult.
-//   - `opts.record`: RECORDING — the headless ingest captures the entry texts
-//     (committed later on approval), no live client to suspend on.
-// A static `tool()` would SILENTLY DROP bad input (no bounce/retry) — that was
-// the parity gap that lost gemma's garbled batches. Don't reintroduce it.
+// The shared beancount-shape guidance — what ONE entry's text may be. Identical
+// for both surfaces; only the CONTAINER differs (array-of-objects vs id→text map).
+const ENTRY_SHAPES =
+  'Each entry is ONE beancount entry — ONE of:\n' +
+  '• a transaction — a date header then 2+ posting lines:\n' +
+  '    2026-05-21 * "Payee" "Narration"\n' +
+  '      Expenses:Food:Groceries     42.10 USD\n' +
+  '      Assets:Bank:Chase:Checking -42.10 USD\n' +
+  '• a balance assertion: `2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD`\n' +
+  '• a pad+balance (lets a pad absorb drift up to the figure) — two lines, plug always Equity:Void:\n' +
+  '    2026-06-12 pad Assets:Bank:Chase:Checking Equity:Void\n' +
+  '    2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD\n' +
+  'Every posting needs an explicit amount and currency (no blanks), and postings must balance per currency. For a foreign-currency or points→points conversion, carry a total price with `@@` in the OTHER commodity (e.g. a 150→150 points transfer: `Assets:Rewards:...:Dest 150 DEST @@ 150 SRC`). On validation failure you get a compact tool-result naming the bad entries with a worked example — fix only those and call again in the same turn. Do NOT narrate, do NOT invent file paths.'
+
+// TWO draft-transaction tools, picked by the output channel (`opts.record`):
+//
+//   - default (SUSPENDING): the EDITOR's client tool. Array-of-objects schema
+//     `{ entries: [{ id, text?, replaces? }] }` — it must express ADD / EDIT /
+//     DELETE (replaces addresses an existing entry), resolved by the UI on
+//     approval. Unchanged.
+//
+//   - `opts.record` (RECORDING): the headless statement-ingest tool. A first
+//     draft is ADDS-ONLY, so it has no use for `replaces` (and already discarded
+//     it). It takes an id→text MAP `{ "t1": "<entry>", … }` instead — half the
+//     `<|"|>`-encoded strings of the array-of-objects, and no per-entry `{ }`
+//     boundary, which is exactly where gemma's streamed tool-call JSON was
+//     collapsing mid-batch. Records the map's values in order.
+//
+// BOTH are `dynamicTool` so invalid/garbled args bounce a tool-error and the
+// model re-emits in the same turn. A static `tool()` would SILENTLY DROP bad
+// input (no bounce/retry) — don't reintroduce it.
 export function draftTransactionTool(opts?: { record?: (entryTexts: string[]) => void }) {
-  const recordingExecute: ToolExecuteFunction<unknown, unknown> = async (input) => {
-    const entries = (input as { entries?: Array<{ text?: string }> }).entries ?? []
-    opts!.record!(entries.map((e) => e.text ?? '').filter(Boolean))
-    return { ok: true, recorded: entries.length }
+  const record = opts?.record
+  if (record) {
+    return dynamicTool({
+      description:
+        'Render the proposed journal entries for the user to review and approve. Pass an OBJECT that maps a short unique id (e.g. "t1", "t2") to ONE entry\'s beancount text — { "t1": "<entry>", "t2": "<entry>" }. The id is a transient handle (used only to name an entry in validation feedback; never written to the ledger). Put EVERY entry from the statement in this ONE object — the transaction rows AND any pad+balance closing bookends. ' +
+        ENTRY_SHAPES,
+      inputSchema: draftTransactionDictSchema,
+      execute: async (input) => {
+        const texts = Object.values(input as Record<string, string>)
+          .map((t) => (t ?? '').trim())
+          .filter(Boolean)
+        record(texts)
+        return { ok: true as const, recorded: texts.length }
+      },
+    })
   }
   return dynamicTool({
     description:
-      'Render proposed journal entries for the user to review and approve — to ADD, EDIT, or DELETE. `entries` is an array; each element is { "id", "text"?, "replaces"? }. `id` is a short unique handle (used only to address the entry on a correction — never written to the ledger). ADD = `text` only. EDIT = `replaces` (the existing entry\'s exact text) + `text` (the full replacement). DELETE = `replaces` with empty `text`. For any change to existing entries, call `incorporate({ intent })` first and pass its returned entries here VERBATIM — do not hand-write edits or hunt for entries. Each `text` is ONE beancount entry — ONE of:\n' +
-      '• a transaction — a date header then 2+ posting lines:\n' +
-      '    2026-05-21 * "Payee" "Narration"\n' +
-      '      Expenses:Food:Groceries     42.10 USD\n' +
-      '      Assets:Bank:Chase:Checking -42.10 USD\n' +
-      '• a balance assertion: `2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD`\n' +
-      '• a pad+balance (lets a pad absorb drift up to the figure) — two lines, plug always Equity:Void:\n' +
-      '    2026-06-12 pad Assets:Bank:Chase:Checking Equity:Void\n' +
-      '    2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD\n' +
-      'Every posting needs an explicit amount and currency (no blanks), and postings must balance per currency. For a foreign-currency or points→points conversion, carry a total price with `@@` in the OTHER commodity (e.g. a 150→150 points transfer: `Assets:Rewards:...:Dest 150 DEST @@ 150 SRC`). Batch related entries (statement uploads, splits, subscription series) into one call. On validation failure you get a compact tool-result naming the bad entries with a worked example — fix only those and call again in the same turn. Do NOT narrate, do NOT invent file paths.',
+      'Render proposed journal entries for the user to review and approve — to ADD, EDIT, or DELETE. `entries` is an array; each element is { "id", "text"?, "replaces"? }. `id` is a short unique handle (used only to address the entry on a correction — never written to the ledger). ADD = `text` only. EDIT = `replaces` (the existing entry\'s exact text) + `text` (the full replacement). DELETE = `replaces` with empty `text`. For any change to existing entries, call `incorporate({ intent })` first and pass its returned entries here VERBATIM — do not hand-write edits or hunt for entries. ' +
+      ENTRY_SHAPES.replace('Each entry is', 'Each `text` is') +
+      ' Batch related entries (statement uploads, splits, subscription series) into one call.',
     inputSchema: draftTransactionBatchSchema,
-    execute: opts?.record ? recordingExecute : SUSPENDING_EXECUTE,
+    execute: SUSPENDING_EXECUTE,
   })
 }
