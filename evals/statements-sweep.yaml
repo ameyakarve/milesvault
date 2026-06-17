@@ -218,16 +218,16 @@ tests:
 
   # ---- D: rewards card, plain monthly layout (annual fee waived). HSBC-Premier
   #         -shaped — the "ordinary" baseline, should be the easiest. ----
-  - description: 'statement — rewards card, plain monthly batch'
+  - description: 'statement — FIRST upload of a card the user does NOT hold (opens its own account)'
+    # The user holds a DIFFERENT card (Vista). The uploaded statement is for a
+    # Crown Premier they don't track yet — so the model must OPEN a new
+    # Liabilities:CreditCards:Crown… account and draft against THAT, not bail and
+    # not fall back to the unrelated held Vista card.
     vars:
       seed: |
-        2026-01-02 * "Crown" "Welcome points"
-          Assets:Rewards:Points:Crown   2000 CROWNPTS
-          Equity:Void                  -2000 CROWNPTS
-
         2026-01-03 * "Corner Store" "Setup"
           Expenses:Misc                          100 INR
-          Liabilities:CreditCards:Crown:Rewards -100 INR
+          Liabilities:CreditCards:Vista:Everyday -100 INR
       message: |
         add everything from my Crown Premier statement:
 
@@ -247,9 +247,15 @@ tests:
       - type: javascript
         value: 'output.drafts.length >= 5 && output.clarifies.length === 0'
         metric: captured-most
+      # First upload of an UNHELD card → the model must OPEN it (post to a new
+      # Liabilities:CreditCards:Crown… account derived from the header), not bail.
       - type: javascript
-        value: "output.drafts.some(d => d.text.includes('Liabilities:CreditCards:Crown'))"
-        metric: card-leg
+        value: "output.drafts.some(d => /Liabilities:CreditCards:Crown/.test(d.text))"
+        metric: new-card-opened
+      # …and must NOT fall back to the unrelated held card.
+      - type: javascript
+        value: "!output.drafts.some(d => /Liabilities:CreditCards:Vista/.test(d.text))"
+        metric: not-the-held-card
       # Fictional issuer → no card_guide → model improvises the currency name;
       # assert it accrues SOME reward leg, not an exact ticker.
       - type: javascript
@@ -257,11 +263,15 @@ tests:
         metric: reward-leg
       - type: llm-rubric
         value: |
-          The drafts ingest a rewards card statement. Each purchase posts to
-          Liabilities:CreditCards:Crown… and accrues its REWARD POINTS into the
-          CROWNPTS pool. The annual-fee line is informational (waived) — no charge.
-          "PAYMENT - THANK YOU … 12,000.00 CR" is a payment, not an expense. PASS if
-          every purchase is captured with its points and the payment is handled.
+          This is the FIRST upload of a Crown Premier card that the user does NOT
+          already hold (their only held card is a different one, "Vista"). The model
+          must OPEN a new account for this card — every purchase posts to a
+          Liabilities:CreditCards:Crown… account it creates from the header — and
+          accrue the stated REWARD POINTS into a Crown reward pool. The annual-fee
+          line is informational (waived) — no charge. "PAYMENT - THANK YOU …
+          12,000.00 CR" is a payment, not an expense. PASS only if it opens and uses
+          a Crown card account (NOT the held Vista card) and captures every purchase
+          with its points and the payment.
 
   # ---- E: points card with a FOREX MARKUP FEE and "Dr" debit suffix on an
   #         international spend. Axis-Magnus-shaped. ----

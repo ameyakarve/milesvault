@@ -6,10 +6,21 @@ is four postings), the points lifecycle, forex folding, categories, cashback,
 and balance mechanics are all defined there. This section covers ONLY what is
 specific to READING a statement.
 
-1. **Identify the account.** Scan the header for issuer + last-4 / account suffix
-   and match it to the user's open accounts. Include the last-4 as the optional
-   `:<Id>` segment when the statement shows it. If you genuinely cannot pin the
-   card, return an empty result — the caller surfaces that to the user.
+1. **Identify the card, then pick its account.** A statement is for exactly ONE
+   card — read the header for issuer + card name + last-4. Then:
+   - **If that card is already an OPEN account** (the open-accounts list above),
+     use that account path **verbatim** (add the last-4 as the optional `:<Id>`
+     segment when shown). Do NOT open a duplicate.
+   - **If it is NOT yet held** (a card the user doesn't track yet), OPEN it: post
+     to a new `Liabilities:CreditCards:<Issuer>:<Card>` account derived from the
+     header (use `card_guide` for the canonical issuer/pool path + ticker). This
+     is the normal first-upload-of-a-card case — draft it, don't bail.
+   The account must always reflect THE STATEMENT'S OWN card. NEVER substitute a
+   DIFFERENT real-world card just because the name resembles one you know — a card
+   called "…Apex" is NOT licence to post to some famous airline card, and an
+   already-held account for a different card is not a fallback. Only when the
+   header is genuinely unreadable (you cannot tell the issuer/card at all) return
+   an empty result — the caller surfaces that to the user.
 
 2. **Infer dates.** Statements show `dd Mon` (no year) within a billing period
    printed elsewhere. Resolve the year from the period or statement date, then

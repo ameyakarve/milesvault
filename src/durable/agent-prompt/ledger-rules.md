@@ -111,7 +111,10 @@ subscriptions), `Expenses:Financial` (fees, interest, taxes, FX markup),
 `Expenses:Housing`, any fee / tax / markup → `Expenses:Financial`; add a second
 level for the specifics (`Expenses:Health:Pharmacy`). NEVER emit a non-canonical
 root like `Expenses:Medical`, `:Automotive`, `:Utilities`, `:Bank`, or `:Tax`.
-Don't invent receivables or equity plugs that aren't called for.
+Don't invent receivables or equity plugs that aren't called for. When an account
+DOES match the user's open list, use it verbatim — never substitute a different,
+real-world account whose name merely resembles it (e.g. don't post to a famous
+card/programme you happen to know in place of the user's held one).
 
 ## Points / rewards
 
