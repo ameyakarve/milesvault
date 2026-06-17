@@ -86,14 +86,7 @@ specific to READING a statement.
    negative — it says NOTHING about the closing balance, which carries its own
    suffix. "Cr" closings are uncommon, so the pull after a page of "Dr" rows is to
    default the balance negative; resist it — if the printed suffix is "Cr", the
-   balance is POSITIVE. The reliable guard is to NAME the suffix to yourself — in
-   your reasoning, NOT in the draft — at the moment you write the amount: "the
-   closing total prints <figure> Cr, so this balance is POSITIVE" (or "Dr →
-   NEGATIVE"), then make the number match what you just named. (Keep the entry
-   itself clean beancount — the suffix is a reasoning check, never text in the
-   `balance` line.) The negation slips in precisely when you skip that step and let
-   the amount inherit the sign of the "Dr" rows above. E.g. a period ending 31 May
-   2026 that prints ₹54,321 owed and a
+   balance is POSITIVE. E.g. a period ending 31 May 2026 that prints ₹54,321 owed and a
    12,500-point closing balance:
 
    ```
