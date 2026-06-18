@@ -326,14 +326,11 @@ redemption / transfer-out / expiry (see Redemption), never a bare burn to Void.
 Assert the figure exactly as given, digit-for-digit. Date the `balance` the day
 the figure is as-of (for a statement closing, the day AFTER the period ends), the
 `pad` the day before. EXACTLY ONE balance per account — never two, never a `0`
-lifted from a non-balance figure. SIGN a card/liability balance from the figure's
-printed Cr/Dr suffix — find that suffix and let it ALONE decide the sign: a plain
-or "Dr" amount (what you OWE) asserts NEGATIVE; a "Cr" amount (you have OVERPAID, so
-the issuer must refund you) asserts POSITIVE. The suffix is INDEPENDENT of the
-transactions: a card whose every charge is a "Dr" purchase can still CLOSE "Cr", and
-those purchase signs say NOTHING about the closing balance — never let a page of
-"Dr" rows drag it negative. Read the total's Cr/Dr suffix, never the bare number;
-"Cr" closings are uncommon, so resist the reflex to default negative. The suffix
-sets only the SIGN: the amount you write is ALWAYS `<number> <CURRENCY>` (INR, or
-the points ticker). The Cr/Dr mark is a sign cue, NEVER the commodity — drop it
-once it has set the sign; it never appears on the `balance` line.
+lifted from a non-balance figure. SIGN a card/liability balance YOURSELF — the
+printed figure is an unsigned MAGNITUDE and a card is a LIABILITY, so add the sign
+by who owes whom: you OWE (a plain, "Dr", or unmarked total — the common case) →
+NEGATIVE (`-<amount>`); you've OVERPAID (the total is marked "Cr", issuer owes you
+back — uncommon) → POSITIVE (`<amount>`). The statement prints an owed amount as a
+positive number — do NOT copy it as-is; an owed balance is NEGATIVE. The Cr/Dr
+marker decides the sign and is then dropped — NEVER the commodity; the amount is
+always `<number> <CURRENCY>` (INR, or the points ticker).

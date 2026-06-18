@@ -80,20 +80,19 @@ specific to READING a statement.
    closing figure the statement actually prints — the card's closing (step 6) and
    the points closing balance (step 5) — and NONE for a figure it doesn't print
    (never a fabricated figure, never a 0-amount opening pad). The points balance
-   is the settled-pool total. Sign the CARD balance from the total's printed Cr/Dr
-   suffix — find that suffix and let it ALONE decide the sign: a "Dr" or unmarked
-   total is what you OWE → NEGATIVE; a "Cr" total means you have OVERPAID and the
-   issuer must refund you → POSITIVE. The suffix is INDEPENDENT of the transactions:
-   a statement can be a full page of "Dr" purchases and still CLOSE "Cr". Those
-   purchase signs sign their own card legs and say NOTHING about the closing balance,
-   so never let a page of "Dr" rows drag it negative — the closing total carries its
-   OWN suffix; obey that. "Cr" closings are uncommon, so the reflex is to default
-   negative; do NOT — when the printed suffix is "Cr", the balance is POSITIVE, never
-   negated. The suffix sets only the SIGN: the amount you write is ALWAYS
-   `<number> <CURRENCY>`, where CURRENCY is INR or the points ticker. The Cr/Dr mark
-   is a sign cue, NEVER the commodity — once it has decided positive vs negative,
-   drop it; it never appears on the `balance` line. E.g. a period ending 31 May 2026
-   that prints ₹54,321 owed and a 12,500-point closing balance:
+   is the settled-pool total. **Sign the CARD closing balance YOURSELF.** The
+   statement prints the total as an unsigned MAGNITUDE (sometimes with a Cr/Dr
+   marker); a credit card is a LIABILITY, so you add the sign by who owes whom:
+   - **Owe the issuer** — a plain, "Dr", or unmarked total (the COMMON case) →
+     **NEGATIVE**, write `-<amount>`. The statement prints the owed amount as a
+     positive number; do NOT copy it as-is — an owed card balance is NEGATIVE.
+   - **Overpaid** — the total is marked "Cr" (the issuer owes YOU back; uncommon) →
+     **POSITIVE**, write `<amount>`.
+
+   The Cr/Dr marker decides the sign and is then dropped — it is NEVER the commodity;
+   the amount is always `<number> <CURRENCY>` (INR or the points ticker). E.g. a
+   period ending 31 May 2026 that prints ₹54,321 owed and a 12,500-point closing
+   balance:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
@@ -118,6 +117,16 @@ specific to READING a statement.
    ✓  2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
       2026-06-01 balance Liabilities:CreditCards:Skybank:Plus:1234  -54321.00 INR
    ✗  2026-06-01 balance Liabilities:CreditCards:Skybank:Plus:1234  -54321.00 INR   (bare — no pad above; a statement closing always drifts, so this fails to reconcile)
+   ```
+
+   And the SIGN — owed is NEGATIVE (the common case), a "Cr" (overpaid) closing is
+   POSITIVE — ✓ vs ✗ in BOTH directions:
+
+   ```
+   ✓  owed (plain/Dr/unmarked):  balance Liabilities:CreditCards:Skybank:Plus:1234  -54321.00 INR
+   ✗  owed written positive:     balance Liabilities:CreditCards:Skybank:Plus:1234   54321.00 INR
+   ✓  overpaid ("Cr"):           balance Liabilities:CreditCards:Harbor:Signature:5678   7500.00 INR
+   ✗  "Cr" written negative:     balance Liabilities:CreditCards:Harbor:Signature:5678  -7500.00 INR
    ```
 
 Prefer the extracted TEXT for anything legible in it (dates, amounts, merchant
