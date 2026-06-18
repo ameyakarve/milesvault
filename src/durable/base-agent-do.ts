@@ -7,8 +7,10 @@ import {
   type TurnContext,
 } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
+import { wrapLanguageModel } from 'ai'
 import type {
   LanguageModel,
+  LanguageModelMiddleware,
   ModelMessage,
   ToolCallRepairFunction,
   ToolSet,
@@ -30,6 +32,117 @@ import type {
 } from './agents/types'
 
 type UIMessagePart = UIMessage['parts'][number]
+
+// Gemma on Workers AI intermittently leaks a tool call into the TEXT (or
+// reasoning) channel as its raw chat-template tokens
+// (`<|tool_call>:name{json-args}<tool_call|>`) instead of a structured tool
+// call — the SDK then sees plain text and the turn dies with no tool executed.
+// RECOVER it: parse the tool name + (JSON) args out of the sentinel and re-inject
+// a structured tool call, dropping the leaked text. If the args aren't
+// JSON-parseable (e.g. gemma's `<|"|>` value encoding), leave the response
+// untouched — no worse than no middleware. Applied via buildModel so it covers
+// both the streaming (prod) and generate (bench) paths.
+const TOOL_CALL_LEAK = /<\|tool_call>\s*:?\s*([A-Za-z0-9_]+)\s*(\{[\s\S]*?\})\s*<tool_call\|>/g
+const TOOL_CALL_SENTINEL = /<\|?tool_call|tool_call\|>/
+
+type RecoveredCall = { type: 'tool-call'; toolCallId: string; toolName: string; input: string }
+
+function recoverLeakedToolCalls(text: string): RecoveredCall[] {
+  const calls: RecoveredCall[] = []
+  TOOL_CALL_LEAK.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = TOOL_CALL_LEAK.exec(text)) !== null) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(m[2]!)
+    } catch {
+      continue // non-JSON args — can't recover safely, leave it
+    }
+    calls.push({
+      type: 'tool-call',
+      toolCallId: `rescue_${crypto.randomUUID()}`,
+      toolName: m[1]!,
+      input: JSON.stringify(parsed),
+    })
+  }
+  return calls
+}
+
+const isTextish = (t: string | undefined) => t === 'text' || t === 'reasoning'
+
+const toolCallRescueMiddleware: LanguageModelMiddleware = {
+  specificationVersion: 'v3',
+  async wrapGenerate({ doGenerate }) {
+    const res = await doGenerate()
+    if (res.content.some((p) => p.type === 'tool-call')) return res
+    const text = res.content
+      .map((p) => (p.type === 'text' || p.type === 'reasoning' ? p.text : ''))
+      .join('\n')
+    if (!TOOL_CALL_SENTINEL.test(text)) return res
+    const calls = recoverLeakedToolCalls(text)
+    if (calls.length === 0) return res
+    const cleaned = res.content.filter(
+      (p) => !(isTextish(p.type) && TOOL_CALL_SENTINEL.test((p as { text: string }).text)),
+    )
+    return { ...res, content: [...cleaned, ...calls], finishReason: 'tool-calls' } as unknown as Awaited<
+      ReturnType<typeof doGenerate>
+    >
+  },
+  async wrapStream({ doStream }) {
+    const result = await doStream()
+    const { stream } = result
+    type Part = typeof stream extends ReadableStream<infer T> ? T : never
+    const parts: Part[] = []
+    let hasToolCall = false
+    let text = ''
+    const reader = stream.getReader()
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      parts.push(value)
+      const t = (value as { type?: string }).type
+      if (t === 'tool-call') hasToolCall = true
+      else if (t === 'text-delta' || t === 'reasoning-delta')
+        text += (value as { delta?: string }).delta ?? ''
+    }
+    let out = parts
+    if (!hasToolCall && TOOL_CALL_SENTINEL.test(text)) {
+      const calls = recoverLeakedToolCalls(text)
+      if (calls.length > 0) {
+        // Drop the leaked text/reasoning stream and inject the recovered tool
+        // calls just before finish, forcing the finish reason to tool-calls.
+        const textParts = new Set([
+          'text-start',
+          'text-delta',
+          'text-end',
+          'reasoning-start',
+          'reasoning-delta',
+          'reasoning-end',
+        ])
+        out = []
+        for (const p of parts) {
+          const t = (p as { type?: string }).type
+          if (t && textParts.has(t)) continue
+          if (t === 'finish') {
+            for (const c of calls) out.push(c as unknown as Part)
+            out.push({ ...(p as object), finishReason: 'tool-calls' } as unknown as Part)
+            continue
+          }
+          out.push(p)
+        }
+      }
+    }
+    return {
+      ...result,
+      stream: new ReadableStream<Part>({
+        start(controller) {
+          for (const p of out) controller.enqueue(p)
+          controller.close()
+        },
+      }),
+    }
+  },
+}
 
 // Framework-shaped DO that owns the Think runtime, the agent registry
 // resolution, the handoff plumbing, and the off-websocket entry points
@@ -133,12 +246,8 @@ export abstract class BaseAgentDO<
               chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
             })
           : workersai(cfg.id, { reasoning_effort: cfg.reasoning })
-    // NOTE: no tool-call middleware. The buffer-and-replay wrapStream ate the
-    // provider stream (downstream saw empty text + zero tool calls). Gemma's
-    // dominant failure — a content-dumped draft (valid JSON in the text channel)
-    // — is recovered downstream in ChatDO.runDraftStatement, which needs the text
-    // INTACT; broken-args tool calls bounce via the recording tool's validator.
-    return base
+    // Recover gemma's tool-call-into-text leak (see toolCallRescueMiddleware).
+    return wrapLanguageModel({ model: base, middleware: toolCallRescueMiddleware })
   }
 
   // ---- Think per-turn config ----
