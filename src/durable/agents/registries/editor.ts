@@ -31,7 +31,7 @@ export function makeEditorRegistry(host: AgentHost<EditorAgentName>): Registry {
   const ledger: AgentDef = {
     name: 'ledger',
     canHandoffTo: [],
-    model: { id: LEDGER_MODEL_ID, reasoning: 'off', maxOutputTokens: 16384, maxSteps: EDITOR_MAX_STEPS },
+    model: { id: LEDGER_MODEL_ID, reasoning: 'low', maxOutputTokens: 16384, maxSteps: EDITOR_MAX_STEPS },
     system: () => host.system('ledger'),
     tools: () => host.tools('ledger'),
   }
