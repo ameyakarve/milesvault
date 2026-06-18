@@ -60,6 +60,13 @@ specific to READING a statement.
      running total), a much larger number than the cycle's earnings. If the
      statement prints NO closing points balance, emit no points bookend (never
      fabricate or infer one).
+   - The reward-points summary is frequently a box the bank renders as a GRAPHIC,
+     so in the extracted text it collapses to a bare, UNLABELLED row of figures —
+     `<opening> <earned> <redeemed> <closing>` (the closing is the last, and the
+     largest) — with the words living only in the page IMAGE. When you see such a
+     trailing row of reward figures, READ THE IMAGE to confirm it is the
+     reward-points box, then assert its CLOSING figure as the points balance. A
+     missing label in the text is NOT a reason to skip the points bookend.
 
 6. **Assert the card's closing balance — when the statement prints one.** Most
    statements carry a SUMMARY box of TOTALS (Previous Balance · Purchases ·
