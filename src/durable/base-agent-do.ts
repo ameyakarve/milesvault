@@ -35,34 +35,113 @@ type UIMessagePart = UIMessage['parts'][number]
 
 // Gemma on Workers AI intermittently leaks a tool call into the TEXT (or
 // reasoning) channel as its raw chat-template tokens
-// (`<|tool_call>:name{json-args}<tool_call|>`) instead of a structured tool
+// (`<|tool_call>call:name{json-args}<tool_call|>`) instead of a structured tool
 // call — the SDK then sees plain text and the turn dies with no tool executed.
-// RECOVER it: parse the tool name + (JSON) args out of the sentinel and re-inject
-// a structured tool call, dropping the leaked text. If the args aren't
-// JSON-parseable (e.g. gemma's `<|"|>` value encoding), leave the response
-// untouched — no worse than no middleware. Applied via buildModel so it covers
-// both the streaming (prod) and generate (bench) paths.
-const TOOL_CALL_LEAK = /<\|tool_call>\s*:?\s*([A-Za-z0-9_]+)\s*(\{[\s\S]*?\})\s*<tool_call\|>/g
+// RECOVER it: parse the tool name + args out of the sentinel and re-inject a
+// structured tool call, dropping the leaked text. Applied via buildModel so it
+// covers both the streaming (prod) and generate (bench) paths.
+//
+// Three things this has to survive on a LARGE draft_transaction leak: (1) gemma
+// writes `call:name{…}` (a `call:` prefix), (2) the args object is NESTED
+// (`{entries:{…}}`) so a non-greedy regex stops at the first `}` — we
+// balance-match instead, (3) gemma's own string-delimiter / protocol tokens
+// (`<|"|>` et al; see vLLM's gemma4 parser) leak INTO the args and break
+// JSON.parse — we strip them first. A still-unparseable blob is skipped (no worse
+// than no middleware).
 const TOOL_CALL_SENTINEL = /<\|?tool_call|tool_call\|>/
+// START of a leak: the sentinel, an optional `call:`, the tool name, then `{`.
+const TOOL_CALL_LEAK_START = /<\|tool_call>\s*(?:call\s*:\s*)?([A-Za-z0-9_]+)\s*\{/g
+
+// Gemma protocol tokens that can leak INTO the args (string delimiter + channel /
+// tool / think / multimodal markers). The two `<|tool_call>` / `<tool_call|>`
+// sentinels are deliberately EXCLUDED — they mark the leak, so the START regex
+// needs them intact. None of these occur in real JSON, so stripping is safe; the
+// `<|"|>` we see is a STRAY delimiter Workers AI failed to drop, next to a real
+// quote (e.g. `…BURGUNDY<|"|>"}}`) — removing it leaves valid JSON. Strip BEFORE
+// balance-matching, since the stray `"` inside `<|"|>` otherwise desyncs the
+// string-aware brace scan.
+const GEMMA_ARGS_TOKENS = [
+  '<|"|>',
+  '<|tool_response>', '<tool_response|>',
+  '<|tool>', '<tool|>', '<|channel>', '<channel|>', '<|think|>',
+  '<|image>', '<|image|>', '<image|>', '<|audio>', '<|audio|>', '<audio|>', '<|video|>',
+]
+const GEMMA_DELIM_TAILS = ['<|"|', '<|"', '<|', '<'] // partial `<|"|>` from truncation
+
+function stripGemmaTokens(s: string): string {
+  let o = s
+  for (const t of GEMMA_ARGS_TOKENS) if (o.includes(t)) o = o.split(t).join('')
+  for (const f of GEMMA_DELIM_TAILS) {
+    if (o.endsWith(f)) {
+      o = o.slice(0, -f.length)
+      break
+    }
+  }
+  return o
+}
+
+// Balanced, string-aware `{…}` slice from openIdx (tolerates a missing end
+// sentinel from truncation, and nested objects/arrays). Null if never closed.
+function sliceBalanced(s: string, openIdx: number): string | null {
+  let depth = 0
+  let inStr = false
+  let esc = false
+  for (let i = openIdx; i < s.length; i++) {
+    const c = s[i]
+    if (esc) {
+      esc = false
+      continue
+    }
+    if (c === '\\') {
+      esc = true
+      continue
+    }
+    if (c === '"') {
+      inStr = !inStr
+      continue
+    }
+    if (inStr) continue
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return s.slice(openIdx, i + 1)
+    }
+  }
+  return null
+}
 
 type RecoveredCall = { type: 'tool-call'; toolCallId: string; toolName: string; input: string }
 
-function recoverLeakedToolCalls(text: string): RecoveredCall[] {
+function recoverLeakedToolCalls(rawText: string): RecoveredCall[] {
+  // Strip the args-corrupting tokens up front (keeps the `<|tool_call>` sentinel)
+  // so the stray `"` inside `<|"|>` can't desync the brace scan below.
+  const text = stripGemmaTokens(rawText)
   const calls: RecoveredCall[] = []
-  TOOL_CALL_LEAK.lastIndex = 0
+  TOOL_CALL_LEAK_START.lastIndex = 0
   let m: RegExpExecArray | null
-  while ((m = TOOL_CALL_LEAK.exec(text)) !== null) {
+  while ((m = TOOL_CALL_LEAK_START.exec(text)) !== null) {
+    const braceIdx = m.index + m[0].length - 1 // the `{` the match ended on
+    const blob = sliceBalanced(text, braceIdx)
+    if (!blob) break // unterminated — nothing more to recover
     let parsed: unknown
     try {
-      parsed = JSON.parse(m[2]!)
+      parsed = JSON.parse(blob)
     } catch {
-      continue // non-JSON args — can't recover safely, leave it
+      TOOL_CALL_LEAK_START.lastIndex = braceIdx + blob.length
+      continue // still unparseable (e.g. fully gemma-encoded args) — leave it
     }
     calls.push({
       type: 'tool-call',
       toolCallId: `rescue_${crypto.randomUUID()}`,
       toolName: m[1]!,
       input: JSON.stringify(parsed),
+    })
+    TOOL_CALL_LEAK_START.lastIndex = braceIdx + blob.length // skip past this blob
+  }
+  if (calls.length > 0) {
+    console.log('[tool-call-rescue] recovered leaked tool call(s)', {
+      count: calls.length,
+      tools: calls.map((c) => c.toolName),
     })
   }
   return calls
