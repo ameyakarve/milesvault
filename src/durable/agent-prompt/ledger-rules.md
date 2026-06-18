@@ -314,7 +314,10 @@ an existing entry, even if you `search`ed and found related rows in that account
 **The pad always plugs from `Equity:Void`**
 — for every account type (reward, bank, card, cash). Write the plug as
 `Equity:Void` on the pad line. (If the running balance already equals the figure
-exactly and needs no reconciliation, use a bare `balance` line instead — no pad.)
+exactly and needs no reconciliation, use a bare `balance` line instead — no pad.
+This bare-balance shortcut is ONLY for an editor "set balance" on an account you
+already track; a STATEMENT-import closing ALWAYS needs the full pad+balance pair —
+it always drifts from the printed total, so NEVER bare-balance a statement closing.)
 
 This is the PAD plug ONLY. It does NOT license burning points to `Equity:Void` in
 a normal transaction: a points balance going DOWN in a transaction is a

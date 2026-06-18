@@ -69,11 +69,14 @@ specific to READING a statement.
    period's last day. If the statement has no totals / amount-due box, emit no
    card bookend — don't reconstruct a figure.
 
-7. **Pad + balance — the exact form.** A closing bookend is TWO lines — a `pad`
-   naming the account with the `Equity:Void` plug, then a `balance` asserting the
-   printed figure verbatim. The pad absorbs any drift between the figure and what
-   your transactions left in the account, so the balance reconciles the import; a
-   missing bookend means a misread row passes silently. Emit ONE bookend for EACH
+7. **Pad + balance — the exact form.** A closing bookend is ALWAYS TWO lines — a
+   `pad` naming the account with the `Equity:Void` plug, THEN a `balance` asserting
+   the printed figure verbatim. **NEVER emit a bare `balance` (a `balance` line with
+   no `pad` before it) for a statement closing** — a statement import ALWAYS drifts
+   from the printed total (the opening balance, rounding, any row you didn't model
+   exactly), so the `pad` is REQUIRED to absorb that drift; a bare balance will fail
+   to reconcile. EVERY closing `balance` (card AND points) gets its OWN `pad` line
+   immediately before it. A missing bookend means a misread row passes silently. Emit ONE bookend for EACH
    closing figure the statement actually prints — the card's closing (step 6) and
    the points closing balance (step 5) — and NONE for a figure it doesn't print
    (never a fabricated figure, never a 0-amount opening pad). The points balance
