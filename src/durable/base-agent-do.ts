@@ -33,110 +33,90 @@ import type {
 
 type UIMessagePart = UIMessage['parts'][number]
 
-// Gemma on Workers AI intermittently leaks a tool call into the TEXT (or
-// reasoning) channel as its raw chat-template tokens
-// (`<|tool_call>:name{json-args}<tool_call|>`) instead of a structured tool
-// call — the SDK then sees plain text and the turn dies with no tool executed.
-// RECOVER it: parse the tool name + (JSON) args out of the sentinel and re-inject
-// a structured tool call, dropping the leaked text. If the args aren't
-// JSON-parseable (e.g. gemma's `<|"|>` value encoding), leave the response
-// untouched — no worse than no middleware. Applied via buildModel so it covers
-// both the streaming (prod) and generate (bench) paths.
-const TOOL_CALL_LEAK = /<\|tool_call>\s*:?\s*([A-Za-z0-9_]+)\s*(\{[\s\S]*?\})\s*<tool_call\|>/g
+// Gemma on Workers AI intermittently fails to emit a proper tool call: it either
+// leaks the call into the TEXT/reasoning channel as raw chat-template tokens
+// (`<|tool_call>call:name{…}<tool_call|>`), or dumps the would-be tool ARGUMENTS
+// as a bare JSON object in content (`{"entries":{…}}`, finish=stop). Either way
+// the SDK sees no structured tool call and the turn dies with nothing executed.
+//
+// Surgically un-garbling the bytes is whack-a-mole — every leak shape differs,
+// and the worst (a structurally-fumbled args map) isn't recoverable at all. Gemma
+// is STOCHASTIC, so instead we RE-ROLL: when a generation produced no tool call
+// but its output is clearly a BOTCHED tool call, re-run it (up to MAX_REROLLS).
+// A clean call almost always lands within a try or two.
+//
+// Editor-safe — a legitimate no-tool-call reply is PROSE (it has neither the leak
+// sentinel nor a bare-JSON-object body), so it is never re-rolled. Applied via
+// buildModel so it covers the editor AND ingest, streaming (prod) AND generate
+// (bench).
+const MAX_REROLLS = 2 // up to 3 total generations on a botched call
 const TOOL_CALL_SENTINEL = /<\|?tool_call|tool_call\|>/
 
-type RecoveredCall = { type: 'tool-call'; toolCallId: string; toolName: string; input: string }
-
-function recoverLeakedToolCalls(text: string): RecoveredCall[] {
-  const calls: RecoveredCall[] = []
-  TOOL_CALL_LEAK.lastIndex = 0
-  let m: RegExpExecArray | null
-  while ((m = TOOL_CALL_LEAK.exec(text)) !== null) {
-    let parsed: unknown
+// Does a NO-tool-call output look like a botched tool call (vs. a legit prose
+// reply)? Two signatures: the leak sentinel, or a body that is purely a JSON
+// object (the would-be tool args dumped as text). Prose matches neither, so this
+// keeps the re-roll from ever firing on a genuine chat/answer turn.
+function looksLikeBotchedToolCall(text: string): boolean {
+  if (TOOL_CALL_SENTINEL.test(text)) return true
+  const t = text.trim()
+  if (t.startsWith('{') && t.endsWith('}')) {
     try {
-      parsed = JSON.parse(m[2]!)
+      const v: unknown = JSON.parse(t)
+      return typeof v === 'object' && v !== null && !Array.isArray(v)
     } catch {
-      continue // non-JSON args — can't recover safely, leave it
+      /* not valid JSON — treat as prose */
     }
-    calls.push({
-      type: 'tool-call',
-      toolCallId: `rescue_${crypto.randomUUID()}`,
-      toolName: m[1]!,
-      input: JSON.stringify(parsed),
-    })
   }
-  return calls
+  return false
 }
 
-const isTextish = (t: string | undefined) => t === 'text' || t === 'reasoning'
-
-const toolCallRescueMiddleware: LanguageModelMiddleware = {
+const toolCallRerollMiddleware: LanguageModelMiddleware = {
   specificationVersion: 'v3',
   async wrapGenerate({ doGenerate }) {
-    const res = await doGenerate()
-    if (res.content.some((p) => p.type === 'tool-call')) return res
-    const text = res.content
-      .map((p) => (p.type === 'text' || p.type === 'reasoning' ? p.text : ''))
-      .join('\n')
-    if (!TOOL_CALL_SENTINEL.test(text)) return res
-    const calls = recoverLeakedToolCalls(text)
-    if (calls.length === 0) return res
-    const cleaned = res.content.filter(
-      (p) => !(isTextish(p.type) && TOOL_CALL_SENTINEL.test((p as { text: string }).text)),
-    )
-    return { ...res, content: [...cleaned, ...calls], finishReason: 'tool-calls' } as unknown as Awaited<
-      ReturnType<typeof doGenerate>
-    >
+    let res = await doGenerate()
+    for (let reroll = 0; reroll < MAX_REROLLS; reroll++) {
+      if (res.content.some((p) => p.type === 'tool-call')) break
+      const text = res.content
+        .map((p) => (p.type === 'text' || p.type === 'reasoning' ? p.text : ''))
+        .join('\n')
+      if (!looksLikeBotchedToolCall(text)) break // legit prose reply — keep it
+      console.log('[tool-call-reroll] botched tool call, re-rolling', { attempt: reroll + 1 })
+      res = await doGenerate()
+    }
+    return res
   },
   async wrapStream({ doStream }) {
-    const result = await doStream()
-    const { stream } = result
-    type Part = typeof stream extends ReadableStream<infer T> ? T : never
-    const parts: Part[] = []
-    let hasToolCall = false
-    let text = ''
-    const reader = stream.getReader()
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      parts.push(value)
-      const t = (value as { type?: string }).type
-      if (t === 'tool-call') hasToolCall = true
-      else if (t === 'text-delta' || t === 'reasoning-delta')
-        text += (value as { delta?: string }).delta ?? ''
-    }
-    let out = parts
-    if (!hasToolCall && TOOL_CALL_SENTINEL.test(text)) {
-      const calls = recoverLeakedToolCalls(text)
-      if (calls.length > 0) {
-        // Drop the leaked text/reasoning stream and inject the recovered tool
-        // calls just before finish, forcing the finish reason to tool-calls.
-        const textParts = new Set([
-          'text-start',
-          'text-delta',
-          'text-end',
-          'reasoning-start',
-          'reasoning-delta',
-          'reasoning-end',
-        ])
-        out = []
-        for (const p of parts) {
-          const t = (p as { type?: string }).type
-          if (t && textParts.has(t)) continue
-          if (t === 'finish') {
-            for (const c of calls) out.push(c as unknown as Part)
-            out.push({ ...(p as object), finishReason: 'tool-calls' } as unknown as Part)
-            continue
-          }
-          out.push(p)
-        }
+    type StreamResult = Awaited<ReturnType<typeof doStream>>
+    type Part = StreamResult['stream'] extends ReadableStream<infer T> ? T : never
+    let result!: StreamResult
+    let parts: Part[] = []
+    // Buffer each attempt fully so we can see whether it produced a tool call
+    // before deciding to re-roll; replay the chosen attempt as a fresh stream.
+    for (let reroll = 0; ; reroll++) {
+      result = await doStream()
+      parts = []
+      let hasToolCall = false
+      let text = ''
+      const reader = result.stream.getReader()
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        parts.push(value)
+        const t = (value as { type?: string }).type
+        if (t === 'tool-call') hasToolCall = true
+        else if (t === 'text-delta' || t === 'reasoning-delta')
+          text += (value as { delta?: string }).delta ?? ''
       }
+      if (hasToolCall || reroll >= MAX_REROLLS || !looksLikeBotchedToolCall(text)) break
+      console.log('[tool-call-reroll] botched tool call (stream), re-rolling', {
+        attempt: reroll + 1,
+      })
     }
     return {
       ...result,
       stream: new ReadableStream<Part>({
         start(controller) {
-          for (const p of out) controller.enqueue(p)
+          for (const p of parts) controller.enqueue(p)
           controller.close()
         },
       }),
@@ -246,8 +226,9 @@ export abstract class BaseAgentDO<
               chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
             })
           : workersai(cfg.id, { reasoning_effort: cfg.reasoning })
-    // Recover gemma's tool-call-into-text leak (see toolCallRescueMiddleware).
-    return wrapLanguageModel({ model: base, middleware: toolCallRescueMiddleware })
+    // Re-roll a botched tool call (gemma leaks/dumps it as text — see
+    // toolCallRerollMiddleware). Generic: covers the editor AND ingest.
+    return wrapLanguageModel({ model: base, middleware: toolCallRerollMiddleware })
   }
 
   // ---- Think per-turn config ----
