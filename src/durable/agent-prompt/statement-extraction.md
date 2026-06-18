@@ -94,7 +94,23 @@ specific to READING a statement.
    purchases can still close `Cr`, and the purchase signs never change the closing
    balance's sign. The suffix sets ONLY the sign — the amount you write is ALWAYS
    `<number> <CURRENCY>` (CURRENCY = INR or the points ticker), and the Cr/Dr mark is
-   NEVER the commodity; it never appears on the `balance` line. E.g. a period ending 31
+   NEVER the commodity; it never appears on the `balance` line.
+
+   The closing `balance` is its OWN kind of line — NOT a card transaction leg. A
+   purchase's card leg is negative because a purchase adds to what you owe; the
+   closing balance is whatever the statement SAYS it is, by its suffix. To keep the
+   two apart, write a `;` comment on the line BEFORE each closing `balance`, naming
+   the printed total's suffix and the sign it forces, then the `balance` on the next
+   line — e.g. for a credit (`Cr`) closing:
+
+   ```
+   2026-06-01 pad Liabilities:CreditCards:Issuer:Card Equity:Void
+   ; closing total marked Cr → credit balance → POSITIVE
+   2026-06-01 balance Liabilities:CreditCards:Issuer:Card  7500.00 INR
+   ```
+
+   (The `;` line is a beancount comment, dropped before saving; it just forces you to
+   commit the sign right where you write it.) E.g. a period ending 31
    May 2026 whose closing total carries a `Dr` suffix — ₹54,321 owed — and a
    12,500-point closing balance:
 
