@@ -249,6 +249,18 @@ card debited for the sum. Pair stray fee/GST to their charge by the
 **arithmetic, not adjacency** — markup ≈ 2% of ITS billed amount, GST ≈ 18% of
 THAT markup.
 
+An `@@` price is ALWAYS in a DIFFERENT commodity from its leg — that is the whole
+point of `@@` (it converts the leg into another currency). **NEVER write
+`<n> INR @@ <n> INR`** (a same-currency price is not a conversion — the validator
+rejects it). For a `( CCY x.xx )` foreign charge, the expense leg's QUANTITY is the
+FOREIGN amount and `@@` is the billed INR:
+```beancount
+✓  Expenses:Shopping  49.99 USD @@ 4713.75 INR     ; foreign qty, @@ in INR
+✗  Expenses:Shopping  4713.75 INR @@ 4713.75 INR   ; same currency — INVALID
+```
+If a charge is billed in INR with NO foreign `( CCY … )` amount printed, it is NOT
+a forex row — write a plain `<amount> INR` leg with NO `@@` at all.
+
 ## Redemption
 
 **Recognise it by the SIGN:** points/miles going DOWN (a NEGATIVE points line)
