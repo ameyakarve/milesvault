@@ -412,26 +412,28 @@ ${opts.text}`,
         }
       }
       pushProgress('Reading the statement…')
-      // PASS 1 — consolidate text + images. pdftotext silently DROPS whatever the
-      // bank renders as a graphic (styled summary / totals / reward boxes and
-      // their labels), so figures like a closing reward-points balance survive
-      // ONLY in the page images. A focused read recovers them reliably where the
-      // busy draft pass (juggling text + images + tools) misses them. So first ask
-      // the model to transcribe just those graphic-rendered figures as labelled
-      // lines and fold them into the text the draft pass works from. The original
-      // text is kept VERBATIM (transaction coverage can't regress), and the images
-      // are NOT re-sent to the draft pass — they're now reflected in the text, so
-      // the draft pass keeps a lighter, complete context. Best-effort: on any
-      // failure we fall back to the raw text + images.
+      // PASS 1 — consolidate the layout-extracted TEXT with the page IMAGES into
+      // ONE statement blob the draft pass works from. pdftotext is exact for
+      // values it captures but silently DROPS whatever the bank renders as a
+      // graphic (styled summary / reward / totals boxes and their labels), so e.g.
+      // a closing reward-points balance survives only in the images. Merging up
+      // front — text authoritative for numbers, images filling the graphic-only
+      // content in context — gives the draft pass a single complete text and lets
+      // it keep a lighter context (images are not re-sent). Best-effort: on any
+      // failure we fall back to the raw text.
       let consolidatedText = stmt.text
       if (images.length > 0) {
         try {
           const composed = await generateText({
             model: inv.model,
             abortSignal: AbortSignal.timeout(120_000),
-            ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
+            // A faithful consolidation re-emits the WHOLE statement, so it needs
+            // far more output headroom than a draft batch — a large statement
+            // truncates (or errors) at the draft pass's 16k budget. Give Pass 1 a
+            // bigger ceiling so big statements (e.g. dozens of forex rows) survive.
+            maxOutputTokens: 64000,
             system:
-              'You are given the page IMAGES of a credit-card statement and the TEXT a layout extractor produced from it. The text silently DROPS content the bank renders as a graphic — styled summary / totals / reward boxes and their labels. Read the images and transcribe ONLY the figures that are graphic-rendered and therefore missing or unlabelled in the text, as plain "Label: value" lines (each labelled figure in such a box on its own line). Do NOT restate transactions already present in the text, do NOT draft entries, do NOT interpret. If nothing is missing, output exactly NONE.',
+              'You are given a credit-card statement as layout-extracted TEXT and as page IMAGES. Produce ONE consolidated plain-text copy of the statement that merges both. The TEXT is authoritative for any value present in both — copy its numbers, dates and amounts verbatim, never re-key them from the image. Use the IMAGES to add what the text is missing: content the bank renders as a graphic (styled summary / reward / totals boxes and their labels), written in place WITH its labels. Keep every transaction and every figure; do not summarise, drop, re-order, draft, or comment. Output only the consolidated statement text.',
             messages: [
               {
                 role: 'user',
@@ -446,9 +448,9 @@ ${opts.text}`,
               },
             ],
           })
-          const extra = composed.text.trim()
-          if (extra && !/^none\.?$/i.test(extra)) {
-            consolidatedText = `${stmt.text}\n\n${extra}`
+          const merged = composed.text.trim()
+          if (merged) {
+            consolidatedText = merged
             pushProgress('Read the statement…')
           }
         } catch {
