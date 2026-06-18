@@ -515,6 +515,37 @@ ${stmt.text}`,
       } catch {
         /* no-op */
       }
+      // Recover a CONTENT-DUMPED draft. Gemma on Workers AI often returns the whole
+      // draft as a valid JSON object in the text channel (finish=stop) instead of a
+      // draft_transaction call — the bytes are fine, only the channel was wrong (see
+      // the toolCallRerollMiddleware note). When nothing recorded but the text is a
+      // `{ entries: { id: text } }` object, re-channel it through the SAME recording
+      // path (each value is one beancount entry); validation runs on `recorded`
+      // downstream exactly as for a real tool call. Not an error and not a timeout —
+      // only a genuine empty/garbled text is left to fall through as "no entries".
+      if (recorded.length === 0 && !errored) {
+        const trimmed = text.trim()
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          try {
+            const parsed = JSON.parse(trimmed) as { entries?: unknown }
+            const entries = parsed?.entries
+            if (entries && typeof entries === 'object' && !Array.isArray(entries)) {
+              const texts = Object.values(entries as Record<string, unknown>)
+                .map((t) => String(t ?? '').trim())
+                .filter(Boolean)
+              if (texts.length > 0) {
+                recorded.push(...texts)
+                console.log('[async-ingest] recovered content-dumped draft', {
+                  statement_id: statementId,
+                  entries: texts.length,
+                })
+              }
+            }
+          } catch {
+            /* text wasn't a JSON draft — leave as a genuine empty proposal */
+          }
+        }
+      }
       if (recorded.length > 0) {
         await ledger.set_capture_drafts(statementId, recorded, null)
       } else if (errored) {

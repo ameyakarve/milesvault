@@ -33,129 +33,53 @@ import type {
 
 type UIMessagePart = UIMessage['parts'][number]
 
-// Gemma on Workers AI intermittently fails to deliver a proper tool call. The
-// DOMINANT mode (measured ~70% on a large draft): it returns a COMPLETE, VALID
-// JSON object — the would-be tool args — in the `content` channel (finish=stop)
-// instead of as a structured tool call. The bytes are fine; Workers AI's parser
-// already did the gemma `<|"|>`→JSON conversion, it just routed the result to the
-// wrong channel. The rarer mode: a structured tool call whose args JSON is broken
-// (a stray gemma delimiter / fumbled key).
+// Gemma on Workers AI intermittently fails to deliver a proper tool call. Two
+// modes seen: (a) the DOMINANT one — it returns the complete, valid JSON args in
+// the `content` channel (finish=stop) instead of as a structured call; (b) rarer
+// — it LEAKS the call into text as raw chat-template tokens
+// (`<|tool_call>call:name{…}<tool_call|>`).
 //
-// So we CIRCUMVENT (not re-parse gemma's native format):
-//   1. RECOVER — if a no-tool-call output's content is valid JSON matching an
-//      available tool's input schema, re-channel it into that tool call. One pass,
-//      deterministic. Kills the content-dump.
-//   2. RE-ROLL — else, if the output still looks like a botched call (sentinel
-//      leak or a JSON-object body we couldn't match), re-run it (gemma is
-//      stochastic; a clean call usually lands in a try or two). Backstop for the
-//      broken-args case.
+// This middleware handles ONLY (b): a leaked call has no structured tool-call but
+// carries the `<|tool_call>` sentinel — re-roll it (gemma is stochastic; a clean
+// call usually lands in a try or two). It deliberately does NOT touch a bare-JSON
+// content-dump (a): that output is VALID and useful — the caller re-channels it
+// (see ChatDO.runDraftStatement) — and rewriting the stream to inject a synthetic
+// tool call proved unreliable across the SDK's step aggregation. Leaving the text
+// intact lets the caller recover it deterministically.
 //
-// Editor-safe — a legitimate no-tool-call reply is PROSE (neither a schema-
-// matching JSON object nor a sentinel), so it is never touched. Applied via
-// buildModel so it covers the editor AND ingest, streaming (prod) AND generate.
-const MAX_REROLLS = 2 // up to 3 total generations on a botched call
+// Editor-safe — a legitimate no-tool-call reply is PROSE (no sentinel), so it is
+// never re-rolled. Applied via buildModel so it covers the editor AND ingest,
+// streaming (prod) AND generate (bench).
+const MAX_REROLLS = 2 // up to 3 total generations on a leaked call
 const TOOL_CALL_SENTINEL = /<\|?tool_call|tool_call\|>/
-
-type FnTool = { type?: string; name?: string; inputSchema?: { required?: unknown } }
-
-// If `text` is a bare JSON object that satisfies an available tool's REQUIRED
-// keys, return that tool call (the content-dump, re-channeled). Generic — keyed
-// off `params.tools`, nothing hardcoded. Null otherwise (prose, non-JSON, or no
-// schema match — those fall through to the re-roll / are left as prose).
-function recoverContentDump(
-  text: string,
-  tools: FnTool[] | undefined,
-): { toolName: string; input: string } | null {
-  const t = text.trim()
-  if (!(t.startsWith('{') && t.endsWith('}'))) return null
-  let obj: unknown
-  try {
-    obj = JSON.parse(t)
-  } catch {
-    return null
-  }
-  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return null
-  const keys = new Set(Object.keys(obj))
-  for (const tool of tools ?? []) {
-    if (tool?.type !== 'function' || !tool.name) continue
-    const required = Array.isArray(tool.inputSchema?.required)
-      ? (tool.inputSchema!.required as string[])
-      : []
-    if (required.length > 0 && required.every((k) => keys.has(k))) {
-      return { toolName: tool.name, input: JSON.stringify(obj) }
-    }
-  }
-  return null
-}
-
-// Does a NO-tool-call output look like a botched call worth re-rolling (vs. legit
-// prose)? The leak sentinel, or a bare JSON-object body. Prose matches neither.
-function looksLikeBotchedToolCall(text: string): boolean {
-  if (TOOL_CALL_SENTINEL.test(text)) return true
-  const t = text.trim()
-  if (t.startsWith('{') && t.endsWith('}')) {
-    try {
-      const v: unknown = JSON.parse(t)
-      return typeof v === 'object' && v !== null && !Array.isArray(v)
-    } catch {
-      /* not valid JSON — treat as prose */
-    }
-  }
-  return false
-}
 
 const toolCallRerollMiddleware: LanguageModelMiddleware = {
   specificationVersion: 'v3',
-  async wrapGenerate({ doGenerate, params }) {
-    const tools = (params as { tools?: FnTool[] }).tools
+  async wrapGenerate({ doGenerate }) {
     let res = await doGenerate()
-    for (let reroll = 0; reroll <= MAX_REROLLS; reroll++) {
+    for (let reroll = 0; reroll < MAX_REROLLS; reroll++) {
       if (res.content.some((p) => p.type === 'tool-call')) break
       const text = res.content
         .map((p) => (p.type === 'text' || p.type === 'reasoning' ? p.text : ''))
         .join('\n')
-      // 1. Recover a content-dumped tool call (valid JSON matching a tool schema).
-      const rec = recoverContentDump(text, tools)
-      if (rec) {
-        console.log('[tool-call-recover] re-channeled content-dump → tool call', {
-          tool: rec.toolName,
-        })
-        const nonText = res.content.filter((p) => p.type !== 'text' && p.type !== 'reasoning')
-        return {
-          ...res,
-          content: [
-            ...nonText,
-            {
-              type: 'tool-call',
-              toolCallId: `recover_${crypto.randomUUID()}`,
-              toolName: rec.toolName,
-              input: rec.input,
-            },
-          ],
-          finishReason: 'tool-calls',
-        } as unknown as Awaited<ReturnType<typeof doGenerate>>
-      }
-      // 2. Else re-roll if it still looks botched; keep legit prose as-is.
-      if (reroll >= MAX_REROLLS || !looksLikeBotchedToolCall(text)) break
-      console.log('[tool-call-reroll] botched tool call, re-rolling', { attempt: reroll + 1 })
+      if (!TOOL_CALL_SENTINEL.test(text)) break // not a leaked call — keep as-is
+      console.log('[tool-call-reroll] leaked tool call, re-rolling', { attempt: reroll + 1 })
       res = await doGenerate()
     }
     return res
   },
-  async wrapStream({ doStream, params }) {
-    const tools = (params as { tools?: FnTool[] }).tools
+  async wrapStream({ doStream }) {
     type StreamResult = Awaited<ReturnType<typeof doStream>>
     type Part = StreamResult['stream'] extends ReadableStream<infer T> ? T : never
     let result!: StreamResult
     let parts: Part[] = []
-    let text = ''
-    let hasToolCall = false
-    // Buffer each attempt fully so we can inspect it before deciding what to do.
+    // Buffer each attempt fully so we can see whether it produced a tool call
+    // before deciding to re-roll; replay the chosen attempt verbatim.
     for (let reroll = 0; ; reroll++) {
       result = await doStream()
       parts = []
-      hasToolCall = false
-      text = ''
+      let hasToolCall = false
+      let text = ''
       const reader = result.stream.getReader()
       for (;;) {
         const { done, value } = await reader.read()
@@ -166,51 +90,16 @@ const toolCallRerollMiddleware: LanguageModelMiddleware = {
         else if (t === 'text-delta' || t === 'reasoning-delta')
           text += (value as { delta?: string }).delta ?? ''
       }
-      if (hasToolCall || reroll >= MAX_REROLLS) break
-      // Recover a content-dump in place (no re-roll); else re-roll a botched call.
-      if (recoverContentDump(text, tools) || !looksLikeBotchedToolCall(text)) break
-      console.log('[tool-call-reroll] botched tool call (stream), re-rolling', {
+      if (hasToolCall || reroll >= MAX_REROLLS || !TOOL_CALL_SENTINEL.test(text)) break
+      console.log('[tool-call-reroll] leaked tool call (stream), re-rolling', {
         attempt: reroll + 1,
       })
-    }
-    // Re-channel a content-dump: drop the text/reasoning parts, inject the tool
-    // call before finish, and force finishReason to tool-calls.
-    const rec = !hasToolCall ? recoverContentDump(text, tools) : null
-    let out = parts
-    if (rec) {
-      console.log('[tool-call-recover] re-channeled content-dump → tool call (stream)', {
-        tool: rec.toolName,
-      })
-      const textParts = new Set([
-        'text-start',
-        'text-delta',
-        'text-end',
-        'reasoning-start',
-        'reasoning-delta',
-        'reasoning-end',
-      ])
-      out = []
-      for (const p of parts) {
-        const t = (p as { type?: string }).type
-        if (t && textParts.has(t)) continue
-        if (t === 'finish') {
-          out.push({
-            type: 'tool-call',
-            toolCallId: `recover_${crypto.randomUUID()}`,
-            toolName: rec.toolName,
-            input: rec.input,
-          } as unknown as Part)
-          out.push({ ...(p as object), finishReason: 'tool-calls' } as unknown as Part)
-          continue
-        }
-        out.push(p)
-      }
     }
     return {
       ...result,
       stream: new ReadableStream<Part>({
         start(controller) {
-          for (const p of out) controller.enqueue(p)
+          for (const p of parts) controller.enqueue(p)
           controller.close()
         },
       }),
