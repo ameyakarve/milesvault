@@ -136,6 +136,69 @@ function isoFromInt(d: number): string {
   return `${Math.floor(d / 10000)}-${String(Math.floor((d % 10000) / 100)).padStart(2, '0')}-${String(d % 100).padStart(2, '0')}`
 }
 
+// CLEAN-RETRY for the statement draft loop. When a draft_transaction bounces
+// validation, the SDK's multi-step loop normally feeds the FAILED attempt (44
+// negative-signed card legs + the model's format) straight back into the next
+// step — which self-primes the closing-balance sign NEGATIVE and makes the model
+// copy its own broken format on the retry. So before each step we DROP the failed
+// draft attempts and their bulky tool-results, KEEP the reads (card_guide /
+// list_reward_accounts), and re-inject only the LATEST validation feedback as a
+// concise instruction. Each retry then re-drafts from clean context (like a fresh
+// first attempt, which is the one that gets the sign right) WITH the lesson. Pure
+// message hygiene — no content/domain decision. Defensive: any surprise → no-op.
+function cleanDraftRetryMessages(messages: ModelMessage[]): ModelMessage[] {
+  try {
+    const isDraftCall = (m: ModelMessage): boolean =>
+      m.role === 'assistant' &&
+      Array.isArray(m.content) &&
+      m.content.some(
+        (p) =>
+          (p as { type?: string; toolName?: string }).type === 'tool-call' &&
+          (p as { toolName?: string }).toolName === 'draft_transaction',
+      )
+    const draftResultText = (m: ModelMessage): string | null => {
+      if (m.role !== 'tool' || !Array.isArray(m.content)) return null
+      const parts = m.content.filter(
+        (p) => (p as { toolName?: string }).toolName === 'draft_transaction',
+      )
+      if (parts.length === 0) return null
+      return parts
+        .map((p) => {
+          const o = (p as { output?: unknown }).output
+          if (typeof o === 'string') return o
+          if (o && typeof o === 'object') {
+            const v = (o as { value?: unknown }).value
+            return typeof v === 'string' ? v : JSON.stringify(v ?? o)
+          }
+          return ''
+        })
+        .join('\n')
+    }
+    const feedback: string[] = []
+    const kept: ModelMessage[] = []
+    for (const m of messages) {
+      if (isDraftCall(m)) continue
+      const fb = draftResultText(m)
+      if (fb != null) {
+        if (fb.trim()) feedback.push(fb)
+        continue
+      }
+      kept.push(m)
+    }
+    if (feedback.length === 0) return messages // first attempt — untouched
+    kept.push({
+      role: 'user',
+      content:
+        `A previous draft_transaction call was REJECTED by validation:\n${feedback[feedback.length - 1]}\n\n` +
+        `Re-draft the COMPLETE batch as ONE draft_transaction call — fix the flagged entries, keep the rest. ` +
+        `entries maps each id to the RAW beancount text string (never an object).`,
+    })
+    return kept
+  } catch {
+    return messages
+  }
+}
+
 export class ChatDO
   extends BaseAgentDO<Cloudflare.Env, ChatDOState>
   implements AgentHost<EditorAgentName>
@@ -476,6 +539,13 @@ ${stmt.text}`,
         ],
         tools: draftingTools,
         ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
+        // On a validation bounce, re-draft from CLEAN context: drop the failed
+        // attempts (their negative legs self-prime the sign + the model copies its
+        // own broken format), keep the reads, re-inject just the latest feedback.
+        prepareStep: ({ messages }) => {
+          const cleaned = cleanDraftRetryMessages(messages)
+          return cleaned === messages ? {} : { messages: cleaned }
+        },
         // draft_transaction is TERMINAL: stop the moment a valid batch is
         // recorded. A bounced (invalid) draft records nothing, so the validator
         // retry still runs; lookups (card_guide) are non-terminal. The step
