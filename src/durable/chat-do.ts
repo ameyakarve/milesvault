@@ -136,6 +136,42 @@ function isoFromInt(d: number): string {
   return `${Math.floor(d / 10000)}-${String(Math.floor((d % 10000) / 100)).padStart(2, '0')}-${String(d % 100).padStart(2, '0')}`
 }
 
+// Gemma's tool-call special tokens (from vLLM's gemma4 parser): the string
+// delimiter `<|"|>`, plus the channel / tool-protocol / think / multimodal
+// markers. Workers AI normally translates gemma's delimiter language into JSON,
+// but on large outputs it can leave a stray token fragment that breaks JSON.parse.
+// None of these ever legitimately occur in a beancount entry or in JSON, so a
+// failed-parse repair can strip them wholesale. Ordered longest-first so a full
+// `<|"|>` is removed before its partial tails.
+const GEMMA_PROTOCOL_TOKENS = [
+  '<|"|>',
+  '<|tool_response>', '<tool_response|>', '<|tool_call>', '<tool_call|>',
+  '<|tool>', '<tool|>', '<|channel>', '<channel|>', '<|think|>',
+  '<|image>', '<|image|>', '<image|>', '<|audio>', '<|audio|>', '<audio|>', '<|video|>',
+]
+// Trailing partial fragments of the string delimiter `<|"|>` (a token-boundary
+// split mid-delimiter), longest-first — the exact set vLLM PR #38992 strips.
+const GEMMA_PARTIAL_DELIM_TAILS = ['<|"|', '<|"', '<|', '<']
+
+// Strip gemma's leaked protocol tokens from a tool-call argument string. Pure
+// text de-tokenization — makes no content/domain decision. Returns the input
+// unchanged when no token is present (caller then knows there was nothing to do).
+function stripGemmaProtocolTokens(s: string): string {
+  let out = s
+  for (const t of GEMMA_PROTOCOL_TOKENS) {
+    if (out.includes(t)) out = out.split(t).join('')
+  }
+  // Only a trailing partial delimiter (truncated mid-token) — never mid-string,
+  // where a lone `<` could be legitimate JSON-string content.
+  for (const frag of GEMMA_PARTIAL_DELIM_TAILS) {
+    if (out.endsWith(frag)) {
+      out = out.slice(0, -frag.length)
+      break
+    }
+  }
+  return out
+}
+
 export class ChatDO
   extends BaseAgentDO<Cloudflare.Env, ChatDOState>
   implements AgentHost<EditorAgentName>
@@ -883,7 +919,31 @@ entries, or draft corrections.`
     return async ({ toolCall, inputSchema, error, system, messages }) => {
       // Can't repair a call to a tool that doesn't exist — only invalid input.
       if (NoSuchToolError.isInstance(error)) return null
-      const inputLen = String((toolCall as { input?: unknown }).input ?? '').length
+      const rawInput = String((toolCall as { input?: unknown }).input ?? '')
+      const inputLen = rawInput.length
+
+      // FIRST, a DETERMINISTIC salvage — NOT domain arbitration. Gemma emits tool
+      // calls in its own delimiter language (string values wrapped in `<|"|>`, plus
+      // channel / tool-protocol / think tokens; see vLLM's gemma4 parser). Workers
+      // AI converts most of it to JSON but on a large draft occasionally leaves a
+      // STRAY protocol-token fragment that breaks JSON.parse (e.g. a trailing
+      // `…BURGUNDY<|"|>"}}`). Those tokens never legitimately appear in beancount or
+      // JSON, so stripping the whole token set (+ partial `<|"|>` tails) and
+      // re-parsing recovers the model's OWN output verbatim — no re-ask, so the
+      // turn's later steps don't regenerate over the failed attempt (which is what
+      // was flipping the closing-balance sign on retry). This is protocol
+      // de-tokenization, the same fix vLLM ships — it makes ZERO content/domain
+      // decisions. Falls through to the model re-ask if the strip doesn't parse.
+      const salvaged = stripGemmaProtocolTokens(rawInput)
+      if (salvaged !== rawInput) {
+        try {
+          JSON.parse(salvaged)
+          console.log('[repair] gemma-token salvage', { tool: toolCall.toolName, inputLen, ok: true })
+          return { ...toolCall, input: salvaged }
+        } catch {
+          // strip alone didn't yield valid JSON — let the model re-ask handle it
+        }
+      }
       try {
         const schema = await inputSchema(toolCall)
         const { object } = await generateObject({
