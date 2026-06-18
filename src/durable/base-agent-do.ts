@@ -7,10 +7,8 @@ import {
   type TurnContext,
 } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
-import { wrapLanguageModel } from 'ai'
 import type {
   LanguageModel,
-  LanguageModelMiddleware,
   ModelMessage,
   ToolCallRepairFunction,
   ToolSet,
@@ -32,80 +30,6 @@ import type {
 } from './agents/types'
 
 type UIMessagePart = UIMessage['parts'][number]
-
-// Gemma on Workers AI intermittently fails to deliver a proper tool call. Two
-// modes seen: (a) the DOMINANT one — it returns the complete, valid JSON args in
-// the `content` channel (finish=stop) instead of as a structured call; (b) rarer
-// — it LEAKS the call into text as raw chat-template tokens
-// (`<|tool_call>call:name{…}<tool_call|>`).
-//
-// This middleware handles ONLY (b): a leaked call has no structured tool-call but
-// carries the `<|tool_call>` sentinel — re-roll it (gemma is stochastic; a clean
-// call usually lands in a try or two). It deliberately does NOT touch a bare-JSON
-// content-dump (a): that output is VALID and useful — the caller re-channels it
-// (see ChatDO.runDraftStatement) — and rewriting the stream to inject a synthetic
-// tool call proved unreliable across the SDK's step aggregation. Leaving the text
-// intact lets the caller recover it deterministically.
-//
-// Editor-safe — a legitimate no-tool-call reply is PROSE (no sentinel), so it is
-// never re-rolled. Applied via buildModel so it covers the editor AND ingest,
-// streaming (prod) AND generate (bench).
-const MAX_REROLLS = 2 // up to 3 total generations on a leaked call
-const TOOL_CALL_SENTINEL = /<\|?tool_call|tool_call\|>/
-
-const toolCallRerollMiddleware: LanguageModelMiddleware = {
-  specificationVersion: 'v3',
-  async wrapGenerate({ doGenerate }) {
-    let res = await doGenerate()
-    for (let reroll = 0; reroll < MAX_REROLLS; reroll++) {
-      if (res.content.some((p) => p.type === 'tool-call')) break
-      const text = res.content
-        .map((p) => (p.type === 'text' || p.type === 'reasoning' ? p.text : ''))
-        .join('\n')
-      if (!TOOL_CALL_SENTINEL.test(text)) break // not a leaked call — keep as-is
-      console.log('[tool-call-reroll] leaked tool call, re-rolling', { attempt: reroll + 1 })
-      res = await doGenerate()
-    }
-    return res
-  },
-  async wrapStream({ doStream }) {
-    type StreamResult = Awaited<ReturnType<typeof doStream>>
-    type Part = StreamResult['stream'] extends ReadableStream<infer T> ? T : never
-    let result!: StreamResult
-    let parts: Part[] = []
-    // Buffer each attempt fully so we can see whether it produced a tool call
-    // before deciding to re-roll; replay the chosen attempt verbatim.
-    for (let reroll = 0; ; reroll++) {
-      result = await doStream()
-      parts = []
-      let hasToolCall = false
-      let text = ''
-      const reader = result.stream.getReader()
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        parts.push(value)
-        const t = (value as { type?: string }).type
-        if (t === 'tool-call') hasToolCall = true
-        else if (t === 'text-delta' || t === 'reasoning-delta')
-          text += (value as { delta?: string }).delta ?? ''
-      }
-      if (hasToolCall || reroll >= MAX_REROLLS || !TOOL_CALL_SENTINEL.test(text)) break
-      console.log('[tool-call-reroll] leaked tool call (stream), re-rolling', {
-        attempt: reroll + 1,
-      })
-    }
-    return {
-      ...result,
-      stream: new ReadableStream<Part>({
-        start(controller) {
-          for (const p of parts) controller.enqueue(p)
-          controller.close()
-        },
-      }),
-    }
-  },
-}
 
 // Framework-shaped DO that owns the Think runtime, the agent registry
 // resolution, the handoff plumbing, and the off-websocket entry points
@@ -209,9 +133,12 @@ export abstract class BaseAgentDO<
               chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
             })
           : workersai(cfg.id, { reasoning_effort: cfg.reasoning })
-    // Re-roll a botched tool call (gemma leaks/dumps it as text — see
-    // toolCallRerollMiddleware). Generic: covers the editor AND ingest.
-    return wrapLanguageModel({ model: base, middleware: toolCallRerollMiddleware })
+    // NOTE: no tool-call middleware. The buffer-and-replay wrapStream ate the
+    // provider stream (downstream saw empty text + zero tool calls). Gemma's
+    // dominant failure — a content-dumped draft (valid JSON in the text channel)
+    // — is recovered downstream in ChatDO.runDraftStatement, which needs the text
+    // INTACT; broken-args tool calls bounce via the recording tool's validator.
+    return base
   }
 
   // ---- Think per-turn config ----
