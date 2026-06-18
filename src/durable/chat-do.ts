@@ -361,8 +361,7 @@ ${opts.text}`,
       // SAME system prompt the live editor uses (buildLedgerSystem, with the
       // account alias map) and the SAME lookup tools — so the two paths can't
       // drift. The only deltas are headless ones: draft_transaction RECORDS
-      // (captureDraftTools) instead of suspending on a client, tool_choice is
-      // 'required' so the model can't bail to a prose/```python "answer", and
+      // (captureDraftTools) instead of suspending on a client, and
       // draft_transaction is TERMINAL. First-turn contract: assume the statement
       // is good enough, produce ONE batch, no clarify (the user iterates after).
       const { tools: draftingTools, recorded } = this.captureDraftTools()
@@ -695,12 +694,13 @@ ${stmt.text}`,
     try {
       // Drive the bench through the SAME shared invocation production uses
       // (modelInvocation) — identical model build, output-token budget, step
-      // budget, AND tool-call repair hook — so the eval actually MEASURES the
-      // live turn instead of a hand-rolled approximation. (Previously this
-      // generateText omitted maxOutputTokens and the repair hook, so the eval
-      // silently graded a weaker config than production ran.)
+      // budget, AND tool-call repair hook — AND streamed via streamText exactly
+      // like production (runDraftStatement and the live editor turn), so the
+      // streaming tool-call-rescue middleware (wrapStream) actually runs and the
+      // eval measures the REAL path, not a non-streaming approximation that takes
+      // a different recovery branch (wrapGenerate).
       const inv = this.modelInvocation(this.registry.agents[this.registry.entry]!.model)
-      const result = await generateText({
+      const stream = streamText({
         model: inv.model,
         experimental_repairToolCall: inv.repairToolCall,
         system: buildLedgerSystem(snapshot, aliases, {
@@ -711,7 +711,10 @@ ${stmt.text}`,
         ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
         stopWhen: stepCountIs(inv.maxSteps ?? EDITOR_MAX_STEPS),
       })
-      for (const step of result.steps) {
+      await stream.consumeStream()
+      const steps = await stream.steps
+      const text = await stream.text
+      for (const step of steps) {
         for (const call of step.toolCalls ?? []) {
           trace.push({ tool: call.toolName, input: call.input })
         }
@@ -719,7 +722,7 @@ ${stmt.text}`,
       const { drafts, clarifies, sqls } = deriveBenchSignals(trace)
       const { draftsValid, draftIssues } = validateBenchDrafts(drafts)
       return {
-        text: result.text,
+        text,
         trace,
         drafts,
         clarifies,
