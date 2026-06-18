@@ -412,6 +412,49 @@ ${opts.text}`,
         }
       }
       pushProgress('Reading the statement…')
+      // PASS 1 — consolidate text + images. pdftotext silently DROPS whatever the
+      // bank renders as a graphic (styled summary / totals / reward boxes and
+      // their labels), so figures like a closing reward-points balance survive
+      // ONLY in the page images. A focused read recovers them reliably where the
+      // busy draft pass (juggling text + images + tools) misses them. So first ask
+      // the model to transcribe just those graphic-rendered figures as labelled
+      // lines and fold them into the text the draft pass works from. The original
+      // text is kept VERBATIM (transaction coverage can't regress), and the images
+      // are NOT re-sent to the draft pass — they're now reflected in the text, so
+      // the draft pass keeps a lighter, complete context. Best-effort: on any
+      // failure we fall back to the raw text + images.
+      let consolidatedText = stmt.text
+      if (images.length > 0) {
+        try {
+          const composed = await generateText({
+            model: inv.model,
+            abortSignal: AbortSignal.timeout(120_000),
+            ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
+            system:
+              'You are given the page IMAGES of a credit-card statement and the TEXT a layout extractor produced from it. The text silently DROPS content the bank renders as a graphic — styled summary / totals / reward boxes and their labels. Read the images and transcribe ONLY the figures that are graphic-rendered and therefore missing or unlabelled in the text, as plain "Label: value" lines (each labelled figure in such a box on its own line). Do NOT restate transactions already present in the text, do NOT draft entries, do NOT interpret. If nothing is missing, output exactly NONE.',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: `--- extracted text ---\n${stmt.text}` },
+                  ...images.map((url) => ({
+                    type: 'file' as const,
+                    data: url.replace(/^data:[^,]+,/, ''),
+                    mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
+                  })),
+                ],
+              },
+            ],
+          })
+          const extra = composed.text.trim()
+          if (extra && !/^none\.?$/i.test(extra)) {
+            consolidatedText = `${stmt.text}\n\n${extra}`
+            pushProgress('Read the statement…')
+          }
+        } catch {
+          /* Pass 1 is best-effort; fall back to the raw text. */
+        }
+      }
       // 360s wall-clock cap. Drafting is OFFLINE-ish (background, on the
       // per-capture DO's own alarm — a longer draft never blocks the user or
       // other uploads), so we favour completing over a tight clock. The worst
@@ -456,22 +499,10 @@ ${opts.text}`,
         messages: [
           {
             role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
-
-The statement's extracted TEXT is below and its page IMAGES are attached — the text carries the exact amounts/dates/merchants; use the images for anything rendered as graphics (e.g. a reward-points box). Reason over both together.
+            content: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
 
 --- statement: ${stmt.filename} ---
-${stmt.text}`,
-              },
-              ...images.map((url) => ({
-                type: 'file' as const,
-                data: url.replace(/^data:[^,]+,/, ''),
-                mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
-              })),
-            ],
+${consolidatedText}`,
           },
         ],
         tools: draftingTools,
