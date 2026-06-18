@@ -43,6 +43,7 @@ import {
   searchTool,
 } from './agents/tools/editor'
 import { validateDraftBatch } from '@/lib/beancount/validate-draft-batch'
+import { recoverContentDumpedEntries } from '@/lib/beancount/recover-content-dump'
 import { runIncorporation } from './ingest/incorporate'
 import { makeKbTools, kbHttpOverFetch } from './agents/tools/concierge/kb-tools'
 import { type GenFn } from './ingest/pipeline'
@@ -514,6 +515,25 @@ ${stmt.text}`,
         this.setState({})
       } catch {
         /* no-op */
+      }
+      // Recover a CONTENT-DUMPED draft. Gemma intermittently returns the whole
+      // draft as a valid JSON object in the text channel (finish=stop) instead of
+      // calling draft_transaction — the bytes are fine, only the channel is wrong
+      // (the `auto`-vs-`required` tradeoff: required garbles big args, auto allows
+      // the dump). Re-channel it through the SAME recorded path; downstream
+      // validation/serialization is unchanged. Pure, fixture-proven extractor —
+      // it no-ops on prose, partial JSON, and clean tool calls. Only runs when the
+      // turn recorded nothing AND didn't error/time out (a genuine empty/garbled
+      // text still falls through to "no entries").
+      if (recorded.length === 0 && !errored) {
+        const reentried = recoverContentDumpedEntries(text)
+        if (reentried.length > 0) {
+          recorded.push(...reentried)
+          console.log('[async-ingest] recovered content-dumped draft', {
+            statement_id: statementId,
+            entries: reentried.length,
+          })
+        }
       }
       if (recorded.length > 0) {
         await ledger.set_capture_drafts(statementId, recorded, null)
