@@ -112,6 +112,14 @@ specific to READING a statement.
    2026-06-01 balance Liabilities:CreditCards:Harbor:Signature:5678  7500.00 INR
    ```
 
+   Each closing bookend is the pad line AND the balance line — ✓ vs ✗:
+
+   ```
+   ✓  2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
+      2026-06-01 balance Liabilities:CreditCards:Skybank:Plus:1234  -54321.00 INR
+   ✗  2026-06-01 balance Liabilities:CreditCards:Skybank:Plus:1234  -54321.00 INR   (bare — no pad above; a statement closing always drifts, so this fails to reconcile)
+   ```
+
 Prefer the extracted TEXT for anything legible in it (dates, amounts, merchant
 names); use the page IMAGES only for what the text is missing or garbles (labels
 the bank renders as images, like the reward-points summary box). Do not echo or
