@@ -86,8 +86,12 @@ specific to READING a statement.
    - **Owe the issuer** — a plain, "Dr", or unmarked total (the COMMON case) →
      **NEGATIVE**, write `-<amount>`. The statement prints the owed amount as a
      positive number; do NOT copy it as-is — an owed card balance is NEGATIVE.
-   - **Overpaid** — the total is marked "Cr" (the issuer owes YOU back; uncommon) →
-     **POSITIVE**, write `<amount>`.
+   - **Overpaid** — the total is marked "Cr" → you owe NOTHING, the issuer owes
+     YOU → **POSITIVE**, write `<amount>`. CHECK for this "Cr" BEFORE you sign: it
+     OVERRIDES the box's label. A figure sitting under "Total Payment Due" / "Total
+     Amount Due" but suffixed "Cr" is NOT due and NOT owed (its minimum-due reads
+     0.00) — it is money in YOUR favour, so it is POSITIVE. Never let the word
+     "Due" pull a minus onto a number the statement itself marks "Cr".
 
    The Cr/Dr marker decides the sign and is then dropped — it is NEVER the commodity;
    the amount is always `<number> <CURRENCY>` (INR or the points ticker). E.g. a
@@ -100,6 +104,15 @@ specific to READING a statement.
 
    2026-06-01 pad Assets:Rewards:Points:Skybank Equity:Void
    2026-06-01 balance Assets:Rewards:Points:Skybank  12500 SKYBANKPTS
+   ```
+
+   A worked case of the trap: a summary box printing `Total Payment Due  8,420.00
+   Cr` with `Minimum Due  0.00 Cr` — the "Cr" means nothing is due and the issuer
+   holds 8,420.00 of YOURS, so the closing is POSITIVE:
+
+   ```
+   2026-06-01 pad Liabilities:CreditCards:Brightpay:Elite:9012 Equity:Void
+   2026-06-01 balance Liabilities:CreditCards:Brightpay:Elite:9012  8420.00 INR
    ```
 
    And a different card whose closing total carries a "Cr" suffix — overpaid, the
