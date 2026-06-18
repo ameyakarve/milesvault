@@ -65,42 +65,32 @@ specific to READING a statement.
    statements carry a SUMMARY box of TOTALS (Previous Balance · Purchases ·
    Payments · Net Outstanding / Total Payment Due) — use the "Net Outstanding" /
    "Total Payment Due" total, NOT a transaction amount, the minimum due, or the
-   credit limit. The "Due" / "Outstanding" LABEL does NOT mean the figure is owed:
-   when it carries a `Cr` suffix the card is in credit — nothing is due, the issuer
-   owes YOU — and the figure is POSITIVE. The printed suffix, not the label, sets
-   the sign (step 7). Emit it as a pad + balance dated the day AFTER the statement
+   credit limit. Emit it as a pad + balance dated the day AFTER the statement
    period's last day. If the statement has no totals / amount-due box, emit no
    card bookend — don't reconstruct a figure.
 
 7. **Pad + balance — the exact form.** A closing bookend is TWO lines — a `pad`
    naming the account with the `Equity:Void` plug, then a `balance` asserting the
-   figure's DIGITS exactly as printed (never rounded or recomputed) but written in
-   beancount form as `<number> <CURRENCY>` — you do NOT transcribe the statement's
-   notation: the `₹`/currency symbol, the thousand-separators, and the Cr/Dr mark
-   are not part of the amount (the Cr/Dr only sets the sign, per the rule below).
-   The pad absorbs any drift between the figure and what
+   printed figure verbatim. The pad absorbs any drift between the figure and what
    your transactions left in the account, so the balance reconciles the import; a
    missing bookend means a misread row passes silently. Emit ONE bookend for EACH
    closing figure the statement actually prints — the card's closing (step 6) and
    the points closing balance (step 5) — and NONE for a figure it doesn't print
    (never a fabricated figure, never a 0-amount opening pad). The points balance
-   is the settled-pool total. **The closing total's Cr/Dr suffix maps DIRECTLY to the
-   sign — a flat lookup, no reasoning:**
-   - suffix **`Cr`** ⇒ write a **POSITIVE** number (e.g. `7500.00 INR`)
-   - suffix **`Dr`**, or **no suffix** ⇒ write a **NEGATIVE** number (e.g. `-54321.00 INR`)
-
-   Find the suffix on the closing total and apply the lookup — nothing else decides the
-   sign. The suffix is INDEPENDENT of the transactions: a statement full of `Dr`
-   purchases can still close `Cr`, and the purchase signs never change the closing
-   balance's sign. The suffix sets ONLY the sign — the amount you write is ALWAYS
-   `<number> <CURRENCY>` (CURRENCY = INR or the points ticker), and the Cr/Dr mark is
-   NEVER the commodity; it never appears on the `balance` line.
-
-   The closing `balance` is its OWN kind of line — NOT a card transaction leg: a
-   purchase's card leg is negative because it adds to what you owe, but the closing
-   balance is whatever the statement SAYS it is, by its suffix. E.g. a period ending 31
-   May 2026 whose closing total carries a `Dr` suffix — ₹54,321 owed — and a
-   12,500-point closing balance:
+   is the settled-pool total. Sign the CARD balance from the total's printed Cr/Dr
+   suffix — find that suffix and let it ALONE decide the sign: a "Dr" or unmarked
+   total is what you OWE → NEGATIVE; a "Cr" total means you have OVERPAID and the
+   issuer must refund you → POSITIVE. The suffix is INDEPENDENT of the transactions:
+   a statement can be a full page of "Dr" purchases and still CLOSE "Cr". Those
+   purchase signs sign their own card legs and say NOTHING about the closing balance,
+   so never let a page of "Dr" rows drag it negative — the closing total carries its
+   OWN suffix; obey that. "Cr" closings are uncommon, so the reflex is to default
+   negative; do NOT — when the printed suffix is "Cr", the balance is POSITIVE, never
+   negated. The suffix sets only the SIGN: the amount you write is ALWAYS
+   `<number> <CURRENCY>`, where CURRENCY is INR or the points ticker. The Cr/Dr mark
+   is a sign cue, NEVER the commodity — once it has decided positive vs negative,
+   drop it; it never appears on the `balance` line. E.g. a period ending 31 May 2026
+   that prints ₹54,321 owed and a 12,500-point closing balance:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
@@ -110,8 +100,9 @@ specific to READING a statement.
    2026-06-01 balance Assets:Rewards:Points:Skybank  12500 SKYBANKPTS
    ```
 
-   And a different card whose closing total carries a `Cr` suffix → POSITIVE by the
-   lookup (amount 7,500.00, commodity INR — the `Cr` set the sign and is gone):
+   And a different card whose closing total carries a "Cr" suffix — overpaid, the
+   issuer owes you 7,500.00 → the balance is POSITIVE, and the commodity is INR (the
+   "Cr" set the sign and is gone), NOT negated:
 
    ```
    2026-06-01 pad Liabilities:CreditCards:Harbor:Signature:5678 Equity:Void
