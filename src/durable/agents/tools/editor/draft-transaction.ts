@@ -28,12 +28,6 @@ const ENTRY_SHAPES =
   '• a pad+balance (lets a pad absorb drift up to the figure) — two lines, plug always Equity:Void:\n' +
   '    2026-06-12 pad Assets:Bank:Chase:Checking Equity:Void\n' +
   '    2026-06-12 balance Assets:Bank:Chase:Checking  100.00 USD\n' +
-  '  Sign a LIABILITY closing (credit card / loan) by WHO OWES WHOM — not by the posting rows above (a page of "-" purchase legs says nothing about it): a plain or "Dr" total is owed → NEGATIVE; a total marked "Cr" means the issuer owes YOU (overpaid) → POSITIVE. The Cr/Dr mark only sets the sign, then is dropped (the commodity stays the currency). Owed → negative:\n' +
-  '    2026-06-12 pad Liabilities:CreditCards:Bank:Card Equity:Void\n' +
-  '    2026-06-12 balance Liabilities:CreditCards:Bank:Card  -2500.00 INR\n' +
-  '  Overpaid, total reads "Cr" → positive:\n' +
-  '    2026-07-01 pad Liabilities:CreditCards:Bank:Card Equity:Void\n' +
-  '    2026-07-01 balance Liabilities:CreditCards:Bank:Card  3100.00 INR\n' +
   'Every posting needs an explicit amount and currency (no blanks), and postings must balance per currency. For a foreign-currency or points→points conversion, carry a total price with `@@` in the OTHER commodity (e.g. a 150→150 points transfer: `Assets:Rewards:...:Dest 150 DEST @@ 150 SRC`). On validation failure you get a compact tool-result naming the bad entries with a worked example — fix only those and call again in the same turn. Do NOT narrate, do NOT invent file paths.'
 
 type EntriesMap = { entries: Record<string, string> }
