@@ -4,7 +4,7 @@ One transaction captures the purchase AND the reward it earned. Cashback
 and points don't fall out of the sky — they always pair with the expense
 that generated them.
 
-Each example below shows ONE entry's beancount text. How entries are wrapped — the `id` handle, and whether they go in a map or a list — is defined by the `draft_transaction` tool you are calling; follow THAT tool's schema (the id is omitted in these examples for brevity). The value for each entry is always the raw beancount text itself — a plain string — NEVER wrapped in a `{ "text": … }` object.
+Each entry is passed as `{ id, text }` where `id` is a short unique handle (e.g. `"e1"`) and `text` is the beancount below; the id is omitted in these examples for brevity.
 
 The accounts below use `<Issuer>`/`<Card>` placeholders on purpose:
 these examples teach the *shape* of each entry, not how any specific
@@ -199,9 +199,8 @@ negative posting on the same expense; no `Equity:Void`, no receivable.
 ## Transfers (money moves between your accounts — no expense)
 
 ### Salary received
-Income postings are negative — beancount's sign convention for income
-(this is the accounting sense of "credit", unrelated to a statement's `Cr`
-balance marker, which signs a card balance POSITIVE).
+Income postings are negative — that's the sign convention for
+a credit to your books.
 ```beancount
 2026-05-25 * "ACME Corp" "May salary"
   Assets:Bank:HDFC:Savings  125000.00 INR

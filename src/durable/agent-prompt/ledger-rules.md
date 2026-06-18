@@ -249,18 +249,6 @@ card debited for the sum. Pair stray fee/GST to their charge by the
 **arithmetic, not adjacency** — markup ≈ 2% of ITS billed amount, GST ≈ 18% of
 THAT markup.
 
-An `@@` price is ALWAYS in a DIFFERENT commodity from its leg — that is the whole
-point of `@@` (it converts the leg into another currency). **NEVER write
-`<n> INR @@ <n> INR`** (a same-currency price is not a conversion — the validator
-rejects it). For a `( CCY x.xx )` foreign charge, the expense leg's QUANTITY is the
-FOREIGN amount and `@@` is the billed INR:
-```beancount
-✓  Expenses:Shopping  49.99 USD @@ 4713.75 INR     ; foreign qty, @@ in INR
-✗  Expenses:Shopping  4713.75 INR @@ 4713.75 INR   ; same currency — INVALID
-```
-If a charge is billed in INR with NO foreign `( CCY … )` amount printed, it is NOT
-a forex row — write a plain `<amount> INR` leg with NO `@@` at all.
-
 ## Redemption
 
 **Recognise it by the SIGN:** points/miles going DOWN (a NEGATIVE points line)
@@ -332,18 +320,17 @@ This is the PAD plug ONLY. It does NOT license burning points to `Equity:Void` i
 a normal transaction: a points balance going DOWN in a transaction is a
 redemption / transfer-out / expiry (see Redemption), never a bare burn to Void.
 
-Assert the figure's DIGITS exactly as given, digit-for-digit (never rounded or
-recomputed) — but in beancount form `<number> <CURRENCY>`, NOT transcribed with the
-statement's notation: the currency symbol, the thousand-separators, and the Cr/Dr
-mark are not part of the amount (the Cr/Dr only sets the sign, per below). Date the `balance` the day
+Assert the figure exactly as given, digit-for-digit. Date the `balance` the day
 the figure is as-of (for a statement closing, the day AFTER the period ends), the
 `pad` the day before. EXACTLY ONE balance per account — never two, never a `0`
-lifted from a non-balance figure. SIGN a card/liability balance by a DIRECT lookup on
-the figure's printed Cr/Dr suffix — no reasoning:
-- suffix `Cr` ⇒ POSITIVE number (e.g. `7500.00 INR`)
-- suffix `Dr`, or no suffix ⇒ NEGATIVE number (e.g. `-54321.00 INR`)
-Apply the lookup; nothing else decides the sign. It is INDEPENDENT of the
-transactions: a card whose every charge is a `Dr` purchase can still close `Cr`, and
-the purchase signs never change the closing balance's sign. The suffix sets ONLY the
-sign — the amount is ALWAYS `<number> <CURRENCY>` (INR, or the points ticker), and the
-Cr/Dr mark is NEVER the commodity; it never appears on the `balance` line.
+lifted from a non-balance figure. SIGN a card/liability balance from the figure's
+printed Cr/Dr suffix — find that suffix and let it ALONE decide the sign: a plain
+or "Dr" amount (what you OWE) asserts NEGATIVE; a "Cr" amount (you have OVERPAID, so
+the issuer must refund you) asserts POSITIVE. The suffix is INDEPENDENT of the
+transactions: a card whose every charge is a "Dr" purchase can still CLOSE "Cr", and
+those purchase signs say NOTHING about the closing balance — never let a page of
+"Dr" rows drag it negative. Read the total's Cr/Dr suffix, never the bare number;
+"Cr" closings are uncommon, so resist the reflex to default negative. The suffix
+sets only the SIGN: the amount you write is ALWAYS `<number> <CURRENCY>` (INR, or
+the points ticker). The Cr/Dr mark is a sign cue, NEVER the commodity — drop it
+once it has set the sign; it never appears on the `balance` line.

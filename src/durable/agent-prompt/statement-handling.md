@@ -23,8 +23,8 @@ drafted anything until the `draft_transaction` call is made.
    closing balance (when it prints a closing points TOTAL) — see extraction
    rules §6–7. Those bookends are entries in the batch just like the
    transactions, so don't stop after the transaction rows when a closing figure
-   is printed. A statement that prints no
-   such figure gets NO bookend for it — never fabricate one.
+   is printed. A statement that prints no such figure gets NO bookend for it —
+   never fabricate one.
 2. If the statement genuinely has nothing to record, say so briefly and do not
    call `draft_transaction` — never fabricate entries.
 
