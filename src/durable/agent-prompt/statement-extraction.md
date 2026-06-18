@@ -65,9 +65,15 @@ specific to READING a statement.
    statements carry a SUMMARY box of TOTALS (Previous Balance · Purchases ·
    Payments · Net Outstanding / Total Payment Due) — use the "Net Outstanding" /
    "Total Payment Due" total, NOT a transaction amount, the minimum due, or the
-   credit limit. Emit it as a pad + balance dated the day AFTER the statement
-   period's last day. If the statement has no totals / amount-due box, emit no
-   card bookend — don't reconstruct a figure.
+   credit limit. That total is only a MAGNITUDE — its label ("Payment Due" /
+   "Outstanding" / "Total Dues") does NOT mean it is owed and does NOT set the
+   sign. Read its Cr/Dr suffix right here as you pick it: a "Cr" total means the
+   account is in CREDIT — nothing is due, the issuer owes YOU — so step 7 signs it
+   POSITIVE; a plain or "Dr" total is owed → negative. Never let the word "Due" in
+   the label imply a debt when the figure itself is marked "Cr". Emit it as a pad +
+   balance dated the day AFTER the statement period's last day. If the statement
+   has no totals / amount-due box, emit no card bookend — don't reconstruct a
+   figure.
 
 7. **Pad + balance — the exact form.** A closing bookend is ALWAYS TWO lines — a
    `pad` naming the account with the `Equity:Void` plug, THEN a `balance` asserting
