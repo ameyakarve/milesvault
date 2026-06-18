@@ -142,7 +142,10 @@ specific to READING a statement.
    ✗  "Cr" written negative:     balance Liabilities:CreditCards:Harbor:Signature:5678  -7500.00 INR
    ```
 
-Prefer the extracted TEXT for anything legible in it (dates, amounts, merchant
-names); use the page IMAGES only for what the text is missing or garbles (labels
-the bank renders as images, like the reward-points summary box). Do not echo or
-restate the statement — the narration is the merchant / payee on the row.
+The supplied TEXT is a layout extraction that silently DROPS or garbles whatever
+the bank renders as a graphic (styled summary boxes, their labels, totals). Treat
+the TEXT and the page IMAGES as two views of the same statement and compose your
+working copy from BOTH — read each figure against the image, let the image supply
+what the text dropped and the text confirm what the image shows. Neither alone is
+complete. Do not echo or restate the statement — the narration is the merchant /
+payee on the row.
