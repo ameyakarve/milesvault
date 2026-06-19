@@ -1043,6 +1043,29 @@ entries, or draft corrections.`
       draft_transaction: draftTransactionTool(),
       clarify: clarifyTool(CLARIFICATIONS),
       add_card: addCardTool(),
+      // Read a captured statement / Inbox item's full text by id. The per-capture
+      // thread prompt (threadContextBlock) tells the agent to call this; defaults
+      // to the thread's own capture when statement_id is omitted. Output is
+      // redacted to its size in the tool log (withToolLog) — the blob is private.
+      read_statement: tool({
+        description:
+          "Read the full text of the statement / Inbox item this thread is scoped to. Pass its statement_id (shown in the thread context); call it when the user asks about the statement's contents.",
+        inputSchema: jsonSchema<{ statement_id?: string }>({
+          type: 'object',
+          properties: { statement_id: { type: 'string' } },
+          additionalProperties: false,
+        }),
+        execute: async (input) => {
+          const id = (input as { statement_id?: string }).statement_id ?? this.threadCaptureId()
+          if (!id) return { error: 'no statement_id and thread is not scoped to a capture' }
+          const blob = await this.ledgerStub()
+            .get_statement(id)
+            .catch((): null => null)
+          return blob
+            ? { filename: blob.filename, text: blob.text }
+            : { error: 'statement not found' }
+        },
+      }),
     })
   }
 
