@@ -51,7 +51,10 @@ export interface Env {
   DB: D1Database
 }
 
-const TOKEN_RE = /^ingest\+([a-z0-9]{16,64})@/i
+// Prefix-agnostic: matches `<localpart>+<token>@…` for any localpart — prod uses
+// `ingest+…`, staging `ingest-staging+…`. The Email Routing rule (apex-only, no
+// subdomains) decides WHICH addresses reach this worker; we just extract the token.
+const TOKEN_RE = /^[^+@]+\+([a-z0-9]{16,64})@/i
 
 // Crude fallback when a message has no text part.
 function htmlToText(html: string): string {
