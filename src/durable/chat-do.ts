@@ -422,15 +422,14 @@ ${opts.text}`,
       // it keep a lighter context (images are not re-sent). Best-effort: on any
       // failure we fall back to the raw text.
       let consolidatedText = stmt.text
-      let pass1Ok = false
       if (images.length > 0) {
+        // PASS 1 — consolidate the layout-extracted TEXT and the page IMAGES into ONE
+        // plain-text statement the draft works from. NO RAW FALLBACK: the draft must
+        // never run on un-consolidated text. A silent fall-back-to-raw is exactly the
+        // flakiness we removed — same input would draft differently depending only on
+        // whether Pass 1 happened to finish in time. If Pass 1 fails, the whole draft
+        // errors (visible + retryable via the Inbox), it does NOT degrade to raw.
         const t0 = Date.now()
-        // STREAM, don't generateText. Through the Workers-AI BINDING (env.AI, the
-        // deployed path), a non-streaming multimodal call (generateText with image
-        // file parts) throws client-side before it ever reaches the gateway, so the
-        // whole pass silently failed and fell back to raw text. streamText is the
-        // SAME path the draft pass uses and the binding handles it correctly. (The
-        // REST path tolerates both, which masked this in standalone tests.)
         console.log('[pass1] start', {
           statement_id: statementId,
           images: images.length,
@@ -440,12 +439,15 @@ ${opts.text}`,
         try {
           const composed = streamText({
             model: inv.model,
-            abortSignal: AbortSignal.timeout(120_000),
-            // Same output budget as the draft pass (16384) — ample; the
+            // Pass 1 runs OFFLINE on the capture's own alarm (never blocks a request),
+            // so favour completing over a tight clock: clean consolidations measured
+            // ~14–63s, so 240s clips a runaway tail without cutting a legit slow run.
+            abortSignal: AbortSignal.timeout(240_000),
+            // Same output budget as the draft pass (16384) — ample; a COMPACT
             // consolidation is only a few thousand tokens in practice.
             ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
             system:
-              'You are given a credit-card statement as layout-extracted TEXT and as page IMAGES. Produce ONE consolidated plain-text copy of the statement that merges both. The TEXT is authoritative for any value present in both — copy its numbers, dates and amounts verbatim, never re-key them from the image. Use the IMAGES to add what the text is missing: content the bank renders as a graphic (styled summary / reward / totals boxes and their labels), written in place WITH its labels. Keep every transaction and every figure; do not summarise, drop, re-order, draft, or comment. Output only the consolidated statement text.',
+              'You are given a credit-card statement as layout-extracted TEXT and as page IMAGES. Produce ONE consolidated plain-text copy of the statement that merges both. The TEXT is authoritative for any value present in both — copy its numbers, dates and amounts verbatim, never re-key them from the image. Use the IMAGES to add what the text is missing: content the bank renders as a graphic (styled summary / reward / totals boxes and their labels), written in place WITH its labels. Keep every transaction and every figure; do not summarise, drop, re-order, draft, or comment. Write COMPACTLY: a single space between fields, never pad with runs of spaces, tabs, or repeated blank lines (no column alignment) — extra whitespace wastes output tokens and carries no meaning. Output only the consolidated statement text.',
             messages: [
               {
                 role: 'user',
@@ -461,51 +463,41 @@ ${opts.text}`,
             ],
           })
           const raw = await composed.text
-          // Serialization hygiene (NOT arbiter logic): gemma occasionally emits a
-          // degenerate run of whitespace — observed on one statement as a single
-          // 412 KB line of spaces — which bloats the draft context for zero signal.
-          // Collapse horizontal-whitespace runs to one space, strip per-line trailing
-          // space, and cap blank-line runs. This touches only whitespace; no figure,
-          // word, sign, or line of content is altered or dropped.
+          // Serialization hygiene (NOT arbiter logic): even with the prompt asking for
+          // compact output, defensively collapse any horizontal-whitespace run to one
+          // space, strip per-line trailing space, and cap blank-line runs. Whitespace
+          // only — no figure, word, sign, or line of content is altered or dropped.
           const merged = raw
             .replace(/[ \t]+/g, ' ')
             .replace(/ *\n/g, '\n')
             .replace(/\n{3,}/g, '\n\n')
             .trim()
           const finishReason = await Promise.resolve(composed.finishReason).catch(() => 'unknown')
-          if (merged) {
-            consolidatedText = merged
-            pass1Ok = true
-            pushProgress('Read the statement…')
-          }
           console.log('[pass1] done', {
             statement_id: statementId,
-            ok: pass1Ok,
             finish_reason: finishReason,
             raw_len: raw.length,
             merged_len: merged.length,
             ms: Date.now() - t0,
           })
+          if (!merged) throw new Error('pass 1 produced an empty consolidation')
+          consolidatedText = merged
+          pushProgress('Read the statement…')
         } catch (e) {
-          // Pass 1 is best-effort; fall back to the raw text + images (no worse than
-          // the original single-pass run). Log the real cause so a regression here
-          // is visible in `wrangler tail`, not silent.
-          console.error('[pass1] consolidation errored — falling back to raw text + images', {
+          // No raw fallback — surface the failure so it is deterministic and retryable
+          // (the outer catch sets the capture to an errored state the Inbox can retry).
+          console.error('[pass1] consolidation FAILED — erroring the draft (no raw fallback)', {
             statement_id: statementId,
             ms: Date.now() - t0,
             error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
           })
+          throw e instanceof Error ? e : new Error(String(e))
         }
       }
-      // The draft pass works off the consolidated text. Keep the page images ONLY
-      // when Pass 1 did NOT succeed — so a failed/absent consolidation is no worse
-      // than the original single-pass run (text + images), never a regression.
-      const draftImages = pass1Ok ? [] : images
       console.log('[draft] pass2 input', {
         statement_id: statementId,
-        source: pass1Ok ? 'consolidated' : 'raw_text',
+        source: images.length > 0 ? 'consolidated' : 'raw_no_images',
         draft_text_len: consolidatedText.length,
-        attached_images: draftImages.length,
       })
       // 360s wall-clock cap. Drafting is OFFLINE-ish (background, on the
       // per-capture DO's own alarm — a longer draft never blocks the user or
@@ -548,31 +540,17 @@ ${opts.text}`,
           }
         },
         system: buildLedgerSystem(snapshot, aliases, { statement: true }),
+        // The draft ALWAYS works from the consolidated plain text (Pass 1 already
+        // folded the page images into it, text-authoritative). No images attached
+        // here, and never raw un-consolidated text — Pass 1 erroring out is the only
+        // other path, and that aborts the draft entirely (see above).
         messages: [
           {
             role: 'user',
-            content:
-              draftImages.length === 0
-                ? `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
-
---- statement: ${stmt.filename} ---
-${consolidatedText}`
-                : [
-                    {
-                      type: 'text' as const,
-                      text: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
-
-The statement's TEXT is below and its page IMAGES are attached — the text carries the exact amounts/dates/merchants; use the images for anything rendered as graphics (e.g. a reward-points box). Reason over both together.
+            content: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
 
 --- statement: ${stmt.filename} ---
 ${consolidatedText}`,
-                    },
-                    ...draftImages.map((url) => ({
-                      type: 'file' as const,
-                      data: url.replace(/^data:[^,]+,/, ''),
-                      mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
-                    })),
-                  ],
           },
         ],
         tools: draftingTools,
