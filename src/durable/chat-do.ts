@@ -460,7 +460,18 @@ ${opts.text}`,
               },
             ],
           })
-          const merged = (await composed.text).trim()
+          const raw = await composed.text
+          // Serialization hygiene (NOT arbiter logic): gemma occasionally emits a
+          // degenerate run of whitespace — observed on one statement as a single
+          // 412 KB line of spaces — which bloats the draft context for zero signal.
+          // Collapse horizontal-whitespace runs to one space, strip per-line trailing
+          // space, and cap blank-line runs. This touches only whitespace; no figure,
+          // word, sign, or line of content is altered or dropped.
+          const merged = raw
+            .replace(/[ \t]+/g, ' ')
+            .replace(/ *\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim()
           const finishReason = await Promise.resolve(composed.finishReason).catch(() => 'unknown')
           if (merged) {
             consolidatedText = merged
@@ -471,6 +482,7 @@ ${opts.text}`,
             statement_id: statementId,
             ok: pass1Ok,
             finish_reason: finishReason,
+            raw_len: raw.length,
             merged_len: merged.length,
             ms: Date.now() - t0,
           })
