@@ -60,11 +60,18 @@ specific to READING a statement.
      from `:Pending` to posted) and the figure your per-row accruals must
      reconcile to. This is the cycle's DELTA, NOT a balance — never assert it.
    - When — and ONLY when — it prints a CLOSING points balance (the pool's
-     standing total: "points balance as on <date>" / "total available points"),
-     assert THAT number with a pad + balance, verbatim. Whenever that total IS
-     printed the bookend is REQUIRED — including when it appears only in the
-     rewards summary box or the page image — do not skip it. Do not confuse it
-     with "earned this cycle": closing balance = opening + earned − redeemed (the
+     standing total), assert THAT number with a pad + balance, verbatim. It is
+     printed two ways: (a) a single labelled value — "points balance as on
+     <date>" / "total available points" / "Reward Points: <N>"; or (b) a
+     RECONCILIATION block that lists Opening Balance + Points Earned (Feature /
+     Bonus) − Redeemed / Disbursed / Adjusted / Lapsed. In case (b) the CLOSING
+     balance is the TOTAL those rows resolve to — opening + earned − the
+     deductions — usually printed as the "Reward Points" / "Total" / "Balance"
+     figure heading the block; assert THAT total, NOT the Opening column and NOT
+     the Earned column (it is larger than either). Whenever that total IS printed
+     the bookend is REQUIRED — including when it appears only in the rewards
+     summary box or the page image — do not skip it. Do not confuse it with
+     "earned this cycle": closing balance = opening + earned − redeemed (the
      running total), a much larger number than the cycle's earnings. If the
      statement prints NO closing points balance, emit no points bookend (never
      fabricate or infer one).
