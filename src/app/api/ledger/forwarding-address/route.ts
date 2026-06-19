@@ -27,24 +27,32 @@ export async function GET(): Promise<Response> {
        )`,
     )
     .run()
+  // Bijection — one address per user. Dedupe any legacy multi-token rows (keep the
+  // earliest), then a UNIQUE(email) index makes a second token per user impossible.
+  // (One user per address is already guaranteed by token being PRIMARY KEY.)
   await db
-    .prepare(`CREATE INDEX IF NOT EXISTS idx_ingest_tokens_email ON ingest_tokens(email)`)
+    .prepare(
+      `DELETE FROM ingest_tokens WHERE rowid NOT IN (SELECT MIN(rowid) FROM ingest_tokens GROUP BY email)`,
+    )
+    .run()
+  await db
+    .prepare(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_ingest_tokens_email_uniq ON ingest_tokens(email)`,
+    )
     .run()
 
-  const existing = await db
-    .prepare('SELECT token FROM ingest_tokens WHERE email = ? LIMIT 1')
-    .bind(email)
-    .first<{ token: string }>()
-  if (existing) {
-    return NextResponse.json({ address: `ingest+${existing.token}@milesvault.com` })
-  }
-
+  // Race-safe get-or-create: with UNIQUE(email), a concurrent second INSERT is
+  // ignored, so both callers read back the one winning token.
   const token = crypto.randomUUID().replace(/-/g, '')
   await db
-    .prepare('INSERT INTO ingest_tokens (token, email, created_at) VALUES (?, ?, ?)')
+    .prepare('INSERT OR IGNORE INTO ingest_tokens (token, email, created_at) VALUES (?, ?, ?)')
     .bind(token, email, Date.now())
     .run()
-  return NextResponse.json({ address: `ingest+${token}@milesvault.com` })
+  const rowTok = await db
+    .prepare('SELECT token FROM ingest_tokens WHERE email = ?')
+    .bind(email)
+    .first<{ token: string }>()
+  return NextResponse.json({ address: `ingest+${rowTok?.token ?? token}@milesvault.com` })
 }
 
 // Rotate: burn every existing token for this user and mint a fresh one. The

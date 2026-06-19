@@ -16,6 +16,14 @@
         "class_name": "LedgerDO",
         "script_name": "milesvault-staging",
       },
+      // Per-email draft runs on the app worker's ChatDO (email::<id>), the same
+      // instance the Inbox review chat uses. Cross-script, like LEDGER_DO —
+      // targets staging; flip script_name with LEDGER_DO when prod is current.
+      {
+        "name": "CHAT_DO",
+        "class_name": "ChatDO",
+        "script_name": "milesvault-staging",
+      },
     ],
   },
   "d1_databases": [

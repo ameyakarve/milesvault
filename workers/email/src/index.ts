@@ -5,9 +5,13 @@ import PostalMime from 'postal-mime'
 // One Email Routing rule — ingest@milesvault.com → this worker — serves every
 // user via plus-addressing: ingest+<token>@milesvault.com. The token is a
 // bearer secret minted by the app (/api/ledger/forwarding-address) and stored
-// in D1; unknown tokens are rejected at SMTP time so the domain isn't a spam
-// sink. A valid message lands as a `captured` item (source 'email') in the
-// user's Inbox — never auto-posted; review happens in the Journal chat.
+// in D1; it is the ONLY trust boundary — unknown tokens are rejected at SMTP
+// time so the domain isn't a spam sink, and a user rotates the token to revoke.
+// There is no sender allow/deny list: knowing the secret address IS the grant.
+//
+// A valid message lands as a `captured` item (source 'email') in the user's
+// LedgerDO, then drafts on its OWN per-email ChatDO (email::<id>) — exactly the
+// statement-upload path. Never auto-posted; review happens in the Inbox.
 
 // Minimal local types: this worker compiles standalone, without the app's
 // generated env types.
@@ -20,11 +24,6 @@ type LedgerStub = {
     source: 'upload' | 'email'
     prompt?: string | null
   }): Promise<{ ok: true }>
-  match_email_rule(headers: { from: string; subject: string }): Promise<{
-    action: 'capture' | 'ignore'
-    prompt: string | null
-    rule_id: number | null
-  }>
   record_ingest(entry: {
     from_addr: string | null
     subject: string | null
@@ -35,11 +34,20 @@ type LedgerStub = {
   }): Promise<{ ok: true }>
 }
 
+// The per-email ChatDO: same instance the Inbox review chat uses (email::<id>).
+// `setName` pins its identity (owner + capture id); `draftStatementAsync`
+// schedules the headless draft on the DO's own alarm and returns immediately.
+type ChatStub = {
+  setName(name: string): Promise<unknown>
+  draftStatementAsync(statementId: string): Promise<{ ok: boolean; entries: number }>
+}
+
 // Transaction-alert emails are short; cap pathological bodies.
 const MAX_BODY_CHARS = 20_000
 
 export interface Env {
   LEDGER_DO: DurableObjectNamespace
+  CHAT_DO: DurableObjectNamespace
   DB: D1Database
 }
 
@@ -62,12 +70,13 @@ function htmlToText(html: string): string {
 }
 
 export default {
-  async email(message: ForwardableEmailMessage, env: Env): Promise<void> {
+  async email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): Promise<void> {
     const m = TOKEN_RE.exec(message.to ?? '')
     if (!m) {
       message.setReject('unknown address')
       return
     }
+    // The secret +token IS the trust boundary: an unknown token is rejected.
     const row = await env.DB.prepare('SELECT email FROM ingest_tokens WHERE token = ?')
       .bind(m[1].toLowerCase())
       .first<{ email: string }>()
@@ -93,29 +102,10 @@ export default {
       return
     }
 
-    // User-configured rules (experience.md §9): first enabled match wins.
-    // 'ignore' = accept-and-drop (explicit user intent — OTPs, promos);
-    // anything else captures, carrying the rule's prompt for review.
-    const rule = await stub
-      .match_email_rule({ from: from ?? '', subject })
-      .catch(
-        (): { action: 'capture'; prompt: string | null; rule_id: number | null } => ({
-          action: 'capture',
-          prompt: null,
-          rule_id: null,
-        }),
-      )
-    if (rule.action === 'ignore') {
-      await log({
-        from_addr: from ?? null,
-        subject,
-        outcome: 'ignored',
-        rule_id: rule.rule_id,
-        body_excerpt: body.slice(0, 2000),
-      })
-      return
-    }
-
+    // Land the capture in the user's LedgerDO (cheap), then draft it on its OWN
+    // per-email ChatDO (email::<id>) — the same headless path statement uploads
+    // use. One email → one capture → one DO (bijective). No sender vetting: the
+    // secret address already gated entry.
     const id = `STMT-${crypto.randomUUID()}`
     await stub.put_statement({
       id,
@@ -123,15 +113,28 @@ export default {
       filename: subject,
       text: `Forwarded transaction email\nFrom: ${from}\nSubject: ${subject}\n\n${body}`,
       source: 'email',
-      prompt: rule.prompt,
+      prompt: null,
     })
     await log({
       from_addr: from ?? null,
       subject,
       outcome: 'captured',
-      rule_id: rule.rule_id,
       capture_id: id,
       body_excerpt: body.slice(0, 2000),
     })
+
+    // Kick the headless draft. `draftStatementAsync` only schedules an alarm and
+    // returns, so this is quick; waitUntil keeps it from blocking the SMTP ack
+    // while still guaranteeing it runs. Best-effort — a draft failure must not
+    // bounce the email (the capture is already saved; the Inbox can re-draft).
+    const threadName = `${row.email}::${id}`
+    const chat = env.CHAT_DO.get(env.CHAT_DO.idFromName(threadName)) as unknown as ChatStub
+    ctx.waitUntil(
+      chat
+        .setName(threadName)
+        .then(() => chat.draftStatementAsync(id))
+        .then((): undefined => undefined)
+        .catch((): undefined => undefined),
+    )
   },
 } satisfies ExportedHandler<Env>
