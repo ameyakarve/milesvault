@@ -422,16 +422,17 @@ ${opts.text}`,
       // it keep a lighter context (images are not re-sent). Best-effort: on any
       // failure we fall back to the raw text.
       let consolidatedText = stmt.text
+      let pass1Ok = false
       if (images.length > 0) {
         try {
           const composed = await generateText({
             model: inv.model,
             abortSignal: AbortSignal.timeout(120_000),
-            // A faithful consolidation re-emits the WHOLE statement, so it needs
-            // far more output headroom than a draft batch — a large statement
-            // truncates (or errors) at the draft pass's 16k budget. Give Pass 1 a
-            // bigger ceiling so big statements (e.g. dozens of forex rows) survive.
-            maxOutputTokens: 64000,
+            // Use the SAME output budget the draft pass uses — it's the value the
+            // Workers-AI binding accepts; a larger ceiling (e.g. 64k) is rejected
+            // by the binding and the whole pass errors out. The consolidation is
+            // only a few thousand tokens in practice, so this is ample.
+            ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
             system:
               'You are given a credit-card statement as layout-extracted TEXT and as page IMAGES. Produce ONE consolidated plain-text copy of the statement that merges both. The TEXT is authoritative for any value present in both — copy its numbers, dates and amounts verbatim, never re-key them from the image. Use the IMAGES to add what the text is missing: content the bank renders as a graphic (styled summary / reward / totals boxes and their labels), written in place WITH its labels. Keep every transaction and every figure; do not summarise, drop, re-order, draft, or comment. Output only the consolidated statement text.',
             messages: [
@@ -451,12 +452,17 @@ ${opts.text}`,
           const merged = composed.text.trim()
           if (merged) {
             consolidatedText = merged
+            pass1Ok = true
             pushProgress('Read the statement…')
           }
         } catch {
-          /* Pass 1 is best-effort; fall back to the raw text. */
+          /* Pass 1 is best-effort; fall back to the raw text + images. */
         }
       }
+      // The draft pass works off the consolidated text. Keep the page images ONLY
+      // when Pass 1 did NOT succeed — so a failed/absent consolidation is no worse
+      // than the original single-pass run (text + images), never a regression.
+      const draftImages = pass1Ok ? [] : images
       // 360s wall-clock cap. Drafting is OFFLINE-ish (background, on the
       // per-capture DO's own alarm — a longer draft never blocks the user or
       // other uploads), so we favour completing over a tight clock. The worst
@@ -501,10 +507,28 @@ ${opts.text}`,
         messages: [
           {
             role: 'user',
-            content: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
+            content:
+              draftImages.length === 0
+                ? `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
+
+--- statement: ${stmt.filename} ---
+${consolidatedText}`
+                : [
+                    {
+                      type: 'text' as const,
+                      text: `${capture?.prompt?.trim() || 'Extract every transaction from this statement and draft balanced journal entries for the user to review.'}
+
+The statement's TEXT is below and its page IMAGES are attached — the text carries the exact amounts/dates/merchants; use the images for anything rendered as graphics (e.g. a reward-points box). Reason over both together.
 
 --- statement: ${stmt.filename} ---
 ${consolidatedText}`,
+                    },
+                    ...draftImages.map((url) => ({
+                      type: 'file' as const,
+                      data: url.replace(/^data:[^,]+,/, ''),
+                      mediaType: url.match(/^data:([^;]+)/)?.[1] ?? 'image/jpeg',
+                    })),
+                  ],
           },
         ],
         tools: draftingTools,
