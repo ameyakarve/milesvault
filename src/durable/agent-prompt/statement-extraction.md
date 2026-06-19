@@ -93,36 +93,6 @@ specific to READING a statement.
      0.00) — it is money in YOUR favour, so it is POSITIVE. Never let the word
      "Due" pull a minus onto a number the statement itself marks "Cr".
 
-   To lock the sign in BEFORE you write the figure, put a `;` comment on the line
-   directly ABOVE each closing `balance` naming the printed marker and the sign it
-   forces, then the `balance` underneath. The `;` line is a beancount comment,
-   dropped before saving — it costs nothing and forces you to commit the sign right
-   where you write it:
-
-   ```
-   2026-06-01 pad Liabilities:CreditCards:Issuer:Card Equity:Void
-   ; closing total marked Cr → issuer owes you → POSITIVE
-   2026-06-01 balance Liabilities:CreditCards:Issuer:Card  7500.00 INR
-   ```
-
-   The SAME commit-the-direction trick applies to any TRANSACTION row the statement
-   marks as a CREDIT rather than a spend. The credit marker is NOT always "Cr": it
-   may be `+ C`, a lone `C`, `(Cr)`, "Credit", "Refund", or a "Cashback" line shown
-   as posted back to the card. Such a row is money RETURNED to the card — it REDUCES
-   what you owe — so the card leg is **POSITIVE**, even when the merchant looks like
-   an everyday purchase. A "10% <Merchant> Cashback + C 120.00" line from a
-   food-delivery app is a CREDIT, NOT a food spend; do NOT let the merchant name flip
-   it into an expense. Name the marker in a `;` comment, then write the card leg
-   positive (the counter-leg follows the cashback/refund rules in the ledger primer —
-   what matters HERE is that the card leg is positive, never negative):
-
-   ```
-   ; "10% <Merchant> Cashback + C 120.00" — + C credit marker → money back → card POSITIVE
-   2026-03-15 * "<Merchant>" "Cashback credit"
-     Liabilities:CreditCards:Issuer:Card  120.00 INR
-     Income:Rewards:Cashback             -120.00 INR
-   ```
-
    The Cr/Dr marker decides the sign and is then dropped — it is NEVER the commodity;
    the amount is always `<number> <CURRENCY>` (INR or the points ticker). E.g. a
    period ending 31 May 2026 that prints ₹54,321 owed and a 12,500-point closing
