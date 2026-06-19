@@ -86,6 +86,10 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
   // Editable draft buffer per capture — seeded from the background drafts
   // when an item is opened; the Journal edits this, approve posts it.
   const [draftBuffers, setDraftBuffers] = useState<Record<string, string>>({})
+  // Transient error for list-level mutations (delete / rotate), shown inline.
+  const [actionError, setActionError] = useState<string | null>(null)
+  // Bumped by the load-error retry to re-run the list fetch.
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   useEffect(() => {
     if (!isEmail) return
@@ -143,13 +147,14 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
       window.removeEventListener('focus', onFocus)
       clearInterval(interval)
     }
-  }, [])
+  }, [reloadNonce])
 
   function doRotate() {
+    setActionError(null)
     fetch('/api/ledger/forwarding-address', { method: 'POST' })
-      .then((r) => (r.ok ? (r.json() as Promise<{ address?: string }>) : null))
+      .then((r) => (r.ok ? (r.json() as Promise<{ address?: string }>) : Promise.reject(new Error(String(r.status)))))
       .then((d) => d?.address && setAddress(d.address))
-      .catch(() => {})
+      .catch(() => setActionError('Could not rotate the forwarding address. Try again.'))
       .finally(() => setRotateOpen(false))
   }
 
@@ -167,13 +172,27 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
   const selected = rows?.find((r) => r.id === selectedId) ?? null
 
   function deleteItem(id: string) {
-    setAllRows((prev) => prev?.filter((r) => r.id !== id) ?? prev)
-    if (selectedId === id) setSelectedId(null)
+    // Optimistic remove; snapshot the full list so a failure restores order.
+    let snapshot: CaptureRow[] | null = null
+    setAllRows((prev) => {
+      snapshot = prev
+      return prev?.filter((r) => r.id !== id) ?? prev
+    })
+    const wasSelected = selectedId === id
+    if (wasSelected) setSelectedId(null)
+    setActionError(null)
     fetch('/api/ledger/captures', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ id, action: 'delete' }),
-    }).catch(() => {})
+    })
+      .then((r) => (r.ok ? null : Promise.reject(new Error(String(r.status)))))
+      .catch(() => {
+        // Revert: a permanent delete must not vanish on a transient failure.
+        setAllRows(snapshot)
+        if (wasSelected) setSelectedId(id)
+        setActionError('Could not delete that item — it has been restored. Try again.')
+      })
   }
 
   function redraft(id: string) {
@@ -245,7 +264,11 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
   }
 
   if (error) {
-    return <CenteredState tone="error">Could not load the inbox: {error}</CenteredState>
+    return (
+      <CenteredState tone="error" onRetry={() => setReloadNonce((n) => n + 1)}>
+        Could not load the {isEmail ? 'inbox' : 'statements'}: {error}
+      </CenteredState>
+    )
   }
   if (rows === null) {
     return <CenteredState>Loading…</CenteredState>
@@ -289,6 +312,22 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
           </Button>
         ) : null}
       </header>
+
+      {actionError ? (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-xs text-destructive sm:px-6"
+        >
+          <span>{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="shrink-0 underline underline-offset-2 hover:no-underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4">

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { AccountOverview } from '@/durable/ledger-do'
 import { accountLabel, displayName as resolveName, prettyLeaf } from '@/lib/ledger-core/account-display'
 import { SectionLabel, StatTile, CenteredState, Monogram } from '@/components/shared'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -61,6 +62,8 @@ export function AccountOverviewView() {
   const [range, setRange] = useState<Range>('3m')
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [names, setNames] = useState<Record<string, string>>({})
+  // Bumped by the error-state retry to re-run the overview fetch.
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -133,7 +136,7 @@ export function AccountOverviewView() {
     return () => {
       cancelled = true
     }
-  }, [ready, account, ccy, range])
+  }, [ready, account, ccy, range, reloadNonce])
 
   if (!ready || (state.status === 'loading' && !account)) {
     return <CenteredState>Loading…</CenteredState>
@@ -221,7 +224,18 @@ export function AccountOverviewView() {
     return (
       <>
         {header}
-        <CenteredState>Loading…</CenteredState>
+        <div className="space-y-6 p-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-20 rounded-xl" />
+            ))}
+          </div>
+          <Skeleton className="h-48 rounded-xl" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Skeleton className="h-32 rounded-xl" />
+            <Skeleton className="h-32 rounded-xl" />
+          </div>
+        </div>
       </>
     )
   }
@@ -230,7 +244,9 @@ export function AccountOverviewView() {
     return (
       <>
         {header}
-        <CenteredState tone="error">Failed to load: {state.message}</CenteredState>
+        <CenteredState tone="error" onRetry={() => setReloadNonce((n) => n + 1)}>
+          Failed to load: {state.message}
+        </CenteredState>
       </>
     )
   }
