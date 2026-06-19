@@ -8,7 +8,7 @@ export function StatusBar({
   count?: number
 }) {
   return (
-    <footer className="fixed bottom-0 left-[48px] right-0 h-[28px] z-40 bg-muted border-t border-border flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+    <footer aria-label="App status" className="fixed bottom-0 left-0 md:left-[48px] right-0 h-[28px] z-40 bg-muted border-t border-border flex items-center justify-between px-4 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
       <div className="flex items-center space-x-6">
         {count != null && <span>{count} accounts</span>}
         <span className="text-foreground font-bold flex items-center space-x-1">

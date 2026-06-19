@@ -160,12 +160,14 @@ function Row({
   onSelect: (account: string) => void
   query: string
 }) {
-  const [open, setOpen] = useState(depth < 1 || query.length > 0)
-  const [lastQuery, setLastQuery] = useState(query)
-  if (lastQuery !== query) {
-    setLastQuery(query)
-    setOpen(depth < 1 || query.length > 0)
-  }
+  // Derived default (top level open; searching opens everything) with a manual
+  // override keyed to the query — when the query changes the override no longer
+  // matches and `open` falls back to the default. No setState during render
+  // (which React may drop or double-run in prod builds). Mirrors the JournalAccount
+  // picker pattern in journal-filter-bar.tsx.
+  const [manual, setManual] = useState<{ query: string; open: boolean } | null>(null)
+  const open = manual && manual.query === query ? manual.open : depth < 1 || query.length > 0
+  const setOpen = (fn: (v: boolean) => boolean) => setManual({ query, open: fn(open) })
   const hasChildren = node.children.length > 0
   return (
     <li>

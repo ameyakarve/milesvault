@@ -13,7 +13,7 @@ import { GlobalCapture } from './global-capture'
 import { ThemeToggle } from './theme-toggle'
 
 // Routes that belong to the Plan zone — the Plan nav item is active for any of these.
-const PLAN_ROUTES = ['/explore', '/points', '/status-match']
+const PLAN_ROUTES = ['/explore', '/points', '/status-match', '/accounts']
 
 type NavItem =
   | { kind: 'link'; href: string; label: string; Icon: PhosphorIcon }
@@ -33,34 +33,45 @@ const ITEMS: NavItem[] = [
 
 // Pending capture work (extracted/errored, not yet posted or dismissed) for
 // the nav badges — split by source so Inbox (email) and Statements (upload)
-// each badge only their own queue. One fetch per mount; failures read as zero.
+// each badge only their own queue. Re-polls when a new capture lands
+// (`mv:captured`, fired by GlobalCapture) and when the tab regains focus, so
+// the badges don't sit stale until a full reload. Failures read as zero.
 function usePendingCaptures(): { email: number; upload: number } {
   const [n, setN] = useState({ email: 0, upload: 0 })
   useEffect(() => {
     let cancelled = false
-    fetch('/api/ledger/captures')
-      .then((r) =>
-        r.ok
-          ? (r.json() as Promise<{
-              rows?: Array<{ source: string; state: string; draft_error: string | null }>
-            }>)
-          : null,
-      )
-      .then((d) => {
-        if (cancelled || !d) return
-        const rows = d.rows ?? []
-        const pending = (src: string) =>
-          rows.filter(
-            (r) =>
-              r.source === src &&
-              (r.state === 'extracted' ||
-                (r.draft_error != null && r.state !== 'posted' && r.state !== 'dismissed')),
-          ).length
-        setN({ email: pending('email'), upload: pending('upload') })
-      })
-      .catch(() => {})
+    const load = () => {
+      fetch('/api/ledger/captures')
+        .then((r) =>
+          r.ok
+            ? (r.json() as Promise<{
+                rows?: Array<{ source: string; state: string; draft_error: string | null }>
+              }>)
+            : null,
+        )
+        .then((d) => {
+          if (cancelled || !d) return
+          const rows = d.rows ?? []
+          const pending = (src: string) =>
+            rows.filter(
+              (r) =>
+                r.source === src &&
+                (r.state === 'extracted' ||
+                  (r.draft_error != null && r.state !== 'posted' && r.state !== 'dismissed')),
+            ).length
+          setN({ email: pending('email'), upload: pending('upload') })
+        })
+        .catch(() => {})
+    }
+    load()
+    const onCaptured = () => load()
+    const onFocus = () => load()
+    window.addEventListener('mv:captured', onCaptured)
+    window.addEventListener('focus', onFocus)
     return () => {
       cancelled = true
+      window.removeEventListener('mv:captured', onCaptured)
+      window.removeEventListener('focus', onFocus)
     }
   }, [])
   return n
@@ -70,6 +81,7 @@ function InboxBadge({ count, className }: { count: number; className?: string })
   if (count === 0) return null
   return (
     <span
+      aria-label={`${count} pending`}
       className={cn(
         'flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-background',
         className,
@@ -82,7 +94,11 @@ function InboxBadge({ count, className }: { count: number; className?: string })
 
 function Logo() {
   return (
-    <div className="flex size-8 items-center justify-center rounded-lg bg-foreground text-lg font-black text-background">
+    <div
+      role="img"
+      aria-label="MilesVault"
+      className="flex size-8 items-center justify-center rounded-lg bg-foreground text-lg font-black text-background"
+    >
       M
     </div>
   )
