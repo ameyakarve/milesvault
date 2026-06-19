@@ -4,13 +4,17 @@ import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 
-// The ingest domain is per-environment so each app deployment mints addresses for
-// its OWN email worker: staging → ingest+<token>@staging.milesvault.com (caught by
-// milesvault-email-staging), production → ingest+<token>@milesvault.com. Set via
-// the INGEST_EMAIL_DOMAIN var in each wrangler env (like AI_GATEWAY_ID); falls back
-// to the prod domain. The email worker's token regex is domain-agnostic.
-function ingestDomain(env: unknown): string {
-  return (env as { INGEST_EMAIL_DOMAIN?: string }).INGEST_EMAIL_DOMAIN || 'milesvault.com'
+// Per-env BASE ingest address (localpart@domain); the per-user token is inserted as
+// a `+subaddress`. Email Routing rules are apex-only (no subdomains), so staging and
+// prod differ by LOCAL PART on the same domain, each with its own routing rule:
+//   prod    INGEST_EMAIL_ADDRESS="ingest@milesvault.com"         → ingest+<token>@milesvault.com
+//   staging INGEST_EMAIL_ADDRESS="ingest-staging@milesvault.com" → ingest-staging+<token>@milesvault.com
+// The email worker's token regex is prefix-agnostic, so one worker codebase serves both.
+function ingestAddress(env: unknown, token: string): string {
+  const base = (env as { INGEST_EMAIL_ADDRESS?: string }).INGEST_EMAIL_ADDRESS || 'ingest@milesvault.com'
+  const at = base.lastIndexOf('@')
+  if (at < 0) return `ingest+${token}@milesvault.com`
+  return `${base.slice(0, at)}+${token}@${base.slice(at + 1)}`
 }
 
 // The user's email-ingestion address (ledger-pipeline.md §5):
@@ -61,9 +65,7 @@ export async function GET(): Promise<Response> {
     .prepare('SELECT token FROM ingest_tokens WHERE email = ?')
     .bind(email)
     .first<{ token: string }>()
-  return NextResponse.json({
-    address: `ingest+${rowTok?.token ?? token}@${ingestDomain(env)}`,
-  })
+  return NextResponse.json({ address: ingestAddress(env, rowTok?.token ?? token) })
 }
 
 // Rotate: burn every existing token for this user and mint a fresh one. The
@@ -85,5 +87,5 @@ export async function POST(): Promise<Response> {
       .prepare('INSERT INTO ingest_tokens (token, email, created_at) VALUES (?, ?, ?)')
       .bind(token, email, Date.now()),
   ])
-  return NextResponse.json({ address: `ingest+${token}@${ingestDomain(env)}`, rotated: true })
+  return NextResponse.json({ address: ingestAddress(env, token), rotated: true })
 }
