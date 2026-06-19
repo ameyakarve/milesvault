@@ -4,6 +4,15 @@ import { auth } from '@/auth'
 
 export const dynamic = 'force-dynamic'
 
+// The ingest domain is per-environment so each app deployment mints addresses for
+// its OWN email worker: staging → ingest+<token>@staging.milesvault.com (caught by
+// milesvault-email-staging), production → ingest+<token>@milesvault.com. Set via
+// the INGEST_EMAIL_DOMAIN var in each wrangler env (like AI_GATEWAY_ID); falls back
+// to the prod domain. The email worker's token regex is domain-agnostic.
+function ingestDomain(env: unknown): string {
+  return (env as { INGEST_EMAIL_DOMAIN?: string }).INGEST_EMAIL_DOMAIN || 'milesvault.com'
+}
+
 // The user's email-ingestion address (ledger-pipeline.md §5):
 // ingest+<token>@milesvault.com. The token is a bearer secret minted once per
 // user and stored in D1, where the milesvault-email worker resolves it back
@@ -52,7 +61,9 @@ export async function GET(): Promise<Response> {
     .prepare('SELECT token FROM ingest_tokens WHERE email = ?')
     .bind(email)
     .first<{ token: string }>()
-  return NextResponse.json({ address: `ingest+${rowTok?.token ?? token}@milesvault.com` })
+  return NextResponse.json({
+    address: `ingest+${rowTok?.token ?? token}@${ingestDomain(env)}`,
+  })
 }
 
 // Rotate: burn every existing token for this user and mint a fresh one. The
@@ -74,5 +85,5 @@ export async function POST(): Promise<Response> {
       .prepare('INSERT INTO ingest_tokens (token, email, created_at) VALUES (?, ?, ?)')
       .bind(token, email, Date.now()),
   ])
-  return NextResponse.json({ address: `ingest+${token}@milesvault.com`, rotated: true })
+  return NextResponse.json({ address: `ingest+${token}@${ingestDomain(env)}`, rotated: true })
 }
