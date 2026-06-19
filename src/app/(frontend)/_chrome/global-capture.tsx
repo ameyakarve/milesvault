@@ -258,7 +258,7 @@ export function GlobalCapture() {
           </>
         ) : overlay.kind === 'error' ? (
           <>
-            <p className="text-[15px] font-semibold text-destructive">
+            <p role="alert" className="text-[15px] font-semibold text-destructive">
               {overlay.message}
             </p>
           </>

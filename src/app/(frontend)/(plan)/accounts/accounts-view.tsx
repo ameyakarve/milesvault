@@ -150,6 +150,8 @@ export function AccountsView() {
   const [range, setRange] = useState<RangeKey>('3m')
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
   const [currency, setCurrency] = useState('INR')
   const [path, setPath] = useState<string[]>([])
 
@@ -160,6 +162,7 @@ export function AccountsView() {
   useEffect(() => {
     const { from, to } = rangeDates(range)
     setLoading(true)
+    setError(null)
     const ac = new AbortController()
     const p: Promise<Row[]> = isFlow
       ? ledgerClient.getAccountFlows({ root: type, from, to }, { signal: ac.signal }).then((d) => d.rows ?? [])
@@ -176,10 +179,15 @@ export function AccountsView() {
       setRows(rs)
       setPath([])
     })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+      .catch((e: unknown) => {
+        if (ac.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
+        setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setLoading(false)
+      })
     return () => ac.abort()
-  }, [type, range, isFlow])
+  }, [type, range, isFlow, reloadNonce])
 
   const currencies = useMemo(() => [...new Set(rows.map((r) => r.currency))].sort(), [rows])
   // Derived so we never setState-in-effect: honour the user's pick when it's
@@ -388,9 +396,23 @@ export function AccountsView() {
               </ul>
             )}
           </div>
+        ) : error ? (
+          <div
+            role="alert"
+            className="mx-4 flex h-[460px] flex-col items-center justify-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 text-sm text-destructive"
+          >
+            <span>Couldn’t load accounts: {error}</span>
+            <button
+              type="button"
+              onClick={() => setReloadNonce((n) => n + 1)}
+              className="font-medium text-foreground underline underline-offset-4 hover:no-underline"
+            >
+              Try again
+            </button>
+          </div>
         ) : tiles.length === 0 ? (
           <div className="mx-4 flex h-[460px] items-center justify-center rounded-lg border border-border text-sm text-muted-foreground">
-            {loading ? 'Loading…' : 'No expenses in this period.'}
+            {loading ? 'Loading…' : `No ${type.toLowerCase()} in this period.`}
           </div>
         ) : (
           <>

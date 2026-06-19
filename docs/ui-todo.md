@@ -8,18 +8,18 @@ starting points, not exhaustive.
 ## P0 — high impact / likely bugs
 
 - [x] **Add viewport meta** to `src/app/(frontend)/layout.tsx`. Done via `export const viewport` (width=device-width, initialScale 1, viewportFit cover, colorScheme light dark).
-- [~] **Kill silent error swallowing (`.catch(() => {})`).** Infra built: `src/lib/fetch-json.ts` (`fetchJSON` throws with a usable message) + `src/components/shared/use-async-data.ts` (`useAsyncData` — loading/ready/error + abort + `reload`) + `CenteredState` now takes `onRetry` (role=alert). **Converted/handled:** explore (`transfer-sources`), points (`currencies`), status-match (`match-statuses`); vault main load (retry); account-overview (retry); inbox `deleteItem` (full-snapshot revert + inline alert) and `doRotate` (error surfaced). **Remaining:** `accounts-view.tsx:178–179`, vault secondary overlays (`vault-stats`/`account-names`/`captures`), `add-card.tsx` guide/account fetches, `update-balance-modal.tsx` targets load.
+- [~] **Kill silent error swallowing (`.catch(() => {})`).** Infra built: `src/lib/fetch-json.ts` (`fetchJSON` throws with a usable message) + `src/components/shared/use-async-data.ts` (`useAsyncData` — loading/ready/error + abort + `reload`) + `CenteredState` now takes `onRetry` (role=alert). **Converted/handled:** explore (`transfer-sources`), points (`currencies`), status-match (`match-statuses`); vault main load (retry); account-overview (retry); inbox `deleteItem` (full-snapshot revert + inline alert) and `doRotate` (error surfaced); **accounts-view** (error state + retry — no more silent forever-spinner); **add-card** (distinguishes guide load-failure from genuine-empty + retry); **update-balance-modal** (surfaces targets load failure + retry). **Remaining:** only vault's cosmetic secondary overlays (`vault-stats`/`account-names`/`captures`) — degrade gracefully (labels/KPIs just absent), low priority.
 - [ ] **Nav state: `/accounts` is a Plan tab but not in `PLAN_ROUTES`** (`nav-rail.tsx:16`) — rail's Plan item doesn't activate on `/accounts`.
 - [ ] **Pending-capture badges never re-poll** (`nav-rail.tsx`, `usePendingCaptures` fires once on mount). Subscribe to the existing `mv:captured` event (`global-capture.tsx:155`) to refresh.
 - [ ] **`StatusBar` hardcodes `left-[48px]`** (`status-bar.tsx`) → mis-offset on mobile where the rail is hidden. Also "Parsed ✓" and "Beancount v2.3.5" are hardcoded and can't express an error.
 - [ ] **`account-sheet.tsx` `Row` uses setState-during-render** (`:165–168`) — can loop in StrictMode; match the safer pattern in `journal-filter-bar.tsx:396–399`.
-- [ ] **`version-watcher.tsx` leaks the `focus` listener** (`:35` — cleanup only removes `visibilitychange`).
+- [x] **`version-watcher.tsx` focus-listener leak fixed** — named `onFocus` now removed in cleanup.
 
 ## P1 — accessibility (recurring Level-A gaps)
 
-- [ ] **No `aria-live` on either chat** (`editor/chat.tsx:439`, `concierge/chat.tsx`) — screen readers silent during streamed responses. Add `aria-live="polite"` on the conversation container.
-- [ ] **No `aria-live`/`role="alert"` on error banners** (inbox approve error `capture-review.tsx`, version toast, global-capture error/password).
-- [ ] **Custom controls missing ARIA state:** plan-tabs no `aria-current` (`plan-tabs.tsx`), clarify chips no `aria-pressed` (`clarify.tsx`), inbox chat toggle no `aria-expanded` (`capture-review.tsx:529`), add-accounts tab switcher no tab roles (`add-accounts-modal.tsx:249`).
+- [x] **`aria-live` on both chats** — `ConversationContent` now `role="log" aria-live="polite"` in editor + concierge, so streamed responses are announced.
+- [x] **`role="alert"` on error banners** — version toast (`role=status`), global-capture error, inbox approve error + actionError. (Password placeholder-as-error in global-capture still pending — should be its own `role=alert`, not a placeholder.)
+- [x] **Custom controls ARIA state** — plan-tabs `aria-current`, clarify chips `aria-pressed`, inbox chat toggle `aria-expanded`, add-accounts tab switcher `role=tablist/tab + aria-selected`.
 - [ ] **Graphs/treemap not keyboard/SR-accessible** (ReactFlow `selectable:false` in `points-ui.tsx`/`status-match-ui.tsx`; treemap tiles rely on hover `title` in `accounts-view.tsx`). Add SR-only text summaries.
 - [ ] **Modal a11y for custom overlays:** `account-sheet.tsx` and `global-capture.tsx` overlays lack `role="dialog"`/`aria-modal`/focus-trap (Radix modals already do this right — bring these up to parity).
 - [ ] **Touch targets < 24px:** draft-transaction checkboxes `size-3.5` (`draft-transaction.tsx:371`), 3-char airport inputs (`explore-ui.tsx`).
@@ -53,7 +53,7 @@ starting points, not exhaustive.
 
 ## P3 — copy / polish
 
-- [ ] Empty-state strings are type-agnostic (`accounts-view.tsx:392` always "No expenses…" even for Income/Assets).
+- [x] Empty-state strings type-aware in `accounts-view` (`No {type} in this period.`).
 - [ ] Account paths leak internal beancount format to users (`overview-view.tsx:174`, `explore-link.tsx` raw `source`).
 - [ ] Cabin abbreviations ambiguous (`FST`, `PRE`) in `explore-ui.tsx`; airport inputs need typeahead/validation.
 - [ ] `image_only` upload error gives no next step (`statement-upload-modal.tsx`); add "export a text PDF" hint.

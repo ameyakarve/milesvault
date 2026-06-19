@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import {
   Dialog,
@@ -57,6 +57,7 @@ export function UpdateBalanceModal({
   // Only accounts with activity (txns or balance assertions), each with the
   // currencies seen on it — the currency is taken from the chosen account.
   const [targets, setTargets] = useState<Array<{ account: string; currencies: string[] }>>([])
+  const [loadError, setLoadError] = useState(false)
   const [account, setAccount] = useState('')
   const [acctOpen, setAcctOpen] = useState(false)
   const [date, setDate] = useState(ymd(new Date()))
@@ -69,8 +70,7 @@ export function UpdateBalanceModal({
   // On open, load the balance targets (active Assets/Liabilities accounts +
   // their currencies). The date already defaults to today (useState init +
   // close() reset), so it's today on every open.
-  useEffect(() => {
-    if (!open) return
+  const loadTargets = useCallback(() => {
     ledgerClient
       .getAccounts()
       .then((r) => {
@@ -79,9 +79,13 @@ export function UpdateBalanceModal({
             (t) => t.account.startsWith('Assets:') || t.account.startsWith('Liabilities:'),
           ),
         )
+        setLoadError(false)
       })
-      .catch(() => {})
-  }, [open])
+      .catch(() => setLoadError(true))
+  }, [])
+  useEffect(() => {
+    if (open) loadTargets()
+  }, [open, loadTargets])
 
   // Currencies for the chosen account; the currency is fixed when there's one,
   // a dropdown when there are several.
@@ -151,6 +155,18 @@ export function UpdateBalanceModal({
           <div className="space-y-3 py-1">
             <div className="space-y-1.5">
               <Label>Account</Label>
+              {loadError ? (
+                <p className="text-xs text-destructive" role="alert">
+                  Couldn’t load your accounts.{' '}
+                  <button
+                    type="button"
+                    onClick={loadTargets}
+                    className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                  >
+                    Retry
+                  </button>
+                </p>
+              ) : null}
               <Popover open={acctOpen} onOpenChange={setAcctOpen}>
                 <PopoverTrigger
                   render={

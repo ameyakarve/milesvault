@@ -499,7 +499,7 @@ function ItemDetail({
       </div>
 
       {approveError ? (
-        <p className="border-b border-border bg-destructive/5 px-4 py-2 text-xs text-destructive sm:px-6">
+        <p role="alert" className="border-b border-border bg-destructive/5 px-4 py-2 text-xs text-destructive sm:px-6">
           {approveError}
         </p>
       ) : null}
@@ -564,6 +564,7 @@ function ItemDetail({
       <div className="border-t border-border">
         <button
           type="button"
+          aria-expanded={chatOpen}
           onClick={() => setChatOpen((v) => !v)}
           className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted focus-visible:outline-none sm:px-6"
         >
