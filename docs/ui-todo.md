@@ -7,8 +7,8 @@ starting points, not exhaustive.
 
 ## P0 — high impact / likely bugs
 
-- [ ] **Add `<meta name="viewport" content="width=device-width, initial-scale=1">`** to `src/app/(frontend)/layout.tsx`. Without it every responsive breakpoint is broken on real phones (browser assumes ~980px). Single biggest mobile fix.
-- [ ] **Kill silent error swallowing (`.catch(() => {})`).** Pervasive across data fetches AND mutations: `accounts-view.tsx:178–179`, `explore-view.tsx`, `points-view.tsx`, `status-match-view.tsx`, `vault-view.tsx:86–104`, inbox `deleteItem`/`doRotate` (`capture-review.tsx:153,172`), `add-card.tsx` guide/account fetches, `update-balance-modal.tsx` targets load. Every fetch needs a visible error state; destructive mutations must revert + surface a toast/inline error.
+- [x] **Add viewport meta** to `src/app/(frontend)/layout.tsx`. Done via `export const viewport` (width=device-width, initialScale 1, viewportFit cover, colorScheme light dark).
+- [~] **Kill silent error swallowing (`.catch(() => {})`).** Infra built: `src/lib/fetch-json.ts` (`fetchJSON` throws with a usable message) + `src/components/shared/use-async-data.ts` (`useAsyncData` — loading/ready/error + abort + `reload`) + `CenteredState` now takes `onRetry`. **Converted:** explore (`transfer-sources`), points (`currencies`), status-match (`match-statuses`). **Remaining:** `accounts-view.tsx:178–179`, `vault-view.tsx:86–104`, inbox `deleteItem`/`doRotate` (`capture-review.tsx:153,172`), `add-card.tsx` guide/account fetches, `update-balance-modal.tsx` targets load. Destructive mutations still need revert + toast.
 - [ ] **Nav state: `/accounts` is a Plan tab but not in `PLAN_ROUTES`** (`nav-rail.tsx:16`) — rail's Plan item doesn't activate on `/accounts`.
 - [ ] **Pending-capture badges never re-poll** (`nav-rail.tsx`, `usePendingCaptures` fires once on mount). Subscribe to the existing `mv:captured` event (`global-capture.tsx:155`) to refresh.
 - [ ] **`StatusBar` hardcodes `left-[48px]`** (`status-bar.tsx`) → mis-offset on mobile where the rail is hidden. Also "Parsed ✓" and "Beancount v2.3.5" are hardcoded and can't express an error.
@@ -23,7 +23,7 @@ starting points, not exhaustive.
 - [ ] **Graphs/treemap not keyboard/SR-accessible** (ReactFlow `selectable:false` in `points-ui.tsx`/`status-match-ui.tsx`; treemap tiles rely on hover `title` in `accounts-view.tsx`). Add SR-only text summaries.
 - [ ] **Modal a11y for custom overlays:** `account-sheet.tsx` and `global-capture.tsx` overlays lack `role="dialog"`/`aria-modal`/focus-trap (Radix modals already do this right — bring these up to parity).
 - [ ] **Touch targets < 24px:** draft-transaction checkboxes `size-3.5` (`draft-transaction.tsx:371`), 3-char airport inputs (`explore-ui.tsx`).
-- [ ] **Add `@media (prefers-reduced-motion: reduce)`** to `styles.css` (spinners/transitions ignore the OS setting today).
+- [x] **Add `@media (prefers-reduced-motion: reduce)`** to `styles.css` — global guard neutralizing animations/transitions.
 - [ ] **Low-contrast / tiny text:** graph node labels 10–12px (`points-ui.tsx`, `status-match-ui.tsx`), `+ add` buttons `text-xs text-muted-foreground` (`vault-view.tsx:210,501`).
 - [ ] Misc: login `<h1>` should be the page action ("Sign in to MilesVault"); `flight-map` inner div unlabelled; trend chart needs `role="img"` (`overview-view.tsx`); nav `InboxBadge`/Logo need `aria-label`.
 
@@ -39,7 +39,7 @@ starting points, not exhaustive.
 
 ## P2 — loading & feedback
 
-- [ ] **Add skeletons** — every screen uses centered "Loading…" text; content-rich screens (Vault, account overview) have known layout and should show skeleton cards (kills reflow jank).
+- [~] **Add skeletons** — `src/components/ui/skeleton.tsx` primitive added (reduced-motion-aware). Still to APPLY on content-rich screens (Vault, account overview) in place of centered "Loading…" text.
 - [ ] **Add route-group `loading.tsx` / `error.tsx` / `not-found.tsx`** — failures currently blow away the chrome with an unbranded Next error page.
 - [ ] **Ingestion dead-time is invisible** — between `captured` and `processing` there's no queue position/ETA; the 8s poll lags the chip. Surface queue state; consider a faster signal.
 - [ ] **Per-button submit feedback** — draft-transaction / modal Approve buttons disable at card level but show no per-button spinner during the write.
@@ -62,7 +62,11 @@ starting points, not exhaustive.
 
 ## Cross-cutting fixes with the most leverage
 
-1. Viewport meta tag (retires most mobile breakage at the root).
-2. A shared `fetchJSON` + `<AsyncState>` (loading-skeleton / error / empty) primitive — retires the silent `.catch`es AND the "Loading…" text in one sweep.
+1. ✅ Viewport meta tag (retires most mobile breakage at the root).
+2. ✅ Shared primitives landed — `fetchJSON`, `useAsyncData`, `Skeleton`, `CenteredState.onRetry`. Applied to the 3 plan containers; sweep the rest (vault, accounts, inbox, modals) onto them to finish retiring silent `.catch`es + "Loading…" text.
 3. An `aria-live` + ARIA-state pass over chats and custom controls.
 4. Consolidate range/filter control + `Input` + thinking-indicator into shared components.
+
+## Legend
+
+`[x]` done · `[~]` partial (infra landed, application pending) · `[ ]` not started

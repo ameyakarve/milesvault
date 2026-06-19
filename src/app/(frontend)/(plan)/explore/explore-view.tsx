@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAsyncData } from '@/components/shared/use-async-data'
+import { fetchJSON } from '@/lib/fetch-json'
 import {
   Explore,
   CABIN_TABS,
@@ -35,23 +37,18 @@ export function ExploreView() {
   const [airlineMode, setAirlineMode] = useState<AirlineMode>('include')
   const [selectedAirlines, setSelectedAirlines] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [sources, setSources] = useState<TransferSource[]>([])
 
-  // The KG-derived "Transfer from" list — fetched once, cached server-side.
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/concierge/transfer-sources')
-      .then((r) =>
-        r.ok
-          ? (r.json() as Promise<{ sources?: TransferSource[] }>)
-          : ({ sources: [] as TransferSource[] }),
-      )
-      .then((d) => !cancelled && setSources(d.sources ?? []))
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // The KG-derived "Transfer from" list — fetched once, cached server-side. A
+  // failure here just leaves the picker empty (it's a secondary affordance), but
+  // the error is no longer silently swallowed.
+  const sources =
+    useAsyncData<TransferSource[]>(
+      (signal) =>
+        fetchJSON<{ sources?: TransferSource[] }>('/api/concierge/transfer-sources', {
+          signal,
+        }).then((d) => d.sources ?? []),
+      [],
+    ).data ?? []
 
   // Origin / destination / cabin are URL-synced (shareable). The source currency
   // is in-session only — it's chosen from the KG picker, so there's no reason to
