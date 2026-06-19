@@ -4,7 +4,7 @@
 declare namespace Cloudflare {
 	interface GlobalProps {
 		mainModule: typeof import("./.open-next/worker");
-		durableNamespaces: "LedgerDO" | "ChatDO" | "ConciergeDO";
+		durableNamespaces: "LedgerDO" | "ChatDO" | "ConciergeDO" | "MembershipDO";
 	}
 	interface StagingEnv {
 		R2: R2Bucket;
@@ -25,6 +25,8 @@ declare namespace Cloudflare {
 		LEDGER_DO: DurableObjectNamespace<import("./.open-next/worker").LedgerDO>;
 		CHAT_DO: DurableObjectNamespace /* ChatDO */;
 		CONCIERGE_DO: DurableObjectNamespace /* ConciergeDO */;
+		MEMBERSHIP_DO: DurableObjectNamespace /* MembershipDO */;
+		MEMBERSHIP_GATE?: "1";
 		PROD: Service<typeof import("./.open-next/worker").default>;
 		KB: Fetcher /* milesvault-kb-staging */;
 		REFRESH_MAGNIFY: Workflow /* RefreshMagnifyWorkflow */;
@@ -48,6 +50,8 @@ declare namespace Cloudflare {
 		LEDGER_DO: DurableObjectNamespace<import("./.open-next/worker").LedgerDO>;
 		CHAT_DO: DurableObjectNamespace /* ChatDO */;
 		CONCIERGE_DO: DurableObjectNamespace /* ConciergeDO */;
+		MEMBERSHIP_DO: DurableObjectNamespace /* MembershipDO */;
+		MEMBERSHIP_GATE?: "1";
 		PROD?: Service<typeof import("./.open-next/worker").default>;
 		KB: Fetcher /* milesvault-kb-staging */ | Fetcher /* milesvault-kb */;
 		REFRESH_MAGNIFY: Workflow /* RefreshMagnifyWorkflow */;
