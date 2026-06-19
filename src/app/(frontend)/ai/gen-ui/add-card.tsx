@@ -50,6 +50,7 @@ export function AddCardCard({
   const [selected, setSelected] = useState<Candidate | null>(null)
   const [guide, setGuide] = useState<Guide | null>(null)
   const [guideLoading, setGuideLoading] = useState(false)
+  const [guideError, setGuideError] = useState(false)
   const [last4, setLast4] = useState('')
   const [points, setPoints] = useState('')
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -78,12 +79,13 @@ export function AddCardCard({
   function pick(c: Candidate) {
     setSelected(c)
     setGuide(null)
+    setGuideError(false)
     if (!c.name) return
     setGuideLoading(true)
     fetch(`/api/kb/card-guide?name=${encodeURIComponent(c.name)}`)
-      .then((r) => (r.ok ? (r.json() as Promise<Guide>) : null))
+      .then((r) => (r.ok ? (r.json() as Promise<Guide>) : Promise.reject(new Error(String(r.status)))))
       .then((g) => setGuide(g))
-      .catch(() => setGuide(null))
+      .catch(() => setGuideError(true))
       .finally(() => setGuideLoading(false))
   }
 
@@ -184,6 +186,17 @@ export function AddCardCard({
           </div>
           {guideLoading ? (
             <p className="text-xs text-muted-foreground">Reading the knowledge graph…</p>
+          ) : guideError ? (
+            <p className="text-xs text-destructive" role="alert">
+              Couldn’t load reward details.{' '}
+              <button
+                type="button"
+                onClick={() => selected && pick(selected)}
+                className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+              >
+                Retry
+              </button>
+            </p>
           ) : guide?.ok && guide.pool ? (
             <dl className="space-y-1 text-xs text-muted-foreground">
               <div className="flex gap-2">

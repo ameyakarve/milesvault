@@ -8,7 +8,7 @@ starting points, not exhaustive.
 ## P0 — high impact / likely bugs
 
 - [x] **Add viewport meta** to `src/app/(frontend)/layout.tsx`. Done via `export const viewport` (width=device-width, initialScale 1, viewportFit cover, colorScheme light dark).
-- [~] **Kill silent error swallowing (`.catch(() => {})`).** Infra built: `src/lib/fetch-json.ts` (`fetchJSON` throws with a usable message) + `src/components/shared/use-async-data.ts` (`useAsyncData` — loading/ready/error + abort + `reload`) + `CenteredState` now takes `onRetry` (role=alert). **Converted/handled:** explore (`transfer-sources`), points (`currencies`), status-match (`match-statuses`); vault main load (retry); account-overview (retry); inbox `deleteItem` (full-snapshot revert + inline alert) and `doRotate` (error surfaced). **Remaining:** `accounts-view.tsx:178–179`, vault secondary overlays (`vault-stats`/`account-names`/`captures`), `add-card.tsx` guide/account fetches, `update-balance-modal.tsx` targets load.
+- [~] **Kill silent error swallowing (`.catch(() => {})`).** Infra built: `src/lib/fetch-json.ts` (`fetchJSON` throws with a usable message) + `src/components/shared/use-async-data.ts` (`useAsyncData` — loading/ready/error + abort + `reload`) + `CenteredState` now takes `onRetry` (role=alert). **Converted/handled:** explore (`transfer-sources`), points (`currencies`), status-match (`match-statuses`); vault main load (retry); account-overview (retry); inbox `deleteItem` (full-snapshot revert + inline alert) and `doRotate` (error surfaced); **accounts-view** (error state + retry — no more silent forever-spinner); **add-card** (distinguishes guide load-failure from genuine-empty + retry); **update-balance-modal** (surfaces targets load failure + retry). **Remaining:** only vault's cosmetic secondary overlays (`vault-stats`/`account-names`/`captures`) — degrade gracefully (labels/KPIs just absent), low priority.
 - [ ] **Nav state: `/accounts` is a Plan tab but not in `PLAN_ROUTES`** (`nav-rail.tsx:16`) — rail's Plan item doesn't activate on `/accounts`.
 - [ ] **Pending-capture badges never re-poll** (`nav-rail.tsx`, `usePendingCaptures` fires once on mount). Subscribe to the existing `mv:captured` event (`global-capture.tsx:155`) to refresh.
 - [ ] **`StatusBar` hardcodes `left-[48px]`** (`status-bar.tsx`) → mis-offset on mobile where the rail is hidden. Also "Parsed ✓" and "Beancount v2.3.5" are hardcoded and can't express an error.
@@ -53,7 +53,7 @@ starting points, not exhaustive.
 
 ## P3 — copy / polish
 
-- [ ] Empty-state strings are type-agnostic (`accounts-view.tsx:392` always "No expenses…" even for Income/Assets).
+- [x] Empty-state strings type-aware in `accounts-view` (`No {type} in this period.`).
 - [ ] Account paths leak internal beancount format to users (`overview-view.tsx:174`, `explore-link.tsx` raw `source`).
 - [ ] Cabin abbreviations ambiguous (`FST`, `PRE`) in `explore-ui.tsx`; airport inputs need typeahead/validation.
 - [ ] `image_only` upload error gives no next step (`statement-upload-modal.tsx`); add "export a text PDF" hint.
