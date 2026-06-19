@@ -455,8 +455,9 @@ ${opts.text}`,
             pass1Ok = true
             pushProgress('Read the statement…')
           }
-        } catch {
+        } catch (e) {
           /* Pass 1 is best-effort; fall back to the raw text + images. */
+          console.error('[pass1] consolidation errored', e instanceof Error ? `${e.name}: ${e.message}` : String(e))
         }
       }
       // The draft pass works off the consolidated text. Keep the page images ONLY
