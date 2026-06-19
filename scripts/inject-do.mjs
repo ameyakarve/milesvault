@@ -32,6 +32,7 @@ import { getToken as __authGetToken } from "next-auth/jwt"
 export { LedgerDO } from "../src/durable/ledger-do.ts"
 export { ChatDO } from "../src/durable/chat-do.ts"
 export { ConciergeDO } from "../src/durable/concierge-do.ts"
+export { MembershipDO } from "../src/durable/membership-do.ts"
 export { RefreshMagnifyWorkflow } from "../src/workflows/refresh-magnify.ts"
 
 const __SESSION_COOKIE = "authjs.session-token"
@@ -79,6 +80,12 @@ export default {
     // wrangler.jsonc \`triggers.crons\`. If we add a second cron the
     // dispatch will need to switch on \`_event.cron\` (the cron pattern).
     ctx.waitUntil(env.REFRESH_MAGNIFY.create())
+    // Self-heal the membership poll: ensure the singleton's 60s alarm is alive
+    // (a no-op if it never bootstrapped or is already running).
+    if (env.MEMBERSHIP_DO) {
+      const ns = env.MEMBERSHIP_DO
+      ctx.waitUntil(ns.get(ns.idFromName("global")).poke().catch(() => {}))
+    }
   },
 
   async fetch(request, env, ctx) {

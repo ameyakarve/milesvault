@@ -37,6 +37,10 @@
         "name": "CONCIERGE_DO",
         "class_name": "ConciergeDO",
       },
+      {
+        "name": "MEMBERSHIP_DO",
+        "class_name": "MembershipDO",
+      },
     ],
   },
   "ai": {
@@ -57,6 +61,7 @@
     { "tag": "v2", "new_sqlite_classes": ["StatementExtractorDO"] },
     { "tag": "v3", "deleted_classes": ["StatementExtractorDO"], "new_sqlite_classes": ["ChatDO"] },
     { "tag": "v4", "new_sqlite_classes": ["ConciergeDO"] },
+    { "tag": "v5", "new_sqlite_classes": ["MembershipDO"] },
   ],
   "vars": {
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
@@ -109,6 +114,10 @@
             "name": "CONCIERGE_DO",
             "class_name": "ConciergeDO",
           },
+          {
+            "name": "MEMBERSHIP_DO",
+            "class_name": "MembershipDO",
+          },
         ],
       },
       "ai": {
@@ -129,6 +138,7 @@
         { "tag": "v2", "new_sqlite_classes": ["StatementExtractorDO"] },
         { "tag": "v3", "deleted_classes": ["StatementExtractorDO"], "new_sqlite_classes": ["ChatDO"] },
         { "tag": "v4", "new_sqlite_classes": ["ConciergeDO"] },
+        { "tag": "v5", "new_sqlite_classes": ["MembershipDO"] },
       ],
       "services": [
         { "binding": "PROD", "service": "milesvault" },
