@@ -265,22 +265,6 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
     sql: 'ALTER TABLE capture_items ADD COLUMN draft_error TEXT',
     allowFail: true,
   },
-  // Email ingestion rules (experience.md §9): matcher + action + prompt.
-  // First enabled match wins (created order). 'ignore' drops the email
-  // without a capture; 'capture' attaches the prompt to the capture item.
-  {
-    label: 'email_rules',
-    sql: `CREATE TABLE IF NOT EXISTS email_rules (
-      id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      from_match   TEXT,
-      subject_match TEXT,
-      action       TEXT NOT NULL DEFAULT 'capture',
-      prompt       TEXT,
-      enabled      INTEGER NOT NULL DEFAULT 1,
-      created_at   INTEGER NOT NULL,
-      updated_at   INTEGER NOT NULL
-    ) STRICT`,
-  },
   // Email automation log (experience.md §9): one row per inbound email,
   // whatever the outcome — the answer to "what did the robot do while I was
   // away". body_excerpt feeds the playground's replay.
