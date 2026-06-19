@@ -424,14 +424,25 @@ ${opts.text}`,
       let consolidatedText = stmt.text
       let pass1Ok = false
       if (images.length > 0) {
+        const t0 = Date.now()
+        // STREAM, don't generateText. Through the Workers-AI BINDING (env.AI, the
+        // deployed path), a non-streaming multimodal call (generateText with image
+        // file parts) throws client-side before it ever reaches the gateway, so the
+        // whole pass silently failed and fell back to raw text. streamText is the
+        // SAME path the draft pass uses and the binding handles it correctly. (The
+        // REST path tolerates both, which masked this in standalone tests.)
+        console.log('[pass1] start', {
+          statement_id: statementId,
+          images: images.length,
+          text_len: stmt.text.length,
+          max_output_tokens: inv.maxOutputTokens ?? null,
+        })
         try {
-          const composed = await generateText({
+          const composed = streamText({
             model: inv.model,
             abortSignal: AbortSignal.timeout(120_000),
-            // Use the SAME output budget the draft pass uses — it's the value the
-            // Workers-AI binding accepts; a larger ceiling (e.g. 64k) is rejected
-            // by the binding and the whole pass errors out. The consolidation is
-            // only a few thousand tokens in practice, so this is ample.
+            // Same output budget as the draft pass (16384) — ample; the
+            // consolidation is only a few thousand tokens in practice.
             ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
             system:
               'You are given a credit-card statement as layout-extracted TEXT and as page IMAGES. Produce ONE consolidated plain-text copy of the statement that merges both. The TEXT is authoritative for any value present in both — copy its numbers, dates and amounts verbatim, never re-key them from the image. Use the IMAGES to add what the text is missing: content the bank renders as a graphic (styled summary / reward / totals boxes and their labels), written in place WITH its labels. Keep every transaction and every figure; do not summarise, drop, re-order, draft, or comment. Output only the consolidated statement text.',
@@ -449,20 +460,41 @@ ${opts.text}`,
               },
             ],
           })
-          const merged = composed.text.trim()
+          const merged = (await composed.text).trim()
+          const finishReason = await Promise.resolve(composed.finishReason).catch(() => 'unknown')
           if (merged) {
             consolidatedText = merged
             pass1Ok = true
             pushProgress('Read the statement…')
           }
-        } catch {
-          /* Pass 1 is best-effort; fall back to the raw text + images. */
+          console.log('[pass1] done', {
+            statement_id: statementId,
+            ok: pass1Ok,
+            finish_reason: finishReason,
+            merged_len: merged.length,
+            ms: Date.now() - t0,
+          })
+        } catch (e) {
+          // Pass 1 is best-effort; fall back to the raw text + images (no worse than
+          // the original single-pass run). Log the real cause so a regression here
+          // is visible in `wrangler tail`, not silent.
+          console.error('[pass1] consolidation errored — falling back to raw text + images', {
+            statement_id: statementId,
+            ms: Date.now() - t0,
+            error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+          })
         }
       }
       // The draft pass works off the consolidated text. Keep the page images ONLY
       // when Pass 1 did NOT succeed — so a failed/absent consolidation is no worse
       // than the original single-pass run (text + images), never a regression.
       const draftImages = pass1Ok ? [] : images
+      console.log('[draft] pass2 input', {
+        statement_id: statementId,
+        source: pass1Ok ? 'consolidated' : 'raw_text',
+        draft_text_len: consolidatedText.length,
+        attached_images: draftImages.length,
+      })
       // 360s wall-clock cap. Drafting is OFFLINE-ish (background, on the
       // per-capture DO's own alarm — a longer draft never blocks the user or
       // other uploads), so we favour completing over a tight clock. The worst
