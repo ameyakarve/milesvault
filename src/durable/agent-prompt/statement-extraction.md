@@ -39,20 +39,18 @@ specific to READING a statement.
 4. **Forex rows — read the layout.** A foreign-currency row prints the foreign
    amount inside a `( CCY x.xx )` bracket next to the merchant, and the billed
    amount as the row's main figure on the right — two different numbers (fold
-   them per the forex rule above). The "FOREIGN CURRENCY TRANSACTION FEE" / "DCC
-   MARKUP" / "GST" rows that belong to it are often printed interleaved and out
-   of order (a GST can appear before its own markup) — pair each to its charge by
-   the arithmetic, never by which row sits nearest.
+   them per the forex rule above).
 
-   EVERY fee line is its OWN entry — capture them ALL. Before you finish a cluster
-   of fee rows, COUNT them: a block with K "FOREIGN CURRENCY TRANSACTION FEE" /
-   "DCC MARKUP" lines and K "GST" lines must produce 2K fee entries (each charge
-   and each GST is a separate expense). Do NOT merge two fees, drop one, or skip a
-   GST just because it is small or sits in an odd place. In particular a GST
-   printed ABOVE the charge it taxes (out of order) is still its own entry — match
-   it to its charge by the 18% arithmetic (GST ≈ 0.18 × the charge) and emit it;
-   never let an out-of-order or orphaned-looking GST go unrecorded. A dropped fee
-   makes the closing balance fail to reconcile.
+   Each "FOREIGN CURRENCY TRANSACTION FEE", "DCC MARKUP", and "GST" row is its OWN
+   standalone entry — a plain two-posting expense (`Expenses:Financial:…` + the
+   card leg), with NO points legs. Do NOT fold a fee into the purchase entry (the
+   purchase carries ONLY the merchant's own `<foreign> @@ <INR>` amount), and do
+   NOT try to attach a fee to a particular purchase or pair it by position — these
+   fee rows are routinely interleaved and printed out of order across several
+   purchases, so any attempt to group them mislays one. Just transcribe EACH fee
+   row, top to bottom, as one expense for exactly the amount printed — one entry
+   per row, never merged, never duplicated, never skipped (a dropped row makes the
+   closing fail to reconcile).
 
 5. **Use the statement's printed reward figures.**
    - When the statement prints points PER ROW, use those numbers verbatim — they
