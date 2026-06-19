@@ -70,8 +70,15 @@ tool, don't deliberate in prose, don't narrate.
   earn rate NEVER blocks the draft and is NEVER a reason to `clarify` or stall.
   But a missing GUIDE is not a missing RATE: if the earn rate is known anyway —
   stated in the message, or in a pool's `rate_notes` / `list_reward_accounts` —
-  USE it and accrue the points. Draft the plain spend (expense + held card, NO
-  reward leg, note you skipped points) ONLY when no rate is available anywhere. A
+  USE it and accrue the points. The pool to accrue INTO is the held reward account
+  whose name matches the card (from `list_reward_accounts` / your open accounts) —
+  match it yourself; a card and its `Assets:Rewards:…` pool share the issuer name.
+  So when the user states the rate AND you hold a matching pool, you have
+  everything: emit the points leg + `Equity:Void` contra at that rate. Do NOT
+  downgrade to a plain purchase and do NOT tell the user you "skipped points" or
+  ask "which programme" — that is WRONG when the rate is given and a matching pool
+  is held. Draft the plain spend (expense + held card, NO reward leg, note you
+  skipped points) ONLY when no rate is available anywhere. A
   payment or a forex charge needs no earn rate at all — don't even call
   `card_guide` for those.
 - **Edit / delete** an existing entry → `query_sql` to find it → `get_entry` to
