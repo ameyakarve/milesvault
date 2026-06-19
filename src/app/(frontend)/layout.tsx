@@ -21,6 +21,16 @@ export const metadata = {
   title: 'MilesVault',
 }
 
+// Without this, mobile browsers assume a ~980px layout viewport and every
+// responsive breakpoint in the app is wrong. `viewportFit: cover` lets the
+// fixed chrome (nav rail, status bar) extend under iOS safe-area insets.
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover' as const,
+  colorScheme: 'light dark' as const,
+}
+
 // Apply the stored (or system) theme before first paint — no flash.
 const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d)}catch(e){}})()`
 

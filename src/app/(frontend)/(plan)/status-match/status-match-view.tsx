@@ -1,38 +1,32 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useAsyncData } from '@/components/shared/use-async-data'
+import { fetchJSON } from '@/lib/fetch-json'
 import { StatusMatch, type SmStatus } from './status-match-ui'
 import type { StatusMatchResult, MatchStatus } from '@/durable/agents/tools/concierge/status-match-paths'
+
+const NO_STATUSES: MatchStatus[] = []
+const NO_HELD: string[] = []
 
 export function StatusMatchView() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
-  const [statuses, setStatuses] = useState<MatchStatus[]>([])
-  const [held, setHeld] = useState<string[]>([])
   const [result, setResult] = useState<{ key: string; data: StatusMatchResult } | undefined>()
   const [error, setError] = useState<string | undefined>()
   const [ready, setReady] = useState(false)
 
   // Status universe for the from/to comboboxes (+ the user's held tiers) —
-  // loaded once.
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/concierge/match-statuses')
-      .then((r) =>
-        r.ok
-          ? (r.json() as Promise<{ statuses?: MatchStatus[]; held?: string[] }>)
-          : Promise.reject(new Error(String(r.status))),
-      )
-      .then((d) => {
-        if (cancelled) return
-        setStatuses(d.statuses ?? [])
-        setHeld(d.held ?? [])
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // loaded once. Stable empty fallbacks keep the seed effect's deps stable.
+  const universe = useAsyncData<{ statuses: MatchStatus[]; held: string[] }>(
+    (signal) =>
+      fetchJSON<{ statuses?: MatchStatus[]; held?: string[] }>('/api/concierge/match-statuses', {
+        signal,
+      }).then((d) => ({ statuses: d.statuses ?? [], held: d.held ?? [] })),
+    [],
+  )
+  const statuses = universe.data?.statuses ?? NO_STATUSES
+  const held = universe.data?.held ?? NO_HELD
 
   // Seed From with the user's first held tier — once, and only when neither
   // the URL nor the user has picked one. The blank picker stays available.

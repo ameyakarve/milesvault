@@ -90,10 +90,14 @@ export function CenteredState({
   children,
   tone = 'muted',
   action,
+  onRetry,
 }: {
   children: React.ReactNode
   tone?: 'muted' | 'error'
   action?: { label: string; href: string }
+  // When provided, renders a "Try again" button — the recovery affordance error
+  // states need (pairs with useAsyncData's `reload`).
+  onRetry?: () => void
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-16 text-center">
@@ -102,6 +106,7 @@ export function CenteredState({
           'max-w-xs text-sm',
           tone === 'error' ? 'text-destructive' : 'text-muted-foreground',
         )}
+        {...(tone === 'error' ? { role: 'alert' } : {})}
       >
         {children}
       </p>
@@ -109,6 +114,15 @@ export function CenteredState({
         <Link href={action.href} className="text-sm font-medium text-foreground underline underline-offset-4 hover:no-underline">
           {action.label}
         </Link>
+      ) : null}
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="text-sm font-medium text-foreground underline underline-offset-4 hover:no-underline"
+        >
+          Try again
+        </button>
       ) : null}
     </div>
   )

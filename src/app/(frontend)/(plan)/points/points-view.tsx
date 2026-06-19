@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useAsyncData } from '@/components/shared/use-async-data'
+import { fetchJSON } from '@/lib/fetch-json'
 import { Points, type PointsStatus, type PointsFilters, type FilterMode } from './points-ui'
 import type { PointsPathsResult } from '@/durable/agents/tools/concierge/points-paths'
 import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-currencies'
@@ -10,7 +12,17 @@ import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-c
 export function PointsView() {
   const [target, setTarget] = useState('')
   const [amount, setAmount] = useState<number | null>(null)
-  const [currencies, setCurrencies] = useState<LoyaltyCurrency[]>([])
+
+  // The searchable target universe — fetched once. A failure leaves the picker
+  // empty rather than swallowing the error silently.
+  const currencies =
+    useAsyncData<LoyaltyCurrency[]>(
+      (signal) =>
+        fetchJSON<{ currencies?: LoyaltyCurrency[] }>('/api/concierge/currencies', {
+          signal,
+        }).then((d) => d.currencies ?? []),
+      [],
+    ).data ?? []
 
   // filters
   const [mineOnly, setMineOnly] = useState(true)
@@ -19,22 +31,6 @@ export function PointsView() {
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
   const [currencyMode, setCurrencyMode] = useState<FilterMode>('include')
   const [selectedCurrencies, setSelectedCurrencies] = useState<Set<string>>(new Set())
-
-  // The searchable target universe — fetched once.
-  useEffect(() => {
-    let cancelled = false
-    fetch('/api/concierge/currencies')
-      .then((r) =>
-        r.ok
-          ? (r.json() as Promise<{ currencies?: LoyaltyCurrency[] }>)
-          : ({ currencies: [] as LoyaltyCurrency[] }),
-      )
-      .then((d) => !cancelled && setCurrencies(d.currencies ?? []))
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   // target + amount are URL-synced so the explorer can deep-link in.
   useEffect(() => {
