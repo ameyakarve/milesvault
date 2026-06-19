@@ -28,6 +28,18 @@ export async function POST(req: Request): Promise<Response> {
   if (!body || typeof body.text !== 'string' || !body.text.trim()) {
     return NextResponse.json({ error: 'text required' }, { status: 400 })
   }
+  console.log('[ingest route] recv', {
+    images_type: typeof body.images,
+    is_array: Array.isArray(body.images),
+    n: Array.isArray(body.images) ? body.images.length : undefined,
+    first_chars:
+      typeof body.images === 'string'
+        ? (body.images as string).slice(0, 24)
+        : Array.isArray(body.images) && typeof body.images[0] === 'string'
+          ? body.images[0].slice(0, 24)
+          : undefined,
+    text_len: body.text.length,
+  })
 
   const client = await getLedgerClient(TEST_USER_EMAIL)
   // Reset + seed the shared test ledger (same store the ingest run reads from).
