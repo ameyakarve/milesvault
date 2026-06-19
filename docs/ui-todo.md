@@ -9,10 +9,10 @@ starting points, not exhaustive.
 
 - [x] **Add viewport meta** to `src/app/(frontend)/layout.tsx`. Done via `export const viewport` (width=device-width, initialScale 1, viewportFit cover, colorScheme light dark).
 - [~] **Kill silent error swallowing (`.catch(() => {})`).** Infra built: `src/lib/fetch-json.ts` (`fetchJSON` throws with a usable message) + `src/components/shared/use-async-data.ts` (`useAsyncData` — loading/ready/error + abort + `reload`) + `CenteredState` now takes `onRetry` (role=alert). **Converted/handled:** explore (`transfer-sources`), points (`currencies`), status-match (`match-statuses`); vault main load (retry); account-overview (retry); inbox `deleteItem` (full-snapshot revert + inline alert) and `doRotate` (error surfaced); **accounts-view** (error state + retry — no more silent forever-spinner); **add-card** (distinguishes guide load-failure from genuine-empty + retry); **update-balance-modal** (surfaces targets load failure + retry). **Remaining:** only vault's cosmetic secondary overlays (`vault-stats`/`account-names`/`captures`) — degrade gracefully (labels/KPIs just absent), low priority.
-- [ ] **Nav state: `/accounts` is a Plan tab but not in `PLAN_ROUTES`** (`nav-rail.tsx:16`) — rail's Plan item doesn't activate on `/accounts`.
-- [ ] **Pending-capture badges never re-poll** (`nav-rail.tsx`, `usePendingCaptures` fires once on mount). Subscribe to the existing `mv:captured` event (`global-capture.tsx:155`) to refresh.
-- [ ] **`StatusBar` hardcodes `left-[48px]`** (`status-bar.tsx`) → mis-offset on mobile where the rail is hidden. Also "Parsed ✓" and "Beancount v2.3.5" are hardcoded and can't express an error.
-- [ ] **`account-sheet.tsx` `Row` uses setState-during-render** (`:165–168`) — can loop in StrictMode; match the safer pattern in `journal-filter-bar.tsx:396–399`.
+- [x] **Nav state: `/accounts`** added to `PLAN_ROUTES` — Plan rail item now activates on `/accounts`.
+- [x] **Pending-capture badges re-poll** — `usePendingCaptures` now reloads on `mv:captured` + tab `focus`, not just mount.
+- [x] **`StatusBar` mobile offset fixed** — `left-0 md:left-[48px]` (full-width on mobile where the rail is hidden) + `aria-label`. (Hardcoded "Parsed ✓"/"Beancount v2.3.5" still static — needs a real parse-status source, deferred.)
+- [x] **`account-sheet.tsx` `Row`** no longer setState-during-render — derived `open` from a query-keyed `manual` override (mirrors `journal-filter-bar`).
 - [x] **`version-watcher.tsx` focus-listener leak fixed** — named `onFocus` now removed in cleanup.
 
 ## P1 — accessibility (recurring Level-A gaps)
@@ -25,7 +25,7 @@ starting points, not exhaustive.
 - [ ] **Touch targets < 24px:** draft-transaction checkboxes `size-3.5` (`draft-transaction.tsx:371`), 3-char airport inputs (`explore-ui.tsx`).
 - [x] **Add `@media (prefers-reduced-motion: reduce)`** to `styles.css` — global guard neutralizing animations/transitions.
 - [ ] **Low-contrast / tiny text:** graph node labels 10–12px (`points-ui.tsx`, `status-match-ui.tsx`), `+ add` buttons `text-xs text-muted-foreground` (`vault-view.tsx:210,501`).
-- [ ] Misc: login `<h1>` should be the page action ("Sign in to MilesVault"); `flight-map` inner div unlabelled; trend chart needs `role="img"` (`overview-view.tsx`); nav `InboxBadge`/Logo need `aria-label`.
+- [~] Misc: nav `InboxBadge` + `Logo` `aria-label` DONE; status-bar footer `aria-label` DONE. Remaining: login `<h1>` page action ("Sign in to MilesVault"), `flight-map` inner div unlabelled, trend chart `role="img"` (`overview-view.tsx`).
 
 ## P1 — consistency (app reads as built screen-by-screen)
 
