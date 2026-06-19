@@ -140,7 +140,7 @@ export function ConciergeChat() {
       </header>
 
       <Conversation className="flex-1">
-        <ConversationContent className="mx-auto w-full max-w-3xl px-4">
+        <ConversationContent role="log" aria-live="polite" aria-atomic={false} className="mx-auto w-full max-w-3xl px-4">
           {isEmpty ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
               <Database className="size-6" />

@@ -13,13 +13,13 @@ starting points, not exhaustive.
 - [ ] **Pending-capture badges never re-poll** (`nav-rail.tsx`, `usePendingCaptures` fires once on mount). Subscribe to the existing `mv:captured` event (`global-capture.tsx:155`) to refresh.
 - [ ] **`StatusBar` hardcodes `left-[48px]`** (`status-bar.tsx`) → mis-offset on mobile where the rail is hidden. Also "Parsed ✓" and "Beancount v2.3.5" are hardcoded and can't express an error.
 - [ ] **`account-sheet.tsx` `Row` uses setState-during-render** (`:165–168`) — can loop in StrictMode; match the safer pattern in `journal-filter-bar.tsx:396–399`.
-- [ ] **`version-watcher.tsx` leaks the `focus` listener** (`:35` — cleanup only removes `visibilitychange`).
+- [x] **`version-watcher.tsx` focus-listener leak fixed** — named `onFocus` now removed in cleanup.
 
 ## P1 — accessibility (recurring Level-A gaps)
 
-- [ ] **No `aria-live` on either chat** (`editor/chat.tsx:439`, `concierge/chat.tsx`) — screen readers silent during streamed responses. Add `aria-live="polite"` on the conversation container.
-- [ ] **No `aria-live`/`role="alert"` on error banners** (inbox approve error `capture-review.tsx`, version toast, global-capture error/password).
-- [ ] **Custom controls missing ARIA state:** plan-tabs no `aria-current` (`plan-tabs.tsx`), clarify chips no `aria-pressed` (`clarify.tsx`), inbox chat toggle no `aria-expanded` (`capture-review.tsx:529`), add-accounts tab switcher no tab roles (`add-accounts-modal.tsx:249`).
+- [x] **`aria-live` on both chats** — `ConversationContent` now `role="log" aria-live="polite"` in editor + concierge, so streamed responses are announced.
+- [x] **`role="alert"` on error banners** — version toast (`role=status`), global-capture error, inbox approve error + actionError. (Password placeholder-as-error in global-capture still pending — should be its own `role=alert`, not a placeholder.)
+- [x] **Custom controls ARIA state** — plan-tabs `aria-current`, clarify chips `aria-pressed`, inbox chat toggle `aria-expanded`, add-accounts tab switcher `role=tablist/tab + aria-selected`.
 - [ ] **Graphs/treemap not keyboard/SR-accessible** (ReactFlow `selectable:false` in `points-ui.tsx`/`status-match-ui.tsx`; treemap tiles rely on hover `title` in `accounts-view.tsx`). Add SR-only text summaries.
 - [ ] **Modal a11y for custom overlays:** `account-sheet.tsx` and `global-capture.tsx` overlays lack `role="dialog"`/`aria-modal`/focus-trap (Radix modals already do this right — bring these up to parity).
 - [ ] **Touch targets < 24px:** draft-transaction checkboxes `size-3.5` (`draft-transaction.tsx:371`), 3-char airport inputs (`explore-ui.tsx`).

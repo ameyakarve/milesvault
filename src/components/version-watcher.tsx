@@ -31,19 +31,23 @@ export function VersionWatcher() {
     const onVisible = () => {
       if (document.visibilityState === 'visible') void check()
     }
+    const onFocus = () => {
+      void check()
+    }
     document.addEventListener('visibilitychange', onVisible)
-    window.addEventListener('focus', () => void check())
+    window.addEventListener('focus', onFocus)
     const timer = setInterval(() => void check(), 5 * 60 * 1000)
     return () => {
       alive = false
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onFocus)
       clearInterval(timer)
     }
   }, [])
 
   if (!stale) return null
   return (
-    <div className="fixed inset-x-0 bottom-4 z-[100] flex justify-center px-4">
+    <div role="status" aria-live="polite" className="fixed inset-x-0 bottom-4 z-[100] flex justify-center px-4">
       <div className="flex items-center gap-3 rounded-full border border-border bg-foreground px-4 py-2 text-sm text-background shadow-lg">
         <span>A new version is available.</span>
         <button

@@ -478,7 +478,7 @@ export function Chat({
       ) : (
         <>
           <Conversation>
-            <ConversationContent className="mx-auto w-full max-w-3xl py-6">
+            <ConversationContent role="log" aria-live="polite" aria-atomic={false} className="mx-auto w-full max-w-3xl py-6">
               {messages.map((m) => {
                 const parts = Array.isArray(m.parts) ? (m.parts as Part[]) : []
                 // Programmatic turns we inject to drive the agent (the

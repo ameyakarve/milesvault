@@ -94,6 +94,7 @@ export function ClarifyCard({
                   <button
                     key={opt}
                     type="button"
+                    aria-pressed={on}
                     onClick={() => toggle(opt)}
                     disabled={disabled}
                     className={cn(

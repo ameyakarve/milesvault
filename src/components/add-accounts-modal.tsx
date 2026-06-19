@@ -245,11 +245,13 @@ export function AddAccountsModal({
           </div>
         ) : (
           <div className="space-y-3 py-1">
-            <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
+            <div role="tablist" aria-label="Account type" className="inline-flex rounded-md border border-border p-0.5 text-xs">
               {(['cards', 'programmes'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
+                  role="tab"
+                  aria-selected={tab === t}
                   onClick={() => setTab(t)}
                   className={cn(
                     'rounded px-3 py-1 capitalize',
