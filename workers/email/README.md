@@ -1,38 +1,39 @@
 # milesvault-email — transaction-email ingestion worker
 
-Receives `ingest+<token>@milesvault.com` — for forwarded **transaction
-emails** (card alerts, receipts), not statements; attachments are ignored
-entirely. Resolves the token to a user via the `ingest_tokens` D1 table
-(minted by `/api/ledger/forwarding-address`), consults the user's email
-rules (`/inbox/rules`: first enabled match wins — `ignore` drops the mail,
-`capture` attaches the rule's prompt), and lands the message as a `captured`
-item in that user's `LedgerDO`. Unknown tokens are rejected at SMTP time.
-Nothing is ever auto-posted — review happens in the Journal chat ("Review in
-chat" on the Inbox row, which uses the rule's prompt when one matched).
+Receives forwarded **transaction emails** (card alerts, receipts) — not statements;
+attachments are ignored entirely (text body only, by design). Resolves the `+token`
+to a user via the `ingest_tokens` D1 table (minted by
+`/api/ledger/forwarding-address`), lands the message as a `captured` item in that
+user's `LedgerDO`, then kicks the draft on a **per-email `ChatDO`** (`email::<id>`) —
+the same headless path statement uploads use (the LLM draft runs in the DO, with
+ledger access).
 
-Deploy (not part of the app's CI):
+The secret `+token` is the **only** trust boundary — there is no sender allow/deny
+list. Unknown tokens are rejected at SMTP time, and a user rotates the token to
+revoke. Nothing is ever auto-posted; review happens in the Inbox.
 
-    pnpm exec wrangler deploy --config workers/email/wrangler.jsonc
+## Environments
+
+Two envs, each cross-script bound to the matching app worker's DOs:
+
+    pnpm exec wrangler deploy --env staging      # milesvault-email-staging -> milesvault-staging DOs
+    pnpm exec wrangler deploy --env production    # milesvault-email         -> milesvault prod DOs
+                                                  #   (deploy prod only when the prod app is current)
+
+Addresses differ by **local part** (Email Routing is apex-only — no subdomains):
+prod `ingest+<token>@milesvault.com`, staging `ingest-staging+<token>@milesvault.com`.
+The app mints the right one per env via the `INGEST_EMAIL_ADDRESS` var; the worker's
+token regex is prefix-agnostic, so one codebase serves both.
 
 ## One-time zone setup (dashboard, manual)
 
-The worker is deployed but receives no mail until Email Routing is enabled on
-the `milesvault.com` zone:
+Email Routing on the `milesvault.com` apex zone:
 
-1. Cloudflare dashboard → milesvault.com → **Email → Email Routing** →
-   enable (this adds the MX/SPF records; confirm the zone sends no other
-   mail first).
-2. **Routing rules → Custom addresses → Create**: address `ingest`, action
-   **Send to a Worker**, worker `milesvault-email`.
-   Plus-addressing is automatic: the single `ingest@` rule matches every
-   `ingest+<token>@milesvault.com`.
-3. Test: copy your forwarding address from the Inbox page and forward a
-   transaction alert to it — it should appear as a `captured` item within
-   seconds.
-
-Current limitations (v1, deliberate): text body only by design (transaction
-emails, no attachments); targets
-the **staging** app worker for now (production is stale — flip `script_name`
-in wrangler.jsonc when prod is deployed); no auto-post and no trusted-source
-gate yet — everything lands as `needs review`, which is the trust contract's
-safe default.
+1. Cloudflare dashboard → milesvault.com → **Email → Email Routing** → enable (adds
+   the MX/SPF records; confirm the zone sends no other mail first).
+2. **Routing rules → Custom addresses → Create** — one per env, **Send to a Worker**:
+   - `ingest@milesvault.com` → `milesvault-email` (production)
+   - `ingest-staging@milesvault.com` → `milesvault-email-staging` (staging)
+   Plus-addressing is automatic: an `ingest@` rule matches every `ingest+<token>@`.
+3. Test: copy your forwarding address from the Inbox and forward a transaction alert
+   to it — it should appear as a drafting → drafted item within seconds.

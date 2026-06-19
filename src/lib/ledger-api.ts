@@ -69,11 +69,6 @@ export type LedgerClient = {
       created_at: number
     }>
   }>
-  list_email_rules(): ReturnType<LedgerDO['list_email_rules']>
-  match_email_rule(headers: {
-    from: string
-    subject: string
-  }): ReturnType<LedgerDO['match_email_rule']>
   list_ingest_log(): ReturnType<LedgerDO['list_ingest_log']>
   account_overview(
     opts: Parameters<LedgerDO['account_overview']>[0],
@@ -82,10 +77,6 @@ export type LedgerClient = {
   vault_stats(
     opts: Parameters<LedgerDO['vault_stats']>[0],
   ): ReturnType<LedgerDO['vault_stats']>
-  save_email_rule(
-    rule: Parameters<LedgerDO['save_email_rule']>[0],
-  ): ReturnType<LedgerDO['save_email_rule']>
-  delete_email_rule(id: number): ReturnType<LedgerDO['delete_email_rule']>
   replace_buffer(req: ReplaceBufferRequest): Promise<ReplaceBufferResponse>
   clear(): Promise<{ ok: true }>
   put_statement(opts: {
@@ -220,14 +211,6 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       return stub.set_capture_state(id, state)
     },
 
-    async list_email_rules() {
-      return stub.list_email_rules()
-    },
-
-    async match_email_rule(headers) {
-      return stub.match_email_rule(headers)
-    },
-
     async list_ingest_log() {
       return stub.list_ingest_log()
     },
@@ -255,13 +238,6 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
       return stub.account_flows(root, Number(from.replaceAll('-', '')), Number(to.replaceAll('-', '')))
     },
 
-    async save_email_rule(rule) {
-      return stub.save_email_rule(rule)
-    },
-
-    async delete_email_rule(id) {
-      return stub.delete_email_rule(id)
-    },
 
     async list_entries() {
       return stub.listEntries()

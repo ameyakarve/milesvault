@@ -169,16 +169,6 @@ export type AccountOverview = {
   notable: Array<{ date: number; payee: string; narration: string; amount: number }>
 }
 
-export type EmailRule = {
-  id: number
-  from_match: string | null
-  subject_match: string | null
-  action: string
-  prompt: string | null
-  enabled: number
-  created_at: number
-}
-
 export type ReplaceBufferRequest = {
   knownIds: EntryRef2[]
   buffer: string
@@ -744,94 +734,6 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       )
       .toArray()
     return { rows }
-  }
-
-  // ── Email ingestion rules (experience.md §9) ───────────────────────────────
-
-  async list_email_rules(): Promise<{ rows: EmailRule[] }> {
-    const rows = this.db
-      .exec<EmailRule>(
-        `SELECT id, from_match, subject_match, action, prompt, enabled, created_at
-         FROM email_rules ORDER BY id ASC`,
-      )
-      .toArray()
-    return { rows }
-  }
-
-  async save_email_rule(rule: {
-    id?: number | null
-    from_match?: string | null
-    subject_match?: string | null
-    action: 'capture' | 'ignore'
-    prompt?: string | null
-    enabled: boolean
-  }): Promise<{ ok: boolean; id: number }> {
-    const now = Date.now()
-    if (rule.id != null) {
-      this.db.exec(
-        `UPDATE email_rules SET from_match = ?, subject_match = ?, action = ?, prompt = ?, enabled = ?, updated_at = ?
-         WHERE id = ?`,
-        rule.from_match?.trim() || null,
-        rule.subject_match?.trim() || null,
-        rule.action,
-        rule.prompt?.trim() || null,
-        rule.enabled ? 1 : 0,
-        now,
-        rule.id,
-      )
-      return { ok: true, id: rule.id }
-    }
-    const r = this.db
-      .exec<{ id: number }>(
-        `INSERT INTO email_rules (from_match, subject_match, action, prompt, enabled, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-        rule.from_match?.trim() || null,
-        rule.subject_match?.trim() || null,
-        rule.action,
-        rule.prompt?.trim() || null,
-        rule.enabled ? 1 : 0,
-        now,
-        now,
-      )
-      .toArray()[0]
-    return { ok: true, id: r.id }
-  }
-
-  async delete_email_rule(id: number): Promise<{ ok: boolean }> {
-    const cursor = this.db.exec(`DELETE FROM email_rules WHERE id = ?`, id)
-    return { ok: cursor.rowsWritten > 0 }
-  }
-
-  // Evaluate the rules against an inbound email. First enabled match wins
-  // (creation order); a matcher matches when every set field is a
-  // case-insensitive substring of the corresponding header. No rules match →
-  // the safe default: capture with no prompt.
-  async match_email_rule(headers: { from: string; subject: string }): Promise<{
-    action: 'capture' | 'ignore'
-    prompt: string | null
-    rule_id: number | null
-  }> {
-    const from = headers.from.toLowerCase()
-    const subject = headers.subject.toLowerCase()
-    const rules = this.db
-      .exec<EmailRule>(
-        `SELECT id, from_match, subject_match, action, prompt, enabled, created_at
-         FROM email_rules WHERE enabled = 1 ORDER BY id ASC`,
-      )
-      .toArray()
-    for (const r of rules) {
-      const fromOk = !r.from_match || from.includes(r.from_match.toLowerCase())
-      const subjOk = !r.subject_match || subject.includes(r.subject_match.toLowerCase())
-      if (!r.from_match && !r.subject_match) continue // matcherless rule never fires
-      if (fromOk && subjOk) {
-        return {
-          action: r.action === 'ignore' ? 'ignore' : 'capture',
-          prompt: r.prompt ?? null,
-          rule_id: r.id,
-        }
-      }
-    }
-    return { action: 'capture', prompt: null, rule_id: null }
   }
 
   // Record an inbound email's outcome (experience.md §9 automation log).

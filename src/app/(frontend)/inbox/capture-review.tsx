@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
 import { Button } from '@/components/ui/button'
@@ -264,13 +263,6 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
         {address}
       </button>
       {copied ? <span className="ml-1 font-medium text-foreground">copied</span> : null}
-      {' · '}
-      <Link
-        href="/inbox/rules"
-        className="text-foreground underline underline-offset-4 hover:no-underline"
-      >
-        Rules
-      </Link>
       {' · '}
       <button
         type="button"
