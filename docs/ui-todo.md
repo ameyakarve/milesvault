@@ -8,7 +8,7 @@ starting points, not exhaustive.
 ## P0 — high impact / likely bugs
 
 - [x] **Add viewport meta** to `src/app/(frontend)/layout.tsx`. Done via `export const viewport` (width=device-width, initialScale 1, viewportFit cover, colorScheme light dark).
-- [~] **Kill silent error swallowing (`.catch(() => {})`).** Infra built: `src/lib/fetch-json.ts` (`fetchJSON` throws with a usable message) + `src/components/shared/use-async-data.ts` (`useAsyncData` — loading/ready/error + abort + `reload`) + `CenteredState` now takes `onRetry`. **Converted:** explore (`transfer-sources`), points (`currencies`), status-match (`match-statuses`). **Remaining:** `accounts-view.tsx:178–179`, `vault-view.tsx:86–104`, inbox `deleteItem`/`doRotate` (`capture-review.tsx:153,172`), `add-card.tsx` guide/account fetches, `update-balance-modal.tsx` targets load. Destructive mutations still need revert + toast.
+- [~] **Kill silent error swallowing (`.catch(() => {})`).** Infra built: `src/lib/fetch-json.ts` (`fetchJSON` throws with a usable message) + `src/components/shared/use-async-data.ts` (`useAsyncData` — loading/ready/error + abort + `reload`) + `CenteredState` now takes `onRetry` (role=alert). **Converted/handled:** explore (`transfer-sources`), points (`currencies`), status-match (`match-statuses`); vault main load (retry); account-overview (retry); inbox `deleteItem` (full-snapshot revert + inline alert) and `doRotate` (error surfaced). **Remaining:** `accounts-view.tsx:178–179`, vault secondary overlays (`vault-stats`/`account-names`/`captures`), `add-card.tsx` guide/account fetches, `update-balance-modal.tsx` targets load.
 - [ ] **Nav state: `/accounts` is a Plan tab but not in `PLAN_ROUTES`** (`nav-rail.tsx:16`) — rail's Plan item doesn't activate on `/accounts`.
 - [ ] **Pending-capture badges never re-poll** (`nav-rail.tsx`, `usePendingCaptures` fires once on mount). Subscribe to the existing `mv:captured` event (`global-capture.tsx:155`) to refresh.
 - [ ] **`StatusBar` hardcodes `left-[48px]`** (`status-bar.tsx`) → mis-offset on mobile where the rail is hidden. Also "Parsed ✓" and "Beancount v2.3.5" are hardcoded and can't express an error.
@@ -35,11 +35,11 @@ starting points, not exhaustive.
 - [ ] **One icon library** — Lucide + Phosphor are mixed in the same nav row (divergent stroke weight).
 - [ ] **Extract a shared `ActionChip`** — editor chips are inline Tailwind (`editor/chat.tsx:93`), concierge has none.
 - [ ] **Chat behavior parity** — concierge composer has no Stop/`onStop` (`concierge/chat.tsx:242`) while editor does; reasoning `defaultOpen` differs; submit-disabled logic differs.
-- [ ] **`location.reload()` in `vault-view.tsx:239`** → use a router refresh (breaks history + full flash today).
+- [x] **`location.reload()` in `vault-view.tsx`** → AddAccountsModal `onDone` now re-runs the loader (no full-page flash).
 
 ## P2 — loading & feedback
 
-- [~] **Add skeletons** — `src/components/ui/skeleton.tsx` primitive added (reduced-motion-aware). Still to APPLY on content-rich screens (Vault, account overview) in place of centered "Loading…" text.
+- [~] **Add skeletons** — `src/components/ui/skeleton.tsx` primitive added (reduced-motion-aware) and applied to **Vault** + **account overview** loading states. Remaining: editor split panes, plan/explore result areas still use text loaders.
 - [ ] **Add route-group `loading.tsx` / `error.tsx` / `not-found.tsx`** — failures currently blow away the chrome with an unbranded Next error page.
 - [ ] **Ingestion dead-time is invisible** — between `captured` and `processing` there's no queue position/ETA; the 8s poll lags the chip. Surface queue state; consider a faster signal.
 - [ ] **Per-button submit feedback** — draft-transaction / modal Approve buttons disable at card level but show no per-button spinner during the write.

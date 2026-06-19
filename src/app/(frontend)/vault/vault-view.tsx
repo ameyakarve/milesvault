@@ -17,6 +17,7 @@ import {
   isPending,
 } from '@/lib/ledger-core/account-display'
 import { SectionLabel, StatTile, CenteredState, Monogram, StateChip } from '@/components/shared'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // Shared card frame: compact, hairline border, a hint of depth, and a hover
 // lift. The monogram carries each card's per-programme tint — no extra accent
@@ -59,12 +60,36 @@ type FetchState =
   | { status: 'error'; message: string }
   | { status: 'ok'; rows: AccountSummaryRow[] }
 
+// Mirrors the dashboard's shape (KPI strip + card grid) so the load doesn't
+// pop in from a centered "Loading…" — far less reflow.
+function VaultSkeleton() {
+  return (
+    <div className="space-y-8 p-4 sm:p-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 rounded-xl" />
+        ))}
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-24" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function VaultView() {
   const [state, setState] = useState<FetchState>({ status: 'loading' })
   const [pendingCaptures, setPendingCaptures] = useState(0)
   const [addCardOpen, setAddCardOpen] = useState(false)
   const [names, setNames] = useState<Names>({})
   const [stats, setStats] = useState<VaultStats | null>(null)
+  // Bumped by the error-state retry to re-run the loader.
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   // Load all home data, and REFETCH whenever the page regains focus/visibility
   // — balances change in the editor (statements, Update balance, Add accounts),
@@ -124,15 +149,15 @@ export function VaultView() {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', load)
     }
-  }, [])
+  }, [reloadNonce])
 
   if (state.status === 'loading') {
-    return <CenteredState>Loading…</CenteredState>
+    return <VaultSkeleton />
   }
 
   if (state.status === 'error') {
     return (
-      <CenteredState tone="error">
+      <CenteredState tone="error" onRetry={() => setReloadNonce((n) => n + 1)}>
         Failed to load vault: {state.message}
       </CenteredState>
     )
@@ -236,7 +261,11 @@ export function VaultView() {
         <SpendingBreakdown stats={stats} />
       ) : null}
 
-      <AddAccountsModal open={addCardOpen} onClose={() => setAddCardOpen(false)} onDone={() => location.reload()} />
+      <AddAccountsModal
+        open={addCardOpen}
+        onClose={() => setAddCardOpen(false)}
+        onDone={() => setReloadNonce((n) => n + 1)}
+      />
       {/* ── everything else, compact ──────────────────────────────────────── */}
       {orderedGroups.length > 0 ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
