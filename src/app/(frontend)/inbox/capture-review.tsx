@@ -448,7 +448,65 @@ function ItemDetail({
 }) {
   const entries = parseDrafts(row.drafts)
   const hasDrafts = entries.length > 0 && row.state === 'extracted'
+  const isLg = useIsLg()
+  const [tab, setTab] = useState<'draft' | 'chat'>('draft')
   const [chatOpen, setChatOpen] = useState(false)
+
+  // The draft surface — the real Journal once drafted, else a status panel.
+  const draftPane = hasDrafts ? (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <Journal
+        text={buffer ?? entries.join('\n\n') + '\n'}
+        onChange={onBufferChange}
+        onSave={onApprove}
+        readOnly={approveBusy}
+      />
+    </div>
+  ) : (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+      {row.state === 'processing' || row.state === 'captured' ? (
+        <>
+          {row.draft_error ? (
+            <>
+              <p className="text-sm text-foreground">Background draft failed</p>
+              <p className="max-w-md text-xs text-destructive">{row.draft_error}</p>
+            </>
+          ) : (
+            <>
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                {row.state === 'processing'
+                  ? 'Drafting in the background…'
+                  : 'Queued for drafting…'}
+              </p>
+              <DraftTrace captureId={row.id} />
+            </>
+          )}
+          {row.draft_error || row.state === 'captured' ? (
+            <div className="mt-1 flex items-center gap-2">
+              <Button size="sm" onClick={onRedraft}>
+                Retry draft
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onDelete}
+                className="text-destructive hover:text-destructive"
+              >
+                Delete
+              </Button>
+            </div>
+          ) : null}
+        </>
+      ) : row.state === 'posted' ? (
+        <p className="text-sm text-muted-foreground">
+          Posted to the journal. Dismiss to clear it from the list.
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground">Nothing to review here yet.</p>
+      )}
+    </div>
+  )
 
   return (
     <>
@@ -504,80 +562,85 @@ function ItemDetail({
         </p>
       ) : null}
 
-      {/* Body: drafts editor fills the pane (real Journal — scrolls like the editor) */}
-      {hasDrafts ? (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <Journal
-            text={buffer ?? entries.join('\n\n') + '\n'}
-            onChange={onBufferChange}
-            onSave={onApprove}
-            readOnly={approveBusy}
-          />
+      {/* Below lg: tab between the Draft and the per-item Chat (each full height)
+          instead of stacking — same idea as the editor's Chat/Journal tabs. lg+:
+          the draft fills and the chat stays a collapsible at the bottom, so it
+          only connects to the per-item DO when opened. */}
+      {!isLg ? (
+        <div className="flex justify-center border-b border-border py-1.5">
+          <Segmented value={tab} onChange={setTab} />
         </div>
+      ) : null}
+
+      {isLg ? (
+        <>
+          {draftPane}
+          <div className="border-t border-border">
+            <button
+              type="button"
+              aria-expanded={chatOpen}
+              onClick={() => setChatOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted focus-visible:outline-none sm:px-6"
+            >
+              <span>Ask about this statement</span>
+              <span>{chatOpen ? 'Hide' : 'Open'}</span>
+            </button>
+            {chatOpen ? (
+              <div className="border-t border-border px-3 pb-3">
+                <InboxThreadChat captureId={row.id} onPosted={onPosted} />
+              </div>
+            ) : null}
+          </div>
+        </>
+      ) : tab === 'draft' ? (
+        draftPane
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          {row.state === 'processing' || row.state === 'captured' ? (
-            <>
-              {row.draft_error ? (
-                <>
-                  <p className="text-sm text-foreground">Background draft failed</p>
-                  <p className="max-w-md text-xs text-destructive">{row.draft_error}</p>
-                </>
-              ) : (
-                <>
-                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    {row.state === 'processing'
-                      ? 'Drafting in the background…'
-                      : 'Queued for drafting…'}
-                  </p>
-                  <DraftTrace captureId={row.id} />
-                </>
-              )}
-              {row.draft_error || row.state === 'captured' ? (
-                <div className="mt-1 flex items-center gap-2">
-                  <Button size="sm" onClick={onRedraft}>
-                    Retry draft
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onDelete}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    Delete
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          ) : row.state === 'posted' ? (
-            <p className="text-sm text-muted-foreground">
-              Posted to the journal. Dismiss to clear it from the list.
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">Nothing to review here yet.</p>
-          )}
+        <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-2">
+          <InboxThreadChat captureId={row.id} onPosted={onPosted} fill />
         </div>
       )}
-
-      {/* Per-item chat: collapsed by default so the editor gets the space */}
-      <div className="border-t border-border">
-        <button
-          type="button"
-          aria-expanded={chatOpen}
-          onClick={() => setChatOpen((v) => !v)}
-          className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted focus-visible:outline-none sm:px-6"
-        >
-          <span>Ask about this statement</span>
-          <span>{chatOpen ? 'Hide' : 'Open'}</span>
-        </button>
-        {chatOpen ? (
-          <div className="border-t border-border px-3 pb-3">
-            <InboxThreadChat captureId={row.id} onPosted={onPosted} />
-          </div>
-        ) : null}
-      </div>
     </>
+  )
+}
+
+// lg breakpoint (matches the editor): below it, the detail pane tabs between
+// Draft and Chat; at/above it they're the draft + a collapsible chat.
+function useIsLg(): boolean {
+  const [isLg, setIsLg] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const update = () => setIsLg(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return isLg
+}
+
+function Segmented({
+  value,
+  onChange,
+}: {
+  value: 'draft' | 'chat'
+  onChange: (t: 'draft' | 'chat') => void
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-full bg-muted p-0.5">
+      {(['draft', 'chat'] as const).map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => onChange(t)}
+          className={`rounded-full px-3.5 py-1 text-[13px] font-medium transition ${
+            value === t
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {t === 'draft' ? 'Draft' : 'Chat'}
+        </button>
+      ))}
+    </div>
   )
 }
 

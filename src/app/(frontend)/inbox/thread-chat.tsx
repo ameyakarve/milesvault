@@ -39,9 +39,13 @@ type Part = {
 export function InboxThreadChat({
   captureId,
   onPosted,
+  fill,
 }: {
   captureId: string
   onPosted: () => void
+  // When the chat is its own full-height view (mobile tab), fill the pane
+  // instead of the collapsed-panel cap.
+  fill?: boolean
 }) {
   const agent = useAgent<ChatDOState>({
     agent: 'ChatDO',
@@ -127,7 +131,7 @@ export function InboxThreadChat({
   }
 
   return (
-    <div className="flex max-h-[28rem] flex-col">
+    <div className={`flex flex-col ${fill ? 'min-h-0 flex-1' : 'max-h-[28rem]'}`}>
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="py-3">
           {messages.length === 0 ? (
