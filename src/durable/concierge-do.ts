@@ -591,6 +591,54 @@ export class ConciergeDO
     return { cards: out }
   }
 
+  // Programme commodity → the tier-qualifying status-counter commodities that
+  // QUALIFIES_TOWARD it (resolved from the KG). Lets the vault attach a
+  // programme's status counters to its tile by COMMODITY, even when the ledger
+  // account leaves differ (e.g. points under AllRewards, counters under
+  // AllAccor). The tile join then matches Assets:Rewards:Status:* rows on these.
+  async statusLinks(): Promise<{ links: Record<string, string[]> }> {
+    const ledger = this.ledgerStub()
+    const balances = await ledger
+      .query_sql('SELECT DISTINCT account, currency FROM balance_totals')
+      .catch((): null => null)
+    const rows = (balances?.rows ?? []) as Array<{ account: string; currency: string }>
+    const progCommodities = new Set<string>()
+    for (const r of rows)
+      if (/^Assets:Rewards:(Miles|Points):/.test(r.account)) progCommodities.add(r.currency)
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const links: Record<string, string[]> = {}
+    await Promise.all(
+      [...progCommodities].map(async (commodity) => {
+        try {
+          // The ticker alias (currency/<ticker-lowercased>) lands on the canonical
+          // programme currency node; kb_get follows it.
+          const node = (await kbHttp
+            .get(`currency/${commodity.toLowerCase()}`)
+            .catch((): null => null)) as { slug?: string } | null
+          if (!node?.slug) return
+          const rel = (await kbHttp
+            .related(node.slug, { edge_type: 'QUALIFIES_TOWARD', direction: 'incoming' })
+            .catch((): null => null)) as { items?: Array<{ other: string }> } | null
+          const counterSlugs = (rel?.items ?? [])
+            .map((i) => i.other)
+            .filter((o) => o.startsWith('currency/'))
+          const tickers: string[] = []
+          for (const cs of counterSlugs) {
+            const cn = (await kbHttp.get(cs).catch((): null => null)) as {
+              attrs?: Record<string, unknown> | null
+            } | null
+            const tk = typeof cn?.attrs?.ticker === 'string' ? cn.attrs.ticker : null
+            if (tk) tickers.push(tk)
+          }
+          if (tickers.length) links[commodity] = tickers
+        } catch {
+          /* skip this programme — its tile still shows leaf-matched counters */
+        }
+      }),
+    )
+    return { links }
+  }
+
   // Headless one-shot turn for text-only channels (Telegram, WhatsApp …):
   // the graph-walker's brain and read tools, minus everything interactive —
   // ask_user suspends, show_award_options is gen-UI, handoff needs the chat
