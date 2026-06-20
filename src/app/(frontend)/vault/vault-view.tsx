@@ -88,6 +88,10 @@ export function VaultView() {
   const [addCardOpen, setAddCardOpen] = useState(false)
   const [names, setNames] = useState<Names>({})
   const [stats, setStats] = useState<VaultStats | null>(null)
+  // Per-card KG/ledger metadata (network, reward identity, accrued cashback),
+  // keyed by account. Loaded non-blocking — tiles render without it and enrich
+  // when it arrives.
+  const [cardMeta, setCardMeta] = useState<Record<string, CardMeta>>({})
   // Bumped by the error-state retry to re-run the loader.
   const [reloadNonce, setReloadNonce] = useState(0)
 
@@ -137,6 +141,17 @@ export function VaultView() {
           if (alive)
             setState({ status: 'error', message: e instanceof Error ? e.message : String(e) })
         })
+      fetch('/api/concierge/card-meta', noStore)
+        .then((r) =>
+          r.ok ? (r.json() as Promise<{ cards?: Array<{ card: string } & CardMeta> }>) : null,
+        )
+        .then((d) => {
+          if (!alive || !d?.cards) return
+          const m: Record<string, CardMeta> = {}
+          for (const c of d.cards) m[c.card] = c
+          setCardMeta(m)
+        })
+        .catch(() => {})
     }
     load()
     const onVisible = () => {
@@ -246,6 +261,7 @@ export function VaultView() {
                 row={r}
                 names={names}
                 spend={stats?.card_spend.filter((s) => s.account === r.account) ?? null}
+                meta={cardMeta[r.account] ?? null}
               />
             ))}
           </div>
@@ -290,18 +306,37 @@ function accountHref(r: AccountSummaryRow): string {
 
 // Hero card: one loyalty programme — monogram, resolved name, big balance.
 // Medium card: a credit card — monogram, issuer-qualified name, balance owed.
+// Per-card KG + ledger metadata (from /api/concierge/card-meta), overlaid on
+// the tile. All values are REAL — network/pool come from the knowledge graph,
+// the receivable from the ledger — never invented earn rates.
+type CardMeta = {
+  network: string | null
+  reward_kind: 'points' | 'cashback' | 'none'
+  pool_name: string | null
+  receivable_balance: number | null
+}
+
 export function CreditCardCard({
   row,
   names,
   spend,
+  meta,
 }: {
   row: AccountSummaryRow
   names: Names
   spend: Array<{ currency: string; total: number }> | null
+  meta: CardMeta | null
 }) {
   const { name, suffix } = displayName(row.account, names)
   const bal = balanceOf(row)
   const owed = bal < 0
+  const inCredit = bal > 0
+  // Liabilities are stored negative when you owe — label the direction so the
+  // bare number isn't ambiguous, and show the magnitude (the label carries sign).
+  const stateLabel = owed ? 'Outstanding' : inCredit ? 'In credit' : 'Settled'
+  const magnitude = Math.abs(bal).toLocaleString('en-IN', {
+    maximumFractionDigits: row.scale > 0 ? 2 : 0,
+  })
   const expensesText = (spend && spend.length > 0
     ? spend
     : [{ currency: row.currency, total: 0 }]
@@ -311,6 +346,24 @@ export function CreditCardCard({
         `${s.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}${s.currency !== row.currency ? ` ${s.currency}` : ''}`,
     )
     .join(' + ')
+
+  // Reward identity, grounded in real data: a cashback card shows what's
+  // actually accrued in its issuer receivable; a points card shows the pool it
+  // earns into (a per-card points balance is meaningless — pools are
+  // programme-wide and shared across a bank's cards).
+  const accrued =
+    meta?.reward_kind === 'cashback' &&
+    meta.receivable_balance != null &&
+    meta.receivable_balance > 0
+      ? meta.receivable_balance
+      : null
+  const rewardLabel =
+    meta?.reward_kind === 'cashback'
+      ? 'Cashback'
+      : meta?.reward_kind === 'points'
+        ? (meta.pool_name ?? 'Points')
+        : null
+
   return (
     <Link href={accountHref(row)} className={CARD_FRAME}>
       <span className="flex items-center gap-2.5">
@@ -323,24 +376,53 @@ export function CreditCardCard({
             </span>
           ) : null}
         </span>
+        {meta?.network ? (
+          <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+            {meta.network}
+          </span>
+        ) : null}
         <ArrowUpRight
           className="size-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-foreground"
           aria-hidden
         />
       </span>
-      <span className="flex items-baseline gap-1.5">
+
+      <span className="flex flex-col gap-0.5">
         <span
           className={cn(
-            'font-mono text-xl font-semibold leading-none tracking-tight',
-            owed ? 'text-foreground' : 'text-emerald-600 dark:text-emerald-400',
+            'text-[10px] font-medium uppercase tracking-wide',
+            inCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
           )}
         >
-          {formatBalance(row.balance_scaled, row.scale)}
+          {stateLabel}
         </span>
-        <span className="font-mono text-[11px] text-muted-foreground">{row.currency}</span>
-        <span className="ml-auto truncate font-mono text-[10px] text-muted-foreground">
-          90d {expensesText}
+        <span className="flex items-baseline gap-1.5">
+          <span
+            className={cn(
+              'font-mono text-xl font-semibold leading-none tracking-tight',
+              inCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground',
+            )}
+          >
+            {magnitude}
+          </span>
+          <span className="font-mono text-[11px] text-muted-foreground">{row.currency}</span>
         </span>
+      </span>
+
+      <span className="flex items-center justify-between gap-2 border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
+        <span className="truncate font-mono">90d {expensesText}</span>
+        {rewardLabel ? (
+          <span className="flex shrink-0 items-center gap-1 truncate">
+            <span className="size-1.5 rounded-full bg-foreground/30" aria-hidden />
+            {accrued != null ? (
+              <span className="text-foreground">
+                +{accrued.toLocaleString('en-IN', { maximumFractionDigits: 0 })} {row.currency} cashback
+              </span>
+            ) : (
+              <span>{rewardLabel}</span>
+            )}
+          </span>
+        ) : null}
       </span>
     </Link>
   )

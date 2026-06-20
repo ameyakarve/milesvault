@@ -17,10 +17,16 @@ export const Default: StoryObj = {
         }}
         names={{}}
         spend={[{ currency: 'INR', total: 50000 }]}
+        meta={{
+          network: 'Visa',
+          reward_kind: 'cashback',
+          pool_name: null,
+          receivable_balance: 450,
+        }}
       />
       <CreditCardCard
         row={{
-          account: 'Liabilities:CreditCards:HDFC:Infinia:1784',
+          account: 'Liabilities:CreditCards:Demo:Travel:5678',
           currency: 'INR',
           balance_scaled: '0',
           scale: 12,
@@ -28,6 +34,12 @@ export const Default: StoryObj = {
         }}
         names={{}}
         spend={[]}
+        meta={{
+          network: 'Mastercard',
+          reward_kind: 'points',
+          pool_name: 'Sample Rewards',
+          receivable_balance: null,
+        }}
       />
     </div>
   ),
