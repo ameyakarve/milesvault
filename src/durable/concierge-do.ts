@@ -454,22 +454,23 @@ export class ConciergeDO
     return debug ? { links, trace } : { links }
   }
 
-  // Per-card metadata for the Vault home tiles (owner ask): the KG network
-  // (ON_NETWORK), the reward IDENTITY the card earns into (DENOMINATED_IN →
-  // currency display name), and the issuer's cashback receivable
-  // (Assets:Receivable:<issuer>) with its live balance. Reward *identity* is
-  // card-specific; the cashback receivable is issuer-level. The points pool
-  // *balance* is programme-wide (shared across cards) so it is deliberately NOT
-  // returned per card — it would misattribute a shared pool to one card.
+  // Per-card metadata for the Vault home tiles (owner ask): the associated
+  // reward balance, uniform across points and cashback (we don't model that
+  // split as first-class). The card earns into a pool (DENOMINATED_IN → a
+  // reward currency) or, failing that, accrues into the issuer cashback
+  // receivable. `reward_label` is the pool name or "Cashback"; balance/pending
+  // are in `reward_unit` (a points ticker or a currency). Pool balances are
+  // programme-wide (shared across a bank's cards) — surfaced per card by owner
+  // decision, with the `:Pending` accrual called out separately.
   async cardMeta(): Promise<{
     cards: Array<{
       card: string
       issuer: string | null
-      network: string | null
-      reward_kind: 'points' | 'cashback' | 'none'
-      pool_name: string | null
-      receivable_account: string | null
-      receivable_balance: number | null
+      reward_label: string | null
+      reward_account: string | null
+      reward_balance: number | null
+      reward_pending: number | null
+      reward_unit: string | null
     }>
   }> {
     const ledger = this.ledgerStub()
@@ -506,24 +507,17 @@ export class ConciergeDO
         const parts = kgLookupParts(account)
         if (!parts || parts.kind !== 'card') return
         const issuer = parts.issuer ?? null
-        const receivable_account = issuer ? `Assets:Receivable:${issuer}` : null
-        const receivable_balance = receivable_account ? balanceOf(receivable_account) : null
 
-        let network: string | null = null
-        let pool_name: string | null = null
+        let reward_label: string | null = null
+        let reward_account: string | null = null
+        let reward_balance: number | null = null
+        let reward_pending: number | null = null
+        let reward_unit: string | null = null
+
+        // Points pool the card earns into (DENOMINATED_IN → a reward currency).
         try {
           const hit = await resolveByBeancountName(kbHttp, 'cc', parts.product)
           if (hit) {
-            const netRel = (await kbHttp
-              .related(hit.slug, { edge_type: 'ON_NETWORK', direction: 'outgoing' })
-              .catch((): null => null)) as RelItems | null
-            const netSlug = netRel?.items?.map((i) => i.other).find((o) => o.startsWith('network/'))
-            if (netSlug) {
-              const n = (await kbHttp.get(netSlug).catch((): null => null)) as {
-                display_name?: string | null
-              } | null
-              network = n?.display_name ?? prettySlug(netSlug)
-            }
             const curRel = (await kbHttp
               .related(hit.slug, { edge_type: 'DENOMINATED_IN', direction: 'outgoing' })
               .catch((): null => null)) as RelItems | null
@@ -533,26 +527,51 @@ export class ConciergeDO
             if (curSlug) {
               const n = (await kbHttp.get(curSlug).catch((): null => null)) as {
                 display_name?: string | null
+                attrs?: Record<string, unknown> | null
               } | null
-              pool_name = n?.display_name ?? prettySlug(curSlug)
+              const bn = typeof n?.attrs?.beancountName === 'string' ? n.attrs.beancountName : null
+              const ticker = typeof n?.attrs?.ticker === 'string' ? n.attrs.ticker : null
+              reward_label = n?.display_name ?? prettySlug(curSlug)
+              reward_unit = ticker ?? 'pts'
+              if (bn) {
+                // Same classification as listRewardAccounts: airline FFP → Miles,
+                // everything else → Points.
+                const kind = /-miles$/.test(curSlug) ? 'Miles' : 'Points'
+                reward_account = `Assets:Rewards:${kind}:${bn}`
+                reward_balance = balanceOf(reward_account)
+                const pendingRoot = `${reward_account}:Pending`
+                const pend = balRows
+                  .filter((b) => b.account === pendingRoot || b.account.startsWith(`${pendingRoot}:`))
+                  .reduce((s, b) => s + Number(b.balance_scaled) / 10 ** b.scale, 0)
+                reward_pending = pend !== 0 ? pend : null
+              }
             }
           }
         } catch {
-          /* KG miss → network/pool stay null; the card still renders */
+          /* KG miss → reward stays null; the card still renders */
         }
-        const reward_kind: 'points' | 'cashback' | 'none' = pool_name
-          ? 'points'
-          : receivable_balance != null
-            ? 'cashback'
-            : 'none'
+
+        // No points pool → fall back to the issuer cashback receivable. Uniform
+        // "reward balance" — we don't model cashback vs points as first-class.
+        if (reward_account == null && issuer) {
+          const receivable_account = `Assets:Receivable:${issuer}`
+          const bal = balanceOf(receivable_account)
+          if (bal != null) {
+            reward_label = 'Cashback'
+            reward_account = receivable_account
+            reward_balance = bal
+            reward_unit = 'INR'
+          }
+        }
+
         out.push({
           card: account,
           issuer,
-          network,
-          reward_kind,
-          pool_name,
-          receivable_account,
-          receivable_balance,
+          reward_label,
+          reward_account,
+          reward_balance,
+          reward_pending,
+          reward_unit,
         })
       }),
     )

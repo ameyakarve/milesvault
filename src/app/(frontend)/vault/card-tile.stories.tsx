@@ -17,11 +17,13 @@ export const Default: StoryObj = {
         }}
         names={{}}
         spend={[{ currency: 'INR', total: 50000 }]}
+        trend={[12000, 18000, 9000, 22000, 15000, 50000]}
         meta={{
-          network: 'Visa',
-          reward_kind: 'cashback',
-          pool_name: null,
-          receivable_balance: 450,
+          reward_label: 'Cashback',
+          reward_account: 'Assets:Receivable:Demo',
+          reward_balance: 450,
+          reward_pending: 120,
+          reward_unit: 'INR',
         }}
       />
       <CreditCardCard
@@ -34,11 +36,13 @@ export const Default: StoryObj = {
         }}
         names={{}}
         spend={[]}
+        trend={[8000, 6000, 11000, 7000, 9000, 4000]}
         meta={{
-          network: 'Mastercard',
-          reward_kind: 'points',
-          pool_name: 'Sample Rewards',
-          receivable_balance: null,
+          reward_label: 'Sample Rewards',
+          reward_account: 'Assets:Rewards:Points:Sample',
+          reward_balance: 88184,
+          reward_pending: 1200,
+          reward_unit: 'pts',
         }}
       />
     </div>

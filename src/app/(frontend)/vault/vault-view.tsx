@@ -261,6 +261,7 @@ export function VaultView() {
                 row={r}
                 names={names}
                 spend={stats?.card_spend.filter((s) => s.account === r.account) ?? null}
+                trend={stats?.card_spend_trend.find((t) => t.account === r.account)?.months ?? null}
                 meta={cardMeta[r.account] ?? null}
               />
             ))}
@@ -307,27 +308,98 @@ function accountHref(r: AccountSummaryRow): string {
 // Hero card: one loyalty programme — monogram, resolved name, big balance.
 // Medium card: a credit card — monogram, issuer-qualified name, balance owed.
 // Per-card KG + ledger metadata (from /api/concierge/card-meta), overlaid on
-// the tile. All values are REAL — network/pool come from the knowledge graph,
-// the receivable from the ledger — never invented earn rates.
+// the tile. The associated reward balance is uniform across points/cashback
+// (we don't model that split) — `reward_unit` is a points ticker or a currency.
+// All REAL: pool/receivable from the ledger, label/ticker from the KG.
 type CardMeta = {
-  network: string | null
-  reward_kind: 'points' | 'cashback' | 'none'
-  pool_name: string | null
-  receivable_balance: number | null
+  reward_label: string | null
+  reward_account: string | null
+  reward_balance: number | null
+  reward_pending: number | null
+  reward_unit: string | null
+}
+
+// Curated bank brand tints for the card-art header band — real brand colors are
+// public facts (not user data). Keyed off the issuer segment of the account;
+// unknown issuers fall back to a deterministic neutral gradient.
+const BANK_BANDS: Record<string, string> = {
+  hdfc: 'from-blue-800 to-blue-950',
+  axis: 'from-rose-800 to-rose-950',
+  icici: 'from-orange-700 to-orange-900',
+  sbi: 'from-sky-700 to-blue-900',
+  sbicard: 'from-sky-700 to-blue-900',
+  hsbc: 'from-red-700 to-red-950',
+  indusind: 'from-rose-900 to-red-950',
+  amex: 'from-cyan-700 to-blue-900',
+  americanexpress: 'from-cyan-700 to-blue-900',
+  kotak: 'from-red-700 to-rose-900',
+  idfc: 'from-fuchsia-900 to-rose-950',
+  idfcfirst: 'from-fuchsia-900 to-rose-950',
+  yes: 'from-blue-700 to-indigo-900',
+  yesbank: 'from-blue-700 to-indigo-900',
+  rbl: 'from-amber-700 to-red-900',
+  au: 'from-fuchsia-800 to-purple-950',
+  aubank: 'from-fuchsia-800 to-purple-950',
+  sc: 'from-emerald-700 to-blue-900',
+  standardchartered: 'from-emerald-700 to-blue-900',
+  citi: 'from-blue-700 to-blue-950',
+  citibank: 'from-blue-700 to-blue-950',
+}
+const FALLBACK_BANDS = [
+  'from-slate-700 to-slate-900',
+  'from-zinc-700 to-zinc-900',
+  'from-stone-700 to-stone-900',
+  'from-neutral-700 to-neutral-900',
+]
+function issuerOf(account: string): string | null {
+  // Liabilities:CreditCards:<Issuer>:<Card>[:last4]
+  return account.split(':')[2] ?? null
+}
+function bankBand(issuer: string | null): string {
+  const key = (issuer ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (key && BANK_BANDS[key]) return BANK_BANDS[key]!
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
+  return FALLBACK_BANDS[Math.abs(h) % FALLBACK_BANDS.length]!
+}
+
+// Tiny bar sparkline (monthly spend, oldest→newest). Bars use the current text
+// color at low opacity; a zero month keeps a sliver so the axis reads.
+function Sparkbars({ values }: { values: number[] }) {
+  const max = Math.max(...values, 1)
+  return (
+    <span className="inline-flex h-3.5 items-end gap-px" aria-hidden>
+      {values.map((v, i) => (
+        <span
+          key={i}
+          className="w-1 rounded-sm bg-current/40"
+          style={{ height: `${Math.max(10, (v / max) * 100)}%` }}
+        />
+      ))}
+    </span>
+  )
+}
+
+function fmtReward(v: number, unit: string | null): string {
+  const n = v.toLocaleString('en-IN', { maximumFractionDigits: 0 })
+  return unit === 'INR' ? `₹${n}` : `${n} ${unit ?? 'pts'}`
 }
 
 export function CreditCardCard({
   row,
   names,
   spend,
+  trend,
   meta,
 }: {
   row: AccountSummaryRow
   names: Names
   spend: Array<{ currency: string; total: number }> | null
+  trend: number[] | null
   meta: CardMeta | null
 }) {
   const { name, suffix } = displayName(row.account, names)
+  const issuer = issuerOf(row.account)
   const bal = balanceOf(row)
   const owed = bal < 0
   const inCredit = bal > 0
@@ -337,90 +409,85 @@ export function CreditCardCard({
   const magnitude = Math.abs(bal).toLocaleString('en-IN', {
     maximumFractionDigits: row.scale > 0 ? 2 : 0,
   })
-  const expensesText = (spend && spend.length > 0
-    ? spend
-    : [{ currency: row.currency, total: 0 }]
-  )
-    .map(
-      (s) =>
-        `${s.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}${s.currency !== row.currency ? ` ${s.currency}` : ''}`,
-    )
-    .join(' + ')
 
-  // Reward identity, grounded in real data: a cashback card shows what's
-  // actually accrued in its issuer receivable; a points card shows the pool it
-  // earns into (a per-card points balance is meaningless — pools are
-  // programme-wide and shared across a bank's cards).
-  const accrued =
-    meta?.reward_kind === 'cashback' &&
-    meta.receivable_balance != null &&
-    meta.receivable_balance > 0
-      ? meta.receivable_balance
-      : null
-  const rewardLabel =
-    meta?.reward_kind === 'cashback'
-      ? 'Cashback'
-      : meta?.reward_kind === 'points'
-        ? (meta.pool_name ?? 'Points')
-        : null
+  // Spend: the dominant-currency total over the window + a month-over-month
+  // delta from the trailing trend series.
+  const spendRows = spend && spend.length ? spend : [{ currency: row.currency, total: 0 }]
+  const primarySpend = [...spendRows].sort((a, b) => Math.abs(b.total) - Math.abs(a.total))[0]!
+  const spendText = `${fmtAmt(primarySpend.total)}${primarySpend.currency !== 'INR' ? ` ${primarySpend.currency}` : ''}`
+  const series = trend ?? []
+  const last = series[series.length - 1] ?? 0
+  const prev = series[series.length - 2] ?? 0
+  const deltaPct = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null
 
   return (
-    <Link href={accountHref(row)} className={CARD_FRAME}>
-      <span className="flex items-center gap-2.5">
-        <Monogram name={name} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-          {name}
-          {suffix ? (
-            <span className="ml-1.5 font-mono text-[10px] font-normal text-muted-foreground">
-              ··{suffix}
+    <Link
+      href={accountHref(row)}
+      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-md"
+    >
+      {/* card-art band — bank brand color, wordmark, last 4 */}
+      <span className={cn('flex flex-col gap-0.5 bg-gradient-to-br px-3.5 py-2.5 text-white', bankBand(issuer))}>
+        <span className="flex items-center justify-between gap-2">
+          <span className="truncate text-[11px] font-semibold uppercase tracking-wider opacity-90">
+            {issuer ?? name}
+          </span>
+          <span className="shrink-0 font-mono text-[10px] tracking-wider opacity-80">
+            •••• {suffix || '----'}
+          </span>
+        </span>
+        <span className="truncate text-sm font-medium">{name}</span>
+      </span>
+
+      {/* body — outstanding, spend trend, reward balance */}
+      <span className="flex flex-col gap-2 px-3.5 py-3">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            {stateLabel}
+          </span>
+          <span className="flex items-baseline gap-1">
+            <span
+              className={cn(
+                'font-mono text-lg font-semibold leading-none tracking-tight',
+                inCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground',
+              )}
+            >
+              {magnitude}
             </span>
-          ) : null}
-        </span>
-        {meta?.network ? (
-          <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
-            {meta.network}
+            <span className="font-mono text-[10px] text-muted-foreground">{row.currency}</span>
           </span>
-        ) : null}
-        <ArrowUpRight
-          className="size-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-foreground"
-          aria-hidden
-        />
-      </span>
-
-      <span className="flex flex-col gap-0.5">
-        <span
-          className={cn(
-            'text-[10px] font-medium uppercase tracking-wide',
-            inCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
-          )}
-        >
-          {stateLabel}
         </span>
-        <span className="flex items-baseline gap-1.5">
-          <span
-            className={cn(
-              'font-mono text-xl font-semibold leading-none tracking-tight',
-              inCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground',
-            )}
-          >
-            {magnitude}
+
+        <span className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="text-[10px] uppercase tracking-wide">Spend</span>
+            {series.length > 1 ? <Sparkbars values={series} /> : null}
           </span>
-          <span className="font-mono text-[11px] text-muted-foreground">{row.currency}</span>
-        </span>
-      </span>
-
-      <span className="flex items-center justify-between gap-2 border-t border-border/60 pt-2 text-[10px] text-muted-foreground">
-        <span className="truncate font-mono">90d {expensesText}</span>
-        {rewardLabel ? (
-          <span className="flex shrink-0 items-center gap-1 truncate">
-            <span className="size-1.5 rounded-full bg-foreground/30" aria-hidden />
-            {accrued != null ? (
-              <span className="text-foreground">
-                +{accrued.toLocaleString('en-IN', { maximumFractionDigits: 0 })} {row.currency} cashback
+          <span className="flex items-baseline gap-1">
+            <span className="font-mono text-foreground">{spendText}</span>
+            {deltaPct != null && deltaPct !== 0 ? (
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {deltaPct > 0 ? '▲' : '▼'}
+                {Math.abs(deltaPct)}%
               </span>
-            ) : (
-              <span>{rewardLabel}</span>
-            )}
+            ) : null}
+          </span>
+        </span>
+
+        {meta?.reward_label ? (
+          <span className="flex items-center justify-between gap-2 border-t border-border/60 pt-2 text-[11px]">
+            <span className="truncate text-muted-foreground">{meta.reward_label}</span>
+            <span className="flex shrink-0 items-baseline gap-1">
+              {meta.reward_balance != null ? (
+                <span className="font-mono text-foreground">
+                  {fmtReward(meta.reward_balance, meta.reward_unit)}
+                </span>
+              ) : null}
+              {meta.reward_pending ? (
+                <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400">
+                  · {fmtReward(meta.reward_pending, meta.reward_unit)} pending
+                </span>
+              ) : null}
+            </span>
           </span>
         ) : null}
       </span>
