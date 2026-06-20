@@ -404,8 +404,8 @@ function HeadlineStrip({ stats }: { stats: VaultStats }) {
         label="Card balances"
         value={cards.main ? `${fmtAmt(cards.main.total)} ${cards.main.currency}` : '—'}
         sub={
-          cards.main
-            ? `${cards.main.accounts} card${cards.main.accounts === 1 ? '' : 's'}`
+          stats.card_count > 0
+            ? `${stats.card_count} card${stats.card_count === 1 ? '' : 's'}`
             : 'no cards yet'
         }
         negative={owed > 0}
