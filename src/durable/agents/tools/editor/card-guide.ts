@@ -35,26 +35,18 @@ export async function fetchCardGuide(
 ): Promise<CardGuideResult> {
   try {
     type Item = { slug: string; display_name: string | null }
-    const resolve = async (q: string): Promise<Item[]> => {
-      const r = (await kb.resolve(q, { prefix: 'cc', limit: 5 })) as {
-        items?: Item[]
-      }
-      return r.items ?? []
-    }
-    // Resolution is literal display-name matching; statements add filler
-    // the KG nodes omit. No hardcoded vocabulary: on a miss, gather
-    // candidates by per-token recall — a single hit is used directly,
-    // multiple go back as options.
-    // The model may re-call with an exact slug (cc/…) it picked from a prior
-    // call's candidate set — resolve that directly, skipping the name search.
+    // NO fuzzy name resolution. A card is identified by its EXACT slug: the model
+    // (after a card_not_found) and the add-card picker pass the cc/… slug, and
+    // card-identify passes knownTop. A free-text name with no slug is never
+    // guessed — it falls straight through to the full closed-set list below for
+    // the model to pick from.
     const slugInput = /^cc\//.test(card.trim()) ? card.trim() : null
     const top: Item | undefined =
-      knownTop ??
-      (slugInput ? { slug: slugInput, display_name: null } : (await resolve(card))[0])
+      knownTop ?? (slugInput ? { slug: slugInput, display_name: null } : undefined)
     if (!top) {
-      // Direct name resolve missed. Hand the model the FULL valid card set (the
-      // closed set) and let IT pick — no code arbiter, no token-overlap
-      // narrowing. The candidate NAME is derived from the SLUG, which spells out
+      // No exact slug in hand. Hand the model the FULL valid card set (the
+      // closed set) and let IT pick — no fuzzy resolve, no code arbiter, no
+      // token-overlap narrowing. The candidate NAME is derived from the SLUG, which spells out
       // words the display H1 may punctuate (slug `hsbc-live-plus` → "Hsbc Live
       // Plus", matching a user's "HSBC Live Plus" where the H1 "HSBC Live+" does
       // NOT). The model re-calls card_guide with the chosen `slug`.
