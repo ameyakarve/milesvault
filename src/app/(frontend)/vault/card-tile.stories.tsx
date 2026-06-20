@@ -38,7 +38,7 @@ export const Default: StoryObj = {
         meta={{
           reward_label: 'Sample Rewards',
           reward_account: 'Assets:Rewards:Points:Sample',
-          reward_balance: 88184,
+          reward_balance: 75200,
           reward_pending: 1200,
           reward_unit: 'pts',
         }}
