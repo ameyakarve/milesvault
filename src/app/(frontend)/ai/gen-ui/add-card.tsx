@@ -81,9 +81,11 @@ export function AddCardCard({
     setSelected(c)
     setGuide(null)
     setGuideError(false)
-    if (!c.name) return
+    if (!c.slug) return
     setGuideLoading(true)
-    fetch(`/api/kb/card-guide?name=${encodeURIComponent(c.name)}`)
+    // Pass the EXACT slug (the picker already has it) — card-guide resolves a
+    // cc/… slug directly, no fuzzy name matching.
+    fetch(`/api/kb/card-guide?name=${encodeURIComponent(c.slug)}`)
       .then((r) => (r.ok ? (r.json() as Promise<Guide>) : Promise.reject(new Error(String(r.status)))))
       .then((g) => setGuide(g))
       .catch(() => setGuideError(true))
