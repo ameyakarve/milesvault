@@ -477,12 +477,13 @@ export class ConciergeDO
     const [snapshot, balances] = await Promise.all([
       ledger.ledger_snapshot().catch((): null => null),
       ledger
-        .query_sql('SELECT account, scale, balance_scaled FROM balance_totals')
+        .query_sql('SELECT account, currency, scale, balance_scaled FROM balance_totals')
         .catch((): null => null),
     ])
     const accounts = (snapshot?.accounts ?? []) as ReadonlyArray<{ account: string }>
     const balRows = (balances?.rows ?? []) as Array<{
       account: string
+      currency: string
       scale: number
       balance_scaled: number
     }>
@@ -529,21 +530,29 @@ export class ConciergeDO
                 display_name?: string | null
                 attrs?: Record<string, unknown> | null
               } | null
-              const bn = typeof n?.attrs?.beancountName === 'string' ? n.attrs.beancountName : null
               const ticker = typeof n?.attrs?.ticker === 'string' ? n.attrs.ticker : null
               reward_label = n?.display_name ?? prettySlug(curSlug)
               reward_unit = ticker ?? 'pts'
-              if (bn) {
-                // Same classification as listRewardAccounts: airline FFP → Miles,
-                // everything else → Points.
-                const kind = /-miles$/.test(curSlug) ? 'Miles' : 'Points'
-                reward_account = `Assets:Rewards:${kind}:${bn}`
-                reward_balance = balanceOf(reward_account)
-                const pendingRoot = `${reward_account}:Pending`
-                const pend = balRows
-                  .filter((b) => b.account === pendingRoot || b.account.startsWith(`${pendingRoot}:`))
-                  .reduce((s, b) => s + Number(b.balance_scaled) / 10 ** b.scale, 0)
-                reward_pending = pend !== 0 ? pend : null
+              if (ticker) {
+                // Match the ACTUAL ledger reward accounts by COMMODITY — the same
+                // balances the Vault programmes list reads. No path
+                // reconstruction, no Miles/Points guess (which diverged from the
+                // real account and left the balance blank).
+                const tk = ticker.toUpperCase()
+                const isPending = (a: string) => /:Pending(?::|$)/.test(a)
+                const rewardRows = balRows.filter(
+                  (b) => b.account.startsWith('Assets:Rewards:') && b.currency.toUpperCase() === tk,
+                )
+                const sum = (rs: typeof rewardRows) =>
+                  rs.reduce((s, b) => s + Number(b.balance_scaled) / 10 ** b.scale, 0)
+                if (rewardRows.length) {
+                  const posted = rewardRows.filter((b) => !isPending(b.account))
+                  const pendingRows = rewardRows.filter((b) => isPending(b.account))
+                  reward_account = (posted[0] ?? rewardRows[0]!).account
+                  reward_balance = sum(posted)
+                  const pend = sum(pendingRows)
+                  reward_pending = pend !== 0 ? pend : null
+                }
               }
             }
           }

@@ -16,8 +16,7 @@ export const Default: StoryObj = {
           last_activity: 20260430,
         }}
         names={{}}
-        spend={[{ currency: 'INR', total: 50000 }]}
-        trend={[12000, 18000, 9000, 22000, 15000, 50000]}
+        trend={{ currency: 'INR', months: [12000, 18000, 9000, 22000, 15000, 50000] }}
         meta={{
           reward_label: 'Cashback',
           reward_account: 'Assets:Receivable:Demo',
@@ -35,8 +34,7 @@ export const Default: StoryObj = {
           last_activity: 20260430,
         }}
         names={{}}
-        spend={[]}
-        trend={[8000, 6000, 11000, 7000, 9000, 4000]}
+        trend={{ currency: 'INR', months: [8000, 6000, 11000, 7000, 9000, 4000] }}
         meta={{
           reward_label: 'Sample Rewards',
           reward_account: 'Assets:Rewards:Points:Sample',

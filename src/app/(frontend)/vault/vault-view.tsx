@@ -260,8 +260,7 @@ export function VaultView() {
                 key={`${r.account}|${r.currency}`}
                 row={r}
                 names={names}
-                spend={stats?.card_spend.filter((s) => s.account === r.account) ?? null}
-                trend={stats?.card_spend_trend.find((t) => t.account === r.account)?.months ?? null}
+                trend={stats?.card_spend_trend.find((t) => t.account === r.account) ?? null}
                 meta={cardMeta[r.account] ?? null}
               />
             ))}
@@ -363,17 +362,19 @@ function bankBand(issuer: string | null): string {
   return FALLBACK_BANDS[Math.abs(h) % FALLBACK_BANDS.length]!
 }
 
-// Tiny bar sparkline (monthly spend, oldest→newest). Bars use the current text
-// color at low opacity; a zero month keeps a sliver so the axis reads.
+// Tiny bar sparkline (monthly spend, oldest→newest). The latest month is
+// highlighted; earlier months are quieter but clearly visible. A zero month
+// keeps a sliver so the axis reads.
 function Sparkbars({ values }: { values: number[] }) {
   const max = Math.max(...values, 1)
+  const lastIdx = values.length - 1
   return (
-    <span className="inline-flex h-3.5 items-end gap-px" aria-hidden>
+    <span className="inline-flex h-4 items-end gap-0.5" aria-hidden>
       {values.map((v, i) => (
         <span
           key={i}
-          className="w-1 rounded-sm bg-current/40"
-          style={{ height: `${Math.max(10, (v / max) * 100)}%` }}
+          className={cn('w-1.5 rounded-sm', i === lastIdx ? 'bg-foreground/80' : 'bg-foreground/30')}
+          style={{ height: `${Math.max(12, (v / max) * 100)}%` }}
         />
       ))}
     </span>
@@ -388,14 +389,12 @@ function fmtReward(v: number, unit: string | null): string {
 export function CreditCardCard({
   row,
   names,
-  spend,
   trend,
   meta,
 }: {
   row: AccountSummaryRow
   names: Names
-  spend: Array<{ currency: string; total: number }> | null
-  trend: number[] | null
+  trend: { currency: string; months: number[] } | null
   meta: CardMeta | null
 }) {
   const { name, suffix } = displayName(row.account, names)
@@ -410,15 +409,14 @@ export function CreditCardCard({
     maximumFractionDigits: row.scale > 0 ? 2 : 0,
   })
 
-  // Spend: the dominant-currency total over the window + a month-over-month
-  // delta from the trailing trend series.
-  const spendRows = spend && spend.length ? spend : [{ currency: row.currency, total: 0 }]
-  const primarySpend = [...spendRows].sort((a, b) => Math.abs(b.total) - Math.abs(a.total))[0]!
-  const spendText = `${fmtAmt(primarySpend.total)}${primarySpend.currency !== 'INR' ? ` ${primarySpend.currency}` : ''}`
-  const series = trend ?? []
-  const last = series[series.length - 1] ?? 0
-  const prev = series[series.length - 2] ?? 0
-  const deltaPct = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null
+  // Spend, month over month: the current month's charges + the delta vs the
+  // prior month, both from the monthly series the sparkline draws.
+  const series = trend?.months ?? []
+  const spendCcy = trend?.currency ?? 'INR'
+  const thisMo = series[series.length - 1] ?? 0
+  const prevMo = series[series.length - 2] ?? 0
+  const deltaPct = prevMo > 0 ? Math.round(((thisMo - prevMo) / prevMo) * 100) : null
+  const spendText = `${fmtAmt(thisMo)}${spendCcy !== 'INR' ? ` ${spendCcy}` : ''}`
 
   return (
     <Link
@@ -459,13 +457,19 @@ export function CreditCardCard({
 
         <span className="flex items-center justify-between gap-2 text-[11px]">
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="text-[10px] uppercase tracking-wide">Spend</span>
+            <span className="text-[10px] uppercase tracking-wide">This mo</span>
             {series.length > 1 ? <Sparkbars values={series} /> : null}
           </span>
           <span className="flex items-baseline gap-1">
             <span className="font-mono text-foreground">{spendText}</span>
             {deltaPct != null && deltaPct !== 0 ? (
-              <span className="font-mono text-[10px] text-muted-foreground">
+              <span
+                className={cn(
+                  'font-mono text-[10px]',
+                  deltaPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400',
+                )}
+                title="vs last month"
+              >
                 {deltaPct > 0 ? '▲' : '▼'}
                 {Math.abs(deltaPct)}%
               </span>
