@@ -142,6 +142,10 @@ export type EntryRef2 = {
 export type VaultStats = {
   period: { from: number; to: number }
   card_outstanding: Array<{ currency: string; total: number; accounts: number }>
+  // Number of physical cards = distinct leaf accounts under Liabilities:CreditCards:,
+  // currency-agnostic, with `:Pending` sub-ledgers folded into their card (not counted
+  // separately). The per-currency `accounts` above over-counts (sub-accounts + currencies).
+  card_count: number
   // Per-card charges (negative postings on the liability). Window: between
   // the card's two most recent balance assertions (= the imported statement
   // cycle) when they exist, else the stats period (month-to-date).
@@ -414,9 +418,14 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       .map(([currency, total]) => ({ currency, total }))
       .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
 
+    // A card = a unique leaf under Liabilities:CreditCards:, with its `:Pending`
+    // sub-ledger NOT counted as a separate card (owner definition).
+    const card_count = cardAccounts.filter((a) => !/:Pending(?::|$)/.test(a)).length
+
     return {
       period: { from: opts.fromInt, to: opts.toInt },
       card_outstanding,
+      card_count,
       card_spend,
       bank_total,
       expense_total,
