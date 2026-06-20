@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowUpRight } from 'lucide-react'
+import { ProgrammeMark } from './programme-marks'
 import { AddAccountsModal } from '@/components/add-accounts-modal'
 import { cn } from '@/lib/utils'
 import type { AccountSummaryRow } from '@/durable/ledger-types'
@@ -16,16 +16,9 @@ import {
   isHolding,
   isPending,
 } from '@/lib/ledger-core/account-display'
-import { SectionLabel, StatTile, CenteredState, Monogram, StateChip } from '@/components/shared'
+import { SectionLabel, StatTile, CenteredState } from '@/components/shared'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BankMark } from './bank-marks'
-
-// Shared card frame: compact, hairline border, a hint of depth, and a hover
-// lift. The monogram carries each card's per-programme tint — no extra accent
-// rule (a straight bar reads wrong against the rounded corner). Reused by the
-// programme + credit-card cells.
-const CARD_FRAME =
-  'group flex flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5 shadow-sm transition-all duration-150 hover:-translate-y-px hover:border-foreground/20 hover:shadow-md'
 
 // KG display names (cards, points) fetched once and overlaid on the
 // path-derived labels — account path → display name.
@@ -213,11 +206,28 @@ export function VaultView() {
     a.startsWith('Assets:Rewards:Miles:') || a.startsWith('Assets:Rewards:Points:')
   const rewardRows = rows.filter((r) => isProgrammeHolding(r.account))
   const holdings = foldPending(rewardRows)
+  // Tier-qualifying status counters keyed by programme leaf (the segment after
+  // Assets:Rewards:Status:) — a programme can hold several commodities (nights,
+  // segments, qualifying points), each its own row. Overlaid on the programme
+  // tiles, so they're excluded from "everything else" below.
+  const statusByProgramme = new Map<string, Array<{ value: number; commodity: string }>>()
+  for (const r of rows) {
+    if (!r.account.startsWith('Assets:Rewards:Status:')) continue
+    const leaf = r.account.split(':')[3]
+    if (!leaf) continue
+    const value = Number(r.balance_scaled) / 10 ** r.scale
+    const arr = statusByProgramme.get(leaf) ?? []
+    arr.push({ value, commodity: r.currency })
+    statusByProgramme.set(leaf, arr)
+  }
   const cardRows = rows
     .filter((r) => r.account.startsWith('Liabilities:CreditCards:'))
     .sort((a, b) => a.account.localeCompare(b.account))
   const restRows = rows.filter(
-    (r) => !isRewardish(r.account) && !r.account.startsWith('Liabilities:CreditCards:'),
+    (r) =>
+      !isRewardish(r.account) &&
+      !r.account.startsWith('Assets:Rewards:Status:') &&
+      !r.account.startsWith('Liabilities:CreditCards:'),
   )
   const grouped = new Map<string, AccountSummaryRow[]>()
   for (const r of restRows) {
@@ -277,7 +287,12 @@ export function VaultView() {
 
       {/* ── rewards: the hero, clustered by minting source (clusters always
           render — empty ones invite their first programme) ────────────────── */}
-      <RewardsSections holdings={holdings} names={names} onAdd={() => setAddCardOpen(true)} />
+      <RewardsSections
+        holdings={holdings}
+        names={names}
+        statusByProgramme={statusByProgramme}
+        onAdd={() => setAddCardOpen(true)}
+      />
 
       {/* ── spending this month ───────────────────────────────────────────── */}
       {stats && stats.expense_categories.length > 0 ? (
@@ -649,7 +664,17 @@ function foldPending(rows: AccountSummaryRow[]): Holding[] {
   return [...map.values()].sort((a, b) => b.posted + b.pending - (a.posted + a.pending))
 }
 
-function RewardsSections({ holdings, names, onAdd }: { holdings: Holding[]; names: Names; onAdd: () => void }) {
+function RewardsSections({
+  holdings,
+  names,
+  statusByProgramme,
+  onAdd,
+}: {
+  holdings: Holding[]
+  names: Names
+  statusByProgramme: Map<string, Array<{ value: number; commodity: string }>>
+  onAdd: () => void
+}) {
   const claimed = new Set<string>()
   return (
     <>
@@ -671,7 +696,12 @@ function RewardsSections({ holdings, names, onAdd }: { holdings: Holding[]; name
             {cluster.length > 0 ? (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {cluster.map((h) => (
-                  <ProgrammeCard key={`${h.account}|${h.currency}`} holding={h} names={names} />
+                  <ProgrammeCard
+                    key={`${h.account}|${h.currency}`}
+                    holding={h}
+                    names={names}
+                    status={statusByProgramme.get(h.account.split(':')[3] ?? '') ?? []}
+                  />
                 ))}
               </div>
             ) : (
@@ -711,34 +741,116 @@ function RewardsSections({ holdings, names, onAdd }: { holdings: Holding[]; name
 
 // Hero card: one programme — monogram, resolved name, posted balance big,
 // pending called out when present.
-function ProgrammeCard({ holding, names }: { holding: Holding; names: Names }) {
+// Programme brand color (airline / hotel) for the full-color tile — same idea
+// as the bank card art. Best-effort curated palette keyed by the programme
+// leaf; deterministic fallback for the rest.
+const PROGRAMME_BG: Record<string, string> = {
+  marriott: 'bg-rose-900',
+  bonvoy: 'bg-rose-900',
+  hilton: 'bg-blue-800',
+  honors: 'bg-blue-800',
+  hyatt: 'bg-blue-900',
+  ihg: 'bg-orange-700',
+  accor: 'bg-indigo-800',
+  taj: 'bg-emerald-800',
+  ihcl: 'bg-emerald-800',
+  krisflyer: 'bg-indigo-900',
+  singapore: 'bg-indigo-900',
+  emirates: 'bg-red-800',
+  skywards: 'bg-red-800',
+  qatar: 'bg-purple-900',
+  lufthansa: 'bg-blue-900',
+  milesandmore: 'bg-blue-900',
+  avios: 'bg-sky-800',
+  british: 'bg-sky-800',
+  united: 'bg-blue-800',
+  mileageplus: 'bg-blue-800',
+  airindia: 'bg-red-800',
+  maharaja: 'bg-red-800',
+  vistara: 'bg-purple-800',
+  etihad: 'bg-amber-800',
+  flyingblue: 'bg-blue-900',
+  qantas: 'bg-red-800',
+}
+const FALLBACK_PROGRAMME_BG = [
+  'bg-slate-700',
+  'bg-zinc-700',
+  'bg-stone-700',
+  'bg-teal-800',
+  'bg-indigo-800',
+]
+function programmeBg(account: string): string {
+  const leaf = (account.split(':').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  for (const key of Object.keys(PROGRAMME_BG)) if (leaf.includes(key)) return PROGRAMME_BG[key]!
+  let h = 0
+  for (let i = 0; i < leaf.length; i++) h = (h * 31 + leaf.charCodeAt(i)) | 0
+  return FALLBACK_PROGRAMME_BG[Math.abs(h) % FALLBACK_PROGRAMME_BG.length]!
+}
+// The status commodity is `<PROGRAMME>-<TYPE>` (e.g. MAR-NIGHTS) — the human
+// unit is the type, lowercased: "nights", "status", "segments".
+function statusUnit(commodity: string): string {
+  const t = commodity.includes('-') ? commodity.slice(commodity.lastIndexOf('-') + 1) : commodity
+  return t.toLowerCase()
+}
+
+// One loyalty programme as full-color card art (airline = plane, hotel/other =
+// hotel). Points/miles balance is the hero; tier-qualifying progress counters
+// (Assets:Rewards:Status:<Programme>) ride along on the footer — there can be
+// several (nights + segments + qualifying points), so they wrap.
+export function ProgrammeCard({
+  holding,
+  names,
+  status = [],
+}: {
+  holding: Holding
+  names: Names
+  status?: Array<{ value: number; commodity: string }>
+}) {
   const { name } = displayName(holding.account, names)
   const fmtPts = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
-  const ticker = currencyRedundant(name, holding.currency) ? 'pts' : holding.currency
+  const kind: 'miles' | 'points' = holding.account.startsWith('Assets:Rewards:Miles:')
+    ? 'miles'
+    : 'points'
+  const unitLabel = kind === 'miles' ? 'Miles' : 'Points'
+  const ticker = currencyRedundant(name, holding.currency) ? null : holding.currency
+  const counters = status.filter((s) => s.value !== 0)
   return (
     <Link
       href={`/vault/account?account=${encodeURIComponent(holding.account)}&ccy=${encodeURIComponent(holding.currency)}`}
-      className={CARD_FRAME}
+      className={cn(
+        'group flex flex-col gap-3 rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
+        programmeBg(holding.account),
+      )}
     >
-      <div className="flex items-center gap-2.5">
-        <Monogram name={name} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{name}</span>
-        <ArrowUpRight
-          className="size-3.5 shrink-0 text-muted-foreground/40 transition-colors group-hover:text-foreground"
-          aria-hidden
-        />
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="font-mono text-xl font-semibold leading-none tracking-tight text-foreground">
-          {fmtPts(holding.posted)}
-        </span>
-        <span className="font-mono text-[11px] text-muted-foreground">{ticker}</span>
-        {holding.pending > 0 ? (
-          <span className="ml-auto">
-            <StateChip tone="pending">+{fmtPts(holding.pending)}</StateChip>
+      <span className="flex items-center gap-2">
+        <ProgrammeMark account={holding.account} kind={kind} className="size-5 shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
+      </span>
+
+      <span className="flex flex-col gap-0.5">
+        <span className="text-[10px] uppercase tracking-wide text-white/60">{unitLabel}</span>
+        <span className="flex items-baseline gap-1.5">
+          <span className="font-mono text-2xl font-semibold leading-none tracking-tight">
+            {fmtPts(holding.posted)}
           </span>
-        ) : null}
-      </div>
+          {ticker ? <span className="font-mono text-[10px] text-white/60">{ticker}</span> : null}
+          {holding.pending > 0 ? (
+            <span className="ml-auto font-mono text-[10px] text-white/70">
+              +{fmtPts(holding.pending)} pending
+            </span>
+          ) : null}
+        </span>
+      </span>
+
+      {counters.length > 0 ? (
+        <span className="flex flex-wrap gap-x-3 gap-y-0.5 border-t border-white/20 pt-2 font-mono text-[11px]">
+          {counters.map((c) => (
+            <span key={c.commodity}>
+              {fmtPts(c.value)} <span className="text-white/60">{statusUnit(c.commodity)}</span>
+            </span>
+          ))}
+        </span>
+      ) : null}
     </Link>
   )
 }
