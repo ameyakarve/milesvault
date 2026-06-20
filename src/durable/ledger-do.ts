@@ -150,6 +150,10 @@ export type VaultStats = {
   // the card's two most recent balance assertions (= the imported statement
   // cycle) when they exist, else the stats period (month-to-date).
   card_spend: Array<{ account: string; currency: string; total: number }>
+  // Per-card monthly spend series for the home-tile sparkline: charges summed
+  // by calendar month over the last 6 months, in each card's dominant currency.
+  // `months` is oldest→newest; missing months are 0. Drives the spend trend.
+  card_spend_trend: Array<{ account: string; currency: string; months: number[] }>
   bank_total: Array<{ currency: string; total: number }>
   expense_total: Array<{ currency: string; total: number }>
   expense_categories: Array<{ category: string; currency: string; total: number }>
@@ -408,6 +412,55 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       }
     }
 
+    // Monthly spend trend (last 6 calendar months) per card, for the sparkline.
+    // `date` is a YYYYMMDD int, so `date/100` (integer division) is its YYYYMM.
+    const TREND_MONTHS = 6
+    const monthKeys: number[] = []
+    {
+      let y = Math.floor(opts.toInt / 10000)
+      let m = Math.floor((opts.toInt % 10000) / 100)
+      for (let i = 0; i < TREND_MONTHS; i++) {
+        monthKeys.unshift(y * 100 + m)
+        m -= 1
+        if (m === 0) {
+          m = 12
+          y -= 1
+        }
+      }
+    }
+    const trendFromInt = monthKeys[0]! * 100 + 1 // YYYYMM01 of the oldest month
+    const card_spend_trend: Array<{ account: string; currency: string; months: number[] }> = []
+    for (const account of cardAccounts) {
+      const rows = this.db
+        .exec<{ ym: number; currency: string; scale: number; s: number | null }>(
+          `SELECT (date / 100) AS ym, currency, scale, SUM(-amount_scaled) AS s
+           FROM postings
+           WHERE account = ? AND amount_scaled < 0 AND date >= ?
+           GROUP BY ym, currency, scale`,
+          account,
+          trendFromInt,
+        )
+        .toArray()
+      if (rows.length === 0) continue
+      // Dominant currency = the one with the largest total over the window; the
+      // sparkline tracks that (mixing currencies in one series would be wrong).
+      const byCur = new Map<string, number>()
+      for (const r of rows) byCur.set(r.currency, (byCur.get(r.currency) ?? 0) + toDec(r.s ?? 0, r.scale))
+      let currency = 'INR'
+      let best = -Infinity
+      for (const [c, t] of byCur) {
+        if (t > best) {
+          best = t
+          currency = c
+        }
+      }
+      const perMonth = new Map<number, number>()
+      for (const r of rows)
+        if (r.currency === currency)
+          perMonth.set(r.ym, (perMonth.get(r.ym) ?? 0) + toDec(r.s ?? 0, r.scale))
+      card_spend_trend.push({ account, currency, months: monthKeys.map((ym) => perMonth.get(ym) ?? 0) })
+    }
+
     const expense_categories = [...catMap.entries()]
       .map(([key, total]) => {
         const [category, currency] = key.split('|')
@@ -451,6 +504,7 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       card_outstanding,
       card_count,
       card_spend,
+      card_spend_trend,
       bank_total,
       expense_total,
       expense_categories,
