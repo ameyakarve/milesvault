@@ -254,7 +254,13 @@ export async function resolveByBeancountName(
     displayMustContain?: string
   } = {},
 ): Promise<{ slug: string; display_name: string | null } | null> {
-  const queries = [...new Set(Array.isArray(texts) ? texts : [texts])]
+  const base = Array.isArray(texts) ? texts : [texts]
+  // Word-level recall in addition to the full phrases: kb.resolve substring-
+  // matches on display_name, so a single word ("Live") surfaces "HSBC Live+"
+  // where the phrase "Live Plus" never does. The exact beancountName check
+  // below still gates every candidate, so broad recall can't pick a wrong card.
+  const words = base.flatMap((t) => t.split(/\s+/)).filter((w) => w.length >= 3)
+  const queries = [...new Set([...base, ...words])]
   const tried = new Set<string>()
   const verified: Array<{ slug: string; display_name: string | null }> = []
   const want = opts.displayMustContain?.toLowerCase()
