@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { AccountOverview } from '@/durable/ledger-do'
 import { accountLabel, displayName as resolveName, prettyLeaf } from '@/lib/ledger-core/account-display'
-import { SectionLabel, StatTile, CenteredState, Monogram } from '@/components/shared'
+import { SectionLabel, StatTile, CenteredState, Monogram, SegmentedControl } from '@/components/shared'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -197,24 +197,12 @@ export function AccountOverviewView() {
               {c}
             </Button>
           ))}
-          {/* Time-range chips — right side, above slot A per contract rule 5 */}
-          <div className="flex items-center gap-0.5 rounded-full bg-muted p-0.5">
-            {RANGE_LABELS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setRange(key)}
-                className={[
-                  'rounded-full px-2.5 py-0.5 text-[11px] font-medium transition',
-                  range === key
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                ].join(' ')}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {/* Time-range picker — right side, above slot A per contract rule 5 */}
+          <SegmentedControl
+            options={RANGE_LABELS.map(({ key, label }) => ({ value: key, label }))}
+            value={range}
+            onChange={setRange}
+          />
         </div>
       </div>
     </div>
