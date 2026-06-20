@@ -171,7 +171,7 @@ export function ConciergeChat() {
                     }
                     if (p.type === 'reasoning' && typeof p.text === 'string') {
                       return (
-                        <Reasoning key={i} isStreaming={p.state === 'streaming'}>
+                        <Reasoning key={i} isStreaming={p.state === 'streaming'} defaultOpen>
                           <ReasoningTrigger />
                           <ReasoningContent>{p.text}</ReasoningContent>
                         </Reasoning>
