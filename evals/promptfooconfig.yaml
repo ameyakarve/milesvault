@@ -118,6 +118,35 @@ tests:
           expense by the cashback, did NOT use Income:Void, and did NOT ask the user
           which HSBC card.
 
+  # ---- ADD from a BLANK ledger: user names a new cashback card in passing →
+  #      propose the txn AND the cashback, without first asking to set it up ----
+  - description: 'add — coffee on HSBC Live+ from a blank ledger (txn + cashback)'
+    vars:
+      seed: ''
+      message: 'I had a coffee at Brewpoint yesterday. I spent 200 rupees on my HSBC Live+ card'
+    assert:
+      - type: javascript
+        value: 'output.draftsValid === true'
+        metric: balances
+      - type: javascript
+        value: 'output.drafts.length > 0 && output.clarifies.length === 0'
+        metric: proposes-not-asks
+      - type: javascript
+        value: "output.drafts.some(d => /Expenses:\\S+\\s+\\d/.test(d.text)) && !output.drafts.some(d => /Expenses:\\S+\\s+-/.test(d.text))"
+        metric: expense-full-not-reduced
+      - type: javascript
+        value: "output.drafts.some(d => /Assets:Receivable/.test(d.text) && d.text.includes('Equity:Void'))"
+        metric: cashback-minted-from-void
+      - type: llm-rubric
+        value: >
+          From a BLANK ledger the user names a new HSBC Live+ (cashback) card in
+          passing. The draft proposes BOTH the coffee purchase paid on the HSBC Live+
+          card AND the card's cashback, recorded as the documented deferred-cashback
+          pattern: the FULL coffee expense is NOT reduced, and an Assets:Receivable
+          cashback accrual is minted against an Equity:Void contra (the same mint plug
+          points use). It PROPOSED entries rather than asking the user to open or set
+          up the card first, and did NOT use an Income account.
+
   # ---- EDIT: minimal amount change via replaces ----
   - description: 'edit — change Starbucks amount to 500'
     vars:

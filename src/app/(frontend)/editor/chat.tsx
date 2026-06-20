@@ -579,21 +579,33 @@ export function Chat({
                           // Rejection covers explicit user reject/supersede and
                           // tool-call output-error (e.g. input-validation failure
                           // surfaced by the SDK for dynamic tools).
+                          // A commit the user TRIGGERED that errored (handleApprove
+                          // set subState 'failed' and resolved the part output-error)
+                          // is a FAILURE — show the error so they can fix/retry — NOT
+                          // a rejection. Clicking Approve was rendering as "Rejected"
+                          // because output-error was lumped into isRejection. Only an
+                          // explicit user reject/supersede (or an output-error the user
+                          // never triggered, e.g. SDK input-validation on the model's
+                          // own draft) is a rejection.
+                          const isFailure = subState === 'failed'
                           const isRejection =
-                            p.state === 'output-error' ||
-                            (p.state === 'output-available' &&
-                              outputObj?.ok === false &&
-                              (outputObj.reason === 'rejected' ||
-                                outputObj.reason === 'superseded'))
-                          const cardStatus = isRejection
-                            ? 'rejected'
-                            : p.state === 'output-available' || subState === 'done'
-                              ? 'done'
-                              : subState === 'submitting'
-                                ? 'submitting'
-                                : subState === 'failed' || p.state === 'output-error'
-                                  ? 'failed'
-                                  : 'idle'
+                            !isFailure &&
+                            (p.state === 'output-error' ||
+                              (p.state === 'output-available' &&
+                                outputObj?.ok === false &&
+                                (outputObj.reason === 'rejected' ||
+                                  outputObj.reason === 'superseded')))
+                          const cardStatus = isFailure
+                            ? 'failed'
+                            : isRejection
+                              ? 'rejected'
+                              : p.state === 'output-available' || subState === 'done'
+                                ? 'done'
+                                : subState === 'submitting'
+                                  ? 'submitting'
+                                  : p.state === 'output-error'
+                                    ? 'failed'
+                                    : 'idle'
                           const toolState: ToolUIPart['state'] =
                             cardStatus === 'done' || cardStatus === 'rejected'
                               ? 'output-available'

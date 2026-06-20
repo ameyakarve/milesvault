@@ -157,17 +157,23 @@ export function InboxThreadChat({
                       p.output && typeof p.output === 'object'
                         ? (p.output as { ok?: boolean; reason?: string })
                         : null
+                    // A user-triggered commit that errored (approve set sub 'failed'
+                    // and resolved the part output-error) is a FAILURE — surface the
+                    // error — NOT a rejection. output-error was being mislabeled as
+                    // "Rejected" when the user clicked Approve.
+                    const isFailure = sub === 'failed'
                     const isRejection =
-                      p.state === 'output-error' ||
-                      (p.state === 'output-available' && outputObj?.ok === false)
-                    const cardStatus = isRejection
-                      ? 'rejected'
-                      : p.state === 'output-available' || sub === 'done'
-                        ? 'done'
-                        : sub === 'submitting'
-                          ? 'submitting'
-                          : sub === 'failed'
-                            ? 'failed'
+                      !isFailure &&
+                      (p.state === 'output-error' ||
+                        (p.state === 'output-available' && outputObj?.ok === false))
+                    const cardStatus = isFailure
+                      ? 'failed'
+                      : isRejection
+                        ? 'rejected'
+                        : p.state === 'output-available' || sub === 'done'
+                          ? 'done'
+                          : sub === 'submitting'
+                            ? 'submitting'
                             : 'idle'
                     const dead = p.state === 'input-streaming' && !isLive
                     const rendered =
