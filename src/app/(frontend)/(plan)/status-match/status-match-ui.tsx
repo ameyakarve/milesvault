@@ -64,7 +64,11 @@ type ElkPt = { x: number; y: number }
 type ElkRoutedEdge = { sections?: { startPoint: ElkPt; endPoint: ElkPt; bendPoints?: ElkPt[] }[] }
 const W = 210
 const H = 64
-const elk = new ELK()
+// Instantiate ELK lazily on first use. elkjs spawns a Web Worker in its
+// constructor, which throws during SSR in the Workers runtime — so a module-level
+// `new ELK()` 500s the page. Defer it to the (client-only) layout call.
+let _elk: ELK | null = null
+const getElk = (): ELK => (_elk ??= new ELK())
 const ELK_OPTS = {
   'elk.algorithm': 'layered',
   'elk.direction': 'DOWN',
@@ -122,7 +126,7 @@ async function computeFlow(data: StatusMatchResult): Promise<{ nodes: Node<NodeD
   let positions = new Map<string, { x: number; y: number }>()
   const routes = new Map<string, { x: number; y: number }[]>()
   try {
-    const res = await elk.layout({
+    const res = await getElk().layout({
       id: 'root',
       layoutOptions: ELK_OPTS,
       children: rfNodes.map((n) => ({ id: n.id, width: W, height: H })),
