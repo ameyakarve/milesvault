@@ -205,7 +205,13 @@ export function VaultView() {
   // "Unclassified" cluster (instead of vanishing into the compact lists).
   const isRewardish = (a: string) =>
     a.startsWith('Assets:Rewards:') && !a.startsWith('Assets:Rewards:Status:')
-  const rewardRows = rows.filter((r) => isRewardish(r.account))
+  // Programme holdings on the home = airline (Miles) + hotel/other (Points).
+  // Issuer-direct card reward pools (Assets:Rewards:<Issuer>) now live on the
+  // card tiles, so they're no longer shown as a separate cluster here — but
+  // they're still excluded from "everything else" below (via isRewardish).
+  const isProgrammeHolding = (a: string) =>
+    a.startsWith('Assets:Rewards:Miles:') || a.startsWith('Assets:Rewards:Points:')
+  const rewardRows = rows.filter((r) => isProgrammeHolding(r.account))
   const holdings = foldPending(rewardRows)
   const cardRows = rows
     .filter((r) => r.account.startsWith('Liabilities:CreditCards:'))
@@ -624,20 +630,7 @@ const REWARD_CLUSTERS: Array<{ prefix: string; label: string; cta: string; seed:
     cta: 'No hotel programmes yet',
     seed: 'I want to track a hotel loyalty programme. Ask me which one and how many points I hold, then open Assets:Rewards:Points:<Programme> with the right ticker and record the balance.',
   },
-  {
-    // Issuer-direct wallets (owner convention): Assets:Rewards:<Issuer>
-    // — matched as "under Assets:Rewards but not Miles/Points/Status".
-    prefix: 'Assets:Rewards:',
-    label: 'Card programmes',
-    cta: 'No card reward pools yet',
-    seed: 'I want to add a new credit card to track.',
-  },
-]
-
-const NON_CARD_REWARD_PREFIXES = [
-  'Assets:Rewards:Miles:',
-  'Assets:Rewards:Points:',
-  'Assets:Rewards:Status:',
+  // (Issuer-direct card reward pools are shown on the card tiles, not here.)
 ]
 
 // Fold :Pending children into their programme: one Holding per
@@ -661,14 +654,7 @@ function RewardsSections({ holdings, names, onAdd }: { holdings: Holding[]; name
   return (
     <>
       {REWARD_CLUSTERS.map(({ prefix, label, cta, seed }) => {
-        const cluster = holdings.filter(
-          (h) =>
-            h.account.startsWith(prefix) &&
-            // The card cluster's prefix is the bare Assets:Rewards: — it
-            // owns everything the named clusters don't.
-            (prefix !== 'Assets:Rewards:' ||
-              !NON_CARD_REWARD_PREFIXES.some((p) => h.account.startsWith(p))),
-        )
+        const cluster = holdings.filter((h) => h.account.startsWith(prefix))
         cluster.forEach((h) => claimed.add(`${h.account}|${h.currency}`))
         return (
           <section key={prefix} className="space-y-3">
