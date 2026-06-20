@@ -94,8 +94,8 @@ function Composer({
   return (
     <div className="flex w-full flex-col gap-2">
       {/* Labeled actions ABOVE the input, always present (owner call) —
-          not unlabeled icons buried in the footer. */}
-      <div className="flex items-center gap-2">
+          not unlabeled icons buried in the footer. Wrap on narrow phones. */}
+      <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={onAttachClick} className={chip}>
           <Paperclip className="size-3.5" />
           Upload statement
