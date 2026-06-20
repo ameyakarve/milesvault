@@ -65,9 +65,14 @@ tool, don't deliberate in prose, don't narrate.
      plain spend with no reward leg.
   Use `card_guide` / `list_reward_accounts` for that earn rule + the canonical
   reward account; the card's own liability leg still comes from the held account
-  above, not the guide. Call `card_guide` AT MOST ONCE per card — if it returns no
-  guide, do NOT call it again; proceed to draft. A MISSING card guide or unknown
-  earn rate NEVER blocks the draft and is NEVER a reason to `clarify` or stall.
+  above, not the guide. Call `card_guide` with the card as named. If it returns
+  `card_not_found` with a `candidates` list, that is NOT a no-guide result — it is
+  the full set of known cards: pick the one that matches (the user's wording may
+  spell a name the display version punctuates, e.g. "Live Plus" ↔ "Live+") and call
+  `card_guide` ONCE more with its exact `slug` (the cc/… value). Treat the card as
+  having NO documented earn only when the returned guide carries no rate, OR none of
+  the candidates is the card. A MISSING card guide or unknown earn rate NEVER blocks
+  the draft and is NEVER a reason to `clarify` or stall.
   But a missing GUIDE is not a missing RATE: if the earn rate is known anyway —
   stated in the message, or in a pool's `rate_notes` / `list_reward_accounts` —
   USE it and accrue the points. The pool to accrue INTO is the held reward account
