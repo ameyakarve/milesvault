@@ -18,6 +18,7 @@ import {
 } from '@/lib/ledger-core/account-display'
 import { SectionLabel, StatTile, CenteredState, Monogram, StateChip } from '@/components/shared'
 import { Skeleton } from '@/components/ui/skeleton'
+import { BankMark } from './bank-marks'
 
 // Shared card frame: compact, hairline border, a hint of depth, and a hover
 // lift. The monogram carries each card's per-programme tint — no extra accent
@@ -318,37 +319,39 @@ type CardMeta = {
   reward_unit: string | null
 }
 
-// Curated bank brand tints for the card-art header band — real brand colors are
-// public facts (not user data). Keyed off the issuer segment of the account;
-// unknown issuers fall back to a deterministic neutral gradient.
+// Curated bank brand tints for the card header — real brand colors are public
+// facts (not user data). A SOFT tint (light + dark variants) so the header sits
+// quietly against the card body in both modes; the mark/text take the brand
+// color. Keyed off the issuer segment of the account; unknown issuers fall back
+// to a deterministic neutral tint.
 const BANK_BANDS: Record<string, string> = {
-  hdfc: 'from-blue-800 to-blue-950',
-  axis: 'from-rose-800 to-rose-950',
-  icici: 'from-orange-700 to-orange-900',
-  sbi: 'from-sky-700 to-blue-900',
-  sbicard: 'from-sky-700 to-blue-900',
-  hsbc: 'from-red-700 to-red-950',
-  indusind: 'from-rose-900 to-red-950',
-  amex: 'from-cyan-700 to-blue-900',
-  americanexpress: 'from-cyan-700 to-blue-900',
-  kotak: 'from-red-700 to-rose-900',
-  idfc: 'from-fuchsia-900 to-rose-950',
-  idfcfirst: 'from-fuchsia-900 to-rose-950',
-  yes: 'from-blue-700 to-indigo-900',
-  yesbank: 'from-blue-700 to-indigo-900',
-  rbl: 'from-amber-700 to-red-900',
-  au: 'from-fuchsia-800 to-purple-950',
-  aubank: 'from-fuchsia-800 to-purple-950',
-  sc: 'from-emerald-700 to-blue-900',
-  standardchartered: 'from-emerald-700 to-blue-900',
-  citi: 'from-blue-700 to-blue-950',
-  citibank: 'from-blue-700 to-blue-950',
+  hdfc: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+  axis: 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+  icici: 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300',
+  sbi: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
+  sbicard: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
+  hsbc: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+  indusind: 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+  amex: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300',
+  americanexpress: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300',
+  kotak: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+  idfc: 'bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950/40 dark:text-fuchsia-300',
+  idfcfirst: 'bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950/40 dark:text-fuchsia-300',
+  yes: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+  yesbank: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+  rbl: 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  au: 'bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950/40 dark:text-fuchsia-300',
+  aubank: 'bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950/40 dark:text-fuchsia-300',
+  sc: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  standardchartered: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  citi: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+  citibank: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
 }
 const FALLBACK_BANDS = [
-  'from-slate-700 to-slate-900',
-  'from-zinc-700 to-zinc-900',
-  'from-stone-700 to-stone-900',
-  'from-neutral-700 to-neutral-900',
+  'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300',
+  'bg-zinc-100 text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300',
+  'bg-stone-100 text-stone-700 dark:bg-stone-800/50 dark:text-stone-300',
+  'bg-neutral-100 text-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300',
 ]
 function issuerOf(account: string): string | null {
   // Liabilities:CreditCards:<Issuer>:<Card>[:last4]
@@ -423,17 +426,13 @@ export function CreditCardCard({
       href={accountHref(row)}
       className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-md"
     >
-      {/* card-art band — bank brand color, wordmark, last 4 */}
-      <span className={cn('flex flex-col gap-0.5 bg-gradient-to-br px-3.5 py-2.5 text-white', bankBand(issuer))}>
-        <span className="flex items-center justify-between gap-2">
-          <span className="truncate text-[11px] font-semibold uppercase tracking-wider opacity-90">
-            {issuer ?? name}
-          </span>
-          <span className="shrink-0 font-mono text-[10px] tracking-wider opacity-80">
-            •••• {suffix || '----'}
-          </span>
+      {/* header — soft brand tint + bank mark, card name, last 4 (both modes) */}
+      <span className={cn('flex items-center gap-2 px-3.5 py-2', bankBand(issuer))}>
+        <BankMark issuer={issuer} className="size-5 shrink-0" />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
+        <span className="shrink-0 font-mono text-[10px] tracking-wider opacity-70">
+          •••• {suffix || '----'}
         </span>
-        <span className="truncate text-sm font-medium">{name}</span>
       </span>
 
       {/* body — outstanding, spend trend, reward balance */}
@@ -456,11 +455,11 @@ export function CreditCardCard({
         </span>
 
         <span className="flex items-center justify-between gap-2 text-[11px]">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="text-[10px] uppercase tracking-wide">This mo</span>
-            {series.length > 1 ? <Sparkbars values={series} /> : null}
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Monthly spend
           </span>
-          <span className="flex items-baseline gap-1">
+          <span className="flex items-center gap-1.5">
+            {series.length > 1 ? <Sparkbars values={series} /> : null}
             <span className="font-mono text-foreground">{spendText}</span>
             {deltaPct != null && deltaPct !== 0 ? (
               <span
@@ -488,7 +487,8 @@ export function CreditCardCard({
               ) : null}
               {meta.reward_pending ? (
                 <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400">
-                  · {fmtReward(meta.reward_pending, meta.reward_unit)} pending
+                  {' '}
+                  · {meta.reward_pending.toLocaleString('en-IN', { maximumFractionDigits: 0 })} pending
                 </span>
               ) : null}
             </span>
