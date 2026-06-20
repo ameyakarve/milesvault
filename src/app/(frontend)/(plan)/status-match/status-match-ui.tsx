@@ -67,8 +67,8 @@ const H = 64
 // Instantiate ELK lazily on first use. elkjs spawns a Web Worker in its
 // constructor, which throws during SSR in the Workers runtime — so a module-level
 // `new ELK()` 500s the page. Defer it to the (client-only) layout call.
-let _elk: ELK | null = null
-const getElk = (): ELK => (_elk ??= new ELK())
+let _elk: InstanceType<typeof ELK> | null = null
+const getElk = () => (_elk ??= new ELK())
 const ELK_OPTS = {
   'elk.algorithm': 'layered',
   'elk.direction': 'DOWN',

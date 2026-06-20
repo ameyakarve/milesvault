@@ -15,19 +15,21 @@ import {
   Settings,
   Sparkles,
   SquarePen,
+  UserRound,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { GlobalCapture } from './global-capture'
 import { ThemeToggle } from './theme-toggle'
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>
 type NavItem = { href: string; label: string; Icon: LucideIcon; badge?: 'email' | 'upload' }
 
-// The rail in three zones: Home on top, then two buckets, then Settings pinned
-// at the bottom. Bucket A is the money-management surface (review + edit + spend);
-// Bucket B is exploration + the assistant. Dividers separate the buckets.
+// The rail in three zones: Home on top, then two buckets, then account controls
+// (Profile, Settings) pinned at the bottom. Bucket A is the money-management
+// surface (review + edit + spend); Bucket B is exploration + the assistant.
 const HOME: NavItem = { href: '/vault', label: 'Home', Icon: Home }
 const BUCKETS: NavItem[][] = [
   [
@@ -43,6 +45,7 @@ const BUCKETS: NavItem[][] = [
     { href: '/concierge', label: 'Assistant', Icon: Sparkles },
   ],
 ]
+const PROFILE: NavItem = { href: '/profile', label: 'Profile', Icon: UserRound }
 const SETTINGS: NavItem = { href: '/settings', label: 'Settings', Icon: Settings }
 
 // Pending capture work (extracted/errored, not yet posted or dismissed) for the
@@ -114,26 +117,31 @@ export function NavRail() {
   const badgeFor = (item: NavItem) =>
     item.badge === 'email' ? pending.email : item.badge === 'upload' ? pending.upload : 0
 
-  // ---- desktop: slim icon rail ----
+  // ---- desktop: slim icon rail, with a fast tooltip per icon ----
   const railIcon = (item: NavItem) => {
     const active = isActive(item.href)
     const count = badgeFor(item)
     return (
-      <Link
-        key={item.href}
-        href={item.href}
-        aria-label={item.label}
-        title={item.label}
-        className={cn(
-          'relative rounded-lg p-2',
-          active
-            ? 'bg-muted text-foreground'
-            : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-        )}
-      >
-        <item.Icon size={22} />
-        {count > 0 ? <Badge count={count} className="absolute right-0 top-0" /> : null}
-      </Link>
+      <Tooltip key={item.href}>
+        <TooltipTrigger
+          render={
+            <Link
+              href={item.href}
+              aria-label={item.label}
+              className={cn(
+                'relative rounded-lg p-2',
+                active
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+              )}
+            />
+          }
+        >
+          <item.Icon size={22} />
+          {count > 0 ? <Badge count={count} className="absolute right-0 top-0" /> : null}
+        </TooltipTrigger>
+        <TooltipContent side="right">{item.label}</TooltipContent>
+      </Tooltip>
     )
   }
   const Divider = () => <div className="my-1 h-px w-5 self-center bg-border" />
@@ -166,22 +174,25 @@ export function NavRail() {
       {/* Global drag-and-drop capture overlay — single shared mount point. */}
       <GlobalCapture />
 
-      {/* Desktop: slim side rail */}
-      <nav className="hidden h-screen w-[48px] shrink-0 flex-col items-center overflow-y-auto border-r border-border bg-background py-3 md:flex">
-        <div className="flex flex-col gap-1">
-          {railIcon(HOME)}
-          {BUCKETS.map((bucket, i) => (
-            <div key={i} className="flex flex-col items-center gap-1">
-              <Divider />
-              {bucket.map(railIcon)}
-            </div>
-          ))}
-        </div>
-        <div className="mt-auto flex flex-col items-center gap-1 pt-2">
-          {railIcon(SETTINGS)}
-          <ThemeToggle className="rounded-lg p-2 text-muted-foreground hover:text-foreground" />
-        </div>
-      </nav>
+      {/* Desktop: slim side rail. delay=150ms → tooltips appear quickly. */}
+      <TooltipProvider delay={150}>
+        <nav className="hidden h-screen w-[48px] shrink-0 flex-col items-center overflow-y-auto border-r border-border bg-background py-3 md:flex">
+          <div className="flex flex-col gap-1">
+            {railIcon(HOME)}
+            {BUCKETS.map((bucket, i) => (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <Divider />
+                {bucket.map(railIcon)}
+              </div>
+            ))}
+          </div>
+          <div className="mt-auto flex flex-col items-center gap-1 pt-2">
+            {railIcon(PROFILE)}
+            {railIcon(SETTINGS)}
+            <ThemeToggle className="rounded-lg p-2 text-muted-foreground hover:text-foreground" />
+          </div>
+        </nav>
+      </TooltipProvider>
 
       {/* Mobile: top bar with a hamburger */}
       <header className="flex items-center gap-2 border-b border-border bg-background px-3 py-2 md:hidden">
@@ -211,6 +222,7 @@ export function NavRail() {
               </div>
             ))}
             <div className="my-1 border-t border-border" />
+            {menuRow(PROFILE)}
             {menuRow(SETTINGS)}
           </nav>
           <div className="border-t border-border pt-2">
