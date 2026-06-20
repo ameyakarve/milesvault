@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { CreditCard, Loader2, Search } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import type { AddCardInput } from '@/durable/agent-ui-schemas'
 
 type Candidate = { slug: string; name?: string | null }
@@ -227,17 +228,17 @@ export function AddCardCard({
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            <input
+            <Input
               value={last4}
               onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
               placeholder="last 4 (optional)"
-              className="w-32 rounded border border-border bg-background px-2 py-1 text-[12px] focus:border-foreground/50 focus:outline-none"
+              className="w-32"
             />
-            <input
+            <Input
               value={points}
               onChange={(e) => setPoints(e.target.value.replace(/[^\d]/g, ''))}
               placeholder="current points (optional)"
-              className="w-44 rounded border border-border bg-background px-2 py-1 text-[12px] focus:border-foreground/50 focus:outline-none"
+              className="w-44"
             />
           </div>
         </div>

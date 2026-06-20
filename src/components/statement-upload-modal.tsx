@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   loadStatement,
   extractStatementText,
@@ -162,13 +163,12 @@ export function StatementUploadModal({
           >
             <Lock className="size-5 text-muted-foreground" />
             <p className="text-sm text-foreground">{state.file.name} is locked</p>
-            <input
+            <Input
               type="password"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
               autoFocus
               placeholder={state.wrong ? 'Wrong password — try again' : 'PDF password'}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-foreground/40"
             />
             <p className="text-xs text-muted-foreground">
               Decrypted in your browser — only the text is sent. The password is
