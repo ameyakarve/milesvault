@@ -45,35 +45,30 @@ export async function fetchCardGuide(
     // the KG nodes omit. No hardcoded vocabulary: on a miss, gather
     // candidates by per-token recall — a single hit is used directly,
     // multiple go back as options.
-    const top: Item | undefined = knownTop ?? (await resolve(card))[0]
+    // The model may re-call with an exact slug (cc/…) it picked from a prior
+    // call's candidate set — resolve that directly, skipping the name search.
+    const slugInput = /^cc\//.test(card.trim()) ? card.trim() : null
+    const top: Item | undefined =
+      knownTop ??
+      (slugInput ? { slug: slugInput, display_name: null } : (await resolve(card))[0])
     if (!top) {
-      // Direct resolve missed. Gather candidates by per-token recall and hand
-      // them BACK for the MODEL to pick — code never auto-selects a card (that
-      // overlap auto-pick once chose a plausible WRONG card, the worst failure
-      // mode, and is exactly the name-matching arbiter the owner banned).
-      const votes = new Map<string, { item: Item; n: number }>()
-      for (const token of card.split(/\s+/)) {
-        if (token.length < 4) continue
-        for (const it of await resolve(token)) {
-          const v = votes.get(it.slug)
-          if (v) v.n++
-          else votes.set(it.slug, { item: it, n: 1 })
-        }
-      }
-      const ranked = [...votes.values()].sort((a, b) => b.n - a.n)
-      if (ranked.length > 0) {
+      // Direct name resolve missed. Hand the model the FULL valid card set (the
+      // closed set) and let IT pick — no code arbiter, no token-overlap
+      // narrowing. The candidate NAME is derived from the SLUG, which spells out
+      // words the display H1 may punctuate (slug `hsbc-live-plus` → "Hsbc Live
+      // Plus", matching a user's "HSBC Live Plus" where the H1 "HSBC Live+" does
+      // NOT). The model re-calls card_guide with the chosen `slug`.
+      const all = await listCards(kb)
+      if (all.length > 0) {
         return {
           ok: false as const,
           error: 'card_not_found' as const,
-          candidates: ranked.slice(0, 6).map((r) => ({
-            slug: r.item.slug,
-            name: r.item.display_name,
-          })),
-          hint: 'If one of these candidates is the SAME card, call card_guide again with its exact `name`. If none of them is this card, it has NO guide — do NOT call card_guide again; draft the spend with no reward leg (and note you skipped points).',
+          candidates: all.map((c) => ({ slug: c.slug, name: c.name })),
+          hint: 'Pick the matching card from this list and call card_guide again with its exact `slug` (the cc/… value) as the `card` argument. Only if NONE of these is the card does it have no guide.',
         }
       }
+      return { ok: false as const, error: 'card_not_found' as const }
     }
-    if (!top) return { ok: false as const, error: 'card_not_found' as const }
 
     const node = (await kb.get(top.slug)) as {
       display_name?: string | null
@@ -299,11 +294,13 @@ export function rewardAccountsTool(kb: KbHttp) {
 export function cardGuideTool(kb: KbHttp) {
   return tool({
     description:
-      'Fetch a credit card’s drafting guide from the knowledge graph: earn rules in prose with worked beancount examples (follow them exactly — accounts, tickers, :Pending accruals), the reward pool it earns into, and every per-MCC exception/override. Call this ONCE before drafting transactions for a card (statements especially), then draft per the guide. If `logging_guide` is null, fall back to `rate_notes` + `card_notes` and say estimates are best-effort.',
+      'Fetch a credit card’s drafting guide from the knowledge graph: earn rules in prose with worked beancount examples (follow them exactly — accounts, tickers, :Pending accruals), the reward pool it earns into, and every per-MCC exception/override. Call this before drafting transactions for a card, then draft per the guide. If it returns `card_not_found` with a `candidates` list, that is the full set of known cards — pick the one that matches and call again with its exact `slug` (NOT the display name). If `logging_guide` is null, fall back to `rate_notes` + `card_notes` and say estimates are best-effort.',
     inputSchema: z.object({
       card: z
         .string()
-        .describe('The card as the user/statement names it, e.g. "Axis Magnus Burgundy"'),
+        .describe(
+          'The card as the user/statement names it (e.g. "Axis Magnus Burgundy"), OR — after a card_not_found — the exact `cc/…` slug of the matching candidate.',
+        ),
     }),
     execute: async ({ card }) => fetchCardGuide(kb, card),
   })
