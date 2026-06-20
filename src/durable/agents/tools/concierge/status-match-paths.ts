@@ -81,8 +81,8 @@ export async function listMatchStatuses(kb: KbHttp): Promise<MatchStatus[]> {
   const out: MatchStatus[] = []
   for (const kind of ['status-tier', 'alliance-tier'] as const) {
     try {
-      const r = (await kb.list(kind, { limit: 2000 })) as { items?: string[] }
-      for (const slug of r.items ?? []) out.push({ slug, name: prettySlug(slug), kind })
+      const r = (await kb.list(kind, { limit: 2000 })) as { items?: Array<{ slug: string }> }
+      for (const { slug } of r.items ?? []) out.push({ slug, name: prettySlug(slug), kind })
     } catch {
       /* ignore */
     }

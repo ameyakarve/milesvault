@@ -23,7 +23,12 @@ export type CardGuideResult =
       logging_guide: string | null
       card_notes: string | null
     }
-  | { ok: false; error: string; candidates?: Array<{ slug: string; name: string | null }>; hint?: string }
+  | {
+      ok: false
+      error: string
+      candidates?: Array<{ slug: string; name: string | null; aliases?: string[] }>
+      hint?: string
+    }
 
 // Shared by the agent tool AND the deterministic ingest pipeline.
 export async function fetchCardGuide(
@@ -55,8 +60,12 @@ export async function fetchCardGuide(
         return {
           ok: false as const,
           error: 'card_not_found' as const,
-          candidates: all.map((c) => ({ slug: c.slug, name: c.name })),
-          hint: 'Pick the matching card from this list and call card_guide again with its exact `slug` (the cc/… value) as the `card` argument. Only if NONE of these is the card does it have no guide.',
+          candidates: all.map((c) => ({
+            slug: c.slug,
+            name: c.name,
+            ...(c.aliases.length ? { aliases: c.aliases } : {}),
+          })),
+          hint: 'Pick the matching card from this list and call card_guide again with its exact `slug` (the cc/… value) as the `card` argument. Match against `name` OR any of `aliases` (a card may be held/known under an alias). Only if NONE of these is the card does it have no guide.',
         }
       }
       return { ok: false as const, error: 'card_not_found' as const }
@@ -159,13 +168,21 @@ export async function fetchCardGuideBySlug(
 }
 
 // Every credit card in the KG, for the card-identify closed set: a readable
-// name (display_name, or a prettified slug) plus the slug to resolve by.
-export async function listCards(kb: KbHttp): Promise<Array<{ slug: string; name: string }>> {
-  // kb.list returns `{ items: string[] }` — each item is a SLUG string, not an
-  // object. The readable name (for the model to match against) is derived from
-  // the slug; resolution is by slug, so the derived name only needs to be
-  // recognisable ("cc/swiggy-hdfc" → "Swiggy Hdfc").
-  const r = (await kb.list('cc', { limit: 250 })) as { items?: string[] }
+// name plus the slug to resolve by, AND the card's other names (display_name +
+// alias slugs) so the model can match a held account by ANY of its names.
+export async function listCards(
+  kb: KbHttp,
+): Promise<Array<{ slug: string; name: string; aliases: string[] }>> {
+  // kb.list returns `{ items: [{slug, display_name, aliases[]}] }`. The NAME the
+  // model matches against is derived from the SLUG (the slug spells out words the
+  // display H1 may punctuate: `cc/hsbc-live-plus` → "Hsbc Live Plus", matching a
+  // user's "HSBC Live Plus" where the H1 "HSBC Live+" does NOT). The display_name
+  // and the prettified alias slugs ride along as `aliases`, so a held account leaf
+  // like `…:HSBC:Cashback` matches via the `cc/hsbc-cashback` alias of canonical
+  // `cc/hsbc-live-plus` — exact, no fuzzy resolve.
+  const r = (await kb.list('cc', { limit: 250 })) as {
+    items?: Array<{ slug: string; display_name?: string | null; aliases?: string[] }>
+  }
   const pretty = (s: string) =>
     s
       .replace(/^cc\//, '')
@@ -173,8 +190,18 @@ export async function listCards(kb: KbHttp): Promise<Array<{ slug: string; name:
       .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
       .join(' ')
   return (r.items ?? [])
-    .filter((s) => typeof s === 'string' && s.startsWith('cc/'))
-    .map((slug) => ({ slug, name: pretty(slug) }))
+    .filter((i) => i && typeof i.slug === 'string' && i.slug.startsWith('cc/'))
+    .map((i) => {
+      const name = pretty(i.slug)
+      const aliases = Array.from(
+        new Set(
+          [i.display_name ?? '', ...(i.aliases ?? []).map(pretty)]
+            .map((s) => s.trim())
+            .filter((s) => s && s !== name),
+        ),
+      )
+      return { slug: i.slug, name, aliases }
+    })
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -187,8 +214,10 @@ export async function listCards(kb: KbHttp): Promise<Array<{ slug: string; name:
 export type RewardAccount = { slug: string; name: string; account: string; ticker: string }
 
 export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
-  const listed = (await kb.list('currency', { limit: 1000 })) as { items?: string[] }
-  const slugs = listed.items ?? []
+  const listed = (await kb.list('currency', { limit: 1000 })) as {
+    items?: Array<{ slug: string }>
+  }
+  const slugs = (listed.items ?? []).map((i) => i.slug)
   const items: RewardAccount[] = []
   const CONC = 16
   for (let i = 0; i < slugs.length; i += CONC) {
