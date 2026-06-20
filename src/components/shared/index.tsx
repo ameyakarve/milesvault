@@ -128,6 +128,42 @@ export function CenteredState({
   )
 }
 
+// The ONE segmented control for range / type / mode pickers — a rounded pill
+// group (the idiom the editor tabs, overview range, and inbox Draft/Chat already
+// use). Replaces the divergent rounded-md button groups elsewhere.
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  className,
+}: {
+  options: ReadonlyArray<{ value: T; label: string }>
+  value: T
+  onChange: (v: T) => void
+  className?: string
+}) {
+  return (
+    <div className={cn('inline-flex items-center gap-0.5 rounded-full bg-muted p-0.5', className)}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={cn(
+            'rounded-full px-2.5 py-1 text-xs font-medium transition',
+            value === o.value
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // Identity monogram for programmes/cards — a quiet deterministic tint per
 // name (low saturation, dark-aware). Flip MONOGRAM_TONES to the single
 // neutral entry to go fully monochrome.

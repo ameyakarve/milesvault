@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useAgent } from 'agents/react'
 import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowUp, Database, Loader2, Trash2 } from 'lucide-react'
+import { ArrowUp, Database, Trash2 } from 'lucide-react'
+import { Loader } from '@/components/ai-elements/loader'
 import { Button } from '@/components/ui/button'
 import {
   Conversation,
@@ -52,7 +53,8 @@ export function ConciergeChat() {
     agent: 'ConciergeDO',
     basePath: 'api/agents/concierge',
   })
-  const { messages, sendMessage, addToolOutput, status, isStreaming, clearHistory } = useAgentChat({
+  const { messages, sendMessage, addToolOutput, status, isStreaming, clearHistory, stop } =
+    useAgentChat({
     agent,
     autoContinueAfterToolResult: true,
     getInitialMessages: null,
@@ -221,8 +223,12 @@ export function ConciergeChat() {
           })}
 
           {busy ? (
-            <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
-              <Loader2 className="size-3 animate-spin" />
+            <div
+              role="status"
+              aria-label="Assistant is thinking"
+              className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground"
+            >
+              <Loader size={14} />
               thinking…
             </div>
           ) : null}
@@ -239,7 +245,7 @@ export function ConciergeChat() {
           />
           <PromptInputFooter>
             <PromptInputTools />
-            <PromptInputSubmit status={status} disabled={!text.trim() || busy}>
+            <PromptInputSubmit status={status} onStop={stop} disabled={!text.trim() || busy}>
               <ArrowUp className="size-4" />
             </PromptInputSubmit>
           </PromptInputFooter>

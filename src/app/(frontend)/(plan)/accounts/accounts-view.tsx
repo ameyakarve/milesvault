@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { hierarchy, treemap } from 'd3-hierarchy'
 import { ChevronRight } from 'lucide-react'
 import { ledgerClient } from '@/lib/ledger-client-browser'
+import { SegmentedControl } from '@/components/shared'
 import {
   Select,
   SelectContent,
@@ -260,44 +261,20 @@ export function AccountsView() {
           loading ? 'Loading…' : levelTotal > 0 ? `${fmt(levelTotal, activeCurrency)} total` : undefined
         }
       >
-        <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
-          {ACCOUNT_TYPES.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => {
-                setType(t)
-                setPath([])
-              }}
-              className={cn(
-                'rounded px-2.5 py-1',
-                type === t
-                  ? 'bg-foreground text-background'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          options={ACCOUNT_TYPES.map((t) => ({ value: t, label: t }))}
+          value={type}
+          onChange={(t) => {
+            setType(t)
+            setPath([])
+          }}
+        />
         {isFlow ? (
-          <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
-            {RANGES.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                onClick={() => setRange(r.key)}
-                className={cn(
-                  'rounded px-2.5 py-1',
-                  range === r.key
-                    ? 'bg-foreground text-background'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            options={RANGES.map((r) => ({ value: r.key, label: r.label }))}
+            value={range}
+            onChange={setRange}
+          />
         ) : (
           <span className="text-xs text-muted-foreground">balance as of today</span>
         )}

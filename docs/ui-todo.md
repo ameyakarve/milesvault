@@ -29,12 +29,12 @@ starting points, not exhaustive.
 
 ## P1 — consistency (app reads as built screen-by-screen)
 
-- [ ] **Unify range/filter controls** — 3 idioms for the same job: rounded-md button group (`accounts-view`), rounded-full pill group (`overview-view`), shadcn Tabs (plan toolbar). Pick one.
+- [x] **Unified range/filter controls** — shared `SegmentedControl` (rounded pill, in `components/shared`) now used by accounts-view (type + range) and overview-view (range), matching the editor/inbox tab idiom.
 - [ ] **Use the shared `Input` everywhere** — raw `<input>` in `add-card.tsx:145,218,224`, `statement-upload-modal.tsx:165` differ in focus ring/radius/font from `update-balance-modal.tsx` (which does it right).
-- [ ] **One thinking indicator** — `<Loader/>` (editor) vs raw `<Loader2 className="animate-spin"/>` (concierge `:224`); add `aria-label="Assistant is thinking"`.
+- [x] **One thinking indicator** — concierge now uses the shared `<Loader>` with `role=status aria-label="Assistant is thinking"` (was a raw `<Loader2 animate-spin/>`).
 - [ ] **One icon library** — Lucide + Phosphor are mixed in the same nav row (divergent stroke weight).
 - [ ] **Extract a shared `ActionChip`** — editor chips are inline Tailwind (`editor/chat.tsx:93`), concierge has none.
-- [ ] **Chat behavior parity** — concierge composer has no Stop/`onStop` (`concierge/chat.tsx:242`) while editor does; reasoning `defaultOpen` differs; submit-disabled logic differs.
+- [~] **Chat behavior parity** — concierge composer now has Stop (`onStop={stop}`). Remaining: reasoning `defaultOpen` differs; submit-disabled logic differs.
 - [x] **`location.reload()` in `vault-view.tsx`** → AddAccountsModal `onDone` now re-runs the loader (no full-page flash).
 
 ## P2 — loading & feedback
