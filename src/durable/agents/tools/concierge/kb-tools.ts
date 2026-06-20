@@ -21,7 +21,7 @@ export interface KbHttp {
       limit?: number
     },
   ): Promise<unknown>
-  list(prefix: string, opts: { limit?: number }): Promise<unknown>
+  list(prefix: string, opts: { limit?: number; fields?: string[] }): Promise<unknown>
   // Whole source file (path from a node's `source_file`) — markdown sections
   // outside the ::node block (e.g. a card's "## Logging") live only here.
   getFile(path: string): Promise<unknown>
@@ -251,53 +251,38 @@ export function camelSpace(s: string): string {
 
 export async function resolveByBeancountName(
   kb: KbHttp,
-  texts: string | string[],
   prefix: string,
   beancountName: string,
   opts: {
-    // When set, a verified hit's display_name must contain this token
-    // (case-insensitive) — disambiguates generic pool names ("RewardPoints"
-    // is shared by a dozen banks) using issuer context from the path.
+    // When set, a hit's display_name must contain this token (case-insensitive)
+    // — disambiguates generic pool names ("RewardPoints" is shared by a dozen
+    // banks) using issuer context from the account path.
     displayMustContain?: string
   } = {},
 ): Promise<{ slug: string; display_name: string | null } | null> {
-  const base = Array.isArray(texts) ? texts : [texts]
-  // Word-level recall in addition to the full phrases: kb.resolve substring-
-  // matches on display_name, so a single word ("Live") surfaces "HSBC Live+"
-  // where the phrase "Live Plus" never does. The exact beancountName check
-  // below still gates every candidate, so broad recall can't pick a wrong card.
-  const words = base.flatMap((t) => t.split(/\s+/)).filter((w) => w.length >= 3)
-  const queries = [...new Set([...base, ...words])]
-  const tried = new Set<string>()
-  const verified: Array<{ slug: string; display_name: string | null }> = []
+  // EXACT lookup, no fuzzy: list the whole closed set under `prefix` with each
+  // node's beancountName field and match it dead-on. By owner convention an
+  // account leaf IS the node's beancountName, so this never guesses.
+  const r = (await kb
+    .list(prefix, { limit: 2000, fields: ['beancountName'] })
+    .catch((): null => null)) as {
+    items?: Array<{
+      slug: string
+      display_name: string | null
+      fields?: { beancountName?: unknown }
+    }>
+  } | null
   const want = opts.displayMustContain?.toLowerCase()
-  for (const text of queries) {
-    try {
-      const r = (await kb.resolve(text, { prefix, limit: 6 })) as {
-        items?: Array<{ slug: string }>
-      }
-      for (const item of r.items ?? []) {
-        if (tried.has(item.slug)) continue
-        tried.add(item.slug)
-        try {
-          const node = (await kb.get(item.slug)) as {
-            display_name?: string | null
-            attrs?: Record<string, unknown> | null
-          } | null
-          if (node?.attrs?.beancountName !== beancountName) continue
-          if (want && !(node.display_name ?? '').toLowerCase().includes(want)) continue
-          verified.push({ slug: item.slug, display_name: node.display_name ?? null })
-        } catch {
-          /* try the next candidate */
-        }
-      }
-    } catch {
-      /* this query failed — try the next */
-    }
-  }
-  // Exactly one verified hit or nothing — a generic name matching several
-  // nodes is ambiguous, and a wrong name is worse than no name.
-  return verified.length === 1 ? verified[0] : null
+  const hits = (r?.items ?? []).filter(
+    (i) =>
+      i.fields?.beancountName === beancountName &&
+      (!want || (i.display_name ?? '').toLowerCase().includes(want)),
+  )
+  // Exactly one match or nothing — a name shared by several nodes is ambiguous,
+  // and a wrong name is worse than no name.
+  return hits.length === 1
+    ? { slug: hits[0]!.slug, display_name: hits[0]!.display_name ?? null }
+    : null
 }
 
 // Resolve a Beancount commodity ticker to its currency node — exact, via the
@@ -366,6 +351,7 @@ export function kbHttpOverFetch(
       const u = new URL(`${trimmed}/api/kb/list`)
       u.searchParams.set('prefix', prefix)
       if (opts.limit !== undefined) u.searchParams.set('limit', String(opts.limit))
+      if (opts.fields?.length) u.searchParams.set('fields', opts.fields.join(','))
       return (await fetcher.fetch(u)).json()
     },
   }

@@ -34,7 +34,6 @@ import {
   querySqlTool,
   resolveByBeancountName,
   resolveByTicker,
-  camelSpace,
   showAwardOptionsTool,
 } from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
@@ -276,13 +275,6 @@ export class ConciergeDO
           }
           const hit = await resolveByBeancountName(
             kbHttp,
-            parts.issuer
-              ? [
-                  `${parts.issuer} ${camelSpace(parts.leaf)}`,
-                  camelSpace(parts.leaf),
-                  parts.leaf,
-                ]
-              : [camelSpace(parts.leaf), parts.leaf],
             'currency',
             parts.leaf,
             parts.issuer ? { displayMustContain: parts.issuer } : {},
@@ -290,16 +282,7 @@ export class ConciergeDO
           if (hit?.display_name) names[account] = hit.display_name
           return
         }
-        const hit = await resolveByBeancountName(
-          kbHttp,
-          [
-            `${parts.issuer} ${camelSpace(parts.product)}`,
-            camelSpace(parts.product),
-            `${parts.issuer} ${parts.product}`,
-          ],
-          'cc',
-          parts.product,
-        )
+        const hit = await resolveByBeancountName(kbHttp, 'cc', parts.product)
         if (hit?.display_name) names[account] = hit.display_name
       }),
     )
@@ -381,16 +364,7 @@ export class ConciergeDO
           trace.push(t)
         }
         try {
-          const hit = await resolveByBeancountName(
-            kbHttp,
-            [
-              `${parts.issuer} ${camelSpace(parts.product)}`,
-              camelSpace(parts.product),
-              `${parts.issuer} ${parts.product}`,
-            ],
-            'cc',
-            parts.product,
-          )
+          const hit = await resolveByBeancountName(kbHttp, 'cc', parts.product)
           if (debug) t.verified_slug = hit?.slug ?? null
           if (!hit) return
           const rel = (await kbHttp.related(hit.slug, {
@@ -538,16 +512,7 @@ export class ConciergeDO
         let network: string | null = null
         let pool_name: string | null = null
         try {
-          const hit = await resolveByBeancountName(
-            kbHttp,
-            [
-              `${parts.issuer} ${camelSpace(parts.product)}`,
-              camelSpace(parts.product),
-              `${parts.issuer} ${parts.product}`,
-            ],
-            'cc',
-            parts.product,
-          )
+          const hit = await resolveByBeancountName(kbHttp, 'cc', parts.product)
           if (hit) {
             const netRel = (await kbHttp
               .related(hit.slug, { edge_type: 'ON_NETWORK', direction: 'outgoing' })
