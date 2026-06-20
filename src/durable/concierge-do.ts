@@ -480,6 +480,120 @@ export class ConciergeDO
     return debug ? { links, trace } : { links }
   }
 
+  // Per-card metadata for the Vault home tiles (owner ask): the KG network
+  // (ON_NETWORK), the reward IDENTITY the card earns into (DENOMINATED_IN →
+  // currency display name), and the issuer's cashback receivable
+  // (Assets:Receivable:<issuer>) with its live balance. Reward *identity* is
+  // card-specific; the cashback receivable is issuer-level. The points pool
+  // *balance* is programme-wide (shared across cards) so it is deliberately NOT
+  // returned per card — it would misattribute a shared pool to one card.
+  async cardMeta(): Promise<{
+    cards: Array<{
+      card: string
+      issuer: string | null
+      network: string | null
+      reward_kind: 'points' | 'cashback' | 'none'
+      pool_name: string | null
+      receivable_account: string | null
+      receivable_balance: number | null
+    }>
+  }> {
+    const ledger = this.ledgerStub()
+    const [snapshot, balances] = await Promise.all([
+      ledger.ledger_snapshot().catch((): null => null),
+      ledger
+        .query_sql('SELECT account, scale, balance_scaled FROM balance_totals')
+        .catch((): null => null),
+    ])
+    const accounts = (snapshot?.accounts ?? []) as ReadonlyArray<{ account: string }>
+    const balRows = (balances?.rows ?? []) as Array<{
+      account: string
+      scale: number
+      balance_scaled: number
+    }>
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const balanceOf = (acct: string): number | null => {
+      const rows = balRows.filter((b) => b.account === acct)
+      if (!rows.length) return null
+      return rows.reduce((s, b) => s + Number(b.balance_scaled) / 10 ** b.scale, 0)
+    }
+    const prettySlug = (slug: string) =>
+      slug
+        .replace(/^[^/]+\//, '')
+        .split('-')
+        .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
+        .join(' ')
+    type RelItems = { items?: Array<{ other: string }> }
+
+    const cards = accounts.filter((a) => a.account.startsWith('Liabilities:CreditCards:'))
+    const out: Awaited<ReturnType<ConciergeDO['cardMeta']>>['cards'] = []
+    await Promise.all(
+      cards.map(async ({ account }) => {
+        const parts = kgLookupParts(account)
+        if (!parts || parts.kind !== 'card') return
+        const issuer = parts.issuer ?? null
+        const receivable_account = issuer ? `Assets:Receivable:${issuer}` : null
+        const receivable_balance = receivable_account ? balanceOf(receivable_account) : null
+
+        let network: string | null = null
+        let pool_name: string | null = null
+        try {
+          const hit = await resolveByBeancountName(
+            kbHttp,
+            [
+              `${parts.issuer} ${camelSpace(parts.product)}`,
+              camelSpace(parts.product),
+              `${parts.issuer} ${parts.product}`,
+            ],
+            'cc',
+            parts.product,
+          )
+          if (hit) {
+            const netRel = (await kbHttp
+              .related(hit.slug, { edge_type: 'ON_NETWORK', direction: 'outgoing' })
+              .catch((): null => null)) as RelItems | null
+            const netSlug = netRel?.items?.map((i) => i.other).find((o) => o.startsWith('network/'))
+            if (netSlug) {
+              const n = (await kbHttp.get(netSlug).catch((): null => null)) as {
+                display_name?: string | null
+              } | null
+              network = n?.display_name ?? prettySlug(netSlug)
+            }
+            const curRel = (await kbHttp
+              .related(hit.slug, { edge_type: 'DENOMINATED_IN', direction: 'outgoing' })
+              .catch((): null => null)) as RelItems | null
+            const curSlug = curRel?.items
+              ?.map((i) => i.other)
+              .find((o) => o.startsWith('currency/'))
+            if (curSlug) {
+              const n = (await kbHttp.get(curSlug).catch((): null => null)) as {
+                display_name?: string | null
+              } | null
+              pool_name = n?.display_name ?? prettySlug(curSlug)
+            }
+          }
+        } catch {
+          /* KG miss → network/pool stay null; the card still renders */
+        }
+        const reward_kind: 'points' | 'cashback' | 'none' = pool_name
+          ? 'points'
+          : receivable_balance != null
+            ? 'cashback'
+            : 'none'
+        out.push({
+          card: account,
+          issuer,
+          network,
+          reward_kind,
+          pool_name,
+          receivable_account,
+          receivable_balance,
+        })
+      }),
+    )
+    return { cards: out }
+  }
+
   // Headless one-shot turn for text-only channels (Telegram, WhatsApp …):
   // the graph-walker's brain and read tools, minus everything interactive —
   // ask_user suspends, show_award_options is gen-UI, handoff needs the chat
