@@ -532,7 +532,9 @@ export class ConciergeDO
               } | null
               const ticker = typeof n?.attrs?.ticker === 'string' ? n.attrs.ticker : null
               reward_label = n?.display_name ?? prettySlug(curSlug)
-              reward_unit = ticker ?? 'pts'
+              // Friendly display unit — NOT the raw commodity ticker. Airline FFP
+              // currency slugs end in `-miles`; everything else is points.
+              reward_unit = /-miles$/.test(curSlug) ? 'miles' : 'pts'
               if (ticker) {
                 // Match the ACTUAL ledger reward accounts by COMMODITY — the same
                 // balances the Vault programmes list reads. No path
@@ -551,7 +553,9 @@ export class ConciergeDO
                   reward_account = (posted[0] ?? rewardRows[0]!).account
                   reward_balance = sum(posted)
                   const pend = sum(pendingRows)
-                  reward_pending = pend !== 0 ? pend : null
+                  // Only surface a real positive accrual — a tiny negative
+                  // (rounding / reversed accrual) is noise, not "pending".
+                  reward_pending = pend > 0 ? pend : null
                 }
               }
             }

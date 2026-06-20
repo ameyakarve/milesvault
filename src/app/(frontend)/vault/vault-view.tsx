@@ -477,21 +477,16 @@ export function CreditCardCard({
         {series.length > 1 ? <Sparkarea values={series} className="h-6 w-16 text-white" /> : null}
       </span>
 
-      {/* reward balance */}
-      {meta?.reward_label ? (
-        <span className="flex items-center justify-between gap-2 border-t border-white/20 pt-2 text-[11px]">
-          <span className="truncate text-white/70">{meta.reward_label}</span>
-          <span className="flex shrink-0 items-baseline gap-1">
-            {meta.reward_balance != null ? (
-              <span className="font-mono">{fmtReward(meta.reward_balance, meta.reward_unit)}</span>
-            ) : null}
-            {meta.reward_pending ? (
-              <span className="font-mono text-[10px] text-white/60">
-                {' '}
-                · {meta.reward_pending.toLocaleString('en-IN', { maximumFractionDigits: 0 })} pending
-              </span>
-            ) : null}
-          </span>
+      {/* reward balance — no programme label (the card already names it);
+          just the balance + a friendly unit, pending only when positive */}
+      {meta?.reward_balance != null ? (
+        <span className="flex items-baseline gap-1 border-t border-white/20 pt-2 text-[11px]">
+          <span className="font-mono">{fmtReward(meta.reward_balance, meta.reward_unit)}</span>
+          {meta.reward_pending != null && meta.reward_pending > 0 ? (
+            <span className="font-mono text-[10px] text-white/60">
+              · {meta.reward_pending.toLocaleString('en-IN', { maximumFractionDigits: 0 })} pending
+            </span>
+          ) : null}
         </span>
       ) : null}
     </Link>
