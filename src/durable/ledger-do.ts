@@ -424,14 +424,25 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     // directive — so a card that's opened or balance-set but not yet transacted
     // still counts. One simple query per source, deduped in a Set.
     const CC = 'Liabilities:CreditCards:%'
-    const accountsFrom = (sql: string, ...params: string[]) =>
-      this.db.exec<{ account: string }>(sql, ...params).toArray().map((r) => r.account)
+    // One query per source, each independently guarded — a stat must never 500
+    // the home page, and a guarded source tells us (in logs) which one fails.
+    const accountsFrom = (label: string, sql: string, col = 'account'): string[] => {
+      try {
+        return this.db
+          .exec<Record<string, string>>(sql, CC)
+          .toArray()
+          .map((r) => r[col]!)
+      } catch (e) {
+        console.error('[vault_stats] cardLeaves source failed', { label, err: String(e) })
+        return []
+      }
+    }
     const cardLeaves = new Set<string>([
-      ...accountsFrom(`SELECT DISTINCT account FROM postings WHERE account LIKE ?`, CC),
-      ...accountsFrom(`SELECT DISTINCT account FROM directives_open WHERE account LIKE ?`, CC),
-      ...accountsFrom(`SELECT DISTINCT account FROM directives_balance WHERE account LIKE ?`, CC),
-      ...accountsFrom(`SELECT DISTINCT account FROM directives_pad WHERE account LIKE ?`, CC),
-      ...accountsFrom(`SELECT DISTINCT account_pad AS account FROM directives_pad WHERE account_pad LIKE ?`, CC),
+      ...accountsFrom('postings', `SELECT DISTINCT account FROM postings WHERE account LIKE ?`),
+      ...accountsFrom('open', `SELECT DISTINCT account FROM directives_open WHERE account LIKE ?`),
+      ...accountsFrom('balance', `SELECT DISTINCT account FROM directives_balance WHERE account LIKE ?`),
+      ...accountsFrom('pad', `SELECT DISTINCT account FROM directives_pad WHERE account LIKE ?`),
+      ...accountsFrom('pad_src', `SELECT DISTINCT account_pad FROM directives_pad WHERE account_pad LIKE ?`, 'account_pad'),
     ])
     const card_count = [...cardLeaves].filter((a) => !/:Pending(?::|$)/.test(a)).length
 
