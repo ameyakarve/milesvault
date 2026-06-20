@@ -43,8 +43,8 @@ async function displayName(kb: KbHttp, slug: string): Promise<string> {
 }
 
 async function listSlugs(kb: KbHttp, prefix: string): Promise<string[]> {
-  const r = (await kb.list(prefix, { limit: 1000 })) as { items?: string[] }
-  return r.items ?? []
+  const r = (await kb.list(prefix, { limit: 1000 })) as { items?: Array<{ slug: string }> }
+  return (r.items ?? []).map((i) => i.slug)
 }
 
 export async function listTransferSources(kb: KbHttp): Promise<TransferSource[]> {

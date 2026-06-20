@@ -16,8 +16,8 @@ const prettySlug = (slug: string) =>
 export async function listLoyaltyCurrencies(kb: KbHttp): Promise<LoyaltyCurrency[]> {
   let slugs: string[] = []
   try {
-    const r = (await kb.list('currency', { limit: 1000 })) as { items?: string[] }
-    slugs = r.items ?? []
+    const r = (await kb.list('currency', { limit: 1000 })) as { items?: Array<{ slug: string }> }
+    slugs = (r.items ?? []).map((i) => i.slug)
   } catch {
     slugs = []
   }

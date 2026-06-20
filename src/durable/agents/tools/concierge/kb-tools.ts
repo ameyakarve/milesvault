@@ -85,7 +85,13 @@ const RELATED_OUTPUT = z.object({
 
 const LIST_OUTPUT = z.object({
   ok: z.literal(true),
-  items: z.array(z.string()),
+  items: z.array(
+    z.object({
+      slug: z.string(),
+      display_name: z.string().nullable().optional(),
+      aliases: z.array(z.string()).optional(),
+    }),
+  ),
 })
 
 const ERROR_OUTPUT = z.object({
@@ -194,11 +200,12 @@ export function makeKbTools(http: KbHttp) {
 
     kb_list: tool({
       description:
-        'Enumerate every node under a given prefix. Returns `{ items }` ' +
-        'where each item is a slug string (NOT an object). Use this to ' +
-        "browse a type (e.g. prefix='cc' to see every credit card slug, " +
-        "prefix='program' for every loyalty programme). Pair with kb_get " +
-        'for details. Slugs are alphabetical.',
+        'Enumerate every node under a given prefix. Returns `{ items }` where ' +
+        'each item is `{ slug, display_name, aliases }` — `aliases` are the other ' +
+        'slugs that redirect to it, so you can match a node by any of its names. ' +
+        "Use this to browse a type (e.g. prefix='cc' for every credit card, " +
+        "prefix='program' for every loyalty programme). Pair with kb_get for " +
+        'details. Items are alphabetical by slug.',
       inputSchema: z.object({
         prefix: z
           .string()
