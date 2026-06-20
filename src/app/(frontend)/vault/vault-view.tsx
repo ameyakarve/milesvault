@@ -86,6 +86,10 @@ export function VaultView() {
   // keyed by account. Loaded non-blocking — tiles render without it and enrich
   // when it arrives.
   const [cardMeta, setCardMeta] = useState<Record<string, CardMeta>>({})
+  // Programme commodity → its tier-qualifying status-counter commodities
+  // (QUALIFIES_TOWARD, from the KG), so a programme's counters attach by
+  // commodity even when ledger account leaves differ. Loaded non-blocking.
+  const [statusLinks, setStatusLinks] = useState<Record<string, string[]>>({})
   // Bumped by the error-state retry to re-run the loader.
   const [reloadNonce, setReloadNonce] = useState(0)
 
@@ -145,6 +149,10 @@ export function VaultView() {
           for (const c of d.cards) m[c.card] = c
           setCardMeta(m)
         })
+        .catch(() => {})
+      fetch('/api/concierge/status-links', noStore)
+        .then((r) => (r.ok ? (r.json() as Promise<{ links?: Record<string, string[]> }>) : null))
+        .then((d) => alive && d?.links && setStatusLinks(d.links))
         .catch(() => {})
     }
     load()
@@ -206,19 +214,30 @@ export function VaultView() {
     a.startsWith('Assets:Rewards:Miles:') || a.startsWith('Assets:Rewards:Points:')
   const rewardRows = rows.filter((r) => isProgrammeHolding(r.account))
   const holdings = foldPending(rewardRows)
-  // Tier-qualifying status counters keyed by programme leaf (the segment after
-  // Assets:Rewards:Status:) — a programme can hold several commodities (nights,
-  // segments, qualifying points), each its own row. Overlaid on the programme
-  // tiles, so they're excluded from "everything else" below.
-  const statusByProgramme = new Map<string, Array<{ value: number; commodity: string }>>()
-  for (const r of rows) {
-    if (!r.account.startsWith('Assets:Rewards:Status:')) continue
-    const leaf = r.account.split(':')[3]
-    if (!leaf) continue
-    const value = Number(r.balance_scaled) / 10 ** r.scale
-    const arr = statusByProgramme.get(leaf) ?? []
-    arr.push({ value, commodity: r.currency })
-    statusByProgramme.set(leaf, arr)
+  // Tier-qualifying status counters (Assets:Rewards:Status:*) — a programme can
+  // hold several (nights, segments, qualifying points). They're overlaid on the
+  // programme tiles (and excluded from "everything else" below). A counter
+  // attaches to a programme tile if EITHER its account leaf matches the
+  // programme's leaf, OR its commodity QUALIFIES_TOWARD the programme's
+  // commodity per the KG (statusLinks) — the latter catches counters whose
+  // account leaf differs (e.g. AllAccor counters under the AllRewards tile).
+  const statusRows = rows
+    .filter((r) => r.account.startsWith('Assets:Rewards:Status:'))
+    .map((r) => ({
+      leaf: r.account.split(':')[3] ?? '',
+      commodity: r.currency,
+      value: Number(r.balance_scaled) / 10 ** r.scale,
+    }))
+  const countersFor = (h: Holding): Array<{ value: number; commodity: string }> => {
+    const leaf = h.account.split(':')[3] ?? ''
+    const linked = new Set(statusLinks[h.currency] ?? [])
+    const byCommodity = new Map<string, number>()
+    for (const sr of statusRows) {
+      if (sr.leaf === leaf || linked.has(sr.commodity)) {
+        byCommodity.set(sr.commodity, (byCommodity.get(sr.commodity) ?? 0) + sr.value)
+      }
+    }
+    return [...byCommodity.entries()].map(([commodity, value]) => ({ value, commodity }))
   }
   const cardRows = rows
     .filter((r) => r.account.startsWith('Liabilities:CreditCards:'))
@@ -290,7 +309,7 @@ export function VaultView() {
       <RewardsSections
         holdings={holdings}
         names={names}
-        statusByProgramme={statusByProgramme}
+        countersFor={countersFor}
         onAdd={() => setAddCardOpen(true)}
       />
 
@@ -667,12 +686,12 @@ function foldPending(rows: AccountSummaryRow[]): Holding[] {
 function RewardsSections({
   holdings,
   names,
-  statusByProgramme,
+  countersFor,
   onAdd,
 }: {
   holdings: Holding[]
   names: Names
-  statusByProgramme: Map<string, Array<{ value: number; commodity: string }>>
+  countersFor: (h: Holding) => Array<{ value: number; commodity: string }>
   onAdd: () => void
 }) {
   const claimed = new Set<string>()
@@ -700,7 +719,7 @@ function RewardsSections({
                     key={`${h.account}|${h.currency}`}
                     holding={h}
                     names={names}
-                    status={statusByProgramme.get(h.account.split(':')[3] ?? '') ?? []}
+                    status={countersFor(h)}
                   />
                 ))}
               </div>
