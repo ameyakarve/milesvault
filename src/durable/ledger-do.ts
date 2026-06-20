@@ -419,20 +419,21 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
 
     // A card = a unique leaf under Liabilities:CreditCards:, with its `:Pending`
-    // sub-ledger folded in (owner definition). Union EVERY place an account can
-    // surface — a transaction posting, an `open`, or a `pad`/`balance` directive —
-    // so a card that's opened or balance-set but not yet transacted still counts.
-    const cardLeaves = this.db
-      .exec<{ account: string }>(
-        `SELECT account FROM postings           WHERE account LIKE 'Liabilities:CreditCards:%'
-         UNION SELECT account FROM directives_open    WHERE account LIKE 'Liabilities:CreditCards:%'
-         UNION SELECT account FROM directives_balance WHERE account LIKE 'Liabilities:CreditCards:%'
-         UNION SELECT account FROM directives_pad     WHERE account LIKE 'Liabilities:CreditCards:%'
-         UNION SELECT account_pad AS account FROM directives_pad WHERE account_pad LIKE 'Liabilities:CreditCards:%'`,
-      )
-      .toArray()
-      .map((r) => r.account)
-    const card_count = cardLeaves.filter((a) => !/:Pending(?::|$)/.test(a)).length
+    // sub-ledger folded in (owner definition). Gather the account from EVERY place
+    // it can surface — a transaction posting, an `open`, or a `pad`/`balance`
+    // directive — so a card that's opened or balance-set but not yet transacted
+    // still counts. One simple query per source, deduped in a Set.
+    const CC = 'Liabilities:CreditCards:%'
+    const accountsFrom = (sql: string, ...params: string[]) =>
+      this.db.exec<{ account: string }>(sql, ...params).toArray().map((r) => r.account)
+    const cardLeaves = new Set<string>([
+      ...accountsFrom(`SELECT DISTINCT account FROM postings WHERE account LIKE ?`, CC),
+      ...accountsFrom(`SELECT DISTINCT account FROM directives_open WHERE account LIKE ?`, CC),
+      ...accountsFrom(`SELECT DISTINCT account FROM directives_balance WHERE account LIKE ?`, CC),
+      ...accountsFrom(`SELECT DISTINCT account FROM directives_pad WHERE account LIKE ?`, CC),
+      ...accountsFrom(`SELECT DISTINCT account_pad AS account FROM directives_pad WHERE account_pad LIKE ?`, CC),
+    ])
+    const card_count = [...cardLeaves].filter((a) => !/:Pending(?::|$)/.test(a)).length
 
     return {
       period: { from: opts.fromInt, to: opts.toInt },
