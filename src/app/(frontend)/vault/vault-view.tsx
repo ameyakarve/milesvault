@@ -319,68 +319,81 @@ type CardMeta = {
   reward_unit: string | null
 }
 
-// Curated bank brand tints for the card header — real brand colors are public
-// facts (not user data). A SOFT tint (light + dark variants) so the header sits
-// quietly against the card body in both modes; the mark/text take the brand
-// color. Keyed off the issuer segment of the account; unknown issuers fall back
-// to a deterministic neutral tint.
-const BANK_BANDS: Record<string, string> = {
-  hdfc: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
-  axis: 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
-  icici: 'bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300',
-  sbi: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
-  sbicard: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
-  hsbc: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
-  indusind: 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
-  amex: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300',
-  americanexpress: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300',
-  kotak: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
-  idfc: 'bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950/40 dark:text-fuchsia-300',
-  idfcfirst: 'bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950/40 dark:text-fuchsia-300',
-  yes: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
-  yesbank: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
-  rbl: 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
-  au: 'bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950/40 dark:text-fuchsia-300',
-  aubank: 'bg-fuchsia-50 text-fuchsia-800 dark:bg-fuchsia-950/40 dark:text-fuchsia-300',
-  sc: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
-  standardchartered: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
-  citi: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
-  citibank: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+// Full-color "card-art" background per bank — the whole tile takes the brand
+// color (like the physical plastic / a Wallet card), white text overlaid. Real
+// brand colors are public facts (not user data). Shades are chosen dark enough
+// for white text and work over either app surface. Unknown issuers fall back to
+// a deterministic muted color.
+const BANK_BG: Record<string, string> = {
+  hdfc: 'bg-blue-700',
+  axis: 'bg-rose-800',
+  icici: 'bg-orange-700',
+  sbi: 'bg-sky-700',
+  sbicard: 'bg-sky-700',
+  hsbc: 'bg-red-700',
+  indusind: 'bg-rose-900',
+  amex: 'bg-cyan-800',
+  americanexpress: 'bg-cyan-800',
+  kotak: 'bg-red-700',
+  idfc: 'bg-fuchsia-900',
+  idfcfirst: 'bg-fuchsia-900',
+  yes: 'bg-blue-700',
+  yesbank: 'bg-blue-700',
+  rbl: 'bg-amber-800',
+  au: 'bg-purple-800',
+  aubank: 'bg-purple-800',
+  sc: 'bg-emerald-800',
+  standardchartered: 'bg-emerald-800',
+  citi: 'bg-blue-800',
+  citibank: 'bg-blue-800',
 }
-const FALLBACK_BANDS = [
-  'bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300',
-  'bg-zinc-100 text-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300',
-  'bg-stone-100 text-stone-700 dark:bg-stone-800/50 dark:text-stone-300',
-  'bg-neutral-100 text-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300',
-]
+const FALLBACK_BG = ['bg-slate-700', 'bg-zinc-700', 'bg-stone-700', 'bg-neutral-700']
 function issuerOf(account: string): string | null {
   // Liabilities:CreditCards:<Issuer>:<Card>[:last4]
   return account.split(':')[2] ?? null
 }
-function bankBand(issuer: string | null): string {
+function bankBg(issuer: string | null): string {
   const key = (issuer ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
-  if (key && BANK_BANDS[key]) return BANK_BANDS[key]!
+  if (key && BANK_BG[key]) return BANK_BG[key]!
   let h = 0
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
-  return FALLBACK_BANDS[Math.abs(h) % FALLBACK_BANDS.length]!
+  return FALLBACK_BG[Math.abs(h) % FALLBACK_BG.length]!
 }
 
-// Tiny bar sparkline (monthly spend, oldest→newest). The latest month is
-// highlighted; earlier months are quieter but clearly visible. A zero month
-// keeps a sliver so the axis reads.
-function Sparkbars({ values }: { values: number[] }) {
-  const max = Math.max(...values, 1)
-  const lastIdx = values.length - 1
+// Area sparkline (monthly spend, oldest→newest): the line's SLOPE shows the
+// trend direction; the filled area gives it weight. currentColor (white on the
+// card), low-opacity fill + solid stroke.
+function Sparkarea({ values, className }: { values: number[]; className?: string }) {
+  const w = 64
+  const h = 20
+  const max = Math.max(...values)
+  const min = Math.min(...values)
+  const range = max - min || 1
+  const n = values.length
+  const step = n > 1 ? w / (n - 1) : w
+  const xy = values.map((v, i) => [i * step, h - 2 - ((v - min) / range) * (h - 4)] as const)
+  const line = xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const area = `0,${h} ${line} ${w},${h}`
   return (
-    <span className="inline-flex h-4 items-end gap-0.5" aria-hidden>
-      {values.map((v, i) => (
-        <span
-          key={i}
-          className={cn('w-1.5 rounded-sm', i === lastIdx ? 'bg-foreground/80' : 'bg-foreground/30')}
-          style={{ height: `${Math.max(12, (v / max) * 100)}%` }}
-        />
-      ))}
-    </span>
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      className={className}
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <polygon points={area} fill="currentColor" opacity="0.25" />
+      <polyline
+        points={line}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
   )
 }
 
@@ -405,15 +418,13 @@ export function CreditCardCard({
   const bal = balanceOf(row)
   const owed = bal < 0
   const inCredit = bal > 0
-  // Liabilities are stored negative when you owe — label the direction so the
-  // bare number isn't ambiguous, and show the magnitude (the label carries sign).
   const stateLabel = owed ? 'Outstanding' : inCredit ? 'In credit' : 'Settled'
   const magnitude = Math.abs(bal).toLocaleString('en-IN', {
     maximumFractionDigits: row.scale > 0 ? 2 : 0,
   })
 
   // Spend, month over month: the current month's charges + the delta vs the
-  // prior month, both from the monthly series the sparkline draws.
+  // prior month, both from the monthly series the area chart draws.
   const series = trend?.months ?? []
   const spendCcy = trend?.currency ?? 'INR'
   const thisMo = series[series.length - 1] ?? 0
@@ -424,77 +435,65 @@ export function CreditCardCard({
   return (
     <Link
       href={accountHref(row)}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-md"
+      className={cn(
+        'group flex flex-col gap-3 rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
+        bankBg(issuer),
+      )}
     >
-      {/* header — soft brand tint + bank mark, card name, last 4 (both modes) */}
-      <span className={cn('flex items-center gap-2 px-3.5 py-2', bankBand(issuer))}>
-        <BankMark issuer={issuer} className="size-5 shrink-0" />
+      {/* identity — mark, card name, last 4 */}
+      <span className="flex items-center gap-2">
+        <BankMark issuer={issuer} className="size-5 shrink-0 text-white" />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
-        <span className="shrink-0 font-mono text-[10px] tracking-wider opacity-70">
+        <span className="shrink-0 font-mono text-[10px] tracking-wider text-white/70">
           •••• {suffix || '----'}
         </span>
       </span>
 
-      {/* body — outstanding, spend trend, reward balance */}
-      <span className="flex flex-col gap-2 px-3.5 py-3">
-        <span className="flex items-baseline justify-between gap-2">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            {stateLabel}
+      {/* outstanding hero */}
+      <span className="flex flex-col gap-0.5">
+        <span className="text-[10px] uppercase tracking-wide text-white/60">{stateLabel}</span>
+        <span className="flex items-baseline gap-1.5">
+          <span className="font-mono text-2xl font-semibold leading-none tracking-tight">
+            {magnitude}
           </span>
-          <span className="flex items-baseline gap-1">
-            <span
-              className={cn(
-                'font-mono text-lg font-semibold leading-none tracking-tight',
-                inCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground',
-              )}
-            >
-              {magnitude}
-            </span>
-            <span className="font-mono text-[10px] text-muted-foreground">{row.currency}</span>
-          </span>
+          <span className="font-mono text-[10px] text-white/60">{row.currency}</span>
         </span>
+      </span>
 
-        <span className="flex items-center justify-between gap-2 text-[11px]">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            Monthly spend
-          </span>
-          <span className="flex items-center gap-1.5">
-            {series.length > 1 ? <Sparkbars values={series} /> : null}
-            <span className="font-mono text-foreground">{spendText}</span>
+      {/* monthly spend + area trend */}
+      <span className="flex items-end justify-between gap-2">
+        <span className="flex flex-col gap-0.5">
+          <span className="text-[10px] uppercase tracking-wide text-white/60">Monthly spend</span>
+          <span className="flex items-baseline gap-1">
+            <span className="font-mono text-xs">{spendText}</span>
             {deltaPct != null && deltaPct !== 0 ? (
-              <span
-                className={cn(
-                  'font-mono text-[10px]',
-                  deltaPct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400',
-                )}
-                title="vs last month"
-              >
+              <span className="font-mono text-[10px] text-white/70" title="vs last month">
                 {deltaPct > 0 ? '▲' : '▼'}
                 {Math.abs(deltaPct)}%
               </span>
             ) : null}
           </span>
         </span>
-
-        {meta?.reward_label ? (
-          <span className="flex items-center justify-between gap-2 border-t border-border/60 pt-2 text-[11px]">
-            <span className="truncate text-muted-foreground">{meta.reward_label}</span>
-            <span className="flex shrink-0 items-baseline gap-1">
-              {meta.reward_balance != null ? (
-                <span className="font-mono text-foreground">
-                  {fmtReward(meta.reward_balance, meta.reward_unit)}
-                </span>
-              ) : null}
-              {meta.reward_pending ? (
-                <span className="font-mono text-[10px] text-amber-600 dark:text-amber-400">
-                  {' '}
-                  · {meta.reward_pending.toLocaleString('en-IN', { maximumFractionDigits: 0 })} pending
-                </span>
-              ) : null}
-            </span>
-          </span>
-        ) : null}
+        {series.length > 1 ? <Sparkarea values={series} className="h-6 w-16 text-white" /> : null}
       </span>
+
+      {/* reward balance */}
+      {meta?.reward_label ? (
+        <span className="flex items-center justify-between gap-2 border-t border-white/20 pt-2 text-[11px]">
+          <span className="truncate text-white/70">{meta.reward_label}</span>
+          <span className="flex shrink-0 items-baseline gap-1">
+            {meta.reward_balance != null ? (
+              <span className="font-mono">{fmtReward(meta.reward_balance, meta.reward_unit)}</span>
+            ) : null}
+            {meta.reward_pending ? (
+              <span className="font-mono text-[10px] text-white/60">
+                {' '}
+                · {meta.reward_pending.toLocaleString('en-IN', { maximumFractionDigits: 0 })} pending
+              </span>
+            ) : null}
+          </span>
+        </span>
+      ) : null}
     </Link>
   )
 }
