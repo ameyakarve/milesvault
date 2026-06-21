@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ProgrammeMark } from './programme-marks'
 import { AddAccountsModal } from '@/components/add-accounts-modal'
@@ -14,7 +14,7 @@ import {
   isHolding,
   isPending,
 } from '@/lib/ledger-core/account-display'
-import { SectionLabel, StatTile, CenteredState } from '@/components/shared'
+import { CenteredState } from '@/components/shared'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BankMark } from './bank-marks'
 
@@ -325,35 +325,23 @@ export function VaultView() {
 
   return (
     <div className="w-full px-6 py-6 space-y-8">
-      {/* ── needs review lane ─────────────────────────────────────────────── */}
-      {pendingCaptures > 0 ? (
-        <Link
-          href="/inbox"
-          className="flex items-center justify-between rounded-xl border border-amber-200/60 bg-amber-50 px-4 py-3 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/40 dark:hover:bg-amber-950/60"
-        >
-          <span className="text-sm text-amber-800 dark:text-amber-300">
-            {pendingCaptures} item{pendingCaptures === 1 ? '' : 's'} ready to review
-          </span>
-          <span className="text-sm font-medium text-amber-700 dark:text-amber-300">Open Inbox →</span>
-        </Link>
+      {/* ── masthead: at-a-glance totals + review prompt ──────────────────── */}
+      {stats ? (
+        <Masthead
+          stats={stats}
+          pendingCaptures={pendingCaptures}
+          programmeCount={holdings.length}
+        />
       ) : null}
-
-      {/* ── headline strip: numbers that mean something ───────────────────── */}
-      {stats ? <HeadlineStrip stats={stats} /> : null}
 
       {/* ── credit cards ──────────────────────────────────────────────────── */}
       {cardRows.length > 0 ? (
         <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionLabel>Credit cards</SectionLabel>
-            <button
-              type="button"
-              onClick={() => setAddCardOpen(true)}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              + add
-            </button>
-          </div>
+          <SectionHead
+            title="Credit cards"
+            count={cardRows.length}
+            action={<AddButton label="Add card" onClick={() => setAddCardOpen(true)} />}
+          />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {cardRows.map((r) => (
               <CreditCardCard
@@ -602,73 +590,180 @@ export function CreditCardCard({
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
-// Two headline numbers relevant to a rewards/spend tracker: what you owe on
-// cards and what you've spent this month. (No "net worth / in the bank" — this
-// isn't a net-worth app; account balances live on the cards and Accounts tab.)
-function HeadlineStrip({ stats }: { stats: VaultStats }) {
+// Page masthead: the at-a-glance totals (owed, spend MTD, counts) as one
+// cohesive strip — the quiet "header" layer beneath the hero cards — with the
+// review prompt folded in as an on-brand accent (not a pastel box).
+function Masthead({
+  stats,
+  pendingCaptures,
+  programmeCount,
+}: {
+  stats: VaultStats
+  pendingCaptures: number
+  programmeCount: number
+}) {
   const cards = primaryOf(stats.card_outstanding)
   const spend = primaryOf(stats.expense_total)
   // Liabilities are negative in beancount — owed is the flipped sign.
   const owed = cards.main ? -cards.main.total : 0
+  const cur = cards.main?.currency ?? 'INR'
+  const kpis: Array<{ label: string; value: string; sub?: string }> = [
+    { label: 'Owed', value: cards.main ? fmtAmt(owed) : '—', sub: cards.main ? cur : undefined },
+    {
+      label: 'Spent · MTD',
+      value: spend.main ? fmtAmt(spend.main.total) : '0',
+      sub: spend.main?.currency ?? cur,
+    },
+    { label: 'Cards', value: String(stats.card_count) },
+    { label: 'Programmes', value: String(programmeCount) },
+  ]
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <StatTile
-        label="Card balances"
-        value={cards.main ? `${fmtAmt(cards.main.total)} ${cards.main.currency}` : '—'}
-        sub={
-          stats.card_count > 0
-            ? `${stats.card_count} card${stats.card_count === 1 ? '' : 's'}`
-            : 'no cards yet'
-        }
-        negative={owed > 0}
-      />
-      <StatTile
-        label="Spent this month"
-        value={spend.main ? `${fmtAmt(spend.main.total)} ${spend.main.currency}` : '0'}
-        sub="month to date"
-      />
+    <div className="space-y-3">
+      {pendingCaptures > 0 ? (
+        <Link
+          href="/inbox"
+          className="flex items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-2.5 text-sm shadow-sm transition-colors hover:bg-muted/40"
+        >
+          <span className="size-2 shrink-0 rounded-full bg-amber-500" aria-hidden />
+          <span className="text-foreground">
+            {pendingCaptures} item{pendingCaptures === 1 ? '' : 's'} ready to review
+          </span>
+          <span className="ml-auto font-medium text-amber-600 dark:text-amber-400">Open Inbox →</span>
+        </Link>
+      ) : null}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4">
+        {kpis.map((k) => (
+          <div key={k.label} className="bg-card px-5 py-4">
+            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {k.label}
+            </div>
+            <div className="mt-1.5 flex items-baseline gap-1">
+              <span className="font-mono text-2xl font-semibold tracking-tight text-foreground">
+                {k.value}
+              </span>
+              {k.sub ? <span className="font-mono text-[10px] text-muted-foreground">{k.sub}</span> : null}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
+  )
+}
+
+// Consistent, present-enough section header (title + optional count + action),
+// shared across Credit cards / Programmes / Spending.
+function SectionHead({
+  title,
+  count,
+  action,
+}: {
+  title: string
+  count?: number
+  action?: ReactNode
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <h2 className="text-base font-semibold tracking-tight text-foreground">
+        {title}
+        {count != null ? (
+          <span className="ml-2 text-sm font-normal text-muted-foreground">{count}</span>
+        ) : null}
+      </h2>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  )
+}
+
+function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+    >
+      + {label}
+    </button>
   )
 }
 
 // Month-to-date expenses by category, horizontal bars, each row drilling
 // into that category's own overview page.
+const SPEND_TINTS = [
+  'bg-blue-500',
+  'bg-emerald-500',
+  'bg-violet-500',
+  'bg-amber-500',
+  'bg-rose-500',
+  'bg-cyan-500',
+  'bg-orange-500',
+  'bg-teal-500',
+]
 function SpendingBreakdown({ stats }: { stats: VaultStats }) {
   const main = stats.expense_total[0]
   if (!main) return null
   const cats = stats.expense_categories.filter((c) => c.currency === main.currency).slice(0, 8)
+  const total = Math.abs(main.total) || 1
   const max = Math.max(...cats.map((c) => Math.abs(c.total)), 1)
+  const top = cats[0]
   return (
     <section className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <SectionLabel>Spending this month</SectionLabel>
-        <span className="font-mono text-xs text-muted-foreground">
-          {fmtAmt(main.total)} {main.currency}
-        </span>
-      </div>
-      <div className="space-y-2.5 rounded-xl border border-border bg-card p-4 shadow-sm">
-        {cats.map((c) => (
-          <Link
-            key={c.category}
-            href={`/vault/account?account=${encodeURIComponent(`Expenses:${c.category}`)}&ccy=${encodeURIComponent(c.currency)}`}
-            className="group block space-y-1"
-          >
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span className="text-foreground group-hover:underline group-hover:underline-offset-4">
-                {c.category}
-              </span>
-              <span className="font-mono text-xs text-muted-foreground">
-                {fmtAmt(c.total)} {c.currency}
-              </span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-foreground/70"
-                style={{ width: `${Math.max(2, (Math.abs(c.total) / max) * 100)}%` }}
-              />
-            </div>
-          </Link>
-        ))}
+      <SectionHead
+        title="Spending this month"
+        count={cats.length}
+        action={<span className="font-mono text-xs text-muted-foreground">month to date</span>}
+      />
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        {/* headline: total + the biggest category */}
+        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/60 pb-4">
+          <span className="flex items-baseline gap-1.5">
+            <span className="font-mono text-3xl font-semibold tracking-tight text-foreground">
+              {fmtAmt(main.total)}
+            </span>
+            <span className="font-mono text-xs text-muted-foreground">{main.currency}</span>
+          </span>
+          {top ? (
+            <span className="text-xs text-muted-foreground">
+              Top: <span className="text-foreground">{top.category}</span>{' '}
+              ({Math.round((Math.abs(top.total) / total) * 100)}%)
+            </span>
+          ) : null}
+        </div>
+        <div className="space-y-3.5">
+          {cats.map((c, i) => {
+            const pct = Math.round((Math.abs(c.total) / total) * 100)
+            const tint = SPEND_TINTS[i % SPEND_TINTS.length]!
+            return (
+              <Link
+                key={c.category}
+                href={`/vault/account?account=${encodeURIComponent(`Expenses:${c.category}`)}&ccy=${encodeURIComponent(c.currency)}`}
+                className="group block space-y-1.5"
+              >
+                <div className="flex items-baseline justify-between gap-2 text-sm">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className={cn('size-2 shrink-0 rounded-full', tint)} aria-hidden />
+                    <span className="truncate text-foreground group-hover:underline group-hover:underline-offset-4">
+                      {c.category}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-baseline gap-2">
+                    <span className="font-mono text-foreground">
+                      {fmtAmt(c.total)} {c.currency}
+                    </span>
+                    <span className="w-9 text-right font-mono text-[11px] text-muted-foreground">
+                      {pct}%
+                    </span>
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn('h-full rounded-full transition-all', tint)}
+                    style={{ width: `${Math.max(2, (Math.abs(c.total) / max) * 100)}%` }}
+                  />
+                </div>
+              </Link>
+            )
+          })}
+        </div>
       </div>
     </section>
   )
@@ -712,16 +807,11 @@ function RewardsSections({
 }) {
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <SectionLabel>Programmes</SectionLabel>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="text-xs text-muted-foreground hover:text-foreground"
-        >
-          + add
-        </button>
-      </div>
+      <SectionHead
+        title="Programmes"
+        count={holdings.length}
+        action={<AddButton label="Add" onClick={onAdd} />}
+      />
       {holdings.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {holdings.map((h) => (
