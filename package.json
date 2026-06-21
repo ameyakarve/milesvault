@@ -58,6 +58,7 @@
     "dayjs": "^1.11.20",
     "elkjs": "^0.11.1",
     "embla-carousel-react": "^8.6.0",
+    "html-to-image": "^1.11.13",
     "lezer-beancount": "^1.1.0",
     "lucide-react": "^1.8.0",
     "media-chrome": "^4.19.0",
