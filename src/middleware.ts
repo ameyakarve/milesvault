@@ -4,6 +4,10 @@ import authConfig from '@/auth.config'
 const { auth } = NextAuth(authConfig)
 
 export default auth((req) => {
+  // The homepage is a PUBLIC landing (describes the app, no login wall — a Google
+  // OAuth-verification requirement). The page itself sends signed-in users on to
+  // /vault.
+  if (req.nextUrl.pathname === '/') return
   if (!req.auth) {
     // e2e test identity: the per-route auth() validates the token against
     // TEST_USER_TOKEN; the middleware only needs to not redirect it.
