@@ -53,9 +53,14 @@ const nextAuth = NextAuth({
         }
       }
 
+      // Access = a channel MEMBER, OR the Flagship `app_access` flag (per-env /
+      // per-email). Members are always in (that's the membership gate); the flag
+      // controls everyone else and is flipped from the dashboard. Default flag is
+      // allow, so today it's open; set it OFF to make it members-only + allow-rules.
       const environment = (env as Cloudflare.Env).APP_ENV ?? 'unknown'
-      const allowed = await appAccessAllowed(env as Cloudflare.Env, { email, environment })
-      console.log('[gate] signin', { email, environment, allowed, channelId, isMember })
+      const flagged = await appAccessAllowed(env as Cloudflare.Env, { email, environment })
+      const allowed = isMember || flagged
+      console.log('[gate] signin', { email, environment, isMember, flagged, allowed })
       return allowed
     },
   },
