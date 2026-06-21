@@ -320,10 +320,14 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     const toDec = (scaled: number, scale: number) => scaled / 10 ** scale
 
     const sumByCurrency = (prefix: string) => {
+      // balance_scaled != 0 drops stale zero-rows: the balance triggers subtract
+      // a deleted posting's delta but never delete the row, so a commodity a card
+      // once held (e.g. a miles leg later moved to Assets:Rewards) lingers as a 0
+      // row and would otherwise surface as a phantom "0 <COMMODITY>" currency.
       const rows = this.db
         .exec<{ currency: string; scale: number; s: number; n: number }>(
           `SELECT currency, scale, SUM(balance_scaled) AS s, COUNT(DISTINCT account) AS n
-           FROM balance_totals WHERE account LIKE ? GROUP BY currency, scale`,
+           FROM balance_totals WHERE account LIKE ? AND balance_scaled != 0 GROUP BY currency, scale`,
           `${prefix}%`,
         )
         .toArray()

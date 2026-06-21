@@ -59,6 +59,9 @@ const multi: VaultStats = {
     { currency: 'INR', total: -118456, accounts: 4 },
     { currency: 'USD', total: -420, accounts: 2 },
     { currency: 'EUR', total: -110, accounts: 1 },
+    // Stale zero-row (a reward commodity a card once held) — no matching cards,
+    // nothing owed or in credit: must NOT render a phantom "0 MAHARAJACLUB" block.
+    { currency: 'MAHARAJACLUB', total: 0, accounts: 0 },
   ],
   expense_total: [
     { currency: 'INR', total: 45200 },

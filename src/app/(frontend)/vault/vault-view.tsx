@@ -800,6 +800,9 @@ export function OutstandingCard({
         credit: cards.filter((c) => c.amount < -0.005).map((c) => ({ ...c, amount: -c.amount })),
       }
     })
+    // Drop currencies with nothing owed and nothing in credit — a stale zero-row
+    // (e.g. a reward commodity a card once held) must not render an empty block.
+    .filter((g) => g.owed.length > 0 || g.credit.length > 0)
     .sort((a, b) => b.accounts - a.accounts)
   const single = groups.length <= 1
   return (
