@@ -20,15 +20,14 @@ export default function PrivacyPage() {
       <h2>Information we collect</h2>
       <ul>
         <li>
-          <strong>Account &amp; identity.</strong> When you sign in with Google, we receive your
-          name, email address, and profile picture.
+          <strong>Account &amp; identity.</strong> When you sign in with Discord, we receive your
+          Discord username, email address, avatar, and user ID.
         </li>
         <li>
-          <strong>YouTube channel data.</strong> With your permission (the{' '}
-          <code>youtube.readonly</code> scope), we read your <strong>YouTube channel ID</strong> and
-          your <strong>membership status</strong> for our channel — solely to determine whether you
-          are eligible to access MilesVault. We do <strong>not</strong> access your videos,
-          playlists, subscriptions, watch history, or any other YouTube content.
+          <strong>Discord membership.</strong> With your permission, we read whether your Discord
+          account is a member of our server and holds our member role — solely to verify your
+          eligibility to access MilesVault. We do <strong>not</strong> read your messages, your other
+          servers, or any other Discord content.
         </li>
         <li>
           <strong>Financial information you provide.</strong> The statements and transaction emails
@@ -61,30 +60,14 @@ export default function PrivacyPage() {
         Your data is processed and stored on <strong>Cloudflare</strong>&rsquo;s global network
         (Durable Objects, R2, and D1). Statement processing uses{' '}
         <strong>Cloudflare Workers AI</strong> — your statements are <strong>not</strong> sent to any
-        third-party AI provider. Sign-in is handled by <strong>Google</strong>.
-      </p>
-
-      <h2>Google user data — Limited Use</h2>
-      <p>
-        MilesVault&rsquo;s use and transfer of information received from Google APIs adheres to the{' '}
-        <a
-          href="https://developers.google.com/terms/api-services-user-data-policy"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Google API Services User Data Policy
-        </a>
-        , including its Limited Use requirements. Specifically, the YouTube data we access is used
-        only to provide and improve the access-eligibility feature described above; it is not
-        transferred to others except as needed to provide the service, to comply with law, or as
-        part of a merger; it is not used for advertising; and no humans read it except where you
-        explicitly consent, for security, or where required by law.
+        third-party AI provider. Sign-in and membership verification are handled by{' '}
+        <strong>Discord</strong>.
       </p>
 
       <h2>Sharing</h2>
       <p>
         We do <strong>not</strong> sell your data. We share it only with the infrastructure
-        providers needed to run MilesVault — <strong>Google</strong> (authentication) and{' '}
+        providers needed to run MilesVault — <strong>Discord</strong> (sign-in &amp; membership) and{' '}
         <strong>Cloudflare</strong> (hosting, AI processing, storage) — and where required by law.
       </p>
 

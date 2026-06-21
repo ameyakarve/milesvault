@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/auth'
-import { GoogleSignIn } from './_chrome/google-sign-in'
+import { SignInButton } from './_chrome/sign-in-button'
 
 export const metadata = {
   title: 'MilesVault — track & optimise your card points and airline miles',
@@ -55,7 +55,7 @@ export default async function HomePage() {
 
         {/* sign in */}
         <div className="mt-8 w-full max-w-[320px]">
-          <GoogleSignIn />
+          <SignInButton />
           <p className="mt-2 text-xs text-muted-foreground">Invite-only — sign in to continue.</p>
         </div>
 

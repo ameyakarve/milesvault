@@ -3,8 +3,7 @@ import { cookies } from 'next/headers'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { Session } from 'next-auth'
 import authConfig from './auth.config'
-import { membershipStub } from './lib/membership'
-import { appAccessAllowed } from './lib/flags'
+import { allowedEmails } from './lib/membership'
 
 export const TEST_USER_EMAIL = 'test@milesvault.test'
 
@@ -15,53 +14,54 @@ const nextAuth = NextAuth({
     authorized({ auth: session }) {
       return !!session
     },
-    // Login gate, driven by the Flagship `app_access` flag (evaluated with the
-    // user's email AND the environment, so one flag gates prod + staging with
-    // per-env / per-email rules from the dashboard — no redeploy). Default is
-    // ALLOW (open); restrict from the dashboard. The signer's YouTube channel +
-    // membership are still resolved and logged (so we can see who WOULD qualify
-    // for a future membership-based gate), but no longer decide access.
+    // Login gate. Sign-in is Discord (auth.config). Access = on the ALLOWLIST
+    // (owner + trusted, always in), OR a member of our Discord server holding the
+    // configured member role — which Discord's official YouTube-membership
+    // integration assigns to linked channel members. So YouTube membership flows
+    // through to access via Discord, with no Google sensitive scope or
+    // verification anywhere. FAIL-CLOSED: anything we can't confirm is denied.
     async signIn({ account, profile }) {
       const email = profile?.email
       if (!email) return false
       const { env } = await getCloudflareContext({ async: true })
+      const cf = env as Cloudflare.Env
 
-      // Best-effort membership resolution — LOGGING ONLY now. checkNow no-ops
-      // cheaply until the creator token is bootstrapped.
-      let channelId: string | null = null
-      let isMember = false
+      // Allowlist (first entry is the owner) always gets in.
+      if (allowedEmails(cf).includes(email)) return true
+
       const token = account?.access_token
-      if (token) {
-        try {
-          const res = await fetch(
-            'https://www.googleapis.com/youtube/v3/channels?part=id,snippet&mine=true',
-            { headers: { Authorization: `Bearer ${token}` } },
-          )
-          if (res.ok) {
-            const data = (await res.json()) as {
-              items?: Array<{ id?: string; snippet?: { title?: string } }>
-            }
-            channelId = data.items?.[0]?.id ?? null
-            if (channelId) {
-              isMember = await membershipStub(env as Cloudflare.Env).checkNow(channelId)
-            }
-          } else {
-            console.warn('[membership] channels.list failed', { status: res.status, email })
-          }
-        } catch (e) {
-          console.warn('[membership] resolve error', { email, err: String(e) })
-        }
+      const guild = (cf as { DISCORD_GUILD_ID?: string }).DISCORD_GUILD_ID
+      const roleId = (cf as { DISCORD_MEMBER_ROLE_ID?: string }).DISCORD_MEMBER_ROLE_ID
+      if (!token || !guild || !roleId) {
+        console.warn('[gate] discord check skipped — missing token/config', {
+          email,
+          hasToken: !!token,
+          hasGuild: !!guild,
+          hasRole: !!roleId,
+        })
+        return false
       }
-
-      // Access = a channel MEMBER, OR the Flagship `app_access` flag (per-env /
-      // per-email). Members are always in (that's the membership gate); the flag
-      // controls everyone else and is flipped from the dashboard. Default flag is
-      // allow, so today it's open; set it OFF to make it members-only + allow-rules.
-      const environment = (env as Cloudflare.Env).APP_ENV ?? 'unknown'
-      const flagged = await appAccessAllowed(env as Cloudflare.Env, { email, environment })
-      const allowed = isMember || flagged
-      console.log('[gate] signin', { email, environment, isMember, flagged, allowed })
-      return allowed
+      try {
+        // The signer's member object in OUR server (404 = not in the server).
+        const res = await fetch(`https://discord.com/api/v10/users/@me/guilds/${guild}/member`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.status === 404) {
+          console.log('[gate] discord: not in server', { email })
+          return false
+        }
+        if (!res.ok) {
+          console.warn('[gate] discord member fetch failed', { email, status: res.status })
+          return false
+        }
+        const member = (await res.json()) as { roles?: string[] }
+        const isMember = Array.isArray(member.roles) && member.roles.includes(roleId)
+        console.log('[gate] discord', { email, isMember })
+        return isMember
+      } catch (e) {
+        console.warn('[gate] discord error', { email, err: String(e) })
+        return false
+      }
     },
   },
 })

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { GoogleSignIn } from '../_chrome/google-sign-in'
+import { SignInButton } from '../_chrome/sign-in-button'
 
 export default async function LoginPage(props: {
   searchParams: Promise<{ callbackUrl?: string }>
@@ -19,7 +19,7 @@ export default async function LoginPage(props: {
             </span>
             <p className="text-sm text-muted-foreground">Sign in to continue</p>
           </div>
-          <GoogleSignIn redirectTo={callbackUrl || '/vault'} />
+          <SignInButton redirectTo={callbackUrl || '/vault'} />
         </CardContent>
       </Card>
       <p className="max-w-[380px] text-center text-xs text-muted-foreground">
