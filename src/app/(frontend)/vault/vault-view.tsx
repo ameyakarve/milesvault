@@ -514,14 +514,22 @@ export function CreditCardCard({
   const spendText = `${fmtAmt(thisMo)}${spendCcy !== 'INR' ? ` ${spendCcy}` : ''}`
 
   return (
-    <Link
-      href={accountHref(row)}
+    // Two click targets on one tile (stretched-link pattern): the card opens the
+    // Journal (a full-bleed link behind the content), while the monthly-spend
+    // block sits above it as its own link to the expenses explorer.
+    <div
       className={cn(
         'group relative flex aspect-[1.6] flex-col justify-between gap-2 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
         cardBg(row.account),
       )}
     >
       <CardTexture seed={row.account} />
+      {/* primary target — the whole card opens the Journal */}
+      <Link
+        href={accountHref(row)}
+        aria-label={`Open ${name} in the Journal`}
+        className="absolute inset-0 z-[1]"
+      />
       {/* identity — mark, card name, last 4 */}
       <span className="flex items-center gap-2">
         <BankMark issuer={issuer} className="size-5 shrink-0 text-white" />
@@ -542,8 +550,13 @@ export function CreditCardCard({
         </span>
       </span>
 
-      {/* monthly spend + area trend */}
-      <span className="flex items-end justify-between gap-2">
+      {/* monthly spend + area trend — its own link to the expenses explorer,
+          above the card-wide Journal link */}
+      <Link
+        href="/accounts"
+        aria-label={`View ${name} spending`}
+        className="relative z-[2] -mx-1 flex items-end justify-between gap-2 rounded-md px-1 py-0.5 transition hover:bg-white/10"
+      >
         <span className="flex flex-col gap-0.5">
           <span className="text-[10px] uppercase tracking-wide text-white/60">Monthly spend</span>
           <span className="flex items-baseline gap-1">
@@ -557,7 +570,7 @@ export function CreditCardCard({
           </span>
         </span>
         {series.length > 1 ? <Sparkarea values={series} className="h-6 w-16 text-white" /> : null}
-      </span>
+      </Link>
 
       {/* reward balance — no programme label (the card already names it);
           just the balance + a friendly unit, pending only when positive */}
@@ -571,7 +584,7 @@ export function CreditCardCard({
           ) : null}
         </span>
       ) : null}
-    </Link>
+    </div>
   )
 }
 
