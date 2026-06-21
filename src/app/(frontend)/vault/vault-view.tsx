@@ -392,11 +392,22 @@ function issuerOf(account: string): string | null {
   // Liabilities:CreditCards:<Issuer>:<Card>[:last4]
   return account.split(':')[2] ?? null
 }
-function bankBg(issuer: string | null): string {
-  const key = (issuer ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
-  if (key && BANK_BG[key]) return BANK_BG[key]!
+// Per-card color overrides (keyed `<issuer>:<card>`), checked BEFORE the
+// bank-level color — for cards whose plastic differs from the bank palette.
+const CARD_BG: Record<string, string> = {
+  'hsbc:premier': 'bg-neutral-900', // black
+  'hsbc:liveplus': 'bg-zinc-600', // grey
+}
+function cardBg(account: string): string {
+  // Liabilities:CreditCards:<Issuer>:<Card>[:last4]
+  const parts = account.split(':')
+  const issuer = (parts[2] ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const card = (parts[3] ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  const override = CARD_BG[`${issuer}:${card}`]
+  if (override) return override
+  if (issuer && BANK_BG[issuer]) return BANK_BG[issuer]!
   let h = 0
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
+  for (let i = 0; i < issuer.length; i++) h = (h * 31 + issuer.charCodeAt(i)) | 0
   return FALLBACK_BG[Math.abs(h) % FALLBACK_BG.length]!
 }
 
@@ -477,7 +488,7 @@ export function CreditCardCard({
       href={accountHref(row)}
       className={cn(
         'group flex flex-col gap-3 rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
-        bankBg(issuer),
+        cardBg(row.account),
       )}
     >
       {/* identity — mark, card name, last 4 */}
