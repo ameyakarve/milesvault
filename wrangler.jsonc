@@ -65,6 +65,7 @@
     { "tag": "v5", "new_sqlite_classes": ["MembershipDO"] },
   ],
   "vars": {
+    "APP_ENV": "production",
     "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
     "AI_GATEWAY_ID": "milesvault",
     "INGEST_EMAIL_ADDRESS": "ingest@milesvault.com",
@@ -161,8 +162,8 @@
         },
       ],
       "vars": {
+        "APP_ENV": "staging",
         "ENABLE_HYDRATE": "1",
-        "ALLOWED_EMAILS": "ameya.karve@gmail.com,amogh.karve@gmail.com,tushar.sadhwani000@gmail.com,vandana.karve@gmail.com",
         "CLOUDFLARE_ACCOUNT_ID": "e0bc1f55dc6fc3f8fe870087199a2ee3",
         "AI_GATEWAY_ID": "milesvault-staging",
         "INGEST_EMAIL_ADDRESS": "ingest-staging@milesvault.com",
