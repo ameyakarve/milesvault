@@ -47,23 +47,50 @@ type FetchState =
   | { status: 'error'; message: string }
   | { status: 'ok'; rows: AccountSummaryRow[] }
 
-// Card-art texture, drawn from scratch (a diagonal gloss + fine procedural
-// grain) to give the full-color tiles a plastic feel. Both layers are very low
-// opacity and pointer-events-none; the card needs `relative overflow-hidden`.
-const GRAIN_SVG =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"
+// Card-art texture, recreated from scratch from the design's faceted-gradient
+// treatment (no assets): a two-tone diagonal depth gradient plus a few angled
+// "blades" — light facets (soft-light) and one shade facet — that give the
+// full-color tiles a prismatic sheen. Polygon geometry + gradient direction
+// match the design; the card must be `relative overflow-hidden`.
 function CardTexture() {
   return (
     <>
       <span
-        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/20"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/25"
         aria-hidden
       />
-      <span
-        className="pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay"
-        style={{ backgroundImage: `url("${GRAIN_SVG}")`, backgroundSize: '160px 160px' }}
+      <svg
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
         aria-hidden
-      />
+      >
+        <defs>
+          <linearGradient id="facetLight" x1="100" y1="71" x2="23" y2="5" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#fff" stopOpacity="0.7" />
+            <stop offset="1" stopColor="#fff" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="facetShade" x1="100" y1="71" x2="23" y2="5" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor="#000" stopOpacity="0.5" />
+            <stop offset="1" stopColor="#000" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <polygon
+          points="-3.5,-2.4 33,85.5 99.8,103.6 99.8,-2.4"
+          fill="url(#facetLight)"
+          style={{ mixBlendMode: 'soft-light' }}
+        />
+        <polygon
+          points="19.4,-2.5 55.9,85.4 122.7,103.4 122.7,-2.5"
+          fill="url(#facetLight)"
+          style={{ mixBlendMode: 'soft-light' }}
+        />
+        <polygon
+          points="-1.5,-10.2 43,17.5 102.1,104.1 104.8,-10.2"
+          fill="url(#facetShade)"
+          style={{ mixBlendMode: 'soft-light' }}
+        />
+      </svg>
     </>
   )
 }
@@ -80,7 +107,7 @@ function VaultSkeleton() {
       </div>
       <div className="space-y-3">
         <Skeleton className="h-3 w-24" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
@@ -295,7 +322,7 @@ export function VaultView() {
               + add
             </button>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {cardRows.map((r) => (
               <CreditCardCard
                 key={`${r.account}|${r.currency}`}
@@ -483,7 +510,7 @@ export function CreditCardCard({
     <Link
       href={accountHref(row)}
       className={cn(
-        'group relative flex flex-col gap-3 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
+        'group relative flex aspect-[1.6] flex-col justify-between gap-2 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
         cardBg(row.account),
       )}
     >
@@ -664,7 +691,7 @@ function RewardsSections({
         </button>
       </div>
       {holdings.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {holdings.map((h) => (
             <ProgrammeCard
               key={`${h.account}|${h.currency}`}
@@ -773,7 +800,7 @@ export function ProgrammeCard({
     <Link
       href={`/vault/account?account=${encodeURIComponent(holding.account)}&ccy=${encodeURIComponent(holding.currency)}`}
       className={cn(
-        'group relative flex flex-col gap-3 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
+        'group relative flex aspect-[1.6] flex-col justify-between gap-2 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
         programmeBg(holding.account),
       )}
     >
