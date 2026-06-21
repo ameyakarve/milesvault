@@ -11,12 +11,10 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { ledgerClient, isReplaceBufferError } from '@/lib/ledger-client-browser'
 import { useAgent } from 'agents/react'
 import type { ChatDOState } from '@/durable/chat-do'
-import { InboxThreadChat } from './thread-chat'
 import { StatementUploadModal } from '@/components/statement-upload-modal'
-import { Journal } from '../editor/journal'
+import { DraftChat } from '@/app/(frontend)/_chat/draft-chat'
 
 type CaptureRow = {
   id: string
@@ -28,16 +26,6 @@ type CaptureRow = {
   drafts: string | null
   draft_error: string | null
   created_at: number
-}
-
-function parseDrafts(raw: string | null): string[] {
-  if (!raw) return []
-  try {
-    const v = JSON.parse(raw) as unknown
-    return Array.isArray(v) ? v.filter((e): e is string => typeof e === 'string') : []
-  } catch {
-    return []
-  }
 }
 
 function fmtDate(ms: number): string {
@@ -63,8 +51,7 @@ function chipLabel(state: string): string {
 }
 
 // The capture review workspace — same anatomy as the editor: a bordered
-// header strip, a list rail, and a detail pane whose drafts open in the real
-// Journal (CodeMirror) for in-place fixes before posting. One component, two
+// header strip, a list rail, and a detail pane. One component, two
 // homes (owner split): `source='upload'` is the Statements page (paperclip /
 // drop imports + the upload button); `source='email'` is the Inbox (forwarded
 // mail + the forwarding-address controls). Each shows only its own captures.
@@ -81,11 +68,6 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
   const [rotateOpen, setRotateOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [approveBusy, setApproveBusy] = useState(false)
-  const [approveError, setApproveError] = useState<string | null>(null)
-  // Editable draft buffer per capture — seeded from the background drafts
-  // when an item is opened; the Journal edits this, approve posts it.
-  const [draftBuffers, setDraftBuffers] = useState<Record<string, string>>({})
   // Transient error for list-level mutations (delete / rotate), shown inline.
   const [actionError, setActionError] = useState<string | null>(null)
   // Bumped by the load-error retry to re-run the list fetch.
@@ -225,42 +207,7 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
   }
 
   function openItem(row: CaptureRow) {
-    const entries = parseDrafts(row.drafts)
-    if (entries.length > 0 && draftBuffers[row.id] === undefined) {
-      setDraftBuffers((s) => ({ ...s, [row.id]: entries.join('\n\n') + '\n' }))
-    }
-    setApproveError(null)
     setSelectedId(row.id)
-  }
-
-  async function approve(row: CaptureRow) {
-    const text = (draftBuffers[row.id] ?? parseDrafts(row.drafts).join('\n\n')).trim()
-    if (!text || approveBusy) return
-    setApproveBusy(true)
-    setApproveError(null)
-    try {
-      // Append-only commit, same contract as an editor save — parse errors
-      // come back as the save message.
-      const r = await ledgerClient.replaceBuffer([], text)
-      if (isReplaceBufferError(r)) {
-        setApproveError('message' in r ? r.message : 'Save conflict')
-        return
-      }
-      const post = await fetch('/api/ledger/captures', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ id: row.id, action: 'post' }),
-      }).catch((): null => null)
-      if (!post?.ok) {
-        setApproveError('Posted to the journal, but the update failed — refresh.')
-      }
-      // Consumed on approve: flip to 'posted' (filtered out of the queue) and
-      // return to the list — the one-shot import is done.
-      setAllRows((prev) => prev?.map((x) => (x.id === row.id ? { ...x, state: 'posted' } : x)) ?? prev)
-      setSelectedId(null)
-    } finally {
-      setApproveBusy(false)
-    }
   }
 
   if (error) {
@@ -389,13 +336,6 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
               <ItemDetail
                 key={selected.id}
                 row={selected}
-                buffer={draftBuffers[selected.id] ?? null}
-                onBufferChange={(next) =>
-                  setDraftBuffers((s) => ({ ...s, [selected.id]: next }))
-                }
-                approveBusy={approveBusy}
-                approveError={approveError}
-                onApprove={() => void approve(selected)}
                 onDismiss={() => dismiss(selected.id)}
                 onDelete={() => deleteItem(selected.id)}
                 onRedraft={() => redraft(selected.id)}
@@ -423,11 +363,6 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
 
 function ItemDetail({
   row,
-  buffer,
-  onBufferChange,
-  approveBusy,
-  approveError,
-  onApprove,
   onDismiss,
   onDelete,
   onRedraft,
@@ -435,34 +370,22 @@ function ItemDetail({
   onPosted,
 }: {
   row: CaptureRow
-  buffer: string | null
-  onBufferChange: (next: string) => void
-  approveBusy: boolean
-  approveError: string | null
-  onApprove: () => void
   onDismiss: () => void
   onDelete: () => void
   onRedraft: () => void
   onBack: () => void
   onPosted: () => void
 }) {
-  const entries = parseDrafts(row.drafts)
-  const hasDrafts = entries.length > 0 && row.state === 'extracted'
-  const isLg = useIsLg()
-  const [tab, setTab] = useState<'draft' | 'chat'>('draft')
-  const [chatOpen, setChatOpen] = useState(false)
+  // Show the full DraftChat when the draft is extracted (ready), or for any
+  // state where there may already be chat history from a prior session.
+  // For still-in-flight states (captured/processing) we show a status panel
+  // as the emptyState so the user sees progress — DraftChat still mounts and
+  // will connect once the DO is ready, but the status panel surfaces when the
+  // conversation is blank.
+  const showChat = row.state === 'extracted' || row.state === 'posted'
 
-  // The draft surface — the real Journal once drafted, else a status panel.
-  const draftPane = hasDrafts ? (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <Journal
-        text={buffer ?? entries.join('\n\n') + '\n'}
-        onChange={onBufferChange}
-        onSave={onApprove}
-        readOnly={approveBusy}
-      />
-    </div>
-  ) : (
+  // Status panel to render as DraftChat's emptyState for non-extracted items.
+  const lifecyclePanel = (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
       {row.state === 'processing' || row.state === 'captured' ? (
         <>
@@ -510,7 +433,7 @@ function ItemDetail({
 
   return (
     <>
-      {/* Item header — mirrors the editor's header strip: meta left, actions right */}
+      {/* Item header — meta left, actions right */}
       <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5 sm:px-6">
         <div className="flex min-w-0 items-center gap-2">
           <button
@@ -532,9 +455,9 @@ function ItemDetail({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <StateChip tone={chipTone(row.state)}>{chipLabel(row.state)}</StateChip>
-          {hasDrafts ? (
-            <Button size="sm" onClick={onApprove} disabled={approveBusy}>
-              {approveBusy ? 'Posting…' : 'Approve & post'}
+          {(row.state === 'failed' || row.draft_error) ? (
+            <Button size="sm" onClick={onRedraft}>
+              Retry draft
             </Button>
           ) : null}
           <Button
@@ -556,91 +479,51 @@ function ItemDetail({
         </div>
       </div>
 
-      {approveError ? (
-        <p role="alert" className="border-b border-border bg-destructive/5 px-4 py-2 text-xs text-destructive sm:px-6">
-          {approveError}
-        </p>
-      ) : null}
-
-      {/* Below lg: tab between the Draft and the per-item Chat (each full height)
-          instead of stacking — same idea as the editor's Chat/Journal tabs. lg+:
-          the draft fills and the chat stays a collapsible at the bottom, so it
-          only connects to the per-item DO when opened. */}
-      {!isLg ? (
-        <div className="flex justify-center border-b border-border py-1.5">
-          <Segmented value={tab} onChange={setTab} />
-        </div>
-      ) : null}
-
-      {isLg ? (
-        <>
-          {draftPane}
-          <div className="border-t border-border">
-            <button
-              type="button"
-              aria-expanded={chatOpen}
-              onClick={() => setChatOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:bg-muted focus-visible:outline-none sm:px-6"
-            >
-              <span>Ask about this statement</span>
-              <span>{chatOpen ? 'Hide' : 'Open'}</span>
-            </button>
-            {chatOpen ? (
-              <div className="border-t border-border px-3 pb-3">
-                <InboxThreadChat captureId={row.id} onPosted={onPosted} />
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : tab === 'draft' ? (
-        draftPane
+      {/* Chat pane — fills the remaining height. For extracted items this is
+          the full rich DraftChat (approval happens in-chat via the draft card).
+          For still-in-flight items we show the lifecycle status panel as the
+          empty state so the user sees progress while the DO drafts. */}
+      {showChat ? (
+        <DraftChat
+          agentOptions={{
+            agent: 'ChatDO',
+            basePath: 'api/agents/editor',
+            query: { thread: row.id },
+          }}
+          onCommitted={async () => {
+            const post = await fetch('/api/ledger/captures', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ id: row.id, action: 'post' }),
+            }).catch((): null => null)
+            if (post?.ok) {
+              onPosted()
+            }
+          }}
+          placeholder="Ask about this statement…"
+        />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-2">
-          <InboxThreadChat captureId={row.id} onPosted={onPosted} fill />
-        </div>
+        <DraftChat
+          agentOptions={{
+            agent: 'ChatDO',
+            basePath: 'api/agents/editor',
+            query: { thread: row.id },
+          }}
+          onCommitted={async () => {
+            const post = await fetch('/api/ledger/captures', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ id: row.id, action: 'post' }),
+            }).catch((): null => null)
+            if (post?.ok) {
+              onPosted()
+            }
+          }}
+          placeholder="Ask about this statement…"
+          emptyState={() => lifecyclePanel}
+        />
       )}
     </>
-  )
-}
-
-// lg breakpoint (matches the editor): below it, the detail pane tabs between
-// Draft and Chat; at/above it they're the draft + a collapsible chat.
-function useIsLg(): boolean {
-  const [isLg, setIsLg] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const update = () => setIsLg(mq.matches)
-    update()
-    mq.addEventListener('change', update)
-    return () => mq.removeEventListener('change', update)
-  }, [])
-  return isLg
-}
-
-function Segmented({
-  value,
-  onChange,
-}: {
-  value: 'draft' | 'chat'
-  onChange: (t: 'draft' | 'chat') => void
-}) {
-  return (
-    <div className="inline-flex items-center gap-0.5 rounded-full bg-muted p-0.5">
-      {(['draft', 'chat'] as const).map((t) => (
-        <button
-          key={t}
-          type="button"
-          onClick={() => onChange(t)}
-          className={`rounded-full px-3.5 py-1 text-[13px] font-medium transition ${
-            value === t
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {t === 'draft' ? 'Draft' : 'Chat'}
-        </button>
-      ))}
-    </div>
   )
 }
 
