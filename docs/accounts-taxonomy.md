@@ -13,9 +13,10 @@ Assets
   Investments:<broker>:<vehicle>        e.g. Assets:Investments:Zerodha:Stocks
   Retirement:<scheme>                   e.g. Assets:Retirement:EPF, Assets:Retirement:NPS
   Receivable:<name>                     IOUs owed to you
-  Prepaid:<vendor>                      rent paid forward, deposits, etc.
+  Prepaid:Wallets:<issuer>[:<id>]       food / store / payment wallets — see "Cards"
+  Prepaid:Forex:<issuer>[:<id>]         forex cards (multi-commodity) — see "Cards"
+  Prepaid:GiftCards:<merchant>[:<id>]   money-pegged, merchant-locked gift cards / vouchers — see "Cards"
   DebitCards:*                          see "Cards" section
-  Loaded:Wallets|PrepaidCards|GiftCards|ForexCards:*   see "Cards" section
   Rewards:Points|Status:*               see "Rewards" section
 
 Liabilities
@@ -65,16 +66,15 @@ Expenses
 
 ## Cards
 
-Six card kinds across two beancount types. "Card" is the UX primitive; the ledger primitive is the account a card draws from or holds value on.
+Five card kinds across two beancount types. "Card" is the UX primitive; the ledger primitive is the account a card draws from or holds value on. Stored value lives under `Assets:Prepaid`, split into fixed buckets per instrument kind (`Wallets`, `Forex`, `GiftCards`) — nothing sits bare at `Assets:Prepaid:<x>`. Currency is carried by the commodity, never the path, so a forex card holding USD/EUR is one account.
 
 | kind | beancount type | path prefix | has balance? | constraint commodities |
 |---|---|---|---|---|
 | `credit-card` | Liabilities | `Liabilities:CreditCards:*` | yes (owed) | single fiat |
 | `debit-card` | Assets | `Assets:DebitCards:*` | always 0 (zero-sum) | single fiat |
-| `wallet` | Assets | `Assets:Loaded:Wallets:*` | yes | single fiat |
-| `prepaid-card` | Assets | `Assets:Loaded:PrepaidCards:*` | yes | single fiat |
-| `gift-card` | Assets | `Assets:Loaded:GiftCards:*` | yes | single fiat, often merchant-locked |
-| `forex-card` | Assets | `Assets:Loaded:ForexCards:*` | yes | multi-commodity (e.g. USD, EUR, GBP) |
+| `wallet` | Assets | `Assets:Prepaid:Wallets:*` | yes | single fiat |
+| `forex-card` | Assets | `Assets:Prepaid:Forex:*` | yes | multi-commodity (e.g. USD, EUR, GBP) |
+| `gift-card` | Assets | `Assets:Prepaid:GiftCards:*` | yes | single fiat, money-pegged, merchant-locked |
 
 ### Out of scope (v1)
 - Charge cards — collapse into `credit-card` (structurally same liability).
@@ -109,43 +109,43 @@ Stored-value kinds hold a real balance. Two separate transactions: a load (or gi
 ```beancount
 # Load from bank
 2026-04-01 * "Paytm" "wallet top-up"
-  Assets:Bank:HDFC:Savings  -1000.00 INR
-  Assets:Loaded:Wallets:Paytm  1000.00 INR
+  Assets:Bank:HDFC:Savings      -1000.00 INR
+  Assets:Prepaid:Wallets:Paytm   1000.00 INR
 
 # Spend against balance
 2026-04-16 * "Uber" "auto ride"
-  Assets:Loaded:Wallets:Paytm  -85.00 INR
-  Expenses:Travel:Local         85.00 INR
+  Assets:Prepaid:Wallets:Paytm  -85.00 INR
+  Expenses:Travel:Local          85.00 INR
 ```
 
 Gift card received (no bank outflow — booked via plug with tag):
 ```beancount
 2026-04-01 * "Mom" "birthday — Amazon Pay" #gift-in
-  Income:Void                     -2000.00 INR
-  Assets:Loaded:GiftCards:Amazon   2000.00 INR
+  Income:Void                      -2000.00 INR
+  Assets:Prepaid:GiftCards:Amazon   2000.00 INR
 ```
 
 ### Forex card — multi-commodity, conversion folded into price
 
-Load converts INR → USD via `@@` (total price):
+Under the `Forex` bucket; the foreign commodity (not the path) marks the currency. Load converts INR → USD via `@@` (total price):
 ```beancount
 2026-04-01 * "HDFC" "forex card load"
-  Assets:Bank:HDFC:Savings           -50000.00 INR
-  Assets:Loaded:ForexCards:HDFC         600.00 USD @@ 50000.00 INR
+  Assets:Bank:HDFC:Savings  -50000.00 INR
+  Assets:Prepaid:Forex:HDFC    600.00 USD @@ 50000.00 INR
 ```
 
 Spend in held currency — no conversion:
 ```beancount
 2026-04-16 * "Café de Flore" "breakfast"
-  Assets:Loaded:ForexCards:HDFC  -50.00 USD
-  Expenses:Food:Restaurant        50.00 USD
+  Assets:Prepaid:Forex:HDFC  -50.00 USD
+  Expenses:Food:Restaurant    50.00 USD
 ```
 
 Spend in unheld currency — card converts USD → EUR. Markup is folded into the price (not split as a separate Fees posting):
 ```beancount
 2026-04-20 * "Louvre" "admission"
-  Assets:Loaded:ForexCards:HDFC  -17.50 USD
-  Expenses:Travel:Museums          15.00 EUR @@ 17.50 USD
+  Assets:Prepaid:Forex:HDFC  -17.50 USD
+  Expenses:Travel:Museums     15.00 EUR @@ 17.50 USD
 ```
 
 ## Constraints
@@ -315,8 +315,8 @@ Award flight (points + cash for taxes):
 Card-locked redemption into a voucher:
 ```beancount
 2026-05-10 * "SBI Rewards" "Amazon voucher"
-  Assets:Rewards:SBI              -4000.00 SBI-RP
-  Assets:Loaded:GiftCards:Amazon   1000.00 INR @@ 4000.00 SBI-RP
+  Assets:Rewards:SBI               -4000.00 SBI-RP
+  Assets:Prepaid:GiftCards:Amazon   1000.00 INR @@ 4000.00 SBI-RP
 ```
 
 ### Expiry / reset — burn sink
@@ -406,14 +406,13 @@ Full split lives in "System plug accounts" above; distinguish semantics via tags
 ```
 Liabilities:CreditCards:*    → credit-card
 Assets:DebitCards:*          → debit-card
-Assets:Loaded:Wallets:*      → wallet
-Assets:Loaded:PrepaidCards:* → prepaid-card
-Assets:Loaded:GiftCards:*    → gift-card
-Assets:Loaded:ForexCards:*   → forex-card
+Assets:Prepaid:Wallets:*     → wallet
+Assets:Prepaid:Forex:*       → forex-card
+Assets:Prepaid:GiftCards:*   → gift-card
 Assets:Rewards:Points:*      → loyalty-points
 Assets:Rewards:Status:*      → status-progress
 ```
 
-Unmatched paths are rejected at account creation. Typos like `Liabilities:CreditCards:*` (the old abbreviated form) or `Assets:Loaded:Wallet:*` (singular) fail loudly.
+Everything under `Assets:Prepaid` lives in one of the three fixed buckets (`Wallets`, `Forex`, `GiftCards`) — nothing sits bare at `Assets:Prepaid:<x>`. Unmatched paths are rejected at account creation.
 
 Constraints and validation rules for reward kinds: TBD.

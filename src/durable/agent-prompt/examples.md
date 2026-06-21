@@ -68,13 +68,17 @@ when the KG has no match for the card/programme.
   statement credit stays `Assets:Receivable:<Issuer>` in INR).
 - Posted points / miles balance (credited; redeemable today):
   `<RewardsAcct>` itself.
-- Prepaid cards (food wallets, forex cards, store wallets — anything
-  you've already loaded with money): `Assets:Prepaid:<Issuer>:<Card>` —
-  e.g. `Assets:Prepaid:Sodexo:Meal`, `Assets:Prepaid:HDFC:Forex:Multi`.
-  Forex cards live here too; the currency on the posting tells you it's
-  foreign.
-- Gift cards / vouchers: `Assets:GiftCards:<Merchant>` — e.g.
-  `Assets:GiftCards:Amazon`.
+- Prepaid / stored value — money you hold loaded on an instrument, under
+  `Assets:Prepaid:<Bucket>:<Issuer>[:<Id>]` with a fixed bucket per kind:
+  - Wallets (food / store / payment wallets): `Assets:Prepaid:Wallets:<Issuer>`
+    — e.g. `Assets:Prepaid:Wallets:Sodexo`, `Assets:Prepaid:Wallets:Paytm`.
+  - Forex cards: `Assets:Prepaid:Forex:<Issuer>` — e.g. `Assets:Prepaid:Forex:HDFC`,
+    holding USD/EUR as commodities (currency lives on the commodity, NEVER the path).
+  - Gift cards / vouchers (money-pegged, locked to one merchant):
+    `Assets:Prepaid:GiftCards:<Merchant>` — e.g. `Assets:Prepaid:GiftCards:Amazon`.
+  Add an `<Id>` leaf only to disambiguate more than one instrument for the same
+  issuer. Spending, or loading a wallet from a gift card, just draws the asset
+  down (asset → asset / asset → expense).
 
 ## Cashback pattern (word: "cashback")
 
@@ -252,16 +256,18 @@ like any other charge.)
   Assets:Bank:HDFC:Savings  -120.00 INR
 ```
 
-## Prepaid cards (food wallets, store wallets)
+## Prepaid / stored value (wallets, forex cards)
 
-You loaded money in advance; the balance sits as an asset until you
-spend it down. Two moves: load (bank → prepaid) and spend (prepaid →
-expense).
+Money you loaded in advance; the balance sits as an asset under a fixed bucket —
+`Assets:Prepaid:Wallets:<Issuer>` or `Assets:Prepaid:Forex:<Issuer>` — until you
+spend it down. Two moves: load (bank → prepaid) and spend (prepaid → expense).
+One account per instrument — add an `<Id>` leaf only when an issuer has more
+than one.
 
 ### Load
 ```beancount
 2026-05-27 * "Sodexo" "Top-up food wallet"
-  Assets:Prepaid:Sodexo:Meal  2000.00 INR
+  Assets:Prepaid:Wallets:Sodexo  2000.00 INR
   Assets:Bank:HDFC:Savings  -2000.00 INR
 ```
 
@@ -269,28 +275,22 @@ expense).
 ```beancount
 2026-05-27 * "Cafe Coffee Day" "Lunch — Sodexo"
   Expenses:Food:Restaurants  400.00 INR
-  Assets:Prepaid:Sodexo:Meal  -400.00 INR
+  Assets:Prepaid:Wallets:Sodexo  -400.00 INR
 ```
 
-## Forex cards (prepaid, foreign currency)
-
-Same `Assets:Prepaid` segment — the currency on the posting tells you
-it's forex. Loading is a conversion (₹ → foreign), so set
-`@@` with the INR total as the @@ amount. Spending abroad
-is single-currency in the foreign unit.
-
-### Load
+### Forex card
+Under the `Forex` bucket — the currency lives on the commodity, not the path,
+so one card holds USD/EUR/… side by side. Loading is a conversion (₹ → foreign):
+set `@@` with the INR total. Spending abroad is single-currency in the foreign
+unit (no FX at point of sale).
 ```beancount
 2026-05-27 * "Forex load" "Loaded forex card — 1000 USD @ ₹84.50"
-  Assets:Prepaid:HDFC:Forex:Multi  1000.00 USD @@ 84500.00 INR
+  Assets:Prepaid:Forex:HDFC  1000.00 USD @@ 84500.00 INR
   Assets:Bank:HDFC:Savings  -84500.00 INR
-```
 
-### Spend abroad (already in USD — no FX at point of sale)
-```beancount
 2026-05-30 * "Whole Foods" "Groceries — NYC"
   Expenses:Travel:Food  50.00 USD
-  Assets:Prepaid:HDFC:Forex:Multi  -50.00 USD
+  Assets:Prepaid:Forex:HDFC  -50.00 USD
 ```
 
 ## Forex spends on a regular INR credit card
@@ -388,19 +388,20 @@ only reliable link is "GST ≈ 18% of the markup that is 2% of this charge."
 
 ## Gift cards / vouchers
 
-A gift card is an asset — value you hold until you spend it.
+A money-pegged asset locked to one merchant: `Assets:Prepaid:GiftCards:<Merchant>`.
+Value you hold until you spend it down — same drawdown mechanics as a wallet.
 
 ### Bought with cash or card
 ```beancount
 2026-05-27 * "Amazon" "Bought ₹1000 Amazon gift card"
-  Assets:GiftCards:Amazon  1000.00 INR
+  Assets:Prepaid:GiftCards:Amazon  1000.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -1000.00 INR
 ```
 
 ### Received as a gift (income)
 ```beancount
 2026-05-27 * "Friend" "Birthday — Amazon gift card"
-  Assets:GiftCards:Amazon  1000.00 INR
+  Assets:Prepaid:GiftCards:Amazon  1000.00 INR
   Income:Gifts  -1000.00 INR
 ```
 
@@ -409,15 +410,22 @@ Full:
 ```beancount
 2026-05-27 * "Amazon" "Book — paid with gift card"
   Expenses:Shopping:Books  500.00 INR
-  Assets:GiftCards:Amazon  -500.00 INR
+  Assets:Prepaid:GiftCards:Amazon  -500.00 INR
 ```
 
 Partial (gift card + card):
 ```beancount
 2026-05-27 * "Amazon" "Book — ₹500 gift card + ₹300 on card"
   Expenses:Shopping:Books  800.00 INR
-  Assets:GiftCards:Amazon  -500.00 INR
+  Assets:Prepaid:GiftCards:Amazon  -500.00 INR
   Liabilities:CreditCards:<Issuer>:<Card>  -300.00 INR
+```
+
+### Used to load a wallet (asset → asset)
+```beancount
+2026-05-27 * "Amazon Pay" "Loaded wallet with gift card"
+  Assets:Prepaid:Wallets:AmazonPay  1000.00 INR
+  Assets:Prepaid:GiftCards:Amazon  -1000.00 INR
 ```
 
 ## Settling with people

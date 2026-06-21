@@ -12,7 +12,7 @@ export function isHolding(account: string): boolean {
 }
 
 // Group heading: the deepest taxonomy node on the prefix chain, so
-// `Assets:Loaded:Wallets:Paytm` files under "Wallets" and
+// `Assets:Prepaid:GiftCards:Amazon` files under "Gift cards" and
 // `Liabilities:CreditCards:Axis:Magnus` under "Credit cards".
 export function groupLabel(account: string): string {
   for (const prefix of prefixChain(account)) {
@@ -32,16 +32,14 @@ const GROUP_ORDER = [
   'Credit cards',
   'Bank',
   'Wallets',
-  'Prepaid cards',
-  'Gift cards',
   'Forex cards',
+  'Gift cards',
+  'Prepaid',
   'Debit cards',
   'Cash',
-  'Stored value',
   'Investments',
   'Retirement',
   'Receivable',
-  'Prepaid',
   'Mortgage',
   'Auto',
   'Student',
@@ -71,7 +69,7 @@ const ID_RE = /^\d{2,}$/
 // Row label, convention-aware:
 //   Liabilities:CreditCards:Axis:Magnus:1234 → { label: "Axis · Magnus", suffix: "1234" }
 //   Assets:Bank:HDFC:Savings                 → { label: "HDFC · Savings" }
-//   Assets:Loaded:Wallets:Paytm              → { label: "Paytm" }
+//   Assets:Prepaid:GiftCards:Amazon          → { label: "Amazon" }
 //   Assets:Rewards:Points:KRISFLYER          → { label: "KRISFLYER" }
 export function accountLabel(account: string): { label: string; suffix: string | null } {
   const parts = account.split(':')

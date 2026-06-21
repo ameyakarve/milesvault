@@ -81,7 +81,7 @@
 ;; Card-locked redemption into a gift-card / loaded voucher
 2026-05-10 * "SBI Rewards" "Amazon voucher"
   Assets:Rewards:Points:SBI            -4000.00 SBI-RP
-  Assets:Loaded:GiftCards:Amazon        1000.00 INR @@ 4000.00 SBI-RP
+  Assets:Prepaid:GiftCards:Amazon       1000.00 INR @@ 4000.00 SBI-RP
 
 ;; Cash-equivalent cashback redemption (points → statement credit)
 2026-05-12 * "HDFC Infinia" "points → statement credit"
@@ -125,23 +125,23 @@
 
 ;; Same-wallet cashback (Paytm 5%)
 2026-04-16 * "Zomato" "dinner + 5% Paytm cashback" #cashback
-  Assets:Loaded:Wallets:Paytm          -1000.00 INR
+  Assets:Prepaid:Wallets:Paytm     -1000.00 INR
   Expenses:Food:Restaurant              1000.00 INR
-  Assets:Loaded:Wallets:Paytm             50.00 INR
+  Assets:Prepaid:Wallets:Paytm        50.00 INR
   Income:Void                            -50.00 INR
 
 ;; Cross-instrument cashback (Amazon via Infinia, cashback to Amazon Pay)
 2026-04-16 * "Amazon" "headphones + ₹150 AmazonPay cashback" #cashback
   Liabilities:CreditCards:HDFC:Infinia          -3000.00 INR
   Expenses:Shopping:Electronics         3000.00 INR
-  Assets:Loaded:Wallets:AmazonPay        150.00 INR
+  Assets:Prepaid:Wallets:AmazonPay       150.00 INR
   Income:Void                           -150.00 INR
 
 ;; Bill payment with app cashback (CRED pays into CRED wallet)
 2026-04-10 * "CRED" "HDFC bill + ₹25 CRED cashback" #cashback
   Assets:Bank:HDFC:Savings            -10000.00 INR
   Liabilities:CreditCards:HDFC:Infinia          10000.00 INR
-  Assets:Loaded:Wallets:CRED              25.00 INR
+  Assets:Prepaid:Wallets:CRED             25.00 INR
   Income:Void                            -25.00 INR
 
 ;; Statement-level cashback (standalone)
