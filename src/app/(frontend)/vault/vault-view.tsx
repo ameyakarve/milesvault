@@ -30,12 +30,6 @@ type Holding = {
   pending: number
 }
 
-// Primary = the currency with the largest absolute amount; the rest noted.
-function primaryOf<T extends { currency: string; total: number }>(
-  rows: T[],
-): { main: T | null; others: number } {
-  return { main: rows[0] ?? null, others: Math.max(0, rows.length - 1) }
-}
 
 const fmtAmt = (n: number) =>
   n.toLocaleString('en-IN', { maximumFractionDigits: Math.abs(n) >= 1000 ? 0 : 2 })
@@ -327,20 +321,16 @@ export function VaultView() {
     <div className="w-full px-6 py-6 space-y-8">
       {/* ── masthead: at-a-glance totals + review prompt ──────────────────── */}
       {stats ? (
-        <Masthead
-          stats={stats}
-          pendingCaptures={pendingCaptures}
-          programmeCount={holdings.length}
-        />
+        <Masthead stats={stats} cardRows={cardRows} names={names} pendingCaptures={pendingCaptures} />
       ) : null}
 
       {/* ── credit cards ──────────────────────────────────────────────────── */}
       {cardRows.length > 0 ? (
-        <section className="space-y-3">
+        <section id="cards" className="scroll-mt-6 space-y-3">
           <SectionHead
             title="Credit cards"
             count={cardRows.length}
-            action={<AddButton label="Add card" onClick={() => setAddCardOpen(true)} />}
+            action={<AddButton label="Card" onClick={() => setAddCardOpen(true)} />}
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {cardRows.map((r) => (
@@ -590,33 +580,22 @@ export function CreditCardCard({
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
-// Page masthead: the at-a-glance totals (owed, spend MTD, counts) as one
-// cohesive strip — the quiet "header" layer beneath the hero cards — with the
-// review prompt folded in as an on-brand accent (not a pastel box).
+// Page masthead: two rich summary modules — Outstanding (what you owe, broken
+// down by card) and Spend (this month, by category). Both are MULTI-CURRENCY:
+// the totals are per-currency arrays, so each leads with the largest currency
+// and lists the rest, and any bar is drawn within a single currency (no FX to
+// sum across). The review prompt rides above as an on-brand accent.
 function Masthead({
   stats,
+  cardRows,
+  names,
   pendingCaptures,
-  programmeCount,
 }: {
   stats: VaultStats
+  cardRows: AccountSummaryRow[]
+  names: Names
   pendingCaptures: number
-  programmeCount: number
 }) {
-  const cards = primaryOf(stats.card_outstanding)
-  const spend = primaryOf(stats.expense_total)
-  // Liabilities are negative in beancount — owed is the flipped sign.
-  const owed = cards.main ? -cards.main.total : 0
-  const cur = cards.main?.currency ?? 'INR'
-  const kpis: Array<{ label: string; value: string; sub?: string }> = [
-    { label: 'Owed', value: cards.main ? fmtAmt(owed) : '—', sub: cards.main ? cur : undefined },
-    {
-      label: 'Spent · MTD',
-      value: spend.main ? fmtAmt(spend.main.total) : '0',
-      sub: spend.main?.currency ?? cur,
-    },
-    { label: 'Cards', value: String(stats.card_count) },
-    { label: 'Programmes', value: String(programmeCount) },
-  ]
   return (
     <div className="space-y-3">
       {pendingCaptures > 0 ? (
@@ -631,21 +610,146 @@ function Masthead({
           <span className="ml-auto font-medium text-amber-600 dark:text-amber-400">Open Inbox →</span>
         </Link>
       ) : null}
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-4">
-        {kpis.map((k) => (
-          <div key={k.label} className="bg-card px-5 py-4">
-            <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              {k.label}
-            </div>
-            <div className="mt-1.5 flex items-baseline gap-1">
-              <span className="font-mono text-2xl font-semibold tracking-tight text-foreground">
-                {k.value}
-              </span>
-              {k.sub ? <span className="font-mono text-[10px] text-muted-foreground">{k.sub}</span> : null}
-            </div>
-          </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <OutstandingCard stats={stats} cardRows={cardRows} names={names} />
+        <SpendCard stats={stats} />
+      </div>
+    </div>
+  )
+}
+
+// "+ ₹X · $Y" tail for the non-dominant currencies.
+function SecondaryCurrencies({ items }: { items: Array<{ currency: string; amount: number }> }) {
+  if (!items.length) return null
+  return (
+    <span className="font-mono text-xs text-muted-foreground">
+      + {items.map((i) => `${fmtAmt(Math.abs(i.amount))} ${i.currency}`).join(' · ')}
+    </span>
+  )
+}
+
+function MiniBreakdown({ rows }: { rows: Array<{ label: string; weight: number; note: string }> }) {
+  const total = rows.reduce((s, r) => s + r.weight, 0) || 1
+  return (
+    <div className="mt-auto pt-4">
+      <div className="flex h-2 gap-0.5 overflow-hidden">
+        {rows.map((r, i) => (
+          <span
+            key={r.label + i}
+            className={cn('h-full first:rounded-l-full last:rounded-r-full', SPEND_TINTS[i % SPEND_TINTS.length])}
+            style={{ width: `${(r.weight / total) * 100}%` }}
+          />
         ))}
       </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+        {rows.slice(0, 3).map((r, i) => (
+          <span key={r.label + i} className="flex min-w-0 items-center gap-1.5">
+            <span
+              className={cn('size-2 shrink-0 rounded-full', SPEND_TINTS[i % SPEND_TINTS.length])}
+              aria-hidden
+            />
+            <span className="truncate text-muted-foreground">{r.label}</span>
+            <span className="font-mono text-foreground">{r.note}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function OutstandingCard({
+  stats,
+  cardRows,
+  names,
+}: {
+  stats: VaultStats
+  cardRows: AccountSummaryRow[]
+  names: Names
+}) {
+  // Owed per currency (amount owed = flipped liability sign), largest first.
+  const owed = stats.card_outstanding
+    .map((o) => ({ currency: o.currency, amount: -o.total }))
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+  const dom = owed[0]
+  const secondary = owed.slice(1).filter((o) => Math.abs(o.amount) > 0.005)
+  // Which cards carry the dominant-currency balance.
+  const byCard = cardRows
+    .filter((r) => r.currency === dom?.currency)
+    .map((r) => ({ name: displayName(r.account, names).name, amount: -balanceOf(r) }))
+    .filter((c) => c.amount > 0.005)
+    .sort((a, b) => b.amount - a.amount)
+  const inCredit = dom != null && dom.amount < 0 && secondary.length === 0 && byCard.length === 0
+  return (
+    <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          {inCredit ? 'In credit' : 'Outstanding'}
+        </span>
+        <a href="#cards" className="text-xs font-medium text-muted-foreground hover:text-foreground">
+          View cards →
+        </a>
+      </div>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+        <span
+          className={cn(
+            'font-mono text-3xl font-semibold tracking-tight',
+            inCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground',
+          )}
+        >
+          {dom ? fmtAmt(Math.abs(dom.amount)) : '—'}
+        </span>
+        {dom ? <span className="font-mono text-xs text-muted-foreground">{dom.currency}</span> : null}
+        <SecondaryCurrencies items={secondary} />
+      </div>
+      {byCard.length ? (
+        <MiniBreakdown
+          rows={byCard.map((c) => ({ label: c.name, weight: c.amount, note: fmtAmt(c.amount) }))}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+function SpendCard({ stats }: { stats: VaultStats }) {
+  const spent = [...stats.expense_total].sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
+  const dom = spent[0]
+  const secondary = spent
+    .slice(1)
+    .filter((s) => Math.abs(s.total) > 0.005)
+    .map((s) => ({ currency: s.currency, amount: s.total }))
+  const cats = dom
+    ? stats.expense_categories
+        .filter((c) => c.currency === dom.currency)
+        .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
+        .slice(0, 6)
+    : []
+  const totalDom = Math.abs(dom?.total ?? 0) || 1
+  return (
+    <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Spent · this month
+        </span>
+        <a href="#spending" className="text-xs font-medium text-muted-foreground hover:text-foreground">
+          Breakdown →
+        </a>
+      </div>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+        <span className="font-mono text-3xl font-semibold tracking-tight text-foreground">
+          {dom ? fmtAmt(dom.total) : '0'}
+        </span>
+        {dom ? <span className="font-mono text-xs text-muted-foreground">{dom.currency}</span> : null}
+        <SecondaryCurrencies items={secondary} />
+      </div>
+      {cats.length ? (
+        <MiniBreakdown
+          rows={cats.map((c) => ({
+            label: c.category,
+            weight: Math.abs(c.total),
+            note: `${Math.round((Math.abs(c.total) / totalDom) * 100)}%`,
+          }))}
+        />
+      ) : null}
     </div>
   )
 }
@@ -706,7 +810,7 @@ function SpendingBreakdown({ stats }: { stats: VaultStats }) {
   const max = Math.max(...cats.map((c) => Math.abs(c.total)), 1)
   const top = cats[0]
   return (
-    <section className="space-y-3">
+    <section id="spending" className="scroll-mt-6 space-y-3">
       <SectionHead
         title="Spending this month"
         count={cats.length}
@@ -810,7 +914,7 @@ function RewardsSections({
       <SectionHead
         title="Programmes"
         count={holdings.length}
-        action={<AddButton label="Add" onClick={onAdd} />}
+        action={<AddButton label="Programme" onClick={onAdd} />}
       />
       {holdings.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
