@@ -428,6 +428,24 @@ Partial (gift card + card):
   Assets:Prepaid:GiftCards:Amazon  -1000.00 INR
 ```
 
+## Split payment / multiple tenders
+
+One order paid across more than one instrument. ONE expense at the printed
+paid-total; ONE payment leg per tender, each at the amount the receipt prints for
+it — never recompute the total or back-solve a tender (see "Split payments /
+printed totals").
+
+```beancount
+2026-05-27 * "Trattoria Uno" "Dinner — part wallet, part card"
+  Expenses:Food:Restaurants                600.00 INR
+  Assets:Prepaid:Wallets:<Wallet>         -400.00 INR
+  Liabilities:CreditCards:<Issuer>:<Card>  -200.00 INR
+```
+
+Expense = the printed total (600); the payment legs are the printed tenders
+(400 + 200), which sum to it. No `Equity:Void` — there's nothing to balance but
+the tenders.
+
 ## Settling with people
 
 Use `Assets:Receivable:<Person>` for what they owe you,
