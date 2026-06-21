@@ -85,6 +85,23 @@ even when the user says they paid "from my bank" — do NOT debit a bank account
 import and settles the clearing leg, so debiting the bank here double-counts.
 Payments earn no points.
 
+## Split payments / printed totals
+
+When a source prints an authoritative paid-total and/or explicit TENDER lines (how
+one payment was split across instruments — part wallet, part card, etc.), those
+printed figures are GROUND TRUTH — read them, never recompute.
+
+- The expense leg is the printed paid-total. If your own line-item sum disagrees,
+  the printed total wins; never override a printed figure with your arithmetic.
+- A split tender is ONE transaction: one expense leg, plus one payment leg PER
+  tender, each carrying that tender's printed amount VERBATIM and posting to its
+  own account. Never collapse the tenders, and never BACK-SOLVE one to force a
+  balance — if the printed amounts don't sum to the printed total, you misread a
+  figure; re-read, don't plug.
+- Never add an `Equity:Void` (or any leg) just to "close" an entry that already
+  balances. `Equity:Void` exists ONLY to balance a real cashback / points / reward
+  leg — no reward leg, no Void.
+
 ## Refunds
 
 A credit that is NOT a bill payment reverses a purchase: NEGATIVE expense leg,
