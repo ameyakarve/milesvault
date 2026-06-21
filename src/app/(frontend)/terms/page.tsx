@@ -16,9 +16,10 @@ export default function TermsPage() {
 
       <h2>1. The service</h2>
       <p>
-        MilesVault turns your statements into a personal ledger and tracks your spending and
-        rewards. It is currently in <strong>beta</strong>: features may change, break, or be removed,
-        and it is provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis.
+        MilesVault turns your card statements into a rewards ledger that tracks the points and miles
+        you earn across your cards and loyalty programmes. It is currently in <strong>beta</strong>:
+        features may change, break, or be removed, and it is provided on an &ldquo;as is&rdquo; and
+        &ldquo;as available&rdquo; basis.
       </p>
 
       <h2>2. Eligibility &amp; your account</h2>
