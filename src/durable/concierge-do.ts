@@ -639,6 +639,54 @@ export class ConciergeDO
     return { links }
   }
 
+  // Programme commodity → its real category, resolved from the KG (not the
+  // Miles/Points account subtree, which is just a filing choice). A currency is
+  // owned via DENOMINATED_IN incoming: a `platform` owner → aggregator; a
+  // `program` owner → airline if it BOOKS_ON an airline, else hotel. Drives the
+  // vault tile's icon so e.g. MagMiles (a platform aggregator) doesn't read as
+  // an airline. Unresolved commodities are omitted (tile falls back to subtree).
+  async programmeKinds(): Promise<{ kinds: Record<string, 'airline' | 'hotel' | 'aggregator'> }> {
+    const ledger = this.ledgerStub()
+    const balances = await ledger
+      .query_sql('SELECT DISTINCT account, currency FROM balance_totals')
+      .catch((): null => null)
+    const rows = (balances?.rows ?? []) as Array<{ account: string; currency: string }>
+    const progCommodities = new Set<string>()
+    for (const r of rows)
+      if (/^Assets:Rewards:(Miles|Points):/.test(r.account)) progCommodities.add(r.currency)
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const kinds: Record<string, 'airline' | 'hotel' | 'aggregator'> = {}
+    await Promise.all(
+      [...progCommodities].map(async (commodity) => {
+        try {
+          const node = (await kbHttp
+            .get(`currency/${commodity.toLowerCase()}`)
+            .catch((): null => null)) as { slug?: string } | null
+          if (!node?.slug) return
+          const rel = (await kbHttp
+            .related(node.slug, { edge_type: 'DENOMINATED_IN', direction: 'incoming' })
+            .catch((): null => null)) as { items?: Array<{ other: string }> } | null
+          const owners = (rel?.items ?? []).map((i) => i.other)
+          if (owners.some((o) => o.startsWith('platform/'))) {
+            kinds[commodity] = 'aggregator'
+            return
+          }
+          const program = owners.find((o) => o.startsWith('program/'))
+          if (program) {
+            const relP = (await kbHttp
+              .related(program, { edge_type: 'BOOKS_ON', direction: 'outgoing' })
+              .catch((): null => null)) as { items?: Array<{ other: string }> } | null
+            const booksAirline = (relP?.items ?? []).some((i) => i.other.startsWith('airline/'))
+            kinds[commodity] = booksAirline ? 'airline' : 'hotel'
+          }
+        } catch {
+          /* skip → tile falls back to the Miles/Points subtree */
+        }
+      }),
+    )
+    return { kinds }
+  }
+
   // Headless one-shot turn for text-only channels (Telegram, WhatsApp …):
   // the graph-walker's brain and read tools, minus everything interactive —
   // ask_user suspends, show_award_options is gen-UI, handoff needs the chat

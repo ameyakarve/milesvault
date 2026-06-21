@@ -47,6 +47,27 @@ type FetchState =
   | { status: 'error'; message: string }
   | { status: 'ok'; rows: AccountSummaryRow[] }
 
+// Card-art texture, drawn from scratch (a diagonal gloss + fine procedural
+// grain) to give the full-color tiles a plastic feel. Both layers are very low
+// opacity and pointer-events-none; the card needs `relative overflow-hidden`.
+const GRAIN_SVG =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"
+function CardTexture() {
+  return (
+    <>
+      <span
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/20"
+        aria-hidden
+      />
+      <span
+        className="pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay"
+        style={{ backgroundImage: `url("${GRAIN_SVG}")`, backgroundSize: '160px 160px' }}
+        aria-hidden
+      />
+    </>
+  )
+}
+
 // Mirrors the dashboard's shape (KPI strip + card grid) so the load doesn't
 // pop in from a centered "Loading…" — far less reflow.
 function VaultSkeleton() {
@@ -83,6 +104,12 @@ export function VaultView() {
   // (QUALIFIES_TOWARD, from the KG), so a programme's counters attach by
   // commodity even when ledger account leaves differ. Loaded non-blocking.
   const [statusLinks, setStatusLinks] = useState<Record<string, string[]>>({})
+  // Programme commodity → real category (airline/hotel/aggregator) from the KG,
+  // for the tile icon. Loaded non-blocking; falls back to the Miles/Points
+  // subtree until it arrives.
+  const [programmeKinds, setProgrammeKinds] = useState<
+    Record<string, 'airline' | 'hotel' | 'aggregator'>
+  >({})
   // Bumped by the error-state retry to re-run the loader.
   const [reloadNonce, setReloadNonce] = useState(0)
 
@@ -146,6 +173,14 @@ export function VaultView() {
       fetch('/api/concierge/status-links', noStore)
         .then((r) => (r.ok ? (r.json() as Promise<{ links?: Record<string, string[]> }>) : null))
         .then((d) => alive && d?.links && setStatusLinks(d.links))
+        .catch(() => {})
+      fetch('/api/concierge/programme-kinds', noStore)
+        .then((r) =>
+          r.ok
+            ? (r.json() as Promise<{ kinds?: Record<string, 'airline' | 'hotel' | 'aggregator'> }>)
+            : null,
+        )
+        .then((d) => alive && d?.kinds && setProgrammeKinds(d.kinds))
         .catch(() => {})
     }
     load()
@@ -280,6 +315,7 @@ export function VaultView() {
         holdings={holdings}
         names={names}
         countersFor={countersFor}
+        programmeKinds={programmeKinds}
         onAdd={() => setAddCardOpen(true)}
       />
 
@@ -447,10 +483,11 @@ export function CreditCardCard({
     <Link
       href={accountHref(row)}
       className={cn(
-        'group flex flex-col gap-3 rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
+        'group relative flex flex-col gap-3 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
         cardBg(row.account),
       )}
     >
+      <CardTexture />
       {/* identity — mark, card name, last 4 */}
       <span className="flex items-center gap-2">
         <BankMark issuer={issuer} className="size-5 shrink-0 text-white" />
@@ -605,11 +642,13 @@ function RewardsSections({
   holdings,
   names,
   countersFor,
+  programmeKinds,
   onAdd,
 }: {
   holdings: Holding[]
   names: Names
   countersFor: (h: Holding) => Array<{ value: number; commodity: string }>
+  programmeKinds: Record<string, 'airline' | 'hotel' | 'aggregator'>
   onAdd: () => void
 }) {
   return (
@@ -632,6 +671,7 @@ function RewardsSections({
               holding={h}
               names={names}
               status={countersFor(h)}
+              category={programmeKinds[h.currency]}
             />
           ))}
         </div>
@@ -710,16 +750,22 @@ export function ProgrammeCard({
   holding,
   names,
   status = [],
+  category,
 }: {
   holding: Holding
   names: Names
   status?: Array<{ value: number; commodity: string }>
+  // Real category from the KG (drives the fallback icon). When absent, derived
+  // from the Miles/Points subtree.
+  category?: 'airline' | 'hotel' | 'aggregator'
 }) {
   const { name } = displayName(holding.account, names)
   const fmtPts = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
   const kind: 'miles' | 'points' = holding.account.startsWith('Assets:Rewards:Miles:')
     ? 'miles'
     : 'points'
+  const cat: 'airline' | 'hotel' | 'aggregator' =
+    category ?? (kind === 'miles' ? 'airline' : 'hotel')
   const unitLabel = kind === 'miles' ? 'Miles' : 'Points'
   const ticker = currencyRedundant(name, holding.currency) ? null : holding.currency
   const counters = status.filter((s) => s.value !== 0)
@@ -727,12 +773,13 @@ export function ProgrammeCard({
     <Link
       href={`/vault/account?account=${encodeURIComponent(holding.account)}&ccy=${encodeURIComponent(holding.currency)}`}
       className={cn(
-        'group flex flex-col gap-3 rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
+        'group relative flex flex-col gap-3 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
         programmeBg(holding.account),
       )}
     >
+      <CardTexture />
       <span className="flex items-center gap-2">
-        <ProgrammeMark account={holding.account} kind={kind} className="size-5 shrink-0" />
+        <ProgrammeMark account={holding.account} category={cat} className="size-5 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
       </span>
 

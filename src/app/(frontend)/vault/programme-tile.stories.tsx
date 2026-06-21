@@ -12,6 +12,7 @@ const PROGRAMMES: Array<{
   posted: number
   pending: number
   status: Array<{ value: number; commodity: string }>
+  category?: 'airline' | 'hotel' | 'aggregator'
 }> = [
   {
     account: 'Assets:Rewards:Points:Marriott',
@@ -76,11 +77,12 @@ const PROGRAMMES: Array<{
     status: [{ value: 9000, commodity: 'AI-POINTS' }],
   },
   {
-    account: 'Assets:Rewards:Miles:Acme',
-    currency: 'ACME',
+    account: 'Assets:Rewards:Miles:Aggro',
+    currency: 'AGGRO',
     posted: 4200,
     pending: 0,
     status: [],
+    category: 'aggregator',
   },
 ]
 
@@ -98,6 +100,7 @@ export const Default: StoryObj = {
           }}
           names={{}}
           status={p.status}
+          category={p.category}
         />
       ))}
     </div>
