@@ -10,6 +10,7 @@ import {
   type ToolSet,
   type ModelMessage,
   type ToolCallRepairFunction,
+  type UIMessage,
 } from 'ai'
 import { createWorkersAI } from 'workers-ai-provider'
 import { z } from 'zod'
@@ -616,6 +617,33 @@ ${consolidatedText}`,
       }
       if (recorded.length > 0) {
         await ledger.set_capture_drafts(statementId, recorded, null)
+        // Surface the validated draft as a real `draft_transaction` chat message
+        // so the review opens straight into the editor's draft card (same UI +
+        // approve flow) and a follow-up turn has the proposal in context. The
+        // entries are injected VERBATIM via the framework's history primitive —
+        // the model never re-touches the validated draft (no second pass that
+        // could re-mangle it). Best-effort: a failure here doesn't fail the draft
+        // (the entries are already on the capture row).
+        try {
+          await this.appendMessageToHistory({
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            parts: [
+              {
+                type: 'dynamic-tool',
+                toolName: 'draft_transaction',
+                toolCallId: crypto.randomUUID(),
+                state: 'input-available',
+                input: { entries: recorded.map((text, i) => ({ id: String(i + 1), text })) },
+              },
+            ],
+          } as UIMessage)
+        } catch (e) {
+          console.warn('[async-ingest] surface draft card failed', {
+            statement_id: statementId,
+            err: String(e),
+          })
+        }
       } else if (errored) {
         // Real model/gateway error or timeout mid-run — record the actual cause so
         // the Inbox shows it (and offers Retry) instead of a misleading
