@@ -19,3 +19,25 @@ export async function conciergeEnabled(
     return false
   }
 }
+
+// `app_access` is the login gate: may this user sign in? Evaluated with the
+// user's email AND the environment (production | staging), so a single Flagship
+// app can gate both with per-env, per-email (or percentage) targeting rules —
+// flipped from the dashboard, no redeploy. Evaluation is FAIL-OPEN: the DEFAULT
+// is allow, so an unconfigured flag or an unreachable Flagship never locks the
+// app out. To restrict, set the flag's dashboard default OFF and add allow-rules
+// for the cohorts you want in.
+export async function appAccessAllowed(
+  env: Cloudflare.Env,
+  ctx: { email: string; environment: string },
+): Promise<boolean> {
+  try {
+    return await env.FLAGS.getBooleanValue('app_access', true, {
+      email: ctx.email,
+      environment: ctx.environment,
+    })
+  } catch (err) {
+    console.warn(`[flags] app_access eval failed: ${err}`)
+    return true // fail-open: a flag hiccup must never lock everyone out
+  }
+}

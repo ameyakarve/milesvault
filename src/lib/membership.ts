@@ -9,13 +9,14 @@ export function membershipStub(env: Cloudflare.Env): DurableObjectStub<Membershi
   return ns.get(ns.idFromName(MEMBERSHIP_SINGLETON))
 }
 
-// The allowlist (ALLOWED_EMAILS) is the human safety hatch: these emails always
-// log in regardless of the membership gate, so the owner can never be locked out
-// and can bootstrap the creator token. Empty list → no allowlist entries.
+// ALLOWED_EMAILS is no longer a login gate (access is the Flagship `app_access`
+// flag now). It survives ONLY to name the YouTube-admin owner (the first entry)
+// for the creator-token bootstrap, and is optional — absent → no owner.
 export function allowedEmails(env: Cloudflare.Env): string[] {
-  return (env.ALLOWED_EMAILS ?? '')
+  const raw = (env as { ALLOWED_EMAILS?: string }).ALLOWED_EMAILS ?? ''
+  return raw
     .split(',')
-    .map((s) => s.trim())
+    .map((s: string) => s.trim())
     .filter(Boolean)
 }
 
