@@ -11,8 +11,6 @@ import {
   baseAccount,
   currencyRedundant,
   displayName,
-  groupLabel,
-  groupRank,
   isHolding,
   isPending,
 } from '@/lib/ledger-core/account-display'
@@ -30,11 +28,6 @@ type Holding = {
   currency: string
   posted: number
   pending: number
-}
-
-function formatBalance(balanceScaled: string, scale: number): string {
-  const val = Number(balanceScaled) / Math.pow(10, scale)
-  return val.toLocaleString('en-IN', { maximumFractionDigits: scale > 0 ? 2 : 0 })
 }
 
 // Primary = the currency with the largest absolute amount; the rest noted.
@@ -198,18 +191,11 @@ export function VaultView() {
     )
   }
 
-  // ── hierarchy: rewards are the product (hero cards, clustered by the
-  // taxonomy's minting-source subtrees), credit cards second, everything
-  // else compact. :Pending children fold into their programme.
-  // Everything under Assets:Rewards except Status is programme holdings —
-  // accounts outside the Miles/Points/Cards subtrees surface in an explicit
-  // "Unclassified" cluster (instead of vanishing into the compact lists).
-  const isRewardish = (a: string) =>
-    a.startsWith('Assets:Rewards:') && !a.startsWith('Assets:Rewards:Status:')
-  // Programme holdings on the home = airline (Miles) + hotel/other (Points).
-  // Issuer-direct card reward pools (Assets:Rewards:<Issuer>) now live on the
-  // card tiles, so they're no longer shown as a separate cluster here — but
-  // they're still excluded from "everything else" below (via isRewardish).
+  // ── hierarchy: rewards are the product (one Programmes section, airline +
+  // hotel together), credit cards second. :Pending children fold into their
+  // programme. Programme holdings = airline (Miles) + hotel/other (Points);
+  // issuer-direct card reward pools live on the card tiles, and status counters
+  // (Assets:Rewards:Status:*) are overlaid on the programme tiles.
   const isProgrammeHolding = (a: string) =>
     a.startsWith('Assets:Rewards:Miles:') || a.startsWith('Assets:Rewards:Points:')
   const rewardRows = rows.filter((r) => isProgrammeHolding(r.account))
@@ -242,25 +228,9 @@ export function VaultView() {
   const cardRows = rows
     .filter((r) => r.account.startsWith('Liabilities:CreditCards:'))
     .sort((a, b) => a.account.localeCompare(b.account))
-  const restRows = rows.filter(
-    (r) =>
-      !isRewardish(r.account) &&
-      !r.account.startsWith('Assets:Rewards:Status:') &&
-      !r.account.startsWith('Liabilities:CreditCards:'),
-  )
-  const grouped = new Map<string, AccountSummaryRow[]>()
-  for (const r of restRows) {
-    const k = groupLabel(r.account)
-    const bucket = grouped.get(k) ?? []
-    bucket.push(r)
-    grouped.set(k, bucket)
-  }
-  const orderedGroups = [...grouped.keys()].sort(
-    (a, b) => groupRank(a) - groupRank(b) || a.localeCompare(b),
-  )
 
   return (
-    <div className="px-6 py-6 max-w-5xl mx-auto w-full space-y-8">
+    <div className="w-full px-6 py-6 space-y-8">
       {/* ── needs review lane ─────────────────────────────────────────────── */}
       {pendingCaptures > 0 ? (
         <Link
@@ -323,16 +293,6 @@ export function VaultView() {
         onClose={() => setAddCardOpen(false)}
         onDone={() => setReloadNonce((n) => n + 1)}
       />
-      {/* ── everything else, compact ──────────────────────────────────────── */}
-      {orderedGroups.length > 0 ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {orderedGroups.map((key) => {
-            const groupRows = grouped.get(key)
-            if (!groupRows || groupRows.length === 0) return null
-            return <HoldingsCard key={key} title={key} rows={groupRows} names={names} />
-          })}
-        </div>
-      ) : null}
     </div>
   )
 }
@@ -546,48 +506,6 @@ export function CreditCardCard({
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
-function HoldingsCard({
-  title,
-  rows,
-  names,
-}: {
-  title: string
-  rows: AccountSummaryRow[]
-  names: Names
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3 space-y-2 shadow-sm">
-      <SectionLabel>{title}</SectionLabel>
-      <ul className="space-y-1">
-        {rows.map((r) => {
-          const { name: display, suffix } = displayName(r.account, names)
-          return (
-            <li key={`${r.account}|${r.currency}`}>
-              <Link
-                href={accountHref(r)}
-                className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-muted group"
-              >
-                <span className="text-sm text-foreground truncate group-hover:underline group-hover:underline-offset-4">
-                  {display}
-                  {suffix ? (
-                    <span className="ml-1 font-mono text-[10px] text-muted-foreground">··{suffix}</span>
-                  ) : null}
-                </span>
-                <span className="text-xs font-mono text-muted-foreground whitespace-nowrap shrink-0">
-                  {formatBalance(r.balance_scaled, r.scale)}
-                  {!currencyRedundant(display, r.currency) ? (
-                    <span className="ml-1 text-muted-foreground/70">{r.currency}</span>
-                  ) : null}
-                </span>
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
 // Two headline numbers relevant to a rewards/spend tracker: what you owe on
 // cards and what you've spent this month. (No "net worth / in the bank" — this
 // isn't a net-worth app; account balances live on the cards and Accounts tab.)
@@ -662,21 +580,8 @@ function SpendingBreakdown({ stats }: { stats: VaultStats }) {
 
 // Structural clusters straight off the account paths (the taxonomy's
 // minting-source subtrees) — no KG round-trip needed.
-const REWARD_CLUSTERS: Array<{ prefix: string; label: string; cta: string; seed: string }> = [
-  {
-    prefix: 'Assets:Rewards:Miles:',
-    label: 'Airline programmes',
-    cta: 'No airline programmes yet',
-    seed: 'I want to track an airline frequent-flyer programme. Ask me which one and how many miles I hold, then open Assets:Rewards:Miles:<Programme> with the right ticker and record the balance.',
-  },
-  {
-    prefix: 'Assets:Rewards:Points:',
-    label: 'Hotel & other programmes',
-    cta: 'No hotel programmes yet',
-    seed: 'I want to track a hotel loyalty programme. Ask me which one and how many points I hold, then open Assets:Rewards:Points:<Programme> with the right ticker and record the balance.',
-  },
-  // (Issuer-direct card reward pools are shown on the card tiles, not here.)
-]
+const PROGRAMME_EMPTY_SEED =
+  'I want to track a loyalty programme — an airline frequent-flyer or a hotel programme. Ask me which one and how many points/miles I hold, then open the right Assets:Rewards account with the ticker and record the balance.'
 
 // Fold :Pending children into their programme: one Holding per
 // (programme account, commodity) with posted and pending split out.
@@ -694,6 +599,8 @@ function foldPending(rows: AccountSummaryRow[]): Holding[] {
   return [...map.values()].sort((a, b) => b.posted + b.pending - (a.posted + a.pending))
 }
 
+// All loyalty programmes — airline (Miles) and hotel/other (Points) — in one
+// section. The plane/hotel mark on each tile distinguishes the kind.
 function RewardsSections({
   holdings,
   names,
@@ -705,67 +612,39 @@ function RewardsSections({
   countersFor: (h: Holding) => Array<{ value: number; commodity: string }>
   onAdd: () => void
 }) {
-  const claimed = new Set<string>()
   return (
-    <>
-      {REWARD_CLUSTERS.map(({ prefix, label, cta, seed }) => {
-        const cluster = holdings.filter((h) => h.account.startsWith(prefix))
-        cluster.forEach((h) => claimed.add(`${h.account}|${h.currency}`))
-        return (
-          <section key={prefix} className="space-y-3">
-            <div className="flex items-center justify-between">
-              <SectionLabel>{label}</SectionLabel>
-              <button
-                type="button"
-                onClick={onAdd}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                + add
-              </button>
-            </div>
-            {cluster.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {cluster.map((h) => (
-                  <ProgrammeCard
-                    key={`${h.account}|${h.currency}`}
-                    holding={h}
-                    names={names}
-                    status={countersFor(h)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <Link
-                href={`/editor?prefill=${encodeURIComponent(seed)}`}
-                className="flex items-center justify-between rounded-xl border border-dashed border-border px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-              >
-                <span>{cta}</span>
-                <span className="shrink-0 text-xs">Add in the Ledger chat →</span>
-              </Link>
-            )}
-          </section>
-        )
-      })}
-      {(() => {
-        const legacy = holdings.filter((h) => !claimed.has(`${h.account}|${h.currency}`))
-        if (legacy.length === 0) return null
-        return (
-          <section className="space-y-3">
-            <div className="flex items-baseline justify-between">
-              <SectionLabel>Unclassified rewards</SectionLabel>
-              <span className="text-xs text-muted-foreground">
-                move under Rewards:Miles / Points / Cards to classify
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {legacy.map((h) => (
-                <ProgrammeCard key={`${h.account}|${h.currency}`} holding={h} names={names} />
-              ))}
-            </div>
-          </section>
-        )
-      })()}
-    </>
+    <section className="space-y-3">
+      <div className="flex items-center justify-between">
+        <SectionLabel>Programmes</SectionLabel>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="text-xs text-muted-foreground hover:text-foreground"
+        >
+          + add
+        </button>
+      </div>
+      {holdings.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {holdings.map((h) => (
+            <ProgrammeCard
+              key={`${h.account}|${h.currency}`}
+              holding={h}
+              names={names}
+              status={countersFor(h)}
+            />
+          ))}
+        </div>
+      ) : (
+        <Link
+          href={`/editor?prefill=${encodeURIComponent(PROGRAMME_EMPTY_SEED)}`}
+          className="flex items-center justify-between rounded-xl border border-dashed border-border px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+        >
+          <span>No programmes yet</span>
+          <span className="shrink-0 text-xs">Add in the Ledger chat →</span>
+        </Link>
+      )}
+    </section>
   )
 }
 
