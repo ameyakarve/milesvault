@@ -48,11 +48,49 @@ type FetchState =
   | { status: 'ok'; rows: AccountSummaryRow[] }
 
 // Card-art texture, recreated from scratch from the design's faceted-gradient
-// treatment (no assets): a two-tone diagonal depth gradient plus a few angled
-// "blades" — light facets (soft-light) and one shade facet — that give the
-// full-color tiles a prismatic sheen. Polygon geometry + gradient direction
-// match the design; the card must be `relative overflow-hidden`.
-function CardTexture() {
+// treatments (no assets): a two-tone depth gradient plus angled "facets" — light
+// (soft-light), shade, or thin solid (multiply) blades — that give a prismatic
+// sheen. Four distinct facet sets, matching the design's card-bg variants, are
+// assigned per card for variety. The card must be `relative overflow-hidden`.
+type Facet = { points: string; tone: 'light' | 'shade' | 'solid' }
+const FACET_VARIANTS: Facet[][] = [
+  // parallel diagonals (blue / gray)
+  [
+    { points: '-3.5,-2.4 33,85.5 99.8,103.6 99.8,-2.4', tone: 'light' },
+    { points: '19.4,-2.5 55.9,85.4 122.7,103.4 122.7,-2.5', tone: 'light' },
+    { points: '-1.5,-10.2 43,17.5 102.1,104.1 104.8,-10.2', tone: 'shade' },
+  ],
+  // triangular fan (dk-blue)
+  [
+    { points: '56.4,-20.9 -12.2,151 105.1,34', tone: 'light' },
+    { points: '113.6,-27.2 55.1,49.9 69.1,78.5 99.6,107.4', tone: 'light' },
+    { points: '-6.4,-1.9 25.1,114.9 112.5,114.9', tone: 'light' },
+    { points: '-1.5,6.3 104.8,104.1 104.8,6.3', tone: 'shade' },
+  ],
+  // thin solid stripes (purple)
+  [
+    { points: '-4.1,-7.2 107,101.4 107,-2.5', tone: 'light' },
+    { points: '24.7,-14.5 128.9,116.2 128.9,-9', tone: 'solid' },
+    { points: '39.1,-14.5 143.3,116.2 143.3,-9', tone: 'solid' },
+    { points: '59.4,-14.5 163.6,116.2 163.6,-9', tone: 'solid' },
+  ],
+  // layered overlap (red)
+  [
+    { points: '-8,-5.1 13.8,73.7 78.5,114.2 86.3,-5.1', tone: 'light' },
+    { points: '5.8,-3.4 26.4,47.6 95.1,107.9 88.6,-21.4', tone: 'light' },
+    { points: '-10.7,48.2 14.1,66 83.8,121.7 95.4,-9.9', tone: 'light' },
+  ],
+]
+function hashSeed(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+function CardTexture({ seed }: { seed: string }) {
+  const h = hashSeed(seed)
+  const facets = FACET_VARIANTS[h % FACET_VARIANTS.length]!
+  const lid = `fl${h}`
+  const sid = `fs${h}`
   return (
     <>
       <span
@@ -66,30 +104,24 @@ function CardTexture() {
         aria-hidden
       >
         <defs>
-          <linearGradient id="facetLight" x1="100" y1="71" x2="23" y2="5" gradientUnits="userSpaceOnUse">
+          <linearGradient id={lid} x1="100" y1="71" x2="23" y2="5" gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="#fff" stopOpacity="0.7" />
             <stop offset="1" stopColor="#fff" stopOpacity="0" />
           </linearGradient>
-          <linearGradient id="facetShade" x1="100" y1="71" x2="23" y2="5" gradientUnits="userSpaceOnUse">
+          <linearGradient id={sid} x1="100" y1="71" x2="23" y2="5" gradientUnits="userSpaceOnUse">
             <stop offset="0" stopColor="#000" stopOpacity="0.5" />
             <stop offset="1" stopColor="#000" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <polygon
-          points="-3.5,-2.4 33,85.5 99.8,103.6 99.8,-2.4"
-          fill="url(#facetLight)"
-          style={{ mixBlendMode: 'soft-light' }}
-        />
-        <polygon
-          points="19.4,-2.5 55.9,85.4 122.7,103.4 122.7,-2.5"
-          fill="url(#facetLight)"
-          style={{ mixBlendMode: 'soft-light' }}
-        />
-        <polygon
-          points="-1.5,-10.2 43,17.5 102.1,104.1 104.8,-10.2"
-          fill="url(#facetShade)"
-          style={{ mixBlendMode: 'soft-light' }}
-        />
+        {facets.map((f, i) => (
+          <polygon
+            key={i}
+            points={f.points}
+            fill={f.tone === 'light' ? `url(#${lid})` : f.tone === 'shade' ? `url(#${sid})` : '#000'}
+            fillOpacity={f.tone === 'solid' ? 0.12 : undefined}
+            style={{ mixBlendMode: f.tone === 'solid' ? 'multiply' : 'soft-light' }}
+          />
+        ))}
       </svg>
     </>
   )
@@ -514,7 +546,7 @@ export function CreditCardCard({
         cardBg(row.account),
       )}
     >
-      <CardTexture />
+      <CardTexture seed={row.account} />
       {/* identity — mark, card name, last 4 */}
       <span className="flex items-center gap-2">
         <BankMark issuer={issuer} className="size-5 shrink-0 text-white" />
@@ -804,7 +836,7 @@ export function ProgrammeCard({
         programmeBg(holding.account),
       )}
     >
-      <CardTexture />
+      <CardTexture seed={holding.account} />
       <span className="flex items-center gap-2">
         <ProgrammeMark account={holding.account} category={cat} className="size-5 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
