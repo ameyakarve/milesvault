@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Hotel, Plane } from 'lucide-react'
+import { Hotel, Layers, Plane } from 'lucide-react'
 
 // Original, simplified vector marks for the bigger loyalty programmes — drawn
 // from scratch as generic single-color glyphs (NOT the trademarked logos), to
@@ -107,11 +107,11 @@ const ALIASES: Record<string, string> = {
 
 export function ProgrammeMark({
   account,
-  kind,
+  category,
   className,
 }: {
   account: string
-  kind: 'miles' | 'points'
+  category: 'airline' | 'hotel' | 'aggregator'
   className?: string
 }) {
   const leaf = (account.split(':').pop() ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -119,6 +119,7 @@ export function ProgrammeMark({
   for (const k of Object.keys(MARKS)) if (leaf.includes(k)) { mark = MARKS[k]; break }
   if (!mark) for (const a of Object.keys(ALIASES)) if (leaf.includes(a)) { mark = MARKS[ALIASES[a]!]; break }
   if (mark) return mark({ className })
-  const Fallback = kind === 'miles' ? Plane : Hotel
+  // No brand mark — fall back to the real category icon.
+  const Fallback = category === 'airline' ? Plane : category === 'aggregator' ? Layers : Hotel
   return <Fallback className={className} aria-hidden />
 }
