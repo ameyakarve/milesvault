@@ -18,16 +18,16 @@ export default async function HomePage() {
 
   const features: Array<{ title: string; body: string }> = [
     {
-      title: 'Capture every point & mile',
-      body: 'Points and miles are pulled from each statement automatically — both earned and still-pending — so nothing slips through the cracks.',
+      title: 'Every point, captured',
+      body: 'Statements in, a rewards ledger out — earned and still-pending miles, across every card, automatically.',
     },
     {
-      title: 'All your programmes, one place',
-      body: 'Airline miles, hotel points, and card rewards across every loyalty programme, with up-to-date balances and status.',
+      title: 'One balance view',
+      body: 'Airline miles, hotel points and card rewards in one place, always current — so nothing quietly expires.',
     },
     {
-      title: 'Earn and redeem smarter',
-      body: 'See which card earns the most where, keep balances current so nothing quietly expires, and know what each point is worth.',
+      title: 'Spend where it pays',
+      body: 'Know which card earns most where, and what each point is really worth, before you swipe.',
     },
   ]
 
@@ -43,14 +43,12 @@ export default async function HomePage() {
 
         {/* purpose */}
         <h1 className="mt-12 text-3xl font-semibold tracking-tight sm:text-4xl">
-          Track every point and mile your cards earn.
+          Get the most from every point and mile.
         </h1>
         <p className="mt-4 max-w-xl text-base leading-relaxed text-muted-foreground">
-          MilesVault reads your credit-card statements and builds a rewards ledger — tracking the
-          points and miles you earn on every card (including the ones still pending), your balances
-          across airline and hotel programmes, and which spend earns where, so you can optimise your
-          rewards and never let miles expire. It keeps tabs on what you owe and where you spend, too.
-          It&rsquo;s currently an invite-only beta.
+          MilesVault turns your card statements into a live ledger of every reward point and mile —
+          so you always know what you&rsquo;ve earned, what&rsquo;s still pending, and where to spend
+          next. Invite-only beta.
         </p>
 
         {/* sign in */}
