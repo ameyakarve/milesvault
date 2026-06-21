@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { GlobalCapture } from './global-capture'
+import { FeedbackButton } from './feedback-button'
 import { ThemeToggle } from './theme-toggle'
 
 type LucideIcon = React.FC<{ size?: number; className?: string }>
@@ -201,6 +202,9 @@ export function NavRail() {
     <>
       {/* Global drag-and-drop capture overlay — single shared mount point. */}
       <GlobalCapture />
+
+      {/* Floating beta-feedback widget — present on every authed page. */}
+      <FeedbackButton />
 
       {/* Desktop: slim side rail. delay=150ms → tooltips appear quickly. */}
       <TooltipProvider delay={150}>
