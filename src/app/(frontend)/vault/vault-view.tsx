@@ -370,7 +370,9 @@ function balanceOf(r: AccountSummaryRow): number {
 }
 
 function accountHref(r: AccountSummaryRow): string {
-  return `/vault/account?account=${encodeURIComponent(r.account)}&ccy=${encodeURIComponent(r.currency)}`
+  // Provenance link → the Journal, pre-filtered to this account (editor-shell
+  // reads ?tab=journal&account=…). Full history, no date filter.
+  return `/editor?tab=journal&account=${encodeURIComponent(r.account)}`
 }
 
 // Hero card: one loyalty programme — monogram, resolved name, big balance.
@@ -1084,7 +1086,7 @@ export function ProgrammeCard({
   const counters = status.filter((s) => s.value !== 0)
   return (
     <Link
-      href={`/vault/account?account=${encodeURIComponent(holding.account)}&ccy=${encodeURIComponent(holding.currency)}`}
+      href={`/editor?tab=journal&account=${encodeURIComponent(holding.account)}`}
       className={cn(
         'group relative flex aspect-[1.6] flex-col justify-between gap-2 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
         programmeBg(holding.account),
