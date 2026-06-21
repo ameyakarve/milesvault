@@ -25,6 +25,12 @@ const CARDS: Array<{
     reward: { label: 'Cashback', balance: 450, pending: 120, unit: 'INR' },
   },
   {
+    account: 'Liabilities:CreditCards:HSBC:Premier:1009',
+    bal: '-30000000000000000',
+    months: [20000, 25000, 18000, 30000, 22000, 28000],
+    reward: { label: 'Reward Points', balance: 30000, pending: null, unit: 'pts' },
+  },
+  {
     account: 'Liabilities:CreditCards:Axis:Magnus:1003',
     bal: '-23400000000000000',
     months: [22000, 18000, 30000, 25000, 41000, 33000],
