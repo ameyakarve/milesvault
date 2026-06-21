@@ -20,6 +20,6 @@ export default auth((req) => {
 
 export const config = {
   matcher: [
-    '/((?!api/auth|api/internal|api/admin|api/version|login|privacy|terms|logo|_next/static|_next/image|favicon.ico).*)',
+    '/((?!api/auth|api/internal|api/admin|api/version|login|privacy|terms|logo|icon|apple-icon|manifest|web-app-manifest|_next/static|_next/image|favicon.ico).*)',
   ],
 }
