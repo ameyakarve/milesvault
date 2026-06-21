@@ -6,3 +6,13 @@
   rel="stylesheet"
   href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
 />
+<!-- The app sets these via next/font in the layout (which Storybook doesn't
+     run). Without them, Tailwind's font-sans/font-mono = var(--font-sans|mono)
+     is undefined and the whole font-family declaration is invalid, so text
+     falls back to the browser default. Point them at the webfonts loaded above. -->
+<style>
+  :root {
+    --font-sans: 'Inter';
+    --font-mono: 'JetBrains Mono';
+  }
+</style>

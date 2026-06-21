@@ -613,46 +613,169 @@ function Masthead({
   )
 }
 
-// "+ ₹X · $Y" tail for the non-dominant currencies.
-function SecondaryCurrencies({ items }: { items: Array<{ currency: string; amount: number }> }) {
-  if (!items.length) return null
+// One currency's total. No cross-currency ranking — currencies are
+// incomparable without an FX rate, so each stands on its own.
+function CurrencyTotal({
+  amount,
+  currency,
+  big,
+}: {
+  amount: number
+  currency: string
+  big: boolean
+}) {
+  const credit = amount < 0
   return (
-    <span className="font-mono text-xs text-muted-foreground">
-      + {items.map((i) => `${fmtAmt(Math.abs(i.amount))} ${i.currency}`).join(' · ')}
+    <span className="flex items-baseline gap-1.5">
+      <span
+        className={cn(
+          'font-mono font-semibold tracking-tight',
+          big ? 'text-3xl' : 'text-xl',
+          credit ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground',
+        )}
+      >
+        {fmtAmt(Math.abs(amount))}
+      </span>
+      <span className="font-mono text-xs text-muted-foreground">{currency}</span>
+      {credit ? <span className="text-[10px] text-emerald-600 dark:text-emerald-400">in credit</span> : null}
     </span>
   )
 }
 
-function MiniBreakdown({ rows }: { rows: Array<{ label: string; weight: number; note: string }> }) {
-  const total = rows.reduce((s, r) => s + r.weight, 0) || 1
+// Per-currency totals + bars, with ONE common legend shared across currencies:
+// a label (card or category) keeps its colour in every currency's bar, and the
+// legend lists each label once with its amount in each currency it appears in
+// (never summed — no FX). The legend is expandable. A single-currency tile
+// collapses to one big total + one bar.
+function CurrencyBreakdown({
+  groups,
+  single,
+}: {
+  groups: Array<{ currency: string; total: number; items: Array<{ label: string; amount: number }> }>
+  single: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  // Stable global colour order: walk currencies in order, items by amount, so a
+  // label keeps its colour across every bar and the legend.
+  const order: string[] = []
+  for (const g of groups)
+    for (const it of [...g.items].sort((a, b) => b.amount - a.amount))
+      if (!order.includes(it.label)) order.push(it.label)
+  const colorOf = (label: string) => SPEND_TINTS[Math.max(0, order.indexOf(label)) % SPEND_TINTS.length]!
+  const byLabel = new Map<string, Array<{ currency: string; amount: number }>>()
+  for (const g of groups)
+    for (const it of g.items) {
+      const arr = byLabel.get(it.label) ?? []
+      arr.push({ currency: g.currency, amount: it.amount })
+      byLabel.set(it.label, arr)
+    }
+  const legend = order.map((label) => ({ label, entries: byLabel.get(label) ?? [] }))
+  const COLLAPSED = 5
+  const shown = open ? legend : legend.slice(0, COLLAPSED)
   return (
-    <div className="mt-auto pt-4">
+    <div className="space-y-4">
+      <div className="space-y-3">
+        {groups.map((g) => {
+          const items = [...g.items].sort((a, b) => b.amount - a.amount)
+          const sum = items.reduce((s, it) => s + it.amount, 0) || 1
+          return (
+            <div key={g.currency} className="space-y-1.5">
+              <CurrencyTotal amount={g.total} currency={g.currency} big={single} />
+              {items.length ? (
+                <div className="flex h-2 gap-0.5 overflow-hidden">
+                  {items.map((it, i) => (
+                    <span
+                      key={it.label + i}
+                      title={it.label}
+                      className={cn('h-full first:rounded-l-full last:rounded-r-full', colorOf(it.label))}
+                      style={{ width: `${(it.amount / sum) * 100}%` }}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+      {legend.length ? (
+        <div className="space-y-1.5 border-t border-border/60 pt-3">
+          {shown.map((l) => (
+            <div key={l.label} className="flex items-center justify-between gap-2 text-[12px]">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className={cn('size-2 shrink-0 rounded-full', colorOf(l.label))} aria-hidden />
+                <span className="truncate text-muted-foreground">{l.label}</span>
+              </span>
+              <span className="shrink-0 font-mono text-foreground">
+                {l.entries
+                  .map((e) => (single ? fmtAmt(e.amount) : `${fmtAmt(e.amount)} ${e.currency}`))
+                  .join(' · ')}
+              </span>
+            </div>
+          ))}
+          {legend.length > COLLAPSED ? (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className="pl-3.5 pt-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+            >
+              {open ? 'Show less' : `Show all ${legend.length}`}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+// A breakdown WITHIN one currency — a bar + its own legend (expandable). Used
+// per-currency for Outstanding, where cards never recur across currencies, so a
+// shared legend would mix unrelated cards.
+function SimpleBreakdown({ items }: { items: Array<{ label: string; amount: number }> }) {
+  const [open, setOpen] = useState(false)
+  const sorted = [...items].sort((a, b) => b.amount - a.amount)
+  const sum = sorted.reduce((s, it) => s + it.amount, 0) || 1
+  const COLLAPSED = 4
+  const shown = open ? sorted : sorted.slice(0, COLLAPSED)
+  return (
+    <div className="space-y-2">
       <div className="flex h-2 gap-0.5 overflow-hidden">
-        {rows.map((r, i) => (
+        {sorted.map((it, i) => (
           <span
-            key={r.label + i}
+            key={it.label + i}
+            title={it.label}
             className={cn('h-full first:rounded-l-full last:rounded-r-full', SPEND_TINTS[i % SPEND_TINTS.length])}
-            style={{ width: `${(r.weight / total) * 100}%` }}
+            style={{ width: `${(it.amount / sum) * 100}%` }}
           />
         ))}
       </div>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
-        {rows.slice(0, 3).map((r, i) => (
-          <span key={r.label + i} className="flex min-w-0 items-center gap-1.5">
-            <span
-              className={cn('size-2 shrink-0 rounded-full', SPEND_TINTS[i % SPEND_TINTS.length])}
-              aria-hidden
-            />
-            <span className="truncate text-muted-foreground">{r.label}</span>
-            <span className="font-mono text-foreground">{r.note}</span>
-          </span>
+      <div className="space-y-1">
+        {shown.map((it, i) => (
+          <div key={it.label + i} className="flex items-center justify-between gap-2 text-[12px]">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span
+                className={cn('size-2 shrink-0 rounded-full', SPEND_TINTS[i % SPEND_TINTS.length])}
+                aria-hidden
+              />
+              <span className="truncate text-muted-foreground">{it.label}</span>
+            </span>
+            <span className="shrink-0 font-mono text-foreground">{fmtAmt(it.amount)}</span>
+          </div>
         ))}
+        {sorted.length > COLLAPSED ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="pl-3.5 pt-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+          >
+            {open ? 'Show less' : `Show all ${sorted.length}`}
+          </button>
+        ) : null}
       </div>
     </div>
   )
 }
 
-function OutstandingCard({
+export function OutstandingCard({
   stats,
   cardRows,
   names,
@@ -661,90 +784,100 @@ function OutstandingCard({
   cardRows: AccountSummaryRow[]
   names: Names
 }) {
-  // Owed per currency (amount owed = flipped liability sign), largest first.
-  const owed = stats.card_outstanding
-    .map((o) => ({ currency: o.currency, amount: -o.total }))
-    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-  const dom = owed[0]
-  const secondary = owed.slice(1).filter((o) => Math.abs(o.amount) > 0.005)
-  // Which cards carry the dominant-currency balance.
-  const byCard = cardRows
-    .filter((r) => r.currency === dom?.currency)
-    .map((r) => ({ name: displayName(r.account, names).name, amount: -balanceOf(r) }))
-    .filter((c) => c.amount > 0.005)
-    .sort((a, b) => b.amount - a.amount)
-  const inCredit = dom != null && dom.amount < 0 && secondary.length === 0 && byCard.length === 0
+  // One block per currency — its own cards, its own legend (no mixing across
+  // currencies). Order FX-free: most cards first, never by amount. Each card's
+  // amount = -balance: positive = you owe, negative = you're in credit. Owed and
+  // credit are shown as SEPARATE rows (never netted) — each its own split graph.
+  const groups = stats.card_outstanding
+    .map((o) => {
+      const cards = cardRows
+        .filter((r) => r.currency === o.currency)
+        .map((r) => ({ label: displayName(r.account, names).name, amount: -balanceOf(r) }))
+      return {
+        currency: o.currency,
+        accounts: o.accounts,
+        owed: cards.filter((c) => c.amount > 0.005),
+        credit: cards.filter((c) => c.amount < -0.005).map((c) => ({ ...c, amount: -c.amount })),
+      }
+    })
+    .sort((a, b) => b.accounts - a.accounts)
+  const single = groups.length <= 1
   return (
-    <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-          {inCredit ? 'In credit' : 'Outstanding'}
+          Outstanding
         </span>
         <a href="#cards" className="text-xs font-medium text-muted-foreground hover:text-foreground">
           View cards →
         </a>
       </div>
-      <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-        <span
-          className={cn(
-            'font-mono text-3xl font-semibold tracking-tight',
-            inCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-foreground',
-          )}
-        >
-          {dom ? fmtAmt(Math.abs(dom.amount)) : '—'}
-        </span>
-        {dom ? <span className="font-mono text-xs text-muted-foreground">{dom.currency}</span> : null}
-        <SecondaryCurrencies items={secondary} />
+      <div className="mt-3 space-y-5">
+        {groups.length === 0 ? (
+          <span className="font-mono text-3xl font-semibold tracking-tight text-foreground">—</span>
+        ) : (
+          groups.map((g) => {
+            const owedTotal = g.owed.reduce((s, c) => s + c.amount, 0)
+            const creditTotal = g.credit.reduce((s, c) => s + c.amount, 0)
+            return (
+              <div key={g.currency} className="space-y-3">
+                {g.owed.length || g.credit.length === 0 ? (
+                  <div className="space-y-2.5">
+                    <CurrencyTotal amount={owedTotal} currency={g.currency} big={single} />
+                    {g.owed.length ? <SimpleBreakdown items={g.owed} /> : null}
+                  </div>
+                ) : null}
+                {g.credit.length ? (
+                  <div className="space-y-2.5 border-t border-border/60 pt-3">
+                    <span className="flex items-baseline gap-1.5">
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                        In credit
+                      </span>
+                      <span className="font-mono text-lg font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">
+                        {fmtAmt(creditTotal)}
+                      </span>
+                      <span className="font-mono text-xs text-muted-foreground">{g.currency}</span>
+                    </span>
+                    <SimpleBreakdown items={g.credit} />
+                  </div>
+                ) : null}
+              </div>
+            )
+          })
+        )}
       </div>
-      {byCard.length ? (
-        <MiniBreakdown
-          rows={byCard.map((c) => ({ label: c.name, weight: c.amount, note: fmtAmt(c.amount) }))}
-        />
-      ) : null}
     </div>
   )
 }
 
-function SpendCard({ stats }: { stats: VaultStats }) {
-  const spent = [...stats.expense_total].sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
-  const dom = spent[0]
-  const secondary = spent
-    .slice(1)
-    .filter((s) => Math.abs(s.total) > 0.005)
-    .map((s) => ({ currency: s.currency, amount: s.total }))
-  const cats = dom
-    ? stats.expense_categories
-        .filter((c) => c.currency === dom.currency)
-        .sort((a, b) => Math.abs(b.total) - Math.abs(a.total))
-        .slice(0, 6)
-    : []
-  const totalDom = Math.abs(dom?.total ?? 0) || 1
+export function SpendCard({ stats }: { stats: VaultStats }) {
+  // One group per currency (most categories first — FX-free, never by amount).
+  const groups = stats.expense_total
+    .map((e) => ({
+      currency: e.currency,
+      total: e.total,
+      items: stats.expense_categories
+        .filter((c) => c.currency === e.currency)
+        .map((c) => ({ label: c.category, amount: Math.abs(c.total) })),
+    }))
+    .sort((a, b) => b.items.length - a.items.length)
   return (
-    <div className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Spent · this month
         </span>
-        <a href="#spending" className="text-xs font-medium text-muted-foreground hover:text-foreground">
-          Breakdown →
+        <a href="/accounts" className="text-xs font-medium text-muted-foreground hover:text-foreground">
+          View spend →
         </a>
       </div>
-      <div className="mt-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-        <span className="font-mono text-3xl font-semibold tracking-tight text-foreground">
-          {dom ? fmtAmt(dom.total) : '0'}
-        </span>
-        {dom ? <span className="font-mono text-xs text-muted-foreground">{dom.currency}</span> : null}
-        <SecondaryCurrencies items={secondary} />
+      <div className="mt-3">
+        {groups.length === 0 ? (
+          <span className="font-mono text-3xl font-semibold tracking-tight text-foreground">0</span>
+        ) : (
+          <CurrencyBreakdown groups={groups} single={groups.length <= 1} />
+        )}
       </div>
-      {cats.length ? (
-        <MiniBreakdown
-          rows={cats.map((c) => ({
-            label: c.category,
-            weight: Math.abs(c.total),
-            note: `${Math.round((Math.abs(c.total) / totalDom) * 100)}%`,
-          }))}
-        />
-      ) : null}
     </div>
   )
 }
