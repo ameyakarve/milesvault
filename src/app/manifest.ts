@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'MilesVault',
     short_name: 'MilesVault',
-    description: 'Your cards, points, and miles — finally in one ledger.',
+    description: 'Track and optimise the points and miles your cards earn.',
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',

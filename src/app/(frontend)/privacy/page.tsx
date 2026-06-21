@@ -9,11 +9,12 @@ export default function PrivacyPage() {
   return (
     <LegalShell title="Privacy Policy" updated="June 21, 2026">
       <p>
-        MilesVault (&ldquo;we&rdquo;, &ldquo;us&rdquo;) is a personal finance tool that turns your
-        credit-card and bank statements into a private, reviewable ledger, and tracks your card
-        spending and reward points and miles. It is operated by <strong>Ameya Karve</strong> as an
-        individual. This policy explains what we collect, why, and what we do with it. Questions or
-        requests: <a href="mailto:support@milesvault.com">support@milesvault.com</a>.
+        MilesVault (&ldquo;we&rdquo;, &ldquo;us&rdquo;) is a rewards-tracking app that turns your
+        credit-card statements into a ledger of the points and miles you earn, helping you track and
+        optimise your card rewards and airline miles across your loyalty programmes. It is operated
+        by <strong>Ameya Karve</strong> as an individual. This policy explains what we collect, why,
+        and what we do with it. Questions or requests:{' '}
+        <a href="mailto:support@milesvault.com">support@milesvault.com</a>.
       </p>
 
       <h2>Information we collect</h2>

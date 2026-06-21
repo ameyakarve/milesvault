@@ -4,9 +4,9 @@ import { auth } from '@/auth'
 import { GoogleSignIn } from './_chrome/google-sign-in'
 
 export const metadata = {
-  title: 'MilesVault — your cards, points & miles in one ledger',
+  title: 'MilesVault — track & optimise your card points and airline miles',
   description:
-    'MilesVault turns your credit-card and bank statements into a private, reviewable ledger — tracking what you owe, where you spend, and the reward points and miles you earn.',
+    'MilesVault tracks every reward point and mile your cards earn — across all your loyalty programmes, earned and still-pending — so you can optimise your rewards and never let miles expire.',
 }
 
 // Public landing — the homepage. Must explain the app and be viewable without
@@ -18,16 +18,16 @@ export default async function HomePage() {
 
   const features: Array<{ title: string; body: string }> = [
     {
-      title: 'Statements → ledger, automatically',
-      body: 'Forward a card statement or a transaction email, or drop in a PDF. MilesVault reads it and drafts clean, categorised entries for you to review and approve.',
+      title: 'Capture every point & mile',
+      body: 'Points and miles are pulled from each statement automatically — both earned and still-pending — so nothing slips through the cracks.',
     },
     {
-      title: 'See what you actually owe',
-      body: 'Your outstanding balance across every card — even across currencies — plus where your money went this month, with trends.',
+      title: 'All your programmes, one place',
+      body: 'Airline miles, hotel points, and card rewards across every loyalty programme, with up-to-date balances and status.',
     },
     {
-      title: 'Never lose a point',
-      body: 'Reward points and miles tracked properly, including the ones still pending until your statement posts them.',
+      title: 'Earn and redeem smarter',
+      body: 'See which card earns the most where, keep balances current so nothing quietly expires, and know what each point is worth.',
     },
   ]
 
@@ -43,13 +43,14 @@ export default async function HomePage() {
 
         {/* purpose */}
         <h1 className="mt-12 text-3xl font-semibold tracking-tight sm:text-4xl">
-          Your cards, points, and miles — finally in one ledger.
+          Track every point and mile your cards earn.
         </h1>
         <p className="mt-4 max-w-xl text-base leading-relaxed text-muted-foreground">
-          MilesVault turns your credit-card and bank statements into a private, reviewable ledger.
-          It reads what you upload or forward, drafts the entries, and shows you what you owe across
-          every card, where you&rsquo;re spending, and the reward points and miles you&rsquo;ve
-          earned. It&rsquo;s currently an invite-only beta.
+          MilesVault reads your credit-card statements and builds a rewards ledger — tracking the
+          points and miles you earn on every card (including the ones still pending), your balances
+          across airline and hotel programmes, and which spend earns where, so you can optimise your
+          rewards and never let miles expire. It keeps tabs on what you owe and where you spend, too.
+          It&rsquo;s currently an invite-only beta.
         </p>
 
         {/* sign in */}
