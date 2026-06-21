@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { auth } from '@/auth'
+import { conciergeEnabled } from '@/lib/flags'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,12 @@ export async function POST(): Promise<Response> {
   if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
 
   const { env } = await getCloudflareContext({ async: true })
+
+  // Concierge kill switch: no new Telegram pairings while the assistant is off.
+  if (!(await conciergeEnabled(env as Cloudflare.Env, { email: session.user.email }))) {
+    return new NextResponse('forbidden', { status: 403 })
+  }
+
   const db = (env as Cloudflare.Env).D1 as D1Database | undefined
   if (!db) return new NextResponse('D1 binding missing', { status: 500 })
 

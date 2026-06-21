@@ -38,6 +38,7 @@ import {
 } from './agents/tools/concierge'
 import type { AgentHost, Registry } from './agents/types'
 import { baseAccount, isPending, kgLookupParts } from '@/lib/ledger-core/account-display'
+import { conciergeEnabled } from '@/lib/flags'
 
 // The chat/agent runtime for the `/concierge` surface. Read-only Q&A — over
 // the user's ledger (`analyst`) and the milesvault knowledge graph
@@ -107,6 +108,13 @@ export class ConciergeDO
   }
 
   protected override async beforeTurnFetch(): Promise<void> {
+    // Kill switch: the concierge (in-app chat AND the Telegram bot, which both
+    // drive this DO's turn loop) is gated behind the `concierge_enabled` flag.
+    // `this.name` is the user's email — the key the Flagship admin rule matches.
+    // Fail-closed: a disabled user's turn is refused before any model/tool runs.
+    if (!(await conciergeEnabled(this.env, { email: this.name }))) {
+      throw new Error('concierge is disabled for this account')
+    }
     // Fetch both context sources in parallel. Either agent can hand off
     // mid-turn, so we can't gate on the agent active at turn start —
     // the receiving agent's system prompt is rebuilt per step.

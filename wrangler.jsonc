@@ -80,6 +80,9 @@
   "worker_loaders": [
     { "binding": "LOADER" },
   ],
+  "flagship": [
+    { "binding": "FLAGS", "app_id": "27041ed3-6582-4fe2-b350-3b519355818f" },
+  ],
 
   "env": {
     "staging": {
@@ -146,6 +149,9 @@
       ],
       "worker_loaders": [
         { "binding": "LOADER" },
+      ],
+      "flagship": [
+        { "binding": "FLAGS", "app_id": "27041ed3-6582-4fe2-b350-3b519355818f" },
       ],
       "r2_buckets": [
         {
