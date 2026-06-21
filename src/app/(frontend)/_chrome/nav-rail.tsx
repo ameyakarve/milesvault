@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -108,10 +108,38 @@ function Badge({ count, className }: { count: number; className?: string }) {
   )
 }
 
+// Concierge assistant flag — hides the `/concierge` nav item when off. Cosmetic
+// only (the page + DO enforce the real gate). Fail-closed: stays hidden until a
+// positive answer arrives, so beta users never see it flash.
+function useConciergeEnabled(): boolean {
+  const [on, setOn] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/flags/concierge')
+      .then((r) => (r.ok ? (r.json() as Promise<{ enabled?: boolean }>) : null))
+      .then((d) => !cancelled && setOn(!!d?.enabled))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return on
+}
+
 export function NavRail() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const pending = usePendingCaptures()
+  const conciergeOn = useConciergeEnabled()
+
+  // Drop the assistant item from its bucket when the flag is off.
+  const buckets = useMemo(
+    () =>
+      conciergeOn
+        ? BUCKETS
+        : BUCKETS.map((bucket) => bucket.filter((item) => item.href !== '/concierge')),
+    [conciergeOn],
+  )
 
   const isActive = (href: string) => !!pathname?.startsWith(href)
   const badgeFor = (item: NavItem) =>
@@ -179,7 +207,7 @@ export function NavRail() {
         <nav className="hidden h-screen w-[48px] shrink-0 flex-col items-center overflow-y-auto border-r border-border bg-background py-3 md:flex">
           <div className="flex flex-col gap-1">
             {railIcon(HOME)}
-            {BUCKETS.map((bucket, i) => (
+            {buckets.map((bucket, i) => (
               <div key={i} className="flex flex-col items-center gap-1">
                 <Divider />
                 {bucket.map(railIcon)}
@@ -215,7 +243,7 @@ export function NavRail() {
           </DialogHeader>
           <nav className="flex flex-col gap-1">
             {menuRow(HOME)}
-            {BUCKETS.map((bucket, i) => (
+            {buckets.map((bucket, i) => (
               <div key={i} className="flex flex-col gap-1">
                 <div className="my-1 border-t border-border" />
                 {bucket.map(menuRow)}
