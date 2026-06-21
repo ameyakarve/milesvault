@@ -24,7 +24,7 @@ export default function TermsPage() {
 
       <h2>2. Eligibility &amp; your account</h2>
       <p>
-        You must be at least 18. You sign in with Google and are responsible for keeping access to
+        You must be at least 18. You sign in with Discord and are responsible for keeping access to
         your account secure and for the information you provide.
       </p>
 
