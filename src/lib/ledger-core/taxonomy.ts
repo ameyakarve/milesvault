@@ -45,19 +45,20 @@ export const TAXONOMY: ReadonlyArray<TaxonomyNode> = [
       },
       { prefix: 'Assets:Retirement', label: 'Retirement', kind: 'Assets' },
       { prefix: 'Assets:Receivable', label: 'Receivable', kind: 'Assets' },
-      { prefix: 'Assets:Prepaid', label: 'Prepaid', kind: 'Assets' },
-      { prefix: 'Assets:DebitCards', label: 'Debit cards', kind: 'Assets' },
       {
-        prefix: 'Assets:Loaded',
-        label: 'Stored value',
+        // Stored value only — one fixed bucket per instrument kind; nothing
+        // sits bare at Assets:Prepaid:<x>. Currency is carried by the commodity
+        // (a Forex card holds USD/EUR), never the path.
+        prefix: 'Assets:Prepaid',
+        label: 'Prepaid',
         kind: 'Assets',
         children: [
-          { prefix: 'Assets:Loaded:Wallets', label: 'Wallets', kind: 'Assets' },
-          { prefix: 'Assets:Loaded:PrepaidCards', label: 'Prepaid cards', kind: 'Assets' },
-          { prefix: 'Assets:Loaded:GiftCards', label: 'Gift cards', kind: 'Assets' },
-          { prefix: 'Assets:Loaded:ForexCards', label: 'Forex cards', kind: 'Assets' },
+          { prefix: 'Assets:Prepaid:Wallets', label: 'Wallets', kind: 'Assets' },
+          { prefix: 'Assets:Prepaid:Forex', label: 'Forex cards', kind: 'Assets' },
+          { prefix: 'Assets:Prepaid:GiftCards', label: 'Gift cards', kind: 'Assets' },
         ],
       },
+      { prefix: 'Assets:DebitCards', label: 'Debit cards', kind: 'Assets' },
       {
         prefix: 'Assets:Rewards',
         label: 'Rewards',

@@ -33,7 +33,7 @@ check('prefixChain root', prefixChain('Income'), ['Income'])
 
 // findTaxonomyNode
 check('findTaxonomyNode root present', findTaxonomyNode('Assets')?.label, 'Assets')
-check('findTaxonomyNode nested present', findTaxonomyNode('Assets:Loaded:Wallets')?.label, 'Wallets')
+check('findTaxonomyNode nested present', findTaxonomyNode('Assets:Prepaid:GiftCards')?.label, 'Gift cards')
 check('findTaxonomyNode unknown', findTaxonomyNode('Mystery'), undefined)
 
 // resolveDashboard — direct hit
