@@ -356,11 +356,6 @@ export function VaultView() {
         onAdd={() => setAddCardOpen(true)}
       />
 
-      {/* ── spending this month ───────────────────────────────────────────── */}
-      {stats && stats.expense_categories.length > 0 ? (
-        <SpendingBreakdown stats={stats} />
-      ) : null}
-
       <AddAccountsModal
         open={addCardOpen}
         onClose={() => setAddCardOpen(false)}
@@ -802,77 +797,6 @@ const SPEND_TINTS = [
   'bg-orange-500',
   'bg-teal-500',
 ]
-function SpendingBreakdown({ stats }: { stats: VaultStats }) {
-  const main = stats.expense_total[0]
-  if (!main) return null
-  const cats = stats.expense_categories.filter((c) => c.currency === main.currency).slice(0, 8)
-  const total = Math.abs(main.total) || 1
-  const max = Math.max(...cats.map((c) => Math.abs(c.total)), 1)
-  const top = cats[0]
-  return (
-    <section id="spending" className="scroll-mt-6 space-y-3">
-      <SectionHead
-        title="Spending this month"
-        count={cats.length}
-        action={<span className="font-mono text-xs text-muted-foreground">month to date</span>}
-      />
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        {/* headline: total + the biggest category */}
-        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border/60 pb-4">
-          <span className="flex items-baseline gap-1.5">
-            <span className="font-mono text-3xl font-semibold tracking-tight text-foreground">
-              {fmtAmt(main.total)}
-            </span>
-            <span className="font-mono text-xs text-muted-foreground">{main.currency}</span>
-          </span>
-          {top ? (
-            <span className="text-xs text-muted-foreground">
-              Top: <span className="text-foreground">{top.category}</span>{' '}
-              ({Math.round((Math.abs(top.total) / total) * 100)}%)
-            </span>
-          ) : null}
-        </div>
-        <div className="space-y-3.5">
-          {cats.map((c, i) => {
-            const pct = Math.round((Math.abs(c.total) / total) * 100)
-            const tint = SPEND_TINTS[i % SPEND_TINTS.length]!
-            return (
-              <Link
-                key={c.category}
-                href={`/vault/account?account=${encodeURIComponent(`Expenses:${c.category}`)}&ccy=${encodeURIComponent(c.currency)}`}
-                className="group block space-y-1.5"
-              >
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className={cn('size-2 shrink-0 rounded-full', tint)} aria-hidden />
-                    <span className="truncate text-foreground group-hover:underline group-hover:underline-offset-4">
-                      {c.category}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-baseline gap-2">
-                    <span className="font-mono text-foreground">
-                      {fmtAmt(c.total)} {c.currency}
-                    </span>
-                    <span className="w-9 text-right font-mono text-[11px] text-muted-foreground">
-                      {pct}%
-                    </span>
-                  </span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className={cn('h-full rounded-full transition-all', tint)}
-                    style={{ width: `${Math.max(2, (Math.abs(c.total) / max) * 100)}%` }}
-                  />
-                </div>
-              </Link>
-            )
-          })}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 // Structural clusters straight off the account paths (the taxonomy's
 // minting-source subtrees) — no KG round-trip needed.
 const PROGRAMME_EMPTY_SEED =
