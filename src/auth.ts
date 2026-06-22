@@ -3,7 +3,6 @@ import { cookies } from 'next/headers'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { Session } from 'next-auth'
 import authConfig from './auth.config'
-import { allowedEmails } from './lib/membership'
 
 export const TEST_USER_EMAIL = 'test@milesvault.test'
 
@@ -14,20 +13,18 @@ const nextAuth = NextAuth({
     authorized({ auth: session }) {
       return !!session
     },
-    // Login gate. Sign-in is Discord (auth.config). Access = on the ALLOWLIST
-    // (owner + trusted, always in), OR a member of our Discord server holding the
-    // configured member role — which Discord's official YouTube-membership
-    // integration assigns to linked channel members. So YouTube membership flows
-    // through to access via Discord, with no Google sensitive scope or
-    // verification anywhere. FAIL-CLOSED: anything we can't confirm is denied.
+    // Login gate. Sign-in is Discord (auth.config). Access = a member of our
+    // Discord server holding the configured member role — which Discord's
+    // official YouTube-membership integration assigns to linked channel members.
+    // So YouTube membership flows through to access via Discord, with no Google
+    // sensitive scope or verification anywhere. There is NO allowlist bypass:
+    // everyone, owner included, goes through the role check. FAIL-CLOSED:
+    // anything we can't confirm is denied.
     async signIn({ account, profile }) {
       const email = profile?.email
       if (!email) return false
       const { env } = await getCloudflareContext({ async: true })
       const cf = env as Cloudflare.Env
-
-      // Allowlist (first entry is the owner) always gets in.
-      if (allowedEmails(cf).includes(email)) return true
 
       const token = account?.access_token
       const guild = (cf as { DISCORD_GUILD_ID?: string }).DISCORD_GUILD_ID
