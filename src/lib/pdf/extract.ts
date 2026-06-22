@@ -41,9 +41,51 @@ type LoadedPdfjs = typeof import('pdfjs-dist')
 
 let pdfjsModulePromise: Promise<LoadedPdfjs> | null = null
 
+// Safari < 17.4 ships ReadableStream WITHOUT async iteration (no
+// `Symbol.asyncIterator` / `.values()`). pdf.js (v5) `for await (… of stream)`s
+// the PDF data, so on those Safaris an encrypted statement dies with
+// "undefined is not a function (near '…t of e…')". Install the spec async
+// iterator when absent — idempotent, client-only, additive (no-op on browsers
+// that already have it).
+function ensureReadableStreamAsyncIterator(): void {
+  const proto = (globalThis as unknown as { ReadableStream?: { prototype?: Record<PropertyKey, unknown> } })
+    .ReadableStream?.prototype
+  if (!proto || proto[Symbol.asyncIterator]) return
+  const values = function (
+    this: ReadableStream,
+    options?: { preventCancel?: boolean },
+  ): AsyncIterableIterator<unknown> {
+    const reader = this.getReader()
+    const preventCancel = options?.preventCancel ?? false
+    return {
+      async next() {
+        try {
+          const r = await reader.read()
+          if (r.done) reader.releaseLock()
+          return r
+        } catch (e) {
+          reader.releaseLock()
+          throw e
+        }
+      },
+      async return(value?: unknown) {
+        if (!preventCancel) await reader.cancel(value)
+        reader.releaseLock()
+        return { value, done: true }
+      },
+      [Symbol.asyncIterator]() {
+        return this
+      },
+    } as AsyncIterableIterator<unknown>
+  }
+  proto.values = values
+  proto[Symbol.asyncIterator] = values
+}
+
 async function loadPdfjs(): Promise<LoadedPdfjs> {
   if (!pdfjsModulePromise) {
     pdfjsModulePromise = (async () => {
+      ensureReadableStreamAsyncIterator()
       const mod = await import('pdfjs-dist')
       // The worker is a separate module bundle. Resolve its URL at runtime
       // relative to the current module so the bundler emits it as an asset.
