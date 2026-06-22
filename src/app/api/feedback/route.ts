@@ -31,6 +31,8 @@ export async function POST(req: Request): Promise<Response> {
   const createdAt = Date.now()
 
   let imageKey: string | null = null
+  let imageBytes: Uint8Array | null = null
+  let imageContentType = 'image/jpeg'
   if (typeof body?.image === 'string' && body.image.startsWith('data:image/') && e.R2) {
     try {
       const comma = body.image.indexOf(',')
@@ -39,6 +41,8 @@ export async function POST(req: Request): Promise<Response> {
       if (bytes.byteLength <= MAX_IMAGE_BYTES) {
         const ext = contentType === 'image/png' ? 'png' : 'jpg'
         imageKey = `feedback/${id}.${ext}`
+        imageBytes = bytes
+        imageContentType = contentType
         await e.R2.put(imageKey, bytes, { httpMetadata: { contentType } })
       }
     } catch {
@@ -79,15 +83,25 @@ export async function POST(req: Request): Promise<Response> {
   const email = session.user.email
   ctx.waitUntil(
     (async () => {
-      const issue = await createLinearFeedbackIssue(e as unknown as LinearEnv, {
-        id,
-        email,
-        message,
-        page_url: body?.url ?? null,
-        user_agent: body?.ua ?? null,
-        image_key: imageKey,
-        created_at: createdAt,
-      })
+      const issue = await createLinearFeedbackIssue(
+        e as unknown as LinearEnv,
+        {
+          id,
+          email,
+          message,
+          page_url: body?.url ?? null,
+          user_agent: body?.ua ?? null,
+          image_key: imageKey,
+          created_at: createdAt,
+        },
+        imageBytes
+          ? {
+              bytes: imageBytes,
+              contentType: imageContentType,
+              filename: `${id}.${imageContentType === 'image/png' ? 'png' : 'jpg'}`,
+            }
+          : null,
+      )
       if (issue) {
         await db
           .prepare(`UPDATE feedback SET linear_issue_id = ?, linear_issue_url = ? WHERE id = ?`)
