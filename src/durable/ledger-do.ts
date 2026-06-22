@@ -2028,11 +2028,12 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
 
   // Materialize balance assertions: for each directive in (account,
   // currency, date) order, the gap between the asserted amount and the
-  // posting-derived running balance at start-of-date becomes a synthetic
-  // posting pair routed through plug_account (the pad), dated the previous
-  // day so start-of-date semantics include it. Directives WITHOUT a plug
-  // are hard assertions: any gap aborts the write. Rebuilt wholesale on
-  // every journal write — O(directives × lookups), tiny for one user.
+  // posting-derived running balance at END-OF-DATE (inclusive of that day's
+  // own postings) becomes a synthetic posting pair routed through plug_account
+  // (the pad), dated the previous day so it's reflected from the assertion
+  // date onward. Directives WITHOUT a plug are hard assertions: any gap aborts
+  // the write. Rebuilt wholesale on every journal write — O(directives ×
+  // lookups), tiny for one user.
   private rematerializePlugs(): Array<{
     account: string
     currency: string
@@ -2070,8 +2071,13 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       const key = `${d.account}|${d.currency}`
       const posted = this.db
         .exec<{ scale: number; s: number | null }>(
+          // END-OF-DATE: include that day's OWN postings (date <=), so the pad
+          // absorbs same-day drift instead of over-filling. A balance asserted
+          // on the same day a transaction posts into the account (e.g. opening a
+          // card: pad+balance AND an opening entry both dated today) nets to the
+          // figure rather than double-counting.
           `SELECT scale, SUM(amount_scaled) AS s FROM postings
-           WHERE account = ? AND currency = ? AND date < ?
+           WHERE account = ? AND currency = ? AND date <= ?
            GROUP BY scale`,
           d.account,
           d.currency,
@@ -2099,7 +2105,8 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
         })
         continue
       }
-      // Dated the day before the assertion (start-of-day semantics).
+      // Dated the day before the assertion, so the reconciliation is reflected
+      // from the assertion date onward (end-of-date balance == asserted figure).
       const dt = String(d.date)
       const prev = new Date(
         Date.UTC(Number(dt.slice(0, 4)), Number(dt.slice(4, 6)) - 1, Number(dt.slice(6, 8)) - 1),
