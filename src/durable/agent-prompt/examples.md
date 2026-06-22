@@ -44,15 +44,24 @@ transaction, resolve each piece by name and read `attrs.beancountName` from
 - `<Card>` → `kb_resolve(<card name>, prefix='cc')` → `kb_get(slug)` →
   `attrs.beancountName` (e.g. "Select Plus" → `SelectPlus`), giving
   `Liabilities:CreditCards:Axis:SelectPlus`.
-- Reward currency → `kb_resolve(<currency name or ticker>, prefix='currency')`
-  → `kb_get(slug)`. Two attrs matter: `ticker` is the commodity ticker
-  (always use it for the point amounts — `HDFC-RP`, `AXIS-RP`, `MR`,
-  `KRISFLYER`), and `beancountName` is the account leaf. The account path
-  depends on the programme's kind:
+- Reward currency → call `list_reward_accounts` and COPY the matching item's
+  `account` + `ticker` VERBATIM. That tool already resolves the canonical account
+  for every loyalty currency; do NOT assemble the path yourself. The three shapes
+  it returns (so you recognise a wrong one):
+  - **bank / issuer pool → `Assets:Rewards:<bank.beancountName>`** — a currency
+    the issuer mints (Amex MR, every Axis EDGE / EDGE Miles / Burgundy tier, all
+    HDFC Reward Points variants, ICICI/Kotak/HSBC points, …). There is exactly
+    ONE wallet per issuer and the COMMODITY TICKER says which tier/variant it is.
+    NEVER split an issuer's points into a per-programme `:Points:`/`:Miles:`
+    account — e.g. Amex Membership Rewards is `Assets:Rewards:Amex` (ticker `MR`),
+    **never** `Assets:Rewards:Points:MembershipRewards`. The card's own pool
+    (from `card_guide`) uses this same `Assets:Rewards:<bank>` — they MUST match.
   - airline FFP → `Assets:Rewards:Miles:<beancountName>`
-  - hotel / other programme → `Assets:Rewards:Points:<beancountName>`
-  - bank/card pool → `Assets:Rewards:<bank.beancountName>` (ONE account per issuer wallet — the commodity ticker carries which pool/tier the points are)
-  Below, `<RewardsAcct>` stands for that full programme account.
+  - standalone hotel / airline-alliance / other programme →
+    `Assets:Rewards:Points:<beancountName>` (Avios, Marriott Bonvoy, Hyatt — NOT
+    issued by a bank).
+  `ticker` is the commodity (use it for the point amounts — `MR`, `AXIS-EDGE`,
+  `HDFC-RP-INFINIA`, `KRISFLYER`). Below, `<RewardsAcct>` stands for that account.
 
 Prefer an account that already exists in the user's ledger if it clearly matches;
 otherwise use these canonical KG names. Only fall back to a best-guess segment

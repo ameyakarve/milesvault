@@ -225,9 +225,15 @@ export async function listCards(
 // Every reward programme / loyalty currency in the KG, with its EXACT canonical
 // Beancount account and ticker — the closed set the editor picks from instead of
 // assembling account paths itself (gemma drops the `:Miles:`/`:Points:` segment
-// when handed only a beancountName + a prose convention). Same classification as
-// /api/kb/programmes (the add-dialog's Programmes tab): airline FFP slugs end in
-// `-miles` → Assets:Rewards:Miles; everything else → Assets:Rewards:Points.
+// when handed only a beancountName + a prose convention). Three account kinds,
+// matching the owner convention (agent-prompt/examples.md) AND the card path
+// (fetchCardGuide.pool.account):
+//   - bank/card pool (a currency DEFINED in content/banks/<bank>.md — i.e. the
+//     issuer's own points/miles) → `Assets:Rewards:<bank.beancountName>`. ONE
+//     wallet per issuer; the commodity ticker carries which tier/variant it is,
+//     so all of Axis EDGE / EDGE Miles / Burgundy etc. share `Assets:Rewards:Axis`.
+//   - airline FFP (slug ends `-miles`) → `Assets:Rewards:Miles:<beancountName>`
+//   - any other standalone programme → `Assets:Rewards:Points:<beancountName>`
 export type RewardAccount = { slug: string; name: string; account: string; ticker: string }
 
 export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
@@ -235,6 +241,26 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
     items?: Array<{ slug: string }>
   }
   const slugs = (listed.items ?? []).map((i) => i.slug)
+
+  // A currency lives in its issuer's bank file (content/banks/<bank>.md) iff it's
+  // a bank pool. Map source_file → the bank's beancountName, resolved once per
+  // bank (deduped via cached in-flight promises).
+  const bankBnCache = new Map<string, Promise<string | null>>()
+  const bankBeancountName = (bankSlug: string): Promise<string | null> => {
+    let p = bankBnCache.get(bankSlug)
+    if (!p) {
+      p = kb
+        .get(bankSlug)
+        .then((b) => {
+          const bn = (b as { attrs?: Record<string, unknown> } | null)?.attrs?.beancountName
+          return typeof bn === 'string' ? bn : null
+        })
+        .catch((): null => null)
+      bankBnCache.set(bankSlug, p)
+    }
+    return p
+  }
+
   const items: RewardAccount[] = []
   const CONC = 16
   for (let i = 0; i < slugs.length; i += CONC) {
@@ -244,14 +270,27 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
           const n = (await kb.get(slug)) as {
             display_name?: string | null
             attrs?: Record<string, unknown> | null
+            source_file?: string | null
           }
           const a = n?.attrs ?? {}
           if (a.fiat === true) return null
           const bn = typeof a.beancountName === 'string' ? a.beancountName : null
           const ticker = typeof a.ticker === 'string' ? a.ticker : null
           if (!bn || !ticker) return null
-          const kind = slug.endsWith('-miles') ? 'Miles' : 'Points'
-          return { slug, name: n?.display_name ?? bn, account: `Assets:Rewards:${kind}:${bn}`, ticker }
+          // Bank pool? — defined under content/banks/<bank>.md.
+          const bankFile = (n.source_file ?? '').match(/(?:^|\/)banks\/([a-z0-9-]+)\.md$/)
+          let account: string
+          if (bankFile) {
+            const bankBn = await bankBeancountName(`bank/${bankFile[1]}`)
+            // No issuer beancountName (shouldn't happen) → fall through to programme
+            // shape rather than guess a wallet name.
+            account = bankBn
+              ? `Assets:Rewards:${bankBn}`
+              : `Assets:Rewards:${slug.endsWith('-miles') ? 'Miles' : 'Points'}:${bn}`
+          } else {
+            account = `Assets:Rewards:${slug.endsWith('-miles') ? 'Miles' : 'Points'}:${bn}`
+          }
+          return { slug, name: n?.display_name ?? bn, account, ticker }
         } catch {
           return null
         }
@@ -323,7 +362,7 @@ export async function resolveCardAccount(kb: KbHttp, slug: string): Promise<stri
 export function rewardAccountsTool(kb: KbHttp) {
   return tool({
     description:
-      'List every reward programme / loyalty currency in the knowledge graph with its EXACT canonical Beancount account and commodity ticker (each item is shaped { name, account, ticker } — e.g. account "Assets:Rewards:Miles:<Programme>", ticker "<TICKER>"). Call this ONCE before drafting any miles/points entry — earn, transfer, redemption, or balance — then copy the `account` and `ticker` for the matching programme VERBATIM. Do NOT assemble reward account paths yourself and do NOT invent a ticker. If the programme is not in the list, ask the user rather than guessing an account.',
+      'List every reward programme / loyalty currency in the knowledge graph with its EXACT canonical Beancount account and commodity ticker (each item is shaped { name, account, ticker }). Accounts come in three shapes already resolved for you: a bank/issuer pool like "Assets:Rewards:<Bank>" (ALL of an issuer\'s own points/miles tiers share this one wallet — the ticker says which), an airline "Assets:Rewards:Miles:<Programme>", or a standalone "Assets:Rewards:Points:<Programme>". Call this ONCE before drafting any miles/points entry — earn, transfer, redemption, or balance — then copy the `account` and `ticker` for the matching programme VERBATIM. Do NOT assemble reward account paths yourself, do NOT re-bucket an issuer pool into a per-programme :Points:/:Miles: account, and do NOT invent a ticker. If the programme is not in the list, ask the user rather than guessing an account.',
     inputSchema: z.object({}),
     execute: async () => ({ items: await listRewardAccounts(kb) }),
   })
