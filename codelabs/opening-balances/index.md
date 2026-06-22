@@ -85,19 +85,35 @@ The save is **rejected** — a `pad` with no matching `balance` for the same acc
 > **Rule of thumb:** every `pad` needs a `balance` for the same account right after it. Think of them as a single move in two lines.
 
 ## Now let the AI do it
-Duration: 3:00
+Duration: 2:00
 
-You've hand-written a `pad`+`balance` pair. The app has a tool that writes the exact same thing.
+You've hand-written a `pad`+`balance` pair. The assistant can produce the same pair from a plain request.
+
+1. Switch to the **Chat** pane.
+2. Type, in plain words:
+
+> *Set my Axis Magnus balance to ₹12,638.52 as of 1 June*
+
+3. The assistant drafts the same **`pad` + `balance`** pair — plugged to `Equity:Void`, with the assertion dated the **day after** — for you to review. Read it, confirm it matches what you typed, and **Approve** (or **Reject**, since you've done this by hand).
+
+> aside positive
+> 
+> The assistant knows the start-of-day rule and the `Equity:Void` plug, so it lays the pair out exactly as you learned — you just check and approve.
+
+## The faster way: the Update balance tool
+Duration: 2:00
+
+There's also a dedicated form for this — no typing at all.
 
 1. In the chat pane, click the **Update balance** chip (the scales icon).
 2. Choose an account (e.g. your `Axis:Magnus:4021` card), type the balance it should hold, and pick an "as of" date.
 3. Confirm. You'll see: *"A pad absorbed the difference into Equity:Void."*
 
-Open the **Journal** and look at what it added — a `pad` on your chosen date and a `balance` the **day after**, plugged to **`Equity:Void`**. Identical to what you typed by hand.
+Open the **Journal** and look at what it added — a `pad` on your chosen date and a `balance` the **day after**, plugged to **`Equity:Void`**. Identical to what you typed by hand, and to what the AI drafts.
 
 > aside positive
 > 
-> This is the pattern again: the tool is faster, but it produces beancount you can read and verify — because you've now written it yourself.
+> Three routes to the same pair: **by hand**, **by chat**, or **by the form**. They all write identical beancount — pick whatever's quickest in the moment.
 
 ## Recap & what's next
 Duration: 1:00

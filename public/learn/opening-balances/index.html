@@ -115,20 +115,25 @@
     google-codelab-step .instructions aside b { color: inherit !important; }
 
      
-    google-codelab-step pre { position: relative; }
+    google-codelab-step pre {
+      position: relative;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      padding-right: 46px;  
+    }
+     
     .mv-copy {
       position: absolute; top: 8px; right: 8px;
-      font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1;
-      padding: 5px 10px; border-radius: 6px; cursor: pointer;
-      background: rgba(255, 255, 255, 0.12); color: #e7e7e3;
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      opacity: 0; transition: opacity 0.15s, background 0.15s;
+      width: 30px; height: 30px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 6px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.08); color: #cdd3da;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    google-codelab-step pre:hover .mv-copy,
-    .mv-copy:focus-visible { opacity: 1; }
-    .mv-copy:hover { background: rgba(255, 255, 255, 0.24); }
-    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; opacity: 1; }
-    @media (hover: none) { .mv-copy { opacity: 1; } }
+    .mv-copy:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; }
+    .mv-copy svg { width: 15px; height: 15px; display: block; }
   </style>
 </head>
 <body>
@@ -196,15 +201,31 @@
 
       </google-codelab-step>
     
-      <google-codelab-step label="Now let the AI do it" duration="3">
-        <p>You&#39;ve hand-written a <code>pad</code>+<code>balance</code> pair. The app has a tool that writes the exact same thing.</p>
+      <google-codelab-step label="Now let the AI do it" duration="2">
+        <p>You&#39;ve hand-written a <code>pad</code>+<code>balance</code> pair. The assistant can produce the same pair from a plain request.</p>
+<ol type="1">
+<li>Switch to the <strong>Chat</strong> pane.</li>
+<li>Type, in plain words:</li>
+</ol>
+<p><em>Set my Axis Magnus balance to ₹12,638.52 as of 1 June</em></p>
+<ol type="1" start="3">
+<li>The assistant drafts the same <strong><code>pad</code></strong><strong> + </strong><strong><code>balance</code></strong> pair — plugged to <code>Equity:Void</code>, with the assertion dated the <strong>day after</strong> — for you to review. Read it, confirm it matches what you typed, and <strong>Approve</strong> (or <strong>Reject</strong>, since you&#39;ve done this by hand).</li>
+</ol>
+<aside class="special"><p>The assistant knows the start-of-day rule and the <code>Equity:Void</code> plug, so it lays the pair out exactly as you learned — you just check and approve.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="The faster way: the Update balance tool" duration="2">
+        <p>There&#39;s also a dedicated form for this — no typing at all.</p>
 <ol type="1">
 <li>In the chat pane, click the <strong>Update balance</strong> chip (the scales icon).</li>
 <li>Choose an account (e.g. your <code>Axis:Magnus:4021</code> card), type the balance it should hold, and pick an &#34;as of&#34; date.</li>
 <li>Confirm. You&#39;ll see: <em>&#34;A pad absorbed the difference into Equity:Void.&#34;</em></li>
 </ol>
-<p>Open the <strong>Journal</strong> and look at what it added — a <code>pad</code> on your chosen date and a <code>balance</code> the <strong>day after</strong>, plugged to <strong><code>Equity:Void</code></strong>. Identical to what you typed by hand.</p>
-<aside class="special"><p>This is the pattern again: the tool is faster, but it produces beancount you can read and verify — because you&#39;ve now written it yourself.</p>
+<p>Open the <strong>Journal</strong> and look at what it added — a <code>pad</code> on your chosen date and a <code>balance</code> the <strong>day after</strong>, plugged to <strong><code>Equity:Void</code></strong>. Identical to what you typed by hand, and to what the AI drafts.</p>
+<aside class="special"><p>Three routes to the same pair: <strong>by hand</strong>, <strong>by chat</strong>, or <strong>by the form</strong>. They all write identical beancount — pick whatever&#39;s quickest in the moment.</p>
 </aside>
 
 
@@ -236,6 +257,8 @@
   <script>
     
     window.addEventListener('load', function () {
+      var COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+      var DONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
       function addCopyButtons() {
         document.querySelectorAll('google-codelab-step pre').forEach(function (pre) {
           if (pre.querySelector('.mv-copy')) return;
@@ -244,13 +267,16 @@
           var btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'mv-copy';
-          btn.textContent = 'Copy';
+          btn.title = 'Copy';
+          btn.setAttribute('aria-label', 'Copy');
+          btn.innerHTML = COPY;
           btn.addEventListener('click', function (e) {
             e.preventDefault();
             navigator.clipboard.writeText(raw).then(function () {
-              btn.textContent = 'Copied';
+              btn.innerHTML = DONE;
+              btn.title = 'Copied';
               btn.classList.add('copied');
-              setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+              setTimeout(function () { btn.innerHTML = COPY; btn.title = 'Copy'; btn.classList.remove('copied'); }, 1500);
             });
           });
           pre.appendChild(btn);

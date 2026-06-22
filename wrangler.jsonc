@@ -85,6 +85,10 @@
   "flagship": [
     { "binding": "FLAGS", "app_id": "27041ed3-6582-4fe2-b350-3b519355818f" },
   ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+  },
 
   "env": {
     "staging": {

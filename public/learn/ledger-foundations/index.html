@@ -115,20 +115,25 @@
     google-codelab-step .instructions aside b { color: inherit !important; }
 
      
-    google-codelab-step pre { position: relative; }
+    google-codelab-step pre {
+      position: relative;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      padding-right: 46px;  
+    }
+     
     .mv-copy {
       position: absolute; top: 8px; right: 8px;
-      font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1;
-      padding: 5px 10px; border-radius: 6px; cursor: pointer;
-      background: rgba(255, 255, 255, 0.12); color: #e7e7e3;
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      opacity: 0; transition: opacity 0.15s, background 0.15s;
+      width: 30px; height: 30px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 6px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.08); color: #cdd3da;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    google-codelab-step pre:hover .mv-copy,
-    .mv-copy:focus-visible { opacity: 1; }
-    .mv-copy:hover { background: rgba(255, 255, 255, 0.24); }
-    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; opacity: 1; }
-    @media (hover: none) { .mv-copy { opacity: 1; } }
+    .mv-copy:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; }
+    .mv-copy svg { width: 15px; height: 15px; display: block; }
   </style>
 </head>
 <body>
@@ -223,7 +228,7 @@
 <ul>
 <li>A credit-card account is <code>Liabilities:CreditCards:<Issuer>:<Card>:<Id></code> — issuer, card name, and a short <strong>id</strong> (use the card&#39;s last 4 digits, e.g. <code>:7788</code>). <strong>Always include the id</strong> so two of the same card never collide. The word is <strong><code>CreditCards</code></strong>, one word.</li>
 <li>An <code>open</code> for a bank or card account names <strong>exactly one</strong> currency (here, <code>INR</code>). No currency, or two, is an error.</li>
-<li>Beancount has <strong>no </strong><strong><code>#</code></strong><strong> comment lines</strong> — only inline <code>;</code> comments, as above. A <code>#</code> at the start of a line breaks the parse.</li>
+<li><strong>Comments use a semicolon.</strong> Put a <code>;</code> after the content on a line and everything to its right is a note the ledger ignores — exactly like the <code>; a bank account you own</code> notes above. Beancount has <strong>no </strong><strong><code>#</code></strong><strong> comment lines</strong>: a <code>#</code> at the <strong>start</strong> of a line breaks the parse.</li>
 </ul>
 </aside>
 
@@ -271,7 +276,7 @@
 
       </google-codelab-step>
     
-      <google-codelab-step label="The faster way to open accounts" duration="2">
+      <google-codelab-step label="The faster way: Add accounts" duration="2">
         <p>Typing <code>open</code> lines by hand is great for understanding — day to day, there&#39;s a shortcut that writes them for you.</p>
 <ol type="1">
 <li>On <strong>Home</strong> (your vault), click <strong>+ Card</strong> (or use the <strong>Add accounts</strong> chip in the chat).</li>
@@ -311,6 +316,8 @@
   <script>
     
     window.addEventListener('load', function () {
+      var COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+      var DONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
       function addCopyButtons() {
         document.querySelectorAll('google-codelab-step pre').forEach(function (pre) {
           if (pre.querySelector('.mv-copy')) return;
@@ -319,13 +326,16 @@
           var btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'mv-copy';
-          btn.textContent = 'Copy';
+          btn.title = 'Copy';
+          btn.setAttribute('aria-label', 'Copy');
+          btn.innerHTML = COPY;
           btn.addEventListener('click', function (e) {
             e.preventDefault();
             navigator.clipboard.writeText(raw).then(function () {
-              btn.textContent = 'Copied';
+              btn.innerHTML = DONE;
+              btn.title = 'Copied';
               btn.classList.add('copied');
-              setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+              setTimeout(function () { btn.innerHTML = COPY; btn.title = 'Copy'; btn.classList.remove('copied'); }, 1500);
             });
           });
           pre.appendChild(btn);

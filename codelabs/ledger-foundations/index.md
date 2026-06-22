@@ -85,7 +85,7 @@ Now press **Save** (or Cmd-S). The chip should read **Saved**.
 > 
 > - A credit-card account is `Liabilities:CreditCards:<Issuer>:<Card>:<Id>` — issuer, card name, and a short **id** (use the card's last 4 digits, e.g. `:7788`). **Always include the id** so two of the same card never collide. The word is **`CreditCards`**, one word.
 > - An `open` for a bank or card account names **exactly one** currency (here, `INR`). No currency, or two, is an error.
-> - Beancount has **no `#` comment lines** — only inline `;` comments, as above. A `#` at the start of a line breaks the parse.
+> - **Comments use a semicolon.** Put a `;` after the content on a line and everything to its right is a note the ledger ignores — exactly like the `; a bank account you own` notes above. Beancount has **no `#` comment lines**: a `#` at the **start** of a line breaks the parse.
 
 ## Record your first transaction
 Duration: 4:00
@@ -136,7 +136,7 @@ You've written beancount by hand. Here's the payoff: the AI writes the *same* th
 
 This is the whole point: the AI is fast, but you can verify every draft because you understand what it's producing.
 
-## The faster way to open accounts
+## The faster way: Add accounts
 Duration: 2:00
 
 Typing `open` lines by hand is great for understanding — day to day, there's a shortcut that writes them for you.
