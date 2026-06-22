@@ -228,39 +228,39 @@ export async function listCards(
 // when handed only a beancountName + a prose convention). Three account kinds,
 // matching the owner convention (agent-prompt/examples.md) AND the card path
 // (fetchCardGuide.pool.account):
-//   - bank/card pool (a currency DEFINED in content/banks/<bank>.md — i.e. the
-//     issuer's own points/miles) → `Assets:Rewards:<bank.beancountName>`. ONE
-//     wallet per issuer; the commodity ticker carries which tier/variant it is,
-//     so all of Axis EDGE / EDGE Miles / Burgundy etc. share `Assets:Rewards:Axis`.
+//   - bank/issuer pool (currency --ISSUED_BY--> bank in the graph) →
+//     `Assets:Rewards:<bank.beancountName>`. ONE wallet per issuer; the commodity
+//     ticker carries the tier/variant, so all of Axis EDGE / EDGE Miles /
+//     Burgundy share `Assets:Rewards:Axis`.
 //   - airline FFP (slug ends `-miles`) → `Assets:Rewards:Miles:<beancountName>`
 //   - any other standalone programme → `Assets:Rewards:Points:<beancountName>`
 export type RewardAccount = { slug: string; name: string; account: string; ticker: string }
 
 export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
+  // currency-slug → issuing bank's beancountName, straight from the graph: walk
+  // ISSUED_BY incoming on each bank (returns its cards AND its proprietary
+  // currencies — keep the `currency/` ones). No path / name heuristics.
+  const banks = (await kb.list('bank', { limit: 500, fields: ['beancountName'] }).catch(() => ({}))) as {
+    items?: Array<{ slug: string; fields?: { beancountName?: unknown } }>
+  }
+  const issuerBn = new Map<string, string>()
+  await Promise.all(
+    (banks.items ?? []).map(async (b) => {
+      const bn = typeof b.fields?.beancountName === 'string' ? b.fields.beancountName : null
+      if (!bn) return
+      const rel = (await kb
+        .related(b.slug, { edge_type: 'ISSUED_BY', direction: 'incoming', limit: 500 })
+        .catch((): null => null)) as { items?: Array<{ other: string }> } | null
+      for (const it of rel?.items ?? []) {
+        if (it.other.startsWith('currency/')) issuerBn.set(it.other, bn)
+      }
+    }),
+  )
+
   const listed = (await kb.list('currency', { limit: 1000 })) as {
     items?: Array<{ slug: string }>
   }
   const slugs = (listed.items ?? []).map((i) => i.slug)
-
-  // A currency lives in its issuer's bank file (content/banks/<bank>.md) iff it's
-  // a bank pool. Map source_file → the bank's beancountName, resolved once per
-  // bank (deduped via cached in-flight promises).
-  const bankBnCache = new Map<string, Promise<string | null>>()
-  const bankBeancountName = (bankSlug: string): Promise<string | null> => {
-    let p = bankBnCache.get(bankSlug)
-    if (!p) {
-      p = kb
-        .get(bankSlug)
-        .then((b) => {
-          const bn = (b as { attrs?: Record<string, unknown> } | null)?.attrs?.beancountName
-          return typeof bn === 'string' ? bn : null
-        })
-        .catch((): null => null)
-      bankBnCache.set(bankSlug, p)
-    }
-    return p
-  }
-
   const items: RewardAccount[] = []
   const CONC = 16
   for (let i = 0; i < slugs.length; i += CONC) {
@@ -270,26 +270,16 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
           const n = (await kb.get(slug)) as {
             display_name?: string | null
             attrs?: Record<string, unknown> | null
-            source_file?: string | null
           }
           const a = n?.attrs ?? {}
           if (a.fiat === true) return null
           const bn = typeof a.beancountName === 'string' ? a.beancountName : null
           const ticker = typeof a.ticker === 'string' ? a.ticker : null
           if (!bn || !ticker) return null
-          // Bank pool? — defined under content/banks/<bank>.md.
-          const bankFile = (n.source_file ?? '').match(/(?:^|\/)banks\/([a-z0-9-]+)\.md$/)
-          let account: string
-          if (bankFile) {
-            const bankBn = await bankBeancountName(`bank/${bankFile[1]}`)
-            // No issuer beancountName (shouldn't happen) → fall through to programme
-            // shape rather than guess a wallet name.
-            account = bankBn
-              ? `Assets:Rewards:${bankBn}`
-              : `Assets:Rewards:${slug.endsWith('-miles') ? 'Miles' : 'Points'}:${bn}`
-          } else {
-            account = `Assets:Rewards:${slug.endsWith('-miles') ? 'Miles' : 'Points'}:${bn}`
-          }
+          const bankBn = issuerBn.get(slug)
+          const account = bankBn
+            ? `Assets:Rewards:${bankBn}`
+            : `Assets:Rewards:${slug.endsWith('-miles') ? 'Miles' : 'Points'}:${bn}`
           return { slug, name: n?.display_name ?? bn, account, ticker }
         } catch {
           return null
