@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { auth } from '@/auth'
+import { createLinearFeedbackIssue, type LinearEnv } from '@/lib/linear'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,9 +25,10 @@ export async function POST(req: Request): Promise<Response> {
   const message = body?.message?.trim()
   if (!message) return new NextResponse('message required', { status: 400 })
 
-  const { env } = await getCloudflareContext({ async: true })
+  const { env, ctx } = await getCloudflareContext({ async: true })
   const e = env as Cloudflare.Env
   const id = crypto.randomUUID()
+  const createdAt = Date.now()
 
   let imageKey: string | null = null
   if (typeof body?.image === 'string' && body.image.startsWith('data:image/') && e.R2) {
@@ -49,23 +51,51 @@ export async function POST(req: Request): Promise<Response> {
   await db
     .prepare(
       `CREATE TABLE IF NOT EXISTS feedback (
-         id         TEXT PRIMARY KEY,
-         email      TEXT NOT NULL,
-         message    TEXT NOT NULL,
-         image_key  TEXT,
-         page_url   TEXT,
-         user_agent TEXT,
-         created_at INTEGER NOT NULL
+         id               TEXT PRIMARY KEY,
+         email            TEXT NOT NULL,
+         message          TEXT NOT NULL,
+         image_key        TEXT,
+         page_url         TEXT,
+         user_agent       TEXT,
+         created_at       INTEGER NOT NULL,
+         linear_issue_id  TEXT,
+         linear_issue_url TEXT
        )`,
     )
     .run()
+  // Pre-existing tables predate the Linear columns — add them (no-op if present).
+  await db.prepare(`ALTER TABLE feedback ADD COLUMN linear_issue_id TEXT`).run().catch(() => {})
+  await db.prepare(`ALTER TABLE feedback ADD COLUMN linear_issue_url TEXT`).run().catch(() => {})
   await db
     .prepare(
       `INSERT INTO feedback (id, email, message, image_key, page_url, user_agent, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, session.user.email, message, imageKey, body?.url ?? null, body?.ua ?? null, Date.now())
+    .bind(id, session.user.email, message, imageKey, body?.url ?? null, body?.ua ?? null, createdAt)
     .run()
+
+  // File a Linear ticket out-of-band — never block (or fail) the feedback write
+  // on it. On success, stamp the issue back onto the row so backfill skips it.
+  const email = session.user.email
+  ctx.waitUntil(
+    (async () => {
+      const issue = await createLinearFeedbackIssue(e as unknown as LinearEnv, {
+        id,
+        email,
+        message,
+        page_url: body?.url ?? null,
+        user_agent: body?.ua ?? null,
+        image_key: imageKey,
+        created_at: createdAt,
+      })
+      if (issue) {
+        await db
+          .prepare(`UPDATE feedback SET linear_issue_id = ?, linear_issue_url = ? WHERE id = ?`)
+          .bind(issue.id, issue.url, id)
+          .run()
+      }
+    })(),
+  )
 
   return NextResponse.json({ ok: true })
 }
