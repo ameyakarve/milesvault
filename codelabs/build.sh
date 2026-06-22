@@ -17,6 +17,11 @@ rm -rf "$OUT"
 mkdir -p "$OUT/assets"
 cp "$ROOT/../public/logo.svg" "$OUT/assets/logo.svg"
 
+# Bundle the beancount highlighter (reuses lezer-beancount + the app's theme).
+( cd "$ROOT/.." && pnpm exec esbuild codelabs/_tmpl/beancount-hl.src.js \
+    --bundle --minify --format=iife --outfile=public/learn/assets/beancount-hl.js >/dev/null )
+echo "  ✓ beancount-hl.js"
+
 for id in "${LABS[@]}"; do
   ( cd "$ROOT/$id" && "$CLAAT" export -f "$TMPL" -o "$OUT" index.md >/dev/null )
   echo "  ✓ $id"

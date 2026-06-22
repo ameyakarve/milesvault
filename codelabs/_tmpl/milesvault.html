@@ -31,6 +31,13 @@
       --mv-special-bd: #4d6e60;
       --mv-warning-bg: #fbf3df;
       --mv-warning-bd: #c8862b;
+      /* Journal-editor theme, reused verbatim for code blocks */
+      --cm-bg: #faf8f5;
+      --cm-accent: #4d6e60;
+      --cm-text: #2e2b27;
+      --cm-muted: #8a8378;
+      --cm-number: #8c5e3c;
+      --cm-unit: #5b7185;
     }
     @media (prefers-color-scheme: dark) {
       :root {
@@ -48,6 +55,12 @@
         --mv-special-bd: #3f6b54;
         --mv-warning-bg: #2a2113;
         --mv-warning-bd: #9c7327;
+        --cm-bg: #24221f;
+        --cm-accent: #93b8a5;
+        --cm-text: #e8e4dd;
+        --cm-muted: #a39d92;
+        --cm-number: #d2a275;
+        --cm-unit: #93a8bb;
       }
     }
 
@@ -105,34 +118,49 @@
     /* Links */
     google-codelab-step .instructions a { color: var(--mv-accent) !important; }
 
-    /* Inline code (block <pre> stays dark navy in both modes) */
+    /* Inline code */
     google-codelab-step code { background-color: var(--mv-code-inline) !important; color: var(--mv-code-inline-text); }
-    google-codelab-step pre > code { background-color: transparent !important; color: inherit; }
 
     /* Callouts */
     google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside b { color: inherit !important; }
 
-    /* Code blocks: wrap instead of horizontal scroll */
+    /* Code blocks: the Journal-editor surface + theme, wrapped (no h-scroll) */
     google-codelab-step pre {
       position: relative;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
-      padding-right: 46px; /* clear the copy button */
+      padding: 16px 46px 16px 16px; /* room for the copy button */
+      background: var(--cm-bg) !important;
+      color: var(--cm-text) !important;
+      border: 1px solid var(--mv-border);
+      border-radius: 8px;
     }
-    /* Permanent copy icon button (pre stays dark navy in both modes) */
+    google-codelab-step pre > code { background: transparent !important; color: inherit !important; }
+    /* Beancount tokens — same tag→colour mapping as the app's HighlightStyle */
+    google-codelab-step pre .bc-date { color: var(--cm-accent); }
+    google-codelab-step pre .bc-flag { color: var(--cm-text); font-weight: 700; }
+    google-codelab-step pre .bc-string { color: var(--cm-muted); }
+    google-codelab-step pre .bc-account { color: var(--cm-text); }
+    google-codelab-step pre .bc-number { color: var(--cm-number); font-weight: 700; }
+    google-codelab-step pre .bc-currency { color: var(--cm-unit); }
+    google-codelab-step pre .bc-comment { color: var(--cm-muted); font-style: italic; }
+    /* Fallback: if the highlighter doesn't run, keep prettify's near-white tokens readable */
+    google-codelab-step pre .pln, google-codelab-step pre .pun { color: var(--cm-text) !important; }
+
+    /* Permanent copy icon button (sits on the code surface) */
     .mv-copy {
       position: absolute; top: 8px; right: 8px;
       width: 30px; height: 30px; padding: 0;
       display: inline-flex; align-items: center; justify-content: center;
       border-radius: 6px; cursor: pointer;
-      background: rgba(255, 255, 255, 0.08); color: #cdd3da;
-      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: transparent; color: var(--cm-muted);
+      border: 1px solid var(--mv-border);
       transition: background 0.15s, color 0.15s, border-color 0.15s;
     }
-    .mv-copy:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
-    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; }
+    .mv-copy:hover { color: var(--cm-text); border-color: var(--cm-muted); }
+    .mv-copy.copied { background: var(--mv-accent); border-color: var(--mv-accent); color: var(--mv-accent-ink); }
     .mv-copy svg { width: 15px; height: 15px; display: block; }
   </style>
 </head>
@@ -155,6 +183,7 @@
   <script src="{{.Prefix}}/claat-public/custom-elements.min.js"></script>
   <script src="{{.Prefix}}/claat-public/prettify.js"></script>
   <script src="{{.Prefix}}/claat-public/codelab-elements.js"></script>
+  <script src="../assets/beancount-hl.js"></script>
 
   <script>
     // Add a permanent Copy icon button to every code block.
