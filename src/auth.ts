@@ -38,22 +38,42 @@ const nextAuth = NextAuth({
         })
         return false
       }
+      // Diagnostics: the signing account's Discord id + the scopes Discord
+      // actually granted + the guild we're checking. Lets us tell apart
+      // "wrong account", "missing scope", and "wrong guild" from the logs.
+      const discordId = (profile as { id?: string })?.id
+      const scope = (account as { scope?: string })?.scope
       try {
         // The signer's member object in OUR server (404 = not in the server).
         const res = await fetch(`https://discord.com/api/v10/users/@me/guilds/${guild}/member`, {
           headers: { Authorization: `Bearer ${token}` },
         })
         if (res.status === 404) {
-          console.log('[gate] discord: not in server', { email })
+          const body = await res.text().catch(() => '')
+          console.log('[gate] discord: not in server', {
+            email,
+            discordId,
+            guild,
+            scope,
+            body: body.slice(0, 200),
+          })
           return false
         }
         if (!res.ok) {
-          console.warn('[gate] discord member fetch failed', { email, status: res.status })
+          const body = await res.text().catch(() => '')
+          console.warn('[gate] discord member fetch failed', {
+            email,
+            discordId,
+            guild,
+            scope,
+            status: res.status,
+            body: body.slice(0, 200),
+          })
           return false
         }
         const member = (await res.json()) as { roles?: string[] }
         const isMember = Array.isArray(member.roles) && member.roles.includes(roleId)
-        console.log('[gate] discord', { email, isMember })
+        console.log('[gate] discord', { email, discordId, guild, isMember, roles: member.roles })
         return isMember
       } catch (e) {
         console.warn('[gate] discord error', { email, err: String(e) })
