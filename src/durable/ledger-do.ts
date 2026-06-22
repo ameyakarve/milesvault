@@ -1348,6 +1348,23 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
       )
       .toArray())
       add(r.account, r.currency)
+    // Also surface OPEN accounts that have no activity yet (freshly-added cards /
+    // programmes) — setting their opening balance is the whole point of this
+    // dialog. Their currency comes from the open directive's constraint.
+    for (const r of this.db
+      .exec<{ account: string; constraint_currencies: string }>(
+        `SELECT account, constraint_currencies FROM directives_open`,
+      )
+      .toArray()) {
+      if (!r.account) continue
+      let curs: string[] = []
+      try {
+        curs = JSON.parse(r.constraint_currencies) as string[]
+      } catch {}
+      // add() ignores empty currencies, so unconstrained (multi-ticker) opens
+      // are naturally skipped — you don't set one balance on those.
+      for (const c of curs) add(r.account, c)
+    }
     return [...map.entries()]
       .map(([account, set]) => ({ account, currencies: [...set].sort() }))
       .sort((a, b) => a.account.localeCompare(b.account))
