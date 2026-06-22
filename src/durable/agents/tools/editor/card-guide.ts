@@ -275,7 +275,22 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
           if (!bn || !ticker) return null
           // ONE shape: bank pools use the issuer beancountName, standalone
           // programmes use their own. No Miles/Points segment, no slug guess.
-          const account = `Assets:Rewards:${issuerBn.get(slug) ?? bn}`
+          let leaf = issuerBn.get(slug) ?? bn
+          // Status / tier-qualifying counter? It lives in the PROGRAMME's wallet
+          // (it QUALIFIES_TOWARD it), distinguished by ticker — never its own
+          // account. e.g. ACCOR-STATUS (beancountName AllAccor) → Assets:Rewards:AllRewards.
+          const qrel = (await kb
+            .related(slug, { edge_type: 'QUALIFIES_TOWARD', direction: 'outgoing', limit: 5 })
+            .catch((): null => null)) as { items?: Array<{ other: string }> } | null
+          const progSlug = (qrel?.items ?? []).map((i) => i.other).find((o) => o.startsWith('currency/'))
+          if (progSlug) {
+            const prog = (await kb.get(progSlug).catch((): null => null)) as {
+              attrs?: Record<string, unknown> | null
+            } | null
+            const pbn = typeof prog?.attrs?.beancountName === 'string' ? prog.attrs.beancountName : null
+            if (pbn) leaf = issuerBn.get(progSlug) ?? pbn
+          }
+          const account = `Assets:Rewards:${leaf}`
           return { slug, name: n?.display_name ?? bn, account, ticker }
         } catch {
           return null
