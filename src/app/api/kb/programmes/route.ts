@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic'
 
 // Loyalty programmes (non-fiat currencies) with their canonical rewards
 // account + ticker — powers the Programmes tab of the add dialog. Same closed
-// set + classification the editor's `list_reward_accounts` tool serves, so the
-// dialog and the agent never diverge: bank/issuer pools → Assets:Rewards:<Bank>,
-// airline FFP (…-miles) → Assets:Rewards:Miles, else → Assets:Rewards:Points.
+// set the editor's `list_reward_accounts` tool serves, so the dialog and the
+// agent never diverge — every reward account is `Assets:Rewards:<X>` (an issuer
+// pool `Assets:Rewards:<Bank>` or a programme `Assets:Rewards:<Programme>`).
 export async function GET(): Promise<Response> {
   const session = await auth()
   if (!session?.user?.email)

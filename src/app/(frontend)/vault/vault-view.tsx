@@ -279,35 +279,39 @@ export function VaultView() {
     )
   }
 
-  // ── hierarchy: rewards are the product (one Programmes section, airline +
-  // hotel together), credit cards second. :Pending children fold into their
-  // programme. Programme holdings = airline (Miles) + hotel/other (Points);
-  // issuer-direct card reward pools live on the card tiles, and status counters
-  // (Assets:Rewards:Status:*) are overlaid on the programme tiles.
-  const isProgrammeHolding = (a: string) =>
-    a.startsWith('Assets:Rewards:Miles:') || a.startsWith('Assets:Rewards:Points:')
+  // ── hierarchy: rewards are the product (one Programmes section), credit cards
+  // second. :Pending children fold into their programme. Every reward pool is
+  // `Assets:Rewards:<X>` (no Miles/Points split) — a programme holding is any such
+  // pool that ISN'T a card's own issuer pool (those live on the card tile,
+  // identified by cardMeta.reward_account).
+  const cardRewardAccounts = new Set(
+    Object.values(cardMeta)
+      .map((m) => m.reward_account)
+      .filter((a): a is string => !!a),
+  )
+  const isProgrammeHolding = (a: string) => {
+    // Legacy ledgers may still hold a `Assets:Rewards:Status:*` account (pre
+    // migration) — exclude it; status is overlaid, never its own tile.
+    if (!a.startsWith('Assets:Rewards:') || a.startsWith('Assets:Rewards:Status:')) return false
+    return !cardRewardAccounts.has(a.replace(/:Pending$/, '')) // card pools (and their :Pending) live on the card
+  }
+  // Status counters are tier-qualifying commodities (KG: QUALIFIES_TOWARD, via
+  // statusLinks). They share the programme's `Assets:Rewards:<X>` account now,
+  // distinguished by ticker (legacy ledgers may still file them under a separate
+  // `Assets:Rewards:Status:<X>` account). EITHER way we identify them BY COMMODITY,
+  // so the account shape doesn't matter — they overlay the programme tile and
+  // never render as their own.
+  const statusCommodities = new Set(Object.values(statusLinks).flat())
   const rewardRows = rows.filter((r) => isProgrammeHolding(r.account))
-  const holdings = foldPending(rewardRows)
-  // Tier-qualifying status counters (Assets:Rewards:Status:*) — a programme can
-  // hold several (nights, segments, qualifying points). They're overlaid on the
-  // programme tiles (and excluded from "everything else" below). A counter
-  // attaches to a programme tile if EITHER its account leaf matches the
-  // programme's leaf, OR its commodity QUALIFIES_TOWARD the programme's
-  // commodity per the KG (statusLinks) — the latter catches counters whose
-  // account leaf differs (e.g. AllAccor counters under the AllRewards tile).
+  const holdings = foldPending(rewardRows).filter((h) => !statusCommodities.has(h.currency))
   const statusRows = rows
-    .filter((r) => r.account.startsWith('Assets:Rewards:Status:'))
-    .map((r) => ({
-      leaf: r.account.split(':')[3] ?? '',
-      commodity: r.currency,
-      value: Number(r.balance_scaled) / 10 ** r.scale,
-    }))
+    .filter((r) => statusCommodities.has(r.currency))
+    .map((r) => ({ commodity: r.currency, value: Number(r.balance_scaled) / 10 ** r.scale }))
   const countersFor = (h: Holding): Array<{ value: number; commodity: string }> => {
-    const leaf = h.account.split(':')[3] ?? ''
     const linked = new Set(statusLinks[h.currency] ?? [])
     const byCommodity = new Map<string, number>()
     for (const sr of statusRows) {
-      if (sr.leaf === leaf || linked.has(sr.commodity)) {
+      if (linked.has(sr.commodity)) {
         byCommodity.set(sr.commodity, (byCommodity.get(sr.commodity) ?? 0) + sr.value)
       }
     }
@@ -1089,12 +1093,11 @@ export function ProgrammeCard({
 }) {
   const { name } = displayName(holding.account, names)
   const fmtPts = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
-  const kind: 'miles' | 'points' = holding.account.startsWith('Assets:Rewards:Miles:')
-    ? 'miles'
-    : 'points'
-  const cat: 'airline' | 'hotel' | 'aggregator' =
-    category ?? (kind === 'miles' ? 'airline' : 'hotel')
-  const unitLabel = kind === 'miles' ? 'Miles' : 'Points'
+  // Category (airline/hotel/aggregator) is KG-resolved (programmeKinds); the unit
+  // word and icon follow it — no account-path guessing. Default to hotel/Points
+  // when the KG hasn't classified it.
+  const cat: 'airline' | 'hotel' | 'aggregator' = category ?? 'hotel'
+  const unitLabel = cat === 'airline' ? 'Miles' : 'Points'
   const ticker = currencyRedundant(name, holding.currency) ? null : holding.currency
   const counters = status.filter((s) => s.value !== 0)
   return (

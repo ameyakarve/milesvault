@@ -60,14 +60,12 @@ export const TAXONOMY: ReadonlyArray<TaxonomyNode> = [
       },
       { prefix: 'Assets:DebitCards', label: 'Debit cards', kind: 'Assets' },
       {
+        // One pool shape `Assets:Rewards:<X>` (bank or programme) holding every
+        // commodity for that issuer/programme — spendable points AND status
+        // counters — distinguished by ticker. No Miles/Points/Status subtrees.
         prefix: 'Assets:Rewards',
         label: 'Rewards',
         kind: 'Assets',
-        children: [
-          { prefix: 'Assets:Rewards:Miles', label: 'Airline miles', kind: 'Assets' },
-          { prefix: 'Assets:Rewards:Points', label: 'Points', kind: 'Assets' },
-          { prefix: 'Assets:Rewards:Status', label: 'Status', kind: 'Assets' },
-        ],
       },
     ],
   },

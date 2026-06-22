@@ -70,7 +70,7 @@ const ID_RE = /^\d{2,}$/
 //   Liabilities:CreditCards:Axis:Magnus:1234 → { label: "Axis · Magnus", suffix: "1234" }
 //   Assets:Bank:HDFC:Savings                 → { label: "HDFC · Savings" }
 //   Assets:Prepaid:GiftCards:Amazon          → { label: "Amazon" }
-//   Assets:Rewards:Points:KRISFLYER          → { label: "KRISFLYER" }
+//   Assets:Rewards:Krisflyer                 → { label: "Krisflyer" }
 export function accountLabel(account: string): { label: string; suffix: string | null } {
   const parts = account.split(':')
   let suffix: string | null = null
@@ -108,11 +108,13 @@ export function kgLookupParts(
     const product = ID_RE.test(last) ? parts[parts.length - 2] : last
     return { kind: 'card', issuer: parts[2], product }
   }
-  if (account.startsWith('Assets:Rewards:') && parts.length >= 4) {
+  if (account.startsWith('Assets:Rewards:') && parts.length >= 3) {
     const base = baseAccount(account).split(':')
     const leaf = base[base.length - 1]
     // Issuer context when present: Cards:<Issuer>:<Pool>, or the legacy
     // shape Assets:Rewards:<Issuer>:<Pool>. Disambiguates generic leaves.
+    // The current shape is `Assets:Rewards:<X>` (3 parts) — bank pool or
+    // programme — where <X> resolves against bank/currency, no issuer level.
     const SUBTREES = new Set(['Points', 'Miles', 'Cards', 'Status'])
     let issuer: string | null = null
     if (base.length >= 5 && base[2] === 'Cards') issuer = base[3]

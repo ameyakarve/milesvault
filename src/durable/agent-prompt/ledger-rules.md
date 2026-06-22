@@ -58,20 +58,19 @@ EXACTLY as a TWO-leg entry:
 3. The source leg is NEGATIVE, in the source commodity, carrying
    `@@ <destination amount> <destination commodity>`. Source amount =
    destination × A/B. Use the source programme's REAL pool account + ticker
-   (from `card_guide` / `list_reward_accounts`) — never a generic
-   `Assets:Rewards:<Issuer>`.
+   (from `card_guide` / `list_reward_accounts`) — never a made-up or guessed path.
 
 At `3:2` (3 SRC → 2 DST), an existing 1200 DST accrual came from `1200 × 3/2 =
 1800` SRC:
 ```beancount
 2026-05-01 * "Programme" "Earn"
-  Assets:Rewards:Points:Dst   1200 DST             ; KEPT, untouched
-  Assets:Rewards:Points:Src  -1800 SRC @@ 1200 DST ; replaces the Equity:Void contra
+  Assets:Rewards:Dst   1200 DST             ; KEPT, untouched
+  Assets:Rewards:Src  -1800 SRC @@ 1200 DST ; replaces the Equity:Void contra
 ```
 WRONG — scaling the destination, pricing the wrong leg, or keeping `Equity:Void`:
 ```beancount
-  Assets:Rewards:Points:Dst    800 DST @@ 1800 SRC  ; ✗ dest recomputed; @@ on dest
-  Assets:Rewards:Points:Src  -1800 SRC              ; ✗
+  Assets:Rewards:Dst    800 DST @@ 1800 SRC  ; ✗ dest recomputed; @@ on dest
+  Assets:Rewards:Src  -1800 SRC              ; ✗
   Equity:Void                -1800 SRC              ; ✗ extra leg → unbalanced
 ```
 
@@ -206,9 +205,9 @@ spendable balance — a "+384 / +384 / +2" row is three different things, not on
   and its `:Pending`, the programme's ticker (Points section above).
 - A **status counter is AUXILIARY**: it only accrues, expires, or resets toward a
   tier — it never transfers out, never lands, and never redeems for cash. Book it
-  straight to `Assets:Rewards:Status:<Programme>` (the SAME `<Programme>` segment
-  as that programme's `Assets:Rewards:Points:<Programme>` account, so the two
-  stay aligned), each counter its own commodity, with an `Equity:Void` contra —
+  straight into the programme's OWN `Assets:Rewards:<Programme>` account — a status
+  counter is just another commodity in that account (a different ticker from the
+  spendable points), each its own commodity, with an `Equity:Void` contra —
   the same mint/burn plug points use. No `:Pending`, no `@@`, no cash value: it is
   a count, not money. Name each counter commodity `<PROG>-NIGHTS`, `<PROG>-STATUS`,
   etc. (short caps programme prefix, plural where the unit is) and REUSE whatever
@@ -297,7 +296,7 @@ expense is always fiat.
 ```beancount
 2026-01-16 * "Airline" "Award flight — points redemption"
   Expenses:Travel:Flights        <cash> INR
-  Assets:Rewards:Miles:<Prog>   -13500 PTS @@ <cash> INR
+  Assets:Rewards:<Prog>   -13500 PTS @@ <cash> INR
 ```
 WRONG — reconstructing a paid ticket (a `-N` flight is a redemption, not a buy):
 ```beancount

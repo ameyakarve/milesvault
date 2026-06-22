@@ -110,8 +110,8 @@ specific to READING a statement.
    2026-06-01 pad Liabilities:CreditCards:Skybank:Plus:1234 Equity:Void
    2026-06-01 balance Liabilities:CreditCards:Skybank:Plus:1234  -54321.00 INR
 
-   2026-06-01 pad Assets:Rewards:Points:Skybank Equity:Void
-   2026-06-01 balance Assets:Rewards:Points:Skybank  12500 SKYBANKPTS
+   2026-06-01 pad Assets:Rewards:Skybank Equity:Void
+   2026-06-01 balance Assets:Rewards:Skybank  12500 SKYBANKPTS
    ```
 
    A worked case of the trap: a summary box printing `Total Payment Due  8,420.00

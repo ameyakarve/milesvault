@@ -46,22 +46,21 @@ transaction, resolve each piece by name and read `attrs.beancountName` from
   `Liabilities:CreditCards:Axis:SelectPlus`.
 - Reward currency → call `list_reward_accounts` and COPY the matching item's
   `account` + `ticker` VERBATIM. That tool already resolves the canonical account
-  for every loyalty currency; do NOT assemble the path yourself. The three shapes
-  it returns (so you recognise a wrong one):
-  - **bank / issuer pool → `Assets:Rewards:<bank.beancountName>`** — a currency
-    the issuer mints (Amex MR, every Axis EDGE / EDGE Miles / Burgundy tier, all
-    HDFC Reward Points variants, ICICI/Kotak/HSBC points, …). There is exactly
-    ONE wallet per issuer and the COMMODITY TICKER says which tier/variant it is.
-    NEVER split an issuer's points into a per-programme `:Points:`/`:Miles:`
-    account — e.g. Amex Membership Rewards is `Assets:Rewards:Amex` (ticker `MR`),
-    **never** `Assets:Rewards:Points:MembershipRewards`. The card's own pool
-    (from `card_guide`) uses this same `Assets:Rewards:<bank>` — they MUST match.
-  - airline FFP → `Assets:Rewards:Miles:<beancountName>`
-  - standalone hotel / airline-alliance / other programme →
-    `Assets:Rewards:Points:<beancountName>` (Avios, Marriott Bonvoy, Hyatt — NOT
-    issued by a bank).
+  for every loyalty currency; do NOT assemble the path yourself. Every reward
+  account has ONE shape — `Assets:Rewards:<X>`, no `:Miles:`/`:Points:`/`:Status:`
+  segment:
+  - **a bank/issuer's own points** → `Assets:Rewards:<bank.beancountName>` (Amex MR
+    → `Assets:Rewards:Amex`; every Axis EDGE / EDGE Miles / Burgundy tier →
+    `Assets:Rewards:Axis`; all HDFC Reward Points variants → `Assets:Rewards:HDFC`).
+    ONE wallet per issuer — the COMMODITY TICKER says which tier. The card's own
+    pool (from `card_guide`) uses this same account — they MUST match.
+  - **any standalone programme** → `Assets:Rewards:<beancountName>` (`Assets:Rewards:Krisflyer`,
+    `Assets:Rewards:MarriottBonvoy`, `Assets:Rewards:Avios`).
+  A programme's **status / tier-qualifying counters** are just OTHER commodities in
+  that SAME `Assets:Rewards:<X>` account (e.g. `Assets:Rewards:MarriottBonvoy` holds
+  both the spendable points and the nights/stays counters, each its own ticker).
   `ticker` is the commodity (use it for the point amounts — `MR`, `AXIS-EDGE`,
-  `HDFC-RP-INFINIA`, `KRISFLYER`). Below, `<RewardsAcct>` stands for that account.
+  `KRISFLYER`). Below, `<RewardsAcct>` stands for that account.
 
 Prefer an account that already exists in the user's ledger if it clearly matches;
 otherwise use these canonical KG names. Only fall back to a best-guess segment
@@ -160,16 +159,16 @@ and tier/status points is two accrual pairs:
 
 ```beancount
 2026-08-06 * "Skyline Air" "SA 100 — earned miles + status"
-  Assets:Rewards:Miles:Skyline          557 SKYMILES
+  Assets:Rewards:Skyline          557 SKYMILES
   Equity:Void                          -557 SKYMILES
-  Assets:Rewards:Status:Skyline         418 SKYLINE-STATUS
+  Assets:Rewards:Skyline         418 SKYLINE-STATUS
   Equity:Void                          -418 SKYLINE-STATUS
 ```
 
 WRONG — flipping a `+557` earn into a redemption and inventing a fare:
 ```beancount
   Expenses:Travel:Flights        10000.00 INR              ; ✗ no fare on this statement
-  Assets:Rewards:Miles:Skyline       -557 SKYMILES @@ 10000.00 INR  ; ✗ earn, not a spend; price made up
+  Assets:Rewards:Skyline       -557 SKYMILES @@ 10000.00 INR  ; ✗ earn, not a spend; price made up
 ```
 
 A `−N` row is a REDEMPTION — see the Redemption rule (carry the real cash value
@@ -545,7 +544,7 @@ the two numbers. `<SrcAcct>` / `SRC_PTS` is the programme account you
 transfer from, `<DestAcct>` / `DST_PTS` the one you transfer to. Replace
 both with the real programme accounts and KG tickers (e.g.
 `Assets:Rewards:Axis`/`AXIS-RP` →
-`Assets:Rewards:Points:Marriott`/`MARRIOTTBONVOY`); never emit
+`Assets:Rewards:Marriott`/`MARRIOTTBONVOY`); never emit
 `SRC_PTS`/`DST_PTS` literally in output.
 
 ### Instant landing (points show up in the destination right away)
@@ -736,24 +735,24 @@ A single stay crediting all three (synthetic "Acme Rewards", spendable ticker
 
 ```beancount
 2026-03-14 * "Acme Downtown" "Stay — 2 nights"
-  Assets:Rewards:Points:Acme:Pending  500 ACMEREWARDS
+  Assets:Rewards:Acme:Pending  500 ACMEREWARDS
   Equity:Void  -500 ACMEREWARDS
-  Assets:Rewards:Status:Acme  500 ACME-STATUS
+  Assets:Rewards:Acme  500 ACME-STATUS
   Equity:Void  -500 ACME-STATUS
-  Assets:Rewards:Status:Acme  2 ACME-NIGHTS
+  Assets:Rewards:Acme  2 ACME-NIGHTS
   Equity:Void  -2 ACME-NIGHTS
 ```
 
 Spendable points follow the usual earn → `:Pending` path (they land later, when
 an earned-this-cycle total is known). Status points and nights are AUXILIARY —
-straight to `Assets:Rewards:Status:Acme`, each its own commodity, `Equity:Void`
+straight to `Assets:Rewards:Acme`, each its own commodity, `Equity:Void`
 contra, no `:Pending`, no `@@`, no cash value. A row that fills only one column
 (e.g. a "bonus status nights" promo: `+30` nights, points blank) is just that
 one accrual leg plus its contra — two postings:
 
 ```beancount
 2026-03-14 * "Acme Rewards" "Bonus status nights — promo"
-  Assets:Rewards:Status:Acme  30 ACME-NIGHTS
+  Assets:Rewards:Acme  30 ACME-NIGHTS
   Equity:Void  -30 ACME-NIGHTS
 ```
 

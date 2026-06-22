@@ -553,9 +553,9 @@ export class ConciergeDO
               } | null
               const ticker = typeof n?.attrs?.ticker === 'string' ? n.attrs.ticker : null
               reward_label = n?.display_name ?? prettySlug(curSlug)
-              // Friendly display unit — NOT the raw commodity ticker. Airline FFP
-              // currency slugs end in `-miles`; everything else is points.
-              reward_unit = /-miles$/.test(curSlug) ? 'miles' : 'pts'
+              // Friendly display unit — neutral "pts" for every reward currency
+              // (no airline-vs-other guessing; the label already names it).
+              reward_unit = 'pts'
               if (ticker) {
                 // Match the ACTUAL ledger reward accounts by COMMODITY — the same
                 // balances the Vault programmes list reads. No path
@@ -614,9 +614,10 @@ export class ConciergeDO
 
   // Programme commodity → the tier-qualifying status-counter commodities that
   // QUALIFIES_TOWARD it (resolved from the KG). Lets the vault attach a
-  // programme's status counters to its tile by COMMODITY, even when the ledger
-  // account leaves differ (e.g. points under AllRewards, counters under
-  // AllAccor). The tile join then matches Assets:Rewards:Status:* rows on these.
+  // programme's status counters to its tile BY COMMODITY — counters now live as
+  // their own tickers inside the programme's `Assets:Rewards:<X>` account (and in
+  // legacy ledgers, a separate `Assets:Rewards:Status:*` account); commodity
+  // matching is robust to either.
   async statusLinks(): Promise<{ links: Record<string, string[]> }> {
     const ledger = this.ledgerStub()
     const balances = await ledger
@@ -625,7 +626,8 @@ export class ConciergeDO
     const rows = (balances?.rows ?? []) as Array<{ account: string; currency: string }>
     const progCommodities = new Set<string>()
     for (const r of rows)
-      if (/^Assets:Rewards:(Miles|Points):/.test(r.account)) progCommodities.add(r.currency)
+      if (/^Assets:Rewards:/.test(r.account) && !/^Assets:Rewards:Status:/.test(r.account))
+        progCommodities.add(r.currency)
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const links: Record<string, string[]> = {}
     await Promise.all(
@@ -674,7 +676,8 @@ export class ConciergeDO
     const rows = (balances?.rows ?? []) as Array<{ account: string; currency: string }>
     const progCommodities = new Set<string>()
     for (const r of rows)
-      if (/^Assets:Rewards:(Miles|Points):/.test(r.account)) progCommodities.add(r.currency)
+      if (/^Assets:Rewards:/.test(r.account) && !/^Assets:Rewards:Status:/.test(r.account))
+        progCommodities.add(r.currency)
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const kinds: Record<string, 'airline' | 'hotel' | 'aggregator'> = {}
     await Promise.all(

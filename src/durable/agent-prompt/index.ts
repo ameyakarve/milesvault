@@ -73,7 +73,7 @@ matching rows with their \`txn_id\` — read the full entry with \`get_entry\` (
 name: a programme's rows live in its ACCOUNT, not its text (its spends carry the
 MERCHANT — a hotel, a flight — never the programme name).
 
-✓  search({ accounts: { prefix: ["Assets:Rewards:Points:Skyline"] }, sign: "credit" })
+✓  search({ accounts: { prefix: ["Assets:Rewards:Skyline"] }, sign: "credit" })
 
 Once a \`search\` returns the rows you need, STOP searching and act — read with
 \`get_entry\` and draft. Never tell the user you can't see their data or ask them

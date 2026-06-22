@@ -85,7 +85,7 @@ export const Default: StoryObj = {
           trend={{ currency: 'INR', months: c.months }}
           meta={{
             reward_label: c.reward.label,
-            reward_account: 'Assets:Rewards:Points:Demo',
+            reward_account: 'Assets:Rewards:Demo',
             reward_balance: c.reward.balance,
             reward_pending: c.reward.pending,
             reward_unit: c.reward.unit,

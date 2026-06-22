@@ -224,16 +224,13 @@ export async function listCards(
 
 // Every reward programme / loyalty currency in the KG, with its EXACT canonical
 // Beancount account and ticker — the closed set the editor picks from instead of
-// assembling account paths itself (gemma drops the `:Miles:`/`:Points:` segment
-// when handed only a beancountName + a prose convention). Three account kinds,
-// matching the owner convention (agent-prompt/examples.md) AND the card path
-// (fetchCardGuide.pool.account):
+// assembling account paths itself. ONE account shape, no Miles/Points split, no
+// guessing — the commodity ticker is the unique identifier:
 //   - bank/issuer pool (currency --ISSUED_BY--> bank in the graph) →
-//     `Assets:Rewards:<bank.beancountName>`. ONE wallet per issuer; the commodity
-//     ticker carries the tier/variant, so all of Axis EDGE / EDGE Miles /
-//     Burgundy share `Assets:Rewards:Axis`.
-//   - airline FFP (slug ends `-miles`) → `Assets:Rewards:Miles:<beancountName>`
-//   - any other standalone programme → `Assets:Rewards:Points:<beancountName>`
+//     `Assets:Rewards:<bank.beancountName>`. ONE wallet per issuer; all of Axis
+//     EDGE / EDGE Miles / Burgundy share `Assets:Rewards:Axis` (ticker = tier).
+//   - any standalone programme → `Assets:Rewards:<currency.beancountName>`
+//     (e.g. `Assets:Rewards:Krisflyer`, `Assets:Rewards:MarriottBonvoy`).
 export type RewardAccount = { slug: string; name: string; account: string; ticker: string }
 
 export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
@@ -276,10 +273,9 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
           const bn = typeof a.beancountName === 'string' ? a.beancountName : null
           const ticker = typeof a.ticker === 'string' ? a.ticker : null
           if (!bn || !ticker) return null
-          const bankBn = issuerBn.get(slug)
-          const account = bankBn
-            ? `Assets:Rewards:${bankBn}`
-            : `Assets:Rewards:${slug.endsWith('-miles') ? 'Miles' : 'Points'}:${bn}`
+          // ONE shape: bank pools use the issuer beancountName, standalone
+          // programmes use their own. No Miles/Points segment, no slug guess.
+          const account = `Assets:Rewards:${issuerBn.get(slug) ?? bn}`
           return { slug, name: n?.display_name ?? bn, account, ticker }
         } catch {
           return null
@@ -352,7 +348,7 @@ export async function resolveCardAccount(kb: KbHttp, slug: string): Promise<stri
 export function rewardAccountsTool(kb: KbHttp) {
   return tool({
     description:
-      'List every reward programme / loyalty currency in the knowledge graph with its EXACT canonical Beancount account and commodity ticker (each item is shaped { name, account, ticker }). Accounts come in three shapes already resolved for you: a bank/issuer pool like "Assets:Rewards:<Bank>" (ALL of an issuer\'s own points/miles tiers share this one wallet — the ticker says which), an airline "Assets:Rewards:Miles:<Programme>", or a standalone "Assets:Rewards:Points:<Programme>". Call this ONCE before drafting any miles/points entry — earn, transfer, redemption, or balance — then copy the `account` and `ticker` for the matching programme VERBATIM. Do NOT assemble reward account paths yourself, do NOT re-bucket an issuer pool into a per-programme :Points:/:Miles: account, and do NOT invent a ticker. If the programme is not in the list, ask the user rather than guessing an account.',
+      'List every reward programme / loyalty currency in the knowledge graph with its EXACT canonical Beancount account and commodity ticker (each item is shaped { name, account, ticker }). Every account has ONE shape — `Assets:Rewards:<X>`: for a bank/issuer\'s own points it is `Assets:Rewards:<Bank>` (ALL of that issuer\'s tiers share the one wallet — the ticker says which), and for a standalone programme it is `Assets:Rewards:<Programme>` (e.g. `Assets:Rewards:Krisflyer`). There is NO :Miles:/:Points: segment. Call this ONCE before drafting any miles/points entry — earn, transfer, redemption, or balance — then copy the `account` and `ticker` for the matching programme VERBATIM. Do NOT assemble reward account paths yourself and do NOT invent a ticker. If the programme is not in the list, ask the user rather than guessing an account.',
     inputSchema: z.object({}),
     execute: async () => ({ items: await listRewardAccounts(kb) }),
   })

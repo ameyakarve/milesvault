@@ -111,9 +111,9 @@ tool, don't deliberate in prose, don't narrate.
 
   ```
   ✓  one ADD op — text only, no replaces:
-       2026-06-15 pad Assets:Rewards:Points:Skyline Equity:Void
-       2026-06-15 balance Assets:Rewards:Points:Skyline  50000 SKY
-  ✗  replaces: "2026-06-15 balance Assets:Rewards:Points:Skyline  <current> SKY"
+       2026-06-15 pad Assets:Rewards:Skyline Equity:Void
+       2026-06-15 balance Assets:Rewards:Skyline  50000 SKY
+  ✗  replaces: "2026-06-15 balance Assets:Rewards:Skyline  <current> SKY"
        — no such directive exists, so the whole batch fails to match and is rejected.
   ```
 

@@ -89,7 +89,7 @@ export function AccountOverviewView() {
   // and spends; a points programme earns and redeems. Hooks live ABOVE every
   // early return — `account` is null on the first render.
   const isCard = !!account?.startsWith('Liabilities:CreditCards:')
-  const isPoints = !!account?.startsWith('Assets:Rewards:Points:')
+  const isPoints = !!account?.startsWith('Assets:Rewards:') // any reward pool (bank or programme)
   const kpiLabels = isCard
     ? { bal: 'Owed', inflow: 'Payments', outflow: 'Spend' }
     : isPoints

@@ -63,10 +63,10 @@ tests:
       seed: |
         2026-01-03 * "Grand Coastal Hotel" "Stay paid with points"
           Expenses:Travel:Hotels             9487 INR
-          Assets:Rewards:Miles:Skyline     -18000 SKYMILES @@ 9487 INR
+          Assets:Rewards:Skyline     -18000 SKYMILES @@ 9487 INR
 
         2026-02-10 * "Skyline" "Bonus points"
-          Assets:Rewards:Miles:Skyline       2000 SKYMILES
+          Assets:Rewards:Skyline       2000 SKYMILES
           Equity:Void                       -2000 SKYMILES
       message: 'check my skyline txns from this year -- tell me which of these are redemptions'
     assert:
@@ -213,7 +213,7 @@ tests:
     vars:
       seed: |
         2026-02-10 * "Skyline" "Bonus points"
-          Assets:Rewards:Miles:Skyline      2000 SKYMILES
+          Assets:Rewards:Skyline      2000 SKYMILES
           Equity:Void                      -2000 SKYMILES
       message: 'set my Skyline reward points balance to 163316'
     assert:
@@ -225,7 +225,7 @@ tests:
         metric: pad-and-balance
       - type: llm-rubric
         value: >
-          The draft is a fresh pad + balance pair on Assets:Rewards:Miles:Skyline
+          The draft is a fresh pad + balance pair on Assets:Rewards:Skyline
           asserting 163316 SKYMILES, plugging from Equity:Void, dated today. It is an
           ADD (no `replaces`) — it did NOT fabricate a `replaces` for a balance
           directive that does not exist.
@@ -235,7 +235,7 @@ tests:
     vars:
       seed: |
         2026-01-01 * "Skyline" "Opening points"
-          Assets:Rewards:Miles:Skyline       50000 SKYMILES
+          Assets:Rewards:Skyline       50000 SKYMILES
           Equity:Void                       -50000 SKYMILES
 
         2026-06-10 * "Corner Store" "Household"
@@ -263,7 +263,7 @@ tests:
     vars:
       seed: |
         2026-01-01 * "Skyline" "Opening miles"
-          Assets:Rewards:Miles:Skyline      50000 SKYMILES
+          Assets:Rewards:Skyline      50000 SKYMILES
           Equity:Void                      -50000 SKYMILES
       message: |
         add this from my Skyline statement:
@@ -293,15 +293,15 @@ tests:
     vars:
       seed: |
         2025-01-01 * "Horizon" "Opening miles"
-          Assets:Rewards:Miles:Horizon      100000 HORIZON
+          Assets:Rewards:Horizon      100000 HORIZON
           Equity:Void                      -100000 HORIZON
 
         2025-03-10 * "Partner Bank" "Earn"
-          Assets:Rewards:Miles:Skyline      8000 SKYMILES
+          Assets:Rewards:Skyline      8000 SKYMILES
           Equity:Void                      -8000 SKYMILES
 
         2025-05-20 * "Partner Bank" "Earn"
-          Assets:Rewards:Miles:Skyline      4000 SKYMILES
+          Assets:Rewards:Skyline      4000 SKYMILES
           Equity:Void                      -4000 SKYMILES
       message: 'the Skyline accruals coming from Partner Bank are actually transferred from my Horizon miles, it used to transfer 5:4. fix them'
     assert:
@@ -331,7 +331,7 @@ tests:
     vars:
       seed: |
         2026-01-01 * "Skyline" "Opening miles"
-          Assets:Rewards:Miles:Skyline      50000 SKYMILES
+          Assets:Rewards:Skyline      50000 SKYMILES
           Equity:Void                      -50000 SKYMILES
       message: |
         add these from my Skyline loyalty statement:
@@ -376,7 +376,7 @@ tests:
     vars:
       seed: |
         2026-01-01 * "Skyline" "Opening miles"
-          Assets:Rewards:Miles:Skyline      50000 SKYMILES
+          Assets:Rewards:Skyline      50000 SKYMILES
           Equity:Void                      -50000 SKYMILES
       message: |
         add this row from my Skyline loyalty statement (I already paid for the ticket):
@@ -389,7 +389,7 @@ tests:
         value: 'output.drafts.length > 0 && output.clarifies.length === 0'
         metric: drafts-no-clarify
       - type: javascript
-        value: "output.drafts.some(d => /Assets:Rewards:Miles:Skyline(:Pending)?\\s+557\\s+SKYMILES/.test(d.text)) && !output.drafts.some(d => /Assets:Rewards:Miles:Skyline(:Pending)?\\s+-/.test(d.text))"
+        value: "output.drafts.some(d => /Assets:Rewards:Skyline(:Pending)?\\s+557\\s+SKYMILES/.test(d.text)) && !output.drafts.some(d => /Assets:Rewards:Skyline(:Pending)?\\s+-/.test(d.text))"
         metric: miles-earned-positive
       - type: javascript
         value: "!output.drafts.some(d => /SKYMILES\\s+@@/.test(d.text))"
@@ -398,7 +398,7 @@ tests:
         value: "!output.drafts.some(d => /Expenses/.test(d.text))"
         metric: no-fabricated-fare
       - type: javascript
-        value: "output.drafts.some(d => /Assets:Rewards:Status:Skyline\\s+418\\s+[A-Z][A-Z-]*STATUS/.test(d.text))"
+        value: "output.drafts.some(d => /Assets:Rewards:Skyline\\s+418\\s+[A-Z][A-Z-]*STATUS/.test(d.text))"
         metric: status-counter-accrues
       - type: llm-rubric
         value: >
@@ -416,7 +416,7 @@ tests:
     vars:
       seed: |
         2026-01-01 * "Skyline" "Opening miles"
-          Assets:Rewards:Miles:Skyline      50000 SKYMILES
+          Assets:Rewards:Skyline      50000 SKYMILES
           Equity:Void                      -50000 SKYMILES
       message: |
         add all of these from my Skyline loyalty statement (I already paid for the tickets in cash):
@@ -440,7 +440,7 @@ tests:
         value: "!output.drafts.some(d => /SKYMILES\\s+@@/.test(d.text))"
         metric: no-price-on-earns
       - type: javascript
-        value: "!output.drafts.some(d => /Assets:Rewards:Miles:Skyline(:Pending)?\\s+-/.test(d.text))"
+        value: "!output.drafts.some(d => /Assets:Rewards:Skyline(:Pending)?\\s+-/.test(d.text))"
         metric: earns-stay-positive
       - type: javascript
         value: "output.drafts.some(d => /9204\\s+SKYMILES/.test(d.text))"
@@ -464,7 +464,7 @@ tests:
     vars:
       seed: |
         2026-01-02 * "Skybank" "Welcome points"
-          Assets:Rewards:Points:Skybank:Pending   100 SKYBANKPTS
+          Assets:Rewards:Skybank:Pending   100 SKYBANKPTS
           Equity:Void                            -100 SKYBANKPTS
 
         2026-01-03 * "Corner Store" "Setup"
@@ -604,7 +604,7 @@ tests:
     vars:
       seed: |
         2026-01-02 * "Skybank" "Earned this cycle"
-          Assets:Rewards:Points:Skybank:Pending   1850 SKYBANKPTS
+          Assets:Rewards:Skybank:Pending   1850 SKYBANKPTS
           Equity:Void                            -1850 SKYBANKPTS
       message: 'my Skybank statement posted 1850 points to my balance this cycle'
     assert:
@@ -612,14 +612,14 @@ tests:
         value: 'output.draftsValid === true'
         metric: balances
       - type: javascript
-        value: "output.drafts.some(d => /Assets:Rewards:Points:Skybank\\s+1850\\s+SKYBANKPTS/.test(d.text) && /:Pending\\s+-1850\\s+SKYBANKPTS/.test(d.text))"
+        value: "output.drafts.some(d => /Assets:Rewards:Skybank\\s+1850\\s+SKYBANKPTS/.test(d.text) && /:Pending\\s+-1850\\s+SKYBANKPTS/.test(d.text))"
         metric: pending-to-parent
       - type: javascript
         value: "!output.drafts.some(d => /1850\\s+SKYBANKPTS/.test(d.text) && d.text.includes('Equity:Void'))"
         metric: no-void-on-landing
       - type: llm-rubric
         value: >
-          A landing: +1850 SKYBANKPTS to the parent Assets:Rewards:Points:Skybank and
+          A landing: +1850 SKYBANKPTS to the parent Assets:Rewards:Skybank and
           -1850 SKYBANKPTS from :Pending — same ticker, NO Equity:Void, NO @@ price.
 
   # ---- RULE: bonus/promo points accrue (to :Pending + Equity:Void) ----
@@ -627,7 +627,7 @@ tests:
     vars:
       seed: |
         2026-01-02 * "Skybank" "Welcome points"
-          Assets:Rewards:Points:Skybank:Pending   100 SKYBANKPTS
+          Assets:Rewards:Skybank:Pending   100 SKYBANKPTS
           Equity:Void                            -100 SKYBANKPTS
       message: 'I got 5000 bonus Skybank points from a promo (not tied to any purchase)'
     assert:
@@ -650,11 +650,11 @@ tests:
     vars:
       seed: |
         2026-01-02 * "Skybank" "Opening"
-          Assets:Rewards:Points:Skybank      20000 SKYBANKPTS
+          Assets:Rewards:Skybank      20000 SKYBANKPTS
           Equity:Void                       -20000 SKYBANKPTS
 
         2026-01-02 * "Skyline" "Opening"
-          Assets:Rewards:Miles:Skyline        1000 SKYMILES
+          Assets:Rewards:Skyline        1000 SKYMILES
           Equity:Void                        -1000 SKYMILES
       message: 'transfer 10000 Skybank points to my Skyline miles — it transfers 2:1 (2 Skybank to 1 Skyline)'
     assert:
@@ -665,7 +665,7 @@ tests:
         value: "output.drafts.some(d => /@@/.test(d.text) && /10000\\s+SKYBANKPTS/.test(d.text) && /5000\\s+SKYMILES/.test(d.text))"
         metric: priced-conversion
       - type: javascript
-        value: "output.drafts.some(d => /Assets:Rewards:Miles:Skyline\\s+5000\\s+SKYMILES/.test(d.text)) && !output.drafts.some(d => d.text.includes('Equity:Void'))"
+        value: "output.drafts.some(d => /Assets:Rewards:Skyline\\s+5000\\s+SKYMILES/.test(d.text)) && !output.drafts.some(d => d.text.includes('Equity:Void'))"
         metric: dest-credited-no-void
       - type: llm-rubric
         value: >
