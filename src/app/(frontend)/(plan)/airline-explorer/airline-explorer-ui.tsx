@@ -230,8 +230,8 @@ function buildFlow(
       source: e.from,
       target: e.to,
       animated: on,
-      markerEnd: { type: MarkerType.ArrowClosed, color, width: 11, height: 11 },
-      ...(mutual ? { markerStart: { type: MarkerType.ArrowClosed, color, width: 11, height: 11 } } : {}),
+      markerEnd: { type: MarkerType.ArrowClosed, color, width: 6, height: 6 },
+      ...(mutual ? { markerStart: { type: MarkerType.ArrowClosed, color, width: 6, height: 6 } } : {}),
       style: {
         stroke: color,
         strokeWidth: on ? 1.8 : mutual ? 1.1 : 0.7,
