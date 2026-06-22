@@ -78,11 +78,14 @@ export async function uploadImageToLinear(
 }
 
 function buildDescription(fb: FeedbackForIssue, assetUrl: string | null): string {
+  // NOTE: no `---` divider — an image line directly above `---` is parsed as a
+  // Setext H2 heading and Linear drops the image. Keep the screenshot isolated
+  // by blank lines and separate metadata with a bold header instead.
   return [
     fb.message,
+    ...(assetUrl ? ['', `![screenshot](${assetUrl})`] : []),
     '',
-    assetUrl ? `![screenshot](${assetUrl})` : null,
-    '---',
+    '**Feedback details**',
     `**From:** ${fb.email}`,
     fb.page_url ? `**Page:** ${fb.page_url}` : null,
     `**When:** ${new Date(fb.created_at).toISOString()}`,
