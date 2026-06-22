@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -13,7 +13,6 @@ import {
   MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import ELK from 'elkjs/lib/elk.bundled.js'
 import { Check, ChevronsUpDown, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -108,50 +107,53 @@ function buildClusters(data: AirlineExplorerResult, hidden: Set<GroupKey>): Clus
   })
 }
 
-// Pack the cluster boxes into the viewport aspect with ELK rectpacking, so the
-// whole map fills the screen instead of leaving half of it blank. Falls back to
-// a simple shelf pack if ELK can't run.
-// Instantiate ELK lazily (client-only) — `new ELK()` spawns a Web Worker and
-// 500s during SSR if done at module load.
-let _elk: InstanceType<typeof ELK> | null = null
-const getElk = () => (_elk ??= new ELK())
-async function packClusters(
-  clusters: Cluster[],
-  aspect: number,
-): Promise<Record<string, { x: number; y: number }>> {
-  if (!clusters.length) return {}
-  try {
-    const res = await getElk().layout({
-      id: 'root',
-      layoutOptions: {
-        'elk.algorithm': 'org.eclipse.elk.rectpacking',
-        'elk.aspectRatio': String(Math.max(0.5, aspect)),
-        'elk.spacing.nodeNode': String(GGAP),
-      },
-      children: clusters.map((c) => ({ id: c.key, width: c.w, height: c.h })),
-    })
-    const out: Record<string, { x: number; y: number }> = {}
-    for (const ch of res.children ?? []) out[ch.id] = { x: ch.x ?? 0, y: ch.y ?? 0 }
-    return out
-  } catch {
-    // shelf-pack fallback
-    const targetW = Math.sqrt(clusters.reduce((s, c) => s + c.w * c.h, 0) * Math.max(0.5, aspect))
-    const out: Record<string, { x: number; y: number }> = {}
-    let x = 0
-    let y = 0
-    let shelfH = 0
-    for (const c of clusters) {
-      if (x > 0 && x + c.w > targetW) {
-        x = 0
-        y += shelfH + GGAP
-        shelfH = 0
-      }
-      out[c.key] = { x, y }
-      x += c.w + GGAP
-      shelfH = Math.max(shelfH, c.h)
-    }
-    return out
+// Deliberate CORNERS + CENTER layout: the four alliance blocks sit in the four
+// corners and the three single-airline hubs (Emirates/Etihad/LATAM) stack down
+// the middle — so the alliances wrap AROUND the solo hubs rather than sitting in
+// a row. Deterministic (no ELK), so it runs synchronously and fills the canvas.
+const CORNER: Partial<Record<GroupKey, 'TL' | 'TR' | 'BL' | 'BR'>> = {
+  star: 'TL',
+  oneworld: 'TR',
+  skyteam: 'BL',
+  none: 'BR',
+}
+const CENTER_ORDER: GroupKey[] = ['emirates', 'etihad', 'latam']
+
+function layoutClusters(clusters: Cluster[]): Record<string, { x: number; y: number }> {
+  const byKey = new Map(clusters.map((c) => [c.key, c]))
+  const g = (k: GroupKey) => byKey.get(k)
+  const tl = g('star')
+  const tr = g('oneworld')
+  const bl = g('skyteam')
+  const br = g('none')
+  const center = CENTER_ORDER.map(g).filter(Boolean) as Cluster[]
+
+  const leftW = Math.max(tl?.w ?? 0, bl?.w ?? 0)
+  const rightW = Math.max(tr?.w ?? 0, br?.w ?? 0)
+  const centerW = center.reduce((m, c) => Math.max(m, c.w), 0)
+  const topH = Math.max(tl?.h ?? 0, tr?.h ?? 0)
+  const botH = Math.max(bl?.h ?? 0, br?.h ?? 0)
+
+  const centerX = leftW > 0 ? leftW + GGAP : 0
+  const rightX = centerX + (centerW > 0 ? centerW + GGAP : 0)
+
+  const cornerH = topH + (botH > 0 ? GGAP + botH : 0)
+  const centerStackH =
+    center.reduce((s, c) => s + c.h, 0) + Math.max(0, center.length - 1) * GGAP
+  const totalH = Math.max(cornerH, centerStackH)
+
+  const pos: Record<string, { x: number; y: number }> = {}
+  if (tl) pos[tl.key] = { x: 0, y: 0 }
+  if (tr) pos[tr.key] = { x: rightX, y: 0 }
+  if (bl) pos[bl.key] = { x: 0, y: totalH - bl.h }
+  if (br) pos[br.key] = { x: rightX, y: totalH - br.h }
+  // center column, vertically centered against the corner grid
+  let cy = (totalH - centerStackH) / 2
+  for (const c of center) {
+    pos[c.key] = { x: centerX + (centerW - c.w) / 2, y: cy }
+    cy += c.h + GGAP
   }
+  return pos
 }
 
 type AirlineNodeData = { airline: ExplorerAirline; focused: boolean; dimmed: boolean }
@@ -294,38 +296,12 @@ export function AirlineExplorer({
   const [hidden, setHidden] = useState<Set<GroupKey>>(new Set())
   const [focus, setFocus] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [aspect, setAspect] = useState(1.8)
-  const [pos, setPos] = useState<Record<string, { x: number; y: number }>>({})
-  const flowRef = useRef<HTMLDivElement>(null)
-
-  // measure the viewport aspect so the cluster packing fills the screen
-  useEffect(() => {
-    const el = flowRef.current
-    if (!el) return
-    const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect()
-      if (r.width > 0 && r.height > 0) setAspect(r.width / r.height)
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
 
   const clusters = useMemo(() => (data ? buildClusters(data, hidden) : []), [data, hidden])
 
-  // pack clusters with ELK whenever the set or the viewport aspect changes
-  useEffect(() => {
-    let cancelled = false
-    packClusters(clusters, aspect).then((p) => {
-      if (!cancelled) setPos(p)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [clusters, aspect])
-
   const { nodes, edges } = useMemo(
-    () => (data ? buildFlow(data, clusters, pos, focus) : { nodes: [], edges: [] }),
-    [data, clusters, pos, focus],
+    () => (data ? buildFlow(data, clusters, layoutClusters(clusters), focus) : { nodes: [], edges: [] }),
+    [data, clusters, focus],
   )
 
   const toggle = (k: GroupKey) =>
@@ -428,7 +404,7 @@ export function AirlineExplorer({
         ) : null}
       </PlanToolbar>
 
-      <div ref={flowRef} className="relative min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         {status === 'loading' ? (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> Building the map…
