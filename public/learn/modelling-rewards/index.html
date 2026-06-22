@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
-  <title>Lab 4 · Cards, points &amp; miles · MilesVault</title>
+  <title>Lab 6 · Under the hood: cards, points &amp; miles · MilesVault</title>
   <link rel="icon" href="../assets/logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -169,7 +169,7 @@
   <google-codelab codelab-gaid=""
                   codelab-ga4id=""
                   id="modelling-rewards"
-                  title="Lab 4 · Cards, points &amp; miles"
+                  title="Lab 6 · Under the hood: cards, points &amp; miles"
                   environment="web"
                   feedback-link="https://milesvault.com">
     
@@ -189,7 +189,7 @@
       </google-codelab-step>
     
       <google-codelab-step label="A purchase that earns points" duration="4">
-        <p>In Lab 2 a purchase was two lines. A purchase that earns rewards is <strong>four</strong>. Type this and <strong>Save</strong> (the <code>;</code> notes explain each line — beancount ignores them):</p>
+        <p>In Lab 4 a purchase was two lines. A purchase that earns rewards is <strong>four</strong>. Type this and <strong>Save</strong> (the <code>;</code> notes explain each line — beancount ignores them):</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-05 * &#34;Amazon&#34; &#34;Headphones&#34;
   Expenses:Shopping:Electronics               3000.00 INR      ; the cost, by category
   Liabilities:CreditCards:HDFC:Infinia:7788  -3000.00 INR      ; added to what you owe
@@ -201,7 +201,7 @@
 <li><strong>Lines 1–2</strong> are the purchase you already know: ₹3,000 expense, ₹3,000 added to what the card owes.</li>
 <li><strong>Lines 3–4</strong> are the reward: <strong>100 points</strong> land in a <code>:Pending</code> bucket, balanced against <strong><code>Equity:Void</code></strong>.</li>
 </ul>
-<aside class="special"><p><strong>Why </strong><strong><code>Equity:Void</code></strong><strong> again?</strong> Points aren&#39;t moved <em>from</em> anywhere real — the bank conjures them. <code>Equity:Void</code> is the counterweight that lets the points line balance to zero, the same plug you met in Lab 3.</p>
+<aside class="special"><p><strong>Why </strong><strong><code>Equity:Void</code></strong><strong> again?</strong> Points aren&#39;t moved <em>from</em> anywhere real — the bank conjures them. <code>Equity:Void</code> is the counterweight that lets the points line balance to zero, the same plug you met in Lab 5.</p>
 </aside>
 <p>Notice the entry balances <strong>per currency</strong>, independently: INR nets to zero (3000 − 3000), and HDFC-RP nets to zero (100 − 100). MilesVault checks each currency separately.</p>
 <aside class="warning"><p><strong>Points never go on the expense line.</strong> An expense must be in a real currency (INR, USD...). <code>Expenses:Shopping 100 HDFC-RP</code> is rejected. Money is the cost; points are a separate, parallel reward.</p>
@@ -290,8 +290,8 @@
 <li><strong>Forex</strong> fees and <strong>cashback</strong> credits</li>
 <li>And you&#39;ve seen the <strong>AI draft the exact same shape</strong></li>
 </ul>
-<p>In <strong>Lab 5 · Redemptions, transfers &amp; status</strong> you&#39;ll <em>spend</em> points: redeem miles for an award flight, transfer points between programmes at a ratio, and track progress toward elite status — then watch your ledger light up the <strong>Award Explorer</strong>, <strong>Points</strong>, and <strong>Status Match</strong> tools.</p>
-<p><a href="../redemptions-and-tools/" target="_blank"><paper-button class="colored" raised>Start Lab 5 · Redemptions, transfers &amp; status →</paper-button></a></p>
+<p>In <strong>Lab 7 · Redemptions, transfers &amp; status</strong> you&#39;ll <em>spend</em> points: redeem miles for an award flight, transfer points between programmes at a ratio, and track progress toward elite status — then watch your ledger light up the <strong>Award Explorer</strong>, <strong>Points</strong>, and <strong>Status Match</strong> tools.</p>
+<p><a href="../redemptions-and-tools/" target="_blank"><paper-button class="colored" raised>Start Lab 7 · Redemptions, transfers &amp; status →</paper-button></a></p>
 <aside class="special"><p>You now model rewards the way MilesVault does. Time to put those points to work. 🙌</p>
 </aside>
 

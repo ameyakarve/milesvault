@@ -10,7 +10,7 @@ TMPL="$ROOT/_tmpl/milesvault.html"
 OUT="$ROOT/../public/learn"
 
 # Order matters: this is the series order shown on the landing page.
-LABS=(getting-started ledger-foundations opening-balances modelling-rewards redemptions-and-tools capture-at-scale)
+LABS=(getting-started log-transactions put-points-to-work ledger-foundations opening-balances modelling-rewards redemptions-and-tools)
 
 echo "→ building ${#LABS[@]} codelabs into $OUT"
 rm -rf "$OUT"

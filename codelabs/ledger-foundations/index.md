@@ -6,7 +6,7 @@ environments: Web
 status: Published
 feedback link: https://milesvault.com
 
-# Lab 2 · Ledger foundations: accounts & your first transaction
+# Lab 4 · Under the hood: accounts & your first transaction
 
 ## What you'll learn
 Duration: 2:00
@@ -132,7 +132,7 @@ You've written beancount by hand. Here's the payoff: the AI writes the *same* th
 
 > aside positive
 > 
-> Notice the AI may add **two extra lines** for the reward points the card earned. That's the four-posting purchase shape — we cover it fully in **Lab 4**. For now, see that the *expense* and *card* legs are exactly what you wrote: the AI didn't do anything you can't read.
+> Notice the AI may add **two extra lines** for the reward points the card earned. That's the four-posting purchase shape — we cover it fully in **Lab 6**. For now, see that the *expense* and *card* legs are exactly what you wrote: the AI didn't do anything you can't read.
 
 This is the whole point: the AI is fast, but you can verify every draft because you understand what it's producing.
 
@@ -161,10 +161,10 @@ You just:
 - **Recorded** a transaction by hand, saw it balance, and watched a bad one get rejected
 - Confirmed the **AI produces the same beancount** — so you can trust and check it
 
-In **Lab 3 · Opening balances** you'll assert what a card *actually* owes today, watch a wrong assertion get rejected, and use `pad` to set an opening balance — by hand, then with the **Update balance** tool.
+In **Lab 5 · Opening balances** you'll assert what a card *actually* owes today, watch a wrong assertion get rejected, and use `pad` to set an opening balance — by hand, then with the **Update balance** tool.
 
 <button>
-<a href="../opening-balances/">Start Lab 3 · Opening balances →</a>
+<a href="../opening-balances/">Start Lab 5 · Opening balances →</a>
 </button>
 
 > aside positive

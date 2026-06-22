@@ -6,7 +6,7 @@ environments: Web
 status: Published
 feedback link: https://milesvault.com
 
-# Lab 4 · Cards, points & miles
+# Lab 6 · Under the hood: cards, points & miles
 
 ## What you'll learn
 Duration: 2:00
@@ -27,7 +27,7 @@ You'll write:
 ## A purchase that earns points
 Duration: 4:00
 
-In Lab 2 a purchase was two lines. A purchase that earns rewards is **four**. Type this and **Save** (the `;` notes explain each line — beancount ignores them):
+In Lab 4 a purchase was two lines. A purchase that earns rewards is **four**. Type this and **Save** (the `;` notes explain each line — beancount ignores them):
 
 ```beancount
 2026-06-05 * "Amazon" "Headphones"
@@ -44,7 +44,7 @@ Read it as two pairs:
 
 > aside positive
 > 
-> **Why `Equity:Void` again?** Points aren't moved *from* anywhere real — the bank conjures them. `Equity:Void` is the counterweight that lets the points line balance to zero, the same plug you met in Lab 3.
+> **Why `Equity:Void` again?** Points aren't moved *from* anywhere real — the bank conjures them. `Equity:Void` is the counterweight that lets the points line balance to zero, the same plug you met in Lab 5.
 
 Notice the entry balances **per currency**, independently: INR nets to zero (3000 − 3000), and HDFC-RP nets to zero (100 − 100). MilesVault checks each currency separately.
 
@@ -157,10 +157,10 @@ You can now model rewards like the app itself:
 - **Forex** fees and **cashback** credits
 - And you've seen the **AI draft the exact same shape**
 
-In **Lab 5 · Redemptions, transfers & status** you'll *spend* points: redeem miles for an award flight, transfer points between programmes at a ratio, and track progress toward elite status — then watch your ledger light up the **Award Explorer**, **Points**, and **Status Match** tools.
+In **Lab 7 · Redemptions, transfers & status** you'll *spend* points: redeem miles for an award flight, transfer points between programmes at a ratio, and track progress toward elite status — then watch your ledger light up the **Award Explorer**, **Points**, and **Status Match** tools.
 
 <button>
-<a href="../redemptions-and-tools/">Start Lab 5 · Redemptions, transfers & status →</a>
+<a href="../redemptions-and-tools/">Start Lab 7 · Redemptions, transfers & status →</a>
 </button>
 
 > aside positive

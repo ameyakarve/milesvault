@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
-  <title>Lab 3 · Opening balances: pad &amp; balance · MilesVault</title>
+  <title>Lab 5 · Under the hood: opening balances (pad &amp; balance) · MilesVault</title>
   <link rel="icon" href="../assets/logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -169,12 +169,12 @@
   <google-codelab codelab-gaid=""
                   codelab-ga4id=""
                   id="opening-balances"
-                  title="Lab 3 · Opening balances: pad &amp; balance"
+                  title="Lab 5 · Under the hood: opening balances (pad &amp; balance)"
                   environment="web"
                   feedback-link="https://milesvault.com">
     
       <google-codelab-step label="What you&#39;ll learn" duration="2">
-        <p>Your accounts exist (Lab 2), but beancount assumes they start at <strong>zero</strong>. A real credit card you&#39;ve held for years already owes money; an airline account already has miles. This lab is about telling the ledger the <strong>truth as of today</strong> — and doing it safely.</p>
+        <p>Your accounts exist (Lab 4), but beancount assumes they start at <strong>zero</strong>. A real credit card you&#39;ve held for years already owes money; an airline account already has miles. This lab is about telling the ledger the <strong>truth as of today</strong> — and doing it safely.</p>
 <p>You&#39;ll learn two new directives by writing them yourself:</p>
 <ul>
 <li><strong><code>balance</code></strong> — assert what an account <em>should</em> hold on a date (a checkpoint)</li>
@@ -187,7 +187,7 @@
       </google-codelab-step>
     
       <google-codelab-step label="A balance assertion is a checkpoint" duration="3">
-        <p>A <strong><code>balance</code></strong> line asserts what an account should hold at the <strong>start</strong> of a given date. If you followed Lab 2, your card shows −500 INR from the coffee purchase on 2026-06-02. Let&#39;s assert that.</p>
+        <p>A <strong><code>balance</code></strong> line asserts what an account should hold at the <strong>start</strong> of a given date. If you followed Lab 4, your card shows −500 INR from the coffee purchase on 2026-06-02. Let&#39;s assert that.</p>
 <p>Type this into the Journal and <strong>Save</strong>:</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-03 balance Liabilities:CreditCards:HDFC:Infinia:7788  -500.00 INR   ; what it should hold today
 </code></pre>
@@ -267,8 +267,8 @@
 <li>Use <strong><code>pad</code></strong> + <strong><code>balance</code></strong> to set an opening balance with no history</li>
 <li>Recognise that the <strong>Update balance</strong> tool writes the very same pair</li>
 </ul>
-<p>In <strong>Lab 4 · Cards, points &amp; miles</strong> you&#39;ll model the thing MilesVault is really about: the <strong>reward points and miles</strong> a card earns — as their own currency — including the four-line purchase shape and the &#34;pending then posted&#34; life of a point.</p>
-<p><a href="../modelling-rewards/" target="_blank"><paper-button class="colored" raised>Start Lab 4 · Cards, points &amp; miles →</paper-button></a></p>
+<p>In <strong>Lab 6 · Cards, points &amp; miles</strong> you&#39;ll model the thing MilesVault is really about: the <strong>reward points and miles</strong> a card earns — as their own currency — including the four-line purchase shape and the &#34;pending then posted&#34; life of a point.</p>
+<p><a href="../modelling-rewards/" target="_blank"><paper-button class="colored" raised>Start Lab 6 · Cards, points &amp; miles →</paper-button></a></p>
 <aside class="special"><p>Two directives down. From here on, it&#39;s all about <strong>points</strong>. 🙌</p>
 </aside>
 

@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
-  <title>Lab 6 · Capture at scale · MilesVault</title>
+  <title>Lab 2 · Log a few transactions · MilesVault</title>
   <link rel="icon" href="../assets/logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -168,106 +168,93 @@
   <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
   <google-codelab codelab-gaid=""
                   codelab-ga4id=""
-                  id="capture-at-scale"
-                  title="Lab 6 · Capture at scale"
+                  id="log-transactions"
+                  title="Lab 2 · Log a few transactions"
                   environment="web"
                   feedback-link="https://milesvault.com">
     
-      <google-codelab-step label="What you&#39;ll learn" duration="2">
-        <p>You&#39;ve earned this lab. After hand-writing accounts, balances, purchases, points and redemptions, you can <strong>read and verify any entry</strong>. That&#39;s the skill that lets you safely hand the heavy lifting to MilesVault.</p>
-<p>This lab is about <strong>volume, not typing</strong>. You&#39;ll use the three ways to capture transactions in bulk:</p>
+      <google-codelab-step label="What you&#39;ll do" duration="1">
+        <p>MilesVault is most fun once it has your real points and miles in it. This lab gets you there the <strong>easy way</strong> — everything here is clicking and chatting, <strong>no beancount at all</strong> (that comes later, only if you want it).</p>
+<p>In a few minutes you&#39;ll:</p>
 <ul>
-<li><strong>Upload a statement</strong> (a whole month at once)</li>
-<li><strong>Forward your bank emails</strong> (hands-off, ongoing)</li>
-<li><strong>Chat</strong> (everyday one-offs)</li>
+<li>Add a card and a loyalty programme</li>
+<li>Give a programme its current balance</li>
+<li>Log a purchase and an award redemption <strong>just by typing in plain English</strong></li>
 </ul>
-<p>...and review each result like the expert you now are.</p>
-<aside class="special"><p>The difference between you and a brand-new user: when a draft looks wrong, <strong>you&#39;ll know.</strong> That&#39;s the whole point of Labs 2–5.</p>
+<p>By the end your vault has real data — and the next lab turns that into the good stuff: award searches, transfer paths, status.</p>
+<aside class="special"><p>Everything below uses <strong>made-up example values</strong> — follow along with these, then do it for real with your own cards afterwards.</p>
 </aside>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="Upload a statement" duration="3">
-        <p>The fastest way to bring in a month of activity.</p>
-<ol type="1">
-<li>Open <a href="https://milesvault.com/statements" target="_blank"><strong>Statements</strong></a> in the left menu.</li>
-<li>Click <strong>Upload statement</strong>.</li>
-<li>Drop in your PDF, or click <strong>Browse...</strong>.</li>
+      <google-codelab-step label="Add a card and a programme" duration="3">
+        <ol type="1">
+<li>On <a href="https://milesvault.com/vault" target="_blank"><strong>Home</strong></a>, click <strong>+ Card</strong>.</li>
+<li>Search for a card you hold — e.g. <em>HDFC Infinia</em> — and <strong>Save</strong>.</li>
+<li>Click <strong>+ Programme</strong>, search for one — e.g. <em>KrisFlyer</em> — and <strong>Save</strong>.</li>
 </ol>
-<p>MilesVault reads it and <strong>drafts everything in the background</strong> — you don&#39;t wait. When it&#39;s ready, you review and approve the drafts from the <strong>Statements</strong> page.</p>
-<aside class="special"><p>You can also <strong>drag a PDF anywhere</strong> in the app to start an upload.</p>
-</aside>
-<aside class="warning"><p>If the PDF is <strong>password-protected</strong>, you&#39;ll be asked for the password. It&#39;s unlocked <strong>in your browser</strong> and never stored — only the text inside is sent for drafting.</p>
+<p>You&#39;ll see them appear on your vault under <strong>Credit cards</strong> and <strong>Programmes</strong>, balances empty for now.</p>
+<aside class="special"><p>This is the same as the <strong>Add accounts</strong> chip inside the Journal chat — use whichever you find first.</p>
 </aside>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="Forward your bank emails" duration="3">
-        <p>The most hands-off option: let your bank&#39;s transaction-alert emails update your vault automatically.</p>
+      <google-codelab-step label="Give your programme a balance" duration="2">
+        <p>Your KrisFlyer tile shows zero — let&#39;s tell it what you actually have.</p>
 <ol type="1">
-<li>Open <a href="https://milesvault.com/inbox" target="_blank"><strong>Inbox</strong></a> in the left menu.</li>
-<li>Copy your personal address, shown as <em>&#34;Forward transaction emails to </em><code>ingest+...@milesvault.com</code><em>&#34;</em>.</li>
-<li>In Gmail (or your mail app), create a <strong>forwarding rule</strong> that sends those bank alerts to that address.</li>
+<li>Open the <a href="https://milesvault.com/editor" target="_blank"><strong>Journal</strong></a> and click the <strong>Update balance</strong> chip (the scales icon).</li>
+<li>Pick <strong>Assets:Rewards:Miles:KrisFlyer</strong>, enter <strong>20000</strong>, currency <strong>KRISFLYER</strong>, and today&#39;s date.</li>
+<li>Confirm.</li>
 </ol>
-<p>From then on, new transactions <strong>draft themselves</strong> in your Inbox — you just review and approve.</p>
-<aside class="warning"><p>Keep this address private — anyone who has it could send things into your inbox. If it ever leaks, hit <strong>Rotate</strong> on the Inbox page to get a fresh one (and update your forwarding rule).</p>
+<p>Head back to <strong>Home</strong> — KrisFlyer now shows <strong>20,000 miles</strong>. (Behind the scenes it wrote a tidy ledger entry; you&#39;ll learn exactly what in the &#34;Under the hood&#34; labs.)</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Log a purchase — just type it" duration="3">
+        <ol type="1">
+<li>In the <a href="https://milesvault.com/editor" target="_blank"><strong>Journal</strong></a> chat, type in plain words:</li>
+</ol>
+<p><em>Spent 4,000 on a flight booking on my HDFC Infinia</em></p>
+<ol type="1" start="2">
+<li>The assistant drafts a <strong>Proposed transaction</strong> — the spend <em>and</em> the reward points the card earned.</li>
+<li>Glance at it and click <strong>Approve</strong>.</li>
+</ol>
+<p>That&#39;s it — your card&#39;s outstanding balance and its reward points both update on <strong>Home</strong>.</p>
+<aside class="special"><p>You don&#39;t tell it the earn rate — MilesVault knows your card&#39;s rules and fills the points in. You just confirm.</p>
 </aside>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="Chat for everyday one-offs" duration="2">
-        <p>For the odd purchase that isn&#39;t on a statement yet — a cash-style entry, a quick correction — just use the <strong>Journal</strong> chat, as you did in earlier labs:</p>
-<p><em>Paid 1,200 for petrol on my Axis Magnus</em></p>
-<p>The assistant drafts it; you approve. Between statements, forwarding, and chat, you&#39;ll rarely type raw beancount again — though you always <em>can</em>.</p>
-<aside class="special"><p>Three inputs, one ledger: <strong>statements</strong> for bulk, <strong>forwarding</strong> for ongoing, <strong>chat</strong> for one-offs. Pick whatever&#39;s handy in the moment.</p>
+      <google-codelab-step label="Log an award redemption" duration="2">
+        <p>Let&#39;s spend some of those miles. In the chat, type:</p>
+<p><em>Booked a Singapore Airlines award flight for 7,125 KrisFlyer miles, worth about ₹15,000</em></p>
+<p>Approve the draft. Your KrisFlyer balance drops to <strong>12,875</strong>, and the trip shows up in your travel spending at its cash value.</p>
+<aside class="special"><p>Notice how natural this is — describe what happened, review, approve. That&#39;s 90% of using MilesVault day to day.</p>
 </aside>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="Review like an expert" duration="3">
-        <p>This is where your training matters. Every draft — from a statement, an email, or the chat — is a <strong>proposal you approve</strong>, never an automatic write. Before you tap Approve, give it the eye you&#39;ve trained:</p>
-<ul>
-<li>Does the <strong>expense category</strong> make sense, or did a merchant get miscategorised?</li>
-<li>Are the <strong>reward points</strong> there, in the right pending bucket?</li>
-<li>Does it <strong>balance</strong> (it won&#39;t let you save otherwise — but check the figures match the statement)?</li>
-<li>For forex or cashback, is the <strong>fee or credit</strong> split out correctly?</li>
-</ul>
-<p>If something&#39;s off, fix it inline before approving, or reject it and nudge the assistant.</p>
-<aside class="special"><p>A brand-new user clicks Approve on faith. <strong>You</strong> click Approve because you checked. That&#39;s a different relationship with your own money.</p>
-</aside>
+      <google-codelab-step label="Bring in a whole month (optional)" duration="1">
+        <p>For real life, you won&#39;t type every line. Drop in a statement and MilesVault drafts the lot:</p>
+<ol type="1">
+<li>Open <a href="https://milesvault.com/statements" target="_blank"><strong>Statements</strong></a> → <strong>Upload statement</strong> → drop a PDF.</li>
+<li>It drafts in the background; review and approve from the Statements page.</li>
+</ol>
+<p>Or set a <strong>forwarding rule</strong> so your bank&#39;s transaction emails draft themselves (see <a href="https://milesvault.com/inbox" target="_blank"><strong>Inbox</strong></a>).</p>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="Read your vault" duration="2">
-        <p>With everything captured, your <a href="https://milesvault.com/vault" target="_blank"><strong>Home</strong></a> tells the story at a glance:</p>
-<ul>
-<li><strong>Outstanding</strong> — what you owe across all cards</li>
-<li><strong>Spent · this month</strong> — where the money went</li>
-<li><strong>Credit cards</strong> — balances, monthly spend, and reward points (with pending)</li>
-<li><strong>Programmes</strong> — miles and points balances, and status progress</li>
-<li><a href="https://milesvault.com/accounts" target="_blank"><strong>Expenses</strong></a> — open this for a drill-down of any category over time, and which card earns most where</li>
-</ul>
-<aside class="special"><p>Click any card or programme tile to jump into its journal entries — the same beancount you now read fluently.</p>
-</aside>
-
-
-      </google-codelab-step>
-    
-      <google-codelab-step label="You&#39;re done — congratulations" duration="1">
-        <p>Across six labs you went from never having seen a ledger to:</p>
-<ul>
-<li>Reading and writing <strong>beancount</strong> by hand — accounts, balances, transactions</li>
-<li>Modelling <strong>points, miles, redemptions, transfers and status</strong></li>
-<li>Letting the <strong>AI and bulk capture</strong> do the work — while you review with real understanding</li>
-</ul>
-<p>That&#39;s the MilesVault way: <strong>the AI is fast, but you&#39;re in control</strong>, because you understand every line of your own ledger.</p>
-<p><a href="https://milesvault.com/vault" target="_blank"><paper-button class="colored" raised>Open MilesVault</paper-button></a></p>
-<aside class="special"><p>Now go make those points work. And drop into the <strong>#general</strong> channel or the <strong>9pm IST voice channel</strong> on Discord any day to talk strategy. 🙌</p>
+      <google-codelab-step label="What&#39;s next" duration="1">
+        <p>Your vault now has a card, a programme, real balances, a purchase and a redemption. Time for the payoff.</p>
+<p>In <strong>Lab 3 · Put your points to work</strong> you&#39;ll use that data: find award flights you can afford, map transfer routes to any programme, and check status-match options.</p>
+<p><a href="../put-points-to-work/" target="_blank"><paper-button class="colored" raised>Start Lab 3 · Put your points to work →</paper-button></a></p>
+<aside class="special"><p>Want to know <em>exactly</em> what the AI wrote into your ledger? That&#39;s the &#34;Under the hood&#34; labs (4 onward) — but you never have to read them to use MilesVault. 🙌</p>
 </aside>
 
 

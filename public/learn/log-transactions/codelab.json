@@ -3,12 +3,12 @@
   "format": "/Users/vandanakarve/milesvault/codelabs/_tmpl/milesvault.html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2026-06-22T07:50:12+05:30",
-  "id": "capture-at-scale",
-  "duration": 16,
-  "title": "Lab 6 · Capture at scale",
+  "updated": "2026-06-22T12:25:07+05:30",
+  "id": "log-transactions",
+  "duration": 13,
+  "title": "Lab 2 · Log a few transactions",
   "authors": "Ameya Karve",
-  "summary": "You can read any entry now — so stop typing and let MilesVault do the volume. Upload statements, set up email forwarding, log everyday spend by chat, and review every draft with an expert eye.",
+  "summary": "Get real data into your vault the easy way — add your cards and programmes, set a balance, and log a couple of transactions just by chatting with the AI. No beancount, no manual entry.",
   "source": "index.md",
   "theme": "",
   "status": [
@@ -22,5 +22,5 @@
     "web"
   ],
   "feedback": "https://milesvault.com",
-  "url": "capture-at-scale"
+  "url": "log-transactions"
 }

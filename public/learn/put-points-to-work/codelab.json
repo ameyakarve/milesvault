@@ -3,12 +3,12 @@
   "format": "/Users/vandanakarve/milesvault/codelabs/_tmpl/milesvault.html",
   "prefix": "https://storage.googleapis.com",
   "mainga": "UA-49880327-14",
-  "updated": "2026-06-22T12:26:43+05:30",
-  "id": "getting-started",
-  "duration": 12,
-  "title": "Lab 1 · Getting started: sign in and find your way around",
+  "updated": "2026-06-22T12:25:37+05:30",
+  "id": "put-points-to-work",
+  "duration": 14,
+  "title": "Lab 3 · Put your points to work",
   "authors": "Ameya Karve",
-  "summary": "Meet MilesVault, the operating system for your points and miles. Join the Discord, sign in, and find your way around — the gentle first step before the hands-on ledger labs.",
+  "summary": "The payoff — use the points and miles in your vault to find affordable award flights, map transfer routes to any programme, check status matches, and see where you stand.",
   "source": "index.md",
   "theme": "",
   "status": [
@@ -22,5 +22,5 @@
     "web"
   ],
   "feedback": "https://milesvault.com",
-  "url": "getting-started"
+  "url": "put-points-to-work"
 }

@@ -101,10 +101,10 @@ Duration: 1:00
 
 You're in, and you know your way around. Time for the fun part — understanding the ledger that powers all of this.
 
-In **Lab 2 · Ledger foundations** you'll open your first accounts and record a transaction in plain beancount — typed by you — then watch the AI produce the very same thing. That's the moment MilesVault really clicks.
+In **Lab 2 · Log a few transactions** you'll add your cards and programmes and log a couple of things — just by chatting with the AI. No beancount, no manual entry. That's the moment your vault comes alive.
 
 <button>
-<a href="../ledger-foundations/">Start Lab 2 · Ledger foundations →</a>
+<a href="../log-transactions/">Start Lab 2 · Log a few transactions →</a>
 </button>
 
 > aside positive

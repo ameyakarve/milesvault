@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
-  <title>Lab 7 · Under the hood: redemptions, transfers &amp; status · MilesVault</title>
+  <title>Lab 3 · Put your points to work · MilesVault</title>
   <link rel="icon" href="../assets/logo.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -168,106 +168,90 @@
   <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
   <google-codelab codelab-gaid=""
                   codelab-ga4id=""
-                  id="redemptions-and-tools"
-                  title="Lab 7 · Under the hood: redemptions, transfers &amp; status"
+                  id="put-points-to-work"
+                  title="Lab 3 · Put your points to work"
                   environment="web"
                   feedback-link="https://milesvault.com">
     
-      <google-codelab-step label="What you&#39;ll learn" duration="2">
-        <p>Earning points is only half of it — the payoff is <strong>spending them well</strong>. This lab covers the moves that make miles worth chasing, and connects your ledger to MilesVault&#39;s planning tools.</p>
-<p>You&#39;ll write:</p>
+      <google-codelab-step label="Why this is the whole point" duration="1">
+        <p>You&#39;ve got real balances in your vault now. This is where MilesVault earns its name: it turns &#34;I have some miles somewhere&#34; into &#34;here&#39;s exactly where they can take me, and how to get more.&#34;</p>
+<p>In this lab:</p>
 <ul>
-<li>A <strong>redemption</strong> — spending miles on an award flight</li>
-<li>A <strong>transfer</strong> — moving points between programmes at a ratio</li>
-<li>A <strong>status</strong> entry — tracking progress toward elite tiers</li>
+<li><strong>Award Explorer</strong> — where your miles can fly you, and whether you can afford it</li>
+<li><strong>Paths to Points</strong> — how to reach any programme from your cards</li>
+<li><strong>Status Match</strong> — turn one status into another</li>
+<li>Reading your <strong>vault</strong> and your <strong>spending</strong></li>
 </ul>
-<p>...and then see your ledger drive <strong>Award Explorer</strong>, <strong>Points</strong>, and <strong>Status Match</strong>.</p>
-<aside class="special"><p>New idea this lab: a small <strong><code>@</code></strong> or <strong><code>@@</code></strong> on a line is a <em>price</em> — a conversion rate. It&#39;s how one currency (miles) gets valued in another (rupees, or another programme&#39;s points).</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Award Explorer — where can these miles go?" duration="3">
+        <ol type="1">
+<li>Open <a href="https://milesvault.com/explore" target="_blank"><strong>Award Explorer</strong></a> from the menu.</li>
+<li>Type an origin and destination — e.g. <strong>BLR → NRT</strong> — and pick a cabin (<strong>Economy / Premium / Business / First</strong>).</li>
+<li>You&#39;ll see every programme that flies that route, split into <strong>Direct</strong> and <strong>Connecting</strong>, each with its <strong>points cost</strong> and operating airlines.</li>
+</ol>
+<p>Because you hold KrisFlyer miles, affordable awards get a green <strong>&#34;You have the points&#34;</strong> chip. For the rest, expand a row to see a <strong>transfer path</strong> — how your other points could get you there.</p>
+<aside class="special"><p>Use the <strong>Filters</strong> to set a transfer source, limit stops, or include/exclude airlines. Sort by <strong>Cheapest</strong>, <strong>Fewest stops</strong>, or <strong>Shortest</strong>.</p>
 </aside>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="First, give yourself some miles" duration="2">
-        <p>To redeem, you need miles to spend. Let&#39;s seed a balance using the <code>pad</code>+<code>balance</code> move from Lab 5 — this time on a rewards account. Type and <strong>Save</strong>:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Assets:Rewards:Miles:KrisFlyer KRISFLYER            ; the programme account
-2026-06-01 pad Assets:Rewards:Miles:KrisFlyer Equity:Void           ; fill the gap from the plug
-2026-06-02 balance Assets:Rewards:Miles:KrisFlyer  20000 KRISFLYER  ; miles you hold today
-</code></pre>
-<p>You now hold <strong>20,000 KrisFlyer miles</strong>. (Reward accounts can hold any number of different point types — no special setup needed.)</p>
-<aside class="special"><p>Look how Lab 5 paid off: the same <code>pad</code>+<code>balance</code> pair that set a card&#39;s debt just seeded a miles balance. The building blocks repeat.</p>
+      <google-codelab-step label="Paths to Points — how do I reach a programme?" duration="3">
+        <p>Found an award in a programme you don&#39;t hold? See how to get there.</p>
+<ol type="1">
+<li>Open <a href="https://milesvault.com/points" target="_blank"><strong>Points</strong></a>.</li>
+<li>Choose a target — e.g. <strong>Qantas</strong> or <strong>Avios</strong>.</li>
+<li>You get an interactive map of every <strong>card and currency</strong> that can reach it within a few transfer hops — each edge showing the <strong>ratio</strong> (e.g. ×1.5), and a node showing what it&#39;d cost to simply <strong>buy</strong> the points.</li>
+</ol>
+<p>Toggle <strong>My points</strong> to see only what <em>you</em> hold, or <strong>All points</strong> for the full universe.</p>
+<aside class="special"><p>Cards you actually hold are ringed in green — so the routes you can use <em>right now</em> jump out.</p>
 </aside>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="Redeem miles for an award flight" duration="4">
-        <p>When you book an award flight, the miles leave your balance and pay for the trip — valued at <strong>what the cash fare would have been</strong>. Type and <strong>Save</strong>:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-25 * &#34;Singapore Airlines&#34; &#34;Award flight&#34;
-  Expenses:Travel:Flights         15000.00 INR              ; the trip, valued at its cash fare
-  Assets:Rewards:Miles:KrisFlyer     -7125 KRISFLYER @@ 15000.00 INR  ; 7,125 miles, worth ₹15,000
-</code></pre>
-<p>The <strong><code>@@</code></strong> means <em>total price</em>: those 7,125 miles are worth ₹15,000 here. So the miles line carries a weight of −₹15,000, which balances the ₹15,000 expense — while your KrisFlyer balance drops by 7,125 miles.</p>
-<aside class="special"><p><strong>Why value it at the cash fare?</strong> So your spending reports stay honest — that trip really was worth ₹15,000 of travel, even though you paid in miles. Your &#34;Travel&#34; expenses reflect reality.</p>
-</aside>
+      <google-codelab-step label="Status Match — trade one status for another" duration="2">
+        <ol type="1">
+<li>Open <a href="https://milesvault.com/status-match" target="_blank"><strong>Status Match</strong></a>.</li>
+<li>Pick a status you hold (e.g. <em>United Gold</em>) and, optionally, one you want.</li>
+<li>You&#39;ll see a map of every match path — <strong>solid = free</strong>, <strong>dashed = paid</strong> — colour-coded by alliance, with a count like <em>&#34;4 matches available&#34;</em>.</li>
+</ol>
+<p>If you&#39;ve recorded status tiers in your vault, they&#39;re pre-filled and tagged <strong>&#34;you hold&#34;</strong>.</p>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="Transfer points between programmes" duration="3">
-        <p>Card points often convert into airline or hotel currencies at a ratio. Here, 2,000 card points become 1,000 miles (a 2:1 transfer). Type and <strong>Save</strong>:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-10 * &#34;Transfer&#34; &#34;HDFC points → KrisFlyer, 2:1&#34;
-  Assets:Rewards:HDFC             -2000 HDFC-RP @ 0.5 KRISFLYER  ; each point = 0.5 miles
-  Assets:Rewards:Miles:KrisFlyer   1000 KRISFLYER               ; 2000 × 0.5 = 1000 miles
-</code></pre>
-<p>The <strong><code>@</code></strong> (single) is a <em>per-unit</em> price: each HDFC point is worth 0.5 miles, so 2,000 × 0.5 = 1,000 miles. The miles currency nets to zero; your HDFC pool drops by 2,000.</p>
-<aside class="warning"><p>A price must be in a <strong>different</strong> currency from the line it&#39;s on (miles priced in points, not in miles), and it can&#39;t be zero. <code>2000 HDFC-RP @ 0 KRISFLYER</code> or self-pricing is rejected.</p>
-</aside>
-
-
-      </google-codelab-step>
-    
-      <google-codelab-step label="Track progress toward status" duration="3">
-        <p>Some spend earns points <strong>and</strong> counts toward elite status. A qualifying hotel stay racks up points <em>and</em> status nights — and the nights are their own counter. Type and <strong>Save</strong>:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-12 * &#34;Marriott&#34; &#34;2-night stay — qualifying&#34;
-  Expenses:Travel:Lodging                    18000.00 INR            ; the room cost
-  Liabilities:CreditCards:HDFC:Infinia:7788 -18000.00 INR            ; paid on the card
-  Assets:Rewards:Points:Marriott                 9000 MARRIOTT       ; points earned
-  Equity:Void                                   -9000 MARRIOTT       ; counterweight
-  Assets:Rewards:Status:Marriott                    2 MARRIOTT-NIGHT ; qualifying nights toward status
-  Equity:Void                                      -2 MARRIOTT-NIGHT ; counterweight
-</code></pre>
-<p>Three currencies, each balancing to zero: rupees, Marriott points, and <strong>status nights</strong>. Those nights are what your vault&#39;s programme tile shows as <em>&#34;N nights&#34;</em> progress toward the next tier.</p>
-<aside class="special"><p>Status is just another counter in its own unit. Once it&#39;s in the ledger, MilesVault can show you how close you are to the next tier — and Status Match can suggest shortcuts.</p>
-</aside>
-
-
-      </google-codelab-step>
-    
-      <google-codelab-step label="See your ledger power the tools" duration="2">
-        <p>Everything you typed now feeds the planning tools in the left menu — no extra setup:</p>
+      <google-codelab-step label="Read your vault" duration="2">
+        <p>Back on <a href="https://milesvault.com/vault" target="_blank"><strong>Home</strong></a>, everything&#39;s at a glance — points and miles first:</p>
 <ul>
-<li><a href="https://milesvault.com/explore" target="_blank"><strong>Award Explorer</strong></a> — search a route and cabin. Because you hold 20,000 KrisFlyer miles, affordable awards get a <strong>&#34;You have the points&#34;</strong> flag; others show how a transfer gets you there.</li>
-<li><a href="https://milesvault.com/points" target="_blank"><strong>Points</strong></a> — pick a target programme and see every route from your cards, at what ratio (the same transfers you just wrote, mapped out).</li>
-<li><a href="https://milesvault.com/status-match" target="_blank"><strong>Status Match</strong></a> — your Marriott progress and any tiers you hold are recognised, with paths to match them elsewhere.</li>
+<li><strong>Programmes</strong> — miles/points balances, what&#39;s still <strong>pending</strong>, progress toward elite status</li>
+<li><strong>Credit cards</strong> — what each card is earning you, plus its balance and monthly spend</li>
+<li><strong>Outstanding</strong> and <strong>Spent · this month</strong> — the money context behind it all</li>
 </ul>
-<aside class="special"><p>This is the reward for going beancount-first: the tools aren&#39;t magic, they&#39;re <strong>reading the ledger you understand</strong>. Garbage in, garbage out — and now you know how to keep it clean.</p>
-</aside>
+<p>Click any tile to drill into its history.</p>
 
 
       </google-codelab-step>
     
-      <google-codelab-step label="Recap — you&#39;ve gone the whole way" duration="1">
-        <p>You can now put points to work in raw beancount:</p>
-<ul>
-<li><strong>Redeem</strong> miles with <code>@@</code>, valued at the cash fare</li>
-<li><strong>Transfer</strong> between programmes with an <code>@</code> ratio</li>
-<li>Track <strong>status</strong> as its own counter</li>
-<li>And you&#39;ve seen <strong>Award Explorer / Points / Status Match</strong> read it all</li>
-</ul>
-<p>That&#39;s the full picture — from signing in, to logging a few transactions, to the planning tools, all the way down to the ledger that powers them. Day to day you&#39;ll live in the chat and the tools; but when you want to read or fix a line yourself, now you can.</p>
-<p><a href="https://milesvault.com/vault" target="_blank"><paper-button class="colored" raised>Open MilesVault</paper-button></a></p>
-<aside class="special"><p>The AI does the work; you stay in control — because now you can read every line. Go make those points fly. 🙌</p>
+      <google-codelab-step label="See where your money goes" duration="2">
+        <ol type="1">
+<li>Open <a href="https://milesvault.com/accounts" target="_blank"><strong>Expenses</strong></a>.</li>
+<li>You get a drillable treemap of your spending — switch between <strong>Expenses / Income / Assets / Liabilities</strong> and time ranges (<strong>1M / 3M / 6M / YTD / All</strong>).</li>
+<li>Click a tile to drill in; at the leaf level you see the actual transactions, with a link to open them in the Journal.</li>
+</ol>
+<p>This is how you spot <strong>which card earns most where</strong>, so your next swipe is the smart one.</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="What&#39;s next" duration="1">
+        <p>That&#39;s the core loop: get points in → see what they&#39;re worth → use them well.</p>
+<p>If you&#39;re curious how MilesVault records all this under the hood — the plain-text ledger that powers every number you just saw — the next labs take you through it, from first principles. Totally optional, genuinely interesting.</p>
+<p><a href="../ledger-foundations/" target="_blank"><paper-button class="colored" raised>Start Lab 4 · Under the hood: the ledger →</paper-button></a></p>
+<aside class="special"><p>You now know the whole product. Everything from here is <em>how it works</em>, for when you want to read or tweak your own ledger. 🙌</p>
 </aside>
 
 

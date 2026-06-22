@@ -6,12 +6,12 @@ environments: Web
 status: Published
 feedback link: https://milesvault.com
 
-# Lab 3 · Opening balances: pad & balance
+# Lab 5 · Under the hood: opening balances (pad & balance)
 
 ## What you'll learn
 Duration: 2:00
 
-Your accounts exist (Lab 2), but beancount assumes they start at **zero**. A real credit card you've held for years already owes money; an airline account already has miles. This lab is about telling the ledger the **truth as of today** — and doing it safely.
+Your accounts exist (Lab 4), but beancount assumes they start at **zero**. A real credit card you've held for years already owes money; an airline account already has miles. This lab is about telling the ledger the **truth as of today** — and doing it safely.
 
 You'll learn two new directives by writing them yourself:
 
@@ -25,7 +25,7 @@ You'll learn two new directives by writing them yourself:
 ## A balance assertion is a checkpoint
 Duration: 3:00
 
-A **`balance`** line asserts what an account should hold at the **start** of a given date. If you followed Lab 2, your card shows −500 INR from the coffee purchase on 2026-06-02. Let's assert that.
+A **`balance`** line asserts what an account should hold at the **start** of a given date. If you followed Lab 4, your card shows −500 INR from the coffee purchase on 2026-06-02. Let's assert that.
 
 Type this into the Journal and **Save**:
 
@@ -125,10 +125,10 @@ You can now:
 - Use **`pad`** + **`balance`** to set an opening balance with no history
 - Recognise that the **Update balance** tool writes the very same pair
 
-In **Lab 4 · Cards, points & miles** you'll model the thing MilesVault is really about: the **reward points and miles** a card earns — as their own currency — including the four-line purchase shape and the "pending then posted" life of a point.
+In **Lab 6 · Cards, points & miles** you'll model the thing MilesVault is really about: the **reward points and miles** a card earns — as their own currency — including the four-line purchase shape and the "pending then posted" life of a point.
 
 <button>
-<a href="../modelling-rewards/">Start Lab 4 · Cards, points & miles →</a>
+<a href="../modelling-rewards/">Start Lab 6 · Cards, points & miles →</a>
 </button>
 
 > aside positive

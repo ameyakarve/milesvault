@@ -6,7 +6,7 @@ environments: Web
 status: Published
 feedback link: https://milesvault.com
 
-# Lab 5 · Redemptions, transfers & status
+# Lab 7 · Under the hood: redemptions, transfers & status
 
 ## What you'll learn
 Duration: 2:00
@@ -28,7 +28,7 @@ You'll write:
 ## First, give yourself some miles
 Duration: 2:00
 
-To redeem, you need miles to spend. Let's seed a balance using the `pad`+`balance` move from Lab 3 — this time on a rewards account. Type and **Save**:
+To redeem, you need miles to spend. Let's seed a balance using the `pad`+`balance` move from Lab 5 — this time on a rewards account. Type and **Save**:
 
 ```beancount
 2026-06-01 open Assets:Rewards:Miles:KrisFlyer KRISFLYER            ; the programme account
@@ -40,7 +40,7 @@ You now hold **20,000 KrisFlyer miles**. (Reward accounts can hold any number of
 
 > aside positive
 > 
-> Look how Lab 3 paid off: the same `pad`+`balance` pair that set a card's debt just seeded a miles balance. The building blocks repeat.
+> Look how Lab 5 paid off: the same `pad`+`balance` pair that set a card's debt just seeded a miles balance. The building blocks repeat.
 
 ## Redeem miles for an award flight
 Duration: 4:00
@@ -110,22 +110,22 @@ Everything you typed now feeds the planning tools in the left menu — no extra 
 > 
 > This is the reward for going beancount-first: the tools aren't magic, they're **reading the ledger you understand**. Garbage in, garbage out — and now you know how to keep it clean.
 
-## Recap & what's next
+## Recap — you've gone the whole way
 Duration: 1:00
 
-You can now put points to work:
+You can now put points to work in raw beancount:
 
 - **Redeem** miles with `@@`, valued at the cash fare
 - **Transfer** between programmes with an `@` ratio
 - Track **status** as its own counter
 - And you've seen **Award Explorer / Points / Status Match** read it all
 
-In **Lab 6 · Capture at scale** you've earned the right to stop typing. Now that you can read any entry, you'll let MilesVault do the volume — uploading statements, forwarding bank emails, and chatting — while you review with an expert eye.
+That's the full picture — from signing in, to logging a few transactions, to the planning tools, all the way down to the ledger that powers them. Day to day you'll live in the chat and the tools; but when you want to read or fix a line yourself, now you can.
 
 <button>
-<a href="../capture-at-scale/">Start Lab 6 · Capture at scale →</a>
+<a href="https://milesvault.com/vault">Open MilesVault</a>
 </button>
 
 > aside positive
 > 
-> You can now earn, value, move, and redeem points in raw beancount. That's genuinely more than most apps will ever show you. 🙌
+> The AI does the work; you stay in control — because now you can read every line. Go make those points fly. 🙌
