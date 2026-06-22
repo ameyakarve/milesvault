@@ -26,16 +26,21 @@ export async function POST(req: Request): Promise<Response> {
   if (session?.user?.email !== OWNER_EMAIL) return new NextResponse('forbidden', { status: 403 })
 
   const body = (await req.json().catch((): null => null)) as
-    | { email?: string; dryRun?: boolean }
+    | { email?: string; id?: string; dryRun?: boolean }
     | null
   const email = body?.email?.trim()
+  const id = body?.id?.trim()
   const dryRun = body?.dryRun !== false // default true — never write unless explicitly false
-  if (!email) return NextResponse.json({ error: 'email required' }, { status: 400 })
+  if (!email && !id) return NextResponse.json({ error: 'email or id required' }, { status: 400 })
 
   const { env } = await getCloudflareContext({ async: true })
   const e = env as Cloudflare.Env
   const kb = kbHttpOverFetch('https://kb', e.KB)
-  const stub = e.LEDGER_DO.get(e.LEDGER_DO.idFromName(email))
+  // Target by raw DO id (idFromString — lets us enumerate every ledger from the
+  // namespace object listing, no email needed) or by email (idFromName).
+  const doId = id ? e.LEDGER_DO.idFromString(id) : e.LEDGER_DO.idFromName(email!)
+  const stub = e.LEDGER_DO.get(doId)
+  const label = email ?? id!
 
   // 1. ticker → canonical account for every loyalty currency (programmes + bank
   //    pools), straight from the KG — the SAME resolver the editor/ingest use.
@@ -131,7 +136,7 @@ export async function POST(req: Request): Promise<Response> {
   const afterBuffer = after.join('\n\n')
 
   const summary = {
-    email,
+    target: label,
     dryRun,
     mapping: Object.fromEntries(oldToNew),
     conflicts,
