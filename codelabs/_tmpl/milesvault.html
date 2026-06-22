@@ -186,6 +186,14 @@
       }
       addCopyButtons();
       setTimeout(addCopyButtons, 800); // catch any late hydration
+
+      // The close (X) and the final Done button default to the site root ("/"),
+      // which bounces signed-in users to /vault. Send them to the Learn home
+      // (../ resolves /learn/<id>/ -> /learn/) instead.
+      document.addEventListener('click', function (e) {
+        var t = e.target.closest && e.target.closest('#done, #arrow-back');
+        if (t) { e.preventDefault(); e.stopPropagation(); window.location.assign('../'); }
+      }, true);
     });
   </script>
 </body>

@@ -343,6 +343,14 @@
       }
       addCopyButtons();
       setTimeout(addCopyButtons, 800); 
+
+      
+      
+      
+      document.addEventListener('click', function (e) {
+        var t = e.target.closest && e.target.closest('#done, #arrow-back');
+        if (t) { e.preventDefault(); e.stopPropagation(); window.location.assign('../'); }
+      }, true);
     });
   </script>
 </body>
