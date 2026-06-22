@@ -26,7 +26,7 @@ export async function POST(req: Request): Promise<Response> {
   if (session?.user?.email !== OWNER_EMAIL) return new NextResponse('forbidden', { status: 403 })
 
   const body = (await req.json().catch((): null => null)) as
-    | { email?: string; id?: string; dryRun?: boolean }
+    | { email?: string; id?: string; dryRun?: boolean; buffer?: string; expectBefore?: string }
     | null
   const email = body?.email?.trim()
   const id = body?.id?.trim()
@@ -41,6 +41,21 @@ export async function POST(req: Request): Promise<Response> {
   const doId = id ? e.LEDGER_DO.idFromString(id) : e.LEDGER_DO.idFromName(email!)
   const stub = e.LEDGER_DO.get(doId)
   const label = email ?? id!
+
+  // RAW-APPLY mode: caller supplies the exact, hand-reviewed full ledger text;
+  // we swap the whole ledger to it via replaceBuffer (re-parse + validate). No
+  // auto-mapping. Verify by reading the ledger back after.
+  const rawBuffer = typeof body?.buffer === 'string' ? body.buffer : null
+  if (rawBuffer != null) {
+    const { rows: cur } = (await stub.listEntries()) as {
+      rows: Array<{ kind: string; id: number; raw_text: string; updated_at: number }>
+    }
+    const result = await stub.replaceBuffer({
+      knownIds: cur.map((r) => ({ kind: r.kind as never, id: r.id, expected_updated_at: r.updated_at })),
+      buffer: rawBuffer,
+    })
+    return NextResponse.json({ target: label, mode: 'raw', applied: 'ok' in result ? result.ok : true, result })
+  }
 
   // 1. ticker → canonical account for every loyalty currency (programmes + bank
   //    pools), straight from the KG — the SAME resolver the editor/ingest use.
