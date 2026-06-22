@@ -101,18 +101,21 @@ points line balances — you can ignore it.
 > **Points are their own "currency."** They're counted in `HDFC-RP` (reward
 > points), not rupees — so they never get mixed up with money.
 
-### 2. A foreign-currency swipe (and its forex fee)
-Spend abroad and the bank converts the amount and adds a markup. MilesVault breaks
-the markup out as its own fee, so you can see exactly what the conversion cost:
+### 2. A foreign-currency swipe (forex)
+Spend abroad and the charge is in the **foreign currency**. Record the real foreign
+amount with `@@` (the total it converted to in INR), and itemise the bank's markup
+and the GST on it as their own lines — never pre-convert the expense to rupees:
 
 ```beancount
-2026-05-29 * "Tokyo Hotel" "2 nights — ¥30,000"
-  Expenses:Travel:Lodging                    16500.00 INR
-  Expenses:Financial:Fees:Forex                577.50 INR   ; 3.5% forex markup
-  Liabilities:CreditCards:HDFC:Infinia      -17077.50 INR
-  Assets:Rewards:HDFC:Pending                  569.00 HDFC-RP
-  Equity:Void                                 -569.00 HDFC-RP
+2026-05-29 * "Tokyo Hotel" "2 nights — ¥30,000 (+₹577.50 markup +₹103.95 GST)"
+  Expenses:Travel:Lodging          30000 JPY @@ 16500.00 INR  ; ¥30,000 → ₹16,500
+  Expenses:Financial:ForexMarkup               577.50 INR     ; the bank's 3.5% markup
+  Expenses:Financial:GST                       103.95 INR     ; 18% GST on the markup
+  Liabilities:CreditCards:HDFC:Infinia      -17181.45 INR     ; total added to the card
 ```
+
+The `@@` keeps the true ¥30,000 face value while giving the line a rupee weight of
+₹16,500 for the balance check (16,500 + 577.50 + 103.95 = 17,181.45 on the card).
 
 ### 3. Paying your card bill
 A payment *reduces* what you owe, so the card line is **positive**:

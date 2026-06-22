@@ -151,7 +151,8 @@
 <ul>
 <li>A <strong>four-posting purchase</strong> that captures the spend <em>and</em> the reward</li>
 <li>The <strong>pending → posted</strong> life of a point</li>
-<li>A <strong>forex</strong> purchase and a <strong>cashback</strong> credit</li>
+<li>A <strong>forex</strong> purchase, with markup &amp; GST</li>
+<li><strong>Cashback</strong> vs a <strong>discount</strong> — why the same ₹50 is recorded two different ways</li>
 </ul>
 <aside class="special"><p><strong>Points are their own currency.</strong> A reward point isn&#39;t a rupee — it&#39;s counted in its own unit (a &#34;ticker&#34; like <code>HDFC-RP</code>). That&#39;s how MilesVault keeps your miles from ever getting mixed up with money.</p>
 </aside>
@@ -195,25 +196,47 @@
 
       </google-codelab-step>
     
-      <google-codelab-step label="Forex and cashback" duration="3">
-        <p>Two everyday variations.</p>
-<p><strong>A foreign-currency swipe</strong> breaks the bank&#39;s markup out as its own fee, so you can see what the conversion cost:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-08 * &#34;Tokyo Hotel&#34; &#34;2 nights&#34;
-  Expenses:Travel:Lodging                    16500.00 INR      ; the room cost
-  Expenses:Financial:Fees:Forex                577.50 INR      ; the 3.5% forex markup
-  Liabilities:CreditCards:HDFC:Infinia:7788 -17077.50 INR      ; total added to the card
-  Assets:Rewards:HDFC:Pending                  569.00 HDFC-RP  ; points on the full amount
-  Equity:Void                                 -569.00 HDFC-RP  ; counterweight
+      <google-codelab-step label="A foreign-currency swipe" duration="3">
+        <p>Spend abroad and the charge is in a <strong>foreign currency</strong> — the bank converts it to rupees, adds a <strong>markup</strong>, and charges <strong>GST</strong> on that markup. Record the <strong>real foreign amount</strong> with <strong><code>@@</code></strong> for what it converted to, and itemise the markup and GST as their own INR lines:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-08 * &#34;Tokyo Hotel&#34; &#34;2 nights — ¥30,000 (+₹577.50 markup +₹103.95 GST)&#34;
+  Expenses:Travel:Lodging          30000 JPY @@ 16500.00 INR  ; ¥30,000, converted to ₹16,500
+  Expenses:Financial:ForexMarkup               577.50 INR     ; the bank&#39;s 3.5% markup
+  Expenses:Financial:GST                       103.95 INR     ; 18% GST on the markup
+  Liabilities:CreditCards:HDFC:Infinia:7788 -17181.45 INR     ; total added to the card
 </code></pre>
-<p><strong>Cashback</strong> is credited separately, so the full price still shows as your expense:</p>
+<p>The <strong><code>@@</code></strong> means <em>total price</em>: the expense keeps its true face value of <strong>¥30,000</strong> but carries a <strong>weight of ₹16,500</strong> for the balance check — so the rupee side nets to zero (16,500 + 577.50 + 103.95 = 17,181.45 on the card) while your ledger remembers you spent yen.</p>
+<aside class="warning"><p><strong>Don&#39;t pre-convert the expense to INR.</strong> Record what you actually paid (<code>30000 JPY</code>) and let <code>@@</code> carry the rupee value — that keeps the real foreign amount <em>and</em> the bank&#39;s exact rate.</p>
+</aside>
+<aside class="special"><p><strong>Rewards on forex:</strong> if the card earns, compute it on the <strong>purchase amount only</strong> (the ₹16,500) — never on the markup or GST — and add the same <code>:Pending</code> + <code>Equity:Void</code> pair from earlier.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Cashback (redeemable later)" duration="2">
+        <p>When cashback is credited <strong>separately</strong> — it lands on a later statement or in a cashback pool you redeem — the <strong>full price</strong> still shows as your expense. The cashback accrues as money owed back to you (four postings):</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-09 * &#34;Swiggy&#34; &#34;Dinner — ₹20 cashback&#34;
   Expenses:Food:Restaurants                  400.00 INR   ; the full bill stays the expense
   Liabilities:CreditCards:HSBC:LivePlus:5096 -400.00 INR ; added to the card
   Assets:Receivable:HSBC                      20.00 INR   ; cashback owed back to you
   Equity:Void                                -20.00 INR   ; counterweight
 </code></pre>
-<p><strong>Save</strong> each. In both, every currency still nets to zero — check it yourself.</p>
-<aside class="special"><p>See the pattern? However complex the swipe, it&#39;s just the same building blocks: an expense, the card, and balanced reward/fee legs.</p>
+<p><strong>Save</strong> it — every currency nets to zero, as always.</p>
+<aside class="special"><p>Keeping cashback off the expense line means your reports stay honest: the dinner really cost ₹400, and the ₹20 is a separate little win you collect later.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="A discount (knocked off at the till)" duration="2">
+        <p>Different story when the saving is applied <strong>right then</strong> — &#34;₹50 off&#34;, &#34;10% instant discount&#34;, &#34;cashback at checkout&#34;. You paid less, so the <strong>expense itself is smaller</strong>. Record the saving as a negative line on the <em>same</em> expense — no receivable, no <code>Equity:Void</code>, just <strong>three lines</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-11 * &#34;Swiggy&#34; &#34;Dinner — ₹50 instant discount&#34;
+  Expenses:Food:Restaurants    500.00 INR   ; the menu price
+  Expenses:Food:Restaurants   -50.00 INR    ; the discount, off the same expense
+  Liabilities:CreditCards:HDFC:Infinia:7788 -450.00 INR  ; what you actually paid
+</code></pre>
+<p>Net expense = <strong>₹450</strong> (what it really cost you), the card paid ₹450, and there&#39;s nothing to collect later.</p>
+<aside class="special"><p><strong>Discount vs cashback — the one test:</strong> did it reduce what you paid <em>right now</em>? → <strong>discount</strong> (shrink the expense, 3 lines). Is it a credit you collect <em>later</em>? → <strong>cashback</strong> (full expense + a receivable, 4 lines). Same ₹50, completely different entry — decide by the economics, not the card&#39;s name.</p>
 </aside>
 
 

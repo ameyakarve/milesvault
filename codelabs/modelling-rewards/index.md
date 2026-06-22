@@ -17,7 +17,8 @@ You'll write:
 
 - A **four-posting purchase** that captures the spend *and* the reward
 - The **pending → posted** life of a point
-- A **forex** purchase and a **cashback** credit
+- A **forex** purchase, with markup & GST
+- **Cashback** vs a **discount** — why the same ₹50 is recorded two different ways
 
 > aside positive
 > 
@@ -70,23 +71,33 @@ The 100 points leave `:Pending` and arrive in the spendable pool. It's a pure mo
 > 
 > This split is why your vault can show **"4,250 pts · 120 pending"** — it always knows what's truly usable versus still in flight. No guessing.
 
-## Forex and cashback
+## A foreign-currency swipe
 Duration: 3:00
 
-Two everyday variations.
-
-**A foreign-currency swipe** breaks the bank's markup out as its own fee, so you can see what the conversion cost:
+Spend abroad and the charge is in a **foreign currency** — the bank converts it to rupees, adds a **markup**, and charges **GST** on that markup. Record the **real foreign amount** with **`@@`** for what it converted to, and itemise the markup and GST as their own INR lines:
 
 ```beancount
-2026-06-08 * "Tokyo Hotel" "2 nights"
-  Expenses:Travel:Lodging                    16500.00 INR      ; the room cost
-  Expenses:Financial:Fees:Forex                577.50 INR      ; the 3.5% forex markup
-  Liabilities:CreditCards:HDFC:Infinia:7788 -17077.50 INR      ; total added to the card
-  Assets:Rewards:HDFC:Pending                  569.00 HDFC-RP  ; points on the full amount
-  Equity:Void                                 -569.00 HDFC-RP  ; counterweight
+2026-06-08 * "Tokyo Hotel" "2 nights — ¥30,000 (+₹577.50 markup +₹103.95 GST)"
+  Expenses:Travel:Lodging          30000 JPY @@ 16500.00 INR  ; ¥30,000, converted to ₹16,500
+  Expenses:Financial:ForexMarkup               577.50 INR     ; the bank's 3.5% markup
+  Expenses:Financial:GST                       103.95 INR     ; 18% GST on the markup
+  Liabilities:CreditCards:HDFC:Infinia:7788 -17181.45 INR     ; total added to the card
 ```
 
-**Cashback** is credited separately, so the full price still shows as your expense:
+The **`@@`** means *total price*: the expense keeps its true face value of **¥30,000** but carries a **weight of ₹16,500** for the balance check — so the rupee side nets to zero (16,500 + 577.50 + 103.95 = 17,181.45 on the card) while your ledger remembers you spent yen.
+
+> aside negative
+> 
+> **Don't pre-convert the expense to INR.** Record what you actually paid (`30000 JPY`) and let `@@` carry the rupee value — that keeps the real foreign amount *and* the bank's exact rate.
+
+> aside positive
+> 
+> **Rewards on forex:** if the card earns, compute it on the **purchase amount only** (the ₹16,500) — never on the markup or GST — and add the same `:Pending` + `Equity:Void` pair from earlier.
+
+## Cashback (redeemable later)
+Duration: 2:00
+
+When cashback is credited **separately** — it lands on a later statement or in a cashback pool you redeem — the **full price** still shows as your expense. The cashback accrues as money owed back to you (four postings):
 
 ```beancount
 2026-06-09 * "Swiggy" "Dinner — ₹20 cashback"
@@ -96,11 +107,29 @@ Two everyday variations.
   Equity:Void                                -20.00 INR   ; counterweight
 ```
 
-**Save** each. In both, every currency still nets to zero — check it yourself.
+**Save** it — every currency nets to zero, as always.
 
 > aside positive
 > 
-> See the pattern? However complex the swipe, it's just the same building blocks: an expense, the card, and balanced reward/fee legs.
+> Keeping cashback off the expense line means your reports stay honest: the dinner really cost ₹400, and the ₹20 is a separate little win you collect later.
+
+## A discount (knocked off at the till)
+Duration: 2:00
+
+Different story when the saving is applied **right then** — "₹50 off", "10% instant discount", "cashback at checkout". You paid less, so the **expense itself is smaller**. Record the saving as a negative line on the *same* expense — no receivable, no `Equity:Void`, just **three lines**:
+
+```beancount
+2026-06-11 * "Swiggy" "Dinner — ₹50 instant discount"
+  Expenses:Food:Restaurants    500.00 INR   ; the menu price
+  Expenses:Food:Restaurants   -50.00 INR    ; the discount, off the same expense
+  Liabilities:CreditCards:HDFC:Infinia:7788 -450.00 INR  ; what you actually paid
+```
+
+Net expense = **₹450** (what it really cost you), the card paid ₹450, and there's nothing to collect later.
+
+> aside positive
+> 
+> **Discount vs cashback — the one test:** did it reduce what you paid *right now*? → **discount** (shrink the expense, 3 lines). Is it a credit you collect *later*? → **cashback** (full expense + a receivable, 4 lines). Same ₹50, completely different entry — decide by the economics, not the card's name.
 
 ## Now let the AI do it
 Duration: 3:00
