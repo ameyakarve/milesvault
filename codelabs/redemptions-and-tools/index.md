@@ -31,9 +31,9 @@ Duration: 2:00
 To redeem, you need miles to spend. Let's seed a balance using the `pad`+`balance` move from Lab 3 — this time on a rewards account. Type and **Save**:
 
 ```beancount
-2026-06-01 open Assets:Rewards:Miles:KrisFlyer KRISFLYER
-2026-06-01 pad Assets:Rewards:Miles:KrisFlyer Equity:Void
-2026-06-02 balance Assets:Rewards:Miles:KrisFlyer  20000 KRISFLYER
+2026-06-01 open Assets:Rewards:Miles:KrisFlyer KRISFLYER            ; the programme account
+2026-06-01 pad Assets:Rewards:Miles:KrisFlyer Equity:Void           ; fill the gap from the plug
+2026-06-02 balance Assets:Rewards:Miles:KrisFlyer  20000 KRISFLYER  ; miles you hold today
 ```
 
 You now hold **20,000 KrisFlyer miles**. (Reward accounts can hold any number of different point types — no special setup needed.)
@@ -49,8 +49,8 @@ When you book an award flight, the miles leave your balance and pay for the trip
 
 ```beancount
 2026-06-25 * "Singapore Airlines" "Award flight"
-  Expenses:Travel:Flights               15000.00 INR
-  Assets:Rewards:Miles:KrisFlyer         -7125 KRISFLYER @@ 15000.00 INR
+  Expenses:Travel:Flights         15000.00 INR              ; the trip, valued at its cash fare
+  Assets:Rewards:Miles:KrisFlyer     -7125 KRISFLYER @@ 15000.00 INR  ; 7,125 miles, worth ₹15,000
 ```
 
 The **`@@`** means *total price*: those 7,125 miles are worth ₹15,000 here. So the miles line carries a weight of −₹15,000, which balances the ₹15,000 expense — while your KrisFlyer balance drops by 7,125 miles.
@@ -66,8 +66,8 @@ Card points often convert into airline or hotel currencies at a ratio. Here, 2,0
 
 ```beancount
 2026-06-10 * "Transfer" "HDFC points → KrisFlyer, 2:1"
-  Assets:Rewards:HDFC              -2000 HDFC-RP @ 0.5 KRISFLYER
-  Assets:Rewards:Miles:KrisFlyer    1000 KRISFLYER
+  Assets:Rewards:HDFC             -2000 HDFC-RP @ 0.5 KRISFLYER  ; each point = 0.5 miles
+  Assets:Rewards:Miles:KrisFlyer   1000 KRISFLYER               ; 2000 × 0.5 = 1000 miles
 ```
 
 The **`@`** (single) is a *per-unit* price: each HDFC point is worth 0.5 miles, so 2,000 × 0.5 = 1,000 miles. The miles currency nets to zero; your HDFC pool drops by 2,000.
@@ -83,12 +83,12 @@ Some spend earns points **and** counts toward elite status. A qualifying hotel s
 
 ```beancount
 2026-06-12 * "Marriott" "2-night stay — qualifying"
-  Expenses:Travel:Lodging               18000.00 INR
-  Liabilities:CreditCards:HDFC:Infinia -18000.00 INR
-  Assets:Rewards:Points:Marriott          9000 MARRIOTT
-  Equity:Void                            -9000 MARRIOTT
-  Assets:Rewards:Status:Marriott             2 MARRIOTT-NIGHT
-  Equity:Void                               -2 MARRIOTT-NIGHT
+  Expenses:Travel:Lodging                    18000.00 INR            ; the room cost
+  Liabilities:CreditCards:HDFC:Infinia:7788 -18000.00 INR            ; paid on the card
+  Assets:Rewards:Points:Marriott                 9000 MARRIOTT       ; points earned
+  Equity:Void                                   -9000 MARRIOTT       ; counterweight
+  Assets:Rewards:Status:Marriott                    2 MARRIOTT-NIGHT ; qualifying nights toward status
+  Equity:Void                                      -2 MARRIOTT-NIGHT ; counterweight
 ```
 
 Three currencies, each balancing to zero: rupees, Marriott points, and **status nights**. Those nights are what your vault's programme tile shows as *"N nights"* progress toward the next tier.

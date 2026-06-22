@@ -113,6 +113,22 @@
     google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside b { color: inherit !important; }
+
+     
+    google-codelab-step pre { position: relative; }
+    .mv-copy {
+      position: absolute; top: 8px; right: 8px;
+      font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1;
+      padding: 5px 10px; border-radius: 6px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.12); color: #e7e7e3;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      opacity: 0; transition: opacity 0.15s, background 0.15s;
+    }
+    google-codelab-step pre:hover .mv-copy,
+    .mv-copy:focus-visible { opacity: 1; }
+    .mv-copy:hover { background: rgba(255, 255, 255, 0.24); }
+    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; opacity: 1; }
+    @media (hover: none) { .mv-copy { opacity: 1; } }
   </style>
 </head>
 <body>
@@ -126,7 +142,7 @@
     
       <google-codelab-step label="What you&#39;ll learn" duration="2">
         <p>MilesVault is an <strong>operating system for your points and miles</strong> — and like any OS, it runs on something underneath. That something is a plain-text <strong>beancount</strong> ledger: the source of truth for every point, mile, and rupee you track. The AI writes it for you, but it&#39;s always yours — you can read and edit every line.</p>
-<p>This first lab makes you fluent in the basics by having you <em>write them yourself</em>:</p>
+<p>This lab makes you fluent in the basics by having you <em>write them yourself</em>:</p>
 <ul>
 <li>The one rule behind double-entry bookkeeping</li>
 <li>The five kinds of accounts</li>
@@ -197,17 +213,17 @@
       </google-codelab-step>
     
       <google-codelab-step label="Open your first accounts" duration="3">
-        <p>Before tracking anything, we declare the accounts we&#39;ll use with the <strong><code>open</code></strong> directive. Type these two lines into the Journal:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Assets:Bank:HDFC:Savings INR
-2026-06-01 open Liabilities:CreditCards:HDFC:Infinia INR
+        <p>Before tracking anything, we declare the accounts we&#39;ll use with the <strong><code>open</code></strong> directive. Type these two lines into the Journal (the text after <code>;</code> is just a comment — beancount ignores it):</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Assets:Bank:HDFC:Savings INR                   ; a bank account you own
+2026-06-01 open Liabilities:CreditCards:HDFC:Infinia:7788 INR  ; a credit card — note the :7788 id
 </code></pre>
 <p>Each line is: a <strong>date</strong>, the word <strong><code>open</code></strong>, the <strong>account path</strong> (general → specific, separated by colons), and the <strong>currency</strong> it holds.</p>
 <p>Now press <strong>Save</strong> (or Cmd-S). The chip should read <strong>Saved</strong>.</p>
 <aside class="warning"><p><strong>Two rules the ledger enforces — get these wrong and the save is rejected:</strong></p>
 <ul>
-<li>A credit-card account must be exactly <code>Liabilities:CreditCards:<Issuer>:<Card></code> — the word is <strong><code>CreditCards</code></strong> (one word), with an issuer and a card name.</li>
+<li>A credit-card account is <code>Liabilities:CreditCards:<Issuer>:<Card>:<Id></code> — issuer, card name, and a short <strong>id</strong> (use the card&#39;s last 4 digits, e.g. <code>:7788</code>). <strong>Always include the id</strong> so two of the same card never collide. The word is <strong><code>CreditCards</code></strong>, one word.</li>
 <li>An <code>open</code> for a bank or card account names <strong>exactly one</strong> currency (here, <code>INR</code>). No currency, or two, is an error.</li>
-<li>Beancount has <strong>no </strong><strong><code>#</code></strong><strong> comment lines</strong> — a <code>#</code> at the start of a line breaks the parse. (Use <code>;</code> for notes <em>inside</em> an entry.)</li>
+<li>Beancount has <strong>no </strong><strong><code>#</code></strong><strong> comment lines</strong> — only inline <code>;</code> comments, as above. A <code>#</code> at the start of a line breaks the parse.</li>
 </ul>
 </aside>
 
@@ -217,13 +233,13 @@
       <google-codelab-step label="Record your first transaction" duration="4">
         <p>Now the real thing. Add this purchase below your <code>open</code> lines:</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-02 * &#34;Blue Tokai&#34; &#34;Morning coffee&#34;
-  Expenses:Food:Coffee                   500.00 INR
-  Liabilities:CreditCards:HDFC:Infinia  -500.00 INR
+  Expenses:Food:Coffee                        500.00 INR   ; where the money went (a category)
+  Liabilities:CreditCards:HDFC:Infinia:7788  -500.00 INR   ; what you now owe (negative)
 </code></pre>
 <p>Reading it top to bottom:</p>
 <ul>
 <li><strong>Date</strong>, then <strong><code>*</code></strong> (a confirmed transaction), then the <strong>payee</strong> (<code>"Blue Tokai"</code>) and a short <strong>note</strong> (<code>"Morning coffee"</code>).</li>
-<li>Two <strong>postings</strong>, indented. Each names an account, an amount, and a currency.</li>
+<li>Two <strong>postings</strong>, indented. Each names an account, an amount, and a currency. The <code>;</code> notes are optional comments.</li>
 <li>The two amounts sum to zero: <code>500 + (−500) = 0</code>. The expense went up by 500; what you owe on the card went up by 500 (shown negative).</li>
 </ul>
 <p>Press <strong>Save</strong>. It&#39;s now in your ledger.</p>
@@ -248,7 +264,7 @@
 <li>The assistant replies with a <strong>Proposed transaction</strong> card — and inside it is beancount you can now <em>read</em>. You&#39;ll recognise the date, payee, the <code>Expenses:Food:Coffee</code> leg and the negative card leg, all balancing to zero.</li>
 <li>Click <strong>Approve</strong> to commit it (or <strong>Reject</strong> since you already logged this one by hand).</li>
 </ol>
-<aside class="special"><p>Notice the AI may add <strong>two extra lines</strong> for the reward points the card earned. That&#39;s the four-posting purchase shape — we cover it fully in <strong>Lab 3</strong>. For now, see that the <em>expense</em> and <em>card</em> legs are exactly what you wrote: the AI didn&#39;t do anything you can&#39;t read.</p>
+<aside class="special"><p>Notice the AI may add <strong>two extra lines</strong> for the reward points the card earned. That&#39;s the four-posting purchase shape — we cover it fully in <strong>Lab 4</strong>. For now, see that the <em>expense</em> and <em>card</em> legs are exactly what you wrote: the AI didn&#39;t do anything you can&#39;t read.</p>
 </aside>
 <p>This is the whole point: the AI is fast, but you can verify every draft because you understand what it&#39;s producing.</p>
 
@@ -262,8 +278,8 @@
 <li>Search for a card (e.g. <em>Axis Magnus</em>, <em>HDFC Infinia</em>) or, on the programmes tab, a loyalty programme (e.g. <em>KrisFlyer</em>, <em>Marriott</em>).</li>
 <li>Select and <strong>Save</strong>.</li>
 </ol>
-<p>Behind the scenes this writes the very same <code>open</code> directive you typed by hand — for a card, <code>... open Liabilities:CreditCards:Axis:Magnus INR</code>; for a programme, <code>... open Assets:Rewards:Points:KrisFlyer ...</code> with the programme&#39;s points ticker.</p>
-<aside class="special"><p>Hand-typing and the modal produce <strong>identical ledger entries</strong>. Use whichever you like — now you know exactly what each one does.</p>
+<p>Behind the scenes this writes the same kind of <code>open</code> directive you typed by hand. Tip: add the card&#39;s <strong>last-4 id</strong> (e.g. <code>:7788</code>) so that if you ever hold two of the same card, your ledger keeps them apart.</p>
+<aside class="special"><p>Hand-typing and the modal produce the <strong>same ledger entries</strong>. Use whichever you like — now you know exactly what each one does.</p>
 </aside>
 
 
@@ -273,7 +289,7 @@
         <p>You just:</p>
 <ul>
 <li>Learned the one rule of double-entry and the five account roots</li>
-<li><strong>Opened</strong> your own accounts in raw beancount and saved them</li>
+<li><strong>Opened</strong> your own accounts in raw beancount (with the <code>:id</code> on the card) and saved them</li>
 <li><strong>Recorded</strong> a transaction by hand, saw it balance, and watched a bad one get rejected</li>
 <li>Confirmed the <strong>AI produces the same beancount</strong> — so you can trust and check it</li>
 </ul>
@@ -291,5 +307,33 @@
   <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
   <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
   <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+
+  <script>
+    
+    window.addEventListener('load', function () {
+      function addCopyButtons() {
+        document.querySelectorAll('google-codelab-step pre').forEach(function (pre) {
+          if (pre.querySelector('.mv-copy')) return;
+          var code = pre.querySelector('code') || pre;
+          var raw = code.innerText.replace(/\s+$/, '');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'mv-copy';
+          btn.textContent = 'Copy';
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            navigator.clipboard.writeText(raw).then(function () {
+              btn.textContent = 'Copied';
+              btn.classList.add('copied');
+              setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+            });
+          });
+          pre.appendChild(btn);
+        });
+      }
+      addCopyButtons();
+      setTimeout(addCopyButtons, 800); 
+    });
+  </script>
 </body>
 </html>

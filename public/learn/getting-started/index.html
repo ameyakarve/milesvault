@@ -113,6 +113,22 @@
     google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside b { color: inherit !important; }
+
+     
+    google-codelab-step pre { position: relative; }
+    .mv-copy {
+      position: absolute; top: 8px; right: 8px;
+      font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1;
+      padding: 5px 10px; border-radius: 6px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.12); color: #e7e7e3;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      opacity: 0; transition: opacity 0.15s, background 0.15s;
+    }
+    google-codelab-step pre:hover .mv-copy,
+    .mv-copy:focus-visible { opacity: 1; }
+    .mv-copy:hover { background: rgba(255, 255, 255, 0.24); }
+    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; opacity: 1; }
+    @media (hover: none) { .mv-copy { opacity: 1; } }
   </style>
 </head>
 <body>
@@ -221,5 +237,33 @@
   <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
   <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
   <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+
+  <script>
+    
+    window.addEventListener('load', function () {
+      function addCopyButtons() {
+        document.querySelectorAll('google-codelab-step pre').forEach(function (pre) {
+          if (pre.querySelector('.mv-copy')) return;
+          var code = pre.querySelector('code') || pre;
+          var raw = code.innerText.replace(/\s+$/, '');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'mv-copy';
+          btn.textContent = 'Copy';
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            navigator.clipboard.writeText(raw).then(function () {
+              btn.textContent = 'Copied';
+              btn.classList.add('copied');
+              setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+            });
+          });
+          pre.appendChild(btn);
+        });
+      }
+      addCopyButtons();
+      setTimeout(addCopyButtons, 800); 
+    });
+  </script>
 </body>
 </html>

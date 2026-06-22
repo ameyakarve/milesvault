@@ -113,6 +113,22 @@
     google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside b { color: inherit !important; }
+
+     
+    google-codelab-step pre { position: relative; }
+    .mv-copy {
+      position: absolute; top: 8px; right: 8px;
+      font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1;
+      padding: 5px 10px; border-radius: 6px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.12); color: #e7e7e3;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      opacity: 0; transition: opacity 0.15s, background 0.15s;
+    }
+    google-codelab-step pre:hover .mv-copy,
+    .mv-copy:focus-visible { opacity: 1; }
+    .mv-copy:hover { background: rgba(255, 255, 255, 0.24); }
+    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; opacity: 1; }
+    @media (hover: none) { .mv-copy { opacity: 1; } }
   </style>
 </head>
 <body>
@@ -139,12 +155,12 @@
       </google-codelab-step>
     
       <google-codelab-step label="A purchase that earns points" duration="4">
-        <p>In Lab 2 a purchase was two lines. A purchase that earns rewards is <strong>four</strong>. Type this and <strong>Save</strong>:</p>
+        <p>In Lab 2 a purchase was two lines. A purchase that earns rewards is <strong>four</strong>. Type this and <strong>Save</strong> (the <code>;</code> notes explain each line — beancount ignores them):</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-05 * &#34;Amazon&#34; &#34;Headphones&#34;
-  Expenses:Shopping:Electronics          3000.00 INR
-  Liabilities:CreditCards:HDFC:Infinia  -3000.00 INR
-  Assets:Rewards:HDFC:Pending             100.00 HDFC-RP
-  Equity:Void                            -100.00 HDFC-RP
+  Expenses:Shopping:Electronics               3000.00 INR      ; the cost, by category
+  Liabilities:CreditCards:HDFC:Infinia:7788  -3000.00 INR      ; added to what you owe
+  Assets:Rewards:HDFC:Pending                   100.00 HDFC-RP ; points earned, not yet credited
+  Equity:Void                                  -100.00 HDFC-RP ; counterweight so the points balance
 </code></pre>
 <p>Read it as two pairs:</p>
 <ul>
@@ -164,8 +180,8 @@
         <p>Points are usually <strong>earned now but credited weeks later</strong>. That&#39;s why they first land in <code>:Pending</code>. When the statement finally posts them, you move them into the real balance.</p>
 <p>Type this and <strong>Save</strong>:</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-20 * &#34;Statement close&#34; &#34;Points posted&#34;
-  Assets:Rewards:HDFC                     100.00 HDFC-RP
-  Assets:Rewards:HDFC:Pending            -100.00 HDFC-RP
+  Assets:Rewards:HDFC          100.00 HDFC-RP   ; arrives in the spendable pool
+  Assets:Rewards:HDFC:Pending -100.00 HDFC-RP   ; leaves the pending bucket
 </code></pre>
 <p>The 100 points leave <code>:Pending</code> and arrive in the spendable pool. It&#39;s a pure move — HDFC-RP nets to zero.</p>
 <aside class="special"><p>This split is why your vault can show <strong>&#34;4,250 pts · 120 pending&#34;</strong> — it always knows what&#39;s truly usable versus still in flight. No guessing.</p>
@@ -178,18 +194,18 @@
         <p>Two everyday variations.</p>
 <p><strong>A foreign-currency swipe</strong> breaks the bank&#39;s markup out as its own fee, so you can see what the conversion cost:</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-08 * &#34;Tokyo Hotel&#34; &#34;2 nights&#34;
-  Expenses:Travel:Lodging               16500.00 INR
-  Expenses:Financial:Fees:Forex           577.50 INR
-  Liabilities:CreditCards:HDFC:Infinia -17077.50 INR
-  Assets:Rewards:HDFC:Pending             569.00 HDFC-RP
-  Equity:Void                            -569.00 HDFC-RP
+  Expenses:Travel:Lodging                    16500.00 INR      ; the room cost
+  Expenses:Financial:Fees:Forex                577.50 INR      ; the 3.5% forex markup
+  Liabilities:CreditCards:HDFC:Infinia:7788 -17077.50 INR      ; total added to the card
+  Assets:Rewards:HDFC:Pending                  569.00 HDFC-RP  ; points on the full amount
+  Equity:Void                                 -569.00 HDFC-RP  ; counterweight
 </code></pre>
 <p><strong>Cashback</strong> is credited separately, so the full price still shows as your expense:</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-09 * &#34;Swiggy&#34; &#34;Dinner — ₹20 cashback&#34;
-  Expenses:Food:Restaurants                400.00 INR
-  Liabilities:CreditCards:HDFC:Infinia    -400.00 INR
-  Assets:Receivable:HDFC                    20.00 INR
-  Equity:Void                              -20.00 INR
+  Expenses:Food:Restaurants                  400.00 INR   ; the full bill stays the expense
+  Liabilities:CreditCards:HSBC:LivePlus:5096 -400.00 INR ; added to the card
+  Assets:Receivable:HSBC                      20.00 INR   ; cashback owed back to you
+  Equity:Void                                -20.00 INR   ; counterweight
 </code></pre>
 <p><strong>Save</strong> each. In both, every currency still nets to zero — check it yourself.</p>
 <aside class="special"><p>See the pattern? However complex the swipe, it&#39;s just the same building blocks: an expense, the card, and balanced reward/fee legs.</p>
@@ -232,5 +248,33 @@
   <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
   <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
   <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+
+  <script>
+    
+    window.addEventListener('load', function () {
+      function addCopyButtons() {
+        document.querySelectorAll('google-codelab-step pre').forEach(function (pre) {
+          if (pre.querySelector('.mv-copy')) return;
+          var code = pre.querySelector('code') || pre;
+          var raw = code.innerText.replace(/\s+$/, '');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'mv-copy';
+          btn.textContent = 'Copy';
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            navigator.clipboard.writeText(raw).then(function () {
+              btn.textContent = 'Copied';
+              btn.classList.add('copied');
+              setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+            });
+          });
+          pre.appendChild(btn);
+        });
+      }
+      addCopyButtons();
+      setTimeout(addCopyButtons, 800); 
+    });
+  </script>
 </body>
 </html>

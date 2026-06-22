@@ -1,5 +1,5 @@
 authors: Ameya Karve
-summary: Model the heart of MilesVault — the reward points and miles your cards earn. Write the four-posting purchase by hand, track points from pending to posted, handle forex and cashback, then watch the AI draft the same shape automatically.
+summary: Model the heart of MilesVault — the reward points and miles your cards earn. Write the four-posting purchase by hand, track points from pending to posted, handle forex and cashback, then watch the AI produce the same shape automatically.
 id: modelling-rewards
 categories: milesvault, beancount
 environments: Web
@@ -26,14 +26,14 @@ You'll write:
 ## A purchase that earns points
 Duration: 4:00
 
-In Lab 2 a purchase was two lines. A purchase that earns rewards is **four**. Type this and **Save**:
+In Lab 2 a purchase was two lines. A purchase that earns rewards is **four**. Type this and **Save** (the `;` notes explain each line — beancount ignores them):
 
 ```beancount
 2026-06-05 * "Amazon" "Headphones"
-  Expenses:Shopping:Electronics          3000.00 INR
-  Liabilities:CreditCards:HDFC:Infinia  -3000.00 INR
-  Assets:Rewards:HDFC:Pending             100.00 HDFC-RP
-  Equity:Void                            -100.00 HDFC-RP
+  Expenses:Shopping:Electronics               3000.00 INR      ; the cost, by category
+  Liabilities:CreditCards:HDFC:Infinia:7788  -3000.00 INR      ; added to what you owe
+  Assets:Rewards:HDFC:Pending                   100.00 HDFC-RP ; points earned, not yet credited
+  Equity:Void                                  -100.00 HDFC-RP ; counterweight so the points balance
 ```
 
 Read it as two pairs:
@@ -60,8 +60,8 @@ Type this and **Save**:
 
 ```beancount
 2026-06-20 * "Statement close" "Points posted"
-  Assets:Rewards:HDFC                     100.00 HDFC-RP
-  Assets:Rewards:HDFC:Pending            -100.00 HDFC-RP
+  Assets:Rewards:HDFC          100.00 HDFC-RP   ; arrives in the spendable pool
+  Assets:Rewards:HDFC:Pending -100.00 HDFC-RP   ; leaves the pending bucket
 ```
 
 The 100 points leave `:Pending` and arrive in the spendable pool. It's a pure move — HDFC-RP nets to zero.
@@ -79,21 +79,21 @@ Two everyday variations.
 
 ```beancount
 2026-06-08 * "Tokyo Hotel" "2 nights"
-  Expenses:Travel:Lodging               16500.00 INR
-  Expenses:Financial:Fees:Forex           577.50 INR
-  Liabilities:CreditCards:HDFC:Infinia -17077.50 INR
-  Assets:Rewards:HDFC:Pending             569.00 HDFC-RP
-  Equity:Void                            -569.00 HDFC-RP
+  Expenses:Travel:Lodging                    16500.00 INR      ; the room cost
+  Expenses:Financial:Fees:Forex                577.50 INR      ; the 3.5% forex markup
+  Liabilities:CreditCards:HDFC:Infinia:7788 -17077.50 INR      ; total added to the card
+  Assets:Rewards:HDFC:Pending                  569.00 HDFC-RP  ; points on the full amount
+  Equity:Void                                 -569.00 HDFC-RP  ; counterweight
 ```
 
 **Cashback** is credited separately, so the full price still shows as your expense:
 
 ```beancount
 2026-06-09 * "Swiggy" "Dinner — ₹20 cashback"
-  Expenses:Food:Restaurants                400.00 INR
-  Liabilities:CreditCards:HDFC:Infinia    -400.00 INR
-  Assets:Receivable:HDFC                    20.00 INR
-  Equity:Void                              -20.00 INR
+  Expenses:Food:Restaurants                  400.00 INR   ; the full bill stays the expense
+  Liabilities:CreditCards:HSBC:LivePlus:5096 -400.00 INR ; added to the card
+  Assets:Receivable:HSBC                      20.00 INR   ; cashback owed back to you
+  Equity:Void                                -20.00 INR   ; counterweight
 ```
 
 **Save** each. In both, every currency still nets to zero — check it yourself.

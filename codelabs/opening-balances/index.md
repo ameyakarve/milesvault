@@ -30,7 +30,7 @@ A **`balance`** line asserts what an account should hold at the **start** of a g
 Type this into the Journal and **Save**:
 
 ```beancount
-2026-06-03 balance Liabilities:CreditCards:HDFC:Infinia  -500.00 INR
+2026-06-03 balance Liabilities:CreditCards:HDFC:Infinia:7788  -500.00 INR   ; what it should hold today
 ```
 
 It saves cleanly — because the ledger's running balance at the start of 2026-06-03 really is −500 INR.
@@ -56,9 +56,9 @@ Here's the real problem: you want to add a card you've held for years that alrea
 Type all three lines and **Save**:
 
 ```beancount
-2026-06-01 open Liabilities:CreditCards:Axis:Magnus INR
-2026-06-01 pad Liabilities:CreditCards:Axis:Magnus Equity:Void
-2026-06-02 balance Liabilities:CreditCards:Axis:Magnus  -12638.52 INR
+2026-06-01 open Liabilities:CreditCards:Axis:Magnus:4021 INR               ; the card you're adding
+2026-06-01 pad Liabilities:CreditCards:Axis:Magnus:4021 Equity:Void        ; fills the gap from Equity:Void
+2026-06-02 balance Liabilities:CreditCards:Axis:Magnus:4021  -12638.52 INR ; the balance it should hold
 ```
 
 What happened: the `pad` (dated the 1st) quietly created an adjustment of −12,638.52 from `Equity:Void`, so that by the start of the 2nd the balance assertion holds. Your card now correctly owes ₹12,638.52 — with zero history typed.
@@ -75,7 +75,7 @@ A `pad` only makes sense paired with a `balance` that tells it the target. On it
 Try it: type just this line and **Save**:
 
 ```beancount
-2026-06-01 pad Liabilities:CreditCards:HDFC:Infinia Equity:Void
+2026-06-01 pad Liabilities:CreditCards:HDFC:Infinia:7788 Equity:Void   ; no matching balance → rejected
 ```
 
 The save is **rejected** — a `pad` with no matching `balance` for the same account is not a valid directive. Delete that line.
@@ -90,7 +90,7 @@ Duration: 3:00
 You've hand-written a `pad`+`balance` pair. The app has a tool that writes the exact same thing.
 
 1. In the chat pane, click the **Update balance** chip (the scales icon).
-2. Choose an account (e.g. your `Axis:Magnus` card), type the balance it should hold, and pick an "as of" date.
+2. Choose an account (e.g. your `Axis:Magnus:4021` card), type the balance it should hold, and pick an "as of" date.
 3. Confirm. You'll see: *"A pad absorbed the difference into Equity:Void."*
 
 Open the **Journal** and look at what it added — a `pad` on your chosen date and a `balance` the **day after**, plugged to **`Equity:Void`**. Identical to what you typed by hand.

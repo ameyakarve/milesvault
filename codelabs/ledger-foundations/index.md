@@ -13,7 +13,7 @@ Duration: 2:00
 
 MilesVault is an **operating system for your points and miles** — and like any OS, it runs on something underneath. That something is a plain-text **beancount** ledger: the source of truth for every point, mile, and rupee you track. The AI writes it for you, but it's always yours — you can read and edit every line.
 
-This first lab makes you fluent in the basics by having you *write them yourself*:
+This lab makes you fluent in the basics by having you *write them yourself*:
 
 - The one rule behind double-entry bookkeeping
 - The five kinds of accounts
@@ -68,11 +68,11 @@ To save your work in this lab you'll use the **Save** button at the top of the J
 ## Open your first accounts
 Duration: 3:00
 
-Before tracking anything, we declare the accounts we'll use with the **`open`** directive. Type these two lines into the Journal:
+Before tracking anything, we declare the accounts we'll use with the **`open`** directive. Type these two lines into the Journal (the text after `;` is just a comment — beancount ignores it):
 
 ```beancount
-2026-06-01 open Assets:Bank:HDFC:Savings INR
-2026-06-01 open Liabilities:CreditCards:HDFC:Infinia INR
+2026-06-01 open Assets:Bank:HDFC:Savings INR                   ; a bank account you own
+2026-06-01 open Liabilities:CreditCards:HDFC:Infinia:7788 INR  ; a credit card — note the :7788 id
 ```
 
 Each line is: a **date**, the word **`open`**, the **account path** (general → specific, separated by colons), and the **currency** it holds.
@@ -83,9 +83,9 @@ Now press **Save** (or Cmd-S). The chip should read **Saved**.
 > 
 > **Two rules the ledger enforces — get these wrong and the save is rejected:**
 > 
-> - A credit-card account must be exactly `Liabilities:CreditCards:<Issuer>:<Card>` — the word is **`CreditCards`** (one word), with an issuer and a card name.
+> - A credit-card account is `Liabilities:CreditCards:<Issuer>:<Card>:<Id>` — issuer, card name, and a short **id** (use the card's last 4 digits, e.g. `:7788`). **Always include the id** so two of the same card never collide. The word is **`CreditCards`**, one word.
 > - An `open` for a bank or card account names **exactly one** currency (here, `INR`). No currency, or two, is an error.
-> - Beancount has **no `#` comment lines** — a `#` at the start of a line breaks the parse. (Use `;` for notes *inside* an entry.)
+> - Beancount has **no `#` comment lines** — only inline `;` comments, as above. A `#` at the start of a line breaks the parse.
 
 ## Record your first transaction
 Duration: 4:00
@@ -94,14 +94,14 @@ Now the real thing. Add this purchase below your `open` lines:
 
 ```beancount
 2026-06-02 * "Blue Tokai" "Morning coffee"
-  Expenses:Food:Coffee                   500.00 INR
-  Liabilities:CreditCards:HDFC:Infinia  -500.00 INR
+  Expenses:Food:Coffee                        500.00 INR   ; where the money went (a category)
+  Liabilities:CreditCards:HDFC:Infinia:7788  -500.00 INR   ; what you now owe (negative)
 ```
 
 Reading it top to bottom:
 
 - **Date**, then **`*`** (a confirmed transaction), then the **payee** (`"Blue Tokai"`) and a short **note** (`"Morning coffee"`).
-- Two **postings**, indented. Each names an account, an amount, and a currency.
+- Two **postings**, indented. Each names an account, an amount, and a currency. The `;` notes are optional comments.
 - The two amounts sum to zero: `500 + (−500) = 0`. The expense went up by 500; what you owe on the card went up by 500 (shown negative).
 
 Press **Save**. It's now in your ledger.
@@ -132,7 +132,7 @@ You've written beancount by hand. Here's the payoff: the AI writes the *same* th
 
 > aside positive
 > 
-> Notice the AI may add **two extra lines** for the reward points the card earned. That's the four-posting purchase shape — we cover it fully in **Lab 3**. For now, see that the *expense* and *card* legs are exactly what you wrote: the AI didn't do anything you can't read.
+> Notice the AI may add **two extra lines** for the reward points the card earned. That's the four-posting purchase shape — we cover it fully in **Lab 4**. For now, see that the *expense* and *card* legs are exactly what you wrote: the AI didn't do anything you can't read.
 
 This is the whole point: the AI is fast, but you can verify every draft because you understand what it's producing.
 
@@ -145,11 +145,11 @@ Typing `open` lines by hand is great for understanding — day to day, there's a
 2. Search for a card (e.g. *Axis Magnus*, *HDFC Infinia*) or, on the programmes tab, a loyalty programme (e.g. *KrisFlyer*, *Marriott*).
 3. Select and **Save**.
 
-Behind the scenes this writes the very same `open` directive you typed by hand — for a card, `… open Liabilities:CreditCards:Axis:Magnus INR`; for a programme, `… open Assets:Rewards:Points:KrisFlyer …` with the programme's points ticker.
+Behind the scenes this writes the same kind of `open` directive you typed by hand. Tip: add the card's **last-4 id** (e.g. `:7788`) so that if you ever hold two of the same card, your ledger keeps them apart.
 
 > aside positive
 > 
-> Hand-typing and the modal produce **identical ledger entries**. Use whichever you like — now you know exactly what each one does.
+> Hand-typing and the modal produce the **same ledger entries**. Use whichever you like — now you know exactly what each one does.
 
 ## Recap & what's next
 Duration: 1:00
@@ -157,7 +157,7 @@ Duration: 1:00
 You just:
 
 - Learned the one rule of double-entry and the five account roots
-- **Opened** your own accounts in raw beancount and saved them
+- **Opened** your own accounts in raw beancount (with the `:id` on the card) and saved them
 - **Recorded** a transaction by hand, saw it balance, and watched a bad one get rejected
 - Confirmed the **AI produces the same beancount** — so you can trust and check it
 

@@ -113,6 +113,22 @@
     google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside b { color: inherit !important; }
+
+     
+    google-codelab-step pre { position: relative; }
+    .mv-copy {
+      position: absolute; top: 8px; right: 8px;
+      font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1;
+      padding: 5px 10px; border-radius: 6px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.12); color: #e7e7e3;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      opacity: 0; transition: opacity 0.15s, background 0.15s;
+    }
+    google-codelab-step pre:hover .mv-copy,
+    .mv-copy:focus-visible { opacity: 1; }
+    .mv-copy:hover { background: rgba(255, 255, 255, 0.24); }
+    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; opacity: 1; }
+    @media (hover: none) { .mv-copy { opacity: 1; } }
   </style>
 </head>
 <body>
@@ -140,7 +156,7 @@
       <google-codelab-step label="A balance assertion is a checkpoint" duration="3">
         <p>A <strong><code>balance</code></strong> line asserts what an account should hold at the <strong>start</strong> of a given date. If you followed Lab 2, your card shows −500 INR from the coffee purchase on 2026-06-02. Let&#39;s assert that.</p>
 <p>Type this into the Journal and <strong>Save</strong>:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-03 balance Liabilities:CreditCards:HDFC:Infinia  -500.00 INR
+<pre><code language="language-beancount" class="language-beancount">2026-06-03 balance Liabilities:CreditCards:HDFC:Infinia:7788  -500.00 INR   ; what it should hold today
 </code></pre>
 <p>It saves cleanly — because the ledger&#39;s running balance at the start of 2026-06-03 really is −500 INR.</p>
 <aside class="special"><p><strong>Why the next day?</strong> A <code>balance</code> asserts the figure at the <em>start</em> of its date — before that day&#39;s activity. The coffee was on the 2nd, so we check it on the 3rd. (Hold that thought — <code>pad</code> uses the same rule.)</p>
@@ -157,9 +173,9 @@
         <p>Here&#39;s the real problem: you want to add a card you&#39;ve held for years that already owes <strong>₹12,638.52</strong>. You don&#39;t have the old transactions — and you shouldn&#39;t have to type them.</p>
 <p><strong><code>pad</code></strong> solves this. Placed just before a <code>balance</code>, it tells the ledger: <em>&#34;insert whatever single adjustment is needed here — booked against a plug account — to make the next assertion true.&#34;</em> MilesVault&#39;s plug account is <strong><code>Equity:Void</code></strong>.</p>
 <p>Type all three lines and <strong>Save</strong>:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Liabilities:CreditCards:Axis:Magnus INR
-2026-06-01 pad Liabilities:CreditCards:Axis:Magnus Equity:Void
-2026-06-02 balance Liabilities:CreditCards:Axis:Magnus  -12638.52 INR
+<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Liabilities:CreditCards:Axis:Magnus:4021 INR               ; the card you&#39;re adding
+2026-06-01 pad Liabilities:CreditCards:Axis:Magnus:4021 Equity:Void        ; fills the gap from Equity:Void
+2026-06-02 balance Liabilities:CreditCards:Axis:Magnus:4021  -12638.52 INR ; the balance it should hold
 </code></pre>
 <p>What happened: the <code>pad</code> (dated the 1st) quietly created an adjustment of −12,638.52 from <code>Equity:Void</code>, so that by the start of the 2nd the balance assertion holds. Your card now correctly owes ₹12,638.52 — with zero history typed.</p>
 <aside class="special"><p>Notice the pattern: <strong><code>pad</code></strong><strong> on day D, </strong><strong><code>balance</code></strong><strong> on day D+1.</strong> Same start-of-day rule as before. This is the exact shape MilesVault uses everywhere it sets or reconciles a balance.</p>
@@ -171,7 +187,7 @@
       <google-codelab-step label="A gotcha: pad never travels alone" duration="2">
         <p>A <code>pad</code> only makes sense paired with a <code>balance</code> that tells it the target. On its own it&#39;s meaningless — and the ledger rejects it.</p>
 <p>Try it: type just this line and <strong>Save</strong>:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-01 pad Liabilities:CreditCards:HDFC:Infinia Equity:Void
+<pre><code language="language-beancount" class="language-beancount">2026-06-01 pad Liabilities:CreditCards:HDFC:Infinia:7788 Equity:Void   ; no matching balance → rejected
 </code></pre>
 <p>The save is <strong>rejected</strong> — a <code>pad</code> with no matching <code>balance</code> for the same account is not a valid directive. Delete that line.</p>
 <aside class="warning"><p><strong>Rule of thumb:</strong> every <code>pad</code> needs a <code>balance</code> for the same account right after it. Think of them as a single move in two lines.</p>
@@ -184,7 +200,7 @@
         <p>You&#39;ve hand-written a <code>pad</code>+<code>balance</code> pair. The app has a tool that writes the exact same thing.</p>
 <ol type="1">
 <li>In the chat pane, click the <strong>Update balance</strong> chip (the scales icon).</li>
-<li>Choose an account (e.g. your <code>Axis:Magnus</code> card), type the balance it should hold, and pick an &#34;as of&#34; date.</li>
+<li>Choose an account (e.g. your <code>Axis:Magnus:4021</code> card), type the balance it should hold, and pick an &#34;as of&#34; date.</li>
 <li>Confirm. You&#39;ll see: <em>&#34;A pad absorbed the difference into Equity:Void.&#34;</em></li>
 </ol>
 <p>Open the <strong>Journal</strong> and look at what it added — a <code>pad</code> on your chosen date and a <code>balance</code> the <strong>day after</strong>, plugged to <strong><code>Equity:Void</code></strong>. Identical to what you typed by hand.</p>
@@ -216,5 +232,33 @@
   <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
   <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
   <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+
+  <script>
+    
+    window.addEventListener('load', function () {
+      function addCopyButtons() {
+        document.querySelectorAll('google-codelab-step pre').forEach(function (pre) {
+          if (pre.querySelector('.mv-copy')) return;
+          var code = pre.querySelector('code') || pre;
+          var raw = code.innerText.replace(/\s+$/, '');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'mv-copy';
+          btn.textContent = 'Copy';
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            navigator.clipboard.writeText(raw).then(function () {
+              btn.textContent = 'Copied';
+              btn.classList.add('copied');
+              setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+            });
+          });
+          pre.appendChild(btn);
+        });
+      }
+      addCopyButtons();
+      setTimeout(addCopyButtons, 800); 
+    });
+  </script>
 </body>
 </html>

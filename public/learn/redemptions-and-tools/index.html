@@ -113,6 +113,22 @@
     google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
     google-codelab-step .instructions aside b { color: inherit !important; }
+
+     
+    google-codelab-step pre { position: relative; }
+    .mv-copy {
+      position: absolute; top: 8px; right: 8px;
+      font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1;
+      padding: 5px 10px; border-radius: 6px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.12); color: #e7e7e3;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      opacity: 0; transition: opacity 0.15s, background 0.15s;
+    }
+    google-codelab-step pre:hover .mv-copy,
+    .mv-copy:focus-visible { opacity: 1; }
+    .mv-copy:hover { background: rgba(255, 255, 255, 0.24); }
+    .mv-copy.copied { background: #4d6e60; border-color: #4d6e60; color: #fff; opacity: 1; }
+    @media (hover: none) { .mv-copy { opacity: 1; } }
   </style>
 </head>
 <body>
@@ -141,9 +157,9 @@
     
       <google-codelab-step label="First, give yourself some miles" duration="2">
         <p>To redeem, you need miles to spend. Let&#39;s seed a balance using the <code>pad</code>+<code>balance</code> move from Lab 3 — this time on a rewards account. Type and <strong>Save</strong>:</p>
-<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Assets:Rewards:Miles:KrisFlyer KRISFLYER
-2026-06-01 pad Assets:Rewards:Miles:KrisFlyer Equity:Void
-2026-06-02 balance Assets:Rewards:Miles:KrisFlyer  20000 KRISFLYER
+<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Assets:Rewards:Miles:KrisFlyer KRISFLYER            ; the programme account
+2026-06-01 pad Assets:Rewards:Miles:KrisFlyer Equity:Void           ; fill the gap from the plug
+2026-06-02 balance Assets:Rewards:Miles:KrisFlyer  20000 KRISFLYER  ; miles you hold today
 </code></pre>
 <p>You now hold <strong>20,000 KrisFlyer miles</strong>. (Reward accounts can hold any number of different point types — no special setup needed.)</p>
 <aside class="special"><p>Look how Lab 3 paid off: the same <code>pad</code>+<code>balance</code> pair that set a card&#39;s debt just seeded a miles balance. The building blocks repeat.</p>
@@ -155,8 +171,8 @@
       <google-codelab-step label="Redeem miles for an award flight" duration="4">
         <p>When you book an award flight, the miles leave your balance and pay for the trip — valued at <strong>what the cash fare would have been</strong>. Type and <strong>Save</strong>:</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-25 * &#34;Singapore Airlines&#34; &#34;Award flight&#34;
-  Expenses:Travel:Flights               15000.00 INR
-  Assets:Rewards:Miles:KrisFlyer         -7125 KRISFLYER @@ 15000.00 INR
+  Expenses:Travel:Flights         15000.00 INR              ; the trip, valued at its cash fare
+  Assets:Rewards:Miles:KrisFlyer     -7125 KRISFLYER @@ 15000.00 INR  ; 7,125 miles, worth ₹15,000
 </code></pre>
 <p>The <strong><code>@@</code></strong> means <em>total price</em>: those 7,125 miles are worth ₹15,000 here. So the miles line carries a weight of −₹15,000, which balances the ₹15,000 expense — while your KrisFlyer balance drops by 7,125 miles.</p>
 <aside class="special"><p><strong>Why value it at the cash fare?</strong> So your spending reports stay honest — that trip really was worth ₹15,000 of travel, even though you paid in miles. Your &#34;Travel&#34; expenses reflect reality.</p>
@@ -168,8 +184,8 @@
       <google-codelab-step label="Transfer points between programmes" duration="3">
         <p>Card points often convert into airline or hotel currencies at a ratio. Here, 2,000 card points become 1,000 miles (a 2:1 transfer). Type and <strong>Save</strong>:</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-10 * &#34;Transfer&#34; &#34;HDFC points → KrisFlyer, 2:1&#34;
-  Assets:Rewards:HDFC              -2000 HDFC-RP @ 0.5 KRISFLYER
-  Assets:Rewards:Miles:KrisFlyer    1000 KRISFLYER
+  Assets:Rewards:HDFC             -2000 HDFC-RP @ 0.5 KRISFLYER  ; each point = 0.5 miles
+  Assets:Rewards:Miles:KrisFlyer   1000 KRISFLYER               ; 2000 × 0.5 = 1000 miles
 </code></pre>
 <p>The <strong><code>@</code></strong> (single) is a <em>per-unit</em> price: each HDFC point is worth 0.5 miles, so 2,000 × 0.5 = 1,000 miles. The miles currency nets to zero; your HDFC pool drops by 2,000.</p>
 <aside class="warning"><p>A price must be in a <strong>different</strong> currency from the line it&#39;s on (miles priced in points, not in miles), and it can&#39;t be zero. <code>2000 HDFC-RP @ 0 KRISFLYER</code> or self-pricing is rejected.</p>
@@ -181,12 +197,12 @@
       <google-codelab-step label="Track progress toward status" duration="3">
         <p>Some spend earns points <strong>and</strong> counts toward elite status. A qualifying hotel stay racks up points <em>and</em> status nights — and the nights are their own counter. Type and <strong>Save</strong>:</p>
 <pre><code language="language-beancount" class="language-beancount">2026-06-12 * &#34;Marriott&#34; &#34;2-night stay — qualifying&#34;
-  Expenses:Travel:Lodging               18000.00 INR
-  Liabilities:CreditCards:HDFC:Infinia -18000.00 INR
-  Assets:Rewards:Points:Marriott          9000 MARRIOTT
-  Equity:Void                            -9000 MARRIOTT
-  Assets:Rewards:Status:Marriott             2 MARRIOTT-NIGHT
-  Equity:Void                               -2 MARRIOTT-NIGHT
+  Expenses:Travel:Lodging                    18000.00 INR            ; the room cost
+  Liabilities:CreditCards:HDFC:Infinia:7788 -18000.00 INR            ; paid on the card
+  Assets:Rewards:Points:Marriott                 9000 MARRIOTT       ; points earned
+  Equity:Void                                   -9000 MARRIOTT       ; counterweight
+  Assets:Rewards:Status:Marriott                    2 MARRIOTT-NIGHT ; qualifying nights toward status
+  Equity:Void                                      -2 MARRIOTT-NIGHT ; counterweight
 </code></pre>
 <p>Three currencies, each balancing to zero: rupees, Marriott points, and <strong>status nights</strong>. Those nights are what your vault&#39;s programme tile shows as <em>&#34;N nights&#34;</em> progress toward the next tier.</p>
 <aside class="special"><p>Status is just another counter in its own unit. Once it&#39;s in the ledger, MilesVault can show you how close you are to the next tier — and Status Match can suggest shortcuts.</p>
@@ -230,5 +246,33 @@
   <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
   <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
   <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+
+  <script>
+    
+    window.addEventListener('load', function () {
+      function addCopyButtons() {
+        document.querySelectorAll('google-codelab-step pre').forEach(function (pre) {
+          if (pre.querySelector('.mv-copy')) return;
+          var code = pre.querySelector('code') || pre;
+          var raw = code.innerText.replace(/\s+$/, '');
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'mv-copy';
+          btn.textContent = 'Copy';
+          btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            navigator.clipboard.writeText(raw).then(function () {
+              btn.textContent = 'Copied';
+              btn.classList.add('copied');
+              setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+            });
+          });
+          pre.appendChild(btn);
+        });
+      }
+      addCopyButtons();
+      setTimeout(addCopyButtons, 800); 
+    });
+  </script>
 </body>
 </html>
