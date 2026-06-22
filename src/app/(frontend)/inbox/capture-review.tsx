@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, Loader2 } from 'lucide-react'
+import { ChevronLeft, Loader2, Mail } from 'lucide-react'
 import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
 import { Button } from '@/components/ui/button'
 import {
@@ -376,6 +376,34 @@ function ItemDetail({
   onBack: () => void
   onPosted: () => void
 }) {
+  // "View email" — lazily fetch the stored body the first time it's opened
+  // (too large for the list poll). Only forwarded emails have a body worth
+  // showing (e.g. to grab a verification link); uploads don't.
+  const isEmail = row.source === 'email'
+  const [bodyOpen, setBodyOpen] = useState(false)
+  const [body, setBody] = useState<string | null>(null)
+  const [bodyLoading, setBodyLoading] = useState(false)
+  const [bodyError, setBodyError] = useState(false)
+
+  async function toggleBody() {
+    const next = !bodyOpen
+    setBodyOpen(next)
+    if (next && body === null && !bodyLoading) {
+      setBodyLoading(true)
+      setBodyError(false)
+      try {
+        const res = await fetch(`/api/ledger/captures/${encodeURIComponent(row.id)}`)
+        if (!res.ok) throw new Error(String(res.status))
+        const data = (await res.json()) as { text?: string }
+        setBody(data.text ?? '')
+      } catch {
+        setBodyError(true)
+      } finally {
+        setBodyLoading(false)
+      }
+    }
+  }
+
   // Show the full DraftChat when the draft is extracted (ready), or for any
   // state where there may already be chat history from a prior session.
   // For still-in-flight states (captured/processing) we show a status panel
@@ -455,6 +483,17 @@ function ItemDetail({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <StateChip tone={chipTone(row.state)}>{chipLabel(row.state)}</StateChip>
+          {isEmail ? (
+            <Button
+              size="sm"
+              variant={bodyOpen ? 'secondary' : 'ghost'}
+              onClick={toggleBody}
+              className="gap-1.5 text-muted-foreground"
+            >
+              <Mail className="size-4" />
+              {bodyOpen ? 'Hide email' : 'View email'}
+            </Button>
+          ) : null}
           {(row.state === 'failed' || row.draft_error) ? (
             <Button size="sm" onClick={onRedraft}>
               Retry draft
@@ -478,6 +517,27 @@ function ItemDetail({
           </Button>
         </div>
       </div>
+
+      {/* Email body — collapsible, lazily loaded. Handy for verification links
+          and seeing exactly what was forwarded next to the extracted draft. */}
+      {isEmail && bodyOpen ? (
+        <div className="border-b border-border bg-muted/30 px-4 py-3 sm:px-6">
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Email body
+          </p>
+          {bodyLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" /> Loading…
+            </div>
+          ) : bodyError ? (
+            <p className="text-sm text-destructive">Couldn&rsquo;t load the email body.</p>
+          ) : (
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+              {body}
+            </pre>
+          )}
+        </div>
+      ) : null}
 
       {/* Chat pane — fills the remaining height. For extracted items this is
           the full rich DraftChat (approval happens in-chat via the draft card).
