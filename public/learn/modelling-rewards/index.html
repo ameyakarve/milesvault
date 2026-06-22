@@ -1,0 +1,236 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
+  <title>Lab 4 · Cards, points &amp; miles · MilesVault</title>
+  <link rel="icon" href="../assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/claat-public/codelab-elements.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --mv-accent: #4d6e60;
+      --mv-accent-ink: #ffffff;
+      --mv-page: #f5f5f2;
+      --mv-card: #ffffff;
+      --mv-header: #ffffff;
+      --mv-text: #1c1c1c;
+      --mv-muted: #5f5f5f;
+      --mv-border: #e6e6e2;
+      --mv-code-inline: #eef0ee;
+      --mv-code-inline-text: #1c1c1c;
+      --mv-special-bg: #e8f3ec;
+      --mv-special-bd: #4d6e60;
+      --mv-warning-bg: #fbf3df;
+      --mv-warning-bd: #c8862b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --mv-accent: #93b8a5;
+        --mv-accent-ink: #10231b;
+        --mv-page: #131417;
+        --mv-card: #1c1e22;
+        --mv-header: #191b1e;
+        --mv-text: #e7e7e3;
+        --mv-muted: #9a9a96;
+        --mv-border: #2c2f34;
+        --mv-code-inline: #2a2d33;
+        --mv-code-inline-text: #e7e7e3;
+        --mv-special-bg: #16241c;
+        --mv-special-bd: #3f6b54;
+        --mv-warning-bg: #2a2113;
+        --mv-warning-bd: #9c7327;
+      }
+    }
+
+    html, body { background: var(--mv-page); }
+    .success { color: #1e8e3e; }
+    .error { color: #d93025; }
+
+     
+    google-codelab, google-codelab #codelab-title, .instructions,
+    google-codelab #drawer, google-codelab-step {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    }
+    google-codelab-step pre, google-codelab-step code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    }
+
+     
+    google-codelab #main { background: var(--mv-page) !important; }
+    google-codelab #drawer { background: var(--mv-page) !important; border-right: 1px solid var(--mv-border); }
+    .instructions { background: var(--mv-card) !important; color: var(--mv-text) !important; border: 1px solid var(--mv-border); border-radius: 12px; }
+    google-codelab-step .instructions h1,
+    google-codelab-step .instructions h2,
+    google-codelab-step .instructions h3,
+    google-codelab-step .instructions p,
+    google-codelab-step .instructions li { color: var(--mv-text) !important; }
+
+     
+    google-codelab #codelab-title {
+      background: var(--mv-header) !important;
+      color: var(--mv-text) !important;
+      border-bottom: 1px solid var(--mv-border);
+    }
+    google-codelab #codelab-title::before {
+      content: "";
+      display: inline-block;
+      width: 24px; height: 24px;
+      margin: 0 10px 0 4px;
+      flex: 0 0 auto;
+      align-self: center;
+      background: url("../assets/logo.svg") center/contain no-repeat;
+    }
+    google-codelab #codelab-title a { color: var(--mv-text) !important; }
+
+     
+    google-codelab #drawer ol li a { background: var(--mv-card) !important; color: var(--mv-muted) !important; border-color: var(--mv-border) !important; }
+    google-codelab #drawer ol li[completed] a { color: var(--mv-text) !important; }
+    google-codelab #drawer ol li[completed] .step:before { background-color: var(--mv-accent) !important; }
+    google-codelab #drawer ol li[selected] a { border-color: var(--mv-accent) !important; }
+
+     
+    google-codelab #next-step { background: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+    google-codelab #previous-step, google-codelab #done { color: var(--mv-accent) !important; background: var(--mv-card) !important; }
+    google-codelab-step .instructions paper-button.colored { background-color: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+
+     
+    google-codelab-step .instructions a { color: var(--mv-accent) !important; }
+
+     
+    google-codelab-step code { background-color: var(--mv-code-inline) !important; color: var(--mv-code-inline-text); }
+    google-codelab-step pre > code { background-color: transparent !important; color: inherit; }
+
+     
+    google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside b { color: inherit !important; }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  codelab-ga4id=""
+                  id="modelling-rewards"
+                  title="Lab 4 · Cards, points &amp; miles"
+                  environment="web"
+                  feedback-link="https://milesvault.com">
+    
+      <google-codelab-step label="What you&#39;ll learn" duration="2">
+        <p>This is the core of the operating system: every swipe doesn&#39;t just cost money, it <strong>earns points or miles</strong> — and MilesVault&#39;s whole job is to capture every one. In this lab you&#39;ll record both sides of a purchase in one entry — by hand — and learn how MilesVault keeps points honest.</p>
+<p>You&#39;ll write:</p>
+<ul>
+<li>A <strong>four-posting purchase</strong> that captures the spend <em>and</em> the reward</li>
+<li>The <strong>pending → posted</strong> life of a point</li>
+<li>A <strong>forex</strong> purchase and a <strong>cashback</strong> credit</li>
+</ul>
+<aside class="special"><p><strong>Points are their own currency.</strong> A reward point isn&#39;t a rupee — it&#39;s counted in its own unit (a &#34;ticker&#34; like <code>HDFC-RP</code>). That&#39;s how MilesVault keeps your miles from ever getting mixed up with money.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="A purchase that earns points" duration="4">
+        <p>In Lab 2 a purchase was two lines. A purchase that earns rewards is <strong>four</strong>. Type this and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-05 * &#34;Amazon&#34; &#34;Headphones&#34;
+  Expenses:Shopping:Electronics          3000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia  -3000.00 INR
+  Assets:Rewards:HDFC:Pending             100.00 HDFC-RP
+  Equity:Void                            -100.00 HDFC-RP
+</code></pre>
+<p>Read it as two pairs:</p>
+<ul>
+<li><strong>Lines 1–2</strong> are the purchase you already know: ₹3,000 expense, ₹3,000 added to what the card owes.</li>
+<li><strong>Lines 3–4</strong> are the reward: <strong>100 points</strong> land in a <code>:Pending</code> bucket, balanced against <strong><code>Equity:Void</code></strong>.</li>
+</ul>
+<aside class="special"><p><strong>Why </strong><strong><code>Equity:Void</code></strong><strong> again?</strong> Points aren&#39;t moved <em>from</em> anywhere real — the bank conjures them. <code>Equity:Void</code> is the counterweight that lets the points line balance to zero, the same plug you met in Lab 3.</p>
+</aside>
+<p>Notice the entry balances <strong>per currency</strong>, independently: INR nets to zero (3000 − 3000), and HDFC-RP nets to zero (100 − 100). MilesVault checks each currency separately.</p>
+<aside class="warning"><p><strong>Points never go on the expense line.</strong> An expense must be in a real currency (INR, USD...). <code>Expenses:Shopping 100 HDFC-RP</code> is rejected. Money is the cost; points are a separate, parallel reward.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Pending now, posted later" duration="3">
+        <p>Points are usually <strong>earned now but credited weeks later</strong>. That&#39;s why they first land in <code>:Pending</code>. When the statement finally posts them, you move them into the real balance.</p>
+<p>Type this and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-20 * &#34;Statement close&#34; &#34;Points posted&#34;
+  Assets:Rewards:HDFC                     100.00 HDFC-RP
+  Assets:Rewards:HDFC:Pending            -100.00 HDFC-RP
+</code></pre>
+<p>The 100 points leave <code>:Pending</code> and arrive in the spendable pool. It&#39;s a pure move — HDFC-RP nets to zero.</p>
+<aside class="special"><p>This split is why your vault can show <strong>&#34;4,250 pts · 120 pending&#34;</strong> — it always knows what&#39;s truly usable versus still in flight. No guessing.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Forex and cashback" duration="3">
+        <p>Two everyday variations.</p>
+<p><strong>A foreign-currency swipe</strong> breaks the bank&#39;s markup out as its own fee, so you can see what the conversion cost:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-08 * &#34;Tokyo Hotel&#34; &#34;2 nights&#34;
+  Expenses:Travel:Lodging               16500.00 INR
+  Expenses:Financial:Fees:Forex           577.50 INR
+  Liabilities:CreditCards:HDFC:Infinia -17077.50 INR
+  Assets:Rewards:HDFC:Pending             569.00 HDFC-RP
+  Equity:Void                            -569.00 HDFC-RP
+</code></pre>
+<p><strong>Cashback</strong> is credited separately, so the full price still shows as your expense:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-09 * &#34;Swiggy&#34; &#34;Dinner — ₹20 cashback&#34;
+  Expenses:Food:Restaurants                400.00 INR
+  Liabilities:CreditCards:HDFC:Infinia    -400.00 INR
+  Assets:Receivable:HDFC                    20.00 INR
+  Equity:Void                              -20.00 INR
+</code></pre>
+<p><strong>Save</strong> each. In both, every currency still nets to zero — check it yourself.</p>
+<aside class="special"><p>See the pattern? However complex the swipe, it&#39;s just the same building blocks: an expense, the card, and balanced reward/fee legs.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Now let the AI do it" duration="3">
+        <p>Here&#39;s the moment it all pays off. Switch to the <strong>Chat</strong> pane and type:</p>
+<p><em>Bought headphones for 3000 on my HDFC Infinia</em></p>
+<p>The assistant drafts a <strong>Proposed transaction</strong> — and it&#39;s the <strong>four-posting shape you just wrote by hand</strong>: expense, card, pending points, <code>Equity:Void</code>. It even knows the card&#39;s earn rate from its built-in card guide, so the points figure is filled in for you.</p>
+<p>Glance at it, confirm it matches what you&#39;d write, and <strong>Approve</strong> (or <strong>Reject</strong>, since you logged this by hand already).</p>
+<aside class="special"><p>This is the whole philosophy: the AI does the lookups and the typing, but it produces nothing you can&#39;t read. You&#39;re the reviewer who actually understands the entry.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Recap &amp; what&#39;s next" duration="1">
+        <p>You can now model rewards like the app itself:</p>
+<ul>
+<li>The <strong>four-posting purchase</strong> — spend plus the points it earns</li>
+<li>Points as their <strong>own currency</strong>, balanced against <strong><code>Equity:Void</code></strong></li>
+<li>The <strong>pending → posted</strong> move</li>
+<li><strong>Forex</strong> fees and <strong>cashback</strong> credits</li>
+<li>And you&#39;ve seen the <strong>AI draft the exact same shape</strong></li>
+</ul>
+<p>In <strong>Lab 5 · Redemptions, transfers &amp; status</strong> you&#39;ll <em>spend</em> points: redeem miles for an award flight, transfer points between programmes at a ratio, and track progress toward elite status — then watch your ledger light up the <strong>Award Explorer</strong>, <strong>Points</strong>, and <strong>Status Match</strong> tools.</p>
+<p><a href="../redemptions-and-tools/" target="_blank"><paper-button class="colored" raised>Start Lab 5 · Redemptions, transfers &amp; status →</paper-button></a></p>
+<aside class="special"><p>You now model rewards the way MilesVault does. Time to put those points to work. 🙌</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+</body>
+</html>

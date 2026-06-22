@@ -1,0 +1,234 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
+  <title>Lab 5 · Redemptions, transfers &amp; status · MilesVault</title>
+  <link rel="icon" href="../assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/claat-public/codelab-elements.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --mv-accent: #4d6e60;
+      --mv-accent-ink: #ffffff;
+      --mv-page: #f5f5f2;
+      --mv-card: #ffffff;
+      --mv-header: #ffffff;
+      --mv-text: #1c1c1c;
+      --mv-muted: #5f5f5f;
+      --mv-border: #e6e6e2;
+      --mv-code-inline: #eef0ee;
+      --mv-code-inline-text: #1c1c1c;
+      --mv-special-bg: #e8f3ec;
+      --mv-special-bd: #4d6e60;
+      --mv-warning-bg: #fbf3df;
+      --mv-warning-bd: #c8862b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --mv-accent: #93b8a5;
+        --mv-accent-ink: #10231b;
+        --mv-page: #131417;
+        --mv-card: #1c1e22;
+        --mv-header: #191b1e;
+        --mv-text: #e7e7e3;
+        --mv-muted: #9a9a96;
+        --mv-border: #2c2f34;
+        --mv-code-inline: #2a2d33;
+        --mv-code-inline-text: #e7e7e3;
+        --mv-special-bg: #16241c;
+        --mv-special-bd: #3f6b54;
+        --mv-warning-bg: #2a2113;
+        --mv-warning-bd: #9c7327;
+      }
+    }
+
+    html, body { background: var(--mv-page); }
+    .success { color: #1e8e3e; }
+    .error { color: #d93025; }
+
+     
+    google-codelab, google-codelab #codelab-title, .instructions,
+    google-codelab #drawer, google-codelab-step {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    }
+    google-codelab-step pre, google-codelab-step code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    }
+
+     
+    google-codelab #main { background: var(--mv-page) !important; }
+    google-codelab #drawer { background: var(--mv-page) !important; border-right: 1px solid var(--mv-border); }
+    .instructions { background: var(--mv-card) !important; color: var(--mv-text) !important; border: 1px solid var(--mv-border); border-radius: 12px; }
+    google-codelab-step .instructions h1,
+    google-codelab-step .instructions h2,
+    google-codelab-step .instructions h3,
+    google-codelab-step .instructions p,
+    google-codelab-step .instructions li { color: var(--mv-text) !important; }
+
+     
+    google-codelab #codelab-title {
+      background: var(--mv-header) !important;
+      color: var(--mv-text) !important;
+      border-bottom: 1px solid var(--mv-border);
+    }
+    google-codelab #codelab-title::before {
+      content: "";
+      display: inline-block;
+      width: 24px; height: 24px;
+      margin: 0 10px 0 4px;
+      flex: 0 0 auto;
+      align-self: center;
+      background: url("../assets/logo.svg") center/contain no-repeat;
+    }
+    google-codelab #codelab-title a { color: var(--mv-text) !important; }
+
+     
+    google-codelab #drawer ol li a { background: var(--mv-card) !important; color: var(--mv-muted) !important; border-color: var(--mv-border) !important; }
+    google-codelab #drawer ol li[completed] a { color: var(--mv-text) !important; }
+    google-codelab #drawer ol li[completed] .step:before { background-color: var(--mv-accent) !important; }
+    google-codelab #drawer ol li[selected] a { border-color: var(--mv-accent) !important; }
+
+     
+    google-codelab #next-step { background: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+    google-codelab #previous-step, google-codelab #done { color: var(--mv-accent) !important; background: var(--mv-card) !important; }
+    google-codelab-step .instructions paper-button.colored { background-color: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+
+     
+    google-codelab-step .instructions a { color: var(--mv-accent) !important; }
+
+     
+    google-codelab-step code { background-color: var(--mv-code-inline) !important; color: var(--mv-code-inline-text); }
+    google-codelab-step pre > code { background-color: transparent !important; color: inherit; }
+
+     
+    google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside b { color: inherit !important; }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  codelab-ga4id=""
+                  id="redemptions-and-tools"
+                  title="Lab 5 · Redemptions, transfers &amp; status"
+                  environment="web"
+                  feedback-link="https://milesvault.com">
+    
+      <google-codelab-step label="What you&#39;ll learn" duration="2">
+        <p>Earning points is only half of it — the payoff is <strong>spending them well</strong>. This lab covers the moves that make miles worth chasing, and connects your ledger to MilesVault&#39;s planning tools.</p>
+<p>You&#39;ll write:</p>
+<ul>
+<li>A <strong>redemption</strong> — spending miles on an award flight</li>
+<li>A <strong>transfer</strong> — moving points between programmes at a ratio</li>
+<li>A <strong>status</strong> entry — tracking progress toward elite tiers</li>
+</ul>
+<p>...and then see your ledger drive <strong>Award Explorer</strong>, <strong>Points</strong>, and <strong>Status Match</strong>.</p>
+<aside class="special"><p>New idea this lab: a small <strong><code>@</code></strong> or <strong><code>@@</code></strong> on a line is a <em>price</em> — a conversion rate. It&#39;s how one currency (miles) gets valued in another (rupees, or another programme&#39;s points).</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="First, give yourself some miles" duration="2">
+        <p>To redeem, you need miles to spend. Let&#39;s seed a balance using the <code>pad</code>+<code>balance</code> move from Lab 3 — this time on a rewards account. Type and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Assets:Rewards:Miles:KrisFlyer KRISFLYER
+2026-06-01 pad Assets:Rewards:Miles:KrisFlyer Equity:Void
+2026-06-02 balance Assets:Rewards:Miles:KrisFlyer  20000 KRISFLYER
+</code></pre>
+<p>You now hold <strong>20,000 KrisFlyer miles</strong>. (Reward accounts can hold any number of different point types — no special setup needed.)</p>
+<aside class="special"><p>Look how Lab 3 paid off: the same <code>pad</code>+<code>balance</code> pair that set a card&#39;s debt just seeded a miles balance. The building blocks repeat.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Redeem miles for an award flight" duration="4">
+        <p>When you book an award flight, the miles leave your balance and pay for the trip — valued at <strong>what the cash fare would have been</strong>. Type and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-25 * &#34;Singapore Airlines&#34; &#34;Award flight&#34;
+  Expenses:Travel:Flights               15000.00 INR
+  Assets:Rewards:Miles:KrisFlyer         -7125 KRISFLYER @@ 15000.00 INR
+</code></pre>
+<p>The <strong><code>@@</code></strong> means <em>total price</em>: those 7,125 miles are worth ₹15,000 here. So the miles line carries a weight of −₹15,000, which balances the ₹15,000 expense — while your KrisFlyer balance drops by 7,125 miles.</p>
+<aside class="special"><p><strong>Why value it at the cash fare?</strong> So your spending reports stay honest — that trip really was worth ₹15,000 of travel, even though you paid in miles. Your &#34;Travel&#34; expenses reflect reality.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Transfer points between programmes" duration="3">
+        <p>Card points often convert into airline or hotel currencies at a ratio. Here, 2,000 card points become 1,000 miles (a 2:1 transfer). Type and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-10 * &#34;Transfer&#34; &#34;HDFC points → KrisFlyer, 2:1&#34;
+  Assets:Rewards:HDFC              -2000 HDFC-RP @ 0.5 KRISFLYER
+  Assets:Rewards:Miles:KrisFlyer    1000 KRISFLYER
+</code></pre>
+<p>The <strong><code>@</code></strong> (single) is a <em>per-unit</em> price: each HDFC point is worth 0.5 miles, so 2,000 × 0.5 = 1,000 miles. The miles currency nets to zero; your HDFC pool drops by 2,000.</p>
+<aside class="warning"><p>A price must be in a <strong>different</strong> currency from the line it&#39;s on (miles priced in points, not in miles), and it can&#39;t be zero. <code>2000 HDFC-RP @ 0 KRISFLYER</code> or self-pricing is rejected.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Track progress toward status" duration="3">
+        <p>Some spend earns points <strong>and</strong> counts toward elite status. A qualifying hotel stay racks up points <em>and</em> status nights — and the nights are their own counter. Type and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-12 * &#34;Marriott&#34; &#34;2-night stay — qualifying&#34;
+  Expenses:Travel:Lodging               18000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia -18000.00 INR
+  Assets:Rewards:Points:Marriott          9000 MARRIOTT
+  Equity:Void                            -9000 MARRIOTT
+  Assets:Rewards:Status:Marriott             2 MARRIOTT-NIGHT
+  Equity:Void                               -2 MARRIOTT-NIGHT
+</code></pre>
+<p>Three currencies, each balancing to zero: rupees, Marriott points, and <strong>status nights</strong>. Those nights are what your vault&#39;s programme tile shows as <em>&#34;N nights&#34;</em> progress toward the next tier.</p>
+<aside class="special"><p>Status is just another counter in its own unit. Once it&#39;s in the ledger, MilesVault can show you how close you are to the next tier — and Status Match can suggest shortcuts.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="See your ledger power the tools" duration="2">
+        <p>Everything you typed now feeds the planning tools in the left menu — no extra setup:</p>
+<ul>
+<li><a href="https://milesvault.com/explore" target="_blank"><strong>Award Explorer</strong></a> — search a route and cabin. Because you hold 20,000 KrisFlyer miles, affordable awards get a <strong>&#34;You have the points&#34;</strong> flag; others show how a transfer gets you there.</li>
+<li><a href="https://milesvault.com/points" target="_blank"><strong>Points</strong></a> — pick a target programme and see every route from your cards, at what ratio (the same transfers you just wrote, mapped out).</li>
+<li><a href="https://milesvault.com/status-match" target="_blank"><strong>Status Match</strong></a> — your Marriott progress and any tiers you hold are recognised, with paths to match them elsewhere.</li>
+</ul>
+<aside class="special"><p>This is the reward for going beancount-first: the tools aren&#39;t magic, they&#39;re <strong>reading the ledger you understand</strong>. Garbage in, garbage out — and now you know how to keep it clean.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Recap &amp; what&#39;s next" duration="1">
+        <p>You can now put points to work:</p>
+<ul>
+<li><strong>Redeem</strong> miles with <code>@@</code>, valued at the cash fare</li>
+<li><strong>Transfer</strong> between programmes with an <code>@</code> ratio</li>
+<li>Track <strong>status</strong> as its own counter</li>
+<li>And you&#39;ve seen <strong>Award Explorer / Points / Status Match</strong> read it all</li>
+</ul>
+<p>In <strong>Lab 6 · Capture at scale</strong> you&#39;ve earned the right to stop typing. Now that you can read any entry, you&#39;ll let MilesVault do the volume — uploading statements, forwarding bank emails, and chatting — while you review with an expert eye.</p>
+<p><a href="../capture-at-scale/" target="_blank"><paper-button class="colored" raised>Start Lab 6 · Capture at scale →</paper-button></a></p>
+<aside class="special"><p>You can now earn, value, move, and redeem points in raw beancount. That&#39;s genuinely more than most apps will ever show you. 🙌</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+</body>
+</html>

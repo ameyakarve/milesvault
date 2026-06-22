@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
+<title>Learn · MilesVault</title>
+<link rel="icon" href="./assets/logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root{color-scheme:light dark;--accent:#4d6e60;--page:#f5f5f2;--card:#fff;--text:#1c1c1c;--muted:#5f5f5f;--border:#e6e6e2}
+  @media (prefers-color-scheme:dark){:root{--accent:#93b8a5;--page:#131417;--card:#1c1e22;--text:#e7e7e3;--muted:#9a9a96;--border:#2c2f34}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--text);font-family:Inter,system-ui,sans-serif;line-height:1.5}
+  .wrap{max-width:720px;margin:0 auto;padding:64px 20px 96px}
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:40px}
+  .brand img{width:30px;height:30px}
+  .brand span{font-weight:600;font-size:18px;letter-spacing:-.01em}
+  h1{font-size:30px;letter-spacing:-.02em;margin:0 0 8px}
+  .lede{color:var(--muted);font-size:16px;margin:0 0 36px;max-width:60ch}
+  .card{display:flex;align-items:center;gap:16px;padding:18px 18px;margin:10px 0;background:var(--card);border:1px solid var(--border);border-radius:12px;text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+  .card:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .num{flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px}
+  @media (prefers-color-scheme:dark){.num{color:#10231b}}
+  .body{display:flex;flex-direction:column;gap:3px;flex:1 1 auto;min-width:0}
+  .title{font-weight:600;font-size:16px}
+  .summary{color:var(--muted);font-size:13.5px}
+  .meta{color:var(--muted);font-size:12px;margin-top:2px}
+  .arrow{color:var(--muted);flex:0 0 auto;font-size:18px}
+  footer{margin-top:48px;color:var(--muted);font-size:13px}
+  footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand"><img src="./assets/logo.svg" alt=""><span>MilesVault</span></div>
+    <h1>Learn MilesVault</h1>
+    <p class="lede">MilesVault is an operating system for your points and miles. These hands-on labs take you from signing in to writing your own ledger — and putting every point to work. Start at the top.</p>
+      <a class="card" href="./getting-started/">
+        <span class="num">1</span>
+        <span class="body">
+          <span class="title">Getting started: sign in and find your way around</span>
+          <span class="summary">Meet MilesVault, the operating system for your points and miles. Join the Discord, sign in, and find your way around — the gentle first step before the hands-on ledger labs.</span>
+          <span class="meta">12 min</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+      <a class="card" href="./ledger-foundations/">
+        <span class="num">2</span>
+        <span class="body">
+          <span class="title">Ledger foundations: accounts & your first transaction</span>
+          <span class="summary">Learn how your MilesVault ledger really works by writing it yourself — open your first accounts and record a transaction in plain beancount, then watch the AI produce the very same thing.</span>
+          <span class="meta">19 min</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+      <a class="card" href="./opening-balances/">
+        <span class="num">3</span>
+        <span class="body">
+          <span class="title">Opening balances: pad & balance</span>
+          <span class="summary">Tell your ledger what your accounts actually hold today — write a balance assertion, watch a wrong one get rejected, and use pad to set an opening balance, by hand and with the Update balance tool.</span>
+          <span class="meta">15 min</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+      <a class="card" href="./modelling-rewards/">
+        <span class="num">4</span>
+        <span class="body">
+          <span class="title">Cards, points & miles</span>
+          <span class="summary">Model the heart of MilesVault — the reward points and miles your cards earn. Write the four-posting purchase by hand, track points from pending to posted, handle forex and cashback, then watch the AI draft the same shape automatically.</span>
+          <span class="meta">16 min</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+      <a class="card" href="./redemptions-and-tools/">
+        <span class="num">5</span>
+        <span class="body">
+          <span class="title">Redemptions, transfers & status</span>
+          <span class="summary">Spend your points well — redeem miles for an award flight, transfer points between programmes at a ratio, and track elite-status progress. Then see how the ledger you wrote powers Award Explorer, Points, and Status Match.</span>
+          <span class="meta">17 min</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+      <a class="card" href="./capture-at-scale/">
+        <span class="num">6</span>
+        <span class="body">
+          <span class="title">Capture at scale</span>
+          <span class="summary">You can read any entry now — so stop typing and let MilesVault do the volume. Upload statements, set up email forwarding, log everyday spend by chat, and review every draft with an expert eye.</span>
+          <span class="meta">16 min</span>
+        </span>
+        <span class="arrow">→</span>
+      </a>
+    <footer>Questions? Ask in <strong>#general</strong> on Discord, or open <a href="https://milesvault.com">MilesVault</a>.</footer>
+  </div>
+</body>
+</html>

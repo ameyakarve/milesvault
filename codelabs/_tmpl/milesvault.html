@@ -1,0 +1,138 @@
+<!doctype html>
+<!-- MilesVault-branded codelab template (forked from claat default). Light + dark. -->
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
+  <title>{{.Meta.Title}} · MilesVault</title>
+  <link rel="icon" href="../assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="{{.Prefix}}/claat-public/codelab-elements.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --mv-accent: #4d6e60;
+      --mv-accent-ink: #ffffff;
+      --mv-page: #f5f5f2;
+      --mv-card: #ffffff;
+      --mv-header: #ffffff;
+      --mv-text: #1c1c1c;
+      --mv-muted: #5f5f5f;
+      --mv-border: #e6e6e2;
+      --mv-code-inline: #eef0ee;
+      --mv-code-inline-text: #1c1c1c;
+      --mv-special-bg: #e8f3ec;
+      --mv-special-bd: #4d6e60;
+      --mv-warning-bg: #fbf3df;
+      --mv-warning-bd: #c8862b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --mv-accent: #93b8a5;
+        --mv-accent-ink: #10231b;
+        --mv-page: #131417;
+        --mv-card: #1c1e22;
+        --mv-header: #191b1e;
+        --mv-text: #e7e7e3;
+        --mv-muted: #9a9a96;
+        --mv-border: #2c2f34;
+        --mv-code-inline: #2a2d33;
+        --mv-code-inline-text: #e7e7e3;
+        --mv-special-bg: #16241c;
+        --mv-special-bd: #3f6b54;
+        --mv-warning-bg: #2a2113;
+        --mv-warning-bd: #9c7327;
+      }
+    }
+
+    html, body { background: var(--mv-page); }
+    .success { color: #1e8e3e; }
+    .error { color: #d93025; }
+
+    /* Fonts everywhere */
+    google-codelab, google-codelab #codelab-title, .instructions,
+    google-codelab #drawer, google-codelab-step {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    }
+    google-codelab-step pre, google-codelab-step code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    }
+
+    /* Surfaces */
+    google-codelab #main { background: var(--mv-page) !important; }
+    google-codelab #drawer { background: var(--mv-page) !important; border-right: 1px solid var(--mv-border); }
+    .instructions { background: var(--mv-card) !important; color: var(--mv-text) !important; border: 1px solid var(--mv-border); border-radius: 12px; }
+    google-codelab-step .instructions h1,
+    google-codelab-step .instructions h2,
+    google-codelab-step .instructions h3,
+    google-codelab-step .instructions p,
+    google-codelab-step .instructions li { color: var(--mv-text) !important; }
+
+    /* Header bar + logo */
+    google-codelab #codelab-title {
+      background: var(--mv-header) !important;
+      color: var(--mv-text) !important;
+      border-bottom: 1px solid var(--mv-border);
+    }
+    google-codelab #codelab-title::before {
+      content: "";
+      display: inline-block;
+      width: 24px; height: 24px;
+      margin: 0 10px 0 4px;
+      flex: 0 0 auto;
+      align-self: center;
+      background: url("../assets/logo.svg") center/contain no-repeat;
+    }
+    google-codelab #codelab-title a { color: var(--mv-text) !important; }
+
+    /* Step nav (left rail) */
+    google-codelab #drawer ol li a { background: var(--mv-card) !important; color: var(--mv-muted) !important; border-color: var(--mv-border) !important; }
+    google-codelab #drawer ol li[completed] a { color: var(--mv-text) !important; }
+    google-codelab #drawer ol li[completed] .step:before { background-color: var(--mv-accent) !important; }
+    google-codelab #drawer ol li[selected] a { border-color: var(--mv-accent) !important; }
+
+    /* Buttons */
+    google-codelab #next-step { background: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+    google-codelab #previous-step, google-codelab #done { color: var(--mv-accent) !important; background: var(--mv-card) !important; }
+    google-codelab-step .instructions paper-button.colored { background-color: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+
+    /* Links */
+    google-codelab-step .instructions a { color: var(--mv-accent) !important; }
+
+    /* Inline code (block <pre> stays dark navy in both modes) */
+    google-codelab-step code { background-color: var(--mv-code-inline) !important; color: var(--mv-code-inline-text); }
+    google-codelab-step pre > code { background-color: transparent !important; color: inherit; }
+
+    /* Callouts */
+    google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside b { color: inherit !important; }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="{{.GlobalGA}}" ga4id="{{.GlobalGA4}}"></google-codelab-analytics>
+  <google-codelab codelab-gaid="{{.Meta.GA}}"
+                  codelab-ga4id="{{.Meta.GA4}}"
+                  id="{{.Meta.ID}}"
+                  title="{{.Meta.Title}}"
+                  environment="{{index .Env}}"
+                  feedback-link="{{.Meta.Feedback}}">
+    {{range $i, $e := .Steps}}{{if matchEnv .Tags $.Env}}
+      <google-codelab-step label="{{.Title}}" duration="{{.Duration.Minutes}}">
+        {{.Content | renderHTML $.Context}}
+      </google-codelab-step>
+    {{end}}{{end}}
+  </google-codelab>
+
+  <script src="{{.Prefix}}/claat-public/native-shim.js"></script>
+  <script src="{{.Prefix}}/claat-public/custom-elements.min.js"></script>
+  <script src="{{.Prefix}}/claat-public/prettify.js"></script>
+  <script src="{{.Prefix}}/claat-public/codelab-elements.js"></script>
+</body>
+</html>

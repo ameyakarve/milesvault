@@ -1,6 +1,6 @@
 # Understanding your MilesVault ledger
 
-A 5-minute primer. **You never have to write any of this** — MilesVault drafts
+A 10-minute primer. **You never have to write any of this** — MilesVault drafts
 every entry from your statements and you just review and approve. This is here so
 that when you read a draft, it makes sense.
 
@@ -43,10 +43,10 @@ Every account starts with one of five words:
 
 | Root | What it means | Examples |
 |---|---|---|
-| **Assets** | what you *have* | bank balance, wallet money, gift cards, reward points & miles |
+| **Assets** | what you *have* | bank balance, wallet money, gift cards, reward points & miles, status progress |
 | **Liabilities** | what you *owe* | credit cards, loans |
 | **Income** | money coming *in* | salary, interest, a gift |
-| **Expenses** | money going *out*, by category | food, travel, shopping |
+| **Expenses** | money going *out*, by category | food, travel, shopping, fees |
 | **Equity** | the balancing bucket | opening balances, adjustments |
 
 ### One sign rule to remember
@@ -65,10 +65,13 @@ You'll see accounts nested with colons, going from general to specific:
 Assets:Bank:HDFC:Savings                     your bank account
 Assets:Prepaid:Wallets:Paytm                 a loaded wallet
 Assets:Prepaid:GiftCards:Amazon              a gift card
+Assets:Rewards:HDFC                          a card's reward-point pool
 Assets:Rewards:Miles:KrisFlyer               airline miles
-Assets:Rewards:Points:Marriott               hotel / card points
+Assets:Rewards:Points:Marriott               hotel / programme points
+Assets:Rewards:Status:Marriott               progress toward elite status
 Liabilities:CreditCards:HDFC:Infinia         a credit card
 Expenses:Food:Restaurants                    a spending category
+Expenses:Financial:Fees:Forex                a fee category
 Income:Salary                                money coming in
 ```
 
@@ -98,7 +101,20 @@ points line balances — you can ignore it.
 > **Points are their own "currency."** They're counted in `HDFC-RP` (reward
 > points), not rupees — so they never get mixed up with money.
 
-### 2. Paying your card bill
+### 2. A foreign-currency swipe (and its forex fee)
+Spend abroad and the bank converts the amount and adds a markup. MilesVault breaks
+the markup out as its own fee, so you can see exactly what the conversion cost:
+
+```beancount
+2026-05-29 * "Tokyo Hotel" "2 nights — ¥30,000"
+  Expenses:Travel:Lodging                    16500.00 INR
+  Expenses:Financial:Fees:Forex                577.50 INR   ; 3.5% forex markup
+  Liabilities:CreditCards:HDFC:Infinia      -17077.50 INR
+  Assets:Rewards:HDFC:Pending                  569.00 HDFC-RP
+  Equity:Void                                 -569.00 HDFC-RP
+```
+
+### 3. Paying your card bill
 A payment *reduces* what you owe, so the card line is **positive**:
 
 ```beancount
@@ -107,7 +123,7 @@ A payment *reduces* what you owe, so the card line is **positive**:
   Assets:Clearing:CardPayments              -25000.00 INR
 ```
 
-### 3. A refund
+### 4. A refund
 A refund mirrors the purchase — the expense goes negative, the card positive:
 
 ```beancount
@@ -116,7 +132,7 @@ A refund mirrors the purchase — the expense goes negative, the card positive:
   Liabilities:CreditCards:HDFC:Infinia        3000.00 INR
 ```
 
-### 4. Cashback
+### 5. Cashback
 Cashback is credited separately, so the full price still shows as your expense:
 
 ```beancount
@@ -127,7 +143,7 @@ Cashback is credited separately, so the full price still shows as your expense:
   Equity:Void                                  -20.00 INR
 ```
 
-### 5. Points & miles: a two-step life
+### 6. Points & miles: a two-step life
 Points are usually **earned now but credited later**. Earned points wait in a
 `:Pending` account; once the statement posts them, they move to the main balance:
 
@@ -145,7 +161,18 @@ Points are usually **earned now but credited later**. Earned points wait in a
   Assets:Rewards:Axis:Pending                 -480.00 AXIS-EDGE
 ```
 
-### 6. Redeeming points or miles
+### 7. Transferring points between programmes
+Move card points into an airline or hotel programme and they change "currency" at a
+ratio. The `@` price is just the conversion rate that lets the two sides balance —
+here 2,000 card points become 1,000 miles at 2:1:
+
+```beancount
+2026-06-10 * "Transfer" "HDFC points → KrisFlyer miles, 2:1"
+  Assets:Rewards:HDFC              -2000 HDFC-RP @ 0.5 KRISFLYER
+  Assets:Rewards:Miles:KrisFlyer    1000 KRISFLYER
+```
+
+### 8. Redeeming points or miles
 When you spend miles on an award flight, the miles leave your balance and pay for
 the trip (priced at what the cash fare would have been):
 
@@ -155,7 +182,22 @@ the trip (priced at what the cash fare would have been):
   Assets:Rewards:Miles:KrisFlyer             -7125 KRISFLYER @@ 15000.00 INR
 ```
 
-### 7. Wallets & gift cards
+### 9. Progress toward elite status
+Some spend earns points *and* counts toward status. A qualifying hotel stay racks up
+points and **status nights** — the nights are tracked as their own counter, which is
+what the vault home shows as your progress to the next tier:
+
+```beancount
+2026-05-31 * "Marriott" "2-night stay — qualifying"
+  Expenses:Travel:Lodging                    18000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia      -18000.00 INR
+  Assets:Rewards:Points:Marriott              9000 MARRIOTT
+  Equity:Void                                -9000 MARRIOTT
+  Assets:Rewards:Status:Marriott                 2 MARRIOTT-NIGHT
+  Equity:Void                                   -2 MARRIOTT-NIGHT
+```
+
+### 10. Wallets & gift cards
 Money you've loaded sits as an asset until you spend it down:
 
 ```beancount
@@ -170,13 +212,31 @@ Money you've loaded sits as an asset until you spend it down:
   Assets:Prepaid:GiftCards:Amazon             -500.00 INR
 ```
 
-### 8. A balance check
-Now and then your ledger records what a balance *should* be, straight off your
-statement — a safety net that flags if anything drifted:
+### 11. Opening balances & safety-net checks: `balance` and `pad`
+Two special, non-transaction lines keep your ledger honest.
+
+A **`balance`** line is a *checkpoint* — it asserts what an account **should** hold
+on a date, taken straight off your statement. If the ledger has drifted even by a
+rupee, MilesVault flags it:
 
 ```beancount
 2026-06-15 balance Liabilities:CreditCards:HDFC:Infinia   -12638.52 INR
 ```
+
+But what if you're *starting* a card mid-life and don't want to enter years of
+history? That's what **`pad`** is for. Placed just before a `balance`, it tells the
+ledger: *"insert whatever single adjustment is needed here — booked against
+`Equity:Opening-Balances` — to make the next assertion true."*
+
+```beancount
+2026-01-01 pad     Liabilities:CreditCards:HDFC:Infinia   Equity:Opening-Balances
+2026-01-01 balance Liabilities:CreditCards:HDFC:Infinia   -12638.52 INR
+```
+
+The `pad` fills the gap automatically, so the balance holds without itemising the
+past. You'll see **pad + balance pairs** whenever an account is first opened, or
+whenever a statement hands MilesVault an authoritative closing balance to reconcile
+against — for money *and* for points.
 
 ---
 
@@ -187,7 +247,12 @@ statement — a safety net that flags if anything drifted:
 - **Every transaction balances to zero** (per currency) — that's the integrity check.
 - **Negative on a credit card = what you owe.**
 - **`:Pending`** = points earned but not yet credited by the bank.
-- **Points/miles** are counted in their own units (a ticker like `AXIS-EDGE`), never rupees.
+- **Points/miles/status** are counted in their own units (a ticker like `AXIS-EDGE`
+  or `MARRIOTT-NIGHT`), never rupees.
+- **An `@` price** on a rewards line is just a conversion rate — for a transfer
+  between programmes, or to value a redemption against its cash fare.
+- **`balance`** asserts what an account should hold; **`pad`** (just before it) lets
+  the ledger set an opening balance or reconcile to a statement automatically.
 - **`Equity:Void`** is a harmless bookkeeping counterweight for rewards — safe to ignore.
 
 That's everything you need to read your ledger with confidence. Welcome to the beta 🙌

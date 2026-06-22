@@ -1,0 +1,220 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
+  <title>Lab 3 · Opening balances: pad &amp; balance · MilesVault</title>
+  <link rel="icon" href="../assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/claat-public/codelab-elements.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --mv-accent: #4d6e60;
+      --mv-accent-ink: #ffffff;
+      --mv-page: #f5f5f2;
+      --mv-card: #ffffff;
+      --mv-header: #ffffff;
+      --mv-text: #1c1c1c;
+      --mv-muted: #5f5f5f;
+      --mv-border: #e6e6e2;
+      --mv-code-inline: #eef0ee;
+      --mv-code-inline-text: #1c1c1c;
+      --mv-special-bg: #e8f3ec;
+      --mv-special-bd: #4d6e60;
+      --mv-warning-bg: #fbf3df;
+      --mv-warning-bd: #c8862b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --mv-accent: #93b8a5;
+        --mv-accent-ink: #10231b;
+        --mv-page: #131417;
+        --mv-card: #1c1e22;
+        --mv-header: #191b1e;
+        --mv-text: #e7e7e3;
+        --mv-muted: #9a9a96;
+        --mv-border: #2c2f34;
+        --mv-code-inline: #2a2d33;
+        --mv-code-inline-text: #e7e7e3;
+        --mv-special-bg: #16241c;
+        --mv-special-bd: #3f6b54;
+        --mv-warning-bg: #2a2113;
+        --mv-warning-bd: #9c7327;
+      }
+    }
+
+    html, body { background: var(--mv-page); }
+    .success { color: #1e8e3e; }
+    .error { color: #d93025; }
+
+     
+    google-codelab, google-codelab #codelab-title, .instructions,
+    google-codelab #drawer, google-codelab-step {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    }
+    google-codelab-step pre, google-codelab-step code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    }
+
+     
+    google-codelab #main { background: var(--mv-page) !important; }
+    google-codelab #drawer { background: var(--mv-page) !important; border-right: 1px solid var(--mv-border); }
+    .instructions { background: var(--mv-card) !important; color: var(--mv-text) !important; border: 1px solid var(--mv-border); border-radius: 12px; }
+    google-codelab-step .instructions h1,
+    google-codelab-step .instructions h2,
+    google-codelab-step .instructions h3,
+    google-codelab-step .instructions p,
+    google-codelab-step .instructions li { color: var(--mv-text) !important; }
+
+     
+    google-codelab #codelab-title {
+      background: var(--mv-header) !important;
+      color: var(--mv-text) !important;
+      border-bottom: 1px solid var(--mv-border);
+    }
+    google-codelab #codelab-title::before {
+      content: "";
+      display: inline-block;
+      width: 24px; height: 24px;
+      margin: 0 10px 0 4px;
+      flex: 0 0 auto;
+      align-self: center;
+      background: url("../assets/logo.svg") center/contain no-repeat;
+    }
+    google-codelab #codelab-title a { color: var(--mv-text) !important; }
+
+     
+    google-codelab #drawer ol li a { background: var(--mv-card) !important; color: var(--mv-muted) !important; border-color: var(--mv-border) !important; }
+    google-codelab #drawer ol li[completed] a { color: var(--mv-text) !important; }
+    google-codelab #drawer ol li[completed] .step:before { background-color: var(--mv-accent) !important; }
+    google-codelab #drawer ol li[selected] a { border-color: var(--mv-accent) !important; }
+
+     
+    google-codelab #next-step { background: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+    google-codelab #previous-step, google-codelab #done { color: var(--mv-accent) !important; background: var(--mv-card) !important; }
+    google-codelab-step .instructions paper-button.colored { background-color: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+
+     
+    google-codelab-step .instructions a { color: var(--mv-accent) !important; }
+
+     
+    google-codelab-step code { background-color: var(--mv-code-inline) !important; color: var(--mv-code-inline-text); }
+    google-codelab-step pre > code { background-color: transparent !important; color: inherit; }
+
+     
+    google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside b { color: inherit !important; }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  codelab-ga4id=""
+                  id="opening-balances"
+                  title="Lab 3 · Opening balances: pad &amp; balance"
+                  environment="web"
+                  feedback-link="https://milesvault.com">
+    
+      <google-codelab-step label="What you&#39;ll learn" duration="2">
+        <p>Your accounts exist (Lab 2), but beancount assumes they start at <strong>zero</strong>. A real credit card you&#39;ve held for years already owes money; an airline account already has miles. This lab is about telling the ledger the <strong>truth as of today</strong> — and doing it safely.</p>
+<p>You&#39;ll learn two new directives by writing them yourself:</p>
+<ul>
+<li><strong><code>balance</code></strong> — assert what an account <em>should</em> hold on a date (a checkpoint)</li>
+<li><strong><code>pad</code></strong> — fill the gap automatically so an opening balance just <em>works</em>, without typing years of history</li>
+</ul>
+<aside class="special"><p>These two are how every statement you ever import gets reconciled. Understand them once here and the rest of MilesVault makes sense.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="A balance assertion is a checkpoint" duration="3">
+        <p>A <strong><code>balance</code></strong> line asserts what an account should hold at the <strong>start</strong> of a given date. If you followed Lab 2, your card shows −500 INR from the coffee purchase on 2026-06-02. Let&#39;s assert that.</p>
+<p>Type this into the Journal and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-03 balance Liabilities:CreditCards:HDFC:Infinia  -500.00 INR
+</code></pre>
+<p>It saves cleanly — because the ledger&#39;s running balance at the start of 2026-06-03 really is −500 INR.</p>
+<aside class="special"><p><strong>Why the next day?</strong> A <code>balance</code> asserts the figure at the <em>start</em> of its date — before that day&#39;s activity. The coffee was on the 2nd, so we check it on the 3rd. (Hold that thought — <code>pad</code> uses the same rule.)</p>
+</aside>
+<h2 is-upgraded>Now break it on purpose</h2>
+<p>Change the figure to <code>-600.00 INR</code> and <strong>Save</strong>. The save is <strong>rejected</strong> with a balance-assertion error — the ledger computed −500 but you asserted −600. Put it back to <code>-500.00 INR</code> and save.</p>
+<aside class="warning"><p>A bare <code>balance</code> (with no <code>pad</code>, which is next) is a <strong>hard check</strong>. It&#39;s your safety net: when you import a statement, you assert its closing balance, and if anything drifted by even a rupee, MilesVault tells you.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Set an opening balance with pad" duration="4">
+        <p>Here&#39;s the real problem: you want to add a card you&#39;ve held for years that already owes <strong>₹12,638.52</strong>. You don&#39;t have the old transactions — and you shouldn&#39;t have to type them.</p>
+<p><strong><code>pad</code></strong> solves this. Placed just before a <code>balance</code>, it tells the ledger: <em>&#34;insert whatever single adjustment is needed here — booked against a plug account — to make the next assertion true.&#34;</em> MilesVault&#39;s plug account is <strong><code>Equity:Void</code></strong>.</p>
+<p>Type all three lines and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Liabilities:CreditCards:Axis:Magnus INR
+2026-06-01 pad Liabilities:CreditCards:Axis:Magnus Equity:Void
+2026-06-02 balance Liabilities:CreditCards:Axis:Magnus  -12638.52 INR
+</code></pre>
+<p>What happened: the <code>pad</code> (dated the 1st) quietly created an adjustment of −12,638.52 from <code>Equity:Void</code>, so that by the start of the 2nd the balance assertion holds. Your card now correctly owes ₹12,638.52 — with zero history typed.</p>
+<aside class="special"><p>Notice the pattern: <strong><code>pad</code></strong><strong> on day D, </strong><strong><code>balance</code></strong><strong> on day D+1.</strong> Same start-of-day rule as before. This is the exact shape MilesVault uses everywhere it sets or reconciles a balance.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="A gotcha: pad never travels alone" duration="2">
+        <p>A <code>pad</code> only makes sense paired with a <code>balance</code> that tells it the target. On its own it&#39;s meaningless — and the ledger rejects it.</p>
+<p>Try it: type just this line and <strong>Save</strong>:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-01 pad Liabilities:CreditCards:HDFC:Infinia Equity:Void
+</code></pre>
+<p>The save is <strong>rejected</strong> — a <code>pad</code> with no matching <code>balance</code> for the same account is not a valid directive. Delete that line.</p>
+<aside class="warning"><p><strong>Rule of thumb:</strong> every <code>pad</code> needs a <code>balance</code> for the same account right after it. Think of them as a single move in two lines.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Now let the AI do it" duration="3">
+        <p>You&#39;ve hand-written a <code>pad</code>+<code>balance</code> pair. The app has a tool that writes the exact same thing.</p>
+<ol type="1">
+<li>In the chat pane, click the <strong>Update balance</strong> chip (the scales icon).</li>
+<li>Choose an account (e.g. your <code>Axis:Magnus</code> card), type the balance it should hold, and pick an &#34;as of&#34; date.</li>
+<li>Confirm. You&#39;ll see: <em>&#34;A pad absorbed the difference into Equity:Void.&#34;</em></li>
+</ol>
+<p>Open the <strong>Journal</strong> and look at what it added — a <code>pad</code> on your chosen date and a <code>balance</code> the <strong>day after</strong>, plugged to <strong><code>Equity:Void</code></strong>. Identical to what you typed by hand.</p>
+<aside class="special"><p>This is the pattern again: the tool is faster, but it produces beancount you can read and verify — because you&#39;ve now written it yourself.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Recap &amp; what&#39;s next" duration="1">
+        <p>You can now:</p>
+<ul>
+<li>Write a <strong><code>balance</code></strong> assertion and use it as a safety-net checkpoint</li>
+<li>See a wrong assertion get <strong>rejected</strong> — and trust that rejection</li>
+<li>Use <strong><code>pad</code></strong> + <strong><code>balance</code></strong> to set an opening balance with no history</li>
+<li>Recognise that the <strong>Update balance</strong> tool writes the very same pair</li>
+</ul>
+<p>In <strong>Lab 4 · Cards, points &amp; miles</strong> you&#39;ll model the thing MilesVault is really about: the <strong>reward points and miles</strong> a card earns — as their own currency — including the four-line purchase shape and the &#34;pending then posted&#34; life of a point.</p>
+<p><a href="../modelling-rewards/" target="_blank"><paper-button class="colored" raised>Start Lab 4 · Cards, points &amp; miles →</paper-button></a></p>
+<aside class="special"><p>Two directives down. From here on, it&#39;s all about <strong>points</strong>. 🙌</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+</body>
+</html>

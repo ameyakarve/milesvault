@@ -1,0 +1,4 @@
+# claat generates these in source dirs; the real build output is in public/learn (committed).
+*/index.html
+*/codelab.json
+*/img/

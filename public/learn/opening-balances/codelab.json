@@ -1,0 +1,26 @@
+{
+  "environment": "web",
+  "format": "/Users/vandanakarve/milesvault/codelabs/_tmpl/milesvault.html",
+  "prefix": "https://storage.googleapis.com",
+  "mainga": "UA-49880327-14",
+  "updated": "2026-06-22T07:49:51+05:30",
+  "id": "opening-balances",
+  "duration": 15,
+  "title": "Lab 3 · Opening balances: pad \u0026 balance",
+  "authors": "Ameya Karve",
+  "summary": "Tell your ledger what your accounts actually hold today — write a balance assertion, watch a wrong one get rejected, and use pad to set an opening balance, by hand and with the Update balance tool.",
+  "source": "index.md",
+  "theme": "",
+  "status": [
+    "published"
+  ],
+  "category": [
+    "milesvault",
+    "beancount"
+  ],
+  "tags": [
+    "web"
+  ],
+  "feedback": "https://milesvault.com",
+  "url": "opening-balances"
+}

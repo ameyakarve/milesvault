@@ -1,0 +1,295 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
+  <title>Lab 2 · Ledger foundations: accounts &amp; your first transaction · MilesVault</title>
+  <link rel="icon" href="../assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/claat-public/codelab-elements.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --mv-accent: #4d6e60;
+      --mv-accent-ink: #ffffff;
+      --mv-page: #f5f5f2;
+      --mv-card: #ffffff;
+      --mv-header: #ffffff;
+      --mv-text: #1c1c1c;
+      --mv-muted: #5f5f5f;
+      --mv-border: #e6e6e2;
+      --mv-code-inline: #eef0ee;
+      --mv-code-inline-text: #1c1c1c;
+      --mv-special-bg: #e8f3ec;
+      --mv-special-bd: #4d6e60;
+      --mv-warning-bg: #fbf3df;
+      --mv-warning-bd: #c8862b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --mv-accent: #93b8a5;
+        --mv-accent-ink: #10231b;
+        --mv-page: #131417;
+        --mv-card: #1c1e22;
+        --mv-header: #191b1e;
+        --mv-text: #e7e7e3;
+        --mv-muted: #9a9a96;
+        --mv-border: #2c2f34;
+        --mv-code-inline: #2a2d33;
+        --mv-code-inline-text: #e7e7e3;
+        --mv-special-bg: #16241c;
+        --mv-special-bd: #3f6b54;
+        --mv-warning-bg: #2a2113;
+        --mv-warning-bd: #9c7327;
+      }
+    }
+
+    html, body { background: var(--mv-page); }
+    .success { color: #1e8e3e; }
+    .error { color: #d93025; }
+
+     
+    google-codelab, google-codelab #codelab-title, .instructions,
+    google-codelab #drawer, google-codelab-step {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    }
+    google-codelab-step pre, google-codelab-step code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    }
+
+     
+    google-codelab #main { background: var(--mv-page) !important; }
+    google-codelab #drawer { background: var(--mv-page) !important; border-right: 1px solid var(--mv-border); }
+    .instructions { background: var(--mv-card) !important; color: var(--mv-text) !important; border: 1px solid var(--mv-border); border-radius: 12px; }
+    google-codelab-step .instructions h1,
+    google-codelab-step .instructions h2,
+    google-codelab-step .instructions h3,
+    google-codelab-step .instructions p,
+    google-codelab-step .instructions li { color: var(--mv-text) !important; }
+
+     
+    google-codelab #codelab-title {
+      background: var(--mv-header) !important;
+      color: var(--mv-text) !important;
+      border-bottom: 1px solid var(--mv-border);
+    }
+    google-codelab #codelab-title::before {
+      content: "";
+      display: inline-block;
+      width: 24px; height: 24px;
+      margin: 0 10px 0 4px;
+      flex: 0 0 auto;
+      align-self: center;
+      background: url("../assets/logo.svg") center/contain no-repeat;
+    }
+    google-codelab #codelab-title a { color: var(--mv-text) !important; }
+
+     
+    google-codelab #drawer ol li a { background: var(--mv-card) !important; color: var(--mv-muted) !important; border-color: var(--mv-border) !important; }
+    google-codelab #drawer ol li[completed] a { color: var(--mv-text) !important; }
+    google-codelab #drawer ol li[completed] .step:before { background-color: var(--mv-accent) !important; }
+    google-codelab #drawer ol li[selected] a { border-color: var(--mv-accent) !important; }
+
+     
+    google-codelab #next-step { background: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+    google-codelab #previous-step, google-codelab #done { color: var(--mv-accent) !important; background: var(--mv-card) !important; }
+    google-codelab-step .instructions paper-button.colored { background-color: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+
+     
+    google-codelab-step .instructions a { color: var(--mv-accent) !important; }
+
+     
+    google-codelab-step code { background-color: var(--mv-code-inline) !important; color: var(--mv-code-inline-text); }
+    google-codelab-step pre > code { background-color: transparent !important; color: inherit; }
+
+     
+    google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside b { color: inherit !important; }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  codelab-ga4id=""
+                  id="ledger-foundations"
+                  title="Lab 2 · Ledger foundations: accounts &amp; your first transaction"
+                  environment="web"
+                  feedback-link="https://milesvault.com">
+    
+      <google-codelab-step label="What you&#39;ll learn" duration="2">
+        <p>MilesVault is an <strong>operating system for your points and miles</strong> — and like any OS, it runs on something underneath. That something is a plain-text <strong>beancount</strong> ledger: the source of truth for every point, mile, and rupee you track. The AI writes it for you, but it&#39;s always yours — you can read and edit every line.</p>
+<p>This first lab makes you fluent in the basics by having you <em>write them yourself</em>:</p>
+<ul>
+<li>The one rule behind double-entry bookkeeping</li>
+<li>The five kinds of accounts</li>
+<li>How to <strong>open</strong> your own accounts by hand</li>
+<li>How to <strong>record a transaction</strong> as text — and what makes it valid</li>
+<li>How the <strong>AI produces the exact same beancount</strong>, so you can trust and check its drafts</li>
+</ul>
+<aside class="special"><p><strong>Why learn the raw format at all?</strong> Because once you can read a transaction, you can verify every draft the AI makes, catch mistakes, and fix anything by hand. You stay in control of your own data.</p>
+</aside>
+<p>By the end you&#39;ll have a real account and a real transaction in your ledger — typed by you.</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="The one rule: double-entry" duration="2">
+        <p>Beancount is <strong>double-entry</strong>, which sounds technical but is a single idea:</p>
+<p><strong>Money always moves </strong></p>
+<p><strong><em>from</em></strong></p>
+<p><strong> one place </strong></p>
+<p><strong><em>to</em></strong></p>
+<p><strong> another. Every transaction adds up to zero.</strong></p>
+<p>If you spend ₹500 on coffee with a credit card, ₹500 <em>leaves</em> your available credit and ₹500 <em>arrives</em> as a food expense. Two sides, equal and opposite — they sum to zero.</p>
+<p>Every account you&#39;ll ever use starts with one of <strong>five words</strong>:</p>
+<table>
+<tr><td colspan="1" rowspan="1"><p>Root</p>
+</td><td colspan="1" rowspan="1"><p>What it means</p>
+</td><td colspan="1" rowspan="1"><p>Examples</p>
+</td></tr>
+<tr><td colspan="1" rowspan="1"><p><strong>Assets</strong></p>
+</td><td colspan="1" rowspan="1"><p>what you <em>have</em></p>
+</td><td colspan="1" rowspan="1"><p>bank balance, wallet money, reward points &amp; miles</p>
+</td></tr>
+<tr><td colspan="1" rowspan="1"><p><strong>Liabilities</strong></p>
+</td><td colspan="1" rowspan="1"><p>what you <em>owe</em></p>
+</td><td colspan="1" rowspan="1"><p>credit cards, loans</p>
+</td></tr>
+<tr><td colspan="1" rowspan="1"><p><strong>Income</strong></p>
+</td><td colspan="1" rowspan="1"><p>money coming <em>in</em></p>
+</td><td colspan="1" rowspan="1"><p>salary, interest</p>
+</td></tr>
+<tr><td colspan="1" rowspan="1"><p><strong>Expenses</strong></p>
+</td><td colspan="1" rowspan="1"><p>money going <em>out</em>, by category</p>
+</td><td colspan="1" rowspan="1"><p>food, travel, shopping</p>
+</td></tr>
+<tr><td colspan="1" rowspan="1"><p><strong>Equity</strong></p>
+</td><td colspan="1" rowspan="1"><p>the balancing bucket</p>
+</td><td colspan="1" rowspan="1"><p>opening balances, adjustments</p>
+</td></tr>
+</table>
+<aside class="special"><p><strong>The one sign rule:</strong> a credit card is a <strong>liability</strong>, and what you owe is shown as a <strong>negative</strong> number. A purchase makes it <em>more</em> negative (you owe more); a payment makes it <em>less</em> negative. Everything else reads naturally.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Find your raw ledger" duration="2">
+        <p>Let&#39;s open the actual text file behind your vault.</p>
+<ol type="1">
+<li>In the left menu, click <strong>Journal</strong>.</li>
+<li>You&#39;ll see two panes (or two tabs on mobile): <strong>Chat</strong> and <strong>Journal</strong>. Click into the <strong>Journal</strong> side.</li>
+<li>That editor — with the coloured syntax — <strong>is your beancount ledger</strong>. Anything you type here and save is written straight to your vault.</li>
+</ol>
+<p>To save your work in this lab you&#39;ll use the <strong>Save</strong> button at the top of the Journal pane (or press <strong>Cmd-S</strong> / <strong>Ctrl-S</strong>). A small chip shows <strong>Unsaved</strong> → <strong>Saving...</strong> → <strong>Saved</strong>.</p>
+<aside class="warning"><p>This is your real ledger, not a sandbox. Everything here is <strong>synthetic example data</strong> — use made-up names and round numbers as you follow along, exactly as shown. You can delete these practice lines afterwards.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Open your first accounts" duration="3">
+        <p>Before tracking anything, we declare the accounts we&#39;ll use with the <strong><code>open</code></strong> directive. Type these two lines into the Journal:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-01 open Assets:Bank:HDFC:Savings INR
+2026-06-01 open Liabilities:CreditCards:HDFC:Infinia INR
+</code></pre>
+<p>Each line is: a <strong>date</strong>, the word <strong><code>open</code></strong>, the <strong>account path</strong> (general → specific, separated by colons), and the <strong>currency</strong> it holds.</p>
+<p>Now press <strong>Save</strong> (or Cmd-S). The chip should read <strong>Saved</strong>.</p>
+<aside class="warning"><p><strong>Two rules the ledger enforces — get these wrong and the save is rejected:</strong></p>
+<ul>
+<li>A credit-card account must be exactly <code>Liabilities:CreditCards:<Issuer>:<Card></code> — the word is <strong><code>CreditCards</code></strong> (one word), with an issuer and a card name.</li>
+<li>An <code>open</code> for a bank or card account names <strong>exactly one</strong> currency (here, <code>INR</code>). No currency, or two, is an error.</li>
+<li>Beancount has <strong>no </strong><strong><code>#</code></strong><strong> comment lines</strong> — a <code>#</code> at the start of a line breaks the parse. (Use <code>;</code> for notes <em>inside</em> an entry.)</li>
+</ul>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Record your first transaction" duration="4">
+        <p>Now the real thing. Add this purchase below your <code>open</code> lines:</p>
+<pre><code language="language-beancount" class="language-beancount">2026-06-02 * &#34;Blue Tokai&#34; &#34;Morning coffee&#34;
+  Expenses:Food:Coffee                   500.00 INR
+  Liabilities:CreditCards:HDFC:Infinia  -500.00 INR
+</code></pre>
+<p>Reading it top to bottom:</p>
+<ul>
+<li><strong>Date</strong>, then <strong><code>*</code></strong> (a confirmed transaction), then the <strong>payee</strong> (<code>"Blue Tokai"</code>) and a short <strong>note</strong> (<code>"Morning coffee"</code>).</li>
+<li>Two <strong>postings</strong>, indented. Each names an account, an amount, and a currency.</li>
+<li>The two amounts sum to zero: <code>500 + (−500) = 0</code>. The expense went up by 500; what you owe on the card went up by 500 (shown negative).</li>
+</ul>
+<p>Press <strong>Save</strong>. It&#39;s now in your ledger.</p>
+<aside class="special"><p><strong>Why must it sum to zero?</strong> That&#39;s the integrity check at the heart of double-entry — every rupee that arrives somewhere came from somewhere. MilesVault checks this <strong>per currency</strong> on every save.</p>
+</aside>
+<h2 is-upgraded>Now break it on purpose</h2>
+<p>Change the card line to <code>-400.00 INR</code> and press <strong>Save</strong>. The save is <strong>rejected</strong> — the transaction no longer balances (<code>500 + (−400) = 100</code>). Change it back to <code>-500.00 INR</code> and save again. That rejection is the ledger protecting you from a bad entry.</p>
+<aside class="warning"><p>A few things the ledger insists on: <strong>every posting needs an explicit amount and currency</strong> (no blank/inferred legs), and an <strong>expense leg must be in a real currency</strong> like INR — never in points. We&#39;ll meet points next lab.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Now let the AI do it" duration="3">
+        <p>You&#39;ve written beancount by hand. Here&#39;s the payoff: the AI writes the <em>same</em> thing.</p>
+<ol type="1">
+<li>Switch to the <strong>Chat</strong> pane.</li>
+<li>Type, in plain words:</li>
+</ol>
+<p><em>Spent 500 on coffee at Blue Tokai on my HDFC Infinia</em></p>
+<ol type="1" start="3">
+<li>The assistant replies with a <strong>Proposed transaction</strong> card — and inside it is beancount you can now <em>read</em>. You&#39;ll recognise the date, payee, the <code>Expenses:Food:Coffee</code> leg and the negative card leg, all balancing to zero.</li>
+<li>Click <strong>Approve</strong> to commit it (or <strong>Reject</strong> since you already logged this one by hand).</li>
+</ol>
+<aside class="special"><p>Notice the AI may add <strong>two extra lines</strong> for the reward points the card earned. That&#39;s the four-posting purchase shape — we cover it fully in <strong>Lab 3</strong>. For now, see that the <em>expense</em> and <em>card</em> legs are exactly what you wrote: the AI didn&#39;t do anything you can&#39;t read.</p>
+</aside>
+<p>This is the whole point: the AI is fast, but you can verify every draft because you understand what it&#39;s producing.</p>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="The faster way to open accounts" duration="2">
+        <p>Typing <code>open</code> lines by hand is great for understanding — day to day, there&#39;s a shortcut that writes them for you.</p>
+<ol type="1">
+<li>On <strong>Home</strong> (your vault), click <strong>+ Card</strong> (or use the <strong>Add accounts</strong> chip in the chat).</li>
+<li>Search for a card (e.g. <em>Axis Magnus</em>, <em>HDFC Infinia</em>) or, on the programmes tab, a loyalty programme (e.g. <em>KrisFlyer</em>, <em>Marriott</em>).</li>
+<li>Select and <strong>Save</strong>.</li>
+</ol>
+<p>Behind the scenes this writes the very same <code>open</code> directive you typed by hand — for a card, <code>... open Liabilities:CreditCards:Axis:Magnus INR</code>; for a programme, <code>... open Assets:Rewards:Points:KrisFlyer ...</code> with the programme&#39;s points ticker.</p>
+<aside class="special"><p>Hand-typing and the modal produce <strong>identical ledger entries</strong>. Use whichever you like — now you know exactly what each one does.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Recap &amp; what&#39;s next" duration="1">
+        <p>You just:</p>
+<ul>
+<li>Learned the one rule of double-entry and the five account roots</li>
+<li><strong>Opened</strong> your own accounts in raw beancount and saved them</li>
+<li><strong>Recorded</strong> a transaction by hand, saw it balance, and watched a bad one get rejected</li>
+<li>Confirmed the <strong>AI produces the same beancount</strong> — so you can trust and check it</li>
+</ul>
+<p>In <strong>Lab 3 · Opening balances</strong> you&#39;ll assert what a card <em>actually</em> owes today, watch a wrong assertion get rejected, and use <code>pad</code> to set an opening balance — by hand, then with the <strong>Update balance</strong> tool.</p>
+<p><a href="../opening-balances/" target="_blank"><paper-button class="colored" raised>Start Lab 3 · Opening balances →</paper-button></a></p>
+<aside class="special"><p><strong>You&#39;re now beancount-literate.</strong> Everything else in MilesVault — points, miles, redemptions, statements — is just more of these same building blocks. 🙌</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+</body>
+</html>

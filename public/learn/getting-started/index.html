@@ -1,0 +1,225 @@
+<!doctype html>
+
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
+  <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#4d6e60" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#131417" media="(prefers-color-scheme: dark)">
+  <title>Lab 1 · Getting started: sign in and find your way around · MilesVault</title>
+  <link rel="icon" href="../assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="//fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="https://storage.googleapis.com/claat-public/codelab-elements.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --mv-accent: #4d6e60;
+      --mv-accent-ink: #ffffff;
+      --mv-page: #f5f5f2;
+      --mv-card: #ffffff;
+      --mv-header: #ffffff;
+      --mv-text: #1c1c1c;
+      --mv-muted: #5f5f5f;
+      --mv-border: #e6e6e2;
+      --mv-code-inline: #eef0ee;
+      --mv-code-inline-text: #1c1c1c;
+      --mv-special-bg: #e8f3ec;
+      --mv-special-bd: #4d6e60;
+      --mv-warning-bg: #fbf3df;
+      --mv-warning-bd: #c8862b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --mv-accent: #93b8a5;
+        --mv-accent-ink: #10231b;
+        --mv-page: #131417;
+        --mv-card: #1c1e22;
+        --mv-header: #191b1e;
+        --mv-text: #e7e7e3;
+        --mv-muted: #9a9a96;
+        --mv-border: #2c2f34;
+        --mv-code-inline: #2a2d33;
+        --mv-code-inline-text: #e7e7e3;
+        --mv-special-bg: #16241c;
+        --mv-special-bd: #3f6b54;
+        --mv-warning-bg: #2a2113;
+        --mv-warning-bd: #9c7327;
+      }
+    }
+
+    html, body { background: var(--mv-page); }
+    .success { color: #1e8e3e; }
+    .error { color: #d93025; }
+
+     
+    google-codelab, google-codelab #codelab-title, .instructions,
+    google-codelab #drawer, google-codelab-step {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    }
+    google-codelab-step pre, google-codelab-step code {
+      font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+    }
+
+     
+    google-codelab #main { background: var(--mv-page) !important; }
+    google-codelab #drawer { background: var(--mv-page) !important; border-right: 1px solid var(--mv-border); }
+    .instructions { background: var(--mv-card) !important; color: var(--mv-text) !important; border: 1px solid var(--mv-border); border-radius: 12px; }
+    google-codelab-step .instructions h1,
+    google-codelab-step .instructions h2,
+    google-codelab-step .instructions h3,
+    google-codelab-step .instructions p,
+    google-codelab-step .instructions li { color: var(--mv-text) !important; }
+
+     
+    google-codelab #codelab-title {
+      background: var(--mv-header) !important;
+      color: var(--mv-text) !important;
+      border-bottom: 1px solid var(--mv-border);
+    }
+    google-codelab #codelab-title::before {
+      content: "";
+      display: inline-block;
+      width: 24px; height: 24px;
+      margin: 0 10px 0 4px;
+      flex: 0 0 auto;
+      align-self: center;
+      background: url("../assets/logo.svg") center/contain no-repeat;
+    }
+    google-codelab #codelab-title a { color: var(--mv-text) !important; }
+
+     
+    google-codelab #drawer ol li a { background: var(--mv-card) !important; color: var(--mv-muted) !important; border-color: var(--mv-border) !important; }
+    google-codelab #drawer ol li[completed] a { color: var(--mv-text) !important; }
+    google-codelab #drawer ol li[completed] .step:before { background-color: var(--mv-accent) !important; }
+    google-codelab #drawer ol li[selected] a { border-color: var(--mv-accent) !important; }
+
+     
+    google-codelab #next-step { background: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+    google-codelab #previous-step, google-codelab #done { color: var(--mv-accent) !important; background: var(--mv-card) !important; }
+    google-codelab-step .instructions paper-button.colored { background-color: var(--mv-accent) !important; color: var(--mv-accent-ink) !important; }
+
+     
+    google-codelab-step .instructions a { color: var(--mv-accent) !important; }
+
+     
+    google-codelab-step code { background-color: var(--mv-code-inline) !important; color: var(--mv-code-inline-text); }
+    google-codelab-step pre > code { background-color: transparent !important; color: inherit; }
+
+     
+    google-codelab-step .instructions aside.special { background: var(--mv-special-bg) !important; border-color: var(--mv-special-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside.warning { background: var(--mv-warning-bg) !important; border-color: var(--mv-warning-bd) !important; color: var(--mv-text) !important; }
+    google-codelab-step .instructions aside b { color: inherit !important; }
+  </style>
+</head>
+<body>
+  <google-codelab-analytics gaid="UA-49880327-14" ga4id=""></google-codelab-analytics>
+  <google-codelab codelab-gaid=""
+                  codelab-ga4id=""
+                  id="getting-started"
+                  title="Lab 1 · Getting started: sign in and find your way around"
+                  environment="web"
+                  feedback-link="https://milesvault.com">
+    
+      <google-codelab-step label="Welcome to MilesVault" duration="2">
+        <p>MilesVault is an <strong>operating system for your points and miles</strong> — the one place where every reward your cards earn lives, and where you actually put it to work. It tracks what you hold and what&#39;s still pending across all your cards and programmes, then helps you spend it well: award flights, point transfers, elite status.</p>
+<p>This is a short series of hands-on labs. <strong>This first one gets you signed in and oriented</strong> — the later labs teach you the ledger that runs it all, one small step at a time.</p>
+<p>In this lab you&#39;ll:</p>
+<ul>
+<li>Join the Discord and sign in</li>
+<li>Meet your vault</li>
+<li>Learn your way around — and where the community lives</li>
+</ul>
+<aside class="special"><p><strong>No technical background needed here.</strong> It&#39;s all clicking and looking around. The typing comes later — and we walk you through every line.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Join the Discord and sign in" duration="3">
+        <p>The welcome email that brought you here has your <strong>Discord invite</strong> — that&#39;s where access, updates, and the community all live.</p>
+<ol type="1">
+<li>Open that email and tap the <strong>Discord invite</strong> to join the MilesVault server.</li>
+<li>Head to MilesVault and sign in:</li>
+</ol>
+<p><a href="https://milesvault.com" target="_blank"><paper-button class="colored" raised>Open MilesVault</paper-button></a></p>
+<ol type="1" start="3">
+<li>Click <strong>Continue with Discord</strong> and approve the prompt. You&#39;ll land on <strong>Home</strong> — your vault.</li>
+</ol>
+<aside class="special"><p>That&#39;s the only sign-in there is — <strong>no separate password to remember.</strong> Your Discord account is your key, so make sure you&#39;ve joined the server first.</p>
+</aside>
+<aside class="warning"><p>If sign-in bounces you back to the start, your Discord account just hasn&#39;t been cleared yet. Say hello in the server and you&#39;ll be sorted in no time.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Meet your vault" duration="2">
+        <p>The first time you sign in, your vault is empty. You&#39;ll see <em>&#34;Your vault is empty — tell the Assistant about a card you hold, or drop a statement,&#34;</em> with an <strong>Open the Journal</strong> button. That&#39;s fine — you&#39;ll fill it up in the next labs.</p>
+<p>Once you&#39;ve added cards and logged a few things, your <a href="https://milesvault.com/vault" target="_blank"><strong>Home</strong></a> comes alive — points and miles first:</p>
+<ul>
+<li><strong>Programmes</strong> — your airline and hotel balances as <strong>Miles</strong> or <strong>Points</strong>, what&#39;s still <strong>pending</strong>, and your progress toward elite status.</li>
+<li><strong>Credit cards</strong> — what each card is <strong>earning you</strong> (with <strong>&#34;N pending&#34;</strong> for points not yet credited), alongside its balance and monthly spend.</li>
+<li><strong>Outstanding</strong> and <strong>Spent · this month</strong> — the spending context behind it all: what you owe, and where the money (and therefore the earning) went.</li>
+</ul>
+<aside class="special"><p>Empty now is exactly right. <strong>Lab 2 onward</strong> is where you start putting things in — by hand and with the AI.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Find your way around" duration="3">
+        <p>Down the left side is the menu you&#39;ll use to get around. (On a phone it&#39;s behind the <strong>☰</strong> button, top-left.) Each item is a place you can open right now:</p>
+<ul>
+<li><a href="https://milesvault.com/vault" target="_blank"><strong>Home</strong></a> — your vault.</li>
+<li><a href="https://milesvault.com/editor" target="_blank"><strong>Journal</strong></a> — where you read and write your ledger, and chat with the AI. <strong>You&#39;ll live here in the next labs.</strong></li>
+<li><a href="https://milesvault.com/statements" target="_blank"><strong>Statements</strong></a> — upload a PDF statement.</li>
+<li><a href="https://milesvault.com/inbox" target="_blank"><strong>Inbox</strong></a> — transaction emails you forward in land here.</li>
+<li><a href="https://milesvault.com/accounts" target="_blank"><strong>Expenses</strong></a> — a drill-down of where your money goes.</li>
+</ul>
+<p>And the three planning tools — the reason MilesVault exists:</p>
+<ul>
+<li><a href="https://milesvault.com/explore" target="_blank"><strong>Award Explorer</strong></a> — pick where you want to fly and a cabin, and see which programmes get you there, what it costs in points, and whether you can afford it now or with a transfer.</li>
+<li><a href="https://milesvault.com/points" target="_blank"><strong>Points</strong></a> — choose a programme you want and see every route from your cards to reach it, and at what ratio.</li>
+<li><a href="https://milesvault.com/status-match" target="_blank"><strong>Status Match</strong></a> — see how to turn one airline or hotel status into another, free or paid.</li>
+</ul>
+<aside class="special"><p>You don&#39;t need all of these today. Each lab introduces the ones it uses, so you&#39;re never staring at a screen wondering what it&#39;s for.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="Help &amp; community" duration="1">
+        <p>You&#39;re not on your own:</p>
+<ul>
+<li>A <strong>floating feedback button</strong> sits in the corner of every screen — tap it to flag anything confusing or broken (you can even attach a screenshot). We read <strong>every</strong> one.</li>
+<li>Hang out in <strong>#general</strong> on the Discord — ask questions, share finds, or just chat points and miles with everyone else.</li>
+<li>Drop into the <strong>daily voice channel at 9pm IST</strong> — to ask anything live, hear what&#39;s new, and talk strategy.</li>
+</ul>
+<aside class="special"><p>MilesVault is in <strong>beta</strong>. Rough edges are expected — your feedback and questions are exactly how it gets better, so don&#39;t be shy.</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+      <google-codelab-step label="What&#39;s next" duration="1">
+        <p>You&#39;re in, and you know your way around. Time for the fun part — understanding the ledger that powers all of this.</p>
+<p>In <strong>Lab 2 · Ledger foundations</strong> you&#39;ll open your first accounts and record a transaction in plain beancount — typed by you — then watch the AI produce the very same thing. That&#39;s the moment MilesVault really clicks.</p>
+<p><a href="../ledger-foundations/" target="_blank"><paper-button class="colored" raised>Start Lab 2 · Ledger foundations →</paper-button></a></p>
+<aside class="special"><p>See you in Lab 2. 🙌</p>
+</aside>
+
+
+      </google-codelab-step>
+    
+  </google-codelab>
+
+  <script src="https://storage.googleapis.com/claat-public/native-shim.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/custom-elements.min.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/prettify.js"></script>
+  <script src="https://storage.googleapis.com/claat-public/codelab-elements.js"></script>
+</body>
+</html>
