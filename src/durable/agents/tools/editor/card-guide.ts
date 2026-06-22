@@ -11,7 +11,11 @@ import type { KbHttp } from '../concierge/kb-tools'
 export type CardGuideResult =
   | {
       ok: true
-      card: { slug: string; name: string | null }
+      // `beancountName` is the card's canonical leaf and `account` its full
+      // canonical liability path (`Liabilities:CreditCards:<IssuerBn>:<CardBn>`),
+      // both straight from the graph — callers MUST use these verbatim and never
+      // munge a leaf from `name` (the display H1).
+      card: { slug: string; name: string | null; beancountName: string | null; account: string | null }
       pool: {
         currency: string
         name: string | null
@@ -75,7 +79,9 @@ export async function fetchCardGuide(
       display_name?: string | null
       content_md?: string
       source_file?: string
+      attrs?: Record<string, unknown> | null
     } | null
+    const cardBn = typeof node?.attrs?.beancountName === 'string' ? node.attrs.beancountName : null
     // The ::node block holds only the title — the card's prose sections
     // (## Logging, ## Fees…) live in the FILE body, so fetch that.
     let content = node?.content_md ?? ''
@@ -95,6 +101,19 @@ export async function fetchCardGuide(
     }
     const items = rel.items ?? []
 
+    // Issuer beancountName (ISSUED_BY → bank) — used for BOTH the reward-pool
+    // account AND the card's canonical liability path. Both come from the graph
+    // verbatim; nothing is munged from the display H1.
+    const bankEdge = items.find((i) => i.edge_type === 'ISSUED_BY')
+    const bank = bankEdge
+      ? ((await kb.get(bankEdge.other).catch((): null => null)) as {
+          attrs?: Record<string, unknown> | null
+        } | null)
+      : null
+    const issuerBn = typeof bank?.attrs?.beancountName === 'string' ? bank.attrs.beancountName : null
+    const cardAccount =
+      issuerBn && cardBn ? `Liabilities:CreditCards:${issuerBn}:${cardBn}` : null
+
     const denom = items.find(
       (i) => i.edge_type === 'DENOMINATED_IN' && i.other.startsWith('currency/'),
     )
@@ -110,13 +129,6 @@ export async function fetchCardGuide(
         display_name?: string | null
         attrs?: Record<string, unknown> | null
       } | null
-      const bankEdge = items.find((i) => i.edge_type === 'ISSUED_BY')
-      const bank = bankEdge
-        ? ((await kb.get(bankEdge.other).catch((): null => null)) as {
-            attrs?: Record<string, unknown> | null
-          } | null)
-        : null
-      const issuer = bank?.attrs?.beancountName
       const ticker = cur?.attrs?.ticker
       pool = {
         currency: denom.other,
@@ -124,7 +136,7 @@ export async function fetchCardGuide(
         ticker: typeof ticker === 'string' ? ticker : null,
         // One account per issuer wallet (owner convention): the account
         // says WHERE points live; the commodity says WHAT they are.
-        account: typeof issuer === 'string' ? `Assets:Rewards:${issuer}` : null,
+        account: issuerBn ? `Assets:Rewards:${issuerBn}` : null,
         rate_notes: denom.description_md ?? null,
       }
     }
@@ -143,7 +155,12 @@ export async function fetchCardGuide(
 
     return {
       ok: true as const,
-      card: { slug: top.slug, name: node?.display_name ?? top.display_name },
+      card: {
+        slug: top.slug,
+        name: node?.display_name ?? top.display_name,
+        beancountName: cardBn,
+        account: cardAccount,
+      },
       pool,
       overrides,
       logging_guide: logging,

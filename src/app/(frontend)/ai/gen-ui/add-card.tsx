@@ -9,7 +9,7 @@ type Candidate = { slug: string; name?: string | null }
 
 type Guide = {
   ok: boolean
-  card?: { slug: string; name: string | null }
+  card?: { slug: string; name: string | null; beancountName: string | null; account: string | null }
   pool?: {
     name: string | null
     ticker: string | null
@@ -92,18 +92,15 @@ export function AddCardCard({
       .finally(() => setGuideLoading(false))
   }
 
-  const issuer = guide?.pool?.account?.split(':').pop() ?? null
-  const cardLeaf = selected?.name
-    ? selected.name
-        .split(/[^A-Za-z0-9]+/)
-        .filter((t) => t && t.toLowerCase() !== (issuer ?? '').toLowerCase() && !['bank', 'credit', 'card'].includes(t.toLowerCase()))
-        .map((t) => t[0]!.toUpperCase() + t.slice(1))
-        .join('')
-    : ''
-  const liability =
-    issuer && cardLeaf
-      ? `Liabilities:CreditCards:${issuer}:${cardLeaf}${/^\d{4}$/.test(last4) ? `:${last4}` : ''}`
-      : null
+  // Canonical liability account straight from the graph — `beancountName` is a
+  // required cc attr and the card→bank ISSUED_BY edge supplies the issuer, so the
+  // path is `Liabilities:CreditCards:<bank.beancountName>:<card.beancountName>`.
+  // NEVER munge a leaf from the display name — the graph is the source of truth.
+  const cardAccount = guide?.card?.account ?? null
+  const issuer = cardAccount?.split(':')[2] ?? null
+  const liability = cardAccount
+    ? `${cardAccount}${/^\d{4}$/.test(last4) ? `:${last4}` : ''}`
+    : null
 
   function confirm() {
     if (!selected?.name || !liability || !onResult) return
