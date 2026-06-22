@@ -10,6 +10,7 @@ import {
   Inbox,
   Medal,
   Menu,
+  Network,
   PieChart,
   Plane,
   Settings,
@@ -43,6 +44,7 @@ const BUCKETS: NavItem[][] = [
     { href: '/explore', label: 'Award Explorer', Icon: Plane },
     { href: '/points', label: 'Points', Icon: Coins },
     { href: '/status-match', label: 'Status Match', Icon: Medal },
+    { href: '/airline-explorer', label: 'Partner Matrix', Icon: Network },
     { href: '/concierge', label: 'Assistant', Icon: Sparkles },
   ],
 ]

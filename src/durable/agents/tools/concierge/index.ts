@@ -22,6 +22,13 @@ export {
 } from './points-paths'
 export { ensureRouteCache } from './routes-store'
 export {
+  buildAirlineExplorer,
+  type AirlineExplorerResult,
+  type ExplorerAirline,
+  type ExplorerEdge,
+  type AllianceGroup,
+} from './airline-explorer'
+export {
   makeKbTools,
   kbHttpOverFetch,
   resolveByBeancountName,

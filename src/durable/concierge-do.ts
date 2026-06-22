@@ -27,6 +27,8 @@ import {
   type MatchStatusesResult,
   type StatusMatchResult,
   ensureRouteCache,
+  buildAirlineExplorer,
+  type AirlineExplorerResult,
   fetchKbAgentsMd,
   kbHttpOverFetch,
   ledgerSnapshotTool,
@@ -200,6 +202,17 @@ export class ConciergeDO
     // Overlay the user's ledger: mark held nodes and attach current balances.
     applyHoldings(result, snapshot?.accounts ?? [], (balances?.rows ?? []) as BalanceRow[])
     return result
+  }
+
+  // The airline-explorer graph (what airlines can be booked using what,
+  // clustered by alliance, cross-alliance edges only). Static — same for every
+  // user — so cache it on the warm instance. RPC for /api/concierge/airline-explorer.
+  private _airlineExplorer?: AirlineExplorerResult
+  async airlineExplorer(): Promise<AirlineExplorerResult> {
+    if (this._airlineExplorer) return this._airlineExplorer
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    this._airlineExplorer = await buildAirlineExplorer(kbHttp)
+    return this._airlineExplorer
   }
 
   // The searchable target universe for the /points combobox — every loyalty
