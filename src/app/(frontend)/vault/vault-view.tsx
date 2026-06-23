@@ -157,12 +157,6 @@ export function VaultView() {
   // (QUALIFIES_TOWARD, from the KG), so a programme's counters attach by
   // commodity even when ledger account leaves differ. Loaded non-blocking.
   const [statusLinks, setStatusLinks] = useState<Record<string, string[]>>({})
-  // Programme commodity → real category (airline/hotel/aggregator) from the KG,
-  // for the tile icon. Loaded non-blocking; falls back to the Miles/Points
-  // subtree until it arrives.
-  const [programmeKinds, setProgrammeKinds] = useState<
-    Record<string, 'airline' | 'hotel' | 'aggregator'>
-  >({})
   // Bumped by the error-state retry to re-run the loader.
   const [reloadNonce, setReloadNonce] = useState(0)
 
@@ -226,14 +220,6 @@ export function VaultView() {
       fetch('/api/concierge/status-links', noStore)
         .then((r) => (r.ok ? (r.json() as Promise<{ links?: Record<string, string[]> }>) : null))
         .then((d) => alive && d?.links && setStatusLinks(d.links))
-        .catch(() => {})
-      fetch('/api/concierge/programme-kinds', noStore)
-        .then((r) =>
-          r.ok
-            ? (r.json() as Promise<{ kinds?: Record<string, 'airline' | 'hotel' | 'aggregator'> }>)
-            : null,
-        )
-        .then((d) => alive && d?.kinds && setProgrammeKinds(d.kinds))
         .catch(() => {})
     }
     load()
@@ -356,7 +342,6 @@ export function VaultView() {
         holdings={holdings}
         names={names}
         countersFor={countersFor}
-        programmeKinds={programmeKinds}
         onAdd={() => setAddCardOpen(true)}
       />
 
@@ -973,19 +958,16 @@ function foldPending(rows: AccountSummaryRow[]): Holding[] {
   return [...map.values()].sort((a, b) => b.posted + b.pending - (a.posted + a.pending))
 }
 
-// All loyalty programmes — airline (Miles) and hotel/other (Points) — in one
-// section. The plane/hotel mark on each tile distinguishes the kind.
+// All loyalty programmes in one section.
 function RewardsSections({
   holdings,
   names,
   countersFor,
-  programmeKinds,
   onAdd,
 }: {
   holdings: Holding[]
   names: Names
   countersFor: (h: Holding) => Array<{ value: number; commodity: string }>
-  programmeKinds: Record<string, 'airline' | 'hotel' | 'aggregator'>
   onAdd: () => void
 }) {
   return (
@@ -1003,7 +985,6 @@ function RewardsSections({
               holding={h}
               names={names}
               status={countersFor(h)}
-              category={programmeKinds[h.currency]}
             />
           ))}
         </div>
