@@ -448,6 +448,10 @@ export function AirlineExplorer({
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable={false}
+            nodesFocusable={false}
+            edgesFocusable={false}
+            panOnDrag
+            zoomOnPinch
             onNodeClick={(_, n) => {
               if (n.type === 'airline') setFocus((cur) => (cur === n.id ? null : n.id))
             }}

@@ -227,3 +227,20 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* React Flow graph controls (zoom / fit-view) — xyflow ships light-only defaults
+   whose icons vanish in dark mode. Drive its themeable vars from our tokens so
+   the controls stay legible in both modes, identically across every graph
+   (points, airline-explorer, status-match). */
+.react-flow {
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: color-mix(in oklab, var(--foreground) 8%, var(--card));
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+}
+.react-flow__controls {
+  box-shadow: 0 1px 4px color-mix(in oklab, var(--foreground) 20%, transparent);
+  border-radius: 6px;
+  overflow: hidden;
+}
