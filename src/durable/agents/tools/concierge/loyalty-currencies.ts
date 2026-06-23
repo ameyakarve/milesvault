@@ -6,7 +6,10 @@ import type { KbHttp } from './kb-tools'
 // The page is programme-keyed end to end (new account model), so the target IS
 // a programme.
 
-export type LoyaltyCurrency = { slug: string; name: string }
+// `aliases` are the programme's incoming alias slugs, prettified into search
+// tokens (e.g. program/singapore-airlines → "Singapore Airlines") so the picker
+// matches a programme by its operating airline / brand, not just its name.
+export type LoyaltyCurrency = { slug: string; name: string; aliases: string[] }
 
 const prettySlug = (slug: string) =>
   slug
@@ -16,15 +19,19 @@ const prettySlug = (slug: string) =>
     .join(' ')
 
 export async function listLoyaltyCurrencies(kb: KbHttp): Promise<LoyaltyCurrency[]> {
-  // list() already returns display_name inline, so a single call is enough — no
-  // per-node get() fan-out.
+  // list() returns display_name + the node's incoming alias slugs inline, so a
+  // single call is enough — no per-node fan-out.
   try {
     const r = (await kb.list('program', { limit: 2000 })) as {
-      items?: Array<{ slug: string; display_name?: string | null }>
+      items?: Array<{ slug: string; display_name?: string | null; aliases?: string[] }>
     }
     return (r.items ?? [])
       .filter((i) => i.slug.startsWith('program/'))
-      .map((i) => ({ slug: i.slug, name: i.display_name ?? prettySlug(i.slug) }))
+      .map((i) => ({
+        slug: i.slug,
+        name: i.display_name ?? prettySlug(i.slug),
+        aliases: (i.aliases ?? []).map(prettySlug),
+      }))
       .sort((a, b) => a.name.localeCompare(b.name))
   } catch {
     return []

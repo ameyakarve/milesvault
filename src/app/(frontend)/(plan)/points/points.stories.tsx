@@ -35,10 +35,10 @@ const FIXTURE: PointsPathsResult = {
   notes: ['1 feeder programmes, 1 earning cards, 1 cash buy-ins within 3 transfer hops'],
 }
 const CURRENCIES: LoyaltyCurrency[] = [
-  { slug: FIXTURE.target.slug, name: FIXTURE.target.display },
+  { slug: FIXTURE.target.slug, name: FIXTURE.target.display, aliases: [] },
   ...FIXTURE.nodes
     .filter((n) => n.kind === 'program')
-    .map((n) => ({ slug: n.id, name: n.display })),
+    .map((n) => ({ slug: n.id, name: n.display, aliases: [] as string[] })),
 ].sort((a, b) => a.name.localeCompare(b.name))
 
 function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }) {

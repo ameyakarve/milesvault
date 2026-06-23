@@ -240,7 +240,14 @@ function TargetCombobox({ value, onChange, currencies }: { value: string; onChan
             <CommandEmpty>No match.</CommandEmpty>
             <CommandGroup>
               {currencies.map((c) => (
-                <CommandItem key={c.slug} value={`${c.name} ${c.slug}`} onSelect={() => { onChange(c.slug); setOpen(false) }}>
+                <CommandItem
+                  key={c.slug}
+                  value={`${c.name} ${c.slug} ${(c.aliases ?? []).join(' ')}`}
+                  onSelect={() => {
+                    onChange(c.slug)
+                    setOpen(false)
+                  }}
+                >
                   <Check className={cn('size-4', value === c.slug ? 'opacity-100' : 'opacity-0')} />
                   {c.name}
                 </CommandItem>
