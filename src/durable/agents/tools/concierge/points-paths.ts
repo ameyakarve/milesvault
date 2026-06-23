@@ -354,20 +354,11 @@ function matchCard(node: PathNode, account: string): boolean {
   const parts = account.split(':')
   if (parts[0] !== 'Liabilities' || parts[1] !== 'CreditCards') return false
   if (node.issuer && parts[2] !== node.issuer) return false
-  const leaf = (parts[3] ?? '').toLowerCase()
-  if (!leaf) return false
-  if (leaf === node.beancountName.toLowerCase()) return true
-  // Tolerant: users name card accounts loosely ("Infinia" vs the KG's
-  // "InfiniaMetal") — held when the account leaf appears among the card's name
-  // tokens. Exact-match-only silently un-held real cards and the "My points"
-  // filter then hid their entire path.
-  const tokens = new Set(
-    `${node.beancountName.replace(/([a-z0-9])([A-Z])/g, '$1 $2')} ${node.display ?? ''}`
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter(Boolean),
-  )
-  return tokens.has(leaf)
+  // EXACT match only. By owner convention a card account's product segment IS
+  // the card's KG beancountName, verbatim — `Liabilities:CreditCards:<issuer>:
+  // <beancountName>[:<id>]`. Match the product segment dead-on; no lowercasing,
+  // no token-overlap, no fuzzy fallback (a wrong match is worse than no match).
+  return parts[3] === node.beancountName
 }
 
 export function applyHoldings(

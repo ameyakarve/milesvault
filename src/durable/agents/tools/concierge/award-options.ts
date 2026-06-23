@@ -147,20 +147,6 @@ async function ownMetalSlugs(kb: KbHttp, kgSlug: string): Promise<Set<string>> {
   }
 }
 
-// A programme's underlying currency: program/<slug> --DENOMINATED_IN--> currency.
-// This is the funding target the agent transfers INTO.
-async function currencyOfProgramme(kb: KbHttp, kgSlug: string): Promise<string | null> {
-  try {
-    const r = (await kb.related(`program/${kgSlug}`, {
-      edge_type: 'DENOMINATED_IN',
-      direction: 'outgoing',
-    })) as { items?: Array<{ other: string }> }
-    return r.items?.find((i) => i.other.startsWith('currency/'))?.other ?? null
-  } catch {
-    return null
-  }
-}
-
 // Pure core: the fly-side computation, no tool wrapper. Reused by both the
 // `award_options` agent tool and the read-only award-plan HTTP endpoint (which
 // joins this against the transfers graph to cost it in a card's points).
@@ -279,13 +265,10 @@ export async function computeAwardOptions(
     }
   }
 
-  // Resolve each distinct priced programme to its currency (the funding target).
-  const distinctProgs = [...new Set(flat.map((f) => f.programme))]
-  const progCurrency = new Map<string, string | null>()
-  await Promise.all(
-    distinctProgs.map(async (p) => progCurrency.set(p, await currencyOfProgramme(kb, p))),
-  )
-
+  // `programme_currency` is no longer resolved here — the explorer keys on the
+  // programme itself (the /points page handles accumulation/transfers), so this
+  // module no longer reads the program→currency DENOMINATED_IN edge. The field
+  // stays in the shape (nullable) for compatibility but is left null.
   type Opt = AwardOptionsResult['options'][number]
   // Collapse interchangeable routings: same programme, stop count, metal,
   // identical cabin pricing → one option listing the equivalent hubs.
@@ -302,7 +285,7 @@ export async function computeAwardOptions(
     if (!g) {
       g = {
         programme: f.programme,
-        programme_currency: progCurrency.get(f.programme) ?? null,
+        programme_currency: null,
         own_metal: f.own_metal,
         stops: f.stops,
         routings: [],
@@ -336,12 +319,7 @@ export async function computeAwardOptions(
     options = options.slice(0, MAX_OPTIONS)
   }
 
-  const dests = [
-    ...new Set(options.map((o2) => o2.programme_currency).filter((c): c is string => !!c)),
-  ]
-  notes.push(
-    `${options.length} fly-options across ${dests.length} programme currencies (directs first)`,
-  )
+  notes.push(`${options.length} fly-options (directs first)`)
 
-  return { origin: o, destination: d, options, dests, notes }
+  return { origin: o, destination: d, options, dests: [], notes }
 }
