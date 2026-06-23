@@ -3,13 +3,41 @@ import { useState } from 'react'
 import { Points, type PointsStatus, type FilterMode, type PointsFilters } from './points-ui'
 import type { PointsPathsResult } from '@/durable/agents/tools/concierge/points-paths'
 import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-currencies'
-import qantas from './qantas.fixture.json'
 
-const FIXTURE = qantas as unknown as PointsPathsResult
+// Synthetic programme-keyed fixture (new account model): a target programme,
+// one feeder programme that transfers in, a card that earns the feeder, and a
+// cash buy-in. Illustrative ratios only.
+const FIXTURE: PointsPathsResult = {
+  target: { slug: 'program/qantas-frequent-flyer', display: 'Qantas Frequent Flyer', beancountName: null },
+  amount: 90000,
+  nodes: [
+    { id: 'program/qantas-frequent-flyer', kind: 'target', display: 'Qantas Frequent Flyer', tickers: ['QANTAS'], multiplier: 1, hops: 0 },
+    {
+      id: 'program/marriott-bonvoy',
+      kind: 'program',
+      display: 'Marriott Bonvoy',
+      tickers: ['BONVOY'],
+      multiplier: 3,
+      hops: 1,
+      path: ['program/marriott-bonvoy', 'program/qantas-frequent-flyer'],
+      held: true,
+      balance: 120000,
+      balanceCurrency: 'BONVOY',
+    },
+    { id: 'cc/sample-rewards', kind: 'card', display: 'Sample Rewards Card', issuer: 'SampleBank', beancountName: 'SampleRewards', multiplier: 3 },
+    { id: 'currency/usd', kind: 'fiat', display: 'US Dollar', beancountName: 'USD', multiplier: 2.0, hops: 1, path: ['currency/usd', 'program/qantas-frequent-flyer'], fiat: true, held: true },
+  ],
+  edges: [
+    { from: 'program/marriott-bonvoy', to: 'program/qantas-frequent-flyer', kind: 'transfer', ratio_source: 3, ratio_dest: 1, multiplier: 3 },
+    { from: 'cc/sample-rewards', to: 'program/marriott-bonvoy', kind: 'earn' },
+    { from: 'currency/usd', to: 'program/qantas-frequent-flyer', kind: 'transfer', ratio_source: 200, ratio_dest: 100, multiplier: 2 },
+  ],
+  notes: ['1 feeder programmes, 1 earning cards, 1 cash buy-ins within 3 transfer hops'],
+}
 const CURRENCIES: LoyaltyCurrency[] = [
   { slug: FIXTURE.target.slug, name: FIXTURE.target.display },
   ...FIXTURE.nodes
-    .filter((n) => n.kind === 'currency')
+    .filter((n) => n.kind === 'program')
     .map((n) => ({ slug: n.id, name: n.display })),
 ].sort((a, b) => a.name.localeCompare(b.name))
 

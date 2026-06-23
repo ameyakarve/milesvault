@@ -131,9 +131,10 @@ function CostChip({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
   )
 }
 
-// Link into the /points Paths-to-Points page for this programme's currency —
+// Link into the /points Paths-to-Points page for this programme —
 // "how do I accumulate the miles this award costs?". Prefills the amount with
-// the per-cabin chart figure (in the programme's own miles) when known.
+// the per-cabin chart figure (in the programme's own miles) when known. The
+// /points page is programme-keyed, so the target is the programme slug.
 function pointsHref(target: string, row: AwardPlanRow, cabin: Cabin): string {
   const q = new URLSearchParams({ target })
   const miles = row.miles[cabin]
@@ -142,8 +143,8 @@ function pointsHref(target: string, row: AwardPlanRow, cabin: Cabin): string {
 }
 
 function PointsPathCard({ row, cabin, names }: { row: AwardPlanRow; cabin: Cabin; names: Names }) {
-  const target = row.programme_currency
-  if (!target) return null
+  const target = `program/${row.programme}`
+  if (!row.programme) return null
   return (
     <a href={pointsHref(target, row, cabin)} onClick={(e) => e.stopPropagation()} className="group block h-full">
       <Card className="flex h-full flex-row items-center gap-2 p-3 transition-colors group-hover:bg-muted/60">
@@ -152,7 +153,7 @@ function PointsPathCard({ row, cabin, names }: { row: AwardPlanRow; cabin: Cabin
         </span>
         <div className="min-w-0">
           <div className="truncate text-xs font-medium text-foreground">
-            How to earn {nameOf(target, names)}
+            How to earn {nameOf(row.programme, names)}
           </div>
           <div className="truncate text-[11px] text-muted-foreground">Paths to these points</div>
         </div>

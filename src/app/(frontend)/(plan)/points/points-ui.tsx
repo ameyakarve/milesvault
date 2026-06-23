@@ -77,7 +77,7 @@ function CardNode({ data }: NodeProps<Node<NodeData>>) {
     </div>
   )
 }
-function CurrencyNode({ data }: NodeProps<Node<NodeData>>) {
+function ProgramNode({ data }: NodeProps<Node<NodeData>>) {
   return (
     <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-muted/40 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
       <div className="truncate text-xs font-medium text-foreground">{data.display}</div>
@@ -124,7 +124,7 @@ function FiatNode({ data }: NodeProps<Node<NodeData>>) {
     </div>
   )
 }
-const nodeTypes = { card: CardNode, currency: CurrencyNode, target: TargetNode, fiat: FiatNode }
+const nodeTypes = { card: CardNode, program: ProgramNode, target: TargetNode, fiat: FiatNode }
 
 // ── filter state ────────────────────────────────────────────────────────────
 export type PointsFilters = {
@@ -159,7 +159,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   const pass = (n: PathNode): boolean => {
     if (n.kind === 'target') return true
     if (mineKeep && !mineKeep.has(n.id)) return false
-    if (n.kind === 'currency') {
+    if (n.kind === 'program') {
       if ((n.hops ?? 0) > f.maxHops) return false
       if (f.selectedCurrencies.size) {
         const sel = f.selectedCurrencies.has(n.id)
@@ -310,7 +310,7 @@ export function Points(props: PointsProps) {
     return [...by.values()].sort((a, b) => a.issuer.localeCompare(b.issuer))
   }, [data])
   const curOptions = useMemo(
-    () => (data?.nodes ?? []).filter((n) => n.kind === 'currency' && !n.fiat).sort((a, b) => (a.multiplier ?? 99) - (b.multiplier ?? 99)),
+    () => (data?.nodes ?? []).filter((n) => n.kind === 'program' && !n.fiat).sort((a, b) => (a.multiplier ?? 99) - (b.multiplier ?? 99)),
     [data],
   )
   const filterCount = filters.selectedCards.size + filters.selectedCurrencies.size
@@ -379,7 +379,7 @@ export function Points(props: PointsProps) {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xs font-medium text-muted-foreground">Currencies</h3>
+              <h3 className="text-xs font-medium text-muted-foreground">Programmes</h3>
               <ModeTabs mode={filters.currencyMode} onMode={props.onCurrencyMode} />
               <div className="flex flex-wrap gap-1">
                 {curOptions.map((c) => (

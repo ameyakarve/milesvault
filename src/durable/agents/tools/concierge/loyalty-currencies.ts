@@ -1,8 +1,10 @@
 import type { KbHttp } from './kb-tools'
 
-// The searchable target universe for the /points page: every loyalty currency
-// (slug + display name) so the combobox can search "Qantas Points", "Avios", …
-// client-side. Compute on demand; the list is ~160 small rows.
+// The searchable target universe for the /points page: every loyalty PROGRAMME
+// (slug + display name) so the combobox can search "Qantas Frequent Flyer",
+// "Avios", "KrisFlyer", … client-side. Compute on demand; ~a few hundred rows.
+// The page is programme-keyed end to end (new account model), so the target IS
+// a programme.
 
 export type LoyaltyCurrency = { slug: string; name: string }
 
@@ -14,33 +16,17 @@ const prettySlug = (slug: string) =>
     .join(' ')
 
 export async function listLoyaltyCurrencies(kb: KbHttp): Promise<LoyaltyCurrency[]> {
-  let slugs: string[] = []
+  // list() already returns display_name inline, so a single call is enough — no
+  // per-node get() fan-out.
   try {
-    const r = (await kb.list('currency', { limit: 1000 })) as { items?: Array<{ slug: string }> }
-    slugs = (r.items ?? []).map((i) => i.slug)
+    const r = (await kb.list('program', { limit: 2000 })) as {
+      items?: Array<{ slug: string; display_name?: string | null }>
+    }
+    return (r.items ?? [])
+      .filter((i) => i.slug.startsWith('program/'))
+      .map((i) => ({ slug: i.slug, name: i.display_name ?? prettySlug(i.slug) }))
+      .sort((a, b) => a.name.localeCompare(b.name))
   } catch {
-    slugs = []
+    return []
   }
-  const out: LoyaltyCurrency[] = []
-  const CONC = 16
-  for (let i = 0; i < slugs.length; i += CONC) {
-    const batch = slugs.slice(i, i + CONC)
-    const got = await Promise.all(
-      batch.map(async (slug): Promise<LoyaltyCurrency | null> => {
-        try {
-          const n = (await kb.get(slug)) as {
-            display_name?: string | null
-            attrs?: Record<string, unknown> | null
-          }
-          // Fiat money (USD, INR, …) lives under currency/ but is never a target.
-          if (n?.attrs?.fiat === true) return null
-          return { slug, name: n?.display_name ?? prettySlug(slug) }
-        } catch {
-          return { slug, name: prettySlug(slug) }
-        }
-      }),
-    )
-    out.push(...got.filter((c): c is LoyaltyCurrency => c !== null))
-  }
-  return out.sort((a, b) => a.name.localeCompare(b.name))
 }
