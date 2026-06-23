@@ -44,7 +44,7 @@ Duration: 2:00
 Your KrisFlyer tile shows zero — let's tell it what you actually have.
 
 1. Open the [**Journal**](https://milesvault.com/editor) and click the **Update balance** chip (the scales icon).
-2. Pick **Assets:Rewards:Miles:KrisFlyer**, enter **20000**, currency **KRISFLYER**, and today's date.
+2. Pick **Assets:Rewards:KrisFlyer**, enter **20000**, currency **KRISFLYER**, and today's date.
 3. Confirm.
 
 Head back to **Home** — KrisFlyer now shows **20,000 miles**. (Behind the scenes it wrote a tidy ledger entry; you'll learn exactly what in the "Under the hood" labs.)
