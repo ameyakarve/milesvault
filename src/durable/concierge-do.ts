@@ -325,11 +325,6 @@ export class ConciergeDO
       balance_scaled: number
     }>
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    type RelItems = { items?: Array<{ other: string }> }
-    type CurrencyNode = {
-      display_name?: string | null
-      attrs?: Record<string, unknown> | null
-    }
 
     const cards = accounts.filter((a) => a.account.startsWith('Liabilities:CreditCards:'))
     const links: Array<{
@@ -373,23 +368,22 @@ export class ConciergeDO
           if (debug) t.verified_slug = hit?.slug ?? null
           if (!hit) return
           const rel = (await kbHttp.related(hit.slug, {
-            edge_type: 'DENOMINATED_IN',
+            edge_type: 'EARNS_INTO',
             direction: 'outgoing',
-          })) as RelItems
-          const currencySlugs = (rel.items ?? [])
-            .map((i) => i.other)
-            .filter((o) => o.startsWith('currency/'))
-          if (debug) t.denominated_in = currencySlugs
-          for (const slug of currencySlugs) {
-            // Dangling DENOMINATED_IN targets exist in the corpus — a missing
-            // node still yields a name-only banner from the slug.
-            const node = (await kbHttp.get(slug).catch((): null => null)) as CurrencyNode | null
-            const ticker = node?.attrs?.ticker
+          })) as { items?: Array<{ other: string; attrs?: Record<string, unknown> | null }> }
+          const earns = (rel.items ?? []).filter((i) => i.other.startsWith('program/'))
+          if (debug) t.earns_into = earns.map((e) => e.other)
+          for (const e of earns) {
+            // The earned commodity is the EARNS_INTO `currency` ticker; resolve it
+            // to its currency node (exact, via the ticker registry) for the name +
+            // beancountName hint.
+            const ticker = typeof e.attrs?.currency === 'string' ? e.attrs.currency : null
+            if (!ticker) continue
+            const node = await resolveByTicker(kbHttp, ticker).catch((): null => null)
             const bn = node?.attrs?.beancountName
             const name =
               node?.display_name ??
-              slug
-                .replace(/^currency\//, '')
+              ticker
                 .split('-')
                 .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
                 .join(' ')
@@ -498,13 +492,6 @@ export class ConciergeDO
       if (!rows.length) return null
       return rows.reduce((s, b) => s + Number(b.balance_scaled) / 10 ** b.scale, 0)
     }
-    const prettySlug = (slug: string) =>
-      slug
-        .replace(/^[^/]+\//, '')
-        .split('-')
-        .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
-        .join(' ')
-    type RelItems = { items?: Array<{ other: string }> }
 
     const cards = accounts.filter((a) => a.account.startsWith('Liabilities:CreditCards:'))
     const out: Awaited<ReturnType<ConciergeDO['cardMeta']>>['cards'] = []
@@ -520,23 +507,22 @@ export class ConciergeDO
         let reward_pending: number | null = null
         let reward_unit: string | null = null
 
-        // Points pool the card earns into (DENOMINATED_IN → a reward currency).
+        // Points pool the card earns into (EARNS_INTO → a reward programme).
         try {
           const hit = await resolveByBeancountName(kbHttp, 'cc', parts.product)
           if (hit) {
             const curRel = (await kbHttp
-              .related(hit.slug, { edge_type: 'DENOMINATED_IN', direction: 'outgoing' })
-              .catch((): null => null)) as RelItems | null
-            const curSlug = curRel?.items
-              ?.map((i) => i.other)
-              .find((o) => o.startsWith('currency/'))
-            if (curSlug) {
-              const n = (await kbHttp.get(curSlug).catch((): null => null)) as {
-                display_name?: string | null
-                attrs?: Record<string, unknown> | null
-              } | null
-              const ticker = typeof n?.attrs?.ticker === 'string' ? n.attrs.ticker : null
-              reward_label = n?.display_name ?? prettySlug(curSlug)
+              .related(hit.slug, { edge_type: 'EARNS_INTO', direction: 'outgoing' })
+              .catch((): null => null)) as {
+              items?: Array<{ other: string; attrs?: Record<string, unknown> | null }>
+            } | null
+            const earn = curRel?.items?.find((o) => o.other.startsWith('program/'))
+            if (earn) {
+              // The earned commodity ticker is the EARNS_INTO `currency` attr;
+              // resolve it to its currency node (exact ticker registry) for the label.
+              const ticker = typeof earn.attrs?.currency === 'string' ? earn.attrs.currency : null
+              const n = ticker ? await resolveByTicker(kbHttp, ticker).catch((): null => null) : null
+              reward_label = n?.display_name ?? ticker ?? null
               // Friendly display unit — neutral "pts" for every reward currency
               // (no airline-vs-other guessing; the label already names it).
               reward_unit = 'pts'
