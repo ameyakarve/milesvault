@@ -151,26 +151,13 @@ export class ConciergeDO
   }
 
   // Data behind the fluid /explore page. Like awardPlan but returns a uniform
-  // rows shape plus the distinct `airlines` for the include/exclude filter;
-  // `source` is optional (miles-only when omitted). RPC for the
+  // rows shape plus the distinct `airlines` for the include/exclude filter. The
+  // explorer is purely a flight + award-availability view: it reads no card /
+  // ledger / transfer data. "How do I accumulate these miles" (funding source,
+  // holdings, transfer paths) lives on the Points page (/points). RPC for the
   // /api/concierge/award-explore route.
-  async awardExplore(
-    origin: string,
-    destination: string,
-    source?: string,
-  ): Promise<AwardExploreResult> {
+  async awardExplore(origin: string, destination: string): Promise<AwardExploreResult> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    const ledger = this.ledgerStub()
-    // When no explicit source, join the ledger holdings so rows can be
-    // annotated with affordability. Mirror the pointsPaths() pattern exactly.
-    const [snapshot, balances] = source && source.trim()
-      ? [null, null]
-      : await Promise.all([
-          ledger.ledger_snapshot().catch((): null => null),
-          ledger
-            .query_sql('SELECT account, currency, scale, balance_scaled FROM balance_totals')
-            .catch((): null => null),
-        ])
     return buildAwardExplore(
       this.airportLookup,
       this.routeSql,
@@ -178,9 +165,6 @@ export class ConciergeDO
       kbHttp,
       origin,
       destination,
-      source,
-      snapshot?.accounts ?? null,
-      (balances?.rows ?? null) as unknown as ReadonlyArray<BalanceRow> | null,
     )
   }
 

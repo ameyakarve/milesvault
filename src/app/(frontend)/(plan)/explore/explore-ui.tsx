@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import { ArrowRight, Check, ChevronDown, ChevronsUpDown, Coins, SlidersHorizontal, X } from 'lucide-react'
+import { ArrowRight, ChevronDown, Coins, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -19,18 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
 import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
-import type { ExploreAirline, ExploreRow, Afford } from '@/durable/agents/tools/concierge/award-explore'
-import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
+import type { ExploreAirline, ExploreRow } from '@/durable/agents/tools/concierge/award-explore'
 import type { MapPoint } from './flight-map'
 import { PlanToolbar, TAB_ACTIVE } from '../plan-toolbar'
 
@@ -141,57 +131,6 @@ function CostChip({ row, cabin }: { row: AwardPlanRow; cabin: Cabin }) {
   )
 }
 
-// Affordability chip shown in the results table (no-source branch only).
-// tier 'hold'     → emerald chip: "You have the points"
-// tier 'transfer' → sky chip:     "Via <src display name>"
-function AffordChip({ afford }: { afford: Afford }) {
-  if (afford.tier === 'hold') {
-    return (
-      <Badge className="text-[10px] font-medium bg-emerald-50 text-emerald-700 border-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60">
-        You have the points
-      </Badge>
-    )
-  }
-  // Transfer tier: NO chip on the collapsed row — the source programme name
-  // (e.g. "EDGE Rewards — Burgundy tier") just eats real estate. The transfer
-  // path is shown in the expanded detail (AffordDetail).
-  return null
-}
-
-// Expanded-row detail card: concise have vs need + transfer path for the
-// selected cabin when afford data exists (no-source branch only).
-function AffordDetail({ afford, names }: { afford: Afford; names: Names }) {
-  const srcName = nameOf(afford.src, names)
-  const have = fmt(Math.floor(afford.have))
-  const need = fmt(afford.need)
-  if (afford.tier === 'hold') {
-    return (
-      <span>
-        You hold <strong>{have}</strong> {srcName} — {need} needed for this cabin.
-      </span>
-    )
-  }
-  // Transfer path: [src, …, programme_currency]
-  const segs = afford.path.map((s) => nameOf(s, names))
-  return (
-    <span>
-      Transfer {need} from {srcName} (you hold {have}).
-      {segs.length > 1 ? (
-        <>
-          {' '}
-          Path:{' '}
-          {segs.map((s, i) => (
-            <span key={i}>
-              {i > 0 ? <span className="mx-1 text-muted-foreground/60">→</span> : null}
-              {s}
-            </span>
-          ))}
-        </>
-      ) : null}
-    </span>
-  )
-}
-
 // Link into the /points Paths-to-Points page for this programme's currency —
 // "how do I accumulate the miles this award costs?". Prefills the amount with
 // the per-cabin chart figure (in the programme's own miles) when known.
@@ -223,33 +162,9 @@ function PointsPathCard({ row, cabin, names }: { row: AwardPlanRow; cabin: Cabin
   )
 }
 
-function TransferPath({ row, names }: { row: AwardPlanRow; names: Names }) {
-  if (row.multiplier === 1)
-    return <span>{nameOf(row.programme, names)} — you already hold these</span>
-  if (!row.reachable) return <span className="italic">not reachable from this card</span>
-  const segs = row.path.map((s) => nameOf(s, names))
-  return (
-    <span>
-      {segs.map((s, i) => (
-        <span key={i}>
-          {i > 0 ? <span className="mx-1 text-muted-foreground/60">→</span> : null}
-          {s}
-        </span>
-      ))}
-      <span className="ml-1 text-foreground">
-        · {row.multiplier}× · {row.hops} hop{row.hops === 1 ? '' : 's'}
-      </span>
-    </span>
-  )
-}
-
 // ── Filters (reused in the desktop rail + the mobile dialog) ──
 
 export type ExploreFilterProps = {
-  source: string
-  onSource: (s: string) => void
-  // KG-derived "Transfer from" universe (slug → name); empty while it loads.
-  sources: TransferSource[]
   // Carriers on the route (from the KG); the include/exclude target set.
   airlines: ExploreAirline[]
   airlineMode: AirlineMode
@@ -258,79 +173,6 @@ export type ExploreFilterProps = {
   onToggleAirline: (iata: string) => void
   stops: Stops
   onStops: (s: Stops) => void
-}
-
-// Searchable "Transfer from" picker over the (large) KG source list. '' = miles
-// only; otherwise a `currency/...` slug.
-function SourceCombobox({
-  value,
-  onChange,
-  sources,
-}: {
-  value: string
-  onChange: (slug: string) => void
-  sources: TransferSource[]
-}) {
-  const [open, setOpen] = useState(false)
-  const selected = sources.find((s) => s.slug === value)
-  const label = value === '' ? 'Miles only' : (selected?.name ?? value.replace(/^[a-z]+\//, ''))
-  const cards = sources.filter((s) => s.kind === 'card')
-  const currencies = sources.filter((s) => s.kind === 'currency')
-
-  const item = (slug: string, name: string) => (
-    <CommandItem
-      key={slug}
-      value={`${name} ${slug}`}
-      onSelect={() => {
-        onChange(slug)
-        setOpen(false)
-      }}
-    >
-      <Check className={cn('size-4', value === slug ? 'opacity-100' : 'opacity-0')} />
-      {name}
-    </CommandItem>
-  )
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button variant="outline" size="sm" className="w-full justify-between font-normal" />
-        }
-      >
-        <span className="truncate">{label}</span>
-        <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
-      </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search cards & points…" />
-          <CommandList>
-            <CommandEmpty>No match.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                value="Miles only"
-                onSelect={() => {
-                  onChange('')
-                  setOpen(false)
-                }}
-              >
-                <Check className={cn('size-4', value === '' ? 'opacity-100' : 'opacity-0')} />
-                Miles only — no card
-              </CommandItem>
-            </CommandGroup>
-            {cards.length > 0 ? (
-              <CommandGroup heading="Credit cards">{cards.map((s) => item(s.slug, s.name))}</CommandGroup>
-            ) : null}
-            {currencies.length > 0 ? (
-              <CommandGroup heading="Points & miles">
-                {currencies.map((s) => item(s.slug, s.name))}
-              </CommandGroup>
-            ) : null}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  )
 }
 
 function FilterBlock({ title, children }: { title: string; children: React.ReactNode }) {
@@ -345,10 +187,6 @@ function FilterBlock({ title, children }: { title: string; children: React.React
 function Filters({ f }: { f: ExploreFilterProps }) {
   return (
     <div className="space-y-5">
-      <FilterBlock title="Transfer from">
-        <SourceCombobox value={f.source} onChange={f.onSource} sources={f.sources} />
-      </FilterBlock>
-
       <FilterBlock title="Stops">
         <Tabs value={f.stops} onValueChange={(v) => f.onStops(v as Stops)}>
           <TabsList className="w-full">
@@ -427,24 +265,14 @@ function AirlineChips({ row }: { row: AwardPlanRow }) {
 
 type RowItem = { row: ExploreRow; key: string }
 
-// Affordability tier rank for sorting: 'hold' = 0, 'transfer' = 1, none = 2.
-function affordTier(row: ExploreRow, cabin: Cabin): number {
-  const a = row.afford?.[cabin]
-  if (!a) return 2
-  return a.tier === 'hold' ? 0 : 1
-}
-
 // One grouped section (Direct / Connecting), capped at 3 rows with a "show more"
 // toggle. The Direct section drops the Via column (it's always "Direct").
-// When `source` is empty (no-source branch), items are sorted by affordability
-// tier ('hold' first, then 'transfer', then unaffordable) before capping.
 function ResultSection({
   title,
   items,
   showVia,
   defaultVisible,
   cabin,
-  source,
   names,
   origin,
   destination,
@@ -457,7 +285,6 @@ function ResultSection({
   showVia: boolean
   defaultVisible: number
   cabin: Cabin
-  source: string
   names: Names
   origin: string
   destination: string
@@ -468,15 +295,8 @@ function ResultSection({
   const [showAll, setShowAll] = useState(false)
   if (items.length === 0) return null
 
-  // Sort by afford tier within the section (no-source only — preserves relative
-  // order within each tier because sort is stable in modern JS).
-  const sorted =
-    !source && items.some((x) => x.row.afford != null)
-      ? [...items].sort((a, b) => affordTier(a.row, cabin) - affordTier(b.row, cabin))
-      : items
-
   const cap = Math.max(1, defaultVisible)
-  const visible = showAll ? sorted : sorted.slice(0, cap)
+  const visible = showAll ? items : items.slice(0, cap)
   const cols = showVia ? 5 : 4
   return (
     <section>
@@ -502,7 +322,6 @@ function ResultSection({
           <TableBody>
             {visible.map(({ row, key }) => {
               const open = expanded.has(key)
-              const afford = row.afford?.[cabin] ?? null
               return (
                 <Fragment key={key}>
                   <TableRow className="cursor-pointer" onClick={() => onToggleExpanded(key)}>
@@ -511,9 +330,6 @@ function ResultSection({
                         <span className="block truncate font-medium text-foreground">
                           {nameOf(row.programme, names)}
                         </span>
-                        {!source && afford ? (
-                          <AffordChip afford={afford} />
-                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -542,20 +358,10 @@ function ResultSection({
                         {(() => {
                           const pts = routePoints(row, origin, destination, airports)
                           return (
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                               {pts.length >= 2 ? (
                                 <Card className="flex h-full items-center justify-center p-2">
                                   <FlightMap points={pts} />
-                                </Card>
-                              ) : null}
-                              {source ? (
-                                <Card className="flex h-full items-center p-3 text-xs text-muted-foreground">
-                                  <TransferPath row={row} names={names} />
-                                </Card>
-                              ) : null}
-                              {!source && afford ? (
-                                <Card className="flex h-full items-center p-3 text-xs text-muted-foreground">
-                                  <AffordDetail afford={afford} names={names} />
                                 </Card>
                               ) : null}
                               <PointsPathCard row={row} cabin={cabin} names={names} />
@@ -594,7 +400,6 @@ function Results({
   error,
   rows,
   cabin,
-  source,
   names,
   origin,
   destination,
@@ -607,7 +412,6 @@ function Results({
   error?: string
   rows: ExploreRow[]
   cabin: Cabin
-  source: string
   names: Names
   origin: string
   destination: string
@@ -651,7 +455,7 @@ function Results({
   const directCap = Math.min(direct.length, perSection)
   const connectingCap = Math.min(connecting.length, perSection)
 
-  const sectionProps = { cabin, source, names, origin, destination, airports, expanded, onToggleExpanded }
+  const sectionProps = { cabin, names, origin, destination, airports, expanded, onToggleExpanded }
   return (
     <div className="space-y-5">
       <ResultSection title="Direct" items={direct} showVia={false} defaultVisible={directCap} {...sectionProps} />
@@ -706,9 +510,6 @@ export function Explore(props: ExploreProps) {
     return () => ro.disconnect()
   }, [])
   const f: ExploreFilterProps = {
-    source: props.source,
-    onSource: props.onSource,
-    sources: props.sources,
     airlines: props.airlines,
     airlineMode: props.airlineMode,
     onAirlineMode: props.onAirlineMode,
@@ -718,9 +519,7 @@ export function Explore(props: ExploreProps) {
     onStops: props.onStops,
   }
   const activeFilters =
-    (props.source ? 1 : 0) +
-    (props.stops !== 'all' ? 1 : 0) +
-    (props.selectedAirlines.size > 0 ? 1 : 0)
+    (props.stops !== 'all' ? 1 : 0) + (props.selectedAirlines.size > 0 ? 1 : 0)
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
@@ -805,7 +604,6 @@ export function Explore(props: ExploreProps) {
             error={props.error}
             rows={props.rows}
             cabin={props.cabin}
-            source={props.source}
             names={props.names}
             origin={props.resultOrigin}
             destination={props.resultDestination}

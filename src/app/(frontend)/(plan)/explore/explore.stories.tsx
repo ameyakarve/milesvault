@@ -9,7 +9,6 @@ import {
   type Stops,
 } from './explore-ui'
 import type { ExploreAirline, ExploreRow } from '@/durable/agents/tools/concierge/award-explore'
-import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
 
 const CABINS: Cabin[] = ['economy', 'premium_economy', 'business', 'first']
 type MilesByCabin = Partial<Record<Cabin, [number, number]>>
@@ -25,11 +24,12 @@ function mk(
   ownMetal = false,
 ): ExploreRow {
   const miles = {} as ExploreRow['miles']
+  // The explorer shows each programme's own published miles — cost is always
+  // blank here (point-costing / transfers live on /points).
   const cost = {} as ExploreRow['cost']
   for (const c of CABINS) {
-    const m = milesBy[c] ?? null
-    miles[c] = m
-    cost[c] = mult != null && m ? [Math.round(m[0] * mult), Math.round(m[1] * mult)] : null
+    miles[c] = milesBy[c] ?? null
+    cost[c] = null
   }
   return {
     programme,
@@ -155,20 +155,6 @@ const AIRLINES: ExploreAirline[] = [
   { iata: 'QF', name: 'Qantas' },
 ]
 
-// Stands in for the KG-derived "Transfer from" list (cards + transferable
-// currencies; the real one is a few hundred items, computed on demand).
-const SOURCES: TransferSource[] = [
-  { slug: 'cc/axis-magnus', name: 'Axis Bank Magnus', kind: 'card' },
-  { slug: 'cc/axis-reserve', name: 'Axis Bank Reserve', kind: 'card' },
-  { slug: 'cc/hdfc-infinia-metal', name: 'HDFC Infinia (Metal)', kind: 'card' },
-  { slug: 'cc/icici-emeralde', name: 'ICICI Emeralde', kind: 'card' },
-  { slug: 'cc/sbi-aurum', name: 'SBI Aurum', kind: 'card' },
-  { slug: 'currency/amex-membership-rewards-points', name: 'Amex Membership Rewards India', kind: 'currency' },
-  { slug: 'currency/bilt-points', name: 'Bilt Rewards Points', kind: 'currency' },
-  { slug: 'currency/edge-rewards-burgundy', name: 'EDGE Rewards — Burgundy tier', kind: 'currency' },
-  { slug: 'currency/marriott-bonvoy-points', name: 'Marriott Bonvoy Points', kind: 'currency' },
-]
-
 // Stands in for the KG-derived `names` map the endpoint returns (slug →
 // display_name). The real page gets this from the graph, never hardcoded.
 const NAMES: Record<string, string> = {
@@ -210,7 +196,6 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
   const [origin, setOrigin] = useState('BLR')
   const [destination, setDestination] = useState('NRT')
   const [cabin, setCabin] = useState<Cabin>('business')
-  const [source, setSource] = useState('currency/edge-rewards-burgundy')
   const [stops, setStops] = useState<Stops>('all')
   const [sort, setSort] = useState<SortKey>('cost')
   const [airlineMode, setAirlineMode] = useState<AirlineMode>('include')
@@ -241,9 +226,6 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
         onDestination={setDestination}
         cabin={cabin}
         onCabin={setCabin}
-        source={source}
-        onSource={setSource}
-        sources={SOURCES}
         airlines={AIRLINES}
         airlineMode={airlineMode}
         onAirlineMode={setAirlineMode}
@@ -267,7 +249,6 @@ function Harness({ status = 'ready' as ExploreStatus }: { status?: ExploreStatus
         resultOrigin={origin}
         resultDestination={destination}
         onReset={() => {
-          setSource('')
           setStops('all')
           setSelectedAirlines(new Set())
           setAirlineMode('include')

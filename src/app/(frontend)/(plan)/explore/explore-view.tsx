@@ -1,8 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useAsyncData } from '@/components/shared/use-async-data'
-import { fetchJSON } from '@/lib/fetch-json'
 import {
   Explore,
   CABIN_TABS,
@@ -12,13 +10,12 @@ import {
   type Stops,
 } from './explore-ui'
 import type { AwardExploreResult, ExploreRow } from '@/durable/agents/tools/concierge/award-explore'
-import type { TransferSource } from '@/durable/agents/tools/concierge/transfer-sources'
 
 const isIata = (s: string) => /^[A-Z]{3}$/.test(s)
 
+// Sort key for a row in the chosen cabin: the programme's own published miles
+// (the explorer shows miles, never a costed plan).
 function primaryValue(row: ExploreRow, cabin: Cabin): number {
-  const c = row.cost[cabin]
-  if (Array.isArray(c)) return c[0]
   const m = row.miles[cabin]
   if (Array.isArray(m)) return m[0]
   return Number.POSITIVE_INFINITY
@@ -30,7 +27,6 @@ function primaryValue(row: ExploreRow, cabin: Cabin): number {
 export function ExploreView() {
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
-  const [source, setSource] = useState('') // '' = miles only; else a currency/* slug
   const [cabin, setCabin] = useState<Cabin>('business')
   const [stops, setStops] = useState<Stops>('all')
   const [sort, setSort] = useState<SortKey>('cost')
@@ -38,21 +34,7 @@ export function ExploreView() {
   const [selectedAirlines, setSelectedAirlines] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  // The KG-derived "Transfer from" list — fetched once, cached server-side. A
-  // failure here just leaves the picker empty (it's a secondary affordance), but
-  // the error is no longer silently swallowed.
-  const sources =
-    useAsyncData<TransferSource[]>(
-      (signal) =>
-        fetchJSON<{ sources?: TransferSource[] }>('/api/concierge/transfer-sources', {
-          signal,
-        }).then((d) => d.sources ?? []),
-      [],
-    ).data ?? []
-
-  // Origin / destination / cabin are URL-synced (shareable). The source currency
-  // is in-session only — it's chosen from the KG picker, so there's no reason to
-  // round-trip it through the URL.
+  // Origin / destination / cabin are URL-synced (shareable).
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
     const q = new URLSearchParams(window.location.search)
@@ -75,7 +57,7 @@ export function ExploreView() {
   }, [origin, destination, cabin])
 
   const ready = isIata(origin) && isIata(destination)
-  const reqKey = `${origin}|${destination}|${source}`
+  const reqKey = `${origin}|${destination}`
   const [result, setResult] = useState<{
     key: string
     data?: AwardExploreResult
@@ -91,7 +73,6 @@ export function ExploreView() {
     let cancelled = false
     const handle = setTimeout(() => {
       const q = new URLSearchParams({ origin, destination })
-      if (source) q.set('source', source)
       fetch(`/api/concierge/award-explore?${q.toString()}`)
         .then(async (r) => {
           if (!r.ok) throw new Error((await r.text()) || `HTTP ${r.status}`)
@@ -138,7 +119,6 @@ export function ExploreView() {
     })
   }, [])
   const onReset = useCallback(() => {
-    setSource('')
     setStops('all')
     setSelectedAirlines(new Set())
     setAirlineMode('include')
@@ -172,9 +152,6 @@ export function ExploreView() {
       onDestination={setDestination}
       cabin={cabin}
       onCabin={setCabin}
-      source={source}
-      onSource={setSource}
-      sources={sources}
       airlines={data?.airlines ?? []}
       airlineMode={airlineMode}
       onAirlineMode={setAirlineMode}
