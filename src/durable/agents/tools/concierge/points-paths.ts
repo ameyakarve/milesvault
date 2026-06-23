@@ -105,41 +105,56 @@ async function resolveProgram(kb: KbHttp, text: string): Promise<string | null> 
   }
 }
 
-// Cheapest (min cumulative multiplier) path from every programme that can REACH
-// `target` within MAX_HOPS, in one backward pass over incoming TRANSFERS edges.
-// multiplier = source-programme points per 1 target point; the hop bound keeps
-// gain-edges (multiplier < 1) from money-pumping a cheaper-but-fake path.
+// (programme, currency) reachability — the heart of correctness. A STATE means
+// "holding `currency` in `programme`, you can reach the target." We walk
+// TRANSFERS backward from the target and follow an edge ONLY when its
+// `to_currency` is the currency we need in the destination — so a card's
+// specific tier-currency counts only if THAT currency actually transfers all the
+// way along the chain. (Without this, HDFC BizBlack — KrisFlyer-only — would
+// wrongly show on an Accor path just because it shares the SmartBuy programme
+// with Infinia, whose currency is the one that transfers.)
+// multiplier = source-currency units per 1 target unit; the hop bound stops a
+// gain-edge (multiplier < 1) from money-pumping a cheaper-but-fake path. The map
+// is keyed by stateKey(programme, currency) and INCLUDES the target's own seeds.
 type Reach = { multiplier: number; hops: number; path: string[] }
-async function cheapestTo(
-  incoming: (program: string) => Promise<Related>,
+const stateKey = (program: string, currency: string) => `${program}\t${currency}`
+
+async function reachStates(
+  transfersIn: (program: string) => Promise<Related>,
   target: string,
+  targetCurrencies: Set<string>,
 ): Promise<Map<string, Reach>> {
-  type Best = { mult: number; hops: number; path: string[] }
-  const best = new Map<string, Best>([[target, { mult: 1, hops: 0, path: [target] }]])
-  let frontier = [target]
+  const best = new Map<string, Reach>()
+  let frontier: Array<{ program: string; currency: string }> = []
+  for (const c of targetCurrencies) {
+    best.set(stateKey(target, c), { multiplier: 1, hops: 0, path: [target] })
+    frontier.push({ program: target, currency: c })
+  }
   for (let depth = 0; depth < MAX_HOPS && frontier.length; depth++) {
-    const next: string[] = []
-    for (const node of frontier) {
-      const cur = best.get(node)!
-      const r = await incoming(node)
+    const next: Array<{ program: string; currency: string }> = []
+    for (const st of frontier) {
+      const cur = best.get(stateKey(st.program, st.currency))!
+      const r = await transfersIn(st.program)
       for (const it of r.items ?? []) {
         if (!it.other.startsWith('program/') || it.other === target) continue
+        const to = tickerStr(it.attrs?.to_currency)
+        const from = tickerStr(it.attrs?.from_currency)
+        if (!to || !from || to !== st.currency) continue // edge must DELIVER the needed currency
         const rs = Number(it.attrs?.ratio_source)
         const rd = Number(it.attrs?.ratio_dest)
         if (!(rs > 0 && rd > 0)) continue
-        // rs `from` buy rd `node`; 1 node costs rs/rd `from`. Compose toward target.
-        const mult = cur.mult * (rs / rd)
-        const prev = best.get(it.other)
-        if (!prev || mult < prev.mult) {
-          best.set(it.other, { mult, hops: cur.hops + 1, path: [it.other, ...cur.path] })
-          next.push(it.other)
+        const mult = cur.multiplier * (rs / rd)
+        const k = stateKey(it.other, from)
+        const prev = best.get(k)
+        if (!prev || mult < prev.multiplier) {
+          best.set(k, { multiplier: mult, hops: cur.hops + 1, path: [it.other, ...cur.path] })
+          next.push({ program: it.other, currency: from })
         }
       }
     }
     frontier = next
   }
-  best.delete(target)
-  return new Map([...best].map(([slug, b]) => [slug, { multiplier: b.mult, hops: b.hops, path: b.path }]))
+  return best
 }
 
 export async function buildPointsPaths(
@@ -186,67 +201,99 @@ export async function buildPointsPaths(
     }
   }
 
-  // 1. Cheapest ratio from every programme that can reach the target.
-  const reach = await cheapestTo(transfersIn, target)
-  const programs = new Set<string>([target, ...reach.keys()])
+  // 1. The target's own currency/currencies — what "arrives" at the target:
+  //    to_currency of its incoming TRANSFERS, plus anything earned/bought
+  //    directly into it. These seed the reachability walk.
+  const [tInTarget, eInTarget, bInTarget] = await Promise.all([
+    transfersIn(target),
+    earnsIn(target),
+    buysIn(target),
+  ])
+  const targetCurrencies = new Set<string>()
+  const addCcy = (c: string | null) => {
+    if (c) targetCurrencies.add(c)
+  }
+  for (const it of tInTarget.items ?? []) addCcy(tickerStr(it.attrs?.to_currency))
+  for (const it of eInTarget.items ?? []) addCcy(tickerStr(it.attrs?.currency))
+  for (const it of bInTarget.items ?? []) addCcy(tickerStr(it.attrs?.currency))
 
-  // 2. For each programme in the subgraph: its incoming transfer edges (kept
-  //    when the feeder is also in-subgraph), the cards that earn it, and the
-  //    fiat currencies that buy into it. Collect each programme's tickers from
-  //    the currencies named on those edges.
-  const edges: PathEdge[] = []
-  const cardSlugs = new Set<string>()
-  const cardEarns: Array<{ card: string; program: string }> = []
-  const fiatSlugs = new Set<string>()
-  // fiat → its cheapest cash-per-target buy and the route it implies
-  type FiatBuy = { multiplier: number; hops: number; path: string[] }
-  const fiatBest = new Map<string, FiatBuy>()
-  const tickersOf = new Map<string, Set<string>>()
-  const addTicker = (program: string, t: string | null) => {
-    if (!t) return
-    ;(tickersOf.get(program) ?? tickersOf.set(program, new Set()).get(program)!).add(t)
+  // 2. (programme, currency) reachability — currency-consistent chains only.
+  const states = await reachStates(transfersIn, target, targetCurrencies)
+  const hasState = (program: string, currency: string | null) =>
+    currency != null && states.has(stateKey(program, currency))
+  const stateMult = (program: string, currency: string) =>
+    program === target ? 1 : (states.get(stateKey(program, currency))?.multiplier ?? Infinity)
+  // Feeder programmes (state programmes minus the target) + each programme's
+  // reachable currencies + its single cheapest state (for the node's value).
+  const programs = new Set<string>()
+  const reachCcys = new Map<string, Set<string>>()
+  const progBest = new Map<string, Reach>()
+  for (const [k, r] of states) {
+    const tab = k.indexOf('\t')
+    const p = k.slice(0, tab)
+    const c = k.slice(tab + 1)
+    if (p === target) continue
+    programs.add(p)
+    ;(reachCcys.get(p) ?? reachCcys.set(p, new Set()).get(p)!).add(c)
+    const prev = progBest.get(p)
+    if (!prev || r.multiplier < prev.multiplier) progBest.set(p, r)
   }
 
+  // 3. Per programme, keep ONLY the transfer edges, earning cards, and fiat
+  //    buy-ins that lie on a currency-valid path (from/to currency must match a
+  //    reachable state — that's what keeps an invalid tier off the graph).
+  const edges: PathEdge[] = []
+  const cardSlugs = new Set<string>()
+  const cardEarns: Array<{ card: string; program: string; currency: string }> = []
+  const fiatSlugs = new Set<string>()
+  type FiatBuy = { multiplier: number; hops: number; path: string[] }
+  const fiatBest = new Map<string, FiatBuy>()
+
   await Promise.all(
-    [...programs].map(async (p) => {
+    [target, ...programs].map(async (p) => {
       const [t, e, b] = await Promise.all([transfersIn(p), earnsIn(p), buysIn(p)])
       for (const it of t.items ?? []) {
-        if (!programs.has(it.other)) continue
+        if (!it.other.startsWith('program/')) continue
+        const from = tickerStr(it.attrs?.from_currency)
+        const to = tickerStr(it.attrs?.to_currency)
+        // Keep the edge only if it delivers a needed currency into p AND its
+        // source currency is itself reachable in the feeder.
+        if (!hasState(p, to) || !hasState(it.other, from)) continue
         const rs = Number(it.attrs?.ratio_source)
         const rd = Number(it.attrs?.ratio_dest)
         if (!(rs > 0 && rd > 0)) continue
         edges.push({ from: it.other, to: p, kind: 'transfer', ratio_source: rs, ratio_dest: rd, multiplier: rs / rd })
-        addTicker(it.other, tickerStr(it.attrs?.from_currency))
-        addTicker(p, tickerStr(it.attrs?.to_currency))
       }
       for (const it of e.items ?? []) {
         if (!it.other.startsWith('cc/')) continue
+        const c = tickerStr(it.attrs?.currency)
+        if (!hasState(p, c)) continue // the card's EARNED currency must reach the target
         cardSlugs.add(it.other)
-        cardEarns.push({ card: it.other, program: p })
+        cardEarns.push({ card: it.other, program: p, currency: c! })
         edges.push({ from: it.other, to: p, kind: 'earn' })
-        addTicker(p, tickerStr(it.attrs?.currency))
       }
       for (const it of b.items ?? []) {
         if (!it.other.startsWith('currency/')) continue
+        const c = tickerStr(it.attrs?.currency)
+        if (!hasState(p, c)) continue // the bought currency must reach the target
         const rs = Number(it.attrs?.ratio_source)
         const rd = Number(it.attrs?.ratio_dest)
         if (!(rs > 0 && rd > 0)) continue
         fiatSlugs.add(it.other)
         edges.push({ from: it.other, to: p, kind: 'transfer', ratio_source: rs, ratio_dest: rd, multiplier: rs / rd })
-        addTicker(p, tickerStr(it.attrs?.currency))
         // Cash minor-units per 1 TARGET point via this buy + downstream transfer.
-        const downstream = p === target ? 1 : (reach.get(p)?.multiplier ?? Infinity)
-        const cashPerTarget = (rs / rd) * downstream
-        const hops = (p === target ? 0 : (reach.get(p)?.hops ?? 0)) + 1
-        const path = [it.other, ...(p === target ? [target] : (reach.get(p)?.path ?? [target]))]
+        const st = p === target ? null : states.get(stateKey(p, c!))
+        const cashPerTarget = (rs / rd) * (p === target ? 1 : (st?.multiplier ?? Infinity))
+        const hops = (st?.hops ?? 0) + 1
+        const path = [it.other, ...(st?.path ?? [target])]
         const prev = fiatBest.get(it.other)
         if (!prev || cashPerTarget < prev.multiplier) fiatBest.set(it.other, { multiplier: cashPerTarget, hops, path })
       }
     }),
   )
 
-  // 3. Resolve display + attrs for every node, and each card's issuer.
-  const allSlugs = [...programs, ...cardSlugs, ...fiatSlugs]
+  // 4. Resolve display + attrs for every node, and each card's issuer.
+  const allSlugs = [target, ...programs, ...cardSlugs, ...fiatSlugs]
   const fetched = new Map<string, Node>()
   await Promise.all(
     allSlugs.map(async (slug) => {
@@ -269,7 +316,11 @@ export async function buildPointsPaths(
   )
 
   const nameOf = (slug: string) => fetched.get(slug)?.display_name ?? prettySlug(slug)
-  const tickerList = (program: string) => [...(tickersOf.get(program) ?? [])]
+  // A programme's tickers = the currencies in which it can REACH the target
+  // (its reachable states), so the holdings overlay only marks it "held" when
+  // the user holds a currency that's actually on a valid path.
+  const tickerList = (program: string) =>
+    program === target ? [...targetCurrencies] : [...(reachCcys.get(program) ?? [])]
 
   const nodes: PathNode[] = []
   nodes.push({
@@ -281,8 +332,7 @@ export async function buildPointsPaths(
     hops: 0,
   })
   for (const p of programs) {
-    if (p === target) continue
-    const cell = reach.get(p)
+    const cell = progBest.get(p)
     nodes.push({
       id: p,
       kind: 'program',
@@ -293,13 +343,12 @@ export async function buildPointsPaths(
       path: cell?.path,
     })
   }
-  // a card's value = the cheapest value of the programme it earns into
-  const programMult = new Map<string, number>([[target, 1], ...[...reach].map(([s, c]) => [s, c.multiplier] as const)])
+  // a card's value = the cheapest valid (programme, earned-currency) it reaches
   for (const cc of cardSlugs) {
-    const earned = cardEarns.filter((e) => e.card === cc).map((e) => e.program)
-    const best = earned.reduce<{ m: number } | null>((acc, p) => {
-      const m = programMult.get(p)
-      return m != null && (acc === null || m < acc.m) ? { m } : acc
+    const mine = cardEarns.filter((e) => e.card === cc)
+    const best = mine.reduce<{ m: number } | null>((acc, e) => {
+      const m = stateMult(e.program, e.currency)
+      return Number.isFinite(m) && (acc === null || m < acc.m) ? { m } : acc
     }, null)
     nodes.push({
       id: cc,
@@ -328,7 +377,7 @@ export async function buildPointsPaths(
   }
 
   notes.push(
-    `${programs.size - 1} feeder programmes, ${cardSlugs.size} earning cards, ${fiatSlugs.size} cash buy-ins within ${MAX_HOPS} transfer hops`,
+    `${programs.size} feeder programmes, ${cardSlugs.size} earning cards, ${fiatSlugs.size} cash buy-ins within ${MAX_HOPS} transfer hops`,
   )
 
   return {
