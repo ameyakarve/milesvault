@@ -33,6 +33,7 @@ export { LedgerDO } from "../src/durable/ledger-do.ts"
 export { ChatDO } from "../src/durable/chat-do.ts"
 export { ConciergeDO } from "../src/durable/concierge-do.ts"
 export { MembershipDO } from "../src/durable/membership-do.ts"
+export { AirportsDO } from "../src/durable/airports/airports-do.ts"
 export { RefreshMagnifyWorkflow } from "../src/workflows/refresh-magnify.ts"
 
 const __SESSION_COOKIE = "authjs.session-token"

@@ -483,7 +483,7 @@ function Results({
 // Compact toolbar trigger showing the chosen IATA; opens a search popover that
 // queries /api/concierge/airports (KG airport nodes by name / city / IATA) with
 // a debounce. Server-side search, so cmdk's own filtering is disabled.
-type AirportHit = { iata: string; name: string }
+type AirportHit = { iata: string; name: string; city?: string | null }
 
 function AirportCombobox({
   value,
@@ -565,7 +565,10 @@ function AirportCombobox({
                     }}
                   >
                     <span className="w-9 shrink-0 font-mono text-xs font-medium">{a.iata}</span>
-                    <span className="truncate text-xs text-muted-foreground">{a.name}</span>
+                    <span className="truncate text-xs">
+                      {a.name}
+                      {a.city ? <span className="text-muted-foreground"> · {a.city}</span> : null}
+                    </span>
                   </CommandItem>
                 ))}
               </CommandGroup>

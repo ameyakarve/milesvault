@@ -42,6 +42,10 @@
         "name": "MEMBERSHIP_DO",
         "class_name": "MembershipDO",
       },
+      {
+        "name": "AIRPORTS_DO",
+        "class_name": "AirportsDO",
+      },
     ],
   },
   "ai": {
@@ -63,6 +67,7 @@
     { "tag": "v3", "deleted_classes": ["StatementExtractorDO"], "new_sqlite_classes": ["ChatDO"] },
     { "tag": "v4", "new_sqlite_classes": ["ConciergeDO"] },
     { "tag": "v5", "new_sqlite_classes": ["MembershipDO"] },
+    { "tag": "v6", "new_sqlite_classes": ["AirportsDO"] },
   ],
   "vars": {
     "APP_ENV": "production",
@@ -127,6 +132,10 @@
             "name": "MEMBERSHIP_DO",
             "class_name": "MembershipDO",
           },
+          {
+            "name": "AIRPORTS_DO",
+            "class_name": "AirportsDO",
+          },
         ],
       },
       "ai": {
@@ -148,6 +157,7 @@
         { "tag": "v3", "deleted_classes": ["StatementExtractorDO"], "new_sqlite_classes": ["ChatDO"] },
         { "tag": "v4", "new_sqlite_classes": ["ConciergeDO"] },
         { "tag": "v5", "new_sqlite_classes": ["MembershipDO"] },
+        { "tag": "v6", "new_sqlite_classes": ["AirportsDO"] },
       ],
       "services": [
         { "binding": "PROD", "service": "milesvault" },
