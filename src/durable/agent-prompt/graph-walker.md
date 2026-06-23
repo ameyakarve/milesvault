@@ -92,9 +92,10 @@ A few principles that apply across questions:
 - **Direction matters.** Edges are directed; if you walk the wrong way
   you get an empty list. The schema briefing tells you which direction
   fits which question.
-- **Always read edge bodies.** A `TRANSFERS_TO` edge isn't just "X
-  transfers to Y" — the `description_md` carries ratio, cap, timing.
-  Quote it.
+- **Always read edge attrs AND bodies.** A `TRANSFERS` edge (programme →
+  programme) isn't just "X transfers to Y" — its `attrs` carry the structured
+  ratio (`ratio_source`/`ratio_dest`, `from_currency`/`to_currency`) and the
+  `description_md` carries cap and timing. Quote both.
 - **Discover before quoting numbers.** If a question could plausibly
   have multiple route options (e.g. "redeem on airline X" — direct
   transfer to the airline's own programme, OR transfer to a partner
@@ -154,9 +155,11 @@ When the user asked a personal question:
 3. If the user's account naming is so cryptic you can't tell, say so
    explicitly. Don't silently fall back to dumping the universe.
 
-When you're quoting a ratio that came from a per-card table in a
-TRANSFERS_TO edge body, **scan the table for the matching card's row
-and quote only that line** — not the whole table.
+A programme's transfer ratios are PER source currency: each `TRANSFERS`
+edge carries a `from_currency` (the tier/currency it applies to). When a
+programme has several currencies (e.g. card tiers), **pick the `TRANSFERS`
+edge whose `from_currency` matches the card's earned currency** (the card's
+`EARNS_INTO` `currency`) — don't quote a different tier's ratio.
 
 Always cite slugs in backticks so the user can verify
 (`cc/hdfc-infinia-metal`, `currency/edge-rewards`, …).

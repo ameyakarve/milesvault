@@ -7,10 +7,9 @@ import type { KbHttp } from './kb-tools'
 // "Best award options for this O&D" — the objective fly-side only. Given just
 // origin + destination, it finds every nonstop + one-stop routing and prices
 // EVERY programme that can actually book each routing, through the real charts.
-// It does NOT scope to a card or cost things in the user's points — that is the
-// agent's job: it walks the card's TRANSFERS_TO partners (via transfer_matrix),
-// drops programmes the card can't reach, and costs the rest. Keeping this tool
-// card-agnostic is what makes it generic. Directs are listed first.
+// It does NOT scope to a card or cost things in the user's points — accumulation
+// and transfers live on the /points page (TRANSFERS / EARNS_INTO graph). Keeping
+// this tool card-agnostic is what makes it generic. Directs are listed first.
 
 // A cabin cell: a real published [min,max] range, OR the string "dynamic"
 // (the programme can book it but publishes no chart/bounds — show "varies,

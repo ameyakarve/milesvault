@@ -32,9 +32,9 @@ export interface KbHttp {
 // walk the graph in a few hops:
 //
 //   resolve("Marriott Bonvoy") → program/marriott-bonvoy
-//   related(slug=program/marriott-bonvoy, edge_type=TRANSFERS_TO)
-//     → list of currency slugs the points transfer to
-//   get(slug=currency/asia-miles) → node body with transfer ratio detail
+//   related(slug=program/marriott-bonvoy, edge_type=TRANSFERS)
+//     → programmes it transfers to, with ratio attrs
+//   get(slug=program/asia-miles) → node body with transfer detail
 //
 // The schema briefing (/api/kb/agents.md) is folded into the agent's
 // system prompt, so the agent already knows what prefixes and edge
@@ -76,8 +76,9 @@ const RELATED_OUTPUT = z.object({
       direction: z.enum(['outgoing', 'incoming']),
       other: z.string(),
       description_md: z.string().nullable(),
-      // Typed edge attributes (e.g. TRANSFERS_TO carries
-      // { ratio_source, ratio_dest }). Null when the edge type has none.
+      // Typed edge attributes (e.g. TRANSFERS carries { ratio_source,
+      // ratio_dest, from_currency, to_currency }; EARNS_INTO carries
+      // { currency }). Null when the edge type has none.
       attrs: z.record(z.string(), z.unknown()).nullable().optional(),
     }),
   ),
@@ -168,9 +169,11 @@ export function makeKbTools(http: KbHttp) {
         "description_md }`. `other` is the slug on the OTHER side of the " +
         "edge — for an outgoing edge it's the `to_slug`, for incoming it's " +
         "the `from_slug` (flattened so you don't have to branch). Pass " +
-        "`edge_type` to filter (e.g. 'TRANSFERS_TO', 'BOOKS_ON'). " +
+        "`edge_type` to filter (e.g. 'TRANSFERS', 'EARNS_INTO', 'BOOKS_ON'). " +
         "Direction defaults to 'both'; pick 'outgoing' or 'incoming' to " +
-        'narrow. Read `description_md` — it has the ratio, cap, timing.',
+        'narrow. Read BOTH `attrs` (structured fields — TRANSFERS carries ' +
+        '`ratio_source`/`ratio_dest`/`from_currency`/`to_currency`; EARNS_INTO ' +
+        'carries `currency`) AND `description_md` (cap, timing, earn-rate prose).',
       inputSchema: z.object({
         slug: z.string().min(3).describe('Prefixed slug whose edges you want.'),
         edge_type: z

@@ -26,9 +26,10 @@ tool, don't deliberate in prose, don't narrate.
   hand. Do NOT chain `kb_resolve`/`kb_get`/`kb_related` to discover a card's pool;
   call `card_guide` once.
 - `kb_resolve` / `kb_get` / `kb_related` — the knowledge graph, for relationships
-  `card_guide` doesn't already give you — chiefly `TRANSFERS_TO`, the ratio
-  between two currencies/programmes (a transfer is NOT 1:1 unless the KG edge says
-  so). For a single card's own pool / earn rate / account, use `card_guide` above
+  `card_guide` doesn't already give you — chiefly `TRANSFERS` (programme →
+  programme), whose `attrs` carry the `ratio_source`/`ratio_dest` ratio (a
+  transfer is NOT 1:1 unless the KG edge says so). For a single card's own pool /
+  earn rate / account, use `card_guide` above
   — don't hand-walk these.
 - `list_reward_accounts` — the canonical reward accounts + tickers for
   standalone programmes. Copy the exact `account` and `ticker` VERBATIM; never
@@ -98,8 +99,9 @@ tool, don't deliberate in prose, don't narrate.
   read its exact text → `draft_transaction` with `replaces` (+ `text` for an edit).
   NEVER append a new entry to "fix" or "change" an existing one.
 - **Transfer** points (programme → programme, e.g. Axis → Accor) → `kb_related`
-  on the source currency for the `TRANSFERS_TO` ratio → author the two-leg
-  conversion with `@@` at THAT ratio. Never 1:1 unless the KG says so.
+  on the source programme for the `TRANSFERS` edge, read its `ratio_source`/
+  `ratio_dest` attrs → author the two-leg conversion with `@@` at THAT ratio.
+  Never 1:1 unless the KG says so.
 - **Redemption** (points → flight / hotel / credit) → carry the cash value as an
   `@@` total price on the points leg; if you don't have the cash value, `clarify`
   — never guess a cpp.

@@ -1,13 +1,13 @@
 import { tool } from 'ai'
 import { z } from 'zod'
-import type { KbHttp } from '../concierge/kb-tools'
+import { resolveByTicker, type KbHttp } from '../concierge/kb-tools'
 
 // Fetch a card's drafting guide from the knowledge graph (owner design:
 // earn knowledge lives in prose; each card file may carry a "## Logging"
 // section whose worked beancount examples ARE the spec, with EARN_RULE
 // edges as the per-MCC overrides). Returns everything the drafting agent
 // needs in one call: the Logging guide, the reward pool (ticker + account
-// path), the DENOMINATED_IN rate notes, and every exception.
+// path), the EARNS_INTO rate notes, and every exception.
 export type CardGuideResult =
   | {
       ok: true
@@ -17,7 +17,7 @@ export type CardGuideResult =
       // munge a leaf from `name` (the display H1).
       card: { slug: string; name: string | null; beancountName: string | null; account: string | null }
       pool: {
-        currency: string
+        currency: string | null
         name: string | null
         ticker: string | null
         account: string | null
@@ -95,9 +95,14 @@ export async function fetchCardGuide(
 
     // High limit: cards with many per-MCC EARN_RULE edges (Swiggy HDFC has
     // ~100) would otherwise truncate the default page and drop the ISSUED_BY /
-    // DENOMINATED_IN edges that carry the issuer + reward pool.
+    // EARNS_INTO edges that carry the issuer + reward pool.
     const rel = (await kb.related(top.slug, { direction: 'outgoing', limit: 500 })) as {
-      items?: Array<{ edge_type: string; other: string; description_md: string | null }>
+      items?: Array<{
+        edge_type: string
+        other: string
+        description_md: string | null
+        attrs?: Record<string, unknown> | null
+      }>
     }
     const items = rel.items ?? []
 
@@ -114,30 +119,31 @@ export async function fetchCardGuide(
     const cardAccount =
       issuerBn && cardBn ? `Liabilities:CreditCards:${issuerBn}:${cardBn}` : null
 
-    const denom = items.find(
-      (i) => i.edge_type === 'DENOMINATED_IN' && i.other.startsWith('currency/'),
+    // The card's reward pool comes from its EARNS_INTO (card→programme) edge: the
+    // `currency` attr is the commodity ticker (exact — the ticker registry key),
+    // and the edge BODY carries the earn-rate prose. Resolve the ticker to its
+    // currency node (EXACT, no fuzzy) for the slug + display name.
+    const earns = items.find(
+      (i) => i.edge_type === 'EARNS_INTO' && i.other.startsWith('program/'),
     )
     let pool: {
-      currency: string
+      currency: string | null
       name: string | null
       ticker: string | null
       account: string | null
       rate_notes: string | null
     } | null = null
-    if (denom) {
-      const cur = (await kb.get(denom.other).catch((): null => null)) as {
-        display_name?: string | null
-        attrs?: Record<string, unknown> | null
-      } | null
-      const ticker = cur?.attrs?.ticker
+    if (earns) {
+      const ticker = typeof earns.attrs?.currency === 'string' ? earns.attrs.currency : null
+      const cur = ticker ? await resolveByTicker(kb, ticker) : null
       pool = {
-        currency: denom.other,
+        currency: cur?.slug ?? null,
         name: cur?.display_name ?? null,
-        ticker: typeof ticker === 'string' ? ticker : null,
+        ticker,
         // One account per issuer wallet (owner convention): the account
         // says WHERE points live; the commodity says WHAT they are.
         account: issuerBn ? `Assets:Rewards:${issuerBn}` : null,
-        rate_notes: denom.description_md ?? null,
+        rate_notes: earns.description_md ?? null,
       }
     }
 
