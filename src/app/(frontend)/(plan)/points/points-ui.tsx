@@ -27,13 +27,18 @@ export type PointsStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type FilterMode = 'include' | 'exclude'
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US')
-const fmtK = (n: number) =>
-  n >= 1000 ? `${(n / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 })}k` : String(Math.round(n))
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a)
+// Reduce a transfer ratio to lowest terms — `100:50` → `2:1`, the one number
+// the graph is here to show.
+const ratioLabel = (a: number, b: number) => {
+  const g = gcd(a, b) || 1
+  return `${a / g}:${b / g}`
+}
 
-const W = 196
-const H = 64
+const W = 180
+const H = 48
 
-type NodeData = PathNode & { amount: number | null }
+type NodeData = PathNode
 
 // ── layout ────────────────────────────────────────────────────────────────
 function layout(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
@@ -50,41 +55,29 @@ function layout(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
 }
 
 // ── custom nodes ────────────────────────────────────────────────────────────
-function NeedLine({ data }: { data: NodeData }) {
-  if (data.amount == null || data.multiplier == null) return null
-  return <span className="text-[10px] text-muted-foreground">≈ {fmtK(data.amount * data.multiplier)} needed</span>
-}
-// Current ledger balance, shown only when the user holds this account.
+// Nodes carry a name and nothing else — the rates live on the edges. The one
+// exception is a held balance: a fact that's genuinely the user's, not derived.
 function HeldLine({ data, className }: { data: NodeData; className?: string }) {
-  if (!data.held) return null
+  if (!data.held || data.balance == null) return null
   return (
     <span className={cn('truncate text-[10px] font-semibold text-emerald-600', className)}>
-      Balance {fmt(data.balance ?? 0)}
+      {fmt(data.balance)}
       {data.balanceCurrency ? ` ${data.balanceCurrency}` : ''}
     </span>
   )
 }
 function CardNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-card px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
-      <div className="truncate text-xs font-semibold text-foreground">{data.display}</div>
-      <div className="flex items-center justify-between">
-        <span className="truncate text-[10px] text-muted-foreground">{data.issuer ?? 'card'}</span>
-        <NeedLine data={data} />
-      </div>
-      <HeldLine data={data} />
-      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-muted-foreground/50" />
+    <div className={cn('flex h-[48px] w-[180px] flex-col justify-center rounded-md border bg-sky-50/80 px-3 shadow-sm dark:bg-sky-950/30', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-sky-300 dark:border-sky-800/60')}>
+      <div className="truncate text-xs font-semibold text-sky-900 dark:text-sky-200">{data.display}</div>
+      <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-sky-400/60" />
     </div>
   )
 }
 function ProgramNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-muted/40 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
+    <div className={cn('flex h-[48px] w-[180px] flex-col justify-center rounded-md border bg-muted/40 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
       <div className="truncate text-xs font-medium text-foreground">{data.display}</div>
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground">{data.multiplier != null ? `×${data.multiplier.toFixed(2)}` : '—'}</span>
-        <NeedLine data={data} />
-      </div>
       <HeldLine data={data} />
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-foreground/40" />
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-foreground/40" />
@@ -93,32 +86,20 @@ function ProgramNode({ data }: NodeProps<Node<NodeData>>) {
 }
 function TargetNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[64px] w-[196px] flex-col justify-center rounded-md border bg-foreground px-3 text-background shadow', data.held ? 'border-emerald-400 ring-1 ring-emerald-300/60' : 'border-foreground/80')}>
+    <div className="flex h-[48px] w-[180px] flex-col justify-center rounded-md border border-foreground/80 bg-foreground px-3 text-background shadow">
       <div className="truncate text-xs font-semibold">{data.display}</div>
-      <div className="text-[10px] opacity-60">{data.amount != null ? `${fmt(data.amount)} needed` : 'target'}</div>
-      <HeldLine data={data} className="text-emerald-400" />
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-background/50" />
     </div>
   )
 }
-// Fiat source: buying points. multiplier here is CASH minor-units (cents/paise)
-// per 1 target point, so we render a price, not a ×ratio. Always "owned".
+// Fiat source: buying points with cash. The price (cash per 1k points) rides on
+// the edge like every other rate; the node is just a labelled source.
 function FiatNode({ data }: NodeProps<Node<NodeData>>) {
-  const code = data.beancountName ?? ''
-  const perK = data.multiplier != null ? `${code} ${(data.multiplier * 10).toFixed(2)}/1k` : '—'
-  const total =
-    data.amount != null && data.multiplier != null
-      ? `≈ ${code} ${fmt((data.amount * data.multiplier) / 100)} to buy`
-      : null
   return (
-    <div className="flex h-[64px] w-[196px] flex-col justify-center rounded-md border border-emerald-400/60 bg-emerald-50/60 px-3 shadow-sm ring-1 ring-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-700/60 dark:ring-emerald-800/40">
+    <div className="flex h-[48px] w-[180px] flex-col justify-center rounded-md border border-emerald-400/60 bg-emerald-50/60 px-3 shadow-sm ring-1 ring-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-700/60 dark:ring-emerald-800/40">
       <div className="flex items-center gap-1">
         <DollarSign className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
         <div className="truncate text-xs font-semibold text-emerald-900 dark:text-emerald-200">{data.display}</div>
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400">{perK}</span>
-        {total ? <span className="truncate text-[10px] text-emerald-700 dark:text-emerald-400">{total}</span> : null}
       </div>
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-emerald-400/60" />
     </div>
@@ -198,7 +179,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   const fiatIds = new Set(data.nodes.filter((n) => n.fiat).map((n) => n.id))
   const rfNodes: Node<NodeData>[] = data.nodes
     .filter((n) => kept.has(n.id))
-    .map((n) => ({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n, amount: data.amount } }))
+    .map((n) => ({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n } }))
   const rfEdges: Edge[] = candidate
     .filter((e) => kept.has(e.from) && kept.has(e.to))
     .map((e: PathEdge) => {
@@ -213,7 +194,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
         id: `${e.from}->${e.to}`,
         source: e.from,
         target: e.to,
-        label: sale ? price : e.kind === 'transfer' && e.ratio_source != null ? `${e.ratio_source}:${e.ratio_dest}` : undefined,
+        label: sale ? price : e.kind === 'transfer' && e.ratio_source != null && e.ratio_dest != null ? ratioLabel(e.ratio_source, e.ratio_dest) : undefined,
         animated: e.kind === 'transfer',
         style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? 'var(--border)' : 'var(--muted-foreground)', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
         labelStyle: { fontSize: 9, fill: sale ? '#047857' : 'var(--muted-foreground)' },
