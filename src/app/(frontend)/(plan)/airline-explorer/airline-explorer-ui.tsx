@@ -67,6 +67,24 @@ const groupOf = (a: ExplorerAirline): GroupKey => SOLO[a.slug] ?? allianceKey(a.
 const flag = (cc: string) =>
   cc.toUpperCase().replace(/[A-Z]/g, (c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
 
+// Focus-picker filter. A 2-letter query is treated as an IATA code → EXACT match
+// against the airline's `iata` keyword. Anything else fuzzy-matches the display
+// name (subsequence). cmdk's default scorer ranks 2-letter codes poorly, so we
+// split the two cases. `value` is the airline name; `keywords` carries the iata.
+function airlineFilter(value: string, search: string, keywords?: string[]): number {
+  const q = search.trim().toLowerCase()
+  if (!q) return 1
+  if (q.length === 2) return (keywords?.[0] ?? '').toLowerCase() === q ? 1 : 0
+  const name = value.toLowerCase()
+  let i = 0
+  for (const ch of q) {
+    i = name.indexOf(ch, i)
+    if (i === -1) return 0
+    i += 1
+  }
+  return 1
+}
+
 // ── geometry ────────────────────────────────────────────────────────────────
 const NODE_W = 56
 const NODE_H = 36
@@ -365,8 +383,11 @@ export function AirlineExplorer({
             <ChevronsUpDown className="size-3.5 opacity-50" />
           </PopoverTrigger>
           <PopoverContent className="w-64 p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search airline…" className="text-sm" />
+            {/* A 2-letter query is an IATA code → exact match (the `iata`
+                keyword); anything longer fuzzy-matches the display name. cmdk's
+                default scorer ranks 2-letter codes poorly, so we special-case it. */}
+            <Command filter={airlineFilter}>
+              <CommandInput placeholder="Search airline or IATA…" className="text-sm" />
               <CommandList>
                 <CommandEmpty>No airline found.</CommandEmpty>
                 <CommandGroup>
@@ -375,7 +396,8 @@ export function AirlineExplorer({
                     .map((a) => (
                       <CommandItem
                         key={a.slug}
-                        value={`${a.name} ${a.iata}`}
+                        value={a.name}
+                        keywords={a.iata ? [a.iata] : undefined}
                         onSelect={() => {
                           setFocus(a.slug)
                           setPickerOpen(false)
