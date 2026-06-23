@@ -28,17 +28,20 @@ export class AirportsDO extends DurableObject<Cloudflare.Env> {
 
   // Seed from the bundled dataset on first use (idempotent — guarded by row
   // count, so it runs exactly once for the lifetime of the instance's storage).
+  // Values are INLINED (single quotes escaped), not bound — DO SQLite caps the
+  // number of bound parameters per statement, so a multi-row bound INSERT fails;
+  // inlining lets us batch large chunks (same approach as airports-store).
   private ensureSeeded(): void {
     if (this.seeded) return
     const n = (this.sql.exec(`SELECT COUNT(*) AS n FROM ap`).toArray()[0]?.n as number) ?? 0
     if (n === 0) {
-      const CHUNK = 200
+      const lit = (s: string | null) => `'${(s ?? '').replace(/'/g, "''")}'`
+      const CHUNK = 500
       for (let i = 0; i < AIRPORTS_DATA.length; i += CHUNK) {
-        const chunk = AIRPORTS_DATA.slice(i, i + CHUNK)
-        const placeholders = chunk.map(() => '(?,?,?,?)').join(',')
-        const params: (string | null)[] = []
-        for (const [iata, name, city, country] of chunk) params.push(iata, name, city, country)
-        this.sql.exec(`INSERT INTO ap (iata, name, city, country) VALUES ${placeholders}`, ...params)
+        const values = AIRPORTS_DATA.slice(i, i + CHUNK)
+          .map(([iata, name, city, country]) => `(${lit(iata)},${lit(name)},${lit(city)},${lit(country)})`)
+          .join(',')
+        this.sql.exec(`INSERT INTO ap (iata, name, city, country) VALUES ${values}`)
       }
     }
     this.seeded = true
