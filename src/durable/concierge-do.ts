@@ -246,26 +246,42 @@ export class ConciergeDO
     return listLoyaltyCurrencies(kbHttp)
   }
 
-  // Airport typeahead for the /explore origin/destination pickers. Searches the
-  // KG airport nodes via the KB — by name (display), and by city + IATA (both in
-  // the node body, matched by the resolve content pass). All from our graph; no
-  // external calls. Returns up to 8 { iata, name }. RPC for /api/concierge/airports.
+  // Airport typeahead for the /explore origin/destination pickers. All from our
+  // graph (KG airport nodes); no external calls. Two matches, merged:
+  //   1. EXACT IATA — the IATA is the node KEY (`airport/<iata>`), so a 3-letter
+  //      query is a direct kb.get by slug. (kb.resolve never searches the
+  //      canonical slug, so the code must be matched this way.)
+  //   2. NAME — kb.resolve over the airport prefix matches the display name.
+  // Returns up to 8 { iata, name }. RPC for /api/concierge/airports.
   async searchAirports(q: string): Promise<Array<{ iata: string; name: string }>> {
     const query = q.trim()
     if (query.length < 2) return []
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const out: Array<{ iata: string; name: string }> = []
+    const seen = new Set<string>()
+    const add = (slug: string, name: string | null) => {
+      const iata = slug.replace(/^airport\//, '').toUpperCase()
+      if (!/^[A-Z]{3}$/.test(iata) || seen.has(iata)) return
+      seen.add(iata)
+      out.push({ iata, name: name ?? iata })
+    }
+
+    // 1. Exact IATA by node key.
+    if (/^[A-Za-z]{3}$/.test(query)) {
+      const slug = `airport/${query.toLowerCase()}`
+      const node = (await kbHttp.get(slug).catch((): null => null)) as {
+        display_name?: string | null
+      } | null
+      if (node) add(slug, node.display_name ?? null)
+    }
+
+    // 2. Name matches.
     const r = (await kbHttp
       .resolve(query, { prefix: 'airport', limit: 8 })
       .catch((): null => null)) as { items?: Array<{ slug: string; display_name: string | null }> } | null
-    const out: Array<{ iata: string; name: string }> = []
-    const seen = new Set<string>()
-    for (const it of r?.items ?? []) {
-      const iata = it.slug.replace(/^airport\//, '').toUpperCase()
-      if (!/^[A-Z]{3}$/.test(iata) || seen.has(iata)) continue
-      seen.add(iata)
-      out.push({ iata, name: it.display_name ?? iata })
-    }
-    return out
+    for (const it of r?.items ?? []) add(it.slug, it.display_name)
+
+    return out.slice(0, 8)
   }
 
   // Status Match Merry-Go-Round: a chain of status matches from one status to
