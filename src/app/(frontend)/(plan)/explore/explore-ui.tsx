@@ -4,7 +4,6 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { ArrowRight, ChevronDown, Coins, SlidersHorizontal, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -19,6 +18,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
 import type { AwardPlanRow } from '@/durable/agents/tools/concierge/award-plan'
 import type { ExploreAirline, ExploreRow } from '@/durable/agents/tools/concierge/award-explore'
 import type { MapPoint } from './flight-map'
@@ -471,6 +479,104 @@ function Results({
   )
 }
 
+// ── Airport typeahead ──
+// Compact toolbar trigger showing the chosen IATA; opens a search popover that
+// queries /api/concierge/airports (KG airport nodes by name / city / IATA) with
+// a debounce. Server-side search, so cmdk's own filtering is disabled.
+type AirportHit = { iata: string; name: string }
+
+function AirportCombobox({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (iata: string) => void
+  placeholder: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  const [hits, setHits] = useState<AirportHit[]>([])
+
+  // Debounced server search. All setState lives inside the timeout (async), so
+  // nothing fires synchronously in the effect body.
+  useEffect(() => {
+    const query = q.trim()
+    let cancelled = false
+    const handle = setTimeout(
+      () => {
+        if (query.length < 2) {
+          setHits([])
+          return
+        }
+        fetch(`/api/concierge/airports?q=${encodeURIComponent(query)}`)
+          .then((r) =>
+            r.ok ? (r.json() as Promise<{ airports?: AirportHit[] }>) : { airports: [] as AirportHit[] },
+          )
+          .then((d) => !cancelled && setHits(d.airports ?? []))
+          .catch(() => !cancelled && setHits([]))
+      },
+      query.length < 2 ? 0 : 250,
+    )
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [q])
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o)
+        if (!o) setQ('')
+      }}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-10 px-0 font-mono text-sm uppercase sm:w-12"
+          />
+        }
+      >
+        <span className={cn(value ? 'text-foreground' : 'text-muted-foreground')}>
+          {value || placeholder}
+        </span>
+      </PopoverTrigger>
+      <PopoverContent className="w-[280px] p-0" align="start">
+        <Command shouldFilter={false}>
+          <CommandInput placeholder="City, airport, or code…" value={q} onValueChange={setQ} />
+          <CommandList>
+            <CommandEmpty>
+              {q.trim().length < 2 ? 'Type to search…' : 'No match.'}
+            </CommandEmpty>
+            {hits.length > 0 ? (
+              <CommandGroup>
+                {hits.map((a) => (
+                  <CommandItem
+                    key={a.iata}
+                    value={a.iata}
+                    onSelect={() => {
+                      onChange(a.iata)
+                      setOpen(false)
+                      setQ('')
+                    }}
+                  >
+                    <span className="w-9 shrink-0 font-mono text-xs font-medium">{a.iata}</span>
+                    <span className="truncate text-xs text-muted-foreground">{a.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ) : null}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 // ── Top-level presentational view ──
 
 export type ExploreStatus = 'idle' | 'loading' | 'error' | 'ready'
@@ -526,18 +632,12 @@ export function Explore(props: ExploreProps) {
     <div className="flex h-full min-h-0 flex-col bg-background">
       <PlanToolbar>
           <div className="flex shrink-0 items-center gap-0.5 rounded-lg border bg-card px-1.5 py-1 sm:gap-1.5 sm:px-2">
-            <Input
-              value={props.origin}
-              onChange={(e) => props.onOrigin(e.target.value.toUpperCase().slice(0, 3))}
-              placeholder="BLR"
-              className="h-6 w-9 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0 sm:w-12"
-            />
+            <AirportCombobox value={props.origin} onChange={props.onOrigin} placeholder="BLR" />
             <ArrowRight className="size-3 shrink-0 text-muted-foreground sm:size-3.5" />
-            <Input
+            <AirportCombobox
               value={props.destination}
-              onChange={(e) => props.onDestination(e.target.value.toUpperCase().slice(0, 3))}
+              onChange={props.onDestination}
               placeholder="NRT"
-              className="h-6 w-9 border-0 px-0 text-center font-mono text-sm uppercase shadow-none focus-visible:ring-0 sm:w-12"
             />
           </div>
 

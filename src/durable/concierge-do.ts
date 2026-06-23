@@ -246,6 +246,28 @@ export class ConciergeDO
     return listLoyaltyCurrencies(kbHttp)
   }
 
+  // Airport typeahead for the /explore origin/destination pickers. Searches the
+  // KG airport nodes via the KB — by name (display), and by city + IATA (both in
+  // the node body, matched by the resolve content pass). All from our graph; no
+  // external calls. Returns up to 8 { iata, name }. RPC for /api/concierge/airports.
+  async searchAirports(q: string): Promise<Array<{ iata: string; name: string }>> {
+    const query = q.trim()
+    if (query.length < 2) return []
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const r = (await kbHttp
+      .resolve(query, { prefix: 'airport', limit: 8 })
+      .catch((): null => null)) as { items?: Array<{ slug: string; display_name: string | null }> } | null
+    const out: Array<{ iata: string; name: string }> = []
+    const seen = new Set<string>()
+    for (const it of r?.items ?? []) {
+      const iata = it.slug.replace(/^airport\//, '').toUpperCase()
+      if (!/^[A-Z]{3}$/.test(iata) || seen.has(iata)) continue
+      seen.add(iata)
+      out.push({ iata, name: it.display_name ?? iata })
+    }
+    return out
+  }
+
   // Status Match Merry-Go-Round: a chain of status matches from one status to
   // another. RPC for /api/concierge/status-match-paths.
   async statusMatchPaths(from: string, to: string): Promise<StatusMatchResult> {
