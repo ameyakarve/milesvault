@@ -118,8 +118,12 @@ export type PointsFilters = {
 }
 
 function toFlow(data: PointsPathsResult, f: PointsFilters) {
-  // "My points": keep held nodes plus the currencies on their cheapest route to
-  // the target, so held sources still connect through intermediate hops.
+  // "My points": keep held nodes plus the programmes on their route to the
+  // target. A node's `path` is its OWN currency-route (for a card, the route its
+  // earned currency actually takes — which can differ from the programme it earns
+  // into), so following it keeps every real intermediate hop (e.g. KrisFlyer on
+  // BizBlack → SmartBuy → KrisFlyer → Accor) instead of collapsing to a shorter
+  // route the held currency can't actually use.
   let mineKeep: Set<string> | null = null
   if (f.mineOnly) {
     mineKeep = new Set<string>([data.target.slug])
@@ -131,8 +135,12 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
     for (const n of data.nodes) {
       if (!n.held) continue
       mineKeep.add(n.id)
-      if (n.kind === 'card') for (const e of data.edges) { if (e.kind === 'earn' && e.from === n.id) addChain(e.to) }
-      else addChain(n.id)
+      if (n.kind === 'card') {
+        // the card's own path traces its currency-route to the target
+        for (const s of n.path ?? []) mineKeep.add(s)
+        // fallback for cards without a resolved path: keep the programme it earns into
+        if (!n.path?.length) for (const e of data.edges) { if (e.kind === 'earn' && e.from === n.id) addChain(e.to) }
+      } else addChain(n.id)
     }
   }
 

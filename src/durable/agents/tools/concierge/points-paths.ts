@@ -221,8 +221,6 @@ export async function buildPointsPaths(
   const states = await reachStates(transfersIn, target, targetCurrencies)
   const hasState = (program: string, currency: string | null) =>
     currency != null && states.has(stateKey(program, currency))
-  const stateMult = (program: string, currency: string) =>
-    program === target ? 1 : (states.get(stateKey(program, currency))?.multiplier ?? Infinity)
   // Feeder programmes (state programmes minus the target) + each programme's
   // reachable currencies + its single cheapest state (for the node's value).
   const programs = new Set<string>()
@@ -253,7 +251,10 @@ export async function buildPointsPaths(
     [target, ...programs].map(async (p) => {
       const [t, e, b] = await Promise.all([transfersIn(p), earnsIn(p), buysIn(p)])
       for (const it of t.items ?? []) {
-        if (!it.other.startsWith('program/')) continue
+        // Skip non-programmes and the target itself as a SOURCE: the target's own
+        // outbound edges (e.g. Accor → KrisFlyer) must not become feeder edges,
+        // or they form Accor↔airline cycles and stop the target ranking rightmost.
+        if (!it.other.startsWith('program/') || it.other === target) continue
         const from = tickerStr(it.attrs?.from_currency)
         const to = tickerStr(it.attrs?.to_currency)
         // Keep the edge only if it delivers a needed currency into p AND its
@@ -343,13 +344,19 @@ export async function buildPointsPaths(
       path: cell?.path,
     })
   }
-  // a card's value = the cheapest valid (programme, earned-currency) it reaches
+  // a card's value = the cheapest valid (programme, earned-currency) it reaches.
+  // Keep that state's PATH too: a card's real route can differ from its
+  // programme's cheapest route (e.g. BizBlack reaches Accor only via SmartBuy →
+  // KrisFlyer, while SmartBuy's own cheapest route is the direct Infinia one), so
+  // the holdings overlay must trace the CARD's currency-path, not the programme's.
   for (const cc of cardSlugs) {
     const mine = cardEarns.filter((e) => e.card === cc)
-    const best = mine.reduce<{ m: number } | null>((acc, e) => {
-      const m = stateMult(e.program, e.currency)
-      return Number.isFinite(m) && (acc === null || m < acc.m) ? { m } : acc
-    }, null)
+    let best: { m: number; path: string[] } | null = null
+    for (const e of mine) {
+      const st = e.program === target ? { multiplier: 1, path: [target] } : states.get(stateKey(e.program, e.currency))
+      if (!st || !Number.isFinite(st.multiplier)) continue
+      if (best === null || st.multiplier < best.m) best = { m: st.multiplier, path: st.path }
+    }
     nodes.push({
       id: cc,
       kind: 'card',
@@ -357,6 +364,7 @@ export async function buildPointsPaths(
       issuer: issuerOf.get(cc) ?? null,
       beancountName: beancount(fetched.get(cc) ?? null),
       multiplier: best?.m,
+      path: best?.path,
     })
   }
   for (const f of fiatSlugs) {
