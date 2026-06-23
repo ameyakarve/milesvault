@@ -11,6 +11,7 @@ import {
 } from './agents/registries/concierge'
 import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airports-store'
 import type { AirportLookup } from './agents/tools/concierge/award-engine'
+import type { KbHttp } from './agents/tools/concierge/kb-tools'
 import {
   askUserTool,
   buildAwardExplore,
@@ -56,6 +57,45 @@ function todayInt(): number {
   const mm = (now.getUTCMonth() + 1).toString().padStart(2, '0')
   const dd = now.getUTCDate().toString().padStart(2, '0')
   return Number(`${yyyy}${mm}${dd}`)
+}
+
+// A held card account is identified by (issuer, leaf) — the issuer + product
+// segments of `Liabilities:CreditCards:<issuer>:<leaf>`. The generic KB resolver
+// is one-match-or-nothing on beancountName, so when a leaf collides across
+// issuers (e.g. "Platinum" is both Amex and HSBC) we disambiguate HERE, in the
+// domain layer, by the candidate's ISSUED_BY bank — composed from the generic kb
+// primitives. The KB itself stays issuer-agnostic. Returns the same shape as
+// resolveByBeancountName so call sites are unchanged.
+async function resolveHeldCard(
+  kb: KbHttp,
+  issuer: string | null,
+  leaf: string,
+): Promise<{ slug: string; display_name: string | null } | null> {
+  const r = (await kb
+    .list('cc', { limit: 2000, fields: ['beancountName'] })
+    .catch((): null => null)) as {
+    items?: Array<{ slug: string; display_name: string | null; fields?: { beancountName?: unknown } }>
+  } | null
+  const cands = (r?.items ?? []).filter((i) => i.fields?.beancountName === leaf)
+  if (cands.length === 0) return null
+  if (cands.length === 1) return { slug: cands[0]!.slug, display_name: cands[0]!.display_name ?? null }
+  // Collision: pick the candidate whose ISSUED_BY bank beancountName equals the
+  // account path's issuer segment. Exact identity match, no fuzzy.
+  if (!issuer) return null
+  for (const c of cands) {
+    const rel = (await kb
+      .related(c.slug, { edge_type: 'ISSUED_BY', direction: 'outgoing' })
+      .catch((): null => null)) as { items?: Array<{ other: string }> } | null
+    const bankSlug = rel?.items?.find((i) => i.other.startsWith('bank/'))?.other
+    if (!bankSlug) continue
+    const bank = (await kb.get(bankSlug).catch((): null => null)) as {
+      attrs?: Record<string, unknown> | null
+    } | null
+    if (bank?.attrs?.beancountName === issuer) {
+      return { slug: c.slug, display_name: c.display_name ?? null }
+    }
+  }
+  return null
 }
 
 export class ConciergeDO
@@ -287,7 +327,7 @@ export class ConciergeDO
           if (hit?.display_name) names[account] = hit.display_name
           return
         }
-        const hit = await resolveByBeancountName(kbHttp, 'cc', parts.product)
+        const hit = await resolveHeldCard(kbHttp, parts.issuer, parts.product)
         if (hit?.display_name) names[account] = hit.display_name
       }),
     )
@@ -364,7 +404,7 @@ export class ConciergeDO
           trace.push(t)
         }
         try {
-          const hit = await resolveByBeancountName(kbHttp, 'cc', parts.product)
+          const hit = await resolveHeldCard(kbHttp, parts.issuer, parts.product)
           if (debug) t.verified_slug = hit?.slug ?? null
           if (!hit) return
           const rel = (await kbHttp.related(hit.slug, {
@@ -509,7 +549,7 @@ export class ConciergeDO
 
         // Points pool the card earns into (EARNS_INTO → a reward programme).
         try {
-          const hit = await resolveByBeancountName(kbHttp, 'cc', parts.product)
+          const hit = await resolveHeldCard(kbHttp, parts.issuer, parts.product)
           if (hit) {
             const curRel = (await kbHttp
               .related(hit.slug, { edge_type: 'EARNS_INTO', direction: 'outgoing' })
