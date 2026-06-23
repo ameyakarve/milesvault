@@ -260,6 +260,17 @@ export type ExploreFilterProps = {
   onStops: (s: Stops) => void
 }
 
+// Predictable substring matcher for the source picker: every whitespace-separated
+// term in the query must appear (case-insensitively) somewhere in the item's
+// value (its display name + slug). Replaces cmdk's default subsequence scorer,
+// which matches/ranks loosely ("ais" → "Axis"). "axis mag" → Axis Magnus.
+function sourceFilter(value: string, search: string): number {
+  const hay = value.toLowerCase()
+  const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (!terms.length) return 1
+  return terms.every((t) => hay.includes(t)) ? 1 : 0
+}
+
 // Searchable "Transfer from" picker over the (large) KG source list. '' = miles
 // only; otherwise a `currency/...` slug.
 function SourceCombobox({
@@ -302,7 +313,7 @@ function SourceCombobox({
         <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
       </PopoverTrigger>
       <PopoverContent className="w-[280px] p-0" align="start">
-        <Command>
+        <Command filter={sourceFilter}>
           <CommandInput placeholder="Search cards & points…" />
           <CommandList>
             <CommandEmpty>No match.</CommandEmpty>
