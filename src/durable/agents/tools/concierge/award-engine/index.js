@@ -17,6 +17,7 @@ import * as ba from './programmes/ba/index.js'
 import * as cedarmiles from './programmes/cedarmiles/index.js'
 import * as clubpremier from './programmes/clubpremier/index.js'
 import * as connectmiles from './programmes/connectmiles/index.js'
+import * as cosmile from './programmes/cosmile/index.js'
 import * as delta from './programmes/delta/index.js'
 import * as dynastyflyer from './programmes/dynastyflyer/index.js'
 import * as easternmiles from './programmes/easternmiles/index.js'
@@ -58,7 +59,7 @@ import * as velocity from './programmes/velocity/index.js'
 // with no translation table: the module owns its id, the map is derived.
 const MODULES = [
   aadvantage, aeroplan, airindia, alfursan, ana, asiamiles, atmos, ba,
-  cedarmiles, clubpremier, connectmiles, delta, dynastyflyer, easternmiles,
+  cedarmiles, clubpremier, connectmiles, cosmile, delta, dynastyflyer, easternmiles,
   egretclub, emirates, enrich, etihad, eurobonus, eva, finnair, flyingblue,
   flyingclub, flysmiles, iberia, jalmb, krisflyer, latampass, lifemiles,
   lotusmiles, mabuhay, milesbonus, milesgo, milesmore, phoenixmiles, qantas,
@@ -82,6 +83,7 @@ const ALIASES = {
   mea: 'cedar-miles', 'middle east airlines': 'cedar-miles', 'cedar miles': 'cedar-miles',
   aeromexico: 'club-premier', 'club premier': 'club-premier', am: 'club-premier',
   copa: 'connectmiles', cm: 'connectmiles',
+  starlux: 'cosmile', 'starlux airlines': 'cosmile', cosmiles: 'cosmile', jx: 'cosmile',
   skymiles: 'delta-skymiles', dl: 'delta-skymiles',
   'china airlines': 'dynasty-flyer', dynasty: 'dynasty-flyer', ci: 'dynasty-flyer',
   'china eastern': 'eastern-miles', 'eastern miles': 'eastern-miles', mu: 'eastern-miles',
