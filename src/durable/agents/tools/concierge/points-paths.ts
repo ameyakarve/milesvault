@@ -63,6 +63,7 @@ export type PathEdge = {
   ratio_source?: number
   ratio_dest?: number
   multiplier?: number // rs/rd for this single hop
+  transfer_time?: string | null // how long the transfer takes to land (e.g. "instant", "2-3 days")
 }
 
 export type PointsPathsResult = {
@@ -263,7 +264,7 @@ export async function buildPointsPaths(
         const rs = Number(it.attrs?.ratio_source)
         const rd = Number(it.attrs?.ratio_dest)
         if (!(rs > 0 && rd > 0)) continue
-        edges.push({ from: it.other, to: p, kind: 'transfer', ratio_source: rs, ratio_dest: rd, multiplier: rs / rd })
+        edges.push({ from: it.other, to: p, kind: 'transfer', ratio_source: rs, ratio_dest: rd, multiplier: rs / rd, transfer_time: tickerStr(it.attrs?.transfer_time) })
       }
       for (const it of e.items ?? []) {
         if (!it.other.startsWith('cc/')) continue

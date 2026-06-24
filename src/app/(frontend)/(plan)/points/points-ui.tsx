@@ -198,11 +198,18 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
         sale && e.ratio_source != null && e.ratio_dest
           ? `$${((e.ratio_source * 10) / e.ratio_dest).toFixed(2)}/1k`
           : undefined
+      // Transfer edges: ratio, with the transfer time appended when known
+      // (e.g. "2:1 · 2-3 days"). The time is a per-edge KG attribute.
+      const ratio =
+        e.kind === 'transfer' && e.ratio_source != null && e.ratio_dest != null
+          ? ratioLabel(e.ratio_source, e.ratio_dest)
+          : undefined
+      const transferLabel = ratio && e.transfer_time ? `${ratio} · ${e.transfer_time}` : ratio
       return {
         id: `${e.from}->${e.to}`,
         source: e.from,
         target: e.to,
-        label: sale ? price : e.kind === 'transfer' && e.ratio_source != null && e.ratio_dest != null ? ratioLabel(e.ratio_source, e.ratio_dest) : undefined,
+        label: sale ? price : transferLabel,
         animated: e.kind === 'transfer',
         style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? 'var(--border)' : 'var(--muted-foreground)', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
         labelStyle: { fontSize: 9, fill: sale ? '#047857' : 'var(--muted-foreground)' },
