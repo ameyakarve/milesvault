@@ -95,8 +95,14 @@ function ProgramNode({ data }: NodeProps<Node<NodeData>>) {
   )
 }
 function TargetNode({ data }: NodeProps<Node<NodeData>>) {
+  // Colours set inline (not via bg-foreground/text-background utilities): inside
+  // a React Flow node Safari was dropping the inverted text colour, painting the
+  // node black-on-black. Inline wins over React Flow's base node CSS everywhere.
   return (
-    <div className="flex h-[48px] w-[180px] flex-col justify-center rounded-md border border-foreground/80 bg-foreground px-3 text-background shadow">
+    <div
+      style={{ background: 'var(--foreground)', color: 'var(--background)' }}
+      className="flex h-[48px] w-[180px] flex-col justify-center rounded-md border border-foreground/80 px-3 shadow"
+    >
       <div className="truncate text-xs font-semibold">{data.display}</div>
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-background/50" />
     </div>
@@ -421,67 +427,69 @@ export function Points(props: PointsProps) {
     setFocus(null)
   }, [data?.target.slug])
   const view = useMemo(() => {
-    // Highlight the WHOLE connected route through the picked node — walk OUT
-    // (source→target, where its points can go) and IN (target→source, what
-    // feeds it), collecting every edge/node on both cones, transitively.
+    if (focus == null) {
+      // Whole map, calm: every edge drawn faintly, no labels.
+      const edges: Edge[] = flow.edges.map((e): Edge => ({
+        ...e,
+        animated: false,
+        label: undefined,
+        data: { ...(e.data ?? {}), show: false },
+        style: { ...e.style, opacity: 0.4 },
+      }))
+      return { nodes: flow.nodes, edges }
+    }
+    // Focused: keep ONLY the connected route through the picked node — walk OUT
+    // (source→target, where its points can go) and IN (target→source, what feeds
+    // it), transitively — then HIDE everything else and RE-LAYOUT the subgraph
+    // so it fills the canvas cleanly with every on-route ratio labelled.
     const litE = new Set<string>()
-    const litN = new Set<string>()
-    if (focus) {
-      litN.add(focus)
-      const out = new Map<string, Edge[]>()
-      const inc = new Map<string, Edge[]>()
-      for (const e of flow.edges) {
-        ;(out.get(e.source) ?? out.set(e.source, []).get(e.source)!).push(e)
-        ;(inc.get(e.target) ?? inc.set(e.target, []).get(e.target)!).push(e)
-      }
-      const walk = (adj: Map<string, Edge[]>, step: (e: Edge) => string) => {
-        const seen = new Set([focus])
-        const stack = [focus]
-        while (stack.length) {
-          const cur = stack.pop()!
-          for (const e of adj.get(cur) ?? []) {
-            litE.add(e.id)
-            const next = step(e)
-            litN.add(next)
-            if (!seen.has(next)) {
-              seen.add(next)
-              stack.push(next)
-            }
+    const litN = new Set<string>([focus])
+    const out = new Map<string, Edge[]>()
+    const inc = new Map<string, Edge[]>()
+    for (const e of flow.edges) {
+      ;(out.get(e.source) ?? out.set(e.source, []).get(e.source)!).push(e)
+      ;(inc.get(e.target) ?? inc.set(e.target, []).get(e.target)!).push(e)
+    }
+    const walk = (adj: Map<string, Edge[]>, step: (e: Edge) => string) => {
+      const seen = new Set([focus])
+      const stack = [focus]
+      while (stack.length) {
+        const cur = stack.pop()!
+        for (const e of adj.get(cur) ?? []) {
+          litE.add(e.id)
+          const next = step(e)
+          litN.add(next)
+          if (!seen.has(next)) {
+            seen.add(next)
+            stack.push(next)
           }
         }
       }
-      walk(out, (e) => e.target) // outbound cone
-      walk(inc, (e) => e.source) // inbound cone
     }
-    const edges = flow.edges.map((e) => {
-      const on = focus != null && litE.has(e.id)
-      const opacity = focus == null ? 0.4 : on ? 1 : 0.06
-      const baseWidth = (e.style?.strokeWidth as number) ?? 1.2
-      const style = {
-        ...e.style,
-        opacity,
-        ...(on ? { stroke: ACCENT, strokeWidth: baseWidth + 0.8 } : {}),
-      }
-      // Labels only along the highlighted route (no focus → none; keeps it calm).
-      return {
-        ...e,
-        animated: on,
-        label: on ? e.label : undefined,
-        data: { ...(e.data ?? {}), show: on },
-        style,
-        labelStyle: { ...(e.labelStyle as object), ...(on ? { fill: ACCENT, fontWeight: 600 } : {}) },
-      }
-    })
-    const nodes = flow.nodes.map((n) => ({
+    walk(out, (e) => e.target) // outbound cone
+    walk(inc, (e) => e.source) // inbound cone
+
+    const subNodes = flow.nodes
+      .filter((n) => litN.has(n.id))
+      .map((n) => ({ ...n, position: { x: 0, y: 0 } }))
+    const subEdges: Edge[] = flow.edges
+      .filter((e) => litE.has(e.id))
+      .map((e) => {
+        const baseWidth = (e.style?.strokeWidth as number) ?? 1.2
+        return {
+          ...e,
+          animated: true,
+          label: e.label,
+          data: { ...(e.data ?? {}), show: true },
+          style: { ...e.style, opacity: 1, stroke: ACCENT, strokeWidth: baseWidth + 0.6 },
+          labelStyle: { ...(e.labelStyle as object), fill: ACCENT, fontWeight: 600 },
+        }
+      })
+    const nodes = layout(subNodes, subEdges).map((n) => ({
       ...n,
-      style:
-        focus == null
-          ? undefined
-          : n.id === focus
-            ? { outline: `2px solid ${ACCENT}`, outlineOffset: 2, borderRadius: 8 }
-            : { opacity: litN.has(n.id) ? 1 : 0.3 },
+      style: n.id === focus ? { outline: `2px solid ${ACCENT}`, outlineOffset: 2, borderRadius: 8 } : undefined,
     }))
-    return { nodes, edges }
+    return { nodes, edges: subEdges }
   }, [flow, focus])
 
   // filter options from the result graph
@@ -589,6 +597,8 @@ export function Points(props: PointsProps) {
           <div className="flex h-full items-center justify-center text-sm text-destructive">{props.error ?? 'Something went wrong.'}</div>
         ) : (
           <ReactFlow
+            // Remount on focus change so fitView re-frames the isolated route.
+            key={focus ?? '__all__'}
             nodes={view.nodes}
             edges={view.edges}
             nodeTypes={nodeTypes}
@@ -616,7 +626,7 @@ export function Points(props: PointsProps) {
         {status === 'ready' && focus == null ? (
           <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
             <span className="rounded-full border border-border bg-card/90 px-3 py-1 text-xs text-muted-foreground shadow-sm">
-              Select a node to highlight its full route — in and out
+              Select a node to isolate its route — in and out
             </span>
           </div>
         ) : null}
