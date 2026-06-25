@@ -215,7 +215,43 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   }
   let kept = new Set(data.nodes.filter(pass).map((n) => n.id))
 
-  const candidate = data.edges.filter((e) => kept.has(e.from) && kept.has(e.to))
+  // "My points" currency gate: a multi-tier portal (Axis TravelEdge) exposes a
+  // tier edge for EVERY tier, but you can only feed the tiers your held cards
+  // actually earn. Seed the currencies you genuinely have — held cards' earned
+  // currency, held programme balances, and cash buy-ins (always available) —
+  // then close forward over transfers you can feed, and keep only tier edges
+  // whose source currency is in that set.
+  let heldCcy: Set<string> | null = null
+  if (f.mineOnly) {
+    heldCcy = new Set<string>()
+    for (const n of data.nodes) {
+      if (n.fiat) {
+        for (const e of data.edges) if (e.from === n.id && e.to_currency) heldCcy.add(e.to_currency)
+        continue
+      }
+      if (!n.held) continue
+      if (n.kind === 'card') {
+        for (const e of data.edges) if (e.kind === 'earn' && e.from === n.id && e.to_currency) heldCcy.add(e.to_currency)
+      } else for (const t of n.heldTickers ?? []) heldCcy.add(t)
+    }
+    for (let changed = true; changed; ) {
+      changed = false
+      for (const e of data.edges) {
+        if (e.kind !== 'transfer' || !e.variant || !e.to_currency) continue
+        if (heldCcy.has(e.variant) && !heldCcy.has(e.to_currency)) {
+          heldCcy.add(e.to_currency)
+          changed = true
+        }
+      }
+    }
+  }
+
+  const candidate = data.edges.filter((e) => {
+    if (!kept.has(e.from) || !kept.has(e.to)) return false
+    // My-points: drop tier edges whose source currency you can't actually hold.
+    if (heldCcy && e.kind === 'transfer' && e.variant && !heldCcy.has(e.variant)) return false
+    return true
+  })
 
   // reachability prune: keep only nodes that can still reach the target
   const back = new Map<string, string[]>()
