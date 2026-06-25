@@ -7,9 +7,12 @@ import {
   Controls,
   Handle,
   Position,
+  BaseEdge,
+  EdgeLabelRenderer,
   type Node,
   type Edge,
   type NodeProps,
+  type EdgeProps,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import dagre from '@dagrejs/dagre'
@@ -33,6 +36,13 @@ const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a)
 const ratioLabel = (a: number, b: number) => {
   const g = gcd(a, b) || 1
   return `${a / g}:${b / g}`
+}
+// A parallel tier edge prefixes its ratio with the tier — the source currency's
+// last segment, title-cased — so a multi-tier portal reads clearly:
+// AXIS-EM-OLYMPUS → "Olympus", AXIS-EDGE-BURGUNDY → "Burgundy".
+const tierLabel = (variant: string) => {
+  const seg = variant.split(/[-_]/).pop() ?? variant
+  return seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase()
 }
 
 const W = 180
@@ -106,6 +116,46 @@ function FiatNode({ data }: NodeProps<Node<NodeData>>) {
   )
 }
 const nodeTypes = { card: CardNode, program: ProgramNode, target: TargetNode, fiat: FiatNode }
+
+// Parallel edges between the SAME two nodes (a multi-tier portal — e.g. Axis
+// TravelEdge, where Magnus / Atlas / Olympus each transfer at a different ratio)
+// would otherwise stack into one line. The fan edge bows each sibling by a
+// perpendicular offset keyed on its index, so every tier's ratio stays legible.
+function FanEdge({ id, sourceX, sourceY, targetX, targetY, markerEnd, style, data }: EdgeProps) {
+  const d = (data ?? {}) as { idx?: number; count?: number; label?: string; color?: string }
+  const idx = d.idx ?? 0
+  const count = d.count ?? 1
+  const mx = (sourceX + targetX) / 2
+  const my = (sourceY + targetY) / 2
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const len = Math.hypot(dx, dy) || 1
+  const off = (idx - (count - 1) / 2) * 26
+  const cx = mx + (-dy / len) * off
+  const cy = my + (dx / len) * off
+  const path = `M${sourceX},${sourceY} Q${cx},${cy} ${targetX},${targetY}`
+  return (
+    <>
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
+      {d.label ? (
+        <EdgeLabelRenderer>
+          <div
+            className="nodrag nopan pointer-events-none absolute rounded px-1"
+            style={{
+              transform: `translate(-50%, -50%) translate(${cx}px, ${cy}px)`,
+              fontSize: 9,
+              color: d.color,
+              background: 'var(--card)',
+            }}
+          >
+            {d.label}
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  )
+}
+const edgeTypes = { fan: FanEdge }
 
 // ── filter state ────────────────────────────────────────────────────────────
 export type PointsFilters = {
@@ -188,34 +238,57 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   const rfNodes: Node<NodeData>[] = data.nodes
     .filter((n) => kept.has(n.id))
     .map((n) => ({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n } }))
-  const rfEdges: Edge[] = candidate
-    .filter((e) => kept.has(e.from) && kept.has(e.to))
-    .map((e: PathEdge) => {
-      // A sale edge is a buy: fiat → loyalty currency. ratio_source is cash in
-      // minor units, so label it as a price ($X/1k) and style it distinctly.
-      const sale = fiatIds.has(e.from)
-      const price =
-        sale && e.ratio_source != null && e.ratio_dest
-          ? `$${((e.ratio_source * 10) / e.ratio_dest).toFixed(2)}/1k`
-          : undefined
-      // Transfer edges: ratio, with the transfer time appended when known
-      // (e.g. "2:1 · 2-3 days"). The time is a per-edge KG attribute.
-      const ratio =
-        e.kind === 'transfer' && e.ratio_source != null && e.ratio_dest != null
-          ? ratioLabel(e.ratio_source, e.ratio_dest)
-          : undefined
-      const transferLabel = ratio && e.transfer_time ? `${ratio} · ${e.transfer_time}` : ratio
-      return {
-        id: `${e.from}->${e.to}`,
-        source: e.from,
-        target: e.to,
-        label: sale ? price : transferLabel,
-        animated: e.kind === 'transfer',
-        style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? 'var(--border)' : 'var(--muted-foreground)', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
-        labelStyle: { fontSize: 9, fill: sale ? '#047857' : 'var(--muted-foreground)' },
-        labelBgStyle: { fill: 'var(--card)', fillOpacity: 0.9 },
-      }
-    })
+  // Count siblings per node-pair: a multi-tier portal emits SEVERAL edges between
+  // the same two programmes (one per tier currency, each its own ratio). Those
+  // must fan out + be tier-tagged rather than collapse onto one line.
+  const visibleEdges = candidate.filter((e) => kept.has(e.from) && kept.has(e.to))
+  const pairCount = new Map<string, number>()
+  for (const e of visibleEdges) {
+    const k = `${e.from}->${e.to}`
+    pairCount.set(k, (pairCount.get(k) ?? 0) + 1)
+  }
+  const pairIdx = new Map<string, number>()
+  const rfEdges: Edge[] = visibleEdges.map((e: PathEdge) => {
+    // A sale edge is a buy: fiat → loyalty currency. ratio_source is cash in
+    // minor units, so label it as a price ($X/1k) and style it distinctly.
+    const sale = fiatIds.has(e.from)
+    const price =
+      sale && e.ratio_source != null && e.ratio_dest
+        ? `$${((e.ratio_source * 10) / e.ratio_dest).toFixed(2)}/1k`
+        : undefined
+    // Transfer edges: ratio, with the transfer time appended when known
+    // (e.g. "2:1 · 2-3 days"). The time is a per-edge KG attribute.
+    const ratio =
+      e.kind === 'transfer' && e.ratio_source != null && e.ratio_dest != null
+        ? ratioLabel(e.ratio_source, e.ratio_dest)
+        : undefined
+    let transferLabel = ratio && e.transfer_time ? `${ratio} · ${e.transfer_time}` : ratio
+    const pk = `${e.from}->${e.to}`
+    const count = pairCount.get(pk) ?? 1
+    const idx = pairIdx.get(pk) ?? 0
+    pairIdx.set(pk, idx + 1)
+    // Parallel tiers: tag each ratio with its tier so you can tell which card's
+    // currency earns which rate (e.g. "Burgundy 2.5:1" vs "Olympus 1:4").
+    if (count > 1 && e.variant && transferLabel) transferLabel = `${tierLabel(e.variant)} ${transferLabel}`
+    const label = sale ? price : transferLabel
+    const color = sale ? '#047857' : 'var(--muted-foreground)'
+    return {
+      // variant (or index) in the id keeps parallel tier edges DISTINCT — without
+      // it they share one id and React Flow renders just one, hiding the rest.
+      id: `${e.from}->${e.to}#${e.variant ?? idx}`,
+      source: e.from,
+      target: e.to,
+      // count>1 → custom fan edge (renders its own label from data); otherwise
+      // the default edge with its built-in label (unchanged behaviour).
+      type: count > 1 ? 'fan' : undefined,
+      label: count > 1 ? undefined : label,
+      data: { idx, count, label, color },
+      animated: e.kind === 'transfer',
+      style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? 'var(--border)' : 'var(--muted-foreground)', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
+      labelStyle: { fontSize: 9, fill: color },
+      labelBgStyle: { fill: 'var(--card)', fillOpacity: 0.9 },
+    }
+  })
   return { nodes: layout(rfNodes, rfEdges), edges: rfEdges }
 }
 
@@ -410,6 +483,7 @@ export function Points(props: PointsProps) {
             nodes={flow.nodes}
             edges={flow.edges}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             proOptions={{ hideAttribution: true }}
             minZoom={0.2}
