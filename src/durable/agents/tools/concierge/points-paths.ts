@@ -52,6 +52,10 @@ export type PathNode = {
   // The user's current balance in this node's ledger account (when held).
   balance?: number | null
   balanceCurrency?: string | null
+  // The specific currency tickers the user actually holds in this programme
+  // (subset of `tickers`). "My points" seeds its forward walk from these so a
+  // multi-tier portal only shows the tiers you can really feed.
+  heldTickers?: string[]
 }
 
 export type PathEdge = {
@@ -69,6 +73,11 @@ export type PathEdge = {
   // same two programmes — one per tier currency, each with its own ratio — so
   // this is what distinguishes them once both endpoints collapse to one node.
   variant?: string
+  // The currency DELIVERED by this edge (TRANSFERS `to_currency`; for earn/buy
+  // edges, the currency that lands). Lets "My points" walk forward from what
+  // you actually hold (held cards' / balances' currencies) and keep only the
+  // tier edges you can really feed — not every tier the portal offers.
+  to_currency?: string
 }
 
 export type PointsPathsResult = {
@@ -269,7 +278,7 @@ export async function buildPointsPaths(
         const rs = Number(it.attrs?.ratio_source)
         const rd = Number(it.attrs?.ratio_dest)
         if (!(rs > 0 && rd > 0)) continue
-        edges.push({ from: it.other, to: p, kind: 'transfer', ratio_source: rs, ratio_dest: rd, multiplier: rs / rd, transfer_time: tickerStr(it.attrs?.transfer_time), variant: from ?? undefined })
+        edges.push({ from: it.other, to: p, kind: 'transfer', ratio_source: rs, ratio_dest: rd, multiplier: rs / rd, transfer_time: tickerStr(it.attrs?.transfer_time), variant: from ?? undefined, to_currency: to ?? undefined })
       }
       for (const it of e.items ?? []) {
         if (!it.other.startsWith('cc/')) continue
@@ -277,7 +286,7 @@ export async function buildPointsPaths(
         if (!hasState(p, c)) continue // the card's EARNED currency must reach the target
         cardSlugs.add(it.other)
         cardEarns.push({ card: it.other, program: p, currency: c! })
-        edges.push({ from: it.other, to: p, kind: 'earn' })
+        edges.push({ from: it.other, to: p, kind: 'earn', to_currency: c ?? undefined })
       }
       for (const it of b.items ?? []) {
         if (!it.other.startsWith('currency/')) continue
@@ -287,7 +296,7 @@ export async function buildPointsPaths(
         const rd = Number(it.attrs?.ratio_dest)
         if (!(rs > 0 && rd > 0)) continue
         fiatSlugs.add(it.other)
-        edges.push({ from: it.other, to: p, kind: 'transfer', ratio_source: rs, ratio_dest: rd, multiplier: rs / rd, variant: c ?? undefined })
+        edges.push({ from: it.other, to: p, kind: 'transfer', ratio_source: rs, ratio_dest: rd, multiplier: rs / rd, variant: c ?? undefined, to_currency: c ?? undefined })
         // Cash minor-units per 1 TARGET point via this buy + downstream transfer.
         const st = p === target ? null : states.get(stateKey(p, c!))
         const cashPerTarget = (rs / rd) * (p === target ? 1 : (st?.multiplier ?? Infinity))
@@ -448,5 +457,6 @@ export function applyHoldings(
     node.held = true
     node.balance = rows.reduce((sum, r) => sum + Number(r.balance_scaled) / 10 ** r.scale, 0)
     node.balanceCurrency = rows[0].currency
+    node.heldTickers = [...new Set(rows.map((r) => r.currency))]
   }
 }
