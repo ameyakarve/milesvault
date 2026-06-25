@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, Loader2, Mail } from 'lucide-react'
+import { ChevronLeft, Loader2, Mail, X } from 'lucide-react'
 import { SectionLabel, StateChip, CenteredState } from '@/components/shared'
 import { Button } from '@/components/ui/button'
 import {
@@ -332,11 +332,11 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
           >
             <ul className="min-h-0 flex-1 overflow-y-auto py-1">
               {rows.map((r) => (
-                <li key={r.id}>
+                <li key={r.id} className="group relative">
                   <button
                     type="button"
                     onClick={() => openItem(r)}
-                    className={`flex w-full flex-col gap-0.5 px-4 py-2.5 text-left transition hover:bg-muted/50 focus-visible:bg-muted focus-visible:outline-none ${
+                    className={`flex w-full flex-col gap-0.5 px-4 py-2.5 pr-10 text-left transition hover:bg-muted/50 focus-visible:bg-muted focus-visible:outline-none ${
                       selectedId === r.id ? 'bg-muted' : ''
                     }`}
                   >
@@ -354,6 +354,19 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
                         Background draft failed
                       </span>
                     ) : null}
+                  </button>
+                  {/* Quick dismiss straight from the rail — no need to open an
+                      item you already know is irrelevant. Sibling of the open
+                      button (not nested), revealed on hover/focus; always shown
+                      on touch where there's no hover. */}
+                  <button
+                    type="button"
+                    onClick={() => dismiss(r.id)}
+                    title="Dismiss"
+                    aria-label={`Dismiss ${r.filename ?? r.id}`}
+                    className="absolute right-1.5 top-1.5 rounded p-1 text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+                  >
+                    <X className="size-4" />
                   </button>
                 </li>
               ))}
