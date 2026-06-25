@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -411,6 +411,39 @@ export function Points(props: PointsProps) {
   const { target, onTarget, currencies, status, data, filters } = props
   const flow = useMemo(() => (data ? toFlow(data, filters) : { nodes: [], edges: [] }), [data, filters])
 
+  // Pick-to-reveal: the graph is dense, so edges stay hidden until you select a
+  // node — then only that node's edges show and unrelated nodes dim. Layout is
+  // computed from the FULL edge set in toFlow, so hiding here never shifts it.
+  const [focus, setFocus] = useState<string | null>(null)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFocus(null)
+  }, [data?.target.slug])
+  const view = useMemo(() => {
+    const lit = new Set<string>()
+    if (focus) {
+      lit.add(focus)
+      for (const e of flow.edges) {
+        if (e.source === focus) lit.add(e.target)
+        if (e.target === focus) lit.add(e.source)
+      }
+    }
+    const edges = flow.edges.map((e) => ({
+      ...e,
+      hidden: focus == null ? true : !(e.source === focus || e.target === focus),
+    }))
+    const nodes = flow.nodes.map((n) => ({
+      ...n,
+      style:
+        focus == null
+          ? undefined
+          : n.id === focus
+            ? { outline: '2px solid var(--foreground)', outlineOffset: 2, borderRadius: 8 }
+            : { opacity: lit.has(n.id) ? 1 : 0.25 },
+    }))
+    return { nodes, edges }
+  }, [flow, focus])
+
   // filter options from the result graph
   const banks = useMemo(() => {
     const cards = (data?.nodes ?? []).filter((n) => n.kind === 'card')
@@ -516,8 +549,8 @@ export function Points(props: PointsProps) {
           <div className="flex h-full items-center justify-center text-sm text-destructive">{props.error ?? 'Something went wrong.'}</div>
         ) : (
           <ReactFlow
-            nodes={flow.nodes}
-            edges={flow.edges}
+            nodes={view.nodes}
+            edges={view.edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
@@ -525,19 +558,28 @@ export function Points(props: PointsProps) {
             minZoom={0.2}
             nodesDraggable={false}
             nodesConnectable={false}
-            // Fully non-interactive nodes so a one-finger drag that lands on a
-            // node still pans the pane (on mobile the fit graph covers the
-            // screen with nodes, leaving almost no empty pane to grab).
+            // Nodes aren't selectable/draggable (a one-finger drag that lands on
+            // a node still pans the pane), but onNodeClick fires on a tap — that
+            // drives the pick-to-reveal focus. A pane tap clears it.
             elementsSelectable={false}
             nodesFocusable={false}
             edgesFocusable={false}
             panOnDrag
             zoomOnPinch
+            onNodeClick={(_, n) => setFocus((cur) => (cur === n.id ? null : n.id))}
+            onPaneClick={() => setFocus(null)}
           >
             <Background color="var(--border)" gap={20} />
             <Controls showInteractive={false} />
           </ReactFlow>
         )}
+        {status === 'ready' && focus == null ? (
+          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+            <span className="rounded-full border border-border bg-card/90 px-3 py-1 text-xs text-muted-foreground shadow-sm">
+              Select a node to reveal its transfer routes
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   )
