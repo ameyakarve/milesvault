@@ -1,12 +1,10 @@
 import { generateText, stepCountIs, type ToolSet } from 'ai'
-import { createCodeTool } from '@cloudflare/codemode/ai'
-import { DynamicWorkerExecutor } from '@cloudflare/codemode'
-import { buildAnalystSystem, buildGraphWalkerSystem } from './agent-prompt'
+import { buildConciergeSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
 import {
   makeConciergeRegistry,
-  GRAPH_WALKER_MODEL_ID,
+  CONCIERGE_MODEL_ID,
   type ConciergeAgentName,
 } from './agents/registries/concierge'
 import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airports-store'
@@ -173,21 +171,12 @@ export class ConciergeDO
 
   // ---- AgentHost<ConciergeAgentName> ----
 
-  system(name: ConciergeAgentName): string {
-    const base =
-      name === 'graph-walker'
-        ? buildGraphWalkerSystem(this.turnAgentsBriefing ?? '')
-        : buildAnalystSystem(this.snapshot())
-    return base + this.handoffContextBlock()
+  system(_name: ConciergeAgentName): string {
+    return buildConciergeSystem(this.snapshot(), this.turnAgentsBriefing ?? '')
   }
 
-  tools(name: ConciergeAgentName): ToolSet {
-    if (name === 'graph-walker') {
-      return this.graphWalkerTools()
-    }
-    return {
-      query_sql: querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params)),
-    }
+  tools(_name: ConciergeAgentName): ToolSet {
+    return this.conciergeTools()
   }
 
   // Data behind the fluid /explore page. Like awardPlan but returns a uniform
@@ -678,65 +667,48 @@ export class ConciergeDO
   // loop. Stateless by design: each bot message is one self-contained turn,
   // separate from the web chat's history. RPC for the bot adapter workers.
   async answerText(question: string): Promise<{ text: string }> {
-    const briefing = await fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch(() => '')
+    const [snapshot, briefing] = await Promise.all([
+      this.ledgerStub().ledger_snapshot(),
+      fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch(() => ''),
+    ])
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const kb = makeKbTools(kbHttp)
     const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
-    const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
-    const codemode = createCodeTool({ tools: { ...kb, ledger_snapshot }, executor })
     const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
     const system =
-      buildGraphWalkerSystem(briefing) +
+      buildConciergeSystem(snapshot, briefing) +
       '\n\nChannel: plain-text chat (a messaging app). Reply concisely in plain text — no markdown tables, no in-app links. For questions about the user\'s own balances or history, use ledger_snapshot / query_sql.'
     const result = await generateText({
-      model: this.buildModel({ id: GRAPH_WALKER_MODEL_ID, reasoning: 'off' }),
+      model: this.buildModel({ id: CONCIERGE_MODEL_ID, reasoning: 'off' }),
       system,
       prompt: question,
-      tools: { ...kb, ledger_snapshot, query_sql, codemode } as ToolSet,
+      tools: { ...kb, ledger_snapshot, query_sql } as ToolSet,
       stopWhen: stepCountIs(10),
     })
     const text = result.text.trim()
     return { text: text || 'Sorry — I could not work out an answer to that.' }
   }
 
-  // Graph-walker tool surface — layered. Simple one-hop graph lookups
-  // go through the top-level kb tools; complex multi-hop or cross-domain
-  // walks compose them inside the codemode sandbox; the model asks the
-  // user only when an answer would meaningfully change.
+  // The single concierge tool surface — every read tool the agent holds at
+  // once (no analyst/graph-walker split, no codemode sandbox). The model
+  // composes them across normal steps and reasons over the results.
   //
-  // - `kb_resolve` / `kb_get` / `kb_related` / `kb_list`: same factories
-  //   that codemode wraps internally, exposed at top level for one-shot
-  //   queries (text→slug, slug→node, one edge lookup, one prefix list).
-  // - `codemode`: AI-SDK tool that runs an LLM-written JS program in a
-  //   Cloudflare Dynamic Worker isolate. Inside the program the same kb
-  //   tools plus `ledger_snapshot` and `query_sql` are exposed as
-  //   namespaced functions. Use for joins / conditional multi-hop walks.
-  // - `ask_user`: pure-text suspending tool — model asks a question, the
-  //   user's next chat message becomes the answer. No genUI.
-  private graphWalkerTools(): ToolSet {
+  // - `kb_resolve` / `kb_get` / `kb_related` / `kb_list`: the knowledge graph
+  //   (text→slug, slug→node, one edge lookup, one prefix list).
+  // - `ledger_snapshot`: the user's account list (their card summary), a plain
+  //   DO RPC. `query_sql`: one read-only SELECT/WITH over the ledger for any
+  //   numeric/history question. Together these replace what codemode bridged.
+  // - `show_award_options`: gen-UI link to the /explore Award Explorer.
+  // - `ask_user`: pure-text suspending tool — the user's next message answers.
+  private conciergeTools(): ToolSet {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const kb = makeKbTools(kbHttp)
-    // Ledger access is the `ledger_snapshot` DO RPC only — no raw SQL.
-    // It lists the user's accounts (their card summary). Exposed at TOP
-    // LEVEL so the model can call it directly, AND inside codemode for
-    // cross-domain programs.
     const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
-    const executor = new DynamicWorkerExecutor({ loader: this.env.LOADER })
-    const codemode = createCodeTool({
-      tools: {
-        ...kb,
-        ledger_snapshot,
-      },
-      executor,
-    })
-
+    const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
     return {
       ...kb,
       ledger_snapshot,
-      codemode,
-      // Display-only gen-UI tool — emits a link to the /explore Award Explorer
-      // page (origin + destination prefilled). All award pricing/ranking now
-      // lives on that page; the agent never costs awards in chat.
+      query_sql,
       show_award_options: showAwardOptionsTool(),
       ask_user: askUserTool(),
     } as ToolSet

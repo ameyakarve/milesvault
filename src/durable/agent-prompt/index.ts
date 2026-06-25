@@ -11,8 +11,7 @@ import {
   CLARIFICATIONS,
   STATEMENT_HANDLING,
   STATEMENT_EXTRACTION,
-  ANALYST_ROLE,
-  GRAPH_WALKER_ROLE,
+  CONCIERGE_ROLE,
 } from './inline.generated'
 
 export { BEANCOUNT_PRIMER }
@@ -149,70 +148,20 @@ ${counts || '  (empty)'}
 ${snapshot.sample_txns.trim() || '(no transactions yet)'}`
 }
 
-// Handoff teaching for the Concierge surface. The analyst owns ledger
-// questions; the graph-walker owns the points & miles knowledge graph
-// (cards, programmes, transfer partners, alliances). Either can hand the
-// conversation to the other when the question shifts domain.
-const HANDOFF_TO_GRAPH_WALKER = `# Knowledge-graph questions — hand off
-
-If the user is asking about credit cards, loyalty programmes, transfer
-partners, airline alliances, hotel chains, or anything else about the points
-& miles world IN GENERAL (i.e. not about their own ledger numbers), you do
-NOT have that data. Hand off to the graph-walker:
-
-\`\`\`
-handoff({ to: "graph-walker", context: "<the user's question, plus any
-constraint they mentioned>" })
-\`\`\`
-
-Examples that belong to the graph-walker: "which cards transfer to Turkish
-Airlines?", "what's the Marriott → United transfer ratio?", "which Indian
-banks issue Amex?", "what hotels are in Hyatt's portfolio?".
-
-Do NOT try to answer these from the ledger — the ledger only records the
-user's transactions, not the universe of cards and programmes.`
-
-const HANDOFF_TO_ANALYST = `# When to hand off to the analyst
-
-You have ledger access via \`codemode.ledger_snapshot({})\` and
-\`codemode.query_sql({ sql })\` — handle cross-domain questions yourself.
-"Which of MY cards transfer to Turkish?" or "Do I have enough Avios for X?"
-are graph-walker questions — call \`ledger_snapshot\` to read the user's
-account list, then walk the graph alongside it in one program.
-
-ONLY hand off to the analyst when the question is purely about the user's
-ledger with no graph component at all — e.g. "how much did I spend on
-flights last month?", "show me my Marriott stays in 2026", "what's my
-average monthly spend?". Those are pure SQL aggregations over the user's
-postings; the analyst's prompt is shaped for that shallow numeric work.
-
-\`\`\`
-handoff({ to: "analyst", context: "<the user's question>" })
-\`\`\`
-
-If in doubt — if the question touches both card-or-currency knowledge AND
-the user's own data — handle it yourself. That's the whole point of the
-cross-domain tool surface.`
-
-// System prompt for the `analyst` agent (Concierge surface). Read-only Q&A
-// over the ledger via SQL — no Beancount editing, no statement handling.
-export function buildAnalystSystem(snapshot: AnalystSnapshot): string {
-  return [
-    ANALYST_ROLE,
-    HANDOFF_TO_GRAPH_WALKER,
-    BEANCOUNT_PRIMER,
-    renderAnalystSnapshotBlock(snapshot),
-  ].join('\n\n---\n\n')
-}
-
-// System prompt for the `graph-walker` agent (Concierge surface). Read-only
-// traversal of the milesvault knowledge graph via the kb HTTP API. The
+// System prompt for the single Concierge agent. One agent over BOTH domains —
+// the milesvault knowledge graph (cards, programmes, transfer partners,
+// alliances) and the user's own ledger (via query_sql / ledger_snapshot). No
+// handoff, no codemode: the agent holds all the read tools at once. The
 // `agentsBriefing` is the live `/api/kb/agents.md` document (schema + counts),
 // fetched per turn so the agent sees the current type vocabulary.
-export function buildGraphWalkerSystem(agentsBriefing: string): string {
+export function buildConciergeSystem(
+  snapshot: AnalystSnapshot,
+  agentsBriefing: string,
+): string {
   return [
-    GRAPH_WALKER_ROLE,
-    HANDOFF_TO_ANALYST,
+    CONCIERGE_ROLE,
+    BEANCOUNT_PRIMER,
+    renderAnalystSnapshotBlock(snapshot),
     '# Live graph schema',
     agentsBriefing.trim(),
   ].join('\n\n---\n\n')
