@@ -43,7 +43,6 @@ const CURRENCIES: LoyaltyCurrency[] = [
 
 function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }) {
   const [target, setTarget] = useState(FIXTURE.target.slug)
-  const [direction, setDirection] = useState<'to' | 'from'>('to')
   const [mineOnly, setMineOnly] = useState(false)
   const [maxHops, setMaxHops] = useState(3)
   const [cardMode, setCardMode] = useState<FilterMode>('include')
@@ -65,8 +64,6 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
       <Points
         target={target}
         onTarget={setTarget}
-        direction={direction}
-        onDirection={setDirection}
         currencies={CURRENCIES}
         status={status}
         data={status === 'ready' ? FIXTURE : undefined}

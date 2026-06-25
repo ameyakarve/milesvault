@@ -11,7 +11,6 @@ export {
 } from './award-explore'
 export {
   buildPointsPaths,
-  buildPointsFrom,
   applyHoldings,
   type PointsPathsResult,
   type PathNode,
