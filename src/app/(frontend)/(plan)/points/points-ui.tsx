@@ -324,7 +324,9 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
       // the default edge with its built-in label (unchanged behaviour).
       type: count > 1 ? 'fan' : undefined,
       label: count > 1 ? undefined : label,
-      data: { idx, count, label, color },
+      // kind/variant/toCur ride along so focus isolation can walk the route
+      // CURRENCY-STRICT (an edge continues only on the currency you're holding).
+      data: { idx, count, label, color, kind: e.kind, variant: e.variant, toCur: e.to_currency },
       animated: e.kind === 'transfer',
       style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? 'var(--border)' : 'var(--muted-foreground)', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
       labelStyle: { fontSize: 9, fill: color },
@@ -438,36 +440,84 @@ export function Points(props: PointsProps) {
       }))
       return { nodes: flow.nodes, edges }
     }
-    // Focused: keep ONLY the connected route through the picked node — walk OUT
-    // (source→target, where its points can go) and IN (target→source, what feeds
-    // it), transitively — then HIDE everything else and RE-LAYOUT the subgraph
-    // so it fills the canvas cleanly with every on-route ratio labelled.
+    // Focused: keep ONLY the route through the picked node — but CURRENCY-STRICT.
+    // Holding a specific tier currency (e.g. AXIS-EM-ATLAS from the Atlas card),
+    // a multi-tier portal may continue ONLY on edges of that currency, not its
+    // sibling tiers. So we walk (node, currency) STATES, not bare nodes: forward
+    // follows outbound edges whose variant == the currency held; backward follows
+    // inbound edges that DELIVER the currency held. Earn/buy edges (no variant)
+    // pass freely. Then hide everything off-route and re-layout.
+    type ED = { kind?: string; variant?: string; toCur?: string }
+    const ed = (e: Edge) => (e.data ?? {}) as ED
     const litE = new Set<string>()
     const litN = new Set<string>([focus])
-    const out = new Map<string, Edge[]>()
-    const inc = new Map<string, Edge[]>()
-    for (const e of flow.edges) {
-      ;(out.get(e.source) ?? out.set(e.source, []).get(e.source)!).push(e)
-      ;(inc.get(e.target) ?? inc.set(e.target, []).get(e.target)!).push(e)
-    }
-    const walk = (adj: Map<string, Edge[]>, step: (e: Edge) => string) => {
-      const seen = new Set([focus])
-      const stack = [focus]
-      while (stack.length) {
-        const cur = stack.pop()!
-        for (const e of adj.get(cur) ?? []) {
+    const stateKey = (n: string, c: string) => `${n}\t${c}`
+
+    // Seed the currencies held AT the focus node.
+    const focusKind = (flow.nodes.find((n) => n.id === focus)?.data as PathNode | undefined)?.kind
+    const isSource = focusKind === 'card' || focusKind === 'fiat'
+    const fwd: Array<{ node: string; cur: string }> = []
+    const bwd: Array<{ node: string; cur: string }> = []
+    if (isSource) {
+      // A card/fiat produces a currency into the programme it feeds — light that
+      // edge and walk forward from there. Nothing feeds a source, so no backward.
+      for (const e of flow.edges) {
+        const m = ed(e)
+        if (e.source === focus && m.toCur) {
           litE.add(e.id)
-          const next = step(e)
-          litN.add(next)
-          if (!seen.has(next)) {
-            seen.add(next)
-            stack.push(next)
-          }
+          litN.add(e.target)
+          fwd.push({ node: e.target, cur: m.toCur })
+        }
+      }
+    } else {
+      // A programme handles whatever currencies its edges carry — every tier it
+      // can send (outbound variant) and receive (inbound toCur).
+      const curs = new Set<string>()
+      for (const e of flow.edges) {
+        const m = ed(e)
+        if (e.source === focus && m.variant) curs.add(m.variant)
+        if (e.target === focus && m.toCur) curs.add(m.toCur)
+      }
+      for (const c of curs) {
+        fwd.push({ node: focus, cur: c })
+        bwd.push({ node: focus, cur: c })
+      }
+    }
+
+    const seenF = new Set(fwd.map((s) => stateKey(s.node, s.cur)))
+    while (fwd.length) {
+      const { node, cur } = fwd.pop()!
+      for (const e of flow.edges) {
+        if (e.source !== node) continue
+        const m = ed(e)
+        if (m.kind === 'transfer' && m.variant && m.variant !== cur) continue // strict
+        litE.add(e.id)
+        litN.add(e.target)
+        const nc = m.toCur ?? cur
+        const k = stateKey(e.target, nc)
+        if (!seenF.has(k)) {
+          seenF.add(k)
+          fwd.push({ node: e.target, cur: nc })
         }
       }
     }
-    walk(out, (e) => e.target) // outbound cone
-    walk(inc, (e) => e.source) // inbound cone
+    const seenB = new Set(bwd.map((s) => stateKey(s.node, s.cur)))
+    while (bwd.length) {
+      const { node, cur } = bwd.pop()!
+      for (const e of flow.edges) {
+        if (e.target !== node) continue
+        const m = ed(e)
+        if (m.kind === 'transfer' && m.toCur && m.toCur !== cur) continue // strict
+        litE.add(e.id)
+        litN.add(e.source)
+        const pc = m.variant ?? cur
+        const k = stateKey(e.source, pc)
+        if (!seenB.has(k)) {
+          seenB.add(k)
+          bwd.push({ node: e.source, cur: pc })
+        }
+      }
+    }
 
     const subNodes = flow.nodes
       .filter((n) => litN.has(n.id))
