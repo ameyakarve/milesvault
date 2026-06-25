@@ -24,6 +24,9 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (amount != null && !Number.isFinite(amount)) {
     return NextResponse.json({ error: 'amount must be a number' }, { status: 400 })
   }
+  // 'to' (default) = backward to every source; 'from' = forward from a held
+  // programme/card to every booking programme reachable.
+  const direction = url.searchParams.get('direction') === 'from' ? 'from' : 'to'
 
   const { env } = await getCloudflareContext({ async: true })
   const ns = (env as Cloudflare.Env).CONCIERGE_DO as
@@ -32,6 +35,6 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!ns) return new NextResponse('CONCIERGE_DO binding missing', { status: 500 })
 
   const stub = ns.get(ns.idFromName(session.user.email))
-  const data = await stub.pointsPaths(target, amount)
+  const data = await stub.pointsPaths(target, amount, direction)
   return NextResponse.json(data)
 }
