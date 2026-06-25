@@ -17,6 +17,7 @@ import {
   buildAwardExplore,
   type AwardExploreResult,
   buildPointsPaths,
+  buildPointsFrom,
   applyHoldings,
   type PointsPathsResult,
   type BalanceRow,
@@ -213,11 +214,19 @@ export class ConciergeDO
   // accumulate it (currencies that transfer in + the cards that earn them),
   // each source tagged with its cheapest ratio. RPC for the
   // /api/concierge/points-paths route.
-  async pointsPaths(target: string, amount?: number): Promise<PointsPathsResult> {
+  async pointsPaths(
+    target: string,
+    amount?: number,
+    direction?: 'to' | 'from',
+  ): Promise<PointsPathsResult> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const ledger = this.ledgerStub()
+    const build =
+      direction === 'from'
+        ? buildPointsFrom(kbHttp, target, amount)
+        : buildPointsPaths(kbHttp, target, amount)
     const [result, snapshot, balances] = await Promise.all([
-      buildPointsPaths(kbHttp, target, amount),
+      build,
       ledger.ledger_snapshot().catch((): null => null),
       ledger
         .query_sql('SELECT account, currency, scale, balance_scaled FROM balance_totals')
