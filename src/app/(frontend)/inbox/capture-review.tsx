@@ -67,6 +67,7 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
   const [copied, setCopied] = useState(false)
   const [rotateOpen, setRotateOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [dismissAllOpen, setDismissAllOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Transient error for list-level mutations (delete / rotate), shown inline.
   const [actionError, setActionError] = useState<string | null>(null)
@@ -206,6 +207,32 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
       })
   }
 
+  // Clear the whole review queue in one go: flip every still-actionable item
+  // to dismissed optimistically, then fan the per-item dismiss POSTs out in
+  // parallel (the endpoint takes one id). On any failure we don't try to
+  // un-pick which id bounced — we just re-fetch so the list reconciles to the
+  // server's truth (succeeded ones stay hidden, failed ones reappear).
+  function dismissAll() {
+    const ids = rows?.map((r) => r.id) ?? []
+    if (ids.length === 0) return
+    const idSet = new Set(ids)
+    setAllRows((prev) => prev?.map((r) => (idSet.has(r.id) ? { ...r, state: 'dismissed' } : r)) ?? prev)
+    setSelectedId(null)
+    setActionError(null)
+    Promise.all(
+      ids.map((id) =>
+        fetch('/api/ledger/captures', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id, action: 'dismiss' }),
+        }).then((r) => (r.ok ? null : Promise.reject(new Error(id)))),
+      ),
+    ).catch(() => {
+      setActionError('Some items could not be dismissed — refreshing the list.')
+      setReloadNonce((n) => n + 1)
+    })
+  }
+
   function openItem(row: CaptureRow) {
     setSelectedId(row.id)
   }
@@ -253,11 +280,23 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
           {title}
           {rows.length > 0 ? ` · ${rows.length} to review` : ''}
         </SectionLabel>
-        {source === 'upload' ? (
-          <Button size="sm" onClick={() => setUploadOpen(true)}>
-            Upload statement
-          </Button>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          {rows.length > 0 ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setDismissAllOpen(true)}
+              className="text-muted-foreground"
+            >
+              Dismiss all
+            </Button>
+          ) : null}
+          {source === 'upload' ? (
+            <Button size="sm" onClick={() => setUploadOpen(true)}>
+              Upload statement
+            </Button>
+          ) : null}
+        </div>
       </header>
 
       {actionError ? (
@@ -357,7 +396,58 @@ export function CaptureReview({ source }: { source: 'upload' | 'email' }) {
 
       <StatementUploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
       <RotateDialog open={rotateOpen} onClose={() => setRotateOpen(false)} onConfirm={doRotate} />
+      <DismissAllDialog
+        open={dismissAllOpen}
+        count={rows.length}
+        isEmail={isEmail}
+        onClose={() => setDismissAllOpen(false)}
+        onConfirm={() => {
+          dismissAll()
+          setDismissAllOpen(false)
+        }}
+      />
     </div>
+  )
+}
+
+function DismissAllDialog({
+  open,
+  count,
+  isEmail,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean
+  count: number
+  isEmail: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  const noun = isEmail ? 'email' : 'item'
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>
+            Dismiss all {count} {noun}
+            {count === 1 ? '' : 's'}?
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          This clears the review queue — every {noun} here is hidden and won&rsquo;t be
+          posted to your journal. Nothing is deleted; this just removes the clutter
+          while you decide what to keep.
+        </p>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={onConfirm}>
+            Dismiss all
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
