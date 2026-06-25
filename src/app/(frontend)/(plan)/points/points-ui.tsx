@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import dagre from '@dagrejs/dagre'
-import { Check, ChevronsUpDown, DollarSign, SlidersHorizontal } from 'lucide-react'
+import { Check, ChevronsUpDown, DollarSign, MousePointerClick, SlidersHorizontal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -51,17 +51,28 @@ const H = 48
 type NodeData = PathNode
 
 // ── layout ────────────────────────────────────────────────────────────────
-function layout(nodes: Node<NodeData>[], edges: Edge[]): Node<NodeData>[] {
+// `targetId`, when given, is pinned to the far right after layout — the
+// destination must ALWAYS read as the rightmost (highest-rank) node, even when
+// cycles among intermediates (e.g. the Avios hub) would otherwise let dagre
+// rank it mid-graph.
+function layout(nodes: Node<NodeData>[], edges: Edge[], targetId?: string): Node<NodeData>[] {
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'LR', nodesep: 18, ranksep: 90, marginx: 16, marginy: 16 })
   g.setDefaultEdgeLabel(() => ({}))
   nodes.forEach((n) => g.setNode(n.id, { width: W, height: H }))
   edges.forEach((e) => g.setEdge(e.source, e.target))
   dagre.layout(g)
-  return nodes.map((n) => {
+  const positioned = nodes.map((n) => {
     const p = g.node(n.id)
     return { ...n, position: { x: p.x - W / 2, y: p.y - H / 2 } }
   })
+  const t = targetId ? positioned.find((n) => n.id === targetId) : undefined
+  const others = t ? positioned.filter((n) => n.id !== targetId) : []
+  if (t && others.length) {
+    const maxX = Math.max(...others.map((n) => n.position.x))
+    if (t.position.x <= maxX) t.position.x = maxX + W + 60 // pin rightmost
+  }
+  return positioned
 }
 
 // ── custom nodes ────────────────────────────────────────────────────────────
@@ -78,7 +89,7 @@ function HeldLine({ data, className }: { data: NodeData; className?: string }) {
 }
 function CardNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[48px] w-[180px] flex-col justify-center rounded-md border bg-sky-50/80 px-3 shadow-sm dark:bg-sky-950/30', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-sky-300 dark:border-sky-800/60')}>
+    <div className={cn('flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border bg-sky-50/80 px-3 shadow-sm dark:bg-sky-950/30', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-sky-300 dark:border-sky-800/60')}>
       <div className="truncate text-xs font-semibold text-sky-900 dark:text-sky-200">{data.display}</div>
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-sky-400/60" />
     </div>
@@ -86,7 +97,7 @@ function CardNode({ data }: NodeProps<Node<NodeData>>) {
 }
 function ProgramNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[48px] w-[180px] flex-col justify-center rounded-md border bg-muted/40 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
+    <div className={cn('flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border bg-muted/40 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
       <div className="truncate text-xs font-medium text-foreground">{data.display}</div>
       <HeldLine data={data} />
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-foreground/40" />
@@ -101,7 +112,7 @@ function TargetNode({ data }: NodeProps<Node<NodeData>>) {
   return (
     <div
       style={{ background: 'var(--foreground)', color: 'var(--background)' }}
-      className="flex h-[48px] w-[180px] flex-col justify-center rounded-md border border-foreground/80 px-3 shadow"
+      className="flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border border-foreground/80 px-3 shadow"
     >
       <div className="truncate text-xs font-semibold">{data.display}</div>
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-background/50" />
@@ -112,7 +123,7 @@ function TargetNode({ data }: NodeProps<Node<NodeData>>) {
 // the edge like every other rate; the node is just a labelled source.
 function FiatNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className="flex h-[48px] w-[180px] flex-col justify-center rounded-md border border-emerald-400/60 bg-emerald-50/60 px-3 shadow-sm ring-1 ring-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-700/60 dark:ring-emerald-800/40">
+    <div className="flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border border-emerald-400/60 bg-emerald-50/60 px-3 shadow-sm ring-1 ring-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-700/60 dark:ring-emerald-800/40">
       <div className="flex items-center gap-1">
         <DollarSign className="size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
         <div className="truncate text-xs font-semibold text-emerald-900 dark:text-emerald-200">{data.display}</div>
@@ -333,7 +344,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
       labelBgStyle: { fill: 'var(--card)', fillOpacity: 0.9 },
     }
   })
-  return { nodes: layout(rfNodes, rfEdges), edges: rfEdges }
+  return { nodes: layout(rfNodes, rfEdges, data.target.slug), edges: rfEdges }
 }
 
 // ── target combobox ─────────────────────────────────────────────────────────
@@ -535,12 +546,12 @@ export function Points(props: PointsProps) {
           labelStyle: { ...(e.labelStyle as object), fill: ACCENT, fontWeight: 600 },
         }
       })
-    const nodes = layout(subNodes, subEdges).map((n) => ({
+    const nodes = layout(subNodes, subEdges, data.target.slug).map((n) => ({
       ...n,
       style: n.id === focus ? { outline: `2px solid ${ACCENT}`, outlineOffset: 2, borderRadius: 8 } : undefined,
     }))
     return { nodes, edges: subEdges }
-  }, [flow, focus])
+  }, [flow, focus, data?.target.slug])
 
   // filter options from the result graph
   const banks = useMemo(() => {
@@ -557,6 +568,8 @@ export function Points(props: PointsProps) {
     [data],
   )
   const filterCount = filters.selectedCards.size + filters.selectedCurrencies.size
+  const focusName = focus ? (data?.nodes.find((n) => n.id === focus)?.display ?? null) : null
+  const targetName = data?.target.display
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -673,11 +686,26 @@ export function Points(props: PointsProps) {
             <Controls showInteractive={false} />
           </ReactFlow>
         )}
-        {status === 'ready' && focus == null ? (
-          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
-            <span className="rounded-full border border-border bg-card/90 px-3 py-1 text-xs text-muted-foreground shadow-sm">
-              Select a node to isolate its route — in and out
-            </span>
+        {status === 'ready' ? (
+          <div className="absolute inset-x-0 top-3 flex justify-center px-3">
+            {focus == null ? (
+              <span className="pointer-events-none flex items-center gap-1.5 rounded-full border border-border bg-card/95 px-3.5 py-1.5 text-xs font-medium text-foreground shadow-sm">
+                <MousePointerClick className="size-3.5 shrink-0 text-muted-foreground" />
+                Tap any card or programme to trace its route{targetName ? ` to ${targetName}` : ''}
+              </span>
+            ) : (
+              <span className="flex items-center gap-2 rounded-full border border-border bg-card/95 px-3 py-1 text-xs shadow-sm">
+                <span className="text-muted-foreground">Showing route for</span>
+                <span className="font-semibold text-foreground">{focusName ?? 'selection'}</span>
+                <button
+                  type="button"
+                  onClick={() => setFocus(null)}
+                  className="ml-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                >
+                  <X className="size-3" /> Show all
+                </button>
+              </span>
+            )}
           </div>
         ) : null}
       </div>
