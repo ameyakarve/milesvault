@@ -122,7 +122,7 @@ const nodeTypes = { card: CardNode, program: ProgramNode, target: TargetNode, fi
 // would otherwise stack into one line. The fan edge bows each sibling by a
 // perpendicular offset keyed on its index, so every tier's ratio stays legible.
 function FanEdge({ id, sourceX, sourceY, targetX, targetY, markerEnd, style, data }: EdgeProps) {
-  const d = (data ?? {}) as { idx?: number; count?: number; label?: string; color?: string }
+  const d = (data ?? {}) as { idx?: number; count?: number; label?: string; color?: string; show?: boolean }
   const idx = d.idx ?? 0
   const count = d.count ?? 1
   const mx = (sourceX + targetX) / 2
@@ -137,7 +137,7 @@ function FanEdge({ id, sourceX, sourceY, targetX, targetY, markerEnd, style, dat
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />
-      {d.label ? (
+      {d.show && d.label ? (
         <EdgeLabelRenderer>
           <div
             className="nodrag nopan pointer-events-none absolute rounded px-1"
@@ -411,35 +411,75 @@ export function Points(props: PointsProps) {
   const { target, onTarget, currencies, status, data, filters } = props
   const flow = useMemo(() => (data ? toFlow(data, filters) : { nodes: [], edges: [] }), [data, filters])
 
-  // Pick-to-reveal: the graph is dense, so edges stay hidden until you select a
-  // node — then only that node's edges show and unrelated nodes dim. Layout is
-  // computed from the FULL edge set in toFlow, so hiding here never shifts it.
+  // Click-to-highlight: ALL edges stay drawn (calm, label-less by default). Pick
+  // a node and its edges light up in the accent colour WITH their ratio labels,
+  // everything else dims. Tap the pane to clear. Layout is unaffected.
+  const ACCENT = 'var(--cm-accent, #4d6e60)'
   const [focus, setFocus] = useState<string | null>(null)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFocus(null)
   }, [data?.target.slug])
   const view = useMemo(() => {
-    const lit = new Set<string>()
+    // Highlight the WHOLE connected route through the picked node — walk OUT
+    // (source→target, where its points can go) and IN (target→source, what
+    // feeds it), collecting every edge/node on both cones, transitively.
+    const litE = new Set<string>()
+    const litN = new Set<string>()
     if (focus) {
-      lit.add(focus)
+      litN.add(focus)
+      const out = new Map<string, Edge[]>()
+      const inc = new Map<string, Edge[]>()
       for (const e of flow.edges) {
-        if (e.source === focus) lit.add(e.target)
-        if (e.target === focus) lit.add(e.source)
+        ;(out.get(e.source) ?? out.set(e.source, []).get(e.source)!).push(e)
+        ;(inc.get(e.target) ?? inc.set(e.target, []).get(e.target)!).push(e)
       }
+      const walk = (adj: Map<string, Edge[]>, step: (e: Edge) => string) => {
+        const seen = new Set([focus])
+        const stack = [focus]
+        while (stack.length) {
+          const cur = stack.pop()!
+          for (const e of adj.get(cur) ?? []) {
+            litE.add(e.id)
+            const next = step(e)
+            litN.add(next)
+            if (!seen.has(next)) {
+              seen.add(next)
+              stack.push(next)
+            }
+          }
+        }
+      }
+      walk(out, (e) => e.target) // outbound cone
+      walk(inc, (e) => e.source) // inbound cone
     }
-    const edges = flow.edges.map((e) => ({
-      ...e,
-      hidden: focus == null ? true : !(e.source === focus || e.target === focus),
-    }))
+    const edges = flow.edges.map((e) => {
+      const on = focus != null && litE.has(e.id)
+      const opacity = focus == null ? 0.4 : on ? 1 : 0.06
+      const baseWidth = (e.style?.strokeWidth as number) ?? 1.2
+      const style = {
+        ...e.style,
+        opacity,
+        ...(on ? { stroke: ACCENT, strokeWidth: baseWidth + 0.8 } : {}),
+      }
+      // Labels only along the highlighted route (no focus → none; keeps it calm).
+      return {
+        ...e,
+        animated: on,
+        label: on ? e.label : undefined,
+        data: { ...(e.data ?? {}), show: on },
+        style,
+        labelStyle: { ...(e.labelStyle as object), ...(on ? { fill: ACCENT, fontWeight: 600 } : {}) },
+      }
+    })
     const nodes = flow.nodes.map((n) => ({
       ...n,
       style:
         focus == null
           ? undefined
           : n.id === focus
-            ? { outline: '2px solid var(--foreground)', outlineOffset: 2, borderRadius: 8 }
-            : { opacity: lit.has(n.id) ? 1 : 0.25 },
+            ? { outline: `2px solid ${ACCENT}`, outlineOffset: 2, borderRadius: 8 }
+            : { opacity: litN.has(n.id) ? 1 : 0.3 },
     }))
     return { nodes, edges }
   }, [flow, focus])
@@ -576,7 +616,7 @@ export function Points(props: PointsProps) {
         {status === 'ready' && focus == null ? (
           <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
             <span className="rounded-full border border-border bg-card/90 px-3 py-1 text-xs text-muted-foreground shadow-sm">
-              Select a node to reveal its transfer routes
+              Select a node to highlight its full route — in and out
             </span>
           </div>
         ) : null}
