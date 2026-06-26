@@ -50,6 +50,7 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
   const [currencyMode, setCurrencyMode] = useState<FilterMode>('include')
   const [selectedCurrencies, setSelectedCurrencies] = useState<Set<string>>(new Set())
+  const [hidden, setHidden] = useState<Set<string>>(new Set())
 
   const toggle = (s: React.Dispatch<React.SetStateAction<Set<string>>>, slug: string) =>
     s((p) => {
@@ -58,7 +59,7 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
       else n.add(slug)
       return n
     })
-  const filters: PointsFilters = { mineOnly, maxHops, cardMode, selectedCards, currencyMode, selectedCurrencies }
+  const filters: PointsFilters = { mineOnly, maxHops, cardMode, selectedCards, currencyMode, selectedCurrencies, hidden }
 
   return (
     <div className="h-screen">
@@ -88,6 +89,8 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
         }
         onCurrencyMode={setCurrencyMode}
         onToggleCurrency={(s) => toggle(setSelectedCurrencies, s)}
+        onHide={(s) => setHidden((p) => new Set(p).add(s))}
+        onUnhideAll={() => setHidden(new Set())}
       />
     </div>
   )

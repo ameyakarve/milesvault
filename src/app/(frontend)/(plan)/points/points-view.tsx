@@ -34,6 +34,8 @@ export function PointsView() {
   const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
   const [currencyMode, setCurrencyMode] = useState<FilterMode>('include')
   const [selectedCurrencies, setSelectedCurrencies] = useState<Set<string>>(new Set())
+  // Nodes hidden via the per-node button (declutter) — always subtractive.
+  const [hidden, setHidden] = useState<Set<string>>(new Set())
 
   // target + amount are URL-synced so the explorer can deep-link in.
   useEffect(() => {
@@ -99,6 +101,8 @@ export function PointsView() {
     })
   const onToggleCard = useCallback((slug: string) => toggleSet(setSelectedCards, slug), [])
   const onToggleCurrency = useCallback((slug: string) => toggleSet(setSelectedCurrencies, slug), [])
+  const onHide = useCallback((slug: string) => setHidden((prev) => new Set(prev).add(slug)), [])
+  const onUnhideAll = useCallback(() => setHidden(new Set()), [])
   // toggle a whole bank: if all already selected, clear them; else select all.
   const onToggleBank = useCallback((slugs: string[]) => {
     setSelectedCards((prev) => {
@@ -117,6 +121,7 @@ export function PointsView() {
     setTarget(slug)
     setSelectedCards(new Set())
     setSelectedCurrencies(new Set())
+    setHidden(new Set())
   }, [])
 
   // flipping booking ↔ book-from changes the whole input universe (a card is a
@@ -126,9 +131,10 @@ export function PointsView() {
     setTarget('')
     setSelectedCards(new Set())
     setSelectedCurrencies(new Set())
+    setHidden(new Set())
   }, [])
 
-  const filters: PointsFilters = { mineOnly, maxHops, cardMode, selectedCards, currencyMode, selectedCurrencies }
+  const filters: PointsFilters = { mineOnly, maxHops, cardMode, selectedCards, currencyMode, selectedCurrencies, hidden }
 
   return (
     <Points
@@ -148,6 +154,8 @@ export function PointsView() {
       onToggleBank={onToggleBank}
       onCurrencyMode={setCurrencyMode}
       onToggleCurrency={onToggleCurrency}
+      onHide={onHide}
+      onUnhideAll={onUnhideAll}
     />
   )
 }
