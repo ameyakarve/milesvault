@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Eye, EyeOff } from 'lucide-react'
 import { ProgrammeMark } from './programme-marks'
 import { AddAccountsModal } from '@/components/add-accounts-modal'
 import { cn } from '@/lib/utils'
@@ -33,6 +34,42 @@ type Holding = {
 
 const fmtAmt = (n: number) =>
   n.toLocaleString('en-IN', { maximumFractionDigits: Math.abs(n) >= 1000 ? 0 : 2 })
+
+// Hover-revealed control on a card/programme tile: hide it from the home grid,
+// or restore it while hidden tiles are being shown. Sits above the tile's
+// stretched links (z-[3]); stays visible on touch. A pure display toggle.
+function HideButton({ hidden, onToggle }: { hidden: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onToggle()
+      }}
+      title={hidden ? 'Show on vault' : 'Hide from vault'}
+      aria-label={hidden ? 'Show on vault' : 'Hide from vault'}
+      className="absolute right-1.5 top-1.5 z-[3] rounded p-1 text-white/70 opacity-0 transition hover:bg-white/20 hover:text-white focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100"
+    >
+      {hidden ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+    </button>
+  )
+}
+
+// Section-header toggle that reveals/hides the hidden tiles. Shared state, so
+// flipping it in one section reveals hidden tiles in every section.
+function ShowHiddenToggle({ n, on, onClick }: { n: number; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+    >
+      {on ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+      {on ? 'Hide hidden' : `${n} hidden`}
+    </button>
+  )
+}
 
 // ── component ─────────────────────────────────────────────────────────────────
 
@@ -157,6 +194,10 @@ export function VaultView() {
   // (QUALIFIES_TOWARD, from the KG), so a programme's counters attach by
   // commodity even when ledger account leaves differ. Loaded non-blocking.
   const [statusLinks, setStatusLinks] = useState<Record<string, string[]>>({})
+  // Accounts the user has hidden from the home grid (a pure display pref), and
+  // whether hidden tiles are currently revealed for review/restore.
+  const [hidden, setHidden] = useState<Set<string>>(new Set())
+  const [showHidden, setShowHidden] = useState(false)
   // Bumped by the error-state retry to re-run the loader.
   const [reloadNonce, setReloadNonce] = useState(0)
 
@@ -221,6 +262,10 @@ export function VaultView() {
         .then((r) => (r.ok ? (r.json() as Promise<{ links?: Record<string, string[]> }>) : null))
         .then((d) => alive && d?.links && setStatusLinks(d.links))
         .catch(() => {})
+      fetch('/api/ledger/account-prefs', noStore)
+        .then((r) => (r.ok ? (r.json() as Promise<{ accounts?: string[] }>) : null))
+        .then((d) => alive && d?.accounts && setHidden(new Set(d.accounts)))
+        .catch(() => {})
     }
     load()
     const onVisible = () => {
@@ -234,6 +279,27 @@ export function VaultView() {
       window.removeEventListener('focus', load)
     }
   }, [reloadNonce])
+
+  // Hide/show a tile. Optimistic: flip locally, POST, revert on failure
+  // (mirrors the Inbox dismiss flow). Display-only — never touches the ledger.
+  const toggleHide = (account: string) => {
+    const willHide = !hidden.has(account)
+    const flip = (add: boolean) =>
+      setHidden((prev) => {
+        const n = new Set(prev)
+        if (add) n.add(account)
+        else n.delete(account)
+        return n
+      })
+    flip(willHide)
+    fetch('/api/ledger/account-prefs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ account, action: willHide ? 'hide' : 'show' }),
+    })
+      .then((r) => (r.ok ? null : Promise.reject(new Error(String(r.status)))))
+      .catch(() => flip(!willHide))
+  }
 
   if (state.status === 'loading') {
     return <VaultSkeleton />
@@ -306,6 +372,12 @@ export function VaultView() {
   const cardRows = rows
     .filter((r) => r.account.startsWith('Liabilities:CreditCards:'))
     .sort((a, b) => a.account.localeCompare(b.account))
+  // Hidden tiles drop from the grid unless the user reveals them. Masthead
+  // totals stay on the full `cardRows` — hiding is display-only, not a filter
+  // on what you owe.
+  const visibleCardRows = cardRows.filter((r) => !hidden.has(r.account))
+  const hiddenCardCount = cardRows.length - visibleCardRows.length
+  const cardsToShow = showHidden ? cardRows : visibleCardRows
 
   return (
     <div className="w-full px-6 py-6 space-y-8">
@@ -319,17 +391,30 @@ export function VaultView() {
         <section id="cards" className="scroll-mt-6 space-y-3">
           <SectionHead
             title="Credit cards"
-            count={cardRows.length}
-            action={<AddButton label="Card" onClick={() => setAddCardOpen(true)} />}
+            count={cardsToShow.length}
+            action={
+              <div className="flex items-center gap-2">
+                {hiddenCardCount > 0 ? (
+                  <ShowHiddenToggle
+                    n={hiddenCardCount}
+                    on={showHidden}
+                    onClick={() => setShowHidden((v) => !v)}
+                  />
+                ) : null}
+                <AddButton label="Card" onClick={() => setAddCardOpen(true)} />
+              </div>
+            }
           />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {cardRows.map((r) => (
+            {cardsToShow.map((r) => (
               <CreditCardCard
                 key={`${r.account}|${r.currency}`}
                 row={r}
                 names={names}
                 trend={stats?.card_spend_trend.find((t) => t.account === r.account) ?? null}
                 meta={cardMeta[r.account] ?? null}
+                hidden={hidden.has(r.account)}
+                onToggleHide={() => toggleHide(r.account)}
               />
             ))}
           </div>
@@ -343,6 +428,10 @@ export function VaultView() {
         names={names}
         countersFor={countersFor}
         onAdd={() => setAddCardOpen(true)}
+        hidden={hidden}
+        showHidden={showHidden}
+        onToggleShowHidden={() => setShowHidden((v) => !v)}
+        onToggleHide={toggleHide}
       />
 
       <AddAccountsModal
@@ -477,11 +566,15 @@ export function CreditCardCard({
   names,
   trend,
   meta,
+  hidden,
+  onToggleHide,
 }: {
   row: AccountSummaryRow
   names: Names
   trend: { currency: string; months: number[] } | null
   meta: CardMeta | null
+  hidden?: boolean
+  onToggleHide?: () => void
 }) {
   const { name, suffix } = displayName(row.account, names)
   const issuer = issuerOf(row.account)
@@ -510,9 +603,11 @@ export function CreditCardCard({
       className={cn(
         'group relative flex aspect-[1.6] flex-col justify-between gap-2 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
         cardBg(row.account),
+        hidden && 'opacity-60',
       )}
     >
       <CardTexture seed={row.account} />
+      {onToggleHide ? <HideButton hidden={!!hidden} onToggle={onToggleHide} /> : null}
       {/* primary target — the whole card opens the Journal */}
       <Link
         href={accountHref(row)}
@@ -964,31 +1059,51 @@ function RewardsSections({
   names,
   countersFor,
   onAdd,
+  hidden,
+  showHidden,
+  onToggleShowHidden,
+  onToggleHide,
 }: {
   holdings: Holding[]
   names: Names
   countersFor: (h: Holding) => Array<{ value: number; commodity: string }>
   onAdd: () => void
+  hidden: Set<string>
+  showHidden: boolean
+  onToggleShowHidden: () => void
+  onToggleHide: (account: string) => void
 }) {
+  const visible = holdings.filter((h) => !hidden.has(h.account))
+  const hiddenCount = holdings.length - visible.length
+  const toShow = showHidden ? holdings : visible
   return (
     <section className="space-y-3">
       <SectionHead
         title="Programmes"
-        count={holdings.length}
-        action={<AddButton label="Programme" onClick={onAdd} />}
+        count={toShow.length}
+        action={
+          <div className="flex items-center gap-2">
+            {hiddenCount > 0 ? (
+              <ShowHiddenToggle n={hiddenCount} on={showHidden} onClick={onToggleShowHidden} />
+            ) : null}
+            <AddButton label="Programme" onClick={onAdd} />
+          </div>
+        }
       />
-      {holdings.length > 0 ? (
+      {toShow.length > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {holdings.map((h) => (
+          {toShow.map((h) => (
             <ProgrammeCard
               key={`${h.account}|${h.currency}`}
               holding={h}
               names={names}
               status={countersFor(h)}
+              hidden={hidden.has(h.account)}
+              onToggleHide={() => onToggleHide(h.account)}
             />
           ))}
         </div>
-      ) : (
+      ) : holdings.length === 0 ? (
         <Link
           href={`/editor?prefill=${encodeURIComponent(PROGRAMME_EMPTY_SEED)}`}
           className="flex items-center justify-between rounded-xl border border-dashed border-border px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
@@ -996,7 +1111,7 @@ function RewardsSections({
           <span>No programmes yet</span>
           <span className="shrink-0 text-xs">Add in the Ledger chat →</span>
         </Link>
-      )}
+      ) : null}
     </section>
   )
 }
@@ -1064,6 +1179,8 @@ export function ProgrammeCard({
   names,
   status = [],
   category,
+  hidden,
+  onToggleHide,
 }: {
   holding: Holding
   names: Names
@@ -1071,6 +1188,8 @@ export function ProgrammeCard({
   // Real category from the KG (drives the fallback icon). When absent, derived
   // from the Miles/Points subtree.
   category?: 'airline' | 'hotel' | 'aggregator'
+  hidden?: boolean
+  onToggleHide?: () => void
 }) {
   const { name } = displayName(holding.account, names)
   const fmtPts = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 0 })
@@ -1082,14 +1201,21 @@ export function ProgrammeCard({
   const ticker = currencyRedundant(name, holding.currency) ? null : holding.currency
   const counters = status.filter((s) => s.value !== 0)
   return (
-    <Link
-      href={`/editor?tab=journal&account=${encodeURIComponent(holding.account)}`}
+    <div
       className={cn(
         'group relative flex aspect-[1.6] flex-col justify-between gap-2 overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-lg',
         programmeBg(holding.account),
+        hidden && 'opacity-60',
       )}
     >
       <CardTexture seed={holding.account} />
+      {onToggleHide ? <HideButton hidden={!!hidden} onToggle={onToggleHide} /> : null}
+      {/* whole tile opens the Journal */}
+      <Link
+        href={`/editor?tab=journal&account=${encodeURIComponent(holding.account)}`}
+        aria-label={`Open ${name} in the Journal`}
+        className="absolute inset-0 z-[1]"
+      />
       <span className="flex items-center gap-2">
         <ProgrammeMark account={holding.account} category={cat} className="size-5 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
@@ -1119,7 +1245,7 @@ export function ProgrammeCard({
           ))}
         </span>
       ) : null}
-    </Link>
+    </div>
   )
 }
 

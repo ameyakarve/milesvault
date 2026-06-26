@@ -58,6 +58,8 @@ export type LedgerClient = {
     id: string,
     state: 'captured' | 'extracted' | 'posted' | 'dismissed',
   ): Promise<{ ok: boolean }>
+  list_hidden_accounts(): Promise<{ accounts: string[] }>
+  set_account_hidden(account: string, hidden: boolean): Promise<{ ok: boolean }>
   list_captures(): Promise<{
     rows: Array<{
       id: string
@@ -209,6 +211,17 @@ export async function getLedgerClient(email: string): Promise<LedgerClient> {
 
     async set_capture_state(id, state) {
       return stub.set_capture_state(id, state)
+    },
+
+    async list_hidden_accounts() {
+      return stub.list_hidden_accounts()
+    },
+
+    async set_account_hidden(account, hidden) {
+      if (typeof account !== 'string' || account.length === 0) {
+        throw new LedgerInputError(['account must be a non-empty string.'])
+      }
+      return stub.set_account_hidden(account, !!hidden)
     },
 
     async list_ingest_log() {
