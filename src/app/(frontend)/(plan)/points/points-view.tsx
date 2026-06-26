@@ -12,6 +12,9 @@ import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-c
 export function PointsView() {
   const [target, setTarget] = useState('')
   const [amount, setAmount] = useState<number | null>(null)
+  // 'to' = booking (pick a destination, see all sources). 'from' = book-from
+  // (pick a programme/card you hold, see everywhere it can book).
+  const [direction, setDirection] = useState<'to' | 'from'>('to')
 
   // The searchable target universe — fetched once. A failure leaves the picker
   // empty rather than swallowing the error silently.
@@ -40,6 +43,7 @@ export function PointsView() {
     if (t) setTarget(t)
     const a = q.get('amount')
     if (a && Number.isFinite(Number(a))) setAmount(Number(a))
+    if (q.get('dir') === 'from') setDirection('from')
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [])
 
@@ -47,12 +51,13 @@ export function PointsView() {
     const q = new URLSearchParams()
     if (target) q.set('target', target)
     if (amount != null) q.set('amount', String(amount))
+    if (direction === 'from') q.set('dir', 'from')
     const qs = q.toString()
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
-  }, [target, amount])
+  }, [target, amount, direction])
 
   const ready = target.trim().length >= 2
-  const reqKey = `${target.trim()}|${amount ?? ''}`
+  const reqKey = `${target.trim()}|${amount ?? ''}|${direction}`
   const [result, setResult] = useState<{ key: string; data?: PointsPathsResult; error?: string } | null>(null)
 
   useEffect(() => {
@@ -65,6 +70,7 @@ export function PointsView() {
     const handle = setTimeout(() => {
       const q = new URLSearchParams({ target: target.trim() })
       if (amount != null) q.set('amount', String(amount))
+      if (direction === 'from') q.set('direction', 'from')
       fetch(`/api/concierge/points-paths?${q.toString()}`)
         .then(async (r) => {
           if (!r.ok) throw new Error((await r.text()) || `HTTP ${r.status}`)
@@ -113,12 +119,23 @@ export function PointsView() {
     setSelectedCurrencies(new Set())
   }, [])
 
+  // flipping booking ↔ book-from changes the whole input universe (a card is a
+  // valid anchor only in book-from), so reset the picked anchor and filters.
+  const onDirection = useCallback((d: 'to' | 'from') => {
+    setDirection(d)
+    setTarget('')
+    setSelectedCards(new Set())
+    setSelectedCurrencies(new Set())
+  }, [])
+
   const filters: PointsFilters = { mineOnly, maxHops, cardMode, selectedCards, currencyMode, selectedCurrencies }
 
   return (
     <Points
       target={target}
       onTarget={onTarget}
+      direction={direction}
+      onDirection={onDirection}
       currencies={currencies}
       status={status}
       data={data}

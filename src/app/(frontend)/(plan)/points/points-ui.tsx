@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+import { matchesTokens } from '@/lib/search-match'
 import { PlanToolbar, TAB_ACTIVE } from '../plan-toolbar'
 import type { PointsPathsResult, PathNode, PathEdge } from '@/durable/agents/tools/concierge/points-paths'
 import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-currencies'
@@ -48,7 +49,10 @@ const tierLabel = (variant: string) => {
 const W = 180
 const H = 48
 
-type NodeData = PathNode
+// `dir` rides on the anchor/target node so it knows which side to put its handle:
+// in 'to' mode the target RECEIVES (left handle); in 'from' mode the anchor SENDS
+// (right handle), since it sits leftmost as the source.
+type NodeData = PathNode & { dir?: 'to' | 'from' }
 
 // ── layout ────────────────────────────────────────────────────────────────
 // `targetId`, when given, is pinned to the far right after layout — the
@@ -115,7 +119,11 @@ function TargetNode({ data }: NodeProps<Node<NodeData>>) {
       className="flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border border-foreground/80 px-3 shadow"
     >
       <div className="truncate text-xs font-semibold">{data.display}</div>
-      <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-background/50" />
+      {data.dir === 'from' ? (
+        <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-background/50" />
+      ) : (
+        <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-background/50" />
+      )}
     </div>
   )
 }
@@ -185,6 +193,11 @@ export type PointsFilters = {
 }
 
 function toFlow(data: PointsPathsResult, f: PointsFilters) {
+  // 'from' (book-from) fans FORWARD off a single anchor you already hold, so the
+  // "My points" route-keeping (a backward-only notion) and the held-currency
+  // gate don't apply, and the anchor is the LEFTMOST source rather than the
+  // rightmost target.
+  const forward = data.direction === 'from'
   // "My points": keep held nodes plus the programmes on their route to the
   // target. A node's `path` is its OWN currency-route (for a card, the route its
   // earned currency actually takes — which can differ from the programme it earns
@@ -192,7 +205,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   // BizBlack → SmartBuy → KrisFlyer → Accor) instead of collapsing to a shorter
   // route the held currency can't actually use.
   let mineKeep: Set<string> | null = null
-  if (f.mineOnly) {
+  if (f.mineOnly && !forward) {
     mineKeep = new Set<string>([data.target.slug])
     const pathOf = new Map(data.nodes.map((n) => [n.id, n.path ?? []]))
     const addChain = (slug: string) => {
@@ -239,7 +252,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   // then close forward over transfers you can feed, and keep only tier edges
   // whose source currency is in that set.
   let heldCcy: Set<string> | null = null
-  if (f.mineOnly) {
+  if (f.mineOnly && !forward) {
     heldCcy = new Set<string>()
     for (const n of data.nodes) {
       if (n.fiat) {
@@ -270,17 +283,22 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
     return true
   })
 
-  // reachability prune: keep only nodes that can still reach the target
-  const back = new Map<string, string[]>()
-  for (const e of candidate) (back.get(e.to) ?? back.set(e.to, []).get(e.to)!).push(e.from)
+  // reachability prune: keep only nodes connected to the anchor. 'to' keeps
+  // nodes that can still REACH the target (walk edges backward); 'from' keeps
+  // nodes REACHABLE FROM the anchor (walk edges forward).
+  const adj = new Map<string, string[]>()
+  for (const e of candidate) {
+    const [k, v] = forward ? [e.from, e.to] : [e.to, e.from]
+    ;(adj.get(k) ?? adj.set(k, []).get(k)!).push(v)
+  }
   const reach = new Set<string>([data.target.slug])
   const stack = [data.target.slug]
   while (stack.length) {
     const cur = stack.pop()!
-    for (const from of back.get(cur) ?? []) {
-      if (!reach.has(from)) {
-        reach.add(from)
-        stack.push(from)
+    for (const nbr of adj.get(cur) ?? []) {
+      if (!reach.has(nbr)) {
+        reach.add(nbr)
+        stack.push(nbr)
       }
     }
   }
@@ -290,7 +308,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   const fiatIds = new Set(data.nodes.filter((n) => n.fiat).map((n) => n.id))
   const rfNodes: Node<NodeData>[] = data.nodes
     .filter((n) => kept.has(n.id))
-    .map((n) => ({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n } }))
+    .map((n) => ({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n, dir: data.direction } }))
   // Count siblings per node-pair: a multi-tier portal emits SEVERAL edges between
   // the same two programmes (one per tier currency, each its own ratio). Those
   // must fan out + be tier-tagged rather than collapse onto one line.
@@ -344,31 +362,83 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
       labelBgStyle: { fill: 'var(--card)', fillOpacity: 0.9 },
     }
   })
-  return { nodes: layout(rfNodes, rfEdges, data.target.slug), edges: rfEdges }
+  // Pin the destination rightmost only in 'to' mode. In 'from' mode the anchor
+  // is a pure source — dagre already puts it leftmost; pinning it right would be
+  // wrong.
+  return { nodes: layout(rfNodes, rfEdges, forward ? undefined : data.target.slug), edges: rfEdges }
 }
 
 // ── target combobox ─────────────────────────────────────────────────────────
-function TargetCombobox({ value, onChange, currencies }: { value: string; onChange: (slug: string) => void; currencies: LoyaltyCurrency[] }) {
+// Programmes always; in book-from mode it ALSO searches cards (server-side
+// typeahead) so the anchor you hold can be a credit card, not just a programme.
+function TargetCombobox({
+  value,
+  onChange,
+  currencies,
+  allowCards,
+}: {
+  value: string
+  onChange: (slug: string) => void
+  currencies: LoyaltyCurrency[]
+  allowCards?: boolean
+}) {
   const [open, setOpen] = useState(false)
-  const label = currencies.find((c) => c.slug === value)?.name ?? (value ? value.replace(/^[a-z]+\//, '') : 'Choose target points…')
+  const [query, setQuery] = useState('')
+  const [cards, setCards] = useState<Array<{ slug: string; name: string | null }>>([])
+  const [cardName, setCardName] = useState<string | null>(null) // remembered label for a chosen card
+
+  useEffect(() => {
+    if (!allowCards || query.trim().length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCards([])
+      return
+    }
+    let cancelled = false
+    const h = setTimeout(() => {
+      fetch(`/api/kb/cards/search?q=${encodeURIComponent(query.trim())}`)
+        .then((r) => (r.ok ? (r.json() as Promise<{ items?: Array<{ slug: string; name: string | null }> }>) : null))
+        .then((d) => !cancelled && setCards(d?.items ?? []))
+        .catch(() => {})
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(h)
+    }
+  }, [query, allowCards])
+
+  const label = value.startsWith('cc/')
+    ? (cardName ?? value.replace(/^cc\//, '').replace(/-/g, ' '))
+    : (currencies.find((c) => c.slug === value)?.name ?? (value ? value.replace(/^[a-z]+\//, '') : null))
+  const placeholder = allowCards ? 'Choose what you hold…' : 'Choose target points…'
+
+  const q = query.trim()
+  const progMatches = q
+    ? currencies.filter((c) => matchesTokens(q, `${c.name} ${c.slug} ${(c.aliases ?? []).join(' ')}`))
+    : currencies
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger render={<Button variant="outline" size="sm" className="w-64 justify-between font-normal" />}>
-        <span className="truncate">{label}</span>
+        <span className="truncate">{label ?? placeholder}</span>
         <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search points — Qantas, Avios, KrisFlyer…" />
+        <Command shouldFilter={false}>
+          <CommandInput
+            value={query}
+            onValueChange={setQuery}
+            placeholder={allowCards ? 'Search a programme or card…' : 'Search points — Qantas, Avios, KrisFlyer…'}
+          />
           <CommandList>
             <CommandEmpty>No match.</CommandEmpty>
-            <CommandGroup>
-              {currencies.map((c) => (
+            <CommandGroup heading={allowCards ? 'Programmes' : undefined}>
+              {progMatches.map((c) => (
                 <CommandItem
                   key={c.slug}
-                  value={`${c.name} ${c.slug} ${(c.aliases ?? []).join(' ')}`}
+                  value={c.slug}
                   onSelect={() => {
                     onChange(c.slug)
+                    setCardName(null)
                     setOpen(false)
                   }}
                 >
@@ -377,6 +447,24 @@ function TargetCombobox({ value, onChange, currencies }: { value: string; onChan
                 </CommandItem>
               ))}
             </CommandGroup>
+            {allowCards && cards.length ? (
+              <CommandGroup heading="Cards">
+                {cards.map((c) => (
+                  <CommandItem
+                    key={c.slug}
+                    value={c.slug}
+                    onSelect={() => {
+                      onChange(c.slug)
+                      setCardName(c.name ?? null)
+                      setOpen(false)
+                    }}
+                  >
+                    <Check className={cn('size-4', value === c.slug ? 'opacity-100' : 'opacity-0')} />
+                    {c.name ?? c.slug.replace(/^cc\//, '')}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ) : null}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -406,6 +494,8 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 export type PointsProps = {
   target: string
   onTarget: (slug: string) => void
+  direction: 'to' | 'from'
+  onDirection: (d: 'to' | 'from') => void
   currencies: LoyaltyCurrency[]
   status: PointsStatus
   data?: PointsPathsResult
@@ -427,7 +517,8 @@ const HOP_TABS = [
 ]
 
 export function Points(props: PointsProps) {
-  const { target, onTarget, currencies, status, data, filters } = props
+  const { target, onTarget, direction, currencies, status, data, filters } = props
+  const fromMode = direction === 'from'
   const flow = useMemo(() => (data ? toFlow(data, filters) : { nodes: [], edges: [] }), [data, filters])
 
   // Click-to-highlight: ALL edges stay drawn (calm, label-less by default). Pick
@@ -546,12 +637,12 @@ export function Points(props: PointsProps) {
           labelStyle: { ...(e.labelStyle as object), fill: ACCENT, fontWeight: 600 },
         }
       })
-    const nodes = layout(subNodes, subEdges, data.target.slug).map((n) => ({
+    const nodes = layout(subNodes, subEdges, data.direction === 'from' ? undefined : data.target.slug).map((n) => ({
       ...n,
       style: n.id === focus ? { outline: `2px solid ${ACCENT}`, outlineOffset: 2, borderRadius: 8 } : undefined,
     }))
     return { nodes, edges: subEdges }
-  }, [flow, focus, data?.target.slug])
+  }, [flow, focus, data?.target.slug, data?.direction])
 
   // filter options from the result graph
   const banks = useMemo(() => {
@@ -574,13 +665,23 @@ export function Points(props: PointsProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PlanToolbar>
-        <TargetCombobox value={target} onChange={onTarget} currencies={currencies} />
-        <Tabs value={filters.mineOnly ? 'mine' : 'all'} onValueChange={(v) => props.onMineOnly(v === 'mine')}>
+        <Tabs value={direction} onValueChange={(v) => props.onDirection(v as 'to' | 'from')}>
           <TabsList className="h-8">
-            <TabsTrigger value="mine" className={cn('px-2.5 text-xs', TAB_ACTIVE)}>My points</TabsTrigger>
-            <TabsTrigger value="all" className={cn('px-2.5 text-xs', TAB_ACTIVE)}>All points</TabsTrigger>
+            <TabsTrigger value="to" className={cn('px-2.5 text-xs', TAB_ACTIVE)}>Booking</TabsTrigger>
+            <TabsTrigger value="from" className={cn('px-2.5 text-xs', TAB_ACTIVE)}>Book from</TabsTrigger>
           </TabsList>
         </Tabs>
+        <TargetCombobox value={target} onChange={onTarget} currencies={currencies} allowCards={fromMode} />
+        {/* "My points" route-keeping is a booking-mode notion (in book-from the
+            anchor IS your holding), so it only shows in booking mode. */}
+        {!fromMode ? (
+          <Tabs value={filters.mineOnly ? 'mine' : 'all'} onValueChange={(v) => props.onMineOnly(v === 'mine')}>
+            <TabsList className="h-8">
+              <TabsTrigger value="mine" className={cn('px-2.5 text-xs', TAB_ACTIVE)}>My points</TabsTrigger>
+              <TabsTrigger value="all" className={cn('px-2.5 text-xs', TAB_ACTIVE)}>All points</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        ) : null}
 
         {/* filters popover */}
         <Popover>
@@ -655,7 +756,9 @@ export function Points(props: PointsProps) {
         {status === 'loading' ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Computing paths…</div>
         ) : status === 'idle' ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Choose the points you want to reach.</div>
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            {fromMode ? 'Choose a programme or card you hold.' : 'Choose the points you want to reach.'}
+          </div>
         ) : status === 'error' ? (
           <div className="flex h-full items-center justify-center text-sm text-destructive">{props.error ?? 'Something went wrong.'}</div>
         ) : (
@@ -691,7 +794,7 @@ export function Points(props: PointsProps) {
             {focus == null ? (
               <span className="pointer-events-none flex items-center gap-1.5 rounded-full border border-border bg-card/95 px-3.5 py-1.5 text-xs font-medium text-foreground shadow-sm">
                 <MousePointerClick className="size-3.5 shrink-0 text-muted-foreground" />
-                Tap any card or programme to trace its route{targetName ? ` to ${targetName}` : ''}
+                Tap any card or programme to trace its route{!fromMode && targetName ? ` to ${targetName}` : ''}
               </span>
             ) : (
               <span className="flex items-center gap-2 rounded-full border border-border bg-card/95 px-3 py-1 text-xs shadow-sm">
