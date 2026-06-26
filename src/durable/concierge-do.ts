@@ -1,4 +1,6 @@
 import { generateText, stepCountIs, type ToolSet } from 'ai'
+import { createCodeTool } from '@cloudflare/codemode/ai'
+import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { buildConciergeSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
@@ -675,6 +677,10 @@ export class ConciergeDO
     const kb = makeKbTools(kbHttp)
     const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
     const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
+    const codemode = createCodeTool({
+      tools: { ...kb, ledger_snapshot, query_sql },
+      executor: new DynamicWorkerExecutor({ loader: this.env.LOADER }),
+    })
     const system =
       buildConciergeSystem(snapshot, briefing) +
       '\n\nChannel: plain-text chat (a messaging app). Reply concisely in plain text — no markdown tables, no in-app links. For questions about the user\'s own balances or history, use ledger_snapshot / query_sql.'
@@ -682,22 +688,25 @@ export class ConciergeDO
       model: this.buildModel({ id: CONCIERGE_MODEL_ID, reasoning: 'off' }),
       system,
       prompt: question,
-      tools: { ...kb, ledger_snapshot, query_sql } as ToolSet,
+      tools: { ...kb, ledger_snapshot, query_sql, codemode } as ToolSet,
       stopWhen: stepCountIs(10),
     })
     const text = result.text.trim()
     return { text: text || 'Sorry — I could not work out an answer to that.' }
   }
 
-  // The single concierge tool surface — every read tool the agent holds at
-  // once (no analyst/graph-walker split, no codemode sandbox). The model
-  // composes them across normal steps and reasons over the results.
+  // The single concierge tool surface. The model holds every read tool at the
+  // top level for one-shot lookups, AND a `codemode` sandbox that exposes the
+  // same tools (plus the library/util helpers) as methods — for any answer that
+  // needs several dependent lookups or arithmetic, the model writes ONE program
+  // instead of a back-and-forth.
   //
-  // - `kb_resolve` / `kb_get` / `kb_related` / `kb_list`: the knowledge graph
-  //   (text→slug, slug→node, one edge lookup, one prefix list).
-  // - `ledger_snapshot`: the user's account list (their card summary), a plain
-  //   DO RPC. `query_sql`: one read-only SELECT/WITH over the ledger for any
-  //   numeric/history question. Together these replace what codemode bridged.
+  // - `kb_resolve` / `kb_get` / `kb_related` / `kb_list`: the knowledge graph.
+  // - `ledger_snapshot`: the user's account list. `query_sql`: read-only
+  //   SELECT/WITH over the ledger.
+  // - `codemode`: runs an LLM-written async JS program in a Dynamic Worker
+  //   isolate; `sandboxTools` are exposed inside as `codemode.<name>(...)`.
+  //   `sandboxTools` is the seam the util library grows on.
   // - `show_award_options`: gen-UI link to the /explore Award Explorer.
   // - `ask_user`: pure-text suspending tool — the user's next message answers.
   private conciergeTools(): ToolSet {
@@ -705,10 +714,16 @@ export class ConciergeDO
     const kb = makeKbTools(kbHttp)
     const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
     const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
+    const sandboxTools = { ...kb, ledger_snapshot, query_sql }
+    const codemode = createCodeTool({
+      tools: sandboxTools,
+      executor: new DynamicWorkerExecutor({ loader: this.env.LOADER }),
+    })
     return {
       ...kb,
       ledger_snapshot,
       query_sql,
+      codemode,
       show_award_options: showAwardOptionsTool(),
       ask_user: askUserTool(),
     } as ToolSet
