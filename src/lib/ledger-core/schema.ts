@@ -616,4 +616,16 @@ export const SCHEMA_STEPS: ReadonlyArray<SchemaStep> = [
           SELECT id, payee, narration FROM transactions
           WHERE (SELECT COUNT(*) FROM transactions_fts) = 0`,
   },
+  // Per-account display preferences — backs the Vault home's hide control.
+  // `hidden=1` drops a card/programme tile from the grid; it is a PURE display
+  // toggle (balances, totals, postings and the ledger are untouched). An absent
+  // row means visible.
+  {
+    label: 'account_prefs',
+    sql: `CREATE TABLE IF NOT EXISTS account_prefs (
+      account    TEXT    PRIMARY KEY,
+      hidden     INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    ) STRICT`,
+  },
 ]
