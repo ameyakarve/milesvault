@@ -14,6 +14,11 @@ const BOOKABLE = new Set(["AF","AM","AR","CI","DL","GA","KE","KL","KQ","ME","MF"
 
 const SK_CARRIERS = new Set(["SK"]);
 
+// These SkyTeam partners cost DOUBLE the partner chart under SAS EuroBonus rules:
+// Air Europa (UX), China Airlines (CI), Vietnam Airlines (VN). Booking an award
+// operated by any of them applies a 2x multiplier to the partner points.
+const DOUBLE_POINTS = new Set(["UX", "CI", "VN"]);
+
 // SAS own-metal zone mapping
 const SK_ZONE = {
   DK: "DOM_SCAN", NO: "DOM_SCAN", SE: "DOM_SCAN",
@@ -247,8 +252,11 @@ export function handle(legs) {
 
       if (rt) {
         const [e, pe, biz, f] = rt;
-        // One-way = 60% of round-trip
-        const ow = (v) => v === null ? null : [Math.round(v * 0.6), Math.round(v * 0.6)];
+        // Air Europa / China Airlines / Vietnam Airlines cost double the chart —
+        // apply the 2x multiplier when the award is operated by one of them.
+        const mult = carriers.some((c) => DOUBLE_POINTS.has(c)) ? 2 : 1;
+        // One-way = 60% of round-trip (after any double-points multiplier).
+        const ow = (v) => v === null ? null : [Math.round(v * mult * 0.6), Math.round(v * mult * 0.6)];
         entries.push({
           programme: "eurobonus", chart: "partner", season: "default",
           economy: ow(e), premium_economy: ow(pe), business: ow(biz), first: ow(f),
