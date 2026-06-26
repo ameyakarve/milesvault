@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { useState } from 'react'
-import { Points, type PointsStatus, type FilterMode, type PointsFilters } from './points-ui'
+import { Points, type PointsStatus, type PointsFilters } from './points-ui'
 import type { PointsPathsResult } from '@/durable/agents/tools/concierge/points-paths'
 import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-currencies'
 
@@ -46,20 +46,16 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
   const [direction, setDirection] = useState<'to' | 'from'>('to')
   const [mineOnly, setMineOnly] = useState(false)
   const [maxHops, setMaxHops] = useState(3)
-  const [cardMode, setCardMode] = useState<FilterMode>('include')
-  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
-  const [currencyMode, setCurrencyMode] = useState<FilterMode>('include')
-  const [selectedCurrencies, setSelectedCurrencies] = useState<Set<string>>(new Set())
   const [hidden, setHidden] = useState<Set<string>>(new Set())
 
-  const toggle = (s: React.Dispatch<React.SetStateAction<Set<string>>>, slug: string) =>
-    s((p) => {
+  const toggleHidden = (slug: string) =>
+    setHidden((p) => {
       const n = new Set(p)
       if (n.has(slug)) n.delete(slug)
       else n.add(slug)
       return n
     })
-  const filters: PointsFilters = { mineOnly, maxHops, cardMode, selectedCards, currencyMode, selectedCurrencies, hidden }
+  const filters: PointsFilters = { mineOnly, maxHops, hidden }
 
   return (
     <div className="h-screen">
@@ -74,22 +70,18 @@ function Harness({ status = 'ready' as PointsStatus }: { status?: PointsStatus }
         filters={filters}
         onMineOnly={setMineOnly}
         onMaxHops={setMaxHops}
-        onCardMode={setCardMode}
-        onToggleCard={(s) => toggle(setSelectedCards, s)}
-        onToggleBank={(slugs) =>
-          setSelectedCards((prev) => {
+        onToggleHidden={toggleHidden}
+        onToggleHiddenMany={(slugs) =>
+          setHidden((prev) => {
             const next = new Set(prev)
-            const allOn = slugs.every((x) => next.has(x))
+            const allHidden = slugs.every((x) => next.has(x))
             for (const x of slugs) {
-              if (allOn) next.delete(x)
+              if (allHidden) next.delete(x)
               else next.add(x)
             }
             return next
           })
         }
-        onCurrencyMode={setCurrencyMode}
-        onToggleCurrency={(s) => toggle(setSelectedCurrencies, s)}
-        onHide={(s) => setHidden((p) => new Set(p).add(s))}
         onUnhideAll={() => setHidden(new Set())}
       />
     </div>

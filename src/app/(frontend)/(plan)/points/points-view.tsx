@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAsyncData } from '@/components/shared/use-async-data'
 import { fetchJSON } from '@/lib/fetch-json'
-import { Points, type PointsStatus, type PointsFilters, type FilterMode } from './points-ui'
+import { Points, type PointsStatus, type PointsFilters } from './points-ui'
 import type { PointsPathsResult } from '@/durable/agents/tools/concierge/points-paths'
 import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-currencies'
 
@@ -30,11 +30,8 @@ export function PointsView() {
   // filters
   const [mineOnly, setMineOnly] = useState(true)
   const [maxHops, setMaxHops] = useState(3)
-  const [cardMode, setCardMode] = useState<FilterMode>('include')
-  const [selectedCards, setSelectedCards] = useState<Set<string>>(new Set())
-  const [currencyMode, setCurrencyMode] = useState<FilterMode>('include')
-  const [selectedCurrencies, setSelectedCurrencies] = useState<Set<string>>(new Set())
-  // Nodes hidden via the per-node button (declutter) — always subtractive.
+  // The single visibility model — node ids hidden from the graph, driven by both
+  // the per-node hide button and the Filters chips.
   const [hidden, setHidden] = useState<Set<string>>(new Set())
 
   // target + amount are URL-synced so the explorer can deep-link in.
@@ -92,49 +89,47 @@ export function PointsView() {
   const error = result?.key === reqKey ? result.error : undefined
   const status: PointsStatus = !ready ? 'idle' : !result || result.key !== reqKey ? 'loading' : error ? 'error' : 'ready'
 
-  const toggleSet = (set: React.Dispatch<React.SetStateAction<Set<string>>>, slug: string) =>
-    set((prev) => {
+  // Toggle one node's visibility.
+  const onToggleHidden = useCallback(
+    (slug: string) =>
+      setHidden((prev) => {
+        const next = new Set(prev)
+        if (next.has(slug)) next.delete(slug)
+        else next.add(slug)
+        return next
+      }),
+    [],
+  )
+  // Toggle a whole bank's cards: if all are already hidden, show them; else hide
+  // them all.
+  const onToggleHiddenMany = useCallback((slugs: string[]) => {
+    setHidden((prev) => {
       const next = new Set(prev)
-      if (next.has(slug)) next.delete(slug)
-      else next.add(slug)
-      return next
-    })
-  const onToggleCard = useCallback((slug: string) => toggleSet(setSelectedCards, slug), [])
-  const onToggleCurrency = useCallback((slug: string) => toggleSet(setSelectedCurrencies, slug), [])
-  const onHide = useCallback((slug: string) => setHidden((prev) => new Set(prev).add(slug)), [])
-  const onUnhideAll = useCallback(() => setHidden(new Set()), [])
-  // toggle a whole bank: if all already selected, clear them; else select all.
-  const onToggleBank = useCallback((slugs: string[]) => {
-    setSelectedCards((prev) => {
-      const next = new Set(prev)
-      const allOn = slugs.every((s) => next.has(s))
+      const allHidden = slugs.every((s) => next.has(s))
       for (const s of slugs) {
-        if (allOn) next.delete(s)
+        if (allHidden) next.delete(s)
         else next.add(s)
       }
       return next
     })
   }, [])
+  const onUnhideAll = useCallback(() => setHidden(new Set()), [])
 
-  // changing the target clears the per-result filters (the options differ)
+  // changing the target clears the per-result visibility (the options differ)
   const onTarget = useCallback((slug: string) => {
     setTarget(slug)
-    setSelectedCards(new Set())
-    setSelectedCurrencies(new Set())
     setHidden(new Set())
   }, [])
 
   // flipping booking ↔ book-from changes the whole input universe (a card is a
-  // valid anchor only in book-from), so reset the picked anchor and filters.
+  // valid anchor only in book-from), so reset the picked anchor and visibility.
   const onDirection = useCallback((d: 'to' | 'from') => {
     setDirection(d)
     setTarget('')
-    setSelectedCards(new Set())
-    setSelectedCurrencies(new Set())
     setHidden(new Set())
   }, [])
 
-  const filters: PointsFilters = { mineOnly, maxHops, cardMode, selectedCards, currencyMode, selectedCurrencies, hidden }
+  const filters: PointsFilters = { mineOnly, maxHops, hidden }
 
   return (
     <Points
@@ -149,12 +144,8 @@ export function PointsView() {
       filters={filters}
       onMineOnly={setMineOnly}
       onMaxHops={setMaxHops}
-      onCardMode={setCardMode}
-      onToggleCard={onToggleCard}
-      onToggleBank={onToggleBank}
-      onCurrencyMode={setCurrencyMode}
-      onToggleCurrency={onToggleCurrency}
-      onHide={onHide}
+      onToggleHidden={onToggleHidden}
+      onToggleHiddenMany={onToggleHiddenMany}
       onUnhideAll={onUnhideAll}
     />
   )
