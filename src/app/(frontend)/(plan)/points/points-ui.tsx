@@ -396,22 +396,45 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
     return true
   })
 
-  // reachability prune: keep only nodes connected to the anchor. 'to' keeps
-  // nodes that can still REACH the target (walk edges backward); 'from' keeps
-  // nodes REACHABLE FROM the anchor (walk edges forward).
-  const adj = new Map<string, string[]>()
-  for (const e of candidate) {
-    const [k, v] = forward ? [e.from, e.to] : [e.to, e.from]
-    ;(adj.get(k) ?? adj.set(k, []).get(k)!).push(v)
+  // reachability prune — CURRENCY-STRICT (walks (node, currency) states, like the
+  // focus view). A node is kept only if a currency it can actually hold reaches
+  // the target. Plain node-reachability wrongly keeps a card whose earned
+  // currency dead-ends by re-routing it through a shared portal's OTHER currency
+  // (e.g. BizBlack's KrisFlyer-only HDFC-RP-BIZ "reaching" Accor via SmartBuy's
+  // regular points once KrisFlyer is hidden). Backward gates on the DELIVERED
+  // currency (to_currency) of every edge — incl. earn edges into a shared portal;
+  // forward gates on the HELD currency (variant). Intra-pool 1:1 edges keep the
+  // currency, so pool members traverse naturally.
+  const anchor = data.target.slug
+  const reach = new Set<string>([anchor])
+  const seenState = new Set<string>()
+  const queue: Array<{ node: string; cur: string }> = []
+  const pushState = (node: string, cur: string) => {
+    reach.add(node)
+    const k = `${node}\t${cur}`
+    if (!seenState.has(k)) {
+      seenState.add(k)
+      queue.push({ node, cur })
+    }
   }
-  const reach = new Set<string>([data.target.slug])
-  const stack = [data.target.slug]
-  while (stack.length) {
-    const cur = stack.pop()!
-    for (const nbr of adj.get(cur) ?? []) {
-      if (!reach.has(nbr)) {
-        reach.add(nbr)
-        stack.push(nbr)
+  if (forward) {
+    for (const e of candidate) if (e.from === anchor) pushState(e.to, e.to_currency ?? e.variant ?? '')
+    while (queue.length) {
+      const { node, cur } = queue.pop()!
+      for (const e of candidate) {
+        if (e.from !== node) continue
+        if (e.variant && e.variant !== cur) continue // must hold the source currency
+        pushState(e.to, e.to_currency ?? cur)
+      }
+    }
+  } else {
+    for (const e of candidate) if (e.to === anchor) pushState(e.from, e.variant ?? e.to_currency ?? '')
+    while (queue.length) {
+      const { node, cur } = queue.pop()!
+      for (const e of candidate) {
+        if (e.to !== node) continue
+        if (e.to_currency && e.to_currency !== cur) continue // must deliver the held currency
+        pushState(e.from, e.variant ?? cur)
       }
     }
   }
@@ -882,6 +905,11 @@ export function Points(props: PointsProps) {
     [data],
   )
   const filterCount = filters.hidden.size
+  // Excluded items, resolved to display names, for the always-visible strip.
+  const hiddenList = useMemo(
+    () => [...filters.hidden].map((id) => ({ id, name: data?.nodes.find((n) => n.id === id)?.display ?? id })),
+    [filters.hidden, data],
+  )
   const focusName = focus ? (data?.nodes.find((n) => n.id === focus)?.display ?? null) : null
   const targetName = data?.target.display
 
@@ -991,6 +1019,34 @@ export function Points(props: PointsProps) {
 
         {data ? <span className="ml-auto text-xs text-muted-foreground">{flow.nodes.length} nodes · {flow.edges.length} routes</span> : null}
       </PlanToolbar>
+
+      {/* Always-visible record of what's excluded — each chip restores on click. */}
+      {hiddenList.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-muted/30 px-3 py-1.5 text-xs">
+          <span className="inline-flex items-center gap-1 font-medium text-muted-foreground">
+            <EyeOff className="size-3.5" /> Excluded
+          </span>
+          {hiddenList.map((h) => (
+            <button
+              key={h.id}
+              type="button"
+              onClick={() => props.onToggleHidden(h.id)}
+              title="Click to show again"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2 py-0.5 text-foreground transition hover:bg-muted"
+            >
+              <span className="max-w-[160px] truncate">{h.name}</span>
+              <X className="size-3 shrink-0 text-muted-foreground" />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={props.onUnhideAll}
+            className="ml-1 font-medium text-muted-foreground hover:text-foreground"
+          >
+            Show all
+          </button>
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1 bg-background">
         {status === 'loading' ? (
