@@ -45,6 +45,15 @@ const tierLabel = (variant: string) => {
   const seg = variant.split(/[-_]/).pop() ?? variant
   return seg.charAt(0).toUpperCase() + seg.slice(1).toLowerCase()
 }
+// A small, medium-tone palette (readable on light AND dark) so transfer edges —
+// and their ratio labels — are distinguishable. Deterministic by edge key so a
+// given edge keeps its colour across renders.
+const EDGE_PALETTE = ['#4d6e60', '#3b82f6', '#f59e0b', '#8b5cf6', '#f43f5e', '#0ea5a4', '#db2777', '#65a30d']
+const edgeColor = (key: string) => {
+  let h = 0
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0
+  return EDGE_PALETTE[Math.abs(h) % EDGE_PALETTE.length]
+}
 
 const W = 180
 const H = 48
@@ -477,7 +486,9 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
     // currency earns which rate (e.g. "Burgundy 2.5:1" vs "Olympus 1:4").
     if (count > 1 && e.variant && transferLabel) transferLabel = `${tierLabel(e.variant)} ${transferLabel}`
     const label = sale ? price : transferLabel
-    const color = sale ? '#047857' : 'var(--muted-foreground)'
+    // Palette colour per transfer edge (label matches). Sales stay green; earn
+    // edges (no ratio) stay muted.
+    const color = sale ? '#047857' : e.kind === 'earn' ? 'var(--muted-foreground)' : edgeColor(`${e.from}->${e.to}#${e.variant ?? ''}`)
     return {
       // variant (or index) in the id keeps parallel tier edges DISTINCT — without
       // it they share one id and React Flow renders just one, hiding the rest.
@@ -492,7 +503,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
       // CURRENCY-STRICT (an edge continues only on the currency you're holding).
       data: { idx, count, label, color, kind: e.kind, variant: e.variant, toCur: e.to_currency },
       animated: e.kind === 'transfer',
-      style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? 'var(--border)' : 'var(--muted-foreground)', strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
+      style: { stroke: sale ? '#10b981' : e.kind === 'earn' ? 'var(--border)' : color, strokeWidth: sale ? 1.6 : 1.2, strokeDasharray: sale ? '5 3' : undefined },
       labelStyle: { fontSize: 9, fill: color },
       labelBgStyle: { fill: 'var(--card)', fillOpacity: 0.9 },
     }
@@ -680,7 +691,9 @@ export function Points(props: PointsProps) {
         animated: false,
         label: undefined,
         data: { ...(e.data ?? {}), show: false },
-        style: { ...e.style, opacity: 0.4 },
+        // resting: palette strokes shown (no labels — kept clean), a touch
+        // stronger than before so the colours read.
+        style: { ...e.style, opacity: 0.55 },
       }))
       return { nodes: flow.nodes, edges }
     }
@@ -803,8 +816,10 @@ export function Points(props: PointsProps) {
           animated: true,
           label: e.label,
           data: { ...(e.data ?? {}), show: true },
-          style: { ...e.style, opacity: 1, stroke: ACCENT, strokeWidth: baseWidth + 0.6 },
-          labelStyle: { ...(e.labelStyle as object), fill: ACCENT, fontWeight: 600 },
+          // Keep each edge's palette colour (+ its matching label) so the route's
+          // hops stay distinguishable; emphasis is via opacity/weight, not colour.
+          style: { ...e.style, opacity: 1, strokeWidth: baseWidth + 0.8 },
+          labelStyle: { ...(e.labelStyle as object), fontWeight: 600 },
         }
       })
     // Re-lay out the isolated route WITH pool boxes (the same routine the full
