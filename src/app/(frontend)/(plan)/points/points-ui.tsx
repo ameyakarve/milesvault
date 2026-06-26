@@ -59,16 +59,25 @@ type NodeData = PathNode & { dir?: 'to' | 'from' }
 // destination must ALWAYS read as the rightmost (highest-rank) node, even when
 // cycles among intermediates (e.g. the Avios hub) would otherwise let dagre
 // rank it mid-graph.
-function layout(nodes: Node<NodeData>[], edges: Edge[], targetId?: string): Node<NodeData>[] {
+function layout(
+  nodes: Node<NodeData>[],
+  edges: Edge[],
+  targetId?: string,
+  size?: (id: string) => { w: number; h: number },
+): Node<NodeData>[] {
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'LR', nodesep: 18, ranksep: 90, marginx: 16, marginy: 16 })
   g.setDefaultEdgeLabel(() => ({}))
-  nodes.forEach((n) => g.setNode(n.id, { width: W, height: H }))
+  nodes.forEach((n) => {
+    const s = size?.(n.id) ?? { w: W, h: H }
+    g.setNode(n.id, { width: s.w, height: s.h })
+  })
   edges.forEach((e) => g.setEdge(e.source, e.target))
   dagre.layout(g)
   const positioned = nodes.map((n) => {
     const p = g.node(n.id)
-    return { ...n, position: { x: p.x - W / 2, y: p.y - H / 2 } }
+    const s = size?.(n.id) ?? { w: W, h: H }
+    return { ...n, position: { x: p.x - s.w / 2, y: p.y - s.h / 2 } }
   })
   const t = targetId ? positioned.find((n) => n.id === targetId) : undefined
   const others = t ? positioned.filter((n) => n.id !== targetId) : []
@@ -140,7 +149,21 @@ function FiatNode({ data }: NodeProps<Node<NodeData>>) {
     </div>
   )
 }
-const nodeTypes = { card: CardNode, program: ProgramNode, target: TargetNode, fiat: FiatNode }
+// A shared-currency POOL box (e.g. Avios: BA/Finnair/Qatar/Iberia/AerClub). It's
+// a labelled background container that the member nodes sit inside; the 1:1 edges
+// between members are hidden (the box says they're interchangeable), while each
+// member keeps its own external in/out edges. Non-interactive — clicks/pans pass
+// through to the members on top.
+function PoolNode({ data }: NodeProps<Node<NodeData>>) {
+  return (
+    <div className="pointer-events-none size-full rounded-lg border border-dashed border-foreground/30 bg-muted/20">
+      <div className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {data.display}
+      </div>
+    </div>
+  )
+}
+const nodeTypes = { card: CardNode, program: ProgramNode, target: TargetNode, fiat: FiatNode, pool: PoolNode }
 
 // Parallel edges between the SAME two nodes (a multi-tier portal — e.g. Axis
 // TravelEdge, where Magnus / Atlas / Olympus each transfer at a different ratio)
@@ -304,15 +327,57 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   }
   kept = new Set([...kept].filter((id) => reach.has(id)))
 
+  // ── shared-currency pools ──────────────────────────────────────────────────
+  // A pool = programmes mutually linked by SAME-currency 1:1 transfers (e.g. the
+  // Avios mesh: BA/Finnair/Qatar/Iberia/AerClub, all AVIOS↔AVIOS 1:1). Hide the
+  // intra-pool edges and wrap the members in one labelled box — but each member
+  // keeps its OWN external in/out edges. The pool is a single node for LAYOUT
+  // only, then expanded into the box. (Reachability already ran over the full
+  // edge set above, so members stay even though their 1:1 links get hidden.)
+  const isPoolEdge = (e: PathEdge) =>
+    e.kind === 'transfer' && !!e.variant && !!e.to_currency &&
+    e.variant === e.to_currency && e.ratio_source != null && e.ratio_source === e.ratio_dest
+  const kindOf = new Map(data.nodes.map((n) => [n.id, n.kind]))
+  const uf = new Map<string, string>()
+  const find = (x: string): string => {
+    const p = uf.get(x)
+    if (p === undefined || p === x) return x
+    const r = find(p)
+    uf.set(x, r)
+    return r
+  }
+  for (const id of kept) if (kindOf.get(id) === 'program' || kindOf.get(id) === 'target') uf.set(id, id)
+  const ccyAt = new Map<string, string>() // node → its pool currency
+  for (const e of candidate) {
+    if (!isPoolEdge(e) || !uf.has(e.from) || !uf.has(e.to)) continue
+    uf.set(find(e.from), find(e.to))
+    ccyAt.set(e.from, e.variant!)
+    ccyAt.set(e.to, e.variant!)
+  }
+  const compMembers = new Map<string, string[]>()
+  for (const id of kept) {
+    if (!uf.has(id)) continue
+    const r = find(id)
+    ;(compMembers.get(r) ?? compMembers.set(r, []).get(r)!).push(id)
+  }
+  const memberToPool = new Map<string, string>()
+  const pools = new Map<string, { ccy: string; members: string[] }>()
+  for (const [root, members] of compMembers) {
+    if (members.length < 2) continue
+    const poolId = `pool:${root}`
+    for (const m of members) memberToPool.set(m, poolId)
+    pools.set(poolId, { ccy: ccyAt.get(root) ?? members.map((m) => ccyAt.get(m)).find(Boolean) ?? '', members })
+  }
+  const intraPool = (e: PathEdge) =>
+    memberToPool.has(e.from) && memberToPool.get(e.from) === memberToPool.get(e.to)
+
   // Fiat sources get their own node type + their outgoing edges are "sales".
   const fiatIds = new Set(data.nodes.filter((n) => n.fiat).map((n) => n.id))
-  const rfNodes: Node<NodeData>[] = data.nodes
-    .filter((n) => kept.has(n.id))
-    .map((n) => ({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n, dir: data.direction } }))
   // Count siblings per node-pair: a multi-tier portal emits SEVERAL edges between
   // the same two programmes (one per tier currency, each its own ratio). Those
-  // must fan out + be tier-tagged rather than collapse onto one line.
-  const visibleEdges = candidate.filter((e) => kept.has(e.from) && kept.has(e.to))
+  // must fan out + be tier-tagged rather than collapse onto one line. Intra-pool
+  // 1:1 edges are dropped (the box conveys the relationship).
+  const visibleEdges = candidate.filter((e) => kept.has(e.from) && kept.has(e.to) && !intraPool(e))
   const pairCount = new Map<string, number>()
   for (const e of visibleEdges) {
     const k = `${e.from}->${e.to}`
@@ -362,10 +427,70 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
       labelBgStyle: { fill: 'var(--card)', fillOpacity: 0.9 },
     }
   })
-  // Pin the destination rightmost only in 'to' mode. In 'from' mode the anchor
-  // is a pure source — dagre already puts it leftmost; pinning it right would be
-  // wrong.
-  return { nodes: layout(rfNodes, rfEdges, forward ? undefined : data.target.slug), edges: rfEdges }
+  // ── layout: collapse each pool to one tall placeholder, lay out, then expand
+  // the placeholder into a box + its stacked member nodes. ──
+  const ROW = 54 // vertical pitch per member (node is 48px + gap)
+  const HEADER = 22 // room for the pool label
+  const PADX = 8
+  const PADY = 8
+  const poolHeight = (m: number) => HEADER + m * ROW + PADY
+  const layoutNodes: Node<NodeData>[] = []
+  for (const n of data.nodes) {
+    if (!kept.has(n.id) || memberToPool.has(n.id)) continue
+    layoutNodes.push({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n, dir: data.direction } })
+  }
+  for (const [poolId, p] of pools) {
+    layoutNodes.push({ id: poolId, type: 'pool', position: { x: 0, y: 0 }, data: { id: poolId, kind: 'program', display: tierLabel(p.ccy) } as NodeData })
+  }
+  // edges dagre sees: remap members → their pool, drop self/dupes (the real
+  // per-member edges are still drawn from rfEdges).
+  const seenPair = new Set<string>()
+  const layoutEdges: Edge[] = []
+  for (const e of visibleEdges) {
+    const s = memberToPool.get(e.from) ?? e.from
+    const t = memberToPool.get(e.to) ?? e.to
+    if (s === t) continue
+    const k = `${s}->${t}`
+    if (seenPair.has(k)) continue
+    seenPair.add(k)
+    layoutEdges.push({ id: k, source: s, target: t })
+  }
+  const sizeOf = (id: string) => (pools.has(id) ? { w: W, h: poolHeight(pools.get(id)!.members.length) } : { w: W, h: H })
+  // Pin the destination rightmost only in 'to' mode (its pool, if it's pooled).
+  const pinId = forward ? undefined : (memberToPool.get(data.target.slug) ?? data.target.slug)
+  const posOf = new Map(layout(layoutNodes, layoutEdges, pinId, sizeOf).map((n) => [n.id, n.position]))
+
+  // Expand: pool boxes FIRST (render behind), then their members, then the rest.
+  const rfNodes: Node<NodeData>[] = []
+  for (const [poolId, p] of pools) {
+    const pos = posOf.get(poolId) ?? { x: 0, y: 0 }
+    rfNodes.push({
+      id: poolId,
+      type: 'pool',
+      position: pos,
+      data: { id: poolId, kind: 'program', display: tierLabel(p.ccy) } as NodeData,
+      style: { width: W + PADX * 2, height: poolHeight(p.members.length) },
+      draggable: false,
+      selectable: false,
+      zIndex: 0,
+    })
+    p.members.forEach((m, i) => {
+      const n = data.nodes.find((d) => d.id === m)
+      if (!n) return
+      rfNodes.push({
+        id: m,
+        type: n.fiat ? 'fiat' : n.kind,
+        position: { x: pos.x + PADX, y: pos.y + HEADER + i * ROW },
+        data: { ...n, dir: data.direction },
+        zIndex: 1,
+      })
+    })
+  }
+  for (const n of data.nodes) {
+    if (!kept.has(n.id) || memberToPool.has(n.id)) continue
+    rfNodes.push({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: posOf.get(n.id) ?? { x: 0, y: 0 }, data: { ...n, dir: data.direction } })
+  }
+  return { nodes: rfNodes, edges: rfEdges }
 }
 
 // ── target combobox ─────────────────────────────────────────────────────────
@@ -782,7 +907,10 @@ export function Points(props: PointsProps) {
             edgesFocusable={false}
             panOnDrag
             zoomOnPinch
-            onNodeClick={(_, n) => setFocus((cur) => (cur === n.id ? null : n.id))}
+            onNodeClick={(_, n) => {
+              if (n.type === 'pool') return // the box itself isn't focusable
+              setFocus((cur) => (cur === n.id ? null : n.id))
+            }}
             onPaneClick={() => setFocus(null)}
           >
             <Background color="var(--border)" gap={20} />
