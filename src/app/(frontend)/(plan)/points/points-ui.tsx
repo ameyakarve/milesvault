@@ -741,17 +741,18 @@ export function Points(props: PointsProps) {
       }
     } else {
       // A programme handles whatever currencies its edges carry — every tier it
-      // can send (outbound variant) and receive (inbound toCur).
-      // Seed the forward (downstream) walk with the currencies this node can
-      // SEND — where its points go toward the destination. Upstream feeders are
-      // NOT relevant to a clicked node (clicking MR shows MR→…→Qantas; clicking
-      // Accor shows Accor→Qantas, NOT MR→Avios→Accor).
+      // can send (outbound variant) and receive (inbound toCur). The focus shows
+      // the full route THROUGH this node: what reaches it AND where it leads.
       const curs = new Set<string>()
       for (const e of flow.edges) {
         const m = ed(e)
         if (e.source === focus && m.variant) curs.add(m.variant)
+        if (e.target === focus && m.toCur) curs.add(m.toCur)
       }
-      for (const c of curs) fwd.push({ node: focus, cur: c })
+      for (const c of curs) {
+        fwd.push({ node: focus, cur: c })
+        bwd.push({ node: focus, cur: c })
+      }
     }
 
     const seenF = new Set(fwd.map((s) => stateKey(s.node, s.cur)))
@@ -781,39 +782,28 @@ export function Points(props: PointsProps) {
         }
       }
     }
-    // Sink fallback: if nothing flows downstream of the clicked node (it's the
-    // destination itself), show what FEEDS it instead — otherwise the click
-    // would light nothing.
-    if (litE.size === 0) {
-      const curs = new Set<string>()
-      for (const e of flow.edges) {
-        const m = ed(e)
-        if (e.target === focus && m.toCur) curs.add(m.toCur)
-      }
-      for (const c of curs) bwd.push({ node: focus, cur: c })
-      const seenB = new Set(bwd.map((s) => stateKey(s.node, s.cur)))
-      while (bwd.length) {
-        const { node, cur } = bwd.pop()!
-        for (const sib of poolSiblings.get(node) ?? []) {
-          litN.add(sib)
-          const sk = stateKey(sib, cur)
-          if (!seenB.has(sk)) {
-            seenB.add(sk)
-            if (sib !== node) bwd.push({ node: sib, cur })
-          }
+    const seenB = new Set(bwd.map((s) => stateKey(s.node, s.cur)))
+    while (bwd.length) {
+      const { node, cur } = bwd.pop()!
+      for (const sib of poolSiblings.get(node) ?? []) {
+        litN.add(sib)
+        const sk = stateKey(sib, cur)
+        if (!seenB.has(sk)) {
+          seenB.add(sk)
+          if (sib !== node) bwd.push({ node: sib, cur })
         }
-        for (const e of flow.edges) {
-          if (e.target !== node) continue
-          const m = ed(e)
-          if (m.kind === 'transfer' && m.toCur && m.toCur !== cur) continue // strict
-          litE.add(e.id)
-          litN.add(e.source)
-          const pc = m.variant ?? cur
-          const k = stateKey(e.source, pc)
-          if (!seenB.has(k)) {
-            seenB.add(k)
-            bwd.push({ node: e.source, cur: pc })
-          }
+      }
+      for (const e of flow.edges) {
+        if (e.target !== node) continue
+        const m = ed(e)
+        if (m.kind === 'transfer' && m.toCur && m.toCur !== cur) continue // strict
+        litE.add(e.id)
+        litN.add(e.source)
+        const pc = m.variant ?? cur
+        const k = stateKey(e.source, pc)
+        if (!seenB.has(k)) {
+          seenB.add(k)
+          bwd.push({ node: e.source, cur: pc })
         }
       }
     }
