@@ -79,7 +79,7 @@ function NodeHideButton({ onHide }: { onHide?: () => void }) {
       }}
       title="Hide from graph"
       aria-label="Hide from graph"
-      className="absolute -right-1.5 -top-1.5 z-10 hidden rounded-full border border-border bg-card p-0.5 text-muted-foreground shadow-sm transition hover:text-foreground group-hover:flex"
+      className="absolute -right-1.5 -top-1.5 z-10 flex rounded-full border border-border bg-card p-0.5 text-muted-foreground shadow-sm transition hover:text-foreground"
     >
       <EyeOff className="size-3" />
     </button>
