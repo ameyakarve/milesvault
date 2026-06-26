@@ -782,10 +782,60 @@ export function Points(props: PointsProps) {
         }
       }
     }
+    // CUT-VERTEX FILTER. An upstream node is relevant to the focus only if it
+    // DEPENDS on it to reach the target — i.e. with the focus removed it can no
+    // longer reach the target. Compute which nodes still reach the target with
+    // the focus deleted; those have another route and are NOT shown.
+    //   target=Qantas, focus=Accor: remove Accor → MR can't reach Qantas (no
+    //     Avios→Qantas) → MR DEPENDS on Accor → MR→Avios→Accor→Qantas shows.
+    //   target=Finnair, focus=Accor: remove Accor → MR→Avios still reaches
+    //     Finnair (Finnair IS Avios) → MR does NOT depend on Accor → MR dropped.
+    const reachNoFocus = new Set<string>([data.target.slug])
+    {
+      const seedC = new Set<string>()
+      for (const e of flow.edges) {
+        const m = ed(e)
+        if (e.target === data.target.slug && m.toCur) seedC.add(m.toCur)
+        if (e.source === data.target.slug && m.variant) seedC.add(m.variant)
+      }
+      const seen = new Set<string>()
+      const st: Array<{ node: string; cur: string }> = []
+      for (const c of seedC) {
+        st.push({ node: data.target.slug, cur: c })
+        seen.add(stateKey(data.target.slug, c))
+      }
+      while (st.length) {
+        const { node, cur } = st.pop()!
+        for (const sib of poolSiblings.get(node) ?? []) {
+          if (sib === focus) continue
+          reachNoFocus.add(sib)
+          const k = stateKey(sib, cur)
+          if (!seen.has(k)) {
+            seen.add(k)
+            st.push({ node: sib, cur })
+          }
+        }
+        for (const e of flow.edges) {
+          if (e.target !== node || e.source === focus) continue
+          const m = ed(e)
+          if (m.kind === 'transfer' && m.toCur && m.toCur !== cur) continue
+          reachNoFocus.add(e.source)
+          const pc = m.variant ?? cur
+          const k = stateKey(e.source, pc)
+          if (!seen.has(k)) {
+            seen.add(k)
+            st.push({ node: e.source, cur: pc })
+          }
+        }
+      }
+    }
+    const dependsOnFocus = (x: string) => !reachNoFocus.has(x)
+
     const seenB = new Set(bwd.map((s) => stateKey(s.node, s.cur)))
     while (bwd.length) {
       const { node, cur } = bwd.pop()!
       for (const sib of poolSiblings.get(node) ?? []) {
+        if (!dependsOnFocus(sib)) continue
         litN.add(sib)
         const sk = stateKey(sib, cur)
         if (!seenB.has(sk)) {
@@ -797,6 +847,7 @@ export function Points(props: PointsProps) {
         if (e.target !== node) continue
         const m = ed(e)
         if (m.kind === 'transfer' && m.toCur && m.toCur !== cur) continue // strict
+        if (!dependsOnFocus(e.source)) continue // cut-vertex: skip nodes with another route to the target
         litE.add(e.id)
         litN.add(e.source)
         const pc = m.variant ?? cur
