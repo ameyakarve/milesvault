@@ -694,15 +694,15 @@ export function Points(props: PointsProps) {
   }, [flow, focus])
   const view = useMemo(() => {
     if (focus == null) {
-      // Whole map, calm: every edge drawn faintly, no labels.
+      // Whole map, calm AND colourless: neutral grey strokes, no labels. The
+      // palette is reserved for the focused route — colours appear only once a
+      // node is selected, so the resting graph reads as one quiet mesh.
       const edges: Edge[] = flow.edges.map((e): Edge => ({
         ...e,
         animated: false,
         label: undefined,
         data: { ...(e.data ?? {}), show: false },
-        // resting: palette strokes shown (no labels — kept clean), a touch
-        // stronger than before so the colours read.
-        style: { ...e.style, opacity: 0.55 },
+        style: { ...e.style, stroke: 'var(--muted-foreground)', opacity: 0.4 },
       }))
       return { nodes: flow.nodes, edges }
     }
