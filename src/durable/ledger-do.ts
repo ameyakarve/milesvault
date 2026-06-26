@@ -750,30 +750,6 @@ export class LedgerDO extends DurableObject<Cloudflare.Env> {
     return { ok: cursor.rowsWritten > 0 }
   }
 
-  // ---- Per-account display prefs (Vault home hide control) ----
-  //
-  // A pure display toggle: `account_prefs.hidden=1` drops a card/programme tile
-  // from the home grid. Balances, totals, postings and the ledger are untouched;
-  // an absent row means visible. Mirrors the capture dismiss flow.
-
-  async list_hidden_accounts(): Promise<{ accounts: string[] }> {
-    const rows = this.db
-      .exec<{ account: string }>(`SELECT account FROM account_prefs WHERE hidden = 1`)
-      .toArray()
-    return { accounts: rows.map((r) => r.account) }
-  }
-
-  async set_account_hidden(account: string, hidden: boolean): Promise<{ ok: boolean }> {
-    const cursor = this.db.exec(
-      `INSERT INTO account_prefs (account, hidden, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(account) DO UPDATE SET hidden = excluded.hidden, updated_at = excluded.updated_at`,
-      account,
-      hidden ? 1 : 0,
-      Date.now(),
-    )
-    return { ok: cursor.rowsWritten > 0 }
-  }
-
   // Background statement agent's proposal lands here: entries as a JSON
   // array of beancount strings; the capture flips to 'extracted' so the
   // Inbox offers review. Empty entries leave the row untouched.
