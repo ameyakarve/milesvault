@@ -28,7 +28,6 @@ import type { PointsPathsResult, PathNode, PathEdge } from '@/durable/agents/too
 import type { LoyaltyCurrency } from '@/durable/agents/tools/concierge/loyalty-currencies'
 
 export type PointsStatus = 'idle' | 'loading' | 'ready' | 'error'
-export type FilterMode = 'include' | 'exclude'
 
 const fmt = (n: number) => Math.round(n).toLocaleString('en-US')
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a)
@@ -79,9 +78,9 @@ function NodeHideButton({ onHide }: { onHide?: () => void }) {
       }}
       title="Hide from graph"
       aria-label="Hide from graph"
-      className="absolute -right-1.5 -top-1.5 z-10 flex rounded-full border border-border bg-card p-0.5 text-muted-foreground shadow-sm transition hover:text-foreground"
+      className="absolute -right-2.5 -top-2.5 z-10 flex rounded-full border border-border bg-card p-1.5 text-muted-foreground shadow-sm transition hover:bg-muted hover:text-foreground"
     >
-      <EyeOff className="size-3" />
+      <EyeOff className="size-4" />
     </button>
   )
 }
@@ -311,12 +310,9 @@ const edgeTypes = { fan: FanEdge }
 export type PointsFilters = {
   mineOnly: boolean // "My points": restrict to accounts the user holds
   maxHops: number // 1 = Direct, 2 = Via 1, 3 = Via 2
-  cardMode: FilterMode
-  selectedCards: Set<string>
-  currencyMode: FilterMode
-  selectedCurrencies: Set<string>
-  // Nodes the user hid via the per-node button — always subtractive (independent
-  // of the include/exclude card filter), the target is never hideable.
+  // The single visibility model: any card/programme node id in here is hidden.
+  // Driven identically by the per-node hide button and the Filters chips — the
+  // target is never hideable.
   hidden: Set<string>
 }
 
@@ -355,21 +351,9 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   // node-level passes
   const pass = (n: PathNode): boolean => {
     if (n.kind === 'target') return true
-    if (f.hidden.has(n.id)) return false // user-hidden, always dropped
+    if (f.hidden.has(n.id)) return false // hidden via node button or Filters chip
     if (mineKeep && !mineKeep.has(n.id)) return false
-    if (n.kind === 'program') {
-      if ((n.hops ?? 0) > f.maxHops) return false
-      if (f.selectedCurrencies.size) {
-        const sel = f.selectedCurrencies.has(n.id)
-        return f.currencyMode === 'include' ? sel : !sel
-      }
-      return true
-    }
-    // card
-    if (f.selectedCards.size) {
-      const sel = f.selectedCards.has(n.id)
-      return f.cardMode === 'include' ? sel : !sel
-    }
+    if (n.kind === 'program' && (n.hops ?? 0) > f.maxHops) return false
     return true
   }
   let kept = new Set(data.nodes.filter(pass).map((n) => n.id))
@@ -652,19 +636,12 @@ function TargetCombobox({
   )
 }
 
-function ModeTabs({ mode, onMode }: { mode: FilterMode; onMode: (m: FilterMode) => void }) {
-  return (
-    <Tabs value={mode} onValueChange={(v) => onMode(v as FilterMode)}>
-      <TabsList className="h-7 w-full">
-        <TabsTrigger value="include" className={cn('text-xs', TAB_ACTIVE)}>Include</TabsTrigger>
-        <TabsTrigger value="exclude" className={cn('text-xs', TAB_ACTIVE)}>Exclude</TabsTrigger>
-      </TabsList>
-    </Tabs>
-  )
-}
+// A card/programme toggle: `on` = currently shown on the graph. Tapping it hides
+// (outline + muted + eye-off); tapping again brings it back.
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <Button type="button" size="sm" variant={on ? 'default' : 'outline'} onClick={onClick} className={cn('h-7 px-2 text-xs', !on && 'text-muted-foreground')}>
+    <Button type="button" size="sm" variant={on ? 'default' : 'outline'} onClick={onClick} className={cn('h-7 gap-1 px-2 text-xs', !on && 'text-muted-foreground')}>
+      {!on ? <EyeOff className="size-3 shrink-0 opacity-70" /> : null}
       {children}
     </Button>
   )
@@ -683,12 +660,9 @@ export type PointsProps = {
   filters: PointsFilters
   onMineOnly: (v: boolean) => void
   onMaxHops: (n: number) => void
-  onCardMode: (m: FilterMode) => void
-  onToggleCard: (slug: string) => void
-  onToggleBank: (slugs: string[]) => void
-  onCurrencyMode: (m: FilterMode) => void
-  onToggleCurrency: (slug: string) => void
-  onHide: (slug: string) => void
+  // Visibility: toggle one node, toggle a whole bank's cards, or show everything.
+  onToggleHidden: (slug: string) => void
+  onToggleHiddenMany: (slugs: string[]) => void
   onUnhideAll: () => void
 }
 
@@ -887,10 +861,10 @@ export function Points(props: PointsProps) {
     () =>
       view.nodes.map((n) =>
         n.type === 'card' || n.type === 'program'
-          ? { ...n, data: { ...n.data, onHide: () => props.onHide(n.id) } }
+          ? { ...n, data: { ...n.data, onHide: () => props.onToggleHidden(n.id) } }
           : n,
       ),
-    [view.nodes, props.onHide],
+    [view.nodes, props.onToggleHidden],
   )
 
   // filter options from the result graph
@@ -907,7 +881,7 @@ export function Points(props: PointsProps) {
     () => (data?.nodes ?? []).filter((n) => n.kind === 'program' && !n.fiat).sort((a, b) => (a.multiplier ?? 99) - (b.multiplier ?? 99)),
     [data],
   )
-  const filterCount = filters.selectedCards.size + filters.selectedCurrencies.size
+  const filterCount = filters.hidden.size
   const focusName = focus ? (data?.nodes.find((n) => n.id === focus)?.display ?? null) : null
   const targetName = data?.target.display
 
@@ -954,57 +928,66 @@ export function Points(props: PointsProps) {
             </div>
 
             <div className="space-y-2">
-              <h3 className="text-xs font-medium text-muted-foreground">Cards</h3>
-              <ModeTabs mode={filters.cardMode} onMode={props.onCardMode} />
-              {banks.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No cards in these paths.</p>
-              ) : (
-                banks.map((b) => {
-                  const slugs = b.cards.map((c) => c.id)
-                  const sel = slugs.filter((s) => filters.selectedCards.has(s)).length
-                  return (
-                    <div key={b.issuer} className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => props.onToggleBank(slugs)}
-                        className="text-[11px] font-semibold text-foreground hover:underline"
-                      >
-                        {b.issuer} {sel ? `(${sel}/${slugs.length})` : ''}
-                      </button>
-                      <div className="flex flex-wrap gap-1">
-                        {b.cards.map((c) => (
-                          <Chip key={c.id} on={filters.selectedCards.has(c.id)} onClick={() => props.onToggleCard(c.id)}>
-                            {c.display}
-                          </Chip>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-medium text-muted-foreground">Show on graph</h3>
+                {filters.hidden.size > 0 ? (
+                  <button
+                    type="button"
+                    onClick={props.onUnhideAll}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    <Eye className="size-3" /> Show all ({filters.hidden.size})
+                  </button>
+                ) : null}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Tap a card or programme to hide it from the graph; tap again to bring it back.
+              </p>
 
-            <div className="space-y-2">
-              <h3 className="text-xs font-medium text-muted-foreground">Programmes</h3>
-              <ModeTabs mode={filters.currencyMode} onMode={props.onCurrencyMode} />
-              <div className="flex flex-wrap gap-1">
-                {curOptions.map((c) => (
-                  <Chip key={c.id} on={filters.selectedCurrencies.has(c.id)} onClick={() => props.onToggleCurrency(c.id)}>
-                    {c.display}
-                  </Chip>
-                ))}
+              <div className="space-y-1.5">
+                <h4 className="text-[11px] font-semibold text-foreground/80">Cards</h4>
+                {banks.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No cards in these paths.</p>
+                ) : (
+                  banks.map((b) => {
+                    const slugs = b.cards.map((c) => c.id)
+                    const shown = slugs.filter((s) => !filters.hidden.has(s)).length
+                    return (
+                      <div key={b.issuer} className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => props.onToggleHiddenMany(slugs)}
+                          className="text-[11px] font-semibold text-foreground hover:underline"
+                          title="Hide / show all cards from this bank"
+                        >
+                          {b.issuer} {shown < slugs.length ? `(${shown}/${slugs.length})` : ''}
+                        </button>
+                        <div className="flex flex-wrap gap-1">
+                          {b.cards.map((c) => (
+                            <Chip key={c.id} on={!filters.hidden.has(c.id)} onClick={() => props.onToggleHidden(c.id)}>
+                              {c.display}
+                            </Chip>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <h4 className="text-[11px] font-semibold text-foreground/80">Programmes</h4>
+                <div className="flex flex-wrap gap-1">
+                  {curOptions.map((c) => (
+                    <Chip key={c.id} on={!filters.hidden.has(c.id)} onClick={() => props.onToggleHidden(c.id)}>
+                      {c.display}
+                    </Chip>
+                  ))}
+                </div>
               </div>
             </div>
           </PopoverContent>
         </Popover>
-
-        {filters.hidden.size > 0 ? (
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" onClick={props.onUnhideAll}>
-            <Eye className="size-3.5" />
-            <span className="hidden sm:inline">Unhide</span>
-            <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">{filters.hidden.size}</span>
-          </Button>
-        ) : null}
 
         {data ? <span className="ml-auto text-xs text-muted-foreground">{flow.nodes.length} nodes · {flow.edges.length} routes</span> : null}
       </PlanToolbar>
