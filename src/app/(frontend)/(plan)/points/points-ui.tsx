@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import dagre from '@dagrejs/dagre'
-import { Check, ChevronsUpDown, DollarSign, MousePointerClick, SlidersHorizontal, X } from 'lucide-react'
+import { Check, ChevronsUpDown, DollarSign, Eye, EyeOff, MousePointerClick, SlidersHorizontal, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -63,7 +63,28 @@ const H = 48
 // (right handle), since it sits leftmost as the source.
 // `poolId` marks a shared-currency pool member (Avios) — the focus walk uses it
 // to treat all members as one (1:1), since their intra edges are hidden.
-type NodeData = PathNode & { dir?: 'to' | 'from'; poolId?: string }
+type NodeData = PathNode & { dir?: 'to' | 'from'; poolId?: string; onHide?: () => void }
+
+// Hover-revealed control on a card/programme node: drops it from the graph. Sits
+// at the node's top-right corner; stopPropagation keeps the click off the node's
+// focus handler. Injected per-node (bound to its id) by the top-level component.
+function NodeHideButton({ onHide }: { onHide?: () => void }) {
+  if (!onHide) return null
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onHide()
+      }}
+      title="Hide from graph"
+      aria-label="Hide from graph"
+      className="absolute -right-1.5 -top-1.5 z-10 hidden rounded-full border border-border bg-card p-0.5 text-muted-foreground shadow-sm transition hover:text-foreground group-hover:flex"
+    >
+      <EyeOff className="size-3" />
+    </button>
+  )
+}
 
 // ── layout ────────────────────────────────────────────────────────────────
 // `targetId`, when given, is pinned to the far right after layout — the
@@ -181,7 +202,8 @@ function HeldLine({ data, className }: { data: NodeData; className?: string }) {
 }
 function CardNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border bg-sky-50/80 px-3 shadow-sm dark:bg-sky-950/30', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-sky-300 dark:border-sky-800/60')}>
+    <div className={cn('group relative flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border bg-sky-50/80 px-3 shadow-sm dark:bg-sky-950/30', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-sky-300 dark:border-sky-800/60')}>
+      <NodeHideButton onHide={data.onHide} />
       <div className="truncate text-xs font-semibold text-sky-900 dark:text-sky-200">{data.display}</div>
       <Handle type="source" position={Position.Right} className="!h-1.5 !w-1.5 !bg-sky-400/60" />
     </div>
@@ -189,7 +211,8 @@ function CardNode({ data }: NodeProps<Node<NodeData>>) {
 }
 function ProgramNode({ data }: NodeProps<Node<NodeData>>) {
   return (
-    <div className={cn('flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border bg-muted/40 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
+    <div className={cn('group relative flex h-[48px] w-[180px] cursor-pointer flex-col justify-center rounded-md border bg-muted/40 px-3 shadow-sm', data.held ? 'border-emerald-400 ring-1 ring-emerald-200/60 dark:ring-emerald-800/60' : 'border-border')}>
+      <NodeHideButton onHide={data.onHide} />
       <div className="truncate text-xs font-medium text-foreground">{data.display}</div>
       <HeldLine data={data} />
       <Handle type="target" position={Position.Left} className="!h-1.5 !w-1.5 !bg-foreground/40" />
@@ -292,6 +315,9 @@ export type PointsFilters = {
   selectedCards: Set<string>
   currencyMode: FilterMode
   selectedCurrencies: Set<string>
+  // Nodes the user hid via the per-node button — always subtractive (independent
+  // of the include/exclude card filter), the target is never hideable.
+  hidden: Set<string>
 }
 
 function toFlow(data: PointsPathsResult, f: PointsFilters) {
@@ -329,6 +355,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
   // node-level passes
   const pass = (n: PathNode): boolean => {
     if (n.kind === 'target') return true
+    if (f.hidden.has(n.id)) return false // user-hidden, always dropped
     if (mineKeep && !mineKeep.has(n.id)) return false
     if (n.kind === 'program') {
       if ((n.hops ?? 0) > f.maxHops) return false
@@ -661,6 +688,8 @@ export type PointsProps = {
   onToggleBank: (slugs: string[]) => void
   onCurrencyMode: (m: FilterMode) => void
   onToggleCurrency: (slug: string) => void
+  onHide: (slug: string) => void
+  onUnhideAll: () => void
 }
 
 const HOP_TABS = [
@@ -683,6 +712,12 @@ export function Points(props: PointsProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setFocus(null)
   }, [data?.target.slug])
+  // If the focused node leaves the graph (hidden via its button, or filtered
+  // out), drop the focus so we don't render an empty isolated route.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (focus && !flow.nodes.some((n) => n.id === focus)) setFocus(null)
+  }, [flow, focus])
   const view = useMemo(() => {
     if (focus == null) {
       // Whole map, calm: every edge drawn faintly, no labels.
@@ -846,6 +881,18 @@ export function Points(props: PointsProps) {
     return { nodes, edges: subEdges }
   }, [flow, focus, data?.target.slug, data?.direction])
 
+  // Inject the per-node hide handler (bound to each node id) into card/programme
+  // node data so the hover button can fire it. Targets/pools/fiat aren't hideable.
+  const displayNodes = useMemo(
+    () =>
+      view.nodes.map((n) =>
+        n.type === 'card' || n.type === 'program'
+          ? { ...n, data: { ...n.data, onHide: () => props.onHide(n.id) } }
+          : n,
+      ),
+    [view.nodes, props.onHide],
+  )
+
   // filter options from the result graph
   const banks = useMemo(() => {
     const cards = (data?.nodes ?? []).filter((n) => n.kind === 'card')
@@ -951,6 +998,14 @@ export function Points(props: PointsProps) {
           </PopoverContent>
         </Popover>
 
+        {filters.hidden.size > 0 ? (
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 px-2.5" onClick={props.onUnhideAll}>
+            <Eye className="size-3.5" />
+            <span className="hidden sm:inline">Unhide</span>
+            <span className="rounded bg-primary px-1 text-[10px] text-primary-foreground">{filters.hidden.size}</span>
+          </Button>
+        ) : null}
+
         {data ? <span className="ml-auto text-xs text-muted-foreground">{flow.nodes.length} nodes · {flow.edges.length} routes</span> : null}
       </PlanToolbar>
 
@@ -967,7 +1022,7 @@ export function Points(props: PointsProps) {
           <ReactFlow
             // Remount on focus change so fitView re-frames the isolated route.
             key={focus ?? '__all__'}
-            nodes={view.nodes}
+            nodes={displayNodes}
             edges={view.edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
