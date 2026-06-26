@@ -52,7 +52,9 @@ const H = 48
 // `dir` rides on the anchor/target node so it knows which side to put its handle:
 // in 'to' mode the target RECEIVES (left handle); in 'from' mode the anchor SENDS
 // (right handle), since it sits leftmost as the source.
-type NodeData = PathNode & { dir?: 'to' | 'from' }
+// `poolId` marks a shared-currency pool member (Avios) — the focus walk uses it
+// to treat all members as one (1:1), since their intra edges are hidden.
+type NodeData = PathNode & { dir?: 'to' | 'from'; poolId?: string }
 
 // ── layout ────────────────────────────────────────────────────────────────
 // `targetId`, when given, is pinned to the far right after layout — the
@@ -481,7 +483,7 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
         id: m,
         type: n.fiat ? 'fiat' : n.kind,
         position: { x: pos.x + PADX, y: pos.y + HEADER + i * ROW },
-        data: { ...n, dir: data.direction },
+        data: { ...n, dir: data.direction, poolId },
         zIndex: 1,
       })
     })
@@ -680,6 +682,19 @@ export function Points(props: PointsProps) {
     const litN = new Set<string>([focus])
     const stateKey = (n: string, c: string) => `${n}\t${c}`
 
+    // Pool members are 1:1 equivalent and their intra edges are hidden, so the
+    // walk must treat reaching ONE member as reaching ALL of them — otherwise a
+    // route that enters the pool at member A but leaves from member B dead-ends.
+    const poolSiblings = new Map<string, string[]>()
+    {
+      const byPool = new Map<string, string[]>()
+      for (const n of flow.nodes) {
+        const pid = (n.data as NodeData | undefined)?.poolId
+        if (pid) (byPool.get(pid) ?? byPool.set(pid, []).get(pid)!).push(n.id)
+      }
+      for (const ids of byPool.values()) for (const id of ids) poolSiblings.set(id, ids)
+    }
+
     // Seed the currencies held AT the focus node.
     const focusKind = (flow.nodes.find((n) => n.id === focus)?.data as PathNode | undefined)?.kind
     const isSource = focusKind === 'card' || focusKind === 'fiat'
@@ -714,6 +729,16 @@ export function Points(props: PointsProps) {
     const seenF = new Set(fwd.map((s) => stateKey(s.node, s.cur)))
     while (fwd.length) {
       const { node, cur } = fwd.pop()!
+      // 1:1 pool: holding `cur` at one member means holding it at every member,
+      // so their outbound edges apply too.
+      for (const sib of poolSiblings.get(node) ?? []) {
+        litN.add(sib)
+        const sk = stateKey(sib, cur)
+        if (!seenF.has(sk)) {
+          seenF.add(sk)
+          if (sib !== node) fwd.push({ node: sib, cur })
+        }
+      }
       for (const e of flow.edges) {
         if (e.source !== node) continue
         const m = ed(e)
@@ -731,6 +756,14 @@ export function Points(props: PointsProps) {
     const seenB = new Set(bwd.map((s) => stateKey(s.node, s.cur)))
     while (bwd.length) {
       const { node, cur } = bwd.pop()!
+      for (const sib of poolSiblings.get(node) ?? []) {
+        litN.add(sib)
+        const sk = stateKey(sib, cur)
+        if (!seenB.has(sk)) {
+          seenB.add(sk)
+          if (sib !== node) bwd.push({ node: sib, cur })
+        }
+      }
       for (const e of flow.edges) {
         if (e.target !== node) continue
         const m = ed(e)
