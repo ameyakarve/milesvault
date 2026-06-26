@@ -90,6 +90,74 @@ function layout(
   return positioned
 }
 
+// Lay out a node set with shared-currency POOLS collapsed into labelled boxes.
+// Members carry `data.poolId` (= `pool:<CURRENCY>`); any pool with ≥2 members
+// present here renders as one box. `pairs` are source→target ids used ONLY for
+// dagre positioning (the real, styled edges are built separately). Used for both
+// the full graph and the focused/isolated route, so the box shows in both.
+function clusteredLayout(
+  place: Node<NodeData>[],
+  pairs: Array<{ source: string; target: string }>,
+  forward: boolean,
+  targetSlug: string,
+): Node<NodeData>[] {
+  const ROW = 54 // vertical pitch per member (node is 48px + gap)
+  const HEADER = 22 // room for the pool label
+  const PADX = 8
+  const PADY = 8
+  const poolHeight = (m: number) => HEADER + m * ROW + PADY
+  const byPool = new Map<string, Node<NodeData>[]>()
+  for (const n of place) {
+    const pid = n.data.poolId
+    if (pid) (byPool.get(pid) ?? byPool.set(pid, []).get(pid)!).push(n)
+  }
+  const pools = new Map<string, Node<NodeData>[]>()
+  const memberToPool = new Map<string, string>()
+  for (const [pid, members] of byPool) {
+    if (members.length < 2) continue
+    pools.set(pid, members)
+    for (const m of members) memberToPool.set(m.id, pid)
+  }
+  const poolLabel = (pid: string) => tierLabel(pid.replace(/^pool:/, ''))
+  // dagre input: non-pool nodes + one tall placeholder per pool.
+  const layoutNodes: Node<NodeData>[] = []
+  for (const n of place) if (!memberToPool.has(n.id)) layoutNodes.push({ ...n, position: { x: 0, y: 0 } })
+  for (const [pid] of pools)
+    layoutNodes.push({ id: pid, type: 'pool', position: { x: 0, y: 0 }, data: { id: pid, kind: 'program', display: poolLabel(pid) } as NodeData })
+  const seen = new Set<string>()
+  const layoutEdges: Edge[] = []
+  for (const e of pairs) {
+    const s = memberToPool.get(e.source) ?? e.source
+    const t = memberToPool.get(e.target) ?? e.target
+    if (s === t) continue
+    const k = `${s}->${t}`
+    if (seen.has(k)) continue
+    seen.add(k)
+    layoutEdges.push({ id: k, source: s, target: t })
+  }
+  const sizeOf = (id: string) => (pools.has(id) ? { w: W, h: poolHeight(pools.get(id)!.length) } : { w: W, h: H })
+  const pinId = forward ? undefined : (memberToPool.get(targetSlug) ?? targetSlug)
+  const posOf = new Map(layout(layoutNodes, layoutEdges, pinId, sizeOf).map((n) => [n.id, n.position]))
+  // Expand: pool boxes FIRST (render behind), then members, then the rest.
+  const out: Node<NodeData>[] = []
+  for (const [pid, members] of pools) {
+    const pos = posOf.get(pid) ?? { x: 0, y: 0 }
+    out.push({
+      id: pid,
+      type: 'pool',
+      position: pos,
+      data: { id: pid, kind: 'program', display: poolLabel(pid) } as NodeData,
+      style: { width: W + PADX * 2, height: poolHeight(members.length) },
+      draggable: false,
+      selectable: false,
+      zIndex: 0,
+    })
+    members.forEach((m, i) => out.push({ ...m, position: { x: pos.x + PADX, y: pos.y + HEADER + i * ROW }, zIndex: 1 }))
+  }
+  for (const n of place) if (!memberToPool.has(n.id)) out.push({ ...n, position: posOf.get(n.id) ?? { x: 0, y: 0 } })
+  return out
+}
+
 // ── custom nodes ────────────────────────────────────────────────────────────
 // Nodes carry a name and nothing else — the rates live on the edges. The one
 // exception is a held balance: a fact that's genuinely the user's, not derived.
@@ -362,13 +430,13 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
     const r = find(id)
     ;(compMembers.get(r) ?? compMembers.set(r, []).get(r)!).push(id)
   }
+  // memberId → `pool:<CURRENCY>` for components of ≥2 (the currency labels the box).
   const memberToPool = new Map<string, string>()
-  const pools = new Map<string, { ccy: string; members: string[] }>()
   for (const [root, members] of compMembers) {
     if (members.length < 2) continue
-    const poolId = `pool:${root}`
+    const ccy = ccyAt.get(root) ?? members.map((m) => ccyAt.get(m)).find(Boolean) ?? ''
+    const poolId = `pool:${ccy}`
     for (const m of members) memberToPool.set(m, poolId)
-    pools.set(poolId, { ccy: ccyAt.get(root) ?? members.map((m) => ccyAt.get(m)).find(Boolean) ?? '', members })
   }
   const intraPool = (e: PathEdge) =>
     memberToPool.has(e.from) && memberToPool.get(e.from) === memberToPool.get(e.to)
@@ -429,70 +497,17 @@ function toFlow(data: PointsPathsResult, f: PointsFilters) {
       labelBgStyle: { fill: 'var(--card)', fillOpacity: 0.9 },
     }
   })
-  // ── layout: collapse each pool to one tall placeholder, lay out, then expand
-  // the placeholder into a box + its stacked member nodes. ──
-  const ROW = 54 // vertical pitch per member (node is 48px + gap)
-  const HEADER = 22 // room for the pool label
-  const PADX = 8
-  const PADY = 8
-  const poolHeight = (m: number) => HEADER + m * ROW + PADY
-  const layoutNodes: Node<NodeData>[] = []
-  for (const n of data.nodes) {
-    if (!kept.has(n.id) || memberToPool.has(n.id)) continue
-    layoutNodes.push({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n, dir: data.direction } })
-  }
-  for (const [poolId, p] of pools) {
-    layoutNodes.push({ id: poolId, type: 'pool', position: { x: 0, y: 0 }, data: { id: poolId, kind: 'program', display: tierLabel(p.ccy) } as NodeData })
-  }
-  // edges dagre sees: remap members → their pool, drop self/dupes (the real
-  // per-member edges are still drawn from rfEdges).
-  const seenPair = new Set<string>()
-  const layoutEdges: Edge[] = []
-  for (const e of visibleEdges) {
-    const s = memberToPool.get(e.from) ?? e.from
-    const t = memberToPool.get(e.to) ?? e.to
-    if (s === t) continue
-    const k = `${s}->${t}`
-    if (seenPair.has(k)) continue
-    seenPair.add(k)
-    layoutEdges.push({ id: k, source: s, target: t })
-  }
-  const sizeOf = (id: string) => (pools.has(id) ? { w: W, h: poolHeight(pools.get(id)!.members.length) } : { w: W, h: H })
-  // Pin the destination rightmost only in 'to' mode (its pool, if it's pooled).
-  const pinId = forward ? undefined : (memberToPool.get(data.target.slug) ?? data.target.slug)
-  const posOf = new Map(layout(layoutNodes, layoutEdges, pinId, sizeOf).map((n) => [n.id, n.position]))
-
-  // Expand: pool boxes FIRST (render behind), then their members, then the rest.
-  const rfNodes: Node<NodeData>[] = []
-  for (const [poolId, p] of pools) {
-    const pos = posOf.get(poolId) ?? { x: 0, y: 0 }
-    rfNodes.push({
-      id: poolId,
-      type: 'pool',
-      position: pos,
-      data: { id: poolId, kind: 'program', display: tierLabel(p.ccy) } as NodeData,
-      style: { width: W + PADX * 2, height: poolHeight(p.members.length) },
-      draggable: false,
-      selectable: false,
-      zIndex: 0,
-    })
-    p.members.forEach((m, i) => {
-      const n = data.nodes.find((d) => d.id === m)
-      if (!n) return
-      rfNodes.push({
-        id: m,
-        type: n.fiat ? 'fiat' : n.kind,
-        position: { x: pos.x + PADX, y: pos.y + HEADER + i * ROW },
-        data: { ...n, dir: data.direction, poolId },
-        zIndex: 1,
-      })
-    })
-  }
-  for (const n of data.nodes) {
-    if (!kept.has(n.id) || memberToPool.has(n.id)) continue
-    rfNodes.push({ id: n.id, type: n.fiat ? 'fiat' : n.kind, position: posOf.get(n.id) ?? { x: 0, y: 0 }, data: { ...n, dir: data.direction } })
-  }
-  return { nodes: rfNodes, edges: rfEdges }
+  // Place the kept nodes (members tagged with their pool) and lay them out with
+  // pools collapsed into boxes — the SAME routine the focused view uses, so the
+  // box shows in both the full graph and an isolated route.
+  const nodeById = new Map(data.nodes.map((n) => [n.id, n]))
+  const place: Node<NodeData>[] = [...kept].flatMap((id) => {
+    const n = nodeById.get(id)
+    if (!n) return []
+    return [{ id, type: n.fiat ? 'fiat' : n.kind, position: { x: 0, y: 0 }, data: { ...n, dir: data.direction, poolId: memberToPool.get(id) } }]
+  })
+  const pairs = visibleEdges.map((e) => ({ source: e.from, target: e.to }))
+  return { nodes: clusteredLayout(place, pairs, forward, data.target.slug), edges: rfEdges }
 }
 
 // ── target combobox ─────────────────────────────────────────────────────────
@@ -779,9 +794,6 @@ export function Points(props: PointsProps) {
       }
     }
 
-    const subNodes = flow.nodes
-      .filter((n) => litN.has(n.id))
-      .map((n) => ({ ...n, position: { x: 0, y: 0 } }))
     const subEdges: Edge[] = flow.edges
       .filter((e) => litE.has(e.id))
       .map((e) => {
@@ -795,10 +807,24 @@ export function Points(props: PointsProps) {
           labelStyle: { ...(e.labelStyle as object), fill: ACCENT, fontWeight: 600 },
         }
       })
-    const nodes = layout(subNodes, subEdges, data.direction === 'from' ? undefined : data.target.slug).map((n) => ({
-      ...n,
-      style: n.id === focus ? { outline: `2px solid ${ACCENT}`, outlineOffset: 2, borderRadius: 8 } : undefined,
-    }))
+    // Re-lay out the isolated route WITH pool boxes (the same routine the full
+    // graph uses) so the cluster still groups when a node is selected. Members
+    // carry data.poolId from the full layout; the box node itself is dropped and
+    // rebuilt. Preserve a node's own style (the box's width/height) when adding
+    // the focus outline.
+    const place: Node<NodeData>[] = flow.nodes
+      .filter((n) => n.type !== 'pool' && litN.has(n.id))
+      .map((n) => ({ ...n, position: { x: 0, y: 0 } }))
+    const nodes = clusteredLayout(
+      place,
+      subEdges.map((e) => ({ source: e.source, target: e.target })),
+      data.direction === 'from',
+      data.target.slug,
+    ).map((n) =>
+      n.id === focus
+        ? { ...n, style: { ...(n.style ?? {}), outline: `2px solid ${ACCENT}`, outlineOffset: 2, borderRadius: 8 } }
+        : n,
+    )
     return { nodes, edges: subEdges }
   }, [flow, focus, data?.target.slug, data?.direction])
 
