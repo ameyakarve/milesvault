@@ -177,10 +177,10 @@ times, caps — and IS the answer (the same way `/explore` owns award pricing).
 Resolve the target programme FIRST with `kb_resolve(text, prefix: 'program')`
 and copy the EXACT `slug` it returns into the URL — verbatim, character for
 character. NEVER build the slug yourself by lowercasing or concatenating the
-display name: `program/marriottbonvoy` is WRONG (fabricated); the real slug is
-`program/marriott-bonvoy`. Real slugs are hyphenated (`program/qatar-privilege-club`,
-`program/membership-rewards`, `program/avios`). If `kb_resolve` returns no match,
-say so — do not guess a slug.
+display name: resolved slugs are hyphenated and often not what you'd guess (e.g.
+"Fortune Wings Club" resolves to `program/fortune-wings-club`, NOT
+`program/fortunewingsclub`). If `kb_resolve` returns no match, say so — do not
+guess a slug.
 
 ```
 [<short label>](/points?target=<the exact slug kb_resolve returned>)
