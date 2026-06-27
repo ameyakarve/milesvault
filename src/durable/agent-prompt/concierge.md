@@ -99,13 +99,15 @@ that the briefing tells you which direction to walk.
   Pass `prefix` whenever you know the type — it removes noise.
 - **Direction matters.** Edges are directed; walk the wrong way and you get an
   empty list. The briefing says which direction fits which question.
-- **Read edge attrs AND bodies.** A `TRANSFERS` edge carries the structured
-  ratio (`ratio_source`/`ratio_dest`, `from_currency`/`to_currency`) in attrs
-  and the cap/timing in `description_md`. Quote both.
-- **Discover before quoting.** If a question could have multiple routes (direct
-  transfer to the airline's own programme OR via a partner that can book it),
-  enumerate them all before answering. Stopping at the first plausible route is
-  a failure.
+- **Read edge attrs AND bodies** for issuer / network / alliance / card-earning
+  questions. But do NOT recite `TRANSFERS` ratios, caps, or timing in chat —
+  transfer / "how do I get X" / path-to-points questions hand off to the
+  `/points` screen (see "Transfers & how do I get X" below). Walking transfer
+  edges with `kb_related` to enumerate partners and quote ratios is the WRONG
+  move for those; resolve the target and drop the link instead.
+- **Discover before answering a bookability question.** If an airline can be
+  booked via multiple programmes, enumerate them before answering. (This is about
+  `BOOKS_ON` / award routes — NOT transfer ratios, which go to `/points`.)
 
 ## When the user says "my", "mine", "I", or "I have"
 
@@ -173,6 +175,12 @@ the BEST card or route to a currency, or a transfer's ratio / timing / bonus →
 reply with a LINK to the path-to-points screen, NOT a recited ratio. The
 `/points` page draws every route into the target — partners, ratios, transfer
 times, caps — and IS the answer (the same way `/explore` owns award pricing).
+
+**Decide this FIRST, before you touch the graph.** If the question is one of
+these, do NOT call `kb_related` to enumerate partners and do NOT list ratios in
+chat — that is a failure. Your ONLY graph call is `kb_resolve` to get the
+target's slug; then drop the link. "What does Marriott Bonvoy transfer to and at
+what ratios" is a `/points` link, never a recited table.
 
 Resolve the target programme FIRST with `kb_resolve(text, prefix: 'program')`
 and copy the EXACT `slug` it returns into the URL — verbatim, character for
