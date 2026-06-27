@@ -22,7 +22,9 @@ import {
   type PointsPathsResult,
   type BalanceRow,
   listLoyaltyCurrencies,
+  listCards,
   type LoyaltyCurrency,
+  type SlugName,
   listMatchStatuses,
   heldStatusSlugs,
   buildStatusMatchPaths,
@@ -111,9 +113,10 @@ export class ConciergeDO
   // RPC. Cleared after the turn config is built — the next turn re-fetches.
   private turnSnapshot: Snapshot | null = null
   private turnAgentsBriefing: string | null = null
-  // The valid `/points` link targets (loyalty programmes) — injected into the
-  // system prompt so the model copies an exact slug instead of inventing one.
+  // The valid slug catalog — programmes AND cards — injected into the system
+  // prompt so the model copies an exact slug instead of inventing one.
   private turnPointsTargets: LoyaltyCurrency[] | null = null
+  private turnCards: SlugName[] | null = null
 
   // Synthetic host for the kb service binding — only the path is used.
   private readonly KB_BASE = 'https://kb'
@@ -165,7 +168,7 @@ export class ConciergeDO
     // mid-turn, so we can't gate on the agent active at turn start —
     // the receiving agent's system prompt is rebuilt per step.
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    const [snapshot, briefing, pointsTargets] = await Promise.all([
+    const [snapshot, briefing, pointsTargets, cards] = await Promise.all([
       this.ledgerStub().ledger_snapshot(),
       fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((err) => {
         console.warn(`[concierge] kb agents.md fetch failed: ${err}`)
@@ -175,10 +178,15 @@ export class ConciergeDO
         console.warn(`[concierge] loyalty currencies fetch failed: ${err}`)
         return [] as LoyaltyCurrency[]
       }),
+      listCards(kbHttp).catch((err) => {
+        console.warn(`[concierge] cards fetch failed: ${err}`)
+        return [] as SlugName[]
+      }),
     ])
     this.turnSnapshot = snapshot
     this.turnAgentsBriefing = briefing
     this.turnPointsTargets = pointsTargets
+    this.turnCards = cards
   }
 
   // ---- AgentHost<ConciergeAgentName> ----
@@ -188,6 +196,7 @@ export class ConciergeDO
       this.snapshot(),
       this.turnAgentsBriefing ?? '',
       this.turnPointsTargets ?? [],
+      this.turnCards ?? [],
     )
   }
 
