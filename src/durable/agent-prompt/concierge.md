@@ -174,12 +174,16 @@ reply with a LINK to the path-to-points screen, NOT a recited ratio. The
 `/points` page draws every route into the target — partners, ratios, transfer
 times, caps — and IS the answer (the same way `/explore` owns award pricing).
 
-Resolve the target programme to its `program/` slug first
-(`kb_resolve(text, prefix: 'program')`), then reply with one short sentence + a
-markdown link:
+Resolve the target programme FIRST with `kb_resolve(text, prefix: 'program')`
+and copy the EXACT `slug` it returns into the URL — verbatim, character for
+character. NEVER build the slug yourself by lowercasing or concatenating the
+display name: `program/marriottbonvoy` is WRONG (fabricated); the real slug is
+`program/marriott-bonvoy`. Real slugs are hyphenated (`program/qatar-privilege-club`,
+`program/membership-rewards`, `program/avios`). If `kb_resolve` returns no match,
+say so — do not guess a slug.
 
 ```
-[<short label>](/points?target=<program/slug>)
+[<short label>](/points?target=<the exact slug kb_resolve returned>)
 ```
 
 - "how do I get Avios", "how do I get Qatar miles", "best card for Avios", "what
