@@ -316,37 +316,22 @@ const prettySlug = (slug: string) =>
     .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
     .join(' ')
 
-// The whole account model in ONE dump (owner design): the loyalty programmes are
-// the ACCOUNTS (the `/points` target and the `Assets:Rewards` wallet), keyed on
-// their `program/` slug, each with its names + aliases + canonical account + the
-// currency tickers it holds; PLUS the two relationship edge types as flat dumps —
-// `earns_into` (a card earns a currency into an account) and `transfers` (an
-// account moves a currency to another account at a ratio). The model maps the
-// user's words to an account here and reads the relationships directly, instead
-// of resolving slugs or walking the graph node by node.
-export type AccountGraphAccount = {
-  slug: string // program/… — the account identity (also the /points target)
-  name: string
-  aliases: string[]
-  account: string | null // Assets:Rewards:<X>
-  tickers: string[]
-}
-export type AccountGraph = {
-  accounts: AccountGraphAccount[]
-  earns_into: Array<{ card: string; account: string; currency: string }>
-  transfers: Array<{
-    from: string
-    to: string
-    currency: string
-    to_currency: string
-    ratio: string | null
-    transfer_time: string | null
-  }>
-}
+const stripPrefix = (slug: string) => slug.replace(/^[a-z]+\//, '')
+const csvBlock = (headers: string[], rows: string[][]): string =>
+  [headers.join('|'), ...rows.map((r) => r.join('|'))].join('\n')
+const edgeAttr = (a: Record<string, unknown> | null, k: string): string | null =>
+  a && typeof a[k] === 'string' ? (a[k] as string) : null
 
-export async function listAccountGraph(kb: KbHttp): Promise<AccountGraph> {
-  const attr = (a: Record<string, unknown> | null, k: string): string | null =>
-    a && typeof a[k] === 'string' ? (a[k] as string) : null
+// reward_accounts payload — compact pipe-delimited CSV with slug PREFIXES
+// STRIPPED (an `accounts` row's slug is a program/, an earns_into `card` is a
+// cc/ — the column says the type). Two blocks: `accounts` (the loyalty
+// programmes = the /points target + Assets:Rewards wallet, with name / aliases /
+// account / tickers) and `earns_into` (a card earns a currency into an account).
+// TRANSFERS are NOT here (585 rows ≈ 30k tokens) — call `reward_transfers` only
+// when a ratio is actually needed.
+export type AccountGraphCsv = { accounts: string; earns_into: string }
+
+export async function listAccountGraph(kb: KbHttp): Promise<AccountGraphCsv> {
   const [progRaw, rewardAccounts, earnsRaw, transfersRaw] = await Promise.all([
     kb.list('program', { limit: 2000, fields: ['display_name', 'aliases'] }).catch(() => ({})) as Promise<{
       items?: Array<{ slug: string; display_name?: string | null; aliases?: string[] }>
@@ -360,56 +345,71 @@ export async function listAccountGraph(kb: KbHttp): Promise<AccountGraph> {
     }>,
   ])
 
-  // ticker → canonical Assets:Rewards account, from the currency reward-account list.
   const tickerToAccount = new Map(rewardAccounts.map((r) => [r.ticker, r.account]))
-
-  const earns_into = (earnsRaw.items ?? []).map((e) => ({
+  const earns = (earnsRaw.items ?? []).map((e) => ({
     card: e.from,
     account: e.to,
-    currency: attr(e.attrs, 'currency') ?? e.variant ?? '',
+    currency: edgeAttr(e.attrs, 'currency') ?? e.variant ?? '',
   }))
-  const transfers = (transfersRaw.items ?? []).map((e) => {
-    const rs = e.attrs?.ratio_source
-    const rd = e.attrs?.ratio_dest
-    return {
-      from: e.from,
-      to: e.to,
-      currency: attr(e.attrs, 'from_currency') ?? e.variant ?? '',
-      to_currency: attr(e.attrs, 'to_currency') ?? '',
-      ratio: rs != null && rd != null ? `${rs}:${rd}` : null,
-      transfer_time: attr(e.attrs, 'transfer_time'),
-    }
-  })
 
-  // Currency tickers per programme/account — derived from the edges (the link
-  // between a programme and its currency lives only on the edges).
+  // Currency tickers per programme — derived from the edges (a programme's link
+  // to its currency lives only on the edges). Transfers are fetched only for this
+  // derivation, not output here.
   const tickersByProg = new Map<string, Set<string>>()
   const addTicker = (prog: string, t: string) => {
     if (!t || !prog.startsWith('program/')) return
     ;(tickersByProg.get(prog) ?? tickersByProg.set(prog, new Set()).get(prog)!).add(t)
   }
-  for (const t of transfers) {
-    addTicker(t.from, t.currency)
-    addTicker(t.to, t.to_currency)
+  for (const e of transfersRaw.items ?? []) {
+    addTicker(e.from, edgeAttr(e.attrs, 'from_currency') ?? e.variant ?? '')
+    addTicker(e.to, edgeAttr(e.attrs, 'to_currency') ?? '')
   }
-  for (const e of earns_into) addTicker(e.account, e.currency)
+  for (const e of earns) addTicker(e.account, e.currency)
 
-  const accounts: AccountGraphAccount[] = (progRaw.items ?? [])
+  const accountRows = (progRaw.items ?? [])
     .filter((p) => p.slug.startsWith('program/'))
     .map((p) => {
       const tickers = [...(tickersByProg.get(p.slug) ?? [])]
-      const account = tickers.map((t) => tickerToAccount.get(t)).find((a): a is string => !!a) ?? null
-      return {
-        slug: p.slug,
-        name: p.display_name ?? prettySlug(p.slug),
-        aliases: (p.aliases ?? []).map(prettySlug),
+      const account = tickers.map((t) => tickerToAccount.get(t)).find((a): a is string => !!a) ?? ''
+      return [
+        stripPrefix(p.slug),
+        p.display_name ?? prettySlug(p.slug),
+        (p.aliases ?? []).map(prettySlug).join(','),
         account,
-        tickers,
-      }
+        tickers.join(','),
+      ]
     })
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => a[1]!.localeCompare(b[1]!))
 
-  return { accounts, earns_into, transfers }
+  return {
+    accounts: csvBlock(['slug', 'name', 'aliases', 'account', 'tickers'], accountRows),
+    earns_into: csvBlock(
+      ['card', 'account', 'currency'],
+      earns.map((e) => [stripPrefix(e.card), stripPrefix(e.account), e.currency]),
+    ),
+  }
+}
+
+// Every account→account transfer as compact CSV (accounts are program/ slug
+// bodies). Split out of reward_accounts because it is ~585 rows; fetched only
+// when a transfer RATIO is needed (e.g. drafting a points-transfer entry).
+export async function listTransfers(kb: KbHttp): Promise<{ transfers: string }> {
+  const raw = (await kb.edges('TRANSFERS').catch(() => ({}))) as {
+    items?: Array<{ from: string; to: string; variant: string; attrs: Record<string, unknown> | null }>
+  }
+  const rows = (raw.items ?? []).map((e) => {
+    const rs = e.attrs?.ratio_source
+    const rd = e.attrs?.ratio_dest
+    return [
+      stripPrefix(e.from),
+      stripPrefix(e.to),
+      edgeAttr(e.attrs, 'from_currency') ?? e.variant ?? '',
+      edgeAttr(e.attrs, 'to_currency') ?? '',
+      rs != null && rd != null ? `${rs}:${rd}` : '',
+      edgeAttr(e.attrs, 'transfer_time') ?? '',
+    ]
+  })
+  return { transfers: csvBlock(['from', 'to', 'from_ccy', 'to_ccy', 'ratio', 'time'], rows) }
 }
 
 // For the user's held reward accounts, surface the KG's aliases for each — so
@@ -472,9 +472,18 @@ export async function resolveCardAccount(kb: KbHttp, slug: string): Promise<stri
 export function rewardAccountsTool(kb: KbHttp) {
   return tool({
     description:
-      'Dump the whole reward-account model in ONE call. Returns `accounts` — every loyalty programme keyed on its `program/` slug, each with `name`, `aliases`, its canonical Beancount `account` (`Assets:Rewards:<X>` — issuer pools share `Assets:Rewards:<Bank>`, standalone programmes use `Assets:Rewards:<Programme>`; NO :Miles:/:Points: segment), and the currency `tickers` it holds — PLUS `earns_into` (a card earns a currency into an account: `{ card, account, currency }`) and `transfers` (an account moves a currency to another account: `{ from, to, currency, to_currency, ratio, transfer_time }`). Match the user/statement words to an account by its `name`/`aliases`, then: for a `/points` link use that account\'s `slug`; for drafting a miles/points entry copy its `account` + the relevant `ticker` VERBATIM. Do NOT assemble account paths, slugs, or tickers yourself. If the programme is not in `accounts`, ask the user rather than guessing.',
+      'Dump the reward-account model as two pipe-delimited CSV blocks. `accounts` (columns: slug|name|aliases|account|tickers) — every loyalty programme = an ACCOUNT; the `slug` is the programme body WITHOUT a prefix (re-attach `program/` when you cite it or build a /points link), `account` is the canonical `Assets:Rewards:<X>` wallet (issuer pools share `Assets:Rewards:<Bank>`; NO :Miles:/:Points: segment), `tickers` are its commodity tickers. `earns_into` (columns: card|account|currency) — a card (cc/ body) earns a currency into an account (program/ body). Match the user/statement words to an account by its `name`/`aliases`, then: for a /points link use `program/<slug>`; for drafting a miles/points entry copy its `account` + the relevant `ticker` VERBATIM. Do NOT assemble account paths or invent tickers. For a transfer RATIO between accounts, call `reward_transfers` (NOT here). If the programme is not in `accounts`, ask the user.',
     inputSchema: z.object({}),
     execute: async () => listAccountGraph(kb),
+  })
+}
+
+export function rewardTransfersTool(kb: KbHttp) {
+  return tool({
+    description:
+      'The account→account transfer table as pipe-delimited CSV (columns: from|to|from_ccy|to_ccy|ratio|time). `from`/`to` are account (program/) slug bodies, prefix stripped; `ratio` is source:dest (NOT 1:1 unless stated). Call this ONLY when you need a transfer ratio — e.g. drafting a points-transfer entry between two accounts. Routing / "how do I get X" questions are answered by the /points screen, not this tool.',
+    inputSchema: z.object({}),
+    execute: async () => listTransfers(kb),
   })
 }
 

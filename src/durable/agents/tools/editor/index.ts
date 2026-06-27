@@ -1,6 +1,6 @@
 export { draftTransactionTool } from './draft-transaction'
 export { clarifyTool } from './clarify'
 export { addCardTool } from './add-card'
-export { cardGuideTool, rewardAccountsTool, listRewardAccounts, rewardAccountAliases, type RewardAccount } from './card-guide'
+export { cardGuideTool, rewardAccountsTool, rewardTransfersTool, listRewardAccounts, rewardAccountAliases, type RewardAccount } from './card-guide'
 export { getEntryTool, type EntryBlob } from './get-entry'
 export { searchTool } from './search'
