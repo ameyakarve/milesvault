@@ -36,6 +36,7 @@ import {
 import {
   cardGuideTool,
   rewardAccountsTool,
+  rewardTransfersTool,
   rewardAccountAliases,
   draftTransactionTool,
   clarifyTool,
@@ -991,6 +992,7 @@ entries, or draft corrections.`
       kb_related: kb.kb_related,
       card_guide: cardGuideTool(kbHttp),
       list_reward_accounts: rewardAccountsTool(kbHttp),
+      reward_transfers: rewardTransfersTool(kbHttp),
       search: searchTool((filter) => this.ledgerStub().search_postings(filter)),
       get_entry: getEntryTool((ref) => this.ledgerStub().get_entry(ref)),
     }

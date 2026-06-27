@@ -197,15 +197,15 @@ name point figures. The link is the answer.
 ## Branch B — reaching a currency → /points
 
 The HOW for routing/transfer/"how do I get X" questions. Call **`reward_accounts`**
-(it dumps every account with its `slug`, `name`, `aliases`). Match the user's
-words to the account by its `name`/`aliases` and copy that account's **`slug`**
-(always a `program/…` slug) into the link — verbatim, never abbreviated. The
-endpoint ONLY accepts a `program/` account slug; a `currency/` or `cc/` slug is
-REJECTED. If no account matches, say so. Then reply with at most one short
-sentence + the link:
+— its `accounts` CSV lists every account (`slug|name|aliases|…`). Match the
+user's words to the account by its `name`/`aliases`, take that row's `slug` (a
+bare body, e.g. `marriott-bonvoy`) and build the link by prepending `program/` —
+copy the body verbatim, never abbreviated. The endpoint ONLY accepts a
+`program/` account; a `currency/` or `cc/` target is REJECTED. If no account
+matches, say so. Then reply with at most one short sentence + the link:
 
 ```
-[<short label>](/points?target=<the account's program/ slug>)
+[<short label>](/points?target=program/<the account row's slug>)
 ```
 
 - Append `&dir=from` when they ask where a currency they HOLD can go outbound.

@@ -31,16 +31,19 @@ tool, don't deliberate in prose, don't narrate.
   transfer is NOT 1:1 unless the KG edge says so). For a single card's own pool /
   earn rate / account, use `card_guide` above
   — don't hand-walk these.
-- `list_reward_accounts` — dumps the whole account model: `accounts` (every
-  programme keyed on its `program/` `slug`, with `name`, `aliases`, canonical
-  `account`, and `tickers`) plus `earns_into` and `transfers`. Match the
-  programme by `name`/`aliases` and copy the exact `account` and `ticker`
-  VERBATIM; never assemble `Assets:Rewards:…` paths yourself, never invent a
-  ticker. BUT for a currency a CARD earns, `card_guide`'s `pool.account` is
-  authoritative — use it and do NOT override it with a different account from
-  `list_reward_accounts`
-  (the two can name the same currency differently; for a card's own pool,
-  `card_guide` wins).
+- `list_reward_accounts` — two pipe-delimited CSV blocks: `accounts`
+  (`slug|name|aliases|account|tickers` — every programme is an account; `slug` is
+  the bare body, `account` is the canonical `Assets:Rewards:<X>`) and `earns_into`
+  (`card|account|currency`). Match the programme by `name`/`aliases`, then copy
+  its `account` and the relevant `ticker` VERBATIM; never assemble
+  `Assets:Rewards:…` paths, never invent a ticker. BUT for a currency a CARD
+  earns, `card_guide`'s `pool.account` is authoritative — use it and do NOT
+  override it with a different account from `list_reward_accounts` (the two can
+  name the same currency differently; for a card's own pool, `card_guide` wins).
+- `reward_transfers` — the account→account transfer table as CSV
+  (`from|to|from_ccy|to_ccy|ratio|time`, accounts are bare slug bodies). Call ONLY
+  when you need a transfer ratio (e.g. drafting a points-transfer entry); the
+  ratio is `source:dest`, never 1:1 unless stated.
 - `draft_transaction({ entries: [{ id, text?, replaces? }] })` — author the change
   for the user to review and approve. **add** = `text` only · **edit** =
   `replaces` (the entry's exact current text from `get_entry`) + `text` (the full
