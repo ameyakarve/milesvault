@@ -208,23 +208,18 @@ name point figures. The link is the answer.
 **First decide: is this ONE direct fact about ONE named transfer?** Both the
 SOURCE and the DESTINATION are named, and they ask a single attribute — its
 ratio or its timing. E.g. "how long does FlyerBonus → GarudaMiles take",
-"what's the Atmos Rewards → Sixt ONE ratio". → **Answer INLINE with ONE tool
-call, then STOP:**
-1. Call `reward_transfers` ONCE — it returns the whole transfer table as CSV
-   (`from|to|from_ccy|to_ccy|ratio|time`, both ends bare slug bodies).
-2. Find the single row whose `from` is the source and `to` is the destination
-   (the slug bodies are readable — match by name). Read its `ratio` (it's
-   `source:dest`, never 1:1 unless stated) and/or `time`, and state it in one
-   short line.
-3. **STOP.** Do NOT walk the graph, do NOT `kb_resolve`/`kb_related`, do NOT chase
-   indirect routes. The one dump call already has the answer.
+"what's the Atmos Rewards → Sixt ONE ratio". → **Answer it INLINE.** Get the two
+programmes from `reward_accounts`, then read the source's outgoing `TRANSFERS`
+with `kb_related` on the source slug — the edge to the destination carries the
+answer in its attrs (`ratio_source`:`ratio_dest`, `transfer_time`). State that
+one value; the ratio is `source:dest`, never 1:1 unless the edge says so. The
+source's own transfer edges are all you need — the destination is either among
+them (read it) or it isn't a direct transfer (say so, and offer the `/points`
+link for routes). Read the number from the edge; never invent it, and never
+deflect a one-value question to `/points`.
 
-If there is no such row, say "<source> doesn't transfer directly to <dest>" (you
-may add the `/points` link for routes) and stop. Never invent a number — read it
-from the table. Do NOT deflect a one-value question to `/points`.
-
-(A "does X give a transfer bonus?" question is NOT in this table — the bonus
-lives in the programme's KG body; `kb_get` the source programme and read it.)
+(A "does X give a transfer bonus?" question isn't a ratio — the bonus lives in
+the programme's KG body; `kb_get` the source programme and read it.)
 
 **Otherwise it's a routing / enumerate question** — "what does FlyerBonus transfer
 to" (many partners), "how do I get GarudaMiles", "best card for GarudaMiles",

@@ -40,7 +40,7 @@ import {
   resolveByTicker,
   showAwardOptionsTool,
 } from './agents/tools/concierge'
-import { rewardAccountsTool, rewardTransfersTool } from './agents/tools/editor'
+import { rewardAccountsTool } from './agents/tools/editor'
 import type { AgentHost, Registry } from './agents/types'
 import { baseAccount, isPending, kgLookupParts } from '@/lib/ledger-core/account-display'
 import { conciergeEnabled } from '@/lib/flags'
@@ -735,7 +735,6 @@ export class ConciergeDO
       query_sql,
       codemode,
       reward_accounts: rewardAccountsTool(kbHttp),
-      reward_transfers: rewardTransfersTool(kbHttp),
       show_award_options: showAwardOptionsTool(),
       ask_user: askUserTool(),
     } as ToolSet
