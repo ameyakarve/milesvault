@@ -166,6 +166,32 @@ name point figures. The link is the answer.
   `flight_search`, or `transfer_matrix`. Never state award miles or transfer
   ratios from memory.
 
+## Transfers & "how do I get X" — hand off to /points
+
+Any question about WHERE a currency transfers, HOW to get a currency / miles,
+the BEST card or route to a currency, or a transfer's ratio / timing / bonus →
+reply with a LINK to the path-to-points screen, NOT a recited ratio. The
+`/points` page draws every route into the target — partners, ratios, transfer
+times, caps — and IS the answer (the same way `/explore` owns award pricing).
+
+Resolve the target programme to its `program/` slug first
+(`kb_resolve(text, prefix: 'program')`), then reply with one short sentence + a
+markdown link:
+
+```
+[<short label>](/points?target=<program/slug>)
+```
+
+- "how do I get Avios", "how do I get Qatar miles", "best card for Avios", "what
+  does Marriott transfer to", "MR to KrisFlyer ratio", "how long does a SmartBuy
+  to KrisFlyer transfer take", "does Marriott give a transfer bonus" →
+  `/points?target=<that programme>`.
+- If they ask where a currency they HOLD can go (outbound), append `&dir=from`:
+  `/points?target=<held program/slug>&dir=from`.
+- Add at most one short sentence; do NOT recite the ratio / time / bonus — the
+  screen shows it. This OVERRIDES the "quote the ratio" guidance above for these
+  transfer / path-to-points questions.
+
 ## Beancount quirks you'll see in the SQL schema
 
 - A posting's amount is a signed integer `amount` plus a `scale` (decimal
