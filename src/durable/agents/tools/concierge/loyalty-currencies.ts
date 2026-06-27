@@ -37,23 +37,3 @@ export async function listLoyaltyCurrencies(kb: KbHttp): Promise<LoyaltyCurrency
     return []
   }
 }
-
-export type SlugName = { slug: string; name: string }
-
-// Every credit card (cc/ slug + display name). Cards are also valid `/points`
-// targets in book-from mode (?target=cc/<card>&dir=from), and the concierge
-// cites card slugs for card questions — so it needs this closed list too, not
-// just programmes.
-export async function listCards(kb: KbHttp): Promise<SlugName[]> {
-  try {
-    const r = (await kb.list('cc', { limit: 2000 })) as {
-      items?: Array<{ slug: string; display_name?: string | null }>
-    }
-    return (r.items ?? [])
-      .filter((i) => i.slug.startsWith('cc/'))
-      .map((i) => ({ slug: i.slug, name: i.display_name ?? prettySlug(i.slug) }))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  } catch {
-    return []
-  }
-}
