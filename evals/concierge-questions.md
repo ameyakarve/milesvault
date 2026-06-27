@@ -17,7 +17,7 @@ Conventions:
 
 ## 1. Transfer partners & ratios
 
-*Expected: construct a **`/points` deep link** (the path-to-points screen) for the programme in question — the screen visualises the partners + ratios. The concierge builds the URL; it does NOT recite ratios in chat.*
+*Expected: split by shape. A **single named A→B fact** (one ratio / timing / bonus, both ends named) is answered **INLINE** — read straight from the `TRANSFERS` edge, in one line, no link. An **enumerate / routing** question ("what does X transfer to", "how do I get/reach Y", "best card for Y") gets a **`/points` deep link** to the programme — the screen visualises all partners + ratios, so the concierge does NOT recite the whole table in chat. For a currency term (e.g. Avios) the link must target a concrete programme that carries the ticker (the one the user's card earns into), never a bare currency-umbrella node.*
 
 - **What does Marriott Bonvoy transfer to, and at what ratios?**
   - *Pre-setup:* Marriott `TRANSFERS` edges in the KG with ratios.
