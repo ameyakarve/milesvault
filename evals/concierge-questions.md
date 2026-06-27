@@ -27,13 +27,13 @@ Conventions:
   - *Expected:* `/points` deep link targeting Avios.
 - **What's the transfer ratio from Amex Membership Rewards to KrisFlyer?**
   - *Pre-setup:* `TRANSFERS` edge MR → KrisFlyer in the KG with ratio.
-  - *Expected:* `/points` deep link (Membership Rewards); ratio shown on screen.
+  - *Expected:* **single named A→B fact → answer INLINE** (state the ratio read from the edge). Not a deep link.
 - **how long does a smartbuy to krisflyer transfer take?**
   - *Pre-setup:* `transfer_time` on the SmartBuy → KrisFlyer `TRANSFERS` edge.
-  - *Expected:* `/points` deep link (SmartBuy/KrisFlyer); timing shown on screen.
+  - *Expected:* **single A→B fact → INLINE** (state the timing read from the edge).
 - **Does Marriott Bonvoy give a transfer bonus?**
   - *Pre-setup:* transfer-bonus note in the KG (Marriott node / `TRANSFERS` edge body).
-  - *Expected:* `/points` deep link to Marriott Bonvoy.
+  - *Expected:* **single fact → INLINE** (yes/no + threshold, read from the KG).
 - **how do I get Qatar miles?**
   - *Pre-setup:* inbound paths to Qatar's programme (Avios / Privilege Club) in the KG.
   - *Expected:* `/points` deep link targeting Qatar.
