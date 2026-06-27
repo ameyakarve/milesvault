@@ -196,21 +196,24 @@ name point figures. The link is the answer.
 
 ## Branch B — reaching a currency → /points
 
-The HOW for routing/transfer/"how do I get X" questions (Branch B in the
-triage). Resolve the target programme with `kb_resolve(text, prefix: 'program')`
-and copy the EXACT returned `slug` into the URL — verbatim. Slugs are hyphenated
-and not what you'd guess ("Fortune Wings Club" → `program/fortune-wings-club`,
-never `program/fortunewingsclub`); if `kb_resolve` returns no match, say so,
-don't guess. Then reply with at most one short sentence + the link:
+The HOW for routing/transfer/"how do I get X" questions. The target slug comes
+from the **"# /points link targets"** list in this prompt — match the user's
+words to a programme name there and copy its slug **EXACTLY** (e.g.
+`program/avios`, `program/marriott-bonvoy`). Do NOT free-generate or abbreviate
+the slug (`program/av`, `program/mar-bon` are failures), do NOT call
+`kb_resolve` or `kb_related` for it. If no programme in the list matches what
+they asked, say so. Then reply with at most one short sentence + the link:
 
 ```
-[<short label>](/points?target=<exact slug kb_resolve returned>)
+[<short label>](/points?target=<exact slug from the list>)
 ```
 
-- Append `&dir=from` when they ask where a currency they HOLD can go outbound.
-- Do NOT walk transfer edges (`kb_related`) and do NOT recite ratios / timing /
-  bonuses — the `/points` screen shows all of it, and is holdings-aware (so
-  "from my cards" phrasings belong here too, not in the ledger branch).
+- To show where a currency they HOLD can go outbound, append the query param
+  **literally `&dir=from`** (with the `=` — not `dirfrom`):
+  `/points?target=<slug>&dir=from`.
+- Do NOT recite ratios / timing / bonuses — the `/points` screen shows all of it,
+  holdings-aware (so "from my cards" phrasings belong here too, not the ledger
+  branch).
 
 ## Beancount quirks you'll see in the SQL schema
 

@@ -157,12 +157,32 @@ ${snapshot.sample_txns.trim() || '(no transactions yet)'}`
 export function buildConciergeSystem(
   snapshot: AnalystSnapshot,
   agentsBriefing: string,
+  pointsTargets: Array<{ slug: string; name: string }> = [],
 ): string {
   return [
     CONCIERGE_ROLE,
     BEANCOUNT_PRIMER,
     renderAnalystSnapshotBlock(snapshot),
+    pointsTargets.length ? renderPointsTargets(pointsTargets) : null,
     '# Live graph schema',
     agentsBriefing.trim(),
-  ].join('\n\n---\n\n')
+  ]
+    .filter((x): x is string => !!x)
+    .join('\n\n---\n\n')
+}
+
+// The closed set of valid `/points?target=` programme slugs (Branch B). The 26B
+// model truncates/invents slugs when it free-generates them (`program/av`,
+// `program/mar-bon`); handing it the exact list to copy from fixes that. Names +
+// slugs so it can map the user's words to the right slug.
+function renderPointsTargets(targets: Array<{ slug: string; name: string }>): string {
+  const lines = targets.map((t) => `- ${t.name} — \`${t.slug}\``).join('\n')
+  return `# /points link targets — valid programme slugs
+
+When you build a \`/points?target=…\` link (Branch B), the target slug MUST be
+copied EXACTLY from this list. Never abbreviate, truncate, or invent one —
+\`program/avios\`, never \`program/av\`; \`program/marriott-bonvoy\`, never
+\`program/mar-bon\`. If the programme the user named isn't in this list, say so.
+
+${lines}`
 }

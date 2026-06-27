@@ -111,6 +111,9 @@ export class ConciergeDO
   // RPC. Cleared after the turn config is built — the next turn re-fetches.
   private turnSnapshot: Snapshot | null = null
   private turnAgentsBriefing: string | null = null
+  // The valid `/points` link targets (loyalty programmes) — injected into the
+  // system prompt so the model copies an exact slug instead of inventing one.
+  private turnPointsTargets: LoyaltyCurrency[] | null = null
 
   // Synthetic host for the kb service binding — only the path is used.
   private readonly KB_BASE = 'https://kb'
@@ -161,21 +164,31 @@ export class ConciergeDO
     // Fetch both context sources in parallel. Either agent can hand off
     // mid-turn, so we can't gate on the agent active at turn start —
     // the receiving agent's system prompt is rebuilt per step.
-    const [snapshot, briefing] = await Promise.all([
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const [snapshot, briefing, pointsTargets] = await Promise.all([
       this.ledgerStub().ledger_snapshot(),
       fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((err) => {
         console.warn(`[concierge] kb agents.md fetch failed: ${err}`)
         return ''
       }),
+      listLoyaltyCurrencies(kbHttp).catch((err) => {
+        console.warn(`[concierge] loyalty currencies fetch failed: ${err}`)
+        return [] as LoyaltyCurrency[]
+      }),
     ])
     this.turnSnapshot = snapshot
     this.turnAgentsBriefing = briefing
+    this.turnPointsTargets = pointsTargets
   }
 
   // ---- AgentHost<ConciergeAgentName> ----
 
   system(_name: ConciergeAgentName): string {
-    return buildConciergeSystem(this.snapshot(), this.turnAgentsBriefing ?? '')
+    return buildConciergeSystem(
+      this.snapshot(),
+      this.turnAgentsBriefing ?? '',
+      this.turnPointsTargets ?? [],
+    )
   }
 
   tools(_name: ConciergeAgentName): ToolSet {
