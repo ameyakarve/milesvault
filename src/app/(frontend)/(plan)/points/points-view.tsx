@@ -42,7 +42,8 @@ export function PointsView() {
     if (t) setTarget(t)
     const a = q.get('amount')
     if (a && Number.isFinite(Number(a))) setAmount(Number(a))
-    if (q.get('dir') === 'from') setDirection('from')
+    const dir = q.get('dir')
+    if (dir === 'from' || dir === 'to') setDirection(dir)
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [])
 
@@ -50,7 +51,7 @@ export function PointsView() {
     const q = new URLSearchParams()
     if (target) q.set('target', target)
     if (amount != null) q.set('amount', String(amount))
-    if (direction === 'from') q.set('dir', 'from')
+    q.set('dir', direction)
     const qs = q.toString()
     window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
   }, [target, amount, direction])

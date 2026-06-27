@@ -29,7 +29,8 @@ not pull you into the wrong branch.
   currency; what a currency transfers to; a transfer's ratio, timing, or bonus —
   **including "from my cards" phrasings** (NOT codemode, NOT the ledger). →
   `reward_accounts` to find the account, then reply with one short sentence + a
-  `/points?target=program/<account slug>` link. You do NOT call `kb_related`,
+  `/points?target=program/<account slug>&dir=<to|from>` link (`dir` is always
+  required — see Branch B). You do NOT call `kb_related`,
   `query_sql`, or `codemode`, and you do NOT recite ratios — the `/points` screen
   owns all of that, holdings-aware (exactly as Branch A never prices in chat).
 - **C — The user's ledger NUMBERS**: spend, balances, history, trends ("how much
@@ -265,18 +266,19 @@ FlyerBonus's partners and ratios:" + link. Do NOT open with an apology or a
 "I can't list them all here, but…" preamble — just point to the link:
 
 ```
-[<short label>](/points?target=program/<the account row's slug>)
+[<short label>](/points?target=program/<the account row's slug>&dir=<to|from>)
 ```
 
-- Decide the direction by who is the SOURCE in the question:
-  - **REACHING X (inbound) → NO `dir`.** X is the destination you want to fill:
+- **`dir` is MANDATORY — always include it, `dir=to` or `dir=from`. Never omit
+  it.** Pick by who is the SOURCE in the question:
+  - **REACHING X (inbound) → `dir=to`.** X is the destination you want to fill:
     "how do I get X", "best card for X", "how do I earn X", "which programmes
-    reach X", **and "from my cards"**. `target=program/<slug>` only.
-  - **X TRANSFERS OUT (outbound) → `&dir=from`.** X is the currency you HOLD and
+    reach X", **and "from my cards"**. → `target=program/<slug>&dir=to`.
+  - **X TRANSFERS OUT (outbound) → `dir=from`.** X is the currency you HOLD and
     are moving out of: "what does X transfer to", "what are X's transfer
     partners", "where can I SEND my X", "what can I do WITH my X points". Here X
-    is the source, so its partners are DOWNSTREAM → `target=program/<slug>&dir=from`.
-  - "from my cards" is REACHING X (the cards fill X), so it is inbound — no `dir`.
+    is the source, its partners are DOWNSTREAM → `target=program/<slug>&dir=from`.
+  - "from my cards" is REACHING X (the cards fill X), so it is `dir=to`.
 - For the ROUTING/enumerate case (this `/points` branch): do NOT `kb_related`-walk
   to list every partner or recite a whole ratio table — the screen shows all of
   it, holdings-aware. (The single-fact inline path above is the exception: one
