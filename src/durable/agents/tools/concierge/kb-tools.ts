@@ -22,6 +22,8 @@ export interface KbHttp {
     },
   ): Promise<unknown>
   list(prefix: string, opts: { limit?: number; fields?: string[] }): Promise<unknown>
+  // Bulk: every edge of one type (TRANSFERS / EARNS_INTO / …) in one query.
+  edges(edge_type: string): Promise<unknown>
   // Whole source file (path from a node's `source_file`) — markdown sections
   // outside the ::node block (e.g. a card's "## Logging") live only here.
   getFile(path: string): Promise<unknown>
@@ -355,6 +357,11 @@ export function kbHttpOverFetch(
       u.searchParams.set('prefix', prefix)
       if (opts.limit !== undefined) u.searchParams.set('limit', String(opts.limit))
       if (opts.fields?.length) u.searchParams.set('fields', opts.fields.join(','))
+      return (await fetcher.fetch(u)).json()
+    },
+    async edges(edge_type) {
+      const u = new URL(`${trimmed}/api/kb/edges`)
+      u.searchParams.set('type', edge_type)
       return (await fetcher.fetch(u)).json()
     },
   }

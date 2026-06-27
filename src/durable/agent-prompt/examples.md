@@ -44,9 +44,10 @@ transaction, resolve each piece by name and read `attrs.beancountName` from
 - `<Card>` → `kb_resolve(<card name>, prefix='cc')` → `kb_get(slug)` →
   `attrs.beancountName` (e.g. "Select Plus" → `SelectPlus`), giving
   `Liabilities:CreditCards:Axis:SelectPlus`.
-- Reward currency → call `list_reward_accounts` and COPY the matching item's
-  `account` + `ticker` VERBATIM. That tool already resolves the canonical account
-  for every loyalty currency; do NOT assemble the path yourself. Every reward
+- Reward currency → call `list_reward_accounts`; in its `accounts` list match the
+  programme by `name`/`aliases` and COPY that account's `account` + the relevant
+  `ticker` VERBATIM. That tool already gives the canonical account for every
+  programme; do NOT assemble the path yourself. Every reward
   account has ONE shape — `Assets:Rewards:<X>`, no `:Miles:`/`:Points:`/`:Status:`
   segment:
   - **a bank/issuer's own points** → `Assets:Rewards:<bank.beancountName>` (Amex MR

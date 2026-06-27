@@ -309,6 +309,109 @@ export async function listRewardAccounts(kb: KbHttp): Promise<RewardAccount[]> {
   return items
 }
 
+const prettySlug = (slug: string) =>
+  slug
+    .replace(/^[a-z]+\//, '')
+    .split('-')
+    .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1) : w))
+    .join(' ')
+
+// The whole account model in ONE dump (owner design): the loyalty programmes are
+// the ACCOUNTS (the `/points` target and the `Assets:Rewards` wallet), keyed on
+// their `program/` slug, each with its names + aliases + canonical account + the
+// currency tickers it holds; PLUS the two relationship edge types as flat dumps —
+// `earns_into` (a card earns a currency into an account) and `transfers` (an
+// account moves a currency to another account at a ratio). The model maps the
+// user's words to an account here and reads the relationships directly, instead
+// of resolving slugs or walking the graph node by node.
+export type AccountGraphAccount = {
+  slug: string // program/… — the account identity (also the /points target)
+  name: string
+  aliases: string[]
+  account: string | null // Assets:Rewards:<X>
+  tickers: string[]
+}
+export type AccountGraph = {
+  accounts: AccountGraphAccount[]
+  earns_into: Array<{ card: string; account: string; currency: string }>
+  transfers: Array<{
+    from: string
+    to: string
+    currency: string
+    to_currency: string
+    ratio: string | null
+    transfer_time: string | null
+  }>
+}
+
+export async function listAccountGraph(kb: KbHttp): Promise<AccountGraph> {
+  const attr = (a: Record<string, unknown> | null, k: string): string | null =>
+    a && typeof a[k] === 'string' ? (a[k] as string) : null
+  const [progRaw, rewardAccounts, earnsRaw, transfersRaw] = await Promise.all([
+    kb.list('program', { limit: 2000, fields: ['display_name', 'aliases'] }).catch(() => ({})) as Promise<{
+      items?: Array<{ slug: string; display_name?: string | null; aliases?: string[] }>
+    }>,
+    listRewardAccounts(kb).catch((): RewardAccount[] => []),
+    kb.edges('EARNS_INTO').catch(() => ({})) as Promise<{
+      items?: Array<{ from: string; to: string; variant: string; attrs: Record<string, unknown> | null }>
+    }>,
+    kb.edges('TRANSFERS').catch(() => ({})) as Promise<{
+      items?: Array<{ from: string; to: string; variant: string; attrs: Record<string, unknown> | null }>
+    }>,
+  ])
+
+  // ticker → canonical Assets:Rewards account, from the currency reward-account list.
+  const tickerToAccount = new Map(rewardAccounts.map((r) => [r.ticker, r.account]))
+
+  const earns_into = (earnsRaw.items ?? []).map((e) => ({
+    card: e.from,
+    account: e.to,
+    currency: attr(e.attrs, 'currency') ?? e.variant ?? '',
+  }))
+  const transfers = (transfersRaw.items ?? []).map((e) => {
+    const rs = e.attrs?.ratio_source
+    const rd = e.attrs?.ratio_dest
+    return {
+      from: e.from,
+      to: e.to,
+      currency: attr(e.attrs, 'from_currency') ?? e.variant ?? '',
+      to_currency: attr(e.attrs, 'to_currency') ?? '',
+      ratio: rs != null && rd != null ? `${rs}:${rd}` : null,
+      transfer_time: attr(e.attrs, 'transfer_time'),
+    }
+  })
+
+  // Currency tickers per programme/account — derived from the edges (the link
+  // between a programme and its currency lives only on the edges).
+  const tickersByProg = new Map<string, Set<string>>()
+  const addTicker = (prog: string, t: string) => {
+    if (!t || !prog.startsWith('program/')) return
+    ;(tickersByProg.get(prog) ?? tickersByProg.set(prog, new Set()).get(prog)!).add(t)
+  }
+  for (const t of transfers) {
+    addTicker(t.from, t.currency)
+    addTicker(t.to, t.to_currency)
+  }
+  for (const e of earns_into) addTicker(e.account, e.currency)
+
+  const accounts: AccountGraphAccount[] = (progRaw.items ?? [])
+    .filter((p) => p.slug.startsWith('program/'))
+    .map((p) => {
+      const tickers = [...(tickersByProg.get(p.slug) ?? [])]
+      const account = tickers.map((t) => tickerToAccount.get(t)).find((a): a is string => !!a) ?? null
+      return {
+        slug: p.slug,
+        name: p.display_name ?? prettySlug(p.slug),
+        aliases: (p.aliases ?? []).map(prettySlug),
+        account,
+        tickers,
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  return { accounts, earns_into, transfers }
+}
+
 // For the user's held reward accounts, surface the KG's aliases for each — so
 // the editor's account manifest can show "Assets:Rewards:Points:AllRewards …
 // (aka accor, all)" and the model maps a programme word the user types to the
@@ -369,9 +472,9 @@ export async function resolveCardAccount(kb: KbHttp, slug: string): Promise<stri
 export function rewardAccountsTool(kb: KbHttp) {
   return tool({
     description:
-      'List every reward programme / loyalty currency in the knowledge graph with its EXACT canonical Beancount account and commodity ticker (each item is shaped { name, account, ticker }). Every account has ONE shape — `Assets:Rewards:<X>`: for a bank/issuer\'s own points it is `Assets:Rewards:<Bank>` (ALL of that issuer\'s tiers share the one wallet — the ticker says which), and for a standalone programme it is `Assets:Rewards:<Programme>` (e.g. `Assets:Rewards:Krisflyer`). There is NO :Miles:/:Points: segment. Call this ONCE before drafting any miles/points entry — earn, transfer, redemption, or balance — then copy the `account` and `ticker` for the matching programme VERBATIM. Do NOT assemble reward account paths yourself and do NOT invent a ticker. If the programme is not in the list, ask the user rather than guessing an account.',
+      'Dump the whole reward-account model in ONE call. Returns `accounts` — every loyalty programme keyed on its `program/` slug, each with `name`, `aliases`, its canonical Beancount `account` (`Assets:Rewards:<X>` — issuer pools share `Assets:Rewards:<Bank>`, standalone programmes use `Assets:Rewards:<Programme>`; NO :Miles:/:Points: segment), and the currency `tickers` it holds — PLUS `earns_into` (a card earns a currency into an account: `{ card, account, currency }`) and `transfers` (an account moves a currency to another account: `{ from, to, currency, to_currency, ratio, transfer_time }`). Match the user/statement words to an account by its `name`/`aliases`, then: for a `/points` link use that account\'s `slug`; for drafting a miles/points entry copy its `account` + the relevant `ticker` VERBATIM. Do NOT assemble account paths, slugs, or tickers yourself. If the programme is not in `accounts`, ask the user rather than guessing.',
     inputSchema: z.object({}),
-    execute: async () => ({ items: await listRewardAccounts(kb) }),
+    execute: async () => listAccountGraph(kb),
   })
 }
 
