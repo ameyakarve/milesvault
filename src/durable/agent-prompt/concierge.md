@@ -197,14 +197,11 @@ name point figures. The link is the answer.
 ## Branch B — reaching a currency → /points
 
 The HOW for routing/transfer/"how do I get X" questions. The target slug comes
-from the **"# Valid slugs"** catalog in this prompt — match the user's words to a
-name there and copy its slug **EXACTLY** (e.g. `program/avios`,
-`program/marriott-bonvoy`). Use the **Programmes** list for a currency target; in
-book-from mode the target may be a **Card** from the Cards list
-(`?target=<cc/slug>&dir=from`). Do NOT free-generate or abbreviate the slug
-(`program/av`, `program/mar-bon` are failures), do NOT call `kb_resolve` or
-`kb_related` for it. If nothing in the catalog matches, say so. Then reply with at
-most one short sentence + the link:
+from the **"# Reward accounts"** list in this prompt — match the user's words to a
+name there and copy its slug **EXACTLY**. Do NOT free-generate, abbreviate, or
+invent the slug, and do NOT call `kb_resolve` / `kb_related` for it. If nothing
+in the list matches, say so. Then reply with at most one short sentence + the
+link:
 
 ```
 [<short label>](/points?target=<exact slug from the list>)
