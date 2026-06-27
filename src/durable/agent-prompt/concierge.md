@@ -216,10 +216,14 @@ matches, say so. Then reply with at most one short sentence + the link:
 [<short label>](/points?target=program/<the account row's slug>)
 ```
 
-- Append `&dir=from` when they ask where a currency they HOLD can go outbound.
+- **Default is NO `dir` param** (the page defaults to "booking" — what reaches
+  the target). "How do I get X", "best card for X", "how do I earn X", **and
+  "from my cards"** are all REACHING X → no `dir`. `target=program/<slug>` only.
+- Add `&dir=from` ONLY for the OUTBOUND direction — "where can I SEND my X",
+  "what can I do WITH my X points", i.e. X is the currency you HOLD and want to
+  move out. "from my cards" is NOT this — it still reaches X, so no `dir`.
 - Do NOT walk transfer edges (`kb_related`) and do NOT recite ratios / timing /
-  bonuses — the `/points` screen shows all of it, and is holdings-aware (so
-  "from my cards" phrasings belong here too, not in the ledger branch).
+  bonuses — the `/points` screen shows all of it, and is holdings-aware.
 
 ## Beancount quirks you'll see in the SQL schema
 
