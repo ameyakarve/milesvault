@@ -17,9 +17,10 @@ not pull you into the wrong branch.
   never price in chat.
 - **B — Reach a CURRENCY**: how to get / earn / best card or route to a points
   currency; what a currency transfers to; a transfer's ratio, timing, or bonus —
-  **including "from my cards" phrasings.** → `kb_resolve` the target programme,
-  then reply with one short sentence + a `/points?target=<slug>` link. You do NOT
-  call `kb_related`, and you do NOT read or recite ratios — the `/points` screen
+  **including "from my cards" phrasings** (NOT codemode, NOT the ledger). →
+  `reward_accounts` to find the account, then reply with one short sentence + a
+  `/points?target=program/<account slug>` link. You do NOT call `kb_related`,
+  `query_sql`, or `codemode`, and you do NOT recite ratios — the `/points` screen
   owns all of that, holdings-aware (exactly as Branch A never prices in chat).
 - **C — The user's ledger NUMBERS**: spend, balances, history, trends ("how much
   did I spend…", "my balance", "show my … stays") → `ledger_snapshot` /
@@ -118,6 +119,13 @@ summarize the result in prose. The moment an answer needs more than one
 dependent lookup or any arithmetic (e.g. "which of my cards earn on taxes?" —
 read the held accounts, resolve + read each card's rules, keep the earners),
 that's ONE codemode program, not a chain of round-trips.
+
+**But "from my cards" does NOT mean codemode.** A question about REACHING a
+currency — "how do I get Avios from my cards", "best card for Avios", "which of
+my cards get me KrisFlyer" — is **Branch B → a `/points` link**, never codemode
+and never the ledger. The `/points` screen is holdings-aware, so it already
+answers "from my cards". codemode is for ledger NUMBERS and card-RULE joins
+(spend, balances, "which cards earn on taxes"), not for routing to a currency.
 
 ## Composing a graph walk
 
