@@ -157,30 +157,12 @@ ${snapshot.sample_txns.trim() || '(no transactions yet)'}`
 export function buildConciergeSystem(
   snapshot: AnalystSnapshot,
   agentsBriefing: string,
-  rewardAccounts: Array<{ slug: string; name: string }> = [],
 ): string {
   return [
     CONCIERGE_ROLE,
     BEANCOUNT_PRIMER,
     renderAnalystSnapshotBlock(snapshot),
-    rewardAccounts.length ? renderRewardAccounts(rewardAccounts) : null,
     '# Live graph schema',
     agentsBriefing.trim(),
-  ]
-    .filter((x): x is string => !!x)
-    .join('\n\n---\n\n')
-}
-
-// The closed set of reward accounts (loyalty currencies). The model
-// truncates/invents slugs when it free-generates them; handing it the exact list
-// to copy from fixes that. Used for `/points?target=` links and any slug it
-// cites.
-function renderRewardAccounts(accounts: Array<{ slug: string; name: string }>): string {
-  const lines = accounts.map((a) => `- ${a.name} — \`${a.slug}\``).join('\n')
-  return `# Reward accounts — copy the slug EXACTLY (never abbreviate or invent)
-
-When you build a \`/points?target=…\` link or cite a slug, copy it verbatim from
-this list. If what the user named isn't here, say so.
-
-${lines}`
+  ].join('\n\n---\n\n')
 }

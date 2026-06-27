@@ -40,7 +40,7 @@ import {
   resolveByTicker,
   showAwardOptionsTool,
 } from './agents/tools/concierge'
-import { listRewardAccounts, type RewardAccount } from './agents/tools/editor/card-guide'
+import { rewardAccountsTool } from './agents/tools/editor'
 import type { AgentHost, Registry } from './agents/types'
 import { baseAccount, isPending, kgLookupParts } from '@/lib/ledger-core/account-display'
 import { conciergeEnabled } from '@/lib/flags'
@@ -112,9 +112,6 @@ export class ConciergeDO
   // RPC. Cleared after the turn config is built — the next turn re-fetches.
   private turnSnapshot: Snapshot | null = null
   private turnAgentsBriefing: string | null = null
-  // The closed reward-account set — injected into the system prompt so the model
-  // copies an exact slug instead of inventing one.
-  private turnRewardAccounts: RewardAccount[] | null = null
 
   // Synthetic host for the kb service binding — only the path is used.
   private readonly KB_BASE = 'https://kb'
@@ -165,31 +162,21 @@ export class ConciergeDO
     // Fetch both context sources in parallel. Either agent can hand off
     // mid-turn, so we can't gate on the agent active at turn start —
     // the receiving agent's system prompt is rebuilt per step.
-    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    const [snapshot, briefing, rewardAccounts] = await Promise.all([
+    const [snapshot, briefing] = await Promise.all([
       this.ledgerStub().ledger_snapshot(),
       fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((err) => {
         console.warn(`[concierge] kb agents.md fetch failed: ${err}`)
         return ''
       }),
-      listRewardAccounts(kbHttp).catch((err) => {
-        console.warn(`[concierge] reward accounts fetch failed: ${err}`)
-        return [] as RewardAccount[]
-      }),
     ])
     this.turnSnapshot = snapshot
     this.turnAgentsBriefing = briefing
-    this.turnRewardAccounts = rewardAccounts
   }
 
   // ---- AgentHost<ConciergeAgentName> ----
 
   system(_name: ConciergeAgentName): string {
-    return buildConciergeSystem(
-      this.snapshot(),
-      this.turnAgentsBriefing ?? '',
-      this.turnRewardAccounts ?? [],
-    )
+    return buildConciergeSystem(this.snapshot(), this.turnAgentsBriefing ?? '')
   }
 
   tools(_name: ConciergeAgentName): ToolSet {
@@ -747,6 +734,7 @@ export class ConciergeDO
       ledger_snapshot,
       query_sql,
       codemode,
+      reward_accounts: rewardAccountsTool(kbHttp),
       show_award_options: showAwardOptionsTool(),
       ask_user: askUserTool(),
     } as ToolSet
