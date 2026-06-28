@@ -211,3 +211,296 @@ tests:
           The reply gives a /points deep link for Avios pointing at a CONCRETE
           programme slug (e.g. the-club), reached by calling reward_accounts — NOT
           a made-up slug like program/britishairways or the program/avios umbrella.
+
+  # ===== 2. Card earning (EARNS_INTO) — KG fact, prose, NOT a link =====
+  - description: '2a — what does HDFC Infinia earn into'
+    vars:
+      message: 'What does the HDFC Infinia earn into?'
+    assert:
+      - type: javascript
+        value: "!output.links.some(l => l.kind === 'points') && output.awardOptions.length === 0"
+        metric: stays-branch-d
+      - type: llm-rubric
+        value: >
+          States that the HDFC Infinia earns HDFC Reward Points (redeemable via
+          SmartBuy). A concise prose fact — not a /points or /explore link.
+  - description: '2b — Axis Atlas earns + transfers to'
+    vars:
+      message: 'What currency does the Axis Atlas earn, and what does it transfer to?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Says the Axis Atlas earns EDGE Miles (Axis EDGE / Atlas miles) and notes
+          they transfer to airline/hotel partners (it may drop a /points link for
+          the partner list, but must NOT fabricate ratios or partners in prose).
+
+  # ===== 3. Issuers, networks, co-brands (ISSUED_BY / ON_NETWORK) =====
+  - description: '3a — network of HDFC Diners Club Black'
+    vars:
+      message: 'What network is the HDFC Diners Club Black on?'
+    assert:
+      - type: javascript
+        value: "/diners club/i.test(output.text)"
+        metric: says-diners
+      - type: javascript
+        value: "output.awardOptions.length === 0"
+        metric: no-award
+  - description: '3b — who issues the Tata Neu cards'
+    vars:
+      message: 'Who issues the Tata Neu cards?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Identifies HDFC Bank as the issuer of the Tata Neu (Infinity / Plus)
+          co-brand cards. No fabricated issuer.
+
+  # ===== 4. Card selection by spend (EARN_RULE) — known weak area (task #21) =====
+  - description: '4a — cards that earn on rent / property'
+    vars:
+      message: 'Which cards still earn rewards on rent / property payments?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Names real cards that earn on rent (e.g. IndusInd cards, or cards with a
+          capped rent earn) and does NOT claim every card is excluded. Grounded in
+          the KG's EARN_RULE data, no invented cards. (Coverage is incomplete — a
+          partial-but-correct list passes; a fabricated list fails.)
+  - description: '4b — best card for fuel in India'
+    vars:
+      message: 'Best card for fuel spends in India?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Surfaces genuine fuel cards (e.g. a BPCL / HPCL / IndianOil co-brand, or
+          a card with a fuel-surcharge benefit). Must not invent a card or claim a
+          rate not in the KG.
+
+  # ===== 5. Airlines, alliances & bookability =====
+  - description: '5a — Qatar Airways alliance'
+    vars:
+      message: 'Which alliance is Qatar Airways in?'
+    assert:
+      - type: javascript
+        value: "/oneworld/i.test(output.text)"
+        metric: says-oneworld
+  - description: '5b — book ANA with Virgin Atlantic points'
+    vars:
+      message: 'Can I book ANA flights with Virgin Atlantic points?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Answers from the graph whether Virgin Atlantic Flying Club can book ANA
+          award seats (it can, as a partner). A grounded yes/no, not a fabrication.
+
+  # ===== 6. Award flights → /explore (show_award_options) =====
+  - description: '6a — Delhi to Tokyo business on points'
+    vars:
+      message: 'Cheapest way to fly Delhi to Tokyo in business class with points?'
+    assert:
+      - type: javascript
+        value: "output.awardOptions.length > 0"
+        metric: calls-award-options
+      - type: javascript
+        value: "/\\bDEL\\b/.test(JSON.stringify(output.awardOptions)) && /\\b(NRT|HND|TYO)\\b/.test(JSON.stringify(output.awardOptions))"
+        metric: right-iata
+      - type: javascript
+        value: "!output.links.some(l => l.kind === 'points')"
+        metric: not-points-link
+      - type: llm-rubric
+        value: >
+          Hands off to the Award Explorer (/explore) for Delhi→Tokyo and does NOT
+          price the award or name mile figures in chat — at most one short sentence.
+  - description: '6b — Bangalore to London on miles'
+    vars:
+      message: 'Best way to get to London from Bangalore on miles?'
+    assert:
+      - type: javascript
+        value: "output.awardOptions.length > 0"
+        metric: calls-award-options
+      - type: javascript
+        value: "/\\bBLR\\b/.test(JSON.stringify(output.awardOptions)) && /\\b(LHR|LON|LGW)\\b/.test(JSON.stringify(output.awardOptions))"
+        metric: right-iata
+
+  # ===== 7. Path to points → /points link =====
+  - description: '7a — cheapest way to top up Avios from India'
+    vars:
+      message: "What's the cheapest way to top up Avios from India?"
+    assert:
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points') && output.links.filter(l => l.kind==='points').every(l => l.target !== 'program/avios')"
+        metric: points-link-concrete
+      - type: llm-rubric
+        value: >
+          Points to the /points screen for an Avios programme (a concrete one, not
+          the program/avios umbrella). Does not recite transfer routes/ratios.
+  - description: '7b — which of my currencies reach Aeroplan'
+    vars:
+      message: 'Which of my currencies can reach Aeroplan, and how?'
+    assert:
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points')"
+        metric: points-link
+      - type: llm-rubric
+        value: >
+          Routes to the holdings-aware /points screen targeting Aeroplan (Air
+          Canada). Does not hand-walk and recite every transfer path in chat.
+
+  # ===== 8. Status match — NOT a built concierge route; must not fabricate =====
+  - description: '8a — oneworld Sapphire status (unbuilt route)'
+    vars:
+      message: 'How do I get oneworld Sapphire status?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Gives a grounded, honest answer about reaching oneworld Sapphire (tier
+          earned with a member airline / via status match) OR says it can't help
+          with that yet — but does NOT fabricate a fake link, programme, or numbers.
+
+  # ===== 9. Hotel programmes & portfolios =====
+  - description: '9a — brands in World of Hyatt'
+    vars:
+      message: 'Which hotel brands are in World of Hyatt?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Lists real World of Hyatt brands (e.g. Park Hyatt, Grand Hyatt, Andaz,
+          Hyatt Regency, etc.) from the graph. No invented brands.
+  - description: '9b — move hotel points to an airline'
+    vars:
+      message: 'Can I move hotel points to an airline, and which ones?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Explains that some hotel programmes (e.g. Marriott Bonvoy) transfer to
+          airlines, grounded in the KG. May offer a /points link; must not invent
+          ratios or partners in prose.
+
+  # ===== 10. Buying points (BUYS_INTO) =====
+  - description: '10a — buy Avios with cash + cost'
+    vars:
+      message: 'Can I buy Avios with cash, and roughly what does it cost per point?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Answers that Avios can be bought (yes) and gives a cost-per-point only if
+          grounded in the KG's buy-price data; otherwise says it varies. No invented
+          price.
+
+  # ===== 11. My cards / holdings (held cards from the fixture) =====
+  - description: '11a — which of my cards earns Marriott points'
+    vars:
+      message: 'Which of my cards earns Marriott Bonvoy points?'
+    assert:
+      - type: javascript
+        value: "/marriott/i.test(output.text)"
+        metric: names-marriott-card
+      - type: llm-rubric
+        value: >
+          Identifies the held HDFC Marriott Bonvoy card from the user's ledger.
+          Grounded in their actual holdings — does NOT hypothesize cards they don't
+          hold, and does NOT dump the whole card universe.
+  - description: '11b — best card I have for dining'
+    vars:
+      message: "What's my best card for dining?"
+    assert:
+      - type: javascript
+        value: "/live\\s*\\+|hsbc/i.test(output.text)"
+        metric: names-live-plus
+      - type: llm-rubric
+        value: >
+          From the user's HELD cards, picks the HSBC Live+ (10% dining cashback) as
+          the best dining card. Grounded in their holdings, not the universe.
+  - description: '11c — do any of my cards earn Avios'
+    vars:
+      message: 'Do any of my cards earn Avios?'
+    assert:
+      - type: javascript
+        value: "/avios|indusind/i.test(output.text)"
+        metric: names-avios-card
+      - type: llm-rubric
+        value: >
+          Confirms the held IndusInd Avios Visa Infinite earns Avios. Grounded in
+          the user's holdings.
+
+  # ===== 12. Ledger analytics (query_sql over the fixture) =====
+  - description: '12a — points balances across programmes'
+    vars:
+      message: 'What are my points balances across all programmes?'
+    assert:
+      - type: javascript
+        value: "/marriott/i.test(output.text) && /amex|membership/i.test(output.text)"
+        metric: lists-pools
+      - type: llm-rubric
+        value: >
+          Lists the user's reward balances per programme from their ledger — e.g.
+          Marriott ~95,000, Amex MR ~80,000, HDFC ~122,050, Avios ~5,000, Axis
+          ~45,000, SBI ~15,000 (settled; pending may be noted separately). Figures
+          come from the ledger, not invented.
+  - description: '12b — Marriott stays in 2026'
+    vars:
+      message: 'Show my Marriott stays in 2026.'
+    assert:
+      - type: javascript
+        value: "/riverside/i.test(output.text) || /hilltop/i.test(output.text)"
+        metric: names-a-stay
+      - type: llm-rubric
+        value: >
+          Lists the two 2026 Marriott hotel stays from the ledger (Marriott
+          Riverside ~24,000 INR and Marriott Hilltop ~31,000 INR). No invented stays.
+  - description: '12c — how much did I spend on fuel'
+    vars:
+      message: 'How much have I spent on fuel this year?'
+    assert:
+      - type: javascript
+        value: "/5,?500/.test(output.text)"
+        metric: fuel-total
+      - type: llm-rubric
+        value: >
+          Reports total fuel spend of 5,500 INR (two BPCL fuel txns: 3,000 + 2,500)
+          from the ledger, citing it's INR. Number comes from the data.
+
+  # ===== 13. Ambiguity → ask, don't guess =====
+  - description: '13a — best card (no category given)'
+    vars:
+      message: "What's the best card?"
+    assert:
+      - type: javascript
+        value: "output.asks.length > 0"
+        metric: asks-clarifying
+      - type: llm-rubric
+        value: >
+          Asks a clarifying question (best card for WHAT — a spend category, a
+          currency, travel?) rather than guessing a single "best card".
+  - description: '13b — how do I get to Tokyo (no origin/cabin)'
+    vars:
+      message: 'How do I get to Tokyo?'
+    assert:
+      - type: llm-rubric
+        value: >
+          Recognises the missing origin (and cabin) and either asks for it or hands
+          to the Explorer with Tokyo prefilled — it does NOT invent an origin city
+          or price a specific award in chat.
+
+  # ===== 14. Out of scope → decline cleanly =====
+  - description: '14a — weather (out of domain)'
+    vars:
+      message: "What's the weather in Tokyo next week?"
+    assert:
+      - type: javascript
+        value: "output.links.length === 0 && output.awardOptions.length === 0"
+        metric: no-tools-fired
+      - type: llm-rubric
+        value: >
+          Declines cleanly — says weather is out of scope for a points/miles
+          assistant. No fabricated forecast, no irrelevant link.
+  - description: '14b — stock advice (out of domain)'
+    vars:
+      message: 'Should I buy this stock?'
+    assert:
+      - type: javascript
+        value: "output.links.length === 0 && output.awardOptions.length === 0"
+        metric: no-tools-fired
+      - type: llm-rubric
+        value: >
+          Declines cleanly — financial-securities advice is out of scope. No
+          fabricated recommendation.

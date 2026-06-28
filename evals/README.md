@@ -82,9 +82,11 @@ request), `assert` (structural `javascript` over `output.drafts` / `output.sqls`
 ## 2. Concierge eval
 
 Behavior eval for the **concierge** (the KG + ledger Q&A agent — `/points` deep
-links, inline transfer facts, award hand-offs). Sourced from
-`evals/concierge-questions.md`; the committed suite currently covers **§1
-(transfer partners & ratios)**.
+links, inline transfer facts, award hand-offs, holdings questions). Sourced from
+`evals/concierge-questions.md`; the committed suite covers **all 14 categories**
+(§1–§14) — links, inline facts, award hand-offs (`/explore`), KG facts,
+holdings/ledger answers (graded against the shared fixture's balances + history),
+ambiguity (`ask_user`), and clean out-of-scope declines.
 
 ```sh
 npx promptfoo eval -c evals/concierge-bench.yaml --no-cache -j 1
