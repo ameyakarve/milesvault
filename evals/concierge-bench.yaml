@@ -1,0 +1,211 @@
+# MilesVault CONCIERGE eval — Category 1 (transfer partners & ratios).
+#
+# Runs the REAL concierge turn (gemma + the real concierge prompt + the full
+# read-tool surface incl. codemode + reward_accounts) on the deployed staging
+# worker via ConciergeDO.__bench_run, and grades structurally + with a judge.
+# Mirrors the editor suite (promptfooconfig.yaml) — same bench endpoint, same
+# judge — but POSTs {agent:'concierge'} so the route dispatches to the concierge.
+#
+# Run:  pnpm eval:concierge      (needs TEST_USER_TOKEN in env; see evals/README.md)
+# View: pnpm eval:view
+#
+# Each case POSTs {agent, seed, message} to /api/test/bench, which resets+seeds
+# the shared test ledger then runs one concierge turn. The provider output is the
+# full envelope:
+#   { text, trace:[{tool,input}], links:[{href,kind,target,dir,targetExists}],
+#     awardOptions, asks, toolsUsed, error }
+# Structural asserts are inline JS over that object; the judge (llm-rubric) grades
+# correctness via a stronger model served by /api/test/judge.
+#
+# Cases mirror evals/concierge-questions.md §1: items 1/2/6/7 = a /points deep
+# link; items 3/4/5 = an INLINE single fact. The DEFAULT asserts below encode the
+# regressions we fixed: never answer a /points question from memory (reward_accounts
+# must run), and every /points target slug must be REAL (no program/britishairways).
+#
+# NOTE: one shared test ledger → cases MUST run serially. pnpm eval passes -j 1.
+
+description: MilesVault concierge behavior eval (Category 1)
+
+prompts:
+  - '{{message}}'
+
+providers:
+  - id: 'https://staging.milesvault.com/api/test/bench'
+    label: concierge
+    config:
+      method: POST
+      headers:
+        'Content-Type': 'application/json'
+        'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
+      body:
+        agent: 'concierge'
+        message: '{{message}}'
+        seed: '{{seed}}'
+      transformResponse: 'json'
+
+defaultTest:
+  vars:
+    # Category 1 is KG-routing; no holdings needed. Empty ledger keeps cases
+    # deterministic. (Holdings-aware target selection is a later slice.)
+    seed: ''
+  options:
+    provider:
+      id: 'https://staging.milesvault.com/api/test/judge'
+      config:
+        method: POST
+        headers:
+          'Content-Type': 'application/json'
+          'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
+        body:
+          prompt: '{{prompt}}'
+        transformResponse: 'json.output'
+  assert:
+    # Gemma tool-call tokens must never leak into the text channel.
+    - type: javascript
+      value: "!String(output.text || '').includes('tool_call')"
+      metric: no-garble
+    # GROUNDING: if a /points link was emitted, reward_accounts MUST have run —
+    # the concierge never builds a link from memory (the program/britishairways bug).
+    - type: javascript
+      value: "!output.links.some(l => l.kind === 'points') || output.trace.some(t => t.tool === 'reward_accounts')"
+      metric: link-is-grounded
+    # SLUG IS REAL: every /points target must resolve to an actual KB node.
+    - type: javascript
+      value: "output.links.filter(l => l.kind === 'points').every(l => l.targetExists === true)"
+      metric: slug-is-real
+
+tests:
+  # ---- 1. enumerate → /points link, OUTBOUND (Marriott is the source) ----
+  - description: '1 — what does Marriott Bonvoy transfer to (link, dir=from)'
+    vars:
+      message: 'What does Marriott Bonvoy transfer to, and at what ratios?'
+    assert:
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points' && /marriott-bonvoy/.test(l.target || ''))"
+        metric: targets-marriott
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points' && l.dir === 'from')"
+        metric: dir-outbound
+      - type: javascript
+        value: "output.trace.some(t => t.tool === 'reward_accounts')"
+        metric: called-reward-accounts
+      - type: llm-rubric
+        value: >
+          The reply points the user to the Marriott Bonvoy points page via a
+          /points deep link and does NOT recite a full table of transfer partners
+          and ratios in the chat text. A one-line lead-in before the link is fine.
+
+  # ---- 2. reach a currency "from my cards" → /points link, INBOUND ----
+  - description: '2 — how do I get Avios from my cards (link, not program/avios)'
+    vars:
+      message: 'How do I get Avios from my cards?'
+    assert:
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points')"
+        metric: emits-points-link
+      - type: javascript
+        value: "output.links.filter(l => l.kind === 'points').every(l => l.target !== 'program/avios')"
+        metric: not-avios-umbrella
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points' && l.dir === 'to')"
+        metric: dir-inbound
+      - type: llm-rubric
+        value: >
+          The reply gives a /points deep link to a CONCRETE Avios programme (e.g.
+          British Airways Club / the-club, Qatar Privilege Club, Iberia), NOT to a
+          bare "Avios" currency umbrella. It does not recite ratios in chat.
+
+  # ---- 3. single named A→B fact → INLINE ratio, no link, no wandering ----
+  - description: '3 — MR → KrisFlyer ratio (inline, no link)'
+    vars:
+      message: "What's the transfer ratio from Amex Membership Rewards to KrisFlyer?"
+    assert:
+      - type: javascript
+        value: "!output.links.some(l => l.kind === 'points')"
+        metric: no-link
+      - type: javascript
+        value: "/(800\\s*[:/ ]\\s*400)|(2\\s*[:]\\s*1)/.test(output.text)"
+        metric: states-ratio
+      - type: javascript
+        value: "output.trace.length <= 6"
+        metric: no-wandering
+      - type: llm-rubric
+        value: >
+          The reply states the Amex Membership Rewards → KrisFlyer transfer ratio
+          inline (2:1, i.e. 800:400 — twice as many MR points as KrisFlyer miles).
+          It did NOT deflect to a /points link and did NOT fabricate a different ratio.
+
+  # ---- 4. single A→B fact → INLINE timing ----
+  - description: '4 — SmartBuy → KrisFlyer transfer time (inline)'
+    vars:
+      message: 'how long does a smartbuy to krisflyer transfer take?'
+    assert:
+      - type: javascript
+        value: "!output.links.some(l => l.kind === 'points')"
+        metric: no-link
+      - type: javascript
+        value: "/(hour|day|minute|instant|immediate)/i.test(output.text)"
+        metric: states-timing
+      - type: llm-rubric
+        value: >
+          The reply states the SmartBuy → KrisFlyer transfer TIMING inline (a
+          duration read from the KG), or — if there is no such direct transfer —
+          says so plainly. It did not fabricate a duration and did not deflect a
+          one-value question to a /points link.
+
+  # ---- 5. single fact → INLINE yes/no + threshold ----
+  - description: '5 — does Marriott Bonvoy give a transfer bonus (inline yes)'
+    vars:
+      message: 'Does Marriott Bonvoy give a transfer bonus?'
+    assert:
+      - type: javascript
+        value: "/bonus/i.test(output.text)"
+        metric: mentions-bonus
+      - type: llm-rubric
+        value: >
+          The reply answers YES — Marriott Bonvoy gives a standing transfer bonus
+          of 5,000 extra airline miles per 60,000 points transferred (60,000 → 25,000
+          at the 3:1 base). It did NOT claim there is "no active bonus".
+
+  # ---- 6. reach a currency → /points link, INBOUND ----
+  - description: '6 — how do I get Qatar miles (link)'
+    vars:
+      message: 'how do I get Qatar miles?'
+    assert:
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points')"
+        metric: emits-points-link
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points' && l.dir === 'to')"
+        metric: dir-inbound
+      - type: javascript
+        value: "output.trace.some(t => t.tool === 'reward_accounts')"
+        metric: called-reward-accounts
+      - type: llm-rubric
+        value: >
+          The reply gives a /points deep link targeting Qatar's programme (Qatar
+          Privilege Club, or an Avios programme that reaches Qatar). It does not
+          recite routes/ratios in chat.
+
+  # ---- 7. best card for a currency → /points link (the grounding regression) ----
+  - description: '7 — best card for Avios (link, grounded, not invented slug)'
+    vars:
+      message: 'what is the best card for avios?'
+    assert:
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points')"
+        metric: emits-points-link
+      - type: javascript
+        value: "output.links.filter(l => l.kind === 'points').every(l => l.target !== 'program/avios')"
+        metric: not-avios-umbrella
+      - type: javascript
+        value: "output.trace.some(t => t.tool === 'reward_accounts')"
+        metric: called-reward-accounts
+      - type: javascript
+        value: "output.links.some(l => l.kind === 'points' && l.dir === 'to')"
+        metric: dir-inbound
+      - type: llm-rubric
+        value: >
+          The reply gives a /points deep link for Avios pointing at a CONCRETE
+          programme slug (e.g. the-club), reached by calling reward_accounts — NOT
+          a made-up slug like program/britishairways or the program/avios umbrella.

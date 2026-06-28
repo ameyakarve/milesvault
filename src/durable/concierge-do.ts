@@ -1,4 +1,4 @@
-import { generateText, stepCountIs, type ToolSet } from 'ai'
+import { generateText, stepCountIs, tool, type ToolSet } from 'ai'
 import { createCodeTool } from '@cloudflare/codemode/ai'
 import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { buildConciergeSystem } from './agent-prompt'
@@ -41,6 +41,7 @@ import {
   showAwardOptionsTool,
 } from './agents/tools/concierge'
 import { rewardAccountsTool } from './agents/tools/editor'
+import { askUserInputSchema } from './agents/tools/concierge/ask-user'
 import type { AgentHost, Registry } from './agents/types'
 import { baseAccount, isPending, kgLookupParts } from '@/lib/ledger-core/account-display'
 import { conciergeEnabled } from '@/lib/flags'
@@ -738,5 +739,128 @@ export class ConciergeDO
       show_award_options: showAwardOptionsTool(),
       ask_user: askUserTool(),
     } as ToolSet
+  }
+
+  // ---- Eval bench (mirror of ChatDO.__bench_run, for the concierge) ----
+  // Runs ONE real concierge turn (gemma + the real prompt + the full read-tool
+  // surface incl. codemode + reward_accounts) against the seeded test ledger and
+  // returns a structured envelope the promptfoo `concierge-bench` suite asserts
+  // over. `ask_user` SUSPENDS in production, so it's captured (not executed) the
+  // way the editor bench captures its write tools; everything else runs for
+  // real. /points + /explore deep links are parsed out of the final text, and
+  // each /points target is existence-checked against the KB so the suite can
+  // assert the slug is REAL (catches invented slugs like program/britishairways).
+  // Remove with the rest of the bench scaffolding.
+  async __bench_run(message: string): Promise<{
+    text: string
+    trace: Array<{ tool: string; input: unknown }>
+    links: Array<{
+      href: string
+      kind: 'points' | 'explore'
+      target: string | null
+      dir: string | null
+      targetExists: boolean | null
+    }>
+    awardOptions: unknown[]
+    asks: unknown[]
+    toolsUsed: string[]
+    error: string | null
+  }> {
+    const [snapshot, briefing] = await Promise.all([
+      this.ledgerStub().ledger_snapshot(),
+      fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((): string => ''),
+    ])
+    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
+    const trace: Array<{ tool: string; input: unknown }> = []
+    // ask_user suspends the turn in production — capture the call instead, with
+    // the SAME input schema so the model is constrained identically.
+    const tools: ToolSet = {
+      ...this.conciergeTools(),
+      ask_user: tool({
+        description:
+          'Ask the user ONE clarifying question. Fill it exactly as you would for the user.',
+        inputSchema: askUserInputSchema,
+        execute: async () => ({ ok: true as const }),
+      }),
+    }
+    try {
+      const result = await generateText({
+        model: this.buildModel({ id: CONCIERGE_MODEL_ID, reasoning: 'off' }),
+        system: buildConciergeSystem(snapshot, briefing),
+        prompt: message,
+        tools,
+        stopWhen: stepCountIs(10),
+      })
+      for (const step of result.steps) {
+        for (const call of step.toolCalls ?? []) {
+          trace.push({ tool: call.toolName, input: call.input })
+        }
+      }
+      const text = result.text ?? ''
+      const links = await this.benchExtractLinks(text, kbHttp)
+      return {
+        text,
+        trace,
+        links,
+        awardOptions: trace.filter((t) => t.tool === 'show_award_options').map((t) => t.input),
+        asks: trace.filter((t) => t.tool === 'ask_user').map((t) => t.input),
+        toolsUsed: [...new Set(trace.map((t) => t.tool))],
+        error: null,
+      }
+    } catch (e) {
+      return {
+        text: '',
+        trace,
+        links: [],
+        awardOptions: [],
+        asks: [],
+        toolsUsed: [...new Set(trace.map((t) => t.tool))],
+        error: e instanceof Error ? e.message : String(e),
+      }
+    }
+  }
+
+  // Parse /points and /explore deep links out of the concierge's final text;
+  // for each /points target, check the slug actually resolves in the KB so the
+  // suite can hard-gate "the link target is a real programme". Bench-only.
+  private async benchExtractLinks(
+    text: string,
+    kbHttp: KbHttp,
+  ): Promise<
+    Array<{
+      href: string
+      kind: 'points' | 'explore'
+      target: string | null
+      dir: string | null
+      targetExists: boolean | null
+    }>
+  > {
+    const out: Array<{
+      href: string
+      kind: 'points' | 'explore'
+      target: string | null
+      dir: string | null
+      targetExists: boolean | null
+    }> = []
+    const re = /\/(points|explore)\?([^\s)\]]+)/g
+    const seen = new Set<string>()
+    for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+      const href = m[0]
+      if (seen.has(href)) continue
+      seen.add(href)
+      const kind = m[1] as 'points' | 'explore'
+      const qs = new URLSearchParams(m[2]!.replace(/&amp;/g, '&'))
+      const target = qs.get('target')
+      const dir = qs.get('dir')
+      let targetExists: boolean | null = null
+      if (kind === 'points' && target) {
+        targetExists = await kbHttp
+          .get(target)
+          .then((n) => n !== null)
+          .catch(() => false)
+      }
+      out.push({ href, kind, target, dir, targetExists })
+    }
+    return out
   }
 }
