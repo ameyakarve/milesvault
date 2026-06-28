@@ -28,10 +28,31 @@ into a committed script.
 export TEST_USER_TOKEN=$(grep '^TEST_USER_TOKEN=' .dev.vars | cut -d= -f2-)
 ```
 
-All suites run **serially** (`-j 1`) — they share one test ledger, so concurrent
-runs would clobber each other's seed — and with `--no-cache`, so each run
-re-hits the live (non-deterministic) model. View any run's results UI with
-`pnpm eval:view`.
+A single `promptfoo` run is **serial** (`-j 1`) — one process shares one test
+ledger, so concurrent cases in it would clobber each other's seed — and uses
+`--no-cache`, so each run re-hits the live (non-deterministic) model. View any
+run's results UI with `pnpm eval:view`. To run cases **in parallel**, use the
+multi-account runner below.
+
+## Running in parallel (multi-account lanes)
+
+A Durable Object is single-threaded, so one test identity (`email`) = one
+concurrent eval. The runner fans a suite across **N test accounts**, each its own
+serial DO lane:
+
+```sh
+export TEST_USER_TOKEN=$(grep '^TEST_USER_TOKEN=' .dev.vars | cut -d= -f2-)
+node evals/run-parallel.mjs evals/concierge-bench.yaml 4   # 4 accounts
+```
+
+It shards the config's `tests` into N contiguous ranges (`--filter-range`) and
+spawns one `promptfoo` process per account, each pinned via `MV_TEST_ACCOUNT=k`
+→ the `mv-test-account` cookie → `test+k@milesvault.test` → that account's own
+ledger + agent DOs. None of the evals mutate the ledger (drafts are captured), so
+the accounts are interchangeable lanes; results are merged at the end (per-account
+JSON paths are printed). **N is bounded by Workers AI throughput, not the ledger
+— keep it ~4–6 or gemma starts returning 429s.** Account `0`/unset is the
+canonical `test@milesvault.test`, so plain `pnpm eval` is unaffected.
 
 ---
 
