@@ -1,0 +1,148 @@
+;; ============================================================================
+;; SHARED EVAL FIXTURE — a fictional test persona's ledger.
+;;
+;; One seed that all three eval suites read against:
+;;   • Editor   — draft onto the held cards below (held-account matching, cashback
+;;                pattern, points accrual, balances, edits).
+;;   • Statement— the OPEN ACCOUNTS a real statement gets matched against (held
+;;                cards across issuers + their reward pools).
+;;   • Concierge— holdings-aware Q&A ("best card I have for X", "which of my cards
+;;                reach Avios"), points balances, and spend history.
+;;
+;; PRIVACY: the card PRODUCTS are real public cards — they MUST be, so the agents
+;; resolve them in the KG (card_guide / EARNS_INTO / transfer paths). Everything
+;; else — that this persona holds them, every balance, merchant, amount and date —
+;; is INVENTED. No real person's data appears here. Keep it that way: synthetic,
+;; round, obviously-fictional (see CLAUDE.md).
+;;
+;; "Today" for the suites is 2026; quarters below are Q1 (Jan–Mar) and Q2 (Apr–Jun)
+;; so period questions ("spend last quarter") have something to land on.
+;; ============================================================================
+
+;; ---- Reward-pool opening balances (for "my points balances across programmes")
+;; The seed applies transactions only (pad/balance directives are ignored on
+;; ingest), so opening balances are set as plain Equity:Void plug transactions.
+2026-01-01 * "Opening balance" "HDFC reward points"
+  Assets:Rewards:HDFC                           120000 HDFC-RP-INFINIA
+  Equity:Void                                  -120000 HDFC-RP-INFINIA
+
+2026-01-01 * "Opening balance" "Axis EDGE Miles"
+  Assets:Rewards:Axis                            45000 AXIS-EM-ATLAS
+  Equity:Void                                   -45000 AXIS-EM-ATLAS
+
+2026-01-01 * "Opening balance" "Avios"
+  Assets:Rewards:Avios                           30000 AVIOS
+  Equity:Void                                   -30000 AVIOS
+
+2026-01-01 * "Opening balance" "Amex Membership Rewards"
+  Assets:Rewards:Amex                            80000 MR
+  Equity:Void                                   -80000 MR
+
+2026-01-01 * "Opening balance" "Marriott Bonvoy"
+  Assets:Rewards:MarriottBonvoy                  95000 MARRIOTTBONVOY
+  Equity:Void                                   -95000 MARRIOTTBONVOY
+
+2026-01-01 * "Opening balance" "SBI reward points"
+  Assets:Rewards:SBI                             15000 SBI-RP
+  Equity:Void                                   -15000 SBI-RP
+
+;; ---- HDFC Infinia (points, transfers via SmartBuy) ----
+;; Dining spend with the 5 RP / ₹150 accrual to :Pending.
+2026-02-09 * "Cafe Aroma" "Dining out"
+  Expenses:Food:Restaurants                    1500.00 INR
+  Liabilities:CreditCards:HDFC:Infinia        -1500.00 INR
+  Assets:Rewards:HDFC:Pending                       50 HDFC-RP-INFINIA
+  Equity:Void                                      -50 HDFC-RP-INFINIA
+
+2026-03-18 * "MetroMobiles" "New phone"
+  Expenses:Shopping:Electronics               60000.00 INR
+  Liabilities:CreditCards:HDFC:Infinia       -60000.00 INR
+  Assets:Rewards:HDFC:Pending                     2000 HDFC-RP-INFINIA
+  Equity:Void                                    -2000 HDFC-RP-INFINIA
+
+;; Points posted (Pending -> settled), the documented credit pattern.
+2026-04-03 * "HDFC Rewards" "Feb–Mar points posted"
+  Assets:Rewards:HDFC                             2050 HDFC-RP-INFINIA
+  Assets:Rewards:HDFC:Pending                    -2050 HDFC-RP-INFINIA
+
+;; ---- Axis Atlas (EDGE Miles, transfers to airline/hotel partners) ----
+2026-02-22 * "SkyHigh Airlines" "Flights — Q1 travel"
+  Expenses:Travel:Flights                      28000.00 INR
+  Liabilities:CreditCards:Axis:Atlas          -28000.00 INR
+  Assets:Rewards:Axis:Pending                      560 AXIS-EM-ATLAS
+  Equity:Void                                     -560 AXIS-EM-ATLAS
+
+2026-05-14 * "Harbour Grand" "Hotel stay"
+  Expenses:Travel:Hotels                       18000.00 INR
+  Liabilities:CreditCards:Axis:Atlas          -18000.00 INR
+  Assets:Rewards:Axis:Pending                      360 AXIS-EM-ATLAS
+  Equity:Void                                     -360 AXIS-EM-ATLAS
+
+;; ---- IndusInd Avios Visa Infinite (earns Avios directly) ----
+2026-03-05 * "FlyHigh Travel" "Flight booking"
+  Expenses:Travel:Flights                      22000.00 INR
+  Liabilities:CreditCards:IndusInd:AviosVisaInfinite  -22000.00 INR
+  Assets:Rewards:Avios:Pending                     880 AVIOS
+  Equity:Void                                     -880 AVIOS
+
+;; ---- HSBC Live+ (CASHBACK card — the cashback pattern, NOT a points pool) ----
+;; 10% on grocery; full expense kept, cashback minted from Equity:Void.
+2026-02-15 * "FreshMart Grocery" "Weekly groceries"
+  Expenses:Shopping:Groceries                   2000.00 INR
+  Liabilities:CreditCards:HSBC:LivePlus        -2000.00 INR
+  Assets:Receivable:HSBC                         200.00 INR
+  Equity:Void                                   -200.00 INR
+
+2026-04-21 * "Spice Route" "Dining — weekend"
+  Expenses:Food:Restaurants                     1800.00 INR
+  Liabilities:CreditCards:HSBC:LivePlus        -1800.00 INR
+  Assets:Receivable:HSBC                         180.00 INR
+  Equity:Void                                   -180.00 INR
+
+;; ---- Amex Membership Rewards (MR; transfers to KrisFlyer, Marriott, etc.) ----
+2026-03-27 * "Lumen Lighting" "Home improvement"
+  Expenses:Home:Furnishings                     9000.00 INR
+  Liabilities:CreditCards:Amex:MembershipRewards  -9000.00 INR
+  Assets:Rewards:Amex:Pending                      900 MR
+  Equity:Void                                      -900 MR
+
+;; ---- HDFC Marriott Bonvoy (hotel co-brand; Marriott stays) ----
+2026-01-28 * "Marriott Riverside" "Hotel stay — 2 nights"
+  Expenses:Travel:Hotels                       24000.00 INR
+  Liabilities:CreditCards:HDFC:MarriottBonvoy -24000.00 INR
+  Assets:Rewards:MarriottBonvoy:Pending           2880 MARRIOTTBONVOY
+  Equity:Void                                    -2880 MARRIOTTBONVOY
+
+2026-05-30 * "Marriott Hilltop" "Hotel stay — anniversary"
+  Expenses:Travel:Hotels                       31000.00 INR
+  Liabilities:CreditCards:HDFC:MarriottBonvoy -31000.00 INR
+  Assets:Rewards:MarriottBonvoy:Pending           3720 MARRIOTTBONVOY
+  Equity:Void                                    -3720 MARRIOTTBONVOY
+
+;; ---- BPCL SBI (fuel co-brand) ----
+2026-02-11 * "MetroFuel Station" "Fuel"
+  Expenses:Transport:Fuel                       3000.00 INR
+  Liabilities:CreditCards:SBI:BPCL             -3000.00 INR
+  Assets:Rewards:SBI:Pending                       390 SBI-RP
+  Equity:Void                                     -390 SBI-RP
+
+2026-05-09 * "MetroFuel Station" "Fuel"
+  Expenses:Transport:Fuel                       2500.00 INR
+  Liabilities:CreditCards:SBI:BPCL             -2500.00 INR
+  Assets:Rewards:SBI:Pending                       325 SBI-RP
+  Equity:Void                                     -325 SBI-RP
+
+;; ---- A REDEMPTION (points -> award), for "which of these are redemptions" ----
+;; 25,000 Avios redeemed for a flight worth ₹21,000 (cpp carried as @@ on the leg).
+2026-06-04 * "SkyHigh Airlines" "Award flight — points redemption"
+  Expenses:Travel:Flights                     21000.00 INR
+  Assets:Rewards:Avios                          -25000 AVIOS @@ 21000.00 INR
+
+;; ---- A couple of no-earn spends (payment, forex), for variety ----
+2026-06-10 * "HDFC Bank" "Card payment"
+  Liabilities:CreditCards:HDFC:Infinia        50000.00 INR
+  Assets:Bank:Checking                       -50000.00 INR
+
+2026-06-18 * "Global Books (USD)" "Forex charge"
+  Expenses:Shopping:Books                        4200.00 INR
+  Liabilities:CreditCards:Axis:Atlas            -4200.00 INR
