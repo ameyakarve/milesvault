@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import { auth, TEST_USER_EMAIL } from '@/auth'
+import { auth, isTestEmail } from '@/auth'
 import { getLedgerClient } from '@/lib/ledger-api'
 import type { ChatDO } from '@/durable/chat-do'
 
@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request): Promise<Response> {
   if (!process.env.TEST_USER_TOKEN) return new NextResponse('not found', { status: 404 })
   const session = await auth()
-  if (session?.user?.email !== TEST_USER_EMAIL) {
+  const email = session?.user?.email
+  if (!isTestEmail(email)) {
     return new NextResponse('forbidden', { status: 403 })
   }
   const body = (await req.json().catch((): null => null)) as {
@@ -41,19 +42,18 @@ export async function POST(req: Request): Promise<Response> {
     text_len: body.text.length,
   })
 
-  const client = await getLedgerClient(TEST_USER_EMAIL)
-  // Reset + seed the shared test ledger (same store the ingest run reads from).
-  if (typeof body.seed === 'string') {
+  const client = await getLedgerClient(email)
+  // Seed THIS account's ledger. Non-empty seed clears + replaces; empty/absent
+  // leaves the standing (pre-seeded) ledger untouched — see /api/test/bench.
+  if (typeof body.seed === 'string' && body.seed.trim() !== '') {
     await client.clear()
-    if (body.seed.trim()) {
-      await client.replace_buffer({ knownIds: [], buffer: body.seed } as never)
-    }
+    await client.replace_buffer({ knownIds: [], buffer: body.seed } as never)
   }
 
   const id = `STMT-${crypto.randomUUID()}`
   await client.put_statement({
     id,
-    ownerEmail: TEST_USER_EMAIL,
+    ownerEmail: email,
     filename: typeof body.filename === 'string' ? body.filename : 'statement.pdf',
     text: body.text,
     images: Array.isArray(body.images)
@@ -66,7 +66,7 @@ export async function POST(req: Request): Promise<Response> {
   // (email::<id>), so ledgerStub() resolves to the seeded test ledger.
   const { env } = await getCloudflareContext({ async: true })
   const ns = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO>
-  const name = `${TEST_USER_EMAIL}::${id}`
+  const name = `${email}::${id}`
   const stub = ns.get(ns.idFromName(name))
   await stub.setName(name)
   const result = await stub.runDraftStatement(id)

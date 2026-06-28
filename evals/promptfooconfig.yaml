@@ -29,7 +29,7 @@ providers:
       method: POST
       headers:
         'Content-Type': 'application/json'
-        'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
+        'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}; mv-test-account={{env.MV_TEST_ACCOUNT}}'
       body:
         message: '{{message}}'
         seed: '{{seed}}'
@@ -45,7 +45,7 @@ defaultTest:
         method: POST
         headers:
           'Content-Type': 'application/json'
-          'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
+          'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}; mv-test-account={{env.MV_TEST_ACCOUNT}}'
         body:
           prompt: '{{prompt}}'
         transformResponse: 'json.output'

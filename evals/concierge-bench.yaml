@@ -36,7 +36,7 @@ providers:
       method: POST
       headers:
         'Content-Type': 'application/json'
-        'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
+        'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}; mv-test-account={{env.MV_TEST_ACCOUNT}}'
       body:
         agent: 'concierge'
         message: '{{message}}'
@@ -45,9 +45,11 @@ providers:
 
 defaultTest:
   vars:
-    # Category 1 is KG-routing; no holdings needed. Empty ledger keeps cases
-    # deterministic. (Holdings-aware target selection is a later slice.)
-    seed: ''
+    # Seed every case from the shared synthetic fixture so holdings-aware cases
+    # ("from my cards", "best card I have for X") have real held cards to reason
+    # over. Self-contained: each case re-seeds its own account (turns are
+    # read-only, so re-seeding only matters when the required state differs).
+    seed: file://fixtures/seed-all.beancount
   options:
     provider:
       id: 'https://staging.milesvault.com/api/test/judge'
@@ -55,7 +57,7 @@ defaultTest:
         method: POST
         headers:
           'Content-Type': 'application/json'
-          'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}'
+          'cookie': 'mv-test-token={{env.TEST_USER_TOKEN}}; mv-test-account={{env.MV_TEST_ACCOUNT}}'
         body:
           prompt: '{{prompt}}'
         transformResponse: 'json.output'

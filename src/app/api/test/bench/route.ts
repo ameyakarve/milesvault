@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import { auth, TEST_USER_EMAIL } from '@/auth'
+import { auth, isTestEmail } from '@/auth'
 import { getLedgerClient } from '@/lib/ledger-api'
 import type { ChatDO } from '@/durable/chat-do'
 import type { ConciergeDO } from '@/durable/concierge-do'
@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request): Promise<Response> {
   if (!process.env.TEST_USER_TOKEN) return new NextResponse('not found', { status: 404 })
   const session = await auth()
-  if (session?.user?.email !== TEST_USER_EMAIL) {
+  const email = session?.user?.email
+  if (!isTestEmail(email)) {
     return new NextResponse('forbidden', { status: 403 })
   }
   const body = (await req.json().catch((): null => null)) as {
@@ -28,24 +29,25 @@ export async function POST(req: Request): Promise<Response> {
     return NextResponse.json({ error: 'message required' }, { status: 400 })
   }
   const agent = body.agent === 'concierge' ? 'concierge' : 'editor'
-  // Reset + seed the ledger (when a seed is supplied) before the turn. Same
-  // store the bench turn reads from (LedgerDO keyed by the test user email).
-  if (typeof body.seed === 'string') {
-    const client = await getLedgerClient(TEST_USER_EMAIL)
+  // Seed THIS account's ledger (keyed by the resolved per-account email). A
+  // NON-EMPTY seed clears + replaces; an empty/absent seed leaves the standing
+  // ledger untouched — turns are read-only, so a pre-seeded account can serve
+  // many read cases without re-seeding. To force an EMPTY ledger, pass a
+  // comment-only buffer (non-empty, parses to nothing).
+  if (typeof body.seed === 'string' && body.seed.trim() !== '') {
+    const client = await getLedgerClient(email)
     await client.clear()
-    if (body.seed.trim()) {
-      await client.replace_buffer({ knownIds: [], buffer: body.seed } as never)
-    }
+    await client.replace_buffer({ knownIds: [], buffer: body.seed } as never)
   }
   const { env } = await getCloudflareContext({ async: true })
   if (agent === 'concierge') {
     const ns = (env as Cloudflare.Env).CONCIERGE_DO as DurableObjectNamespace<ConciergeDO>
-    const stub = ns.get(ns.idFromName(TEST_USER_EMAIL))
-    await stub.setName(TEST_USER_EMAIL)
+    const stub = ns.get(ns.idFromName(email))
+    await stub.setName(email)
     return NextResponse.json(await stub.__bench_run(body.message))
   }
   const ns = (env as Cloudflare.Env).CHAT_DO as DurableObjectNamespace<ChatDO>
-  const stub = ns.get(ns.idFromName(TEST_USER_EMAIL))
-  await stub.setName(TEST_USER_EMAIL)
+  const stub = ns.get(ns.idFromName(email))
+  await stub.setName(email)
   return NextResponse.json(await stub.__bench_run(body.message))
 }

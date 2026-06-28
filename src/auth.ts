@@ -6,6 +6,20 @@ import authConfig from './auth.config'
 
 export const TEST_USER_EMAIL = 'test@milesvault.test'
 
+// Parallel eval lanes: each test "account" is its own email → its own per-email
+// DOs (ledger + agents), and a Durable Object is single-threaded, so one account
+// runs exactly one eval at a time. N accounts = N parallel lanes. The bench
+// runner pins each promptfoo process to an account via the `mv-test-account`
+// cookie; account `0`/absent is the canonical `TEST_USER_EMAIL`.
+export function testUserEmail(account: string | null | undefined): string {
+  const k = (account ?? '').replace(/[^a-z0-9]/gi, '')
+  return k && k !== '0' ? `test+${k}@milesvault.test` : TEST_USER_EMAIL
+}
+
+export function isTestEmail(email: string | null | undefined): boolean {
+  return email === TEST_USER_EMAIL || /^test\+[a-z0-9]+@milesvault\.test$/.test(email ?? '')
+}
+
 const nextAuth = NextAuth({
   ...authConfig,
   session: { strategy: 'jwt' },
@@ -96,10 +110,13 @@ export async function auth(): Promise<Session | null> {
   const expected = process.env.TEST_USER_TOKEN
   if (expected) {
     try {
-      const token = (await cookies()).get('mv-test-token')?.value
+      const jar = await cookies()
+      const token = jar.get('mv-test-token')?.value
       if (token === expected) {
+        // Optional account selector for parallel eval lanes (one DO set per email).
+        const account = jar.get('mv-test-account')?.value
         return {
-          user: { email: TEST_USER_EMAIL },
+          user: { email: testUserEmail(account) },
           expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         } as Session
       }
