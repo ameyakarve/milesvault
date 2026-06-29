@@ -47,6 +47,24 @@ type WhatsappOut =
   | { kind: 'text'; text: string }
   | { kind: 'cta'; body: string; displayText: string; url: string }
 
+// CTA button label — purposeful, by link type + direction (the currency name
+// stays in the body; the slug isn't the friendly name and WhatsApp caps the
+// label at 20 chars). /points: earn (dir=to) vs redeem (dir=from); /accounts
+// expense view: a breakdown; /explore: award pricing.
+function ctaButtonText(url: string, fallbackLabel: string | null): string {
+  try {
+    const u = new URL(url)
+    if (u.pathname === '/points') {
+      return u.searchParams.get('dir') === 'from' ? 'Ways to redeem' : 'Ways to earn'
+    }
+    if (u.pathname.startsWith('/accounts')) return 'Breakdown'
+    if (u.pathname.startsWith('/explore')) return 'View award pricing'
+  } catch {
+    /* fall through to the label */
+  }
+  return (fallbackLabel?.trim() || 'Open').slice(0, 20)
+}
+
 function formatWhatsappOut(text: string, origin: string): WhatsappOut {
   const abs = (raw: string): string => {
     const u = raw.replace(/\\([&_*[\]()~`>])/g, '$1').trim()
@@ -63,8 +81,7 @@ function formatWhatsappOut(text: string, origin: string): WhatsappOut {
     const { label, url, raw } = links[0]
     let body = text.replaceAll(raw, '').replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').trim()
     if (!body) body = label ?? 'Open the link below.'
-    const displayText = (label?.trim() || 'Open').slice(0, 20) // WhatsApp caps at 20
-    return { kind: 'cta', body, displayText, url }
+    return { kind: 'cta', body, displayText: ctaButtonText(url, label), url }
   }
 
   let out = text
