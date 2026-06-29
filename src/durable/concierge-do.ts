@@ -1,4 +1,4 @@
-import { generateText, stepCountIs, tool, type ToolSet } from 'ai'
+import { generateText, streamText, stepCountIs, tool, type ToolSet } from 'ai'
 import { createCodeTool } from '@cloudflare/codemode/ai'
 import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { buildConciergeSystem } from './agent-prompt'
@@ -201,9 +201,10 @@ export class ConciergeDO
           : 'https://milesvault.com'
       system +=
         `\n\n## Channel: ${mc.provider} (a messaging app)\n` +
-        `Reply in concise plain text — no markdown tables. In-app deep links are NOT clickable here as bare paths, ` +
-        `so when you reference one write it as a FULL URL under ${origin} (e.g. ${origin}/points/<slug>, ${origin}/explore). ` +
-        `The same grounding rules apply — only link to slugs you've confirmed exist.`
+        `All your normal rules apply UNCHANGED — including the deep-link rules above: ` +
+        `still drop the \`/points\`, \`/explore\`, or \`/accounts\` link exactly when you would on the web, with the same grounded slug. ` +
+        `The ONLY difference: a bare path isn't tappable in a chat app, so prefix the link with the absolute origin \`${origin}\` ` +
+        `(e.g. \`${origin}/points?target=program/<slug>&dir=to\`). Do not drop the link to be brief — it is the answer.`
     }
     return system
   }
@@ -813,19 +814,31 @@ export class ConciergeDO
       }),
     }
     try {
-      const result = await generateText({
-        model: this.buildModel({ id: CONCIERGE_MODEL_ID, reasoning: 'off' }),
+      // Drive the bench through the SAME path production uses: modelInvocation
+      // (identical model build, output-token budget, step budget, repair hook)
+      // AND streamText — exactly like the live concierge turn (Think's streaming
+      // loop) and the editor bench. A plain generateText call takes a DIFFERENT
+      // branch (routing + the wrapGenerate vs wrapStream rescue middleware) and
+      // gave false-green on /points links; the eval must measure the REAL
+      // streaming path.
+      const inv = this.modelInvocation(this.registry.agents[this.registry.entry]!.model)
+      const stream = streamText({
+        model: inv.model,
+        experimental_repairToolCall: inv.repairToolCall,
         system: buildConciergeSystem(snapshot, briefing),
         prompt: message,
         tools,
-        stopWhen: stepCountIs(10),
+        ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
+        stopWhen: stepCountIs(inv.maxSteps ?? 10),
       })
-      for (const step of result.steps) {
+      await stream.consumeStream()
+      const steps = await stream.steps
+      const text = (await stream.text) ?? ''
+      for (const step of steps) {
         for (const call of step.toolCalls ?? []) {
           trace.push({ tool: call.toolName, input: call.input })
         }
       }
-      const text = result.text ?? ''
       const links = await this.benchExtractLinks(text, kbHttp)
       return {
         text,
