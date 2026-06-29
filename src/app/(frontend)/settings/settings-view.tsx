@@ -2,6 +2,7 @@
 
 import { SectionLabel } from '@/components/shared'
 import { ThemeToggle } from '../_chrome/theme-toggle'
+import { ConnectWhatsApp } from './connect-whatsapp'
 
 // Settings home — intentionally small to begin with: account, appearance, and
 // the build version (moved off the nav rail). Grows from here.
@@ -22,6 +23,11 @@ export function SettingsView({ email }: { email: string | null }) {
           <span className="text-sm text-foreground">Theme</span>
           <ThemeToggle className="rounded-lg p-2 text-muted-foreground hover:text-foreground" />
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionLabel>Connections</SectionLabel>
+        <ConnectWhatsApp />
       </section>
 
       <section className="space-y-3">

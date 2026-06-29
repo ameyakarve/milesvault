@@ -50,5 +50,14 @@ export async function POST(): Promise<Response> {
     .prepare('INSERT INTO bot_pair_codes (code, email, created_at) VALUES (?, ?, ?)')
     .bind(code, session.user.key, Date.now())
     .run()
-  return NextResponse.json({ code, command: `/start ${code}` })
+
+  // WhatsApp tap-to-chat: a wa.me deep link to the business number with the code
+  // pre-filled, so the user just hits send. Built server-side so the number
+  // (a secret) is never committed. Null when WhatsApp isn't configured.
+  const businessNumber = (env as { WHATSAPP_BUSINESS_NUMBER?: string }).WHATSAPP_BUSINESS_NUMBER
+  const whatsapp = businessNumber
+    ? { link: `https://wa.me/${businessNumber.replace(/\D/g, '')}?text=${encodeURIComponent(code)}` }
+    : null
+
+  return NextResponse.json({ code, command: `/start ${code}`, whatsapp })
 }
