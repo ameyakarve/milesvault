@@ -24,8 +24,8 @@ function ingestAddress(env: unknown, token: string): string {
 // address forever.
 export async function GET(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
-  const email = session.user.email
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
+  const email = session.user.key
 
   const { env } = await getCloudflareContext({ async: true })
   const db = (env as Cloudflare.Env).D1 as D1Database | undefined
@@ -73,8 +73,8 @@ export async function GET(): Promise<Response> {
 // the escape hatch for a leaked/spammed address.
 export async function POST(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
-  const email = session.user.email
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
+  const email = session.user.key
 
   const { env } = await getCloudflareContext({ async: true })
   const db = (env as Cloudflare.Env).D1 as D1Database | undefined

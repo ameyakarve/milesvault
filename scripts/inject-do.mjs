@@ -46,13 +46,17 @@ const __AGENT_DO_BINDINGS = {
   concierge: "CONCIERGE_DO",
 }
 
-async function __resolveEmail(request, env) {
+// Resolve the request's identity from the next-auth JWT: { key, uid }.
+//   key = per-user Durable Object storage key (idFromName) — snowflake for new
+//         users, legacy email for the migrated ~30 (docs/design/discord-identity.md)
+//   uid = Discord snowflake (the primary identity; used for the owner gate)
+async function __resolveAuth(request, env) {
   // e2e test identity (staging only — TEST_USER_TOKEN secret unset in prod).
   if (env.TEST_USER_TOKEN) {
     const cookie = request.headers.get("cookie") ?? ""
     const m = /(?:^|;\s*)mv-test-token=([^;]+)/.exec(cookie)
     if (m && decodeURIComponent(m[1]) === env.TEST_USER_TOKEN) {
-      return "test@milesvault.test"
+      return { key: "test@milesvault.test", uid: null }
     }
   }
   try {
@@ -62,15 +66,16 @@ async function __resolveEmail(request, env) {
       secureCookie: false,
       cookieName: __SESSION_COOKIE,
     })
-    return token?.email ?? null
+    return { key: token?.key ?? null, uid: token?.uid ?? null }
   } catch {
-    return null
+    return { key: null, uid: null }
   }
 }
 
 // Manual workflow trigger: POST /api/admin/workflows/<name>. Gated to the
-// admin email so a stray request can't trigger an Artifact-write workflow.
-const __ADMIN_EMAIL = "ameya.karve@gmail.com"
+// owner — their storage key is their email = ALLOWED_EMAILS[0] — so a stray
+// request can't trigger an Artifact-write workflow.
+const __ownerKey = (env) => ((env.ALLOWED_EMAILS ?? "").split(",")[0] ?? "").trim()
 const __WORKFLOW_BINDINGS = {
   "refresh-magnify": "REFRESH_MAGNIFY",
 }
@@ -100,8 +105,9 @@ export default {
       if (!bindingName) {
         return new Response("unknown workflow: " + name, { status: 404 })
       }
-      const email = await __resolveEmail(request, env)
-      if (email !== __ADMIN_EMAIL) {
+      const { key } = await __resolveAuth(request, env)
+      const ownerKey = __ownerKey(env)
+      if (!ownerKey || key !== ownerKey) {
         return new Response("forbidden", { status: 403 })
       }
       const wf = env[bindingName]
@@ -128,18 +134,18 @@ export default {
       if (!ns) {
         return new Response(bindingName + " binding missing", { status: 500 })
       }
-      const email = await __resolveEmail(request, env)
-      if (!email) return new Response("unauthorized", { status: 401 })
+      const { key } = await __resolveAuth(request, env)
+      if (!key) return new Response("unauthorized", { status: 401 })
       // Optional per-item thread (Inbox chat): ?thread=<captureId> selects a
-      // dedicated DO instance named "<email>::<id>". The email always comes
+      // dedicated DO instance named "<key>::<id>". The key always comes
       // from the session, so a user can only ever reach their own threads.
       const thread = url.searchParams.get("thread")
-      let name = email
+      let name = key
       if (thread) {
         if (!/^[A-Za-z0-9_-]{1,80}$/.test(thread)) {
           return new Response("invalid thread id", { status: 400 })
         }
-        name = email + "::" + thread
+        name = key + "::" + thread
       }
       const id = ns.idFromName(name)
       const stub = ns.get(id)

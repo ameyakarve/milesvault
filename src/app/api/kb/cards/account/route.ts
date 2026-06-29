@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // would, never a client-side guess.
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
   const slug = req.nextUrl.searchParams.get('slug')?.trim()
   if (!slug) return NextResponse.json({ account: null })
 

@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 // add-card form's Card dropdown once an Issuer is picked.
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
   const issuer = req.nextUrl.searchParams.get('issuer')?.trim()
   if (!issuer) return NextResponse.json({ items: [] })
 

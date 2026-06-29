@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { Session } from 'next-auth'
 import authConfig from './auth.config'
+import { resolveStorageKey } from './lib/identity'
 
 export const TEST_USER_EMAIL = 'test@milesvault.test'
 
@@ -33,10 +34,11 @@ const nextAuth = NextAuth({
     // So YouTube membership flows through to access via Discord, with no Google
     // sensitive scope or verification anywhere. There is NO allowlist bypass:
     // everyone, owner included, goes through the role check. FAIL-CLOSED:
-    // anything we can't confirm is denied.
+    // anything we can't confirm is denied. Identity is the Discord snowflake —
+    // we do NOT require an email here (Discord email is nullable: phone signups).
     async signIn({ account, profile }) {
-      const email = profile?.email
-      if (!email) return false
+      const discordId = (profile as { id?: string })?.id
+      if (!discordId) return false
       const { env } = await getCloudflareContext({ async: true })
       const cf = env as Cloudflare.Env
 
@@ -45,7 +47,7 @@ const nextAuth = NextAuth({
       const roleId = (cf as { DISCORD_MEMBER_ROLE_ID?: string }).DISCORD_MEMBER_ROLE_ID
       if (!token || !guild || !roleId) {
         console.warn('[gate] discord check skipped — missing token/config', {
-          email,
+          discordId,
           hasToken: !!token,
           hasGuild: !!guild,
           hasRole: !!roleId,
@@ -55,7 +57,6 @@ const nextAuth = NextAuth({
       // Diagnostics: the signing account's Discord id + the scopes Discord
       // actually granted + the guild we're checking. Lets us tell apart
       // "wrong account", "missing scope", and "wrong guild" from the logs.
-      const discordId = (profile as { id?: string })?.id
       const scope = (account as { scope?: string })?.scope
       try {
         // The signer's member object in OUR server (404 = not in the server).
@@ -65,7 +66,6 @@ const nextAuth = NextAuth({
         if (res.status === 404) {
           const body = await res.text().catch(() => '')
           console.log('[gate] discord: not in server', {
-            email,
             discordId,
             guild,
             scope,
@@ -76,7 +76,6 @@ const nextAuth = NextAuth({
         if (!res.ok) {
           const body = await res.text().catch(() => '')
           console.warn('[gate] discord member fetch failed', {
-            email,
             discordId,
             guild,
             scope,
@@ -87,12 +86,35 @@ const nextAuth = NextAuth({
         }
         const member = (await res.json()) as { roles?: string[] }
         const isMember = Array.isArray(member.roles) && member.roles.includes(roleId)
-        console.log('[gate] discord', { email, discordId, guild, isMember, roles: member.roles })
+        console.log('[gate] discord', { discordId, guild, isMember, roles: member.roles })
         return isMember
       } catch (e) {
-        console.warn('[gate] discord error', { email, err: String(e) })
+        console.warn('[gate] discord error', { discordId, err: String(e) })
         return false
       }
+    },
+    // Stamp the snowflake (uid) and the resolved per-user DO storage key into
+    // the JWT once, at sign-in. `resolveStorageKey` is get-or-create: legacy
+    // users were pre-seeded (key = old email); new users get key = snowflake.
+    // (docs/design/discord-identity.md)
+    async jwt({ token, profile }) {
+      const uid = (profile as { id?: string } | undefined)?.id
+      if (uid) {
+        token.uid = uid
+        const { env } = await getCloudflareContext({ async: true })
+        const db = (env as Cloudflare.Env).D1 as D1Database | undefined
+        token.key = db
+          ? await resolveStorageKey(db, uid, profile?.email ?? null)
+          : uid
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = (token.uid as string | undefined) ?? ''
+        session.user.key = (token.key as string | undefined) ?? session.user.email ?? ''
+      }
+      return session
     },
   },
 })
@@ -115,8 +137,12 @@ export async function auth(): Promise<Session | null> {
       if (token === expected) {
         // Optional account selector for parallel eval lanes (one DO set per email).
         const account = jar.get('mv-test-account')?.value
+        // The test user's storage key is its email (its per-email DOs already
+        // exist under that key) — so eval lanes route unchanged after the
+        // email→snowflake re-key.
+        const key = testUserEmail(account)
         return {
-          user: { email: testUserEmail(account) },
+          user: { id: `test:${account ?? '0'}`, key, email: key },
           expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         } as Session
       }

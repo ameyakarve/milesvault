@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 // the client's job — this computes the universe upstream of the target.
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const url = new URL(req.url)
   const target = (url.searchParams.get('target') ?? '').trim()
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     | undefined
   if (!ns) return new NextResponse('CONCIERGE_DO binding missing', { status: 500 })
 
-  const stub = ns.get(ns.idFromName(session.user.email))
+  const stub = ns.get(ns.idFromName(session.user.key))
   const data = await stub.pointsPaths(target, amount, direction)
   return NextResponse.json(data)
 }

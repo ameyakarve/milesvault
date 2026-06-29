@@ -11,12 +11,12 @@ export const dynamic = 'force-dynamic'
 // chat↔email link. 15-minute TTL, enforced by the bot worker.
 export async function POST(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const { env } = await getCloudflareContext({ async: true })
 
   // Concierge kill switch: no new Telegram pairings while the assistant is off.
-  if (!(await conciergeEnabled(env as Cloudflare.Env, { email: session.user.email }))) {
+  if (!(await conciergeEnabled(env as Cloudflare.Env, { email: session.user.key }))) {
     return new NextResponse('forbidden', { status: 403 })
   }
 
@@ -48,7 +48,7 @@ export async function POST(): Promise<Response> {
     .join('')
   await db
     .prepare('INSERT INTO bot_pair_codes (code, email, created_at) VALUES (?, ?, ?)')
-    .bind(code, session.user.email, Date.now())
+    .bind(code, session.user.key, Date.now())
     .run()
   return NextResponse.json({ code, command: `/start ${code}` })
 }

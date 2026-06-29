@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 // add_card picker — same fetchCardGuide the agents use.
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
   const name = req.nextUrl.searchParams.get('name')?.trim()
   if (!name) return new NextResponse('name required', { status: 400 })
 

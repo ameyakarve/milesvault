@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // only ever reset their own instances.
 export async function POST(req: NextRequest): Promise<Response> {
   const session = await auth()
-  const email = session?.user?.email
+  const email = session?.user?.key
   if (!email) return new NextResponse('unauthorized', { status: 401 })
 
   const { env } = await getCloudflareContext({ async: true })

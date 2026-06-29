@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 // the Vault and per-account overview overlay these on path-derived labels.
 export async function GET(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const { env } = await getCloudflareContext({ async: true })
   const ns = (env as Cloudflare.Env).CONCIERGE_DO as
@@ -17,6 +17,6 @@ export async function GET(): Promise<Response> {
     | undefined
   if (!ns) return new NextResponse('CONCIERGE_DO binding missing', { status: 500 })
 
-  const stub = ns.get(ns.idFromName(session.user.email))
+  const stub = ns.get(ns.idFromName(session.user.key))
   return NextResponse.json(await stub.accountNames())
 }

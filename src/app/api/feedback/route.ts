@@ -19,7 +19,7 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024 // 8 MB — drop the shot (keep the mess
 // store it never blocks the written feedback).
 export async function POST(req: Request): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const body = (await req.json().catch((): null => null)) as FeedbackBody | null
   const message = body?.message?.trim()
@@ -75,12 +75,12 @@ export async function POST(req: Request): Promise<Response> {
       `INSERT INTO feedback (id, email, message, image_key, page_url, user_agent, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(id, session.user.email, message, imageKey, body?.url ?? null, body?.ua ?? null, createdAt)
+    .bind(id, session.user.key, message, imageKey, body?.url ?? null, body?.ua ?? null, createdAt)
     .run()
 
   // File a Linear ticket out-of-band — never block (or fail) the feedback write
   // on it. On success, stamp the issue back onto the row so backfill skips it.
-  const email = session.user.email
+  const email = session.user.key
   ctx.waitUntil(
     (async () => {
       const issue = await createLinearFeedbackIssue(

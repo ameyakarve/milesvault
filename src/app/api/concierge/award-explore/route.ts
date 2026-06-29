@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // — this just computes the universe. Funding/transfers live on /points.
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const url = new URL(req.url)
   const origin = (url.searchParams.get('origin') ?? '').trim().toUpperCase()
@@ -30,7 +30,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     | undefined
   if (!ns) return new NextResponse('CONCIERGE_DO binding missing', { status: 500 })
 
-  const stub = ns.get(ns.idFromName(session.user.email))
+  const stub = ns.get(ns.idFromName(session.user.key))
   const data = await stub.awardExplore(origin, destination)
   return NextResponse.json(data)
 }

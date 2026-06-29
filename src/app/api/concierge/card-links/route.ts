@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 // with its live balance. Powers the "Earns" card on the per-card overview.
 export async function GET(req: Request): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const { env } = await getCloudflareContext({ async: true })
   const ns = (env as Cloudflare.Env).CONCIERGE_DO as
@@ -18,7 +18,7 @@ export async function GET(req: Request): Promise<Response> {
     | undefined
   if (!ns) return new NextResponse('CONCIERGE_DO binding missing', { status: 500 })
 
-  const stub = ns.get(ns.idFromName(session.user.email))
+  const stub = ns.get(ns.idFromName(session.user.key))
   const debug = new URL(req.url).searchParams.get('debug') === '1'
   return NextResponse.json(await stub.cardLinks(debug))
 }

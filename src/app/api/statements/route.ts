@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 // The chat agent later reads it back over RPC via read_statement.
 export async function POST(req: NextRequest): Promise<Response> {
   const session = await auth()
-  const email = session?.user?.email
+  const email = session?.user?.key
   if (!email) return new NextResponse('unauthorized', { status: 401 })
 
   const body = (await req.json().catch((): null => null)) as

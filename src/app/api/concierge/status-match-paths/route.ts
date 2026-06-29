@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 // of status matches connecting them (or found=false).
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const url = new URL(req.url)
   const from = (url.searchParams.get('from') ?? '').trim()
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     | undefined
   if (!ns) return new NextResponse('CONCIERGE_DO binding missing', { status: 500 })
 
-  const stub = ns.get(ns.idFromName(session.user.email))
+  const stub = ns.get(ns.idFromName(session.user.key))
   const data = await stub.statusMatchPaths(from, to)
   return NextResponse.json(data)
 }

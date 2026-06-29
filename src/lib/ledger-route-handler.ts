@@ -18,11 +18,11 @@ export function withLedger<P = Record<string, never>>(handler: HandlerFn<P>) {
     routeCtx?: { params: Promise<P> },
   ): Promise<Response> => {
     const session = await auth()
-    if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+    if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
     const params = routeCtx ? await routeCtx.params : ({} as P)
     try {
-      const client = await getLedgerClient(session.user.email)
-      return await handler({ client, req, params, email: session.user.email })
+      const client = await getLedgerClient(session.user.key)
+      return await handler({ client, req, params, email: session.user.key })
     } catch (e) {
       if (e instanceof LedgerInputError) {
         return NextResponse.json({ errors: e.errors }, { status: 400 })

@@ -10,8 +10,10 @@ export const dynamic = 'force-dynamic'
 // enforcement; this is cosmetic. Fail-closed: any error reads as disabled.
 export async function GET(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return NextResponse.json({ enabled: false })
+  if (!session?.user?.key) return NextResponse.json({ enabled: false })
   const { env } = await getCloudflareContext({ async: true })
-  const enabled = await conciergeEnabled(env as Cloudflare.Env, { email: session.user.email })
+  // Flag targeting uses the storage key. The owner's key is their (legacy)
+  // email, so the existing Flagship admin rule still matches with no change.
+  const enabled = await conciergeEnabled(env as Cloudflare.Env, { email: session.user.key })
   return NextResponse.json({ enabled })
 }
