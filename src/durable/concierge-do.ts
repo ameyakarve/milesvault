@@ -53,17 +53,7 @@ import type { ThinkMessengers } from '@cloudflare/think/messengers'
 // the user's ledger (`analyst`) and the milesvault knowledge graph
 // (`graph-walker`). Pure compute: every read goes to LedgerDO over RPC
 // (ledger) or to the kb worker over HTTP (graph). No writes.
-type Snapshot = Awaited<ReturnType<LedgerDO['ledger_snapshot']>>
-
 export type ConciergeDOState = Record<string, never>
-
-function todayInt(): number {
-  const now = new Date()
-  const yyyy = now.getUTCFullYear().toString().padStart(4, '0')
-  const mm = (now.getUTCMonth() + 1).toString().padStart(2, '0')
-  const dd = now.getUTCDate().toString().padStart(2, '0')
-  return Number(`${yyyy}${mm}${dd}`)
-}
 
 // A held card account is identified by (issuer, leaf) — the issuer + product
 // segments of `Liabilities:CreditCards:<issuer>:<leaf>`. The generic KB resolver
@@ -111,10 +101,8 @@ export class ConciergeDO
   protected registry: Registry
   initialState: ConciergeDOState = {}
 
-  // Per-turn context. Both fetched once in beforeTurnFetch (async) so the
-  // sync system-prompt builder + every step can reuse them without further
-  // RPC. Cleared after the turn config is built — the next turn re-fetches.
-  private turnSnapshot: Snapshot | null = null
+  // Per-turn context: the live graph briefing, fetched once in beforeTurnFetch
+  // so the sync system-prompt builder can reuse it without further RPC.
   private turnAgentsBriefing: string | null = null
 
   // Synthetic host for the kb service binding — only the path is used.
@@ -151,44 +139,27 @@ export class ConciergeDO
     return buildWhatsappMessengers(this.env as unknown as Parameters<typeof buildWhatsappMessengers>[0])
   }
 
-  private snapshot(): Snapshot {
-    return (
-      this.turnSnapshot ?? {
-        today: todayInt(),
-        accounts: [],
-        row_counts: {},
-        sample_txns: '',
-        schema_ddl: '',
-      }
-    )
-  }
-
   protected override async beforeTurnFetch(): Promise<void> {
-    // Kill switch: the concierge (in-app chat AND the Telegram bot, which both
-    // drive this DO's turn loop) is gated behind the `concierge_enabled` flag.
-    // `this.name` is the user's email — the key the Flagship admin rule matches.
-    // Fail-closed: a disabled user's turn is refused before any model/tool runs.
+    // Kill switch: the concierge is gated behind the `concierge_enabled` flag.
+    // `this.name` is the user's storage key — the key the Flagship admin rule
+    // matches. Fail-closed: a disabled user's turn is refused before any model
+    // or tool runs.
     if (!(await conciergeEnabled(this.env, { email: this.name }))) {
       throw new Error('concierge is disabled for this account')
     }
-    // Fetch both context sources in parallel. Either agent can hand off
-    // mid-turn, so we can't gate on the agent active at turn start —
-    // the receiving agent's system prompt is rebuilt per step.
-    const [snapshot, briefing] = await Promise.all([
-      this.ledgerStub().ledger_snapshot(),
-      fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((err) => {
-        console.warn(`[concierge] kb agents.md fetch failed: ${err}`)
-        return ''
-      }),
-    ])
-    this.turnSnapshot = snapshot
-    this.turnAgentsBriefing = briefing
+    // The only per-turn context the prompt needs is the live graph briefing —
+    // ledger data comes through tools (ledger_snapshot / query_sql), not the
+    // prompt, so we no longer fetch or embed a snapshot.
+    this.turnAgentsBriefing = await fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((err) => {
+      console.warn(`[concierge] kb agents.md fetch failed: ${err}`)
+      return ''
+    })
   }
 
   // ---- AgentHost<ConciergeAgentName> ----
 
   system(_name: ConciergeAgentName): string {
-    let system = buildConciergeSystem(this.snapshot(), this.turnAgentsBriefing ?? '')
+    let system = buildConciergeSystem(this.turnAgentsBriefing ?? '')
     // Messaging channels (WhatsApp, …) render plain text — a bare in-app path
     // like `/points/<slug>` isn't tappable there. When this turn is driven by a
     // messenger, tell the model the surface constraints + the absolute origin so
@@ -709,10 +680,7 @@ export class ConciergeDO
   // loop. Stateless by design: each bot message is one self-contained turn,
   // separate from the web chat's history. RPC for the bot adapter workers.
   async answerText(question: string): Promise<{ text: string }> {
-    const [snapshot, briefing] = await Promise.all([
-      this.ledgerStub().ledger_snapshot(),
-      fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch(() => ''),
-    ])
+    const briefing = await fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch(() => '')
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const kb = makeKbTools(kbHttp)
     const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
@@ -722,7 +690,7 @@ export class ConciergeDO
       executor: new DynamicWorkerExecutor({ loader: this.env.LOADER }),
     })
     const system =
-      buildConciergeSystem(snapshot, briefing) +
+      buildConciergeSystem(briefing) +
       '\n\nChannel: plain-text chat (a messaging app). Reply concisely in plain text — no markdown tables, no in-app links. For questions about the user\'s own balances or history, use ledger_snapshot / query_sql.'
     const result = await generateText({
       model: this.buildModel({ id: CONCIERGE_MODEL_ID, reasoning: 'off' }),
@@ -796,10 +764,7 @@ export class ConciergeDO
     toolsUsed: string[]
     error: string | null
   }> {
-    const [snapshot, briefing] = await Promise.all([
-      this.ledgerStub().ledger_snapshot(),
-      fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((): string => ''),
-    ])
+    const briefing = await fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((): string => '')
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     const trace: Array<{ tool: string; input: unknown }> = []
     // ask_user suspends the turn in production — capture the call instead, with
@@ -825,7 +790,7 @@ export class ConciergeDO
       const stream = streamText({
         model: inv.model,
         experimental_repairToolCall: inv.repairToolCall,
-        system: buildConciergeSystem(snapshot, briefing),
+        system: buildConciergeSystem(briefing),
         prompt: message,
         tools,
         ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
