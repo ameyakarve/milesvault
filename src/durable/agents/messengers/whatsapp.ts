@@ -30,7 +30,26 @@ type WhatsAppEnv = {
   WHATSAPP_APP_SECRET?: string
   WHATSAPP_PHONE_NUMBER_ID?: string
   WHATSAPP_VERIFY_TOKEN?: string
+  APP_ENV?: string
   D1?: D1Database
+}
+
+// Final-pass link cleanup, applied to the adapter's RENDERED output (after its
+// renderPostable has done bold/italic/etc.). The adapter mishandles links for
+// WhatsApp two ways — it leaves `[label](url)` bracketed (and escapes `&`→`\&`),
+// and wraps bare URLs in `<…>`. WhatsApp renders neither and only auto-links a
+// bare URL, so we collapse both forms to a bare, absolute URL: absolutise the
+// concierge's app-relative `/points?…` paths against the origin, and undo the
+// markdown `\&`-style escaping. Everything else renderPostable produced is left
+// untouched.
+function cleanMessengerLinks(text: string, origin: string): string {
+  const toBareUrl = (raw: string): string => {
+    const u = raw.replace(/\\([&_*[\]()~`>])/g, '$1').trim()
+    return u.startsWith('/') ? origin + u : u
+  }
+  return text
+    .replace(/\[[^\]]*\]\(([^)\s]+)\)/g, (_m, url: string) => toBareUrl(url)) // [label](url)
+    .replace(/<((?:https?:\/\/|\/)[^>\s]+)>/g, (_m, url: string) => toBareUrl(url)) // <url> autolink
 }
 
 // The bot pairing tables are created lazily by /api/bot/pairing-code; we only
@@ -80,13 +99,32 @@ export function buildWhatsappMessengers(env: WhatsAppEnv, host: MessengerHost): 
   }
   const db = D1
 
-  const adapter = createWhatsAppAdapter({
+  const origin =
+    env.APP_ENV === 'staging' ? 'https://staging.milesvault.com' : 'https://milesvault.com'
+
+  const baseAdapter = createWhatsAppAdapter({
     accessToken: WHATSAPP_ACCESS_TOKEN,
     appSecret: WHATSAPP_APP_SECRET, // webhook HMAC (X-Hub-Signature-256)
     phoneNumberId: WHATSAPP_PHONE_NUMBER_ID,
     verifyToken: WHATSAPP_VERIFY_TOKEN, // GET hub.challenge handshake
     userName: 'MilesVault',
   })
+
+  // Wrap the adapter at its final text-send boundary: renderPostable still does
+  // the markdown→WhatsApp work (bold/italic/…), then we clean up the links it
+  // can't (see cleanMessengerLinks). Everything else delegates to baseAdapter
+  // via the prototype, with `this` bound correctly.
+  const sendText = (
+    baseAdapter as unknown as {
+      sendTextMessage: (threadId: string, to: string, text: string) => Promise<unknown>
+    }
+  ).sendTextMessage.bind(baseAdapter)
+  const adapter = Object.create(baseAdapter) as typeof baseAdapter
+  ;(adapter as unknown as { sendTextMessage: unknown }).sendTextMessage = (
+    threadId: string,
+    to: string,
+    text: string,
+  ) => sendText(threadId, to, cleanMessengerLinks(text, origin))
 
   return {
     whatsapp: chatSdkMessenger({

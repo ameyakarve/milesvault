@@ -172,25 +172,10 @@ export class ConciergeDO
   // ---- AgentHost<ConciergeAgentName> ----
 
   system(_name: ConciergeAgentName): string {
-    let system = buildConciergeSystem(this.turnAgentsBriefing ?? '')
-    // Messaging channels (WhatsApp, …) render plain text — a bare in-app path
-    // like `/points/<slug>` isn't tappable there. When this turn is driven by a
-    // messenger, tell the model the surface constraints + the absolute origin so
-    // it can write links as full URLs. (It decides when/whether to include one.)
-    const mc = this.getMessengerContext()
-    if (mc) {
-      const origin =
-        (this.env as { APP_ENV?: string }).APP_ENV === 'staging'
-          ? 'https://staging.milesvault.com'
-          : 'https://milesvault.com'
-      system +=
-        `\n\n## Channel: ${mc.provider} (a messaging app)\n` +
-        `All your normal rules apply UNCHANGED — including the deep-link rules above: ` +
-        `still drop the \`/points\`, \`/explore\`, or \`/accounts\` link exactly when you would on the web, with the same grounded slug. ` +
-        `The ONLY difference: a bare path isn't tappable in a chat app, so prefix the link with the absolute origin \`${origin}\` ` +
-        `(e.g. \`${origin}/points?target=program/<slug>&dir=to\`). Do not drop the link to be brief — it is the answer.`
-    }
-    return system
+    // Generic, channel-agnostic. The model emits its normal markdown (incl.
+    // `[label](/points?…)` links); the WhatsApp adapter converts that to
+    // chat-native text (bare absolute URLs etc.) on the way out. (whatsapp.ts)
+    return buildConciergeSystem(this.turnAgentsBriefing ?? '')
   }
 
   tools(_name: ConciergeAgentName): ToolSet {
