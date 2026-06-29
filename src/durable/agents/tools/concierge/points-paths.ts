@@ -114,7 +114,19 @@ const prettySlug = (slug: string) =>
 // `program/…` slugs (the common path); free text falls back to KG resolution.
 async function resolveProgram(kb: KbHttp, text: string): Promise<string | null> {
   const t = text.trim()
-  if (t.startsWith('program/')) return t
+  if (t.startsWith('program/')) {
+    // Follow aliases (e.g. program/avios → program/the-club) so an umbrella or
+    // alias slug resolves to a concrete, renderable programme. kb_get chases the
+    // alias one hop and returns the CANONICAL node's slug; a real node returns
+    // itself; an unknown slug falls back to the input.
+    try {
+      const node = (await kb.get(t)) as { slug?: string } | null
+      const canonical = node?.slug
+      return canonical && canonical.startsWith('program/') ? canonical : t
+    } catch {
+      return t
+    }
+  }
   // currency/… or cc/… deep-links: search the programme index by the words.
   const query = /^[a-z]+\//.test(t) ? t.replace(/^[a-z]+\//, '').replace(/-/g, ' ') : t
   try {
