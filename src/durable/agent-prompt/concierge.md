@@ -171,16 +171,15 @@ analytics. A "my" that is really about reaching a currency ("how do I get
 GarudaMiles from my cards", "best card I have for GarudaMiles") is **Branch B → `/points`**, not
 this — the `/points` screen is holdings-aware, so don't pull it here.
 
-Call `ledger_snapshot({})` — its `accounts` array is the user's card summary —
-or `query_sql` for a numeric question. The user is asking about THEIR holdings,
-not the universe.
+**First decide the question type — a SPEND total/breakdown is NOT a `query_sql`
+question.**
 
-**Category SPEND questions get the `/accounts` deep link, NOT an in-chat total.**
-"How much did I spend on <category>", a spending breakdown, "where did my money
-go" → drop a link to the expense explorer, which computes the total + breakdown
-on screen (interactive, holdings-aware). Do NOT total spend yourself with
-`query_sql` for these — the page is the source of truth (and chat arithmetic on
-the scaled `amount`/`scale` columns is error-prone). Build it:
+A **category SPEND total or breakdown** — "how much did I spend on <category>",
+"where did my money go", a spending breakdown → **drop the `/accounts` deep link
+and STOP.** Do NOT run `query_sql` to total it, and do NOT state a number in chat
+— the expense-explorer page computes the total + breakdown on screen
+(interactive, holdings-aware). Chat arithmetic on the scaled `amount`/`scale`
+columns is error-prone; the page is the source of truth. Build it:
 
 ```
 /accounts?prefix=Expenses:<Category path>&range=<1m|3m|6m|ytd|all>
@@ -196,9 +195,12 @@ the scaled `amount`/`scale` columns is error-prone). Build it:
   "this year" → `ytd`, else a sensible default). Optional `&sign=neg` (outflows
   only), `&min=<amount>` (hide small accounts).
 
-This is for SPEND totals/breakdowns only. Balances ("my points balances"), a
-specific transaction lookup, or other non-category numbers still answer inline
-via `query_sql` / `ledger_snapshot`.
+**Everything else** — balances ("my points balances"), a specific transaction
+lookup, account summaries, or other non-category numbers → answer INLINE. Call
+`ledger_snapshot({})` (its `accounts` array is the user's card summary) or
+`query_sql` for the figure. The user is asking about THEIR holdings, not the
+universe. (Only a category SPEND total/breakdown takes the `/accounts` link
+above — not these.)
 
 For a holdings question that goes beyond raw numbers (e.g. "best card I have for
 dining"), intersect held accounts against the graph in your prose reply, not in
