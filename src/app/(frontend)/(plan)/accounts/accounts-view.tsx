@@ -155,6 +155,11 @@ export function AccountsView() {
   const [reloadNonce, setReloadNonce] = useState(0)
   const [currency, setCurrency] = useState('INR')
   const [path, setPath] = useState<string[]>([])
+  // Flow-sign + amount filters (also URL-parametrized for deep-linking):
+  // sign keeps rows whose total is +ve / -ve; min/max bound |total|.
+  const [sign, setSign] = useState<'all' | 'pos' | 'neg'>('all')
+  const [minAmt, setMinAmt] = useState<number | null>(null)
+  const [maxAmt, setMaxAmt] = useState<number | null>(null)
 
   // Income/Expenses explore FLOWS over the range; Assets/Liabilities explore
   // BALANCES as of the range end.
@@ -177,8 +182,9 @@ export function AccountsView() {
             })),
         )
     p.then((rs) => {
+      // Don't reset the drill path here — the type/range pickers reset it, and a
+      // URL-restored prefix path must survive the first load.
       setRows(rs)
-      setPath([])
     })
       .catch((e: unknown) => {
         if (ac.signal.aborted || (e instanceof DOMException && e.name === 'AbortError')) return
@@ -203,10 +209,58 @@ export function AccountsView() {
     [currencies, currency],
   )
 
-  const tree = useMemo(
-    () => buildTree(rows.filter((r) => r.currency === activeCurrency), type),
-    [rows, activeCurrency, type],
+  // ── deep-link: restore view from the URL on mount, reflect changes back ──────
+  // prefix = `<Type>[:<sub>:<sub>…]` (e.g. Expenses:Transport:Fuel), plus range
+  // and the sign / amount filters. Lets the concierge link straight to a spend
+  // view instead of computing totals in chat.
+  const [hydrated, setHydrated] = useState(false)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const prefix = q.get('prefix') ?? q.get('root')
+    if (prefix) {
+      const [root, ...rest] = prefix.split(':')
+      if ((ACCOUNT_TYPES as readonly string[]).includes(root)) {
+        setType(root as AccountType)
+        setPath(rest)
+      }
+    }
+    const rng = q.get('range')
+    if (rng && RANGES.some((r) => r.key === rng)) setRange(rng as RangeKey)
+    const sg = q.get('sign')
+    if (sg === 'pos' || sg === 'neg') setSign(sg)
+    if (q.get('min') && Number.isFinite(Number(q.get('min')))) setMinAmt(Number(q.get('min')))
+    if (q.get('max') && Number.isFinite(Number(q.get('max')))) setMaxAmt(Number(q.get('max')))
+    const cur = q.get('cur')
+    if (cur) setCurrency(cur)
+    setHydrated(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    if (!hydrated) return
+    const q = new URLSearchParams()
+    const prefix = [type, ...path].join(':')
+    if (prefix !== 'Expenses') q.set('prefix', prefix)
+    if (range !== '3m') q.set('range', range)
+    if (sign !== 'all') q.set('sign', sign)
+    if (minAmt != null) q.set('min', String(minAmt))
+    if (maxAmt != null) q.set('max', String(maxAmt))
+    if (activeCurrency && activeCurrency !== 'INR') q.set('cur', activeCurrency)
+    const qs = q.toString()
+    window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
+  }, [hydrated, type, path, range, sign, minAmt, maxAmt, activeCurrency])
+
+  const filteredRows = useMemo(
+    () =>
+      rows.filter(
+        (r) =>
+          r.currency === activeCurrency &&
+          (sign === 'all' || (sign === 'pos' ? r.total > 0 : r.total < 0)) &&
+          (minAmt == null || Math.abs(r.total) >= minAmt) &&
+          (maxAmt == null || Math.abs(r.total) <= maxAmt),
+      ),
+    [rows, activeCurrency, sign, minAmt, maxAmt],
   )
+  const tree = useMemo(() => buildTree(filteredRows, type), [filteredRows, type])
   const node = useMemo(() => nodeAt(tree, path), [tree, path])
 
   const [boxRef, width] = useWidth()
@@ -273,11 +327,23 @@ export function AccountsView() {
           <SegmentedControl
             options={RANGES.map((r) => ({ value: r.key, label: r.label }))}
             value={range}
-            onChange={setRange}
+            onChange={(r) => {
+              setRange(r)
+              setPath([])
+            }}
           />
         ) : (
           <span className="text-xs text-muted-foreground">balance as of today</span>
         )}
+        <SegmentedControl
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'pos', label: '+' },
+            { value: 'neg', label: '−' },
+          ]}
+          value={sign}
+          onChange={(v) => setSign(v as 'all' | 'pos' | 'neg')}
+        />
         {currencies.length > 1 ? (
           <Select value={activeCurrency} onValueChange={setCurrency}>
             <SelectTrigger className="h-8 w-28">
