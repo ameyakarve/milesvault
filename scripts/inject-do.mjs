@@ -96,6 +96,34 @@ export default {
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+    // WhatsApp webhook (Think messenger on ConciergeDO). Unauthenticated — Meta
+    // has no MilesVault session; the trust boundary is the X-Hub-Signature-256
+    // HMAC, which the adapter verifies on POST. Must run BEFORE Next middleware.
+    // Keep this path in sync with WHATSAPP_WEBHOOK_PATH in whatsapp.ts.
+    if (url.pathname === "/api/whatsapp/webhook") {
+      // GET: Meta's subscribe handshake. Think's handleRequest 405s non-POST, so
+      // we answer it here (echo hub.challenge iff the verify token matches).
+      if (request.method === "GET") {
+        const mode = url.searchParams.get("hub.mode")
+        const token = url.searchParams.get("hub.verify_token")
+        const challenge = url.searchParams.get("hub.challenge")
+        if (mode === "subscribe" && token && env.WHATSAPP_VERIFY_TOKEN && token === env.WHATSAPP_VERIFY_TOKEN) {
+          return new Response(challenge ?? "", { status: 200 })
+        }
+        return new Response("forbidden", { status: 403 })
+      }
+      if (request.method === "POST") {
+        // Route to the single WhatsApp host ConciergeDO; its getMessengers()
+        // resolver maps each sender to their own concierge sub-agent.
+        const ns = env.CONCIERGE_DO
+        if (!ns) return new Response("CONCIERGE_DO binding missing", { status: 500 })
+        const hostName = "__whatsapp_host__"
+        const stub = ns.get(ns.idFromName(hostName))
+        await stub.setName(hostName)
+        return stub.fetch(request)
+      }
+      return new Response("Method not allowed", { status: 405 })
+    }
     if (
       url.pathname.startsWith("/api/admin/workflows/") &&
       request.method === "POST"

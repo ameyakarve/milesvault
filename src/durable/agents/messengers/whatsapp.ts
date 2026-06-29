@@ -20,6 +20,11 @@ import { chatSdkMessenger, type MessengerEvent, type ThinkMessengers } from '@cl
 const PAIR_TTL_MS = 15 * 60 * 1000
 const CODE_RE = /\b([a-z0-9]{8})\b/i // 8-char codes minted by /api/bot/pairing-code
 
+// The webhook URL Meta posts to. Think matches `definition.path === url.pathname`
+// EXACTLY, so this must equal the path inject-do.mjs routes to the host DO and
+// the Callback URL configured in the Meta app. (inject-do hardcodes the same.)
+export const WHATSAPP_WEBHOOK_PATH = '/api/whatsapp/webhook'
+
 type WhatsAppEnv = {
   WHATSAPP_ACCESS_TOKEN?: string
   WHATSAPP_APP_SECRET?: string
@@ -85,6 +90,13 @@ export function buildWhatsappMessengers(env: WhatsAppEnv): ThinkMessengers {
       adapter,
       provider: 'whatsapp',
       userName: 'MilesVault',
+      path: WHATSAPP_WEBHOOK_PATH,
+      // The adapter verifies the POST signature (X-Hub-Signature-256 via
+      // appSecret) and the GET hub.challenge handshake itself, so we opt out of
+      // Think's separate verifyWebhook layer. (chatSdkMessenger requires this to
+      // be set explicitly.) The GET handshake is answered in inject-do, since
+      // Think's handleRequest 405s non-POST.
+      verifyWebhook: false,
       // Map each sender to their own concierge sub-agent, keyed by their storage
       // key. Pairing is handled inline: an unpaired sender's first message is
       // treated as a pairing code.
