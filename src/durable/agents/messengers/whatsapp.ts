@@ -34,22 +34,43 @@ type WhatsAppEnv = {
   D1?: D1Database
 }
 
-// Final-pass link cleanup, applied to the adapter's RENDERED output (after its
-// renderPostable has done bold/italic/etc.). The adapter mishandles links for
-// WhatsApp two ways — it leaves `[label](url)` bracketed (and escapes `&`→`\&`),
-// and wraps bare URLs in `<…>`. WhatsApp renders neither and only auto-links a
-// bare URL, so we collapse both forms to a bare, absolute URL: absolutise the
-// concierge's app-relative `/points?…` paths against the origin, and undo the
-// markdown `\&`-style escaping. Everything else renderPostable produced is left
-// untouched.
-function cleanMessengerLinks(text: string, origin: string): string {
-  const toBareUrl = (raw: string): string => {
+// How to render the concierge's reply on WhatsApp. The adapter's renderPostable
+// already did bold/italic/etc., but it mishandles links — it leaves `[label](url)`
+// bracketed (escaping `&`→`\&`) and wraps bare URLs in `<…>`, neither of which is
+// tappable. We fix that here AND pick the richer presentation:
+//   - EXACTLY ONE link  → a native WhatsApp CTA-URL button (body text + a tappable
+//                         button), the cleanest UX.
+//   - zero or many      → inline plain text, each link as `label (absolute-url)`
+//                         (WhatsApp auto-links the bare URL).
+// App-relative `/points?…` paths are absolutised against the origin throughout.
+type WhatsappOut =
+  | { kind: 'text'; text: string }
+  | { kind: 'cta'; body: string; displayText: string; url: string }
+
+function formatWhatsappOut(text: string, origin: string): WhatsappOut {
+  const abs = (raw: string): string => {
     const u = raw.replace(/\\([&_*[\]()~`>])/g, '$1').trim()
     return u.startsWith('/') ? origin + u : u
   }
-  return text
-    .replace(/\[[^\]]*\]\(([^)\s]+)\)/g, (_m, url: string) => toBareUrl(url)) // [label](url)
-    .replace(/<((?:https?:\/\/|\/)[^>\s]+)>/g, (_m, url: string) => toBareUrl(url)) // <url> autolink
+  const MD = /\[([^\]]*)\]\(([^)\s]+)\)/g // [label](url)
+  const AUTO = /<((?:https?:\/\/|\/)[^>\s]+)>/g // <url>
+  const links: Array<{ label: string | null; url: string; raw: string }> = []
+  for (const m of text.matchAll(MD)) links.push({ label: m[1] || null, url: abs(m[2]), raw: m[0] })
+  for (const m of text.matchAll(AUTO)) links.push({ label: null, url: abs(m[1]), raw: m[0] })
+
+  // CTA-URL buttons only support https + one URL; fall back to inline otherwise.
+  if (links.length === 1 && links[0].url.startsWith('https://')) {
+    const { label, url, raw } = links[0]
+    let body = text.replaceAll(raw, '').replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').trim()
+    if (!body) body = label ?? 'Open the link below.'
+    const displayText = (label?.trim() || 'Open').slice(0, 20) // WhatsApp caps at 20
+    return { kind: 'cta', body, displayText, url }
+  }
+
+  let out = text
+  for (const m of text.matchAll(MD)) out = out.replaceAll(m[0], m[1] ? `${m[1]} (${abs(m[2])})` : abs(m[2]))
+  for (const m of text.matchAll(AUTO)) out = out.replaceAll(m[0], abs(m[1]))
+  return { kind: 'text', text: out }
 }
 
 // The bot pairing tables are created lazily by /api/bot/pairing-code; we only
@@ -111,20 +132,44 @@ export function buildWhatsappMessengers(env: WhatsAppEnv, host: MessengerHost): 
   })
 
   // Wrap the adapter at its final text-send boundary: renderPostable still does
-  // the markdown→WhatsApp work (bold/italic/…), then we clean up the links it
-  // can't (see cleanMessengerLinks). Everything else delegates to baseAdapter
-  // via the prototype, with `this` bound correctly.
-  const sendText = (
-    baseAdapter as unknown as {
-      sendTextMessage: (threadId: string, to: string, text: string) => Promise<unknown>
-    }
-  ).sendTextMessage.bind(baseAdapter)
+  // the markdown→WhatsApp work (bold/italic/…), then formatWhatsappOut decides
+  // link presentation — a CTA-URL button for a single link, else inline. The
+  // CTA send is a raw Graph API call (the adapter exposes no cta_url helper);
+  // any failure falls back to plain text. Everything else delegates to
+  // baseAdapter via the prototype, with `this` bound correctly.
+  const base = baseAdapter as unknown as {
+    sendTextMessage: (threadId: string, to: string, text: string) => Promise<unknown>
+    graphApiRequest: (path: string, body: unknown) => Promise<unknown>
+  }
+  const sendText = base.sendTextMessage.bind(baseAdapter)
+  const graphApiRequest = base.graphApiRequest.bind(baseAdapter)
   const adapter = Object.create(baseAdapter) as typeof baseAdapter
-  ;(adapter as unknown as { sendTextMessage: unknown }).sendTextMessage = (
+  ;(adapter as unknown as { sendTextMessage: unknown }).sendTextMessage = async (
     threadId: string,
     to: string,
     text: string,
-  ) => sendText(threadId, to, cleanMessengerLinks(text, origin))
+  ) => {
+    const out = formatWhatsappOut(text, origin)
+    if (out.kind === 'cta') {
+      try {
+        return await graphApiRequest(`/${WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'interactive',
+          interactive: {
+            type: 'cta_url',
+            body: { text: out.body },
+            action: { name: 'cta_url', parameters: { display_text: out.displayText, url: out.url } },
+          },
+        })
+      } catch (e) {
+        console.error('[wa] cta_url failed — falling back to text', { err: String(e) })
+        return sendText(threadId, to, `${out.body}\n${out.url}`)
+      }
+    }
+    return sendText(threadId, to, out.text)
+  }
 
   return {
     whatsapp: chatSdkMessenger({
