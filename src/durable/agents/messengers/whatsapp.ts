@@ -102,7 +102,13 @@ export function buildWhatsappMessengers(env: WhatsAppEnv): ThinkMessengers {
       // treated as a pairing code.
       conversation: async (event: MessengerEvent) => {
         try {
-          const waId = event.author?.userId
+          // The sender's wa_id. `event.author.userId` can be empty for WhatsApp;
+          // the reliable source is the thread id `whatsapp:<phoneNumberId>:<wa_id>`.
+          const waId =
+            event.author?.userId ||
+            event.message?.author?.userId ||
+            event.thread?.id?.split(':').pop() ||
+            ''
           const text = event.message?.text ?? ''
           console.log('[wa] inbound', { waId, textLen: text.length, text: text.slice(0, 40), threadId: event.thread?.id })
           if (!waId) return { target: 'self' as const }
