@@ -110,7 +110,7 @@ export function buildWhatsappMessengers(env: WhatsAppEnv): ThinkMessengers {
             event.thread?.id?.split(':').pop() ||
             ''
           const text = event.message?.text ?? ''
-          console.log('[wa] inbound', { waId, textLen: text.length, text: text.slice(0, 40), threadId: event.thread?.id })
+          console.log('[wa] inbound', { waId, textLen: text.length })
           if (!waId) return { target: 'self' as const }
 
           const paired = await lookupPairedKey(db, waId)

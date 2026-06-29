@@ -270,12 +270,6 @@ export abstract class BaseAgentDO<
   override async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
     await this.beforeTurnFetch()
     const cfg = this.activeAgentConfig()
-    console.log('[turn] beforeTurn', {
-      name: this.name,
-      agent: this.activeAgent().name,
-      activeTools: (cfg.activeTools as string[] | undefined) ?? null,
-      offered: Object.keys(this.getTools()),
-    })
     // Let a subclass rewrite the assembled model messages for this turn only
     // (e.g. expand an inline statement reference into its text) without touching
     // stored history.

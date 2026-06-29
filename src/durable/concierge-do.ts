@@ -188,7 +188,24 @@ export class ConciergeDO
   // ---- AgentHost<ConciergeAgentName> ----
 
   system(_name: ConciergeAgentName): string {
-    return buildConciergeSystem(this.snapshot(), this.turnAgentsBriefing ?? '')
+    let system = buildConciergeSystem(this.snapshot(), this.turnAgentsBriefing ?? '')
+    // Messaging channels (WhatsApp, …) render plain text — a bare in-app path
+    // like `/points/<slug>` isn't tappable there. When this turn is driven by a
+    // messenger, tell the model the surface constraints + the absolute origin so
+    // it can write links as full URLs. (It decides when/whether to include one.)
+    const mc = this.getMessengerContext()
+    if (mc) {
+      const origin =
+        (this.env as { APP_ENV?: string }).APP_ENV === 'staging'
+          ? 'https://staging.milesvault.com'
+          : 'https://milesvault.com'
+      system +=
+        `\n\n## Channel: ${mc.provider} (a messaging app)\n` +
+        `Reply in concise plain text — no markdown tables. In-app deep links are NOT clickable here as bare paths, ` +
+        `so when you reference one write it as a FULL URL under ${origin} (e.g. ${origin}/points/<slug>, ${origin}/explore). ` +
+        `The same grounding rules apply — only link to slugs you've confirmed exist.`
+    }
+    return system
   }
 
   tools(_name: ConciergeAgentName): ToolSet {
