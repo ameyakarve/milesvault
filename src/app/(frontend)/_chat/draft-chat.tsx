@@ -186,6 +186,30 @@ function Composer({
   )
 }
 
+// A paused `ask_user` (the agent asked a question and is waiting) is RESOLVED by
+// the next user message, not superseded. Returns its toolCallId if the latest
+// assistant turn has one open. The editor registers no `ask_user` tool, so this
+// is inert there — keeping the shared component safe for both surfaces.
+function findPendingAskUser(messages: Array<{ role: string; parts?: unknown }>): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i]
+    if (m.role !== 'assistant') continue
+    const parts = (m.parts ?? []) as Part[]
+    for (const p of parts) {
+      if (
+        p.type === 'dynamic-tool' &&
+        (p as { toolName?: unknown }).toolName === 'ask_user' &&
+        (p.state === 'input-available' || p.state === 'input-streaming') &&
+        typeof p.toolCallId === 'string'
+      ) {
+        return p.toolCallId
+      }
+    }
+    break // only the most recent assistant message can hold an open ask_user
+  }
+  return null
+}
+
 export function DraftChat({
   agentOptions,
   onCommitted,
@@ -198,6 +222,8 @@ export function DraftChat({
   onClearableChange,
   onAppended: _onAppended,
   autoPrefill = false,
+  autoContinueAfterToolResult = false,
+  resetAgentOnClear = true,
 }: {
   agentOptions: { agent: string; basePath: string; query?: Record<string, string> }
   onCommitted?: (finalText: string) => void | Promise<void>
@@ -216,6 +242,12 @@ export function DraftChat({
   // In the shared component the post-commit callback is `onCommitted`.
   onAppended?: () => void
   autoPrefill?: boolean
+  // Concierge (read-only Q&A) sets this true so the agent continues after a
+  // tool result; the editor leaves it false (the draft card IS the proposal).
+  autoContinueAfterToolResult?: boolean
+  // The editor resets its active sub-agent on clear (handoff state); single-agent
+  // surfaces (concierge) pass false.
+  resetAgentOnClear?: boolean
 }) {
   const agent = useAgent<ChatDOState>(agentOptions)
   const {
@@ -229,11 +261,11 @@ export function DraftChat({
     isToolContinuation,
   } = useAgentChat({
     agent,
-    // The card IS the proposal; don't let the model continue after a tool
-    // result. Approve transitions the card to "done" locally and we're
-    // ready for the next user message. Reject just dismisses the card —
-    // no apology / retry from the model.
-    autoContinueAfterToolResult: false,
+    // Editor (default false): the card IS the proposal; don't let the model
+    // continue after a tool result — Approve transitions it to "done" locally
+    // and we await the next user message, Reject just dismisses it. Concierge
+    // passes true (read-only tools; the agent should continue to its answer).
+    autoContinueAfterToolResult,
     // Skip the library's HTTP /get-messages fetch. On SSR `useAgent` builds
     // a partysocket URL pointing at "dummy-domain.com" (its fallback when
     // window is undefined), and `useAgentChat` then calls `use(fetch(...))`
@@ -327,7 +359,7 @@ export function DraftChat({
         } catch {
           /* no active stream */
         }
-        void ledgerClient.resetAgent().catch(() => {})
+        if (resetAgentOnClear) void ledgerClient.resetAgent().catch(() => {})
         clearHistoryRef.current()
       },
     })
@@ -339,6 +371,13 @@ export function DraftChat({
     if (submittingRef.current) return // re-entry guard (see ref decl)
     submittingRef.current = true
     try {
+      // A paused ask_user is ANSWERED by this message (not superseded). Inert
+      // for the editor (no ask_user tool); autoContinue then drives the reply.
+      const askId = findPendingAskUser(messages)
+      if (askId) {
+        addToolOutput({ toolCallId: askId, output: { answer: userText } })
+        return
+      }
       // Any tool cards still awaiting a decision get superseded by the new
       // message — otherwise the agent stays stuck waiting on them.
       for (const m of messages) {
@@ -675,7 +714,15 @@ export function DraftChat({
                                   <div className="p-4 text-xs text-muted-foreground">
                                     {toolState === 'input-streaming'
                                       ? 'Preparing…'
-                                      : 'Waiting for input…'}
+                                      : toolState === 'output-error'
+                                        ? 'Failed.'
+                                        : // A non-gen-UI tool that finished (e.g. a concierge
+                                          // read tool: kb_resolve, query_sql) has no card to
+                                          // render — show a compact done state, not the
+                                          // misleading "Waiting for input…".
+                                          toolState === 'output-available'
+                                          ? 'Done.'
+                                          : 'Waiting for input…'}
                                   </div>
                                 )}
                               </ToolContent>

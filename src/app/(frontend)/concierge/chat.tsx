@@ -1,122 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { useAgent } from 'agents/react'
-import { useAgentChat } from '@cloudflare/ai-chat/react'
-import { ArrowUp, Database, Trash2 } from 'lucide-react'
-import { Loader } from '@/components/ai-elements/loader'
+import { Database, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Conversation,
-  ConversationContent,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation'
-import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
-import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning'
-import { Tool, ToolContent, ToolHeader } from '@/components/ai-elements/tool'
-import { isGenUiTool, renderGenUi } from '@/app/(frontend)/ai/gen-ui'
-import {
-  PromptInput,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputTools,
-  type PromptInputMessage,
-} from '@/components/ai-elements/prompt-input'
-import type { ToolUIPart } from 'ai'
-import type { ConciergeDOState } from '@/durable/concierge-do'
+import { DraftChat } from '@/app/(frontend)/_chat/draft-chat'
 
-type Part = {
-  type: string
-  text?: string
-  state?: ToolUIPart['state'] | 'streaming' | 'done'
-  input?: unknown
-  output?: unknown
-  errorText?: string
-  toolName?: string
-  toolCallId?: string
-  [k: string]: unknown
-}
-
-function isToolPart(p: Part): boolean {
-  return p.type.startsWith('tool-') || p.type === 'dynamic-tool'
-}
-
-function toolNameOf(p: Part): string | null {
-  if (p.type === 'dynamic-tool') return typeof p.toolName === 'string' ? p.toolName : null
-  if (p.type.startsWith('tool-')) return p.type.slice(5)
-  return null
-}
-
+// The concierge now renders the SHARED DraftChat — same message rendering, copy
+// button, reasoning/tool/gen-UI cards, composer, and footer as the editor. Its
+// differences are passed as props: it's read-only Q&A (autoContinueAfterToolResult,
+// single-agent so no reset-on-clear), `ask_user` resolution is handled inside
+// DraftChat, and gen-UI cards (award options) reject via the shared registry.
 export function ConciergeChat() {
-  const agent = useAgent<ConciergeDOState>({
-    agent: 'ConciergeDO',
-    basePath: 'api/agents/concierge',
+  const [clearState, setClearState] = useState<{ canClear: boolean; clear: () => void }>({
+    canClear: false,
+    clear: () => {},
   })
-  const { messages, sendMessage, addToolOutput, status, isStreaming, clearHistory, stop } =
-    useAgentChat({
-    agent,
-    autoContinueAfterToolResult: true,
-    getInitialMessages: null,
-  })
-
-  const [text, setText] = useState('')
-
-  // Walk the latest assistant message for a still-pending `ask_user`
-  // dynamic-tool call. If we find one, the next user message resolves
-  // that tool instead of starting a fresh turn — the agent is paused
-  // waiting on the answer.
-  const pendingAskUser = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i]
-      if (m.role !== 'assistant') continue
-      const parts = (m.parts ?? []) as Part[]
-      for (const p of parts) {
-        if (
-          p.type === 'dynamic-tool' &&
-          p.toolName === 'ask_user' &&
-          (p.state === 'input-available' || p.state === 'input-streaming') &&
-          typeof p.toolCallId === 'string'
-        ) {
-          const question =
-            typeof p.input === 'object' && p.input !== null && 'question' in p.input
-              ? String((p.input as { question?: unknown }).question ?? '')
-              : ''
-          return { toolCallId: p.toolCallId, question }
-        }
-      }
-      // Stop at the most recent assistant message — older ones can't be pending.
-      break
-    }
-    return null
-  })()
-
-  function handleSubmit(message: PromptInputMessage) {
-    const value = (message.text ?? '').trim()
-    if (!value) return
-    if (pendingAskUser) {
-      addToolOutput({
-        toolCallId: pendingAskUser.toolCallId,
-        output: { answer: value },
-      })
-    } else {
-      void sendMessage({ text: value })
-    }
-    setText('')
-  }
-
-  // Generic resolution for a gen-UI tool card that the user dismisses. The
-  // concierge's gen-UI tools are read-only display cards (e.g. award options),
-  // so there is no approve/answer round-trip — reject just unblocks the agent.
-  function handleReject(toolCallId: string) {
-    addToolOutput({
-      toolCallId,
-      output: { ok: false, reason: 'rejected' },
-    })
-  }
-
-  const isEmpty = messages.length === 0
-  const busy = status === 'submitted' || status === 'streaming' || isStreaming
+  const [busy, setBusy] = useState(false)
 
   return (
     <div className="flex h-full flex-col">
@@ -131,8 +30,8 @@ export function ConciergeChat() {
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => clearHistory()}
-          disabled={messages.length === 0 || busy}
+          onClick={() => clearState.clear()}
+          disabled={!clearState.canClear || busy}
           title="Clear conversation"
           aria-label="Clear conversation"
         >
@@ -141,116 +40,30 @@ export function ConciergeChat() {
         </Button>
       </header>
 
-      <Conversation className="flex-1">
-        <ConversationContent role="log" aria-live="polite" aria-atomic={false} className="mx-auto w-full max-w-3xl px-4">
-          {isEmpty ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center text-muted-foreground">
-              <Database className="size-6" />
-              <p className="text-sm">
-                Ask a question to get started — e.g. &ldquo;How much did I spend on restaurants last
-                month?&rdquo;
-              </p>
-              <TelegramPairHint />
+      <DraftChat
+        agentOptions={{ agent: 'ConciergeDO', basePath: 'api/agents/concierge' }}
+        autoContinueAfterToolResult
+        resetAgentOnClear={false}
+        onBusyChange={setBusy}
+        onClearableChange={setClearState}
+        placeholder="Ask about your ledger…"
+        footerNote="MilesVault can make mistakes. Check important info."
+        emptyState={(composer) => (
+          <div className="flex flex-1 items-center justify-center px-4">
+            <div className="flex w-full max-w-3xl -translate-y-8 flex-col items-center gap-6">
+              <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
+                <Database className="size-6" />
+                <p className="text-sm">
+                  Ask a question to get started — e.g. &ldquo;How much did I spend on restaurants
+                  last month?&rdquo;
+                </p>
+                <TelegramPairHint />
+              </div>
+              <div className="flex w-full flex-col gap-3">{composer}</div>
             </div>
-          ) : null}
-
-          {messages.map((m) => {
-            const parts = (m.parts ?? []) as Part[]
-            return (
-              <Message key={m.id} from={m.role === 'user' ? 'user' : 'assistant'}>
-                <MessageContent>
-                  {parts.map((p, i) => {
-                    if (p.type === 'text' && typeof p.text === 'string') {
-                      return m.role === 'assistant' ? (
-                        <MessageResponse key={i}>{p.text}</MessageResponse>
-                      ) : (
-                        <span key={i} className="whitespace-pre-wrap">
-                          {p.text}
-                        </span>
-                      )
-                    }
-                    if (p.type === 'reasoning' && typeof p.text === 'string') {
-                      return (
-                        <Reasoning key={i} isStreaming={p.state === 'streaming'} defaultOpen>
-                          <ReasoningTrigger />
-                          <ReasoningContent>{p.text}</ReasoningContent>
-                        </Reasoning>
-                      )
-                    }
-                    if (isToolPart(p)) {
-                      const name = toolNameOf(p) ?? 'tool'
-                      const toolCallId = p.toolCallId ?? `${m.id}-${i}`
-                      const toolState = (p.state as ToolUIPart['state']) ?? 'output-available'
-                      // Gen-UI tools render as a component from the tool-call
-                      // input. Wait for input-available — partial streamed args
-                      // would render a half-formed card. The card self-fetches
-                      // its data, so no output round-trip is needed here.
-                      const card =
-                        isGenUiTool(name) && toolState !== 'input-streaming'
-                          ? renderGenUi(name, p.input, {
-                              status:
-                                toolState === 'output-error'
-                                  ? 'failed'
-                                  : toolState === 'output-available'
-                                    ? 'done'
-                                    : 'idle',
-                              errorMessage: p.errorText,
-                              onReject: () => handleReject(toolCallId),
-                            })
-                          : null
-                      if (card) return <div key={i}>{card}</div>
-                      return (
-                        <Tool key={i}>
-                          <ToolHeader type={`tool-${name}`} state={toolState} />
-                          <ToolContent>
-                            {p.input ? (
-                              <pre className="overflow-x-auto rounded bg-muted p-2 text-xs text-foreground">
-                                {JSON.stringify(p.input, null, 2)}
-                              </pre>
-                            ) : null}
-                            {p.errorText ? (
-                              <p className="text-xs text-destructive">{p.errorText}</p>
-                            ) : null}
-                          </ToolContent>
-                        </Tool>
-                      )
-                    }
-                    return null
-                  })}
-                </MessageContent>
-              </Message>
-            )
-          })}
-
-          {busy ? (
-            <div
-              role="status"
-              aria-label="Assistant is thinking"
-              className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground"
-            >
-              <Loader size={14} />
-              thinking…
-            </div>
-          ) : null}
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
-
-      <div className="mx-auto w-full max-w-3xl px-4 pb-4">
-        <PromptInput onSubmit={handleSubmit}>
-          <PromptInputTextarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Ask about your ledger…"
-          />
-          <PromptInputFooter>
-            <PromptInputTools />
-            <PromptInputSubmit status={status} onStop={stop} disabled={!text.trim() || busy}>
-              <ArrowUp className="size-4" />
-            </PromptInputSubmit>
-          </PromptInputFooter>
-        </PromptInput>
-      </div>
+          </div>
+        )}
+      />
     </div>
   )
 }
