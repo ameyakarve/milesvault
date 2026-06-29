@@ -98,7 +98,7 @@ tests:
           and ratios in the chat text. A one-line lead-in before the link is fine.
 
   # ---- 2. reach a currency "from my cards" → /points link, INBOUND ----
-  - description: '2 — how do I get Avios from my cards (link, not program/avios)'
+  - description: '2 — how do I get Avios from my cards (link, resolves)'
     vars:
       message: 'How do I get Avios from my cards?'
     assert:
@@ -106,16 +106,14 @@ tests:
         value: "output.links.some(l => l.kind === 'points')"
         metric: emits-points-link
       - type: javascript
-        value: "output.links.filter(l => l.kind === 'points').every(l => l.target !== 'program/avios')"
-        metric: not-avios-umbrella
-      - type: javascript
         value: "output.links.some(l => l.kind === 'points' && l.dir === 'to')"
         metric: dir-inbound
       - type: llm-rubric
         value: >
-          The reply gives a /points deep link to a CONCRETE Avios programme (e.g.
-          British Airways Club / the-club, Qatar Privilege Club, Iberia), NOT to a
-          bare "Avios" currency umbrella. It does not recite ratios in chat.
+          The reply gives a /points deep link for Avios that resolves to a real
+          programme (program/avios now aliases to British Airways Club, or it may
+          target the-club / Qatar / Iberia directly — all fine). It does not recite
+          ratios in chat.
 
   # ---- 3. single named A→B fact → INLINE ratio, no link, no wandering ----
   - description: '3 — MR → KrisFlyer ratio (inline, no link)'
@@ -190,16 +188,13 @@ tests:
           recite routes/ratios in chat.
 
   # ---- 7. best card for a currency → /points link (the grounding regression) ----
-  - description: '7 — best card for Avios (link, grounded, not invented slug)'
+  - description: '7 — best card for Avios (link, grounded, resolves)'
     vars:
       message: 'what is the best card for avios?'
     assert:
       - type: javascript
         value: "output.links.some(l => l.kind === 'points')"
         metric: emits-points-link
-      - type: javascript
-        value: "output.links.filter(l => l.kind === 'points').every(l => l.target !== 'program/avios')"
-        metric: not-avios-umbrella
       - type: javascript
         value: "output.trace.some(t => t.tool === 'reward_accounts')"
         metric: called-reward-accounts
@@ -208,9 +203,10 @@ tests:
         metric: dir-inbound
       - type: llm-rubric
         value: >
-          The reply gives a /points deep link for Avios pointing at a CONCRETE
-          programme slug (e.g. the-club), reached by calling reward_accounts — NOT
-          a made-up slug like program/britishairways or the program/avios umbrella.
+          The reply gives a /points deep link for Avios that resolves to a real
+          programme (program/avios now aliases to British Airways Club, or the-club
+          directly — both fine), reached by calling reward_accounts. NOT a made-up
+          slug like program/britishairways (which does not resolve).
 
   # ===== 2. Card earning (EARNS_INTO) — KG fact, prose, NOT a link =====
   - description: '2a — what does HDFC Infinia earn into'
@@ -327,12 +323,13 @@ tests:
       message: "What's the cheapest way to top up Avios from India?"
     assert:
       - type: javascript
-        value: "output.links.some(l => l.kind === 'points') && output.links.filter(l => l.kind==='points').every(l => l.target !== 'program/avios')"
-        metric: points-link-concrete
+        value: "output.links.some(l => l.kind === 'points')"
+        metric: points-link
       - type: llm-rubric
         value: >
-          Points to the /points screen for an Avios programme (a concrete one, not
-          the program/avios umbrella). Does not recite transfer routes/ratios.
+          Points to the /points screen for Avios with a link that resolves
+          (program/avios now aliases to British Airways Club, or a concrete Avios
+          programme directly — both fine). Does not recite transfer routes/ratios.
   - description: '7b — which of my currencies reach Aeroplan'
     vars:
       message: 'Which of my currencies can reach Aeroplan, and how?'
