@@ -136,7 +136,20 @@ export class ConciergeDO
   // paired sender resolves to their own concierge sub-agent keyed by storage key
   // — a separate instance from the web chat, same ledger. (whatsapp.ts)
   override getMessengers(): ThinkMessengers {
-    return buildWhatsappMessengers(this.env as unknown as Parameters<typeof buildWhatsappMessengers>[0])
+    return buildWhatsappMessengers(this.env as unknown as Parameters<typeof buildWhatsappMessengers>[0], this)
+  }
+
+  // Clear a paired messenger user's concierge history — their per-user sub-agent
+  // (a facet keyed by storage key) is reset to empty so the next message starts
+  // a fresh conversation. Invoked by the `/clear` command in the WhatsApp
+  // resolver. Best-effort: a clear failure must not break the turn.
+  async clearMessengerThread(key: string): Promise<void> {
+    const sub = await (
+      this as unknown as {
+        subAgent: (cls: unknown, name: string) => Promise<{ clearMessages: () => Promise<void> }>
+      }
+    ).subAgent(this.constructor, key)
+    await sub.clearMessages()
   }
 
   protected override async beforeTurnFetch(): Promise<void> {

@@ -63,8 +63,11 @@ async function redeemPairCode(db: D1Database, waId: string, code: string): Promi
   return row.email
 }
 
+// The host (ConciergeDO) — used to reset a paired user's sub-agent on /clear.
+type MessengerHost = { clearMessengerThread: (key: string) => Promise<void> }
+
 // Build the concierge's messenger map. Returns {} until the Meta secrets exist.
-export function buildWhatsappMessengers(env: WhatsAppEnv): ThinkMessengers {
+export function buildWhatsappMessengers(env: WhatsAppEnv, host: MessengerHost): ThinkMessengers {
   const { WHATSAPP_ACCESS_TOKEN, WHATSAPP_APP_SECRET, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN, D1 } = env
   if (
     !WHATSAPP_ACCESS_TOKEN ||
@@ -115,7 +118,15 @@ export function buildWhatsappMessengers(env: WhatsAppEnv): ThinkMessengers {
 
           const paired = await lookupPairedKey(db, waId)
           if (paired) {
-            console.log('[wa] paired -> subagent', { waId })
+            // `/clear` resets the conversation: wipe the user's sub-agent history
+            // so the next message starts fresh. The (now-empty) sub-agent then
+            // handles the `/clear` message and replies per the prompt.
+            if (text.trim().toLowerCase() === '/clear') {
+              console.log('[wa] /clear', { waId })
+              await host.clearMessengerThread(paired).catch((e) =>
+                console.error('[wa] clear failed', { err: String(e) }),
+              )
+            }
             return { target: 'subagent' as const, name: paired }
           }
 
