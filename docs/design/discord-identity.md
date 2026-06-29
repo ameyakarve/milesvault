@@ -33,8 +33,10 @@ optional *attribute*, not identity.
 3. **Access gate** = the existing YouTube-membership **role** in the owner's
    guild. **Hard gate**: no role → no login. Ledger data is retained
    server-side but inaccessible until the role returns. No grace window.
-4. **Migration** = approach **A (alias rows), run offline before any login.**
-   No Durable Object data is moved.
+4. **Migration** = **automatic at first login**, no offline step. `storage_key`
+   prefers the Discord email; every pre-cutover user has one (emailless logins
+   were rejected) and their ledger already lives under it, so they are preserved
+   with no email↔snowflake map. No Durable Object data is moved.
 5. Email-ingest forwarding, ledger model, agents, KG, and the LLM-first ingest
    pipeline are **unchanged** — this is purely identity / auth / routing.
 
@@ -54,9 +56,10 @@ user_keys
   created_at   INTEGER NOT NULL
 ```
 
-- **New users**: `storage_key = uid` (the snowflake itself).
-- **Legacy 30 users**: `storage_key = <their old email>` — so their existing
-  `LedgerDO(email)` is found unchanged.
+- **Has an email** (every pre-cutover user — emailless logins were rejected):
+  `storage_key = email`. Their existing `LedgerDO(email)` is found unchanged, so
+  they are **auto-migrated on first login** — no offline seed, no map.
+- **No email** (newly able to sign in, no prior data): `storage_key = uid`.
 
 All DO routing becomes: authenticated `uid` → `user_keys.storage_key` →
 `LEDGER_DO.idFromName(storage_key)`. To avoid a D1 read per agent request, the
@@ -106,25 +109,23 @@ pairings keep working untouched**; only new users get snowflake storage keys.
   (the owner needs their own snowflake whitelisted + the membership role, or an
   explicit owner override).
 
-### One-shot offline migration (the 30, manual correlation)
+### Migration: automatic at first login
 
-1. **Dump the roster** — admin script using the **bot token** +
-   `GET /guilds/{id}/members` (requires the **`GUILD_MEMBERS` privileged
-   intent** enabled and the bot present in the guild) →
-   `{ snowflake, username, has_membership_role }`.
-2. **Owner correlates** email → snowflake by recognizing handles → a 30-row map.
-3. **Seed `user_keys`** offline: insert
-   `(uid = snowflake, storage_key = email, email = email)` per row. Idempotent.
-   Their ledger is now reachable from their Discord login. **Zero data moved.**
-4. Runs **before launch / before any login** — login is then a pure lookup.
-   An unmapped Discord login simply starts a fresh snowflake-keyed account; it
-   can be aliased later by re-running the seed for that user.
+No offline step, no roster correlation, no map. `resolveStorageKey` keys an
+unseeded uid by its **Discord email when present**, else the snowflake. Every
+pre-cutover user has an email (emailless logins were rejected before this
+change) and their ledger already lives under it, so their first post-cutover
+login records `user_keys(uid, storage_key = email)` and finds their data
+unchanged. The same Discord account returns the same email every time, so the
+match is reliable; the recorded row makes the key stable even if they later
+change their email. **Zero data moved, zero manual work.** Emailless accounts
+(now able to sign in) have no prior data and start fresh on their snowflake.
 
 ## Sequencing
 
 1. **This refactor** (auth swap, snowflake identity, `user_keys`, membership
-   gate, offline migration) — verified by the editor + concierge eval suites
-   (test-identity path untouched).
+   gate, auto-migration at login) — verified by the editor + concierge eval
+   suites (test-identity path untouched).
 2. **Then WhatsApp/messengers** keyed by snowflake: pairing maps
    `wa_id → uid`; the concierge sub-agent reads `LEDGER_DO` via `storage_key`.
 3. **Discord-as-a-messaging-channel** later needs **no pairing** — a Discord DM
@@ -136,8 +137,10 @@ pairings keep working untouched**; only new users get snowflake storage keys.
   it returns. Intended for a membership product; data is retained, not deleted.
 - **Single provider**: a Discord outage means no login. Acceptable for a
   Discord-gated product.
-- **Privileged intent + bot-in-guild** required for the roster dump — a one-time
-  Discord developer-portal setting on the owner's side.
+- **Email-scope dependency**: auto-migration relies on Discord returning the
+  user's email on re-login. It does (the scope was already granted, since their
+  data is keyed by that email) — but a user who removed their email would orphan
+  their old data until manually re-aliased.
 - **next-auth v5-beta Discord provider** config to confirm at build time, plus
   the exact shape of `GET /users/@me/guilds/{id}/member` and role-id retrieval.
 
@@ -165,25 +168,11 @@ routing only.
   `inject-do.mjs` (manual run of the live daily `refresh-magnify` workflow),
   gated by `key === ALLOWED_EMAILS[0]` (the owner's storage key is their email).
 
-## Migration runbook
+## Migration
 
-Runs **offline, before login**, out-of-band via `wrangler d1 execute` (so it
-needs no in-app auth — avoiding the owner-gate bootstrap deadlock). Staging and
-production share one D1, so a single apply covers both.
-
-```sh
-# 1. (optional) dump the guild roster to correlate emails → snowflakes.
-#    Needs a bot in the guild with the GUILD_MEMBERS privileged intent.
-DISCORD_BOT_TOKEN=xxx DISCORD_GUILD_ID=123 DISCORD_MEMBER_ROLE_ID=456 \
-  node scripts/migrate-identity.mjs roster > roster.tsv
-
-# 2. hand-build map.csv with `email,uid` rows for the ~30 (include the OWNER,
-#    so their storage_key stays their email and the workflows gate keeps working).
-
-# 3. emit + review SQL, then apply.
-node scripts/migrate-identity.mjs seed map.csv > seed.sql
-npx wrangler d1 execute milesvault --remote --file seed.sql
-```
-
-New users are NOT seeded — they get `storage_key = uid` on first login via
-`resolveStorageKey`.
+Nothing to run. Migration is automatic in `resolveStorageKey` (see "Migration:
+automatic at first login" above): each user's first post-cutover login records
+`user_keys(uid, storage_key = email ?? uid)` and their existing email-keyed
+ledger is found unchanged. The owner is covered the same way — their storage key
+is their Discord email (= `ALLOWED_EMAILS[0]`), so the workflows gate keeps
+recognizing them. No offline seed, no roster, no map.

@@ -5,11 +5,14 @@
 // (nullable: phone signups, scope declined) so we NEVER key on it.
 //
 // Per-user Durable Objects (LEDGER_DO, CHAT_DO, CONCIERGE_DO) are addressed by a
-// `storage_key`, resolved from the uid via `user_keys`:
-//   - new users         → storage_key = uid (the snowflake)
-//   - legacy (the ~30)  → storage_key = their old email, pre-seeded offline by
-//                         the migration so their existing LedgerDO is reachable.
-// No Durable Object data is ever moved; the table is a one-row alias.
+// `storage_key`, resolved from the uid via `user_keys` and recorded on first
+// login (stable thereafter, even if the user later changes their email):
+//   - has an email → storage_key = email. Every pre-cutover user has one (logins
+//                    without an email were rejected) and their ledger already
+//                    lives under that email, so this AUTO-MIGRATES them — no
+//                    offline seed, no email↔snowflake map.
+//   - no email     → storage_key = uid (the snowflake). Such accounts are newly
+//                    able to sign in and have no prior data, so they start fresh.
 
 export const USER_KEYS_DDL = `CREATE TABLE IF NOT EXISTS user_keys (
   uid         TEXT PRIMARY KEY,
@@ -43,13 +46,20 @@ export async function resolveStorageKey(
     }
     return existing.storage_key
   }
+  // First login for this snowflake. Prefer the email as the storage key: every
+  // EXISTING user has one (emailless logins were rejected before this cutover)
+  // and their ledger lives under that email — so keying by it auto-preserves
+  // their data with no offline migration. Emailless accounts (now newly able to
+  // sign in) have no prior data, so they start fresh on the snowflake. The row
+  // is recorded, so the key is stable even if the user later changes their email.
+  const storageKey = email ?? uid
   await db
     .prepare('INSERT OR IGNORE INTO user_keys (uid, storage_key, email, created_at) VALUES (?, ?, ?, ?)')
-    .bind(uid, uid, email ?? null, Date.now())
+    .bind(uid, storageKey, email ?? null, Date.now())
     .run()
   const after = await db
     .prepare('SELECT storage_key FROM user_keys WHERE uid = ?')
     .bind(uid)
     .first<{ storage_key: string }>()
-  return after?.storage_key ?? uid
+  return after?.storage_key ?? storageKey
 }
