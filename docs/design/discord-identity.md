@@ -146,3 +146,44 @@ pairings keep working untouched**; only new users get snowflake storage keys.
 The statement-ingest pipeline (LLM-first), the ledger data model, the
 editor/concierge agents, and the `~/milesvault-kg` content. Identity, auth, and
 routing only.
+
+---
+
+## As-built notes
+
+- The Discord provider + the membership role hard-gate already existed (a prior
+  cutover). The work here was the **email→snowflake re-key**: `signIn` no longer
+  requires an email (gates on snowflake + role); a `jwt` callback stamps `uid`
+  and the resolved `key`; `session.user.{id,key}` are exposed. Existing live
+  sessions degrade gracefully — `session.user.key` falls back to the old email
+  until the next login.
+- The ~30 API routes + pages now key Durable Objects / flags by
+  `session.user.key`. `settings` still shows the real (nullable) email.
+- **Owner gating.** The temporary owner-only admin endpoints were **removed**
+  (`/api/admin/migrate-rewards`, `/api/admin/youtube/{connect,callback,status}`).
+  The only remaining owner gate is the `/api/admin/workflows/*` trigger in
+  `inject-do.mjs` (manual run of the live daily `refresh-magnify` workflow),
+  gated by `key === ALLOWED_EMAILS[0]` (the owner's storage key is their email).
+
+## Migration runbook
+
+Runs **offline, before login**, out-of-band via `wrangler d1 execute` (so it
+needs no in-app auth — avoiding the owner-gate bootstrap deadlock). Staging and
+production share one D1, so a single apply covers both.
+
+```sh
+# 1. (optional) dump the guild roster to correlate emails → snowflakes.
+#    Needs a bot in the guild with the GUILD_MEMBERS privileged intent.
+DISCORD_BOT_TOKEN=xxx DISCORD_GUILD_ID=123 DISCORD_MEMBER_ROLE_ID=456 \
+  node scripts/migrate-identity.mjs roster > roster.tsv
+
+# 2. hand-build map.csv with `email,uid` rows for the ~30 (include the OWNER,
+#    so their storage_key stays their email and the workflows gate keeps working).
+
+# 3. emit + review SQL, then apply.
+node scripts/migrate-identity.mjs seed map.csv > seed.sql
+npx wrangler d1 execute milesvault --remote --file seed.sql
+```
+
+New users are NOT seeded — they get `storage_key = uid` on first login via
+`resolveStorageKey`.
