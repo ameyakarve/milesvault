@@ -50,10 +50,18 @@ function runLane(k) {
   if (start >= M) return Promise.resolve({ k, pass: 0, fail: 0, code: 0, empty: true })
   const out = join(tmp, `lane-${k}.json`)
   return new Promise((resolve) => {
-    const env = { ...process.env, MV_TEST_ACCOUNT: String(k) }
+    // Each lane gets its own promptfoo state dir AND --no-write, so the parallel
+    // processes never contend on the shared ~/.promptfoo results DB (a libsql
+    // lock there crashed a lane). We only read the -o JSON below.
+    const pfDir = join(tmp, `pf-${k}`)
+    const env = {
+      ...process.env,
+      MV_TEST_ACCOUNT: String(k),
+      PROMPTFOO_CONFIG_DIR: pfDir,
+    }
     const args = [
       'promptfoo', 'eval', '-c', configPath,
-      '--no-cache', '-j', '1',
+      '--no-cache', '--no-write', '-j', '1',
       '--filter-range', `${start}:${end}`,
       '-o', out,
     ]
