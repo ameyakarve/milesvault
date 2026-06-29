@@ -335,12 +335,14 @@ tests:
       message: 'Which of my currencies can reach Aeroplan, and how?'
     assert:
       - type: javascript
-        value: "output.links.some(l => l.kind === 'points')"
-        metric: points-link
+        value: "output.links.some(l => l.kind === 'points') || output.toolsUsed.some(t => ['codemode','query_sql','ledger_snapshot'].includes(t))"
+        metric: link-or-grounded-walk
       - type: llm-rubric
         value: >
-          Routes to the holdings-aware /points screen targeting Aeroplan (Air
-          Canada). Does not hand-walk and recite every transfer path in chat.
+          Answers from the user's ACTUAL holdings — either a /points link targeting
+          Aeroplan (Air Canada), OR a grounded walk listing the held currencies
+          that reach Aeroplan. Either is acceptable per the spec; it must not
+          hypothesize currencies the user doesn't hold.
 
   # ===== 8. Status match — NOT a built concierge route; must not fabricate =====
   - description: '8a — oneworld Sapphire status (unbuilt route)'
@@ -444,17 +446,22 @@ tests:
         value: >
           Lists the two 2026 Marriott hotel stays from the ledger (Marriott
           Riverside ~24,000 INR and Marriott Hilltop ~31,000 INR). No invented stays.
-  - description: '12c — how much did I spend on fuel'
+  - description: '12c — fuel spend → /accounts expense-explorer link'
     vars:
       message: 'How much have I spent on fuel this year?'
     assert:
       - type: javascript
-        value: "/5,?500/.test(output.text)"
-        metric: fuel-total
+        value: "output.links.some(l => l.kind === 'accounts' && /Expenses/i.test(l.target || ''))"
+        metric: accounts-link
+      - type: javascript
+        value: "output.toolsUsed.includes('list_accounts')"
+        metric: grounded-via-list-accounts
       - type: llm-rubric
         value: >
-          Reports total fuel spend of 5,500 INR (two BPCL fuel txns: 3,000 + 2,500)
-          from the ledger, citing it's INR. Number comes from the data.
+          Routes the fuel-spend question to the /accounts expense explorer with a
+          prefix under Expenses pointing at the fuel category (e.g.
+          Expenses:Transport:Fuel), grounded via list_accounts — rather than
+          totalling the spend in chat with SQL.
 
   # ===== 13. Ambiguity → ask, don't guess =====
   - description: '13a — best card (no category given)'

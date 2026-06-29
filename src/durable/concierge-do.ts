@@ -36,6 +36,7 @@ import {
   ledgerSnapshotTool,
   makeKbTools,
   querySqlTool,
+  listAccountsTool,
   resolveByBeancountName,
   resolveByTicker,
   showAwardOptionsTool,
@@ -734,6 +735,7 @@ export class ConciergeDO
       ...kb,
       ledger_snapshot,
       query_sql,
+      list_accounts: listAccountsTool((sql, params) => this.ledgerStub().query_sql(sql, params)),
       codemode,
       reward_accounts: rewardAccountsTool(kbHttp),
       show_award_options: showAwardOptionsTool(),
@@ -756,7 +758,7 @@ export class ConciergeDO
     trace: Array<{ tool: string; input: unknown }>
     links: Array<{
       href: string
-      kind: 'points' | 'explore'
+      kind: 'points' | 'explore' | 'accounts'
       target: string | null
       dir: string | null
       targetExists: boolean | null
@@ -829,7 +831,7 @@ export class ConciergeDO
   ): Promise<
     Array<{
       href: string
-      kind: 'points' | 'explore'
+      kind: 'points' | 'explore' | 'accounts'
       target: string | null
       dir: string | null
       targetExists: boolean | null
@@ -837,20 +839,21 @@ export class ConciergeDO
   > {
     const out: Array<{
       href: string
-      kind: 'points' | 'explore'
+      kind: 'points' | 'explore' | 'accounts'
       target: string | null
       dir: string | null
       targetExists: boolean | null
     }> = []
-    const re = /\/(points|explore)\?([^\s)\]]+)/g
+    const re = /\/(points|explore|accounts)\?([^\s)\]]+)/g
     const seen = new Set<string>()
     for (let m = re.exec(text); m !== null; m = re.exec(text)) {
       const href = m[0]
       if (seen.has(href)) continue
       seen.add(href)
-      const kind = m[1] as 'points' | 'explore'
+      const kind = m[1] as 'points' | 'explore' | 'accounts'
       const qs = new URLSearchParams(m[2]!.replace(/&amp;/g, '&'))
-      const target = qs.get('target')
+      // /accounts links carry `prefix`; /points + /explore carry `target`.
+      const target = kind === 'accounts' ? qs.get('prefix') : qs.get('target')
       const dir = qs.get('dir')
       let targetExists: boolean | null = null
       if (kind === 'points' && target) {

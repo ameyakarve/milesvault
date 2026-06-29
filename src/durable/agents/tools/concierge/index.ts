@@ -1,4 +1,5 @@
 export { querySqlTool, type QuerySqlResult } from './query-sql'
+export { listAccountsTool } from './list-accounts'
 export { ledgerSnapshotTool } from './ledger-snapshot'
 export { askUserTool, askUserInputSchema } from './ask-user'
 export { showAwardOptionsTool } from './show-award-options'
