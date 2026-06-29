@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: Request): Promise<Response> {
   if (!process.env.TEST_USER_TOKEN) return new NextResponse('not found', { status: 404 })
   const session = await auth()
-  if (session?.user?.email !== TEST_USER_EMAIL) {
+  if (session?.user?.key !== TEST_USER_EMAIL) {
     return new NextResponse('forbidden', { status: 403 })
   }
   const body = (await req.json().catch((): null => null)) as { intent?: unknown } | null

@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic'
 // calls in one assistant message) without UI rendering in the way.
 export async function GET(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
-  const chat = await getChatClient(session.user.email)
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
+  const chat = await getChatClient(session.user.key)
   const messages = await chat.dump_messages()
   return NextResponse.json({ count: messages.length, messages })
 }

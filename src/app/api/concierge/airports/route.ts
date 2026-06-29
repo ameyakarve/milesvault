@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // per keystroke.
 export async function GET(req: NextRequest): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const q = (new URL(req.url).searchParams.get('q') ?? '').trim()
   if (q.length < 2) return NextResponse.json({ airports: [] })

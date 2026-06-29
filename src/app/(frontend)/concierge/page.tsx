@@ -7,11 +7,12 @@ import { conciergeEnabled } from '@/lib/flags'
 
 export default async function ConciergePage() {
   const session = await auth()
-  if (!session?.user?.email) redirect('/login?callbackUrl=/concierge')
+  if (!session?.user?.key) redirect('/login?callbackUrl=/concierge')
 
-  // Concierge kill switch — off for non-admins; bounce them home.
+  // Concierge kill switch — off for non-admins; bounce them home. Flag targeting
+  // uses the storage key (owner's key = their email → existing rule matches).
   const { env } = await getCloudflareContext({ async: true })
-  if (!(await conciergeEnabled(env as Cloudflare.Env, { email: session.user.email }))) {
+  if (!(await conciergeEnabled(env as Cloudflare.Env, { email: session.user.key }))) {
     redirect('/vault')
   }
 

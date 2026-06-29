@@ -23,7 +23,8 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 export async function POST(req: Request): Promise<Response> {
   const session = await auth()
-  if (session?.user?.email !== OWNER_EMAIL) return new NextResponse('forbidden', { status: 403 })
+  // Owner gate: the owner's storage key is their email.
+  if (session?.user?.key !== OWNER_EMAIL) return new NextResponse('forbidden', { status: 403 })
 
   const body = (await req.json().catch((): null => null)) as
     | { email?: string; id?: string; dryRun?: boolean; buffer?: string; expectBefore?: string }

@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 // pool `Assets:Rewards:<Bank>` or a programme `Assets:Rewards:<Programme>`).
 export async function GET(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email)
+  if (!session?.user?.key)
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const { env } = await getCloudflareContext({ async: true })

@@ -27,7 +27,7 @@ const ISSUERS = [
 
 export async function GET(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email)
+  if (!session?.user?.key)
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   return NextResponse.json({ items: ISSUERS })
 }

@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 // (slug + display name). The combobox loads it once and filters client-side.
 export async function GET(): Promise<Response> {
   const session = await auth()
-  if (!session?.user?.email) return new NextResponse('unauthorized', { status: 401 })
+  if (!session?.user?.key) return new NextResponse('unauthorized', { status: 401 })
 
   const { env } = await getCloudflareContext({ async: true })
   const ns = (env as Cloudflare.Env).CONCIERGE_DO as
@@ -17,7 +17,7 @@ export async function GET(): Promise<Response> {
     | undefined
   if (!ns) return new NextResponse('CONCIERGE_DO binding missing', { status: 500 })
 
-  const stub = ns.get(ns.idFromName(session.user.email))
+  const stub = ns.get(ns.idFromName(session.user.key))
   const currencies = await stub.loyaltyCurrencies()
   return NextResponse.json({ currencies })
 }

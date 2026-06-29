@@ -9,11 +9,12 @@ export const dynamic = 'force-dynamic'
 // times. Visit /api/admin/youtube/status after bootstrapping.
 export async function GET(): Promise<Response> {
   const session = await auth()
-  const email = session?.user?.email
+  // Owner gate: the owner's storage key is their email (= ALLOWED_EMAILS[0]).
+  const key = session?.user?.key
   const { env } = await getCloudflareContext({ async: true })
   const cf = env as Cloudflare.Env
   const owner = ownerEmail(cf)
-  if (!email || !owner || email !== owner) return new NextResponse('forbidden', { status: 403 })
+  if (!key || !owner || key !== owner) return new NextResponse('forbidden', { status: 403 })
   return NextResponse.json({
     gateEnabled: (cf as { MEMBERSHIP_GATE?: string }).MEMBERSHIP_GATE === '1',
     ...(await membershipStub(cf).status()),
