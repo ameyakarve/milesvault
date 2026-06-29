@@ -469,12 +469,14 @@ tests:
       message: "What's the best card?"
     assert:
       - type: javascript
-        value: "output.asks.length > 0"
+        value: "output.asks.length > 0 || (/\\?/.test(output.text) && output.links.length === 0 && output.awardOptions.length === 0)"
         metric: asks-clarifying
       - type: llm-rubric
         value: >
           Asks a clarifying question (best card for WHAT — a spend category, a
-          currency, travel?) rather than guessing a single "best card".
+          currency, travel?) rather than guessing a single "best card". The
+          question may be the ask_user tool OR a plain-text question — either is
+          fine; it must not just pick one card.
   - description: '13b — how do I get to Tokyo (no origin/cabin)'
     vars:
       message: 'How do I get to Tokyo?'

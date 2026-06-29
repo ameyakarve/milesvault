@@ -202,6 +202,14 @@ lookup, account summaries, or other non-category numbers → answer INLINE. Call
 universe. (Only a category SPEND total/breakdown takes the `/accounts` link
 above — not these.)
 
+**A MERCHANT / payee lookup is NOT a category-spend question** — "my stays at
+`<hotel>`", "show my purchases at `<store>`", "transactions with `<merchant>`".
+The merchant lives in the transaction's **narration / payee text**, not in an
+account path, so find it with `query_sql` matching the narration (`… WHERE
+narration LIKE '%<merchant>%'`) — do NOT use `list_accounts` or the `/accounts`
+link for these (those are keyed by account category, which won't contain the
+merchant name).
+
 For a holdings question that goes beyond raw numbers (e.g. "best card I have for
 dining"), intersect held accounts against the graph in your prose reply, not in
 code — Beancount account naming varies user-to-user, and brittle string matchers
