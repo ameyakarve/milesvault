@@ -154,15 +154,12 @@ ${snapshot.sample_txns.trim() || '(no transactions yet)'}`
 // handoff, no codemode: the agent holds all the read tools at once. The
 // `agentsBriefing` is the live `/api/kb/agents.md` document (schema + counts),
 // fetched per turn so the agent sees the current type vocabulary.
-export function buildConciergeSystem(
-  snapshot: AnalystSnapshot,
-  agentsBriefing: string,
-): string {
-  return [
-    CONCIERGE_ROLE,
-    BEANCOUNT_PRIMER,
-    renderAnalystSnapshotBlock(snapshot),
-    '# Live graph schema',
-    agentsBriefing.trim(),
-  ].join('\n\n---\n\n')
+//
+// Deliberately LEAN: no inline ledger snapshot (schema DDL + sample txns +
+// accounts) and no beancount primer. Those bloated the prompt to ~22-31K tokens
+// and buried the branch rules for a weak model, and the concierge gets every
+// bit of ledger data through its tools (ledger_snapshot / query_sql /
+// list_accounts) anyway. Add a dedicated tool if a turn needs the schema.
+export function buildConciergeSystem(agentsBriefing: string): string {
+  return [CONCIERGE_ROLE, '# Live graph schema', agentsBriefing.trim()].join('\n\n---\n\n')
 }

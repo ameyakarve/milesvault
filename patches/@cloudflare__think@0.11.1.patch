@@ -1,11 +1,11 @@
-diff --git a/dist/think.d.ts b/dist/think.d.ts
-index b7a574f8ab8d22a135cb2c1caf34cc4c78c80096..cabb73cd1b3d462075dd38a48880b856e34b8291 100644
---- a/dist/think.d.ts
-+++ b/dist/think.d.ts
-@@ -227,6 +227,16 @@ interface TurnConfig {
-   experimental_telemetry?: Parameters<
+diff --git a/dist/index-CR4-ffm_.d.ts b/dist/index-CR4-ffm_.d.ts
+index 7f7590d2ded8fd0f25f97937fcdc05fe7f5ef57f..232d8fcefda233ae2697f45f853f2a2acc61f7b6 100644
+--- a/dist/index-CR4-ffm_.d.ts
++++ b/dist/index-CR4-ffm_.d.ts
+@@ -817,6 +817,16 @@ interface TurnConfig {
+   experimental_transform?: Parameters<
      typeof streamText
-   >[0]["experimental_telemetry"];
+   >[0]["experimental_transform"];
 +  /**
 +   * Optional tool-call repair callback. Forwarded to streamText as
 +   * `experimental_repairToolCall`. Invoked when a tool call fails input
@@ -20,14 +20,14 @@ index b7a574f8ab8d22a135cb2c1caf34cc4c78c80096..cabb73cd1b3d462075dd38a48880b856
     * Optional structured-output specification (AI SDK `output`).
     * Forwarded to `streamText` so the model's final response is parsed
 diff --git a/dist/think.js b/dist/think.js
-index e951279f912f4feb0d5746751d9eb79b9e414d9a..bfea48ff1702eabe074a5f38a898681459c77452 100644
+index 3e79f48f638f263499e9ee2a0226d1b0a0cc22ed..6e2d466bdfaa153b928d1fe18abebefa74d10a3c 100644
 --- a/dist/think.js
 +++ b/dist/think.js
-@@ -622,6 +622,7 @@ var Think = class Think extends Agent {
- 			stopWhen: finalStopWhen,
+@@ -2467,6 +2467,7 @@ var Think = class Think extends Agent {
  			providerOptions: config.providerOptions,
  			experimental_telemetry: config.experimental_telemetry,
+ 			experimental_transform: config.experimental_transform,
 +			experimental_repairToolCall: config.repairToolCall,
- 			output: config.output,
+ 			output: finalOutput,
  			abortSignal: input.signal,
  			prepareStep: (async (event) => {

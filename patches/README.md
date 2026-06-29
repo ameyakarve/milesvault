@@ -8,11 +8,14 @@ when the relevant code is touched.
 Patches are auto-applied on `pnpm install` (see `patchedDependencies` in
 `package.json`).
 
-## `@cloudflare__think@0.7.1.patch`
+## `@cloudflare__think@0.11.1.patch`
 
 **What it does**: adds a `repairToolCall?` field to `TurnConfig` and forwards
 it to the underlying `streamText({ experimental_repairToolCall })` call in
-`_runInferenceLoop`. ~3 lines.
+`_runInferenceLoop`. ~3 lines. (Re-anchored from the original `0.7.1` patch when
+we upgraded the agents SDK for messengers — `TurnConfig` moved into the bundled
+`dist/index-*.d.ts` chunk and the `streamText` call gained `experimental_transform`,
+but the field is still not exposed natively, so the patch is still required.)
 
 **Why it exists**: the AI SDK ships
 `experimental_repairToolCall` — a hook that fires when a tool call fails input
