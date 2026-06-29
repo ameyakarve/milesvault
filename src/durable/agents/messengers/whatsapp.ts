@@ -101,22 +101,33 @@ export function buildWhatsappMessengers(env: WhatsAppEnv): ThinkMessengers {
       // key. Pairing is handled inline: an unpaired sender's first message is
       // treated as a pairing code.
       conversation: async (event: MessengerEvent) => {
-        const waId = event.author?.userId
-        if (!waId) return { target: 'self' as const }
+        try {
+          const waId = event.author?.userId
+          const text = event.message?.text ?? ''
+          console.log('[wa] inbound', { waId, textLen: text.length, text: text.slice(0, 40), threadId: event.thread?.id })
+          if (!waId) return { target: 'self' as const }
 
-        const paired = await lookupPairedKey(db, waId)
-        if (paired) return { target: 'subagent' as const, name: paired }
+          const paired = await lookupPairedKey(db, waId)
+          if (paired) {
+            console.log('[wa] paired -> subagent', { waId })
+            return { target: 'subagent' as const, name: paired }
+          }
 
-        // Unpaired → try to redeem the message text as a pairing code.
-        const code = CODE_RE.exec(event.message?.text ?? '')?.[1]
-        if (code) {
-          const linked = await redeemPairCode(db, waId, code)
-          if (linked) return { target: 'subagent' as const, name: linked }
+          // Unpaired → try to redeem the message text as a pairing code.
+          const code = CODE_RE.exec(text)?.[1]
+          console.log('[wa] unpaired', { codeFound: code ?? null })
+          if (code) {
+            const linked = await redeemPairCode(db, waId, code)
+            console.log('[wa] redeem result', { linked: linked ? linked.slice(0, 12) + '…' : null })
+            if (linked) return { target: 'subagent' as const, name: linked }
+          }
+
+          // Still unpaired: the host instance handles the "get a code" reply.
+          return { target: 'self' as const }
+        } catch (e) {
+          console.error('[wa] resolver error', { err: String(e), stack: (e as Error)?.stack?.slice(0, 400) })
+          return { target: 'self' as const }
         }
-
-        // Still unpaired: the host instance handles the "get a code from the app"
-        // reply (see ConciergeDO's messenger-context handling).
-        return { target: 'self' as const }
       },
     }),
   }
