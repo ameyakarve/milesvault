@@ -46,6 +46,8 @@ import { askUserInputSchema } from './agents/tools/concierge/ask-user'
 import type { AgentHost, Registry } from './agents/types'
 import { baseAccount, isPending, kgLookupParts } from '@/lib/ledger-core/account-display'
 import { conciergeEnabled } from '@/lib/flags'
+import { buildWhatsappMessengers } from './agents/messengers/whatsapp'
+import type { ThinkMessengers } from '@cloudflare/think/messengers'
 
 // The chat/agent runtime for the `/concierge` surface. Read-only Q&A — over
 // the user's ledger (`analyst`) and the milesvault knowledge graph
@@ -139,6 +141,14 @@ export class ConciergeDO
   private ledgerStub(): DurableObjectStub<LedgerDO> {
     const ns = this.env.LEDGER_DO as unknown as DurableObjectNamespace<LedgerDO>
     return ns.get(ns.idFromName(this.name))
+  }
+
+  // Messenger channels routed through this agent. WhatsApp is live once the four
+  // WHATSAPP_* secrets are set; until then this is {} (no webhook exposed). Each
+  // paired sender resolves to their own concierge sub-agent keyed by storage key
+  // — a separate instance from the web chat, same ledger. (whatsapp.ts)
+  override getMessengers(): ThinkMessengers {
+    return buildWhatsappMessengers(this.env as unknown as Parameters<typeof buildWhatsappMessengers>[0])
   }
 
   private snapshot(): Snapshot {

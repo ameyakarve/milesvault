@@ -19,6 +19,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.5.0
         version: 1.5.0(@types/react@19.2.9)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      '@chat-adapter/whatsapp':
+        specifier: ^4.31.0
+        version: 4.31.0(ai@6.0.185(zod@4.4.3))(zod@4.4.3)
       '@cloudflare/ai-chat':
         specifier: ^0.9.1
         version: 0.9.1(@ai-sdk/react@3.0.216(react@19.2.1)(zod@4.4.3))(agents@0.17.1(@ai-sdk/react@3.0.216(react@19.2.1)(zod@4.4.3))(@babel/core@7.29.0)(@babel/runtime@7.29.2)(@cloudflare/workers-types@4.20260520.1)(ai@6.0.185(zod@4.4.3))(chat@4.31.0(ai@6.0.185(zod@4.4.3))(zod@4.4.3))(just-bash@3.0.2)(react@19.2.1)(rolldown@1.0.2)(vite@7.3.2(@types/node@22.19.9)(jiti@1.21.7)(sass@1.77.4)(terser@5.16.9)(tsx@4.21.0)(yaml@2.9.0))(zod@4.4.3))(ai@6.0.185(zod@4.4.3))(react@19.2.1)(zod@4.4.3)
@@ -1186,6 +1189,14 @@ packages:
 
   '@cfworker/json-schema@4.1.1':
     resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
+
+  '@chat-adapter/shared@4.31.0':
+    resolution: {integrity: sha512-vT/0S/LKSU5QTz5xJNWdiGp1jl55x0o8Z9I2VqlHfwjOKxVR87z++bQjXlE99w6BAxZjSYhWErlveyKo4LiDGg==}
+    engines: {node: '>=20'}
+
+  '@chat-adapter/whatsapp@4.31.0':
+    resolution: {integrity: sha512-aDLs2N1rVtci6CZ4dc2bSglBU1+QytPnMmKIVxy6W9fN/vPvv7tKbiCDNY6g5HIiixqU7QizHQ0Zbd4LOImJ0w==}
+    engines: {node: '>=20'}
 
   '@chevrotain/types@11.1.2':
     resolution: {integrity: sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw==}
@@ -11683,6 +11694,23 @@ snapshots:
       keyv: 5.6.0
 
   '@cfworker/json-schema@4.1.1': {}
+
+  '@chat-adapter/shared@4.31.0(ai@6.0.185(zod@4.4.3))(zod@4.4.3)':
+    dependencies:
+      chat: 4.31.0(ai@6.0.185(zod@4.4.3))(zod@4.4.3)
+    transitivePeerDependencies:
+      - ai
+      - supports-color
+      - zod
+
+  '@chat-adapter/whatsapp@4.31.0(ai@6.0.185(zod@4.4.3))(zod@4.4.3)':
+    dependencies:
+      '@chat-adapter/shared': 4.31.0(ai@6.0.185(zod@4.4.3))(zod@4.4.3)
+      chat: 4.31.0(ai@6.0.185(zod@4.4.3))(zod@4.4.3)
+    transitivePeerDependencies:
+      - ai
+      - supports-color
+      - zod
 
   '@chevrotain/types@11.1.2': {}
 
