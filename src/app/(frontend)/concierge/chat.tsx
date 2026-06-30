@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Database, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DraftChat } from '@/app/(frontend)/_chat/draft-chat'
@@ -16,6 +16,13 @@ export function ConciergeChat() {
     clear: () => {},
   })
   const [busy, setBusy] = useState(false)
+  // DraftChat opens a WebSocket via useAgent/useAgentChat; its first render
+  // depends on live socket state that can't exist during SSR, so server HTML and
+  // the first client render diverge (React #418). Mount it only after hydration
+  // — the same gate the editor uses — so DraftChat never SSRs and can use the
+  // library's real getInitialMessages loader (instead of the global null hack).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   return (
     <div className="flex h-full flex-col">
@@ -40,6 +47,7 @@ export function ConciergeChat() {
         </Button>
       </header>
 
+      {mounted && (
       <DraftChat
         agentOptions={{ agent: 'ConciergeDO', basePath: 'api/agents/concierge' }}
         autoContinueAfterToolResult
@@ -63,6 +71,7 @@ export function ConciergeChat() {
           </div>
         )}
       />
+      )}
     </div>
   )
 }
