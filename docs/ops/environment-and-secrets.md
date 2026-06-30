@@ -170,7 +170,7 @@ Both `.env` and `.dev.vars` are gitignored (`.gitignore` lines 41–42).
 4. **Shared-secret rotation** (#36): `DISCORD_BRIDGE_SECRET`, the WhatsApp
    token/app-secret, and the Discord bot token were all handled in plaintext
    during setup — rotate and confirm they're only in the stores above.
-5. ~~`ENABLE_HYDRATE`~~ **DONE (2026-06-30):** removed from the staging `vars`
-   (no code reference).
+5. **`ENABLE_HYDRATE`** (staging var) — no app-code reference found, but
+   **retained intentionally** (consumed by the build/hydrate path).
 6. **Single shared `D1`** across prod + staging — fine today (routing maps
    only), but worth keeping in mind: a bad write hits both environments.
