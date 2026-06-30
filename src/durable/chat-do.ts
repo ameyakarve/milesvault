@@ -617,14 +617,16 @@ ${consolidatedText}`,
         }
       }
       if (recorded.length > 0) {
-        await ledger.set_capture_drafts(statementId, recorded, null)
         // Surface the validated draft as a real `draft_transaction` chat message
-        // so the review opens straight into the editor's draft card (same UI +
-        // approve flow) and a follow-up turn has the proposal in context. The
-        // entries are injected VERBATIM via the framework's history primitive —
-        // the model never re-touches the validated draft (no second pass that
-        // could re-mangle it). Best-effort: a failure here doesn't fail the draft
-        // (the entries are already on the capture row).
+        // BEFORE flipping the capture to `extracted`. The UI reacts to the capture
+        // state (it polls captures and mounts the DraftChat when `extracted`), so
+        // if the state flips first the chat loads an empty thread and the card only
+        // shows on a later reconnect — i.e. it "appears very late". Surfacing first
+        // guarantees the card is already in the thread the moment the UI opens it.
+        // The entries are injected VERBATIM via the framework's history primitive —
+        // the model never re-touches the validated draft (no second pass that could
+        // re-mangle it). Best-effort: a failure here doesn't fail the draft (the
+        // entries still land on the capture row via set_capture_drafts below).
         try {
           await this.appendMessageToHistory({
             id: crypto.randomUUID(),
@@ -645,6 +647,7 @@ ${consolidatedText}`,
             err: String(e),
           })
         }
+        await ledger.set_capture_drafts(statementId, recorded, null)
       } else if (errored) {
         // Real model/gateway error or timeout mid-run — record the actual cause so
         // the Inbox shows it (and offers Retry) instead of a misleading
