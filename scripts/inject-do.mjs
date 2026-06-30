@@ -198,11 +198,13 @@ export default {
       // getToken must read the prod secure-prefixed cookie over https; the
       // shared __resolveAuth hardcodes secureCookie:false (http/staging only).
       const isHttps = url.protocol === "https:"
+      const cookieName = isHttps ? "__Secure-authjs.session-token" : __SESSION_COOKIE
       const token = await __authGetToken({
         req: request,
         secret: env.AUTH_SECRET,
         secureCookie: isHttps,
-        cookieName: isHttps ? "__Secure-authjs.session-token" : __SESSION_COOKIE,
+        cookieName,
+        salt: cookieName,
       }).catch(() => null)
       const authKey = token?.key ?? null
       const ownerKey = __ownerKey(env)
