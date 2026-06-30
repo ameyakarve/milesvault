@@ -208,9 +208,13 @@ export default {
       }).catch(() => null)
       const authKey = token?.key ?? null
       const ownerKey = __ownerKey(env)
-      if (!ownerKey || authKey !== ownerKey) {
-        // Temp endpoint: surface the resolved key so we can tell a cookie/secure
-        // miss (null) from an owner-key mismatch.
+      // Accept EITHER a valid owner session OR the one-time RECOVERY_TOKEN
+      // (set as a prod secret for this recovery; lets the operator fetch over
+      // curl without depending on session-cookie parsing). Remove with the
+      // endpoint.
+      const tokenOk = !!env.RECOVERY_TOKEN && url.searchParams.get("t") === env.RECOVERY_TOKEN
+      const ownerOk = !!ownerKey && authKey === ownerKey
+      if (!tokenOk && !ownerOk) {
         return new Response("forbidden: resolved key=" + (authKey ?? "null"), { status: 403 })
       }
       const target = url.searchParams.get("key")
