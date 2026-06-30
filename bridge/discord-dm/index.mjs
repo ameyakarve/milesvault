@@ -28,7 +28,28 @@ for (const [k, v] of Object.entries({ DISCORD_BOT_TOKEN, MILESVAULT_DM_URL, DISC
   }
 }
 
+// Origin for absolutising the app-relative links the concierge emits (e.g.
+// /points). Derived from the DM endpoint URL so staging/prod track automatically.
+const DM_ORIGIN = new URL(MILESVAULT_DM_URL).origin
+
 const DISCORD_MAX = 2000 // hard per-message character cap on Discord
+
+// Discord renders masked links `[label](url)` literally in normal messages and
+// won't resolve app-relative paths, so rewrite the concierge's links to bare,
+// absolute, click-through URLs: `[label](/points?x)` -> `label: <origin/points?x>`
+// (the <> keeps it clickable while suppressing the bulky embed card). Bare
+// absolute URLs are left as-is. Generic text rewrite — no domain specifics.
+function formatDiscordLinks(text, origin) {
+  const abs = (raw) => {
+    const u = raw.replace(/\\([&_*[\]()~`>])/g, '$1').trim()
+    return u.startsWith('/') ? origin + u : u
+  }
+  return text
+    .replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (_m, label, url) =>
+      label.trim() ? `${label.trim()}: <${abs(url)}>` : `<${abs(url)}>`,
+    )
+    .replace(/<(\/[^>\s]+)>/g, (_m, url) => `<${abs(url)}>`)
+}
 
 // Split a reply into <=2000-char chunks on paragraph/line boundaries so a long
 // answer arrives as a few clean messages instead of being rejected.
@@ -84,7 +105,9 @@ client.on(Events.MessageCreate, async (message) => {
 
     await message.channel.sendTyping().catch(() => {})
     const reply = await askConcierge(message.author.id, text)
-    const parts = chunk(reply || 'Sorry — I could not work out an answer to that.')
+    const parts = chunk(
+      formatDiscordLinks(reply || 'Sorry — I could not work out an answer to that.', DM_ORIGIN),
+    )
     for (const part of parts) await message.channel.send(part)
   } catch (err) {
     console.error('[bridge] turn failed', { user: message.author?.id, err: String(err) })

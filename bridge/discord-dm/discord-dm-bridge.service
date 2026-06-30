@@ -3,26 +3,30 @@
 #          sudo systemctl daemon-reload && sudo systemctl enable --now discord-dm-bridge
 # Logs:    journalctl -u discord-dm-bridge -f
 #
-# Paths below assume Oracle Linux (Always Free default): user `opc`, home
-# /home/opc. On an Ubuntu image swap `opc` → `ubuntu` throughout. `node` is the
-# official tarball install at /usr/local/bin/node (see README).
+# Runs from /opt (NOT /home): on SELinux-enforcing Oracle Linux, systemd
+# services can't read EnvironmentFile/WorkingDirectory under /home — it fails
+# with "Permission denied". Deploy to /opt/discord-dm and `restorecon -R` it
+# (see README). User `opc` is the Oracle Linux default; swap to `ubuntu` on an
+# Ubuntu image. `node` is the official tarball at /usr/local/bin/node.
+#
+# StartLimit* live in [Unit] (systemd ignores them in [Service]).
 
 [Unit]
 Description=MilesVault Discord DM bridge
 After=network-online.target
 Wants=network-online.target
+# Back off if it crash-loops (Discord rate-limits aggressive reconnects).
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=opc
-WorkingDirectory=/home/opc/discord-dm
-EnvironmentFile=/home/opc/discord-dm/.env
+WorkingDirectory=/opt/discord-dm
+EnvironmentFile=/opt/discord-dm/.env
 ExecStart=/usr/local/bin/node index.mjs
 Restart=always
 RestartSec=5
-# Discord rate-limits aggressive reconnects; back off if it crash-loops.
-StartLimitIntervalSec=60
-StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target

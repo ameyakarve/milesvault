@@ -53,21 +53,31 @@ node -v   # expect v20.x
 
 ## Deploy the bridge
 
+Deploy to **`/opt`**, not `/home`: on SELinux-enforcing Oracle Linux a systemd
+service can't read its `EnvironmentFile`/`WorkingDirectory` under `/home`
+(fails with "Permission denied").
+
 ```sh
-# From your laptop, copy this folder up (use opc@ or ubuntu@ per the image):
+# From your laptop, copy the folder up (use opc@ or ubuntu@ per the image):
 scp -i ~/.ssh/<key> -r bridge/discord-dm opc@<PUBLIC_IP>:~/discord-dm
 
-# On the box:
-cd ~/discord-dm
-npm install --omit=dev
-cp .env.example .env && nano .env   # fill in the three values (below)
+# On the box — install deps, then relocate to /opt and relabel for SELinux:
+cd ~/discord-dm && npm install --omit=dev
+cp .env.example .env && nano .env        # fill in the three values (below)
+sudo mkdir -p /opt/discord-dm
+sudo cp -r ~/discord-dm/. /opt/discord-dm/
+sudo chown -R opc:opc /opt/discord-dm
+sudo restorecon -Rv /opt/discord-dm 2>/dev/null || true   # SELinux contexts
 
-# Run under systemd (unit defaults to user `opc`; edit it for `ubuntu`):
-sudo cp discord-dm-bridge.service /etc/systemd/system/
+# Run under systemd (unit uses /opt + user `opc`; edit it for `ubuntu`):
+sudo cp /opt/discord-dm/discord-dm-bridge.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now discord-dm-bridge
-journalctl -u discord-dm-bridge -f   # expect "[bridge] connected as <bot>#0000"
+journalctl -u discord-dm-bridge -f       # expect "[bridge] connected as <bot>#0000"
 ```
+
+To update later: `scp` the changed file, `sudo cp` it into `/opt/discord-dm/`,
+`sudo systemctl restart discord-dm-bridge`.
 
 No inbound ports — the bridge only makes outbound connections (Discord + the
 Worker). Leave the OCI security list locked down.
