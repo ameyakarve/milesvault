@@ -24,6 +24,7 @@ import {
   unionTools,
 } from './agents/runtime'
 import { makeHandoffTool, type HandoffResult } from './agents/tools/shared'
+import type { UsageDO } from './usage-do'
 import type {
   AgentDef,
   AgentState,
@@ -246,8 +247,66 @@ export abstract class BaseAgentDO<
               chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
             })
           : workersai(cfg.id, { reasoning_effort: cfg.reasoning })
-    // Recover gemma's tool-call-into-text leak (see toolCallRescueMiddleware).
-    return wrapLanguageModel({ model: base, middleware: toolCallRescueMiddleware })
+    // Recover gemma's tool-call-into-text leak (toolCallRescueMiddleware), and
+    // meter token usage for every gateway call (usageMiddleware) — the single
+    // chokepoint, so concierge/editor/messengers are all captured uniformly.
+    return wrapLanguageModel({
+      model: base,
+      middleware: [toolCallRescueMiddleware, this.usageMiddleware(cfg.id)],
+    })
+  }
+
+  // Which product surface this DO is — tags usage rows. Subclasses override.
+  protected surface(): string {
+    return 'unknown'
+  }
+
+  // MONITORING-ONLY usage capture, wrapped around every model call. Reads each
+  // generation's token usage and forwards it to the per-user UsageDO; cost is
+  // computed there. Fire-and-forget: an outstanding cross-DO RPC keeps this DO
+  // alive until it settles, so no waitUntil is needed, and a dropped record must
+  // never affect the turn (this is metering, not billing or enforcement).
+  private recordUsageBestEffort(
+    model: string,
+    usage: { inputTokens?: number; outputTokens?: number } | undefined,
+  ): void {
+    const inTok = usage?.inputTokens ?? 0
+    const outTok = usage?.outputTokens ?? 0
+    if (!inTok && !outTok) return
+    const env = this.env as unknown as { USAGE_DO?: DurableObjectNamespace<UsageDO> }
+    const ns = env.USAGE_DO
+    if (!ns || !this.name) return
+    ns.get(ns.idFromName(this.name))
+      .recordUsage({ surface: this.surface(), model, inTok, outTok })
+      .catch((e: unknown) => console.warn(`[usage] record failed: ${e}`))
+  }
+
+  private usageMiddleware(model: string): LanguageModelMiddleware {
+    return {
+      specificationVersion: 'v3',
+      wrapGenerate: async ({ doGenerate }) => {
+        const res = await doGenerate()
+        this.recordUsageBestEffort(
+          model,
+          res.usage as unknown as { inputTokens?: number; outputTokens?: number },
+        )
+        return res
+      },
+      wrapStream: async ({ doStream }) => {
+        const { stream, ...rest } = await doStream()
+        const record = (u: { inputTokens?: number; outputTokens?: number } | undefined) =>
+          this.recordUsageBestEffort(model, u)
+        const tap = new TransformStream({
+          transform(chunk, controller) {
+            if ((chunk as { type?: string }).type === 'finish') {
+              record((chunk as { usage?: { inputTokens?: number; outputTokens?: number } }).usage)
+            }
+            controller.enqueue(chunk)
+          },
+        })
+        return { stream: stream.pipeThrough(tap), ...rest }
+      },
+    }
   }
 
   // ---- Think per-turn config ----

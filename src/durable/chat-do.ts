@@ -913,6 +913,10 @@ ${consolidatedText}`,
   // prompt builders can't `await`). Also refresh the account-alias map (KG
   // read) so the editor manifest names what each account is — cached by the
   // account set so we hit the KG only when accounts change.
+  protected override surface(): string {
+    return 'editor'
+  }
+
   protected override async beforeTurnFetch(): Promise<void> {
     this.turnSnapshot = await this.ledgerStub().ledger_snapshot()
     const accts = this.turnSnapshot.accounts.map((a) => ({

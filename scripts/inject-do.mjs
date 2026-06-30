@@ -34,6 +34,7 @@ export { ChatDO } from "../src/durable/chat-do.ts"
 export { ConciergeDO } from "../src/durable/concierge-do.ts"
 export { MembershipDO } from "../src/durable/membership-do.ts"
 export { AirportsDO } from "../src/durable/airports/airports-do.ts"
+export { UsageDO } from "../src/durable/usage-do.ts"
 export { RefreshMagnifyWorkflow } from "../src/workflows/refresh-magnify.ts"
 // Think messenger state agent — instantiated as a FACET sub-agent (ctx.exports)
 // by the chat-sdk to persist messenger thread/dedupe state. Must be exported
