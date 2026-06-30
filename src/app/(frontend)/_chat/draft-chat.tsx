@@ -272,6 +272,8 @@ export function DraftChat({
     // against that URL — the resulting snapshot diverges from client and
     // causes React #418. Setting this to null short-circuits that path; the
     // WebSocket connection still replays history via the resume flow.
+    // NOTE: every caller MUST mount-gate DraftChat (render only after hydration)
+    // so it never executes during SSR — editor-shell and concierge/chat both do.
     getInitialMessages: null,
   })
 
