@@ -286,14 +286,14 @@ export abstract class BaseAgentDO<
               chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
             })
           : workersai(cfg.id, { reasoning_effort: cfg.reasoning })
-    // DIAGNOSTIC (staging): usageMiddleware temporarily removed to isolate
-    // whether its stream tap is what's making concierge codemode turns show
-    // "Interrupted" on the client (server completes + persists; refresh shows
-    // the result). If interrupts stop without it, re-add metering WITHOUT a
-    // stream tap (capture usage via onChatResponse/onStepFinish instead).
+    // toolCallRescue first (rescues leaked calls + drops the tool-input prelude
+    // that caused the codemode React #185 loop), then usageMiddleware taps the
+    // finish chunk for per-user token metering. The metering tap was ruled OUT as
+    // the interrupt cause by the render-trace root-cause (it was the prelude), so
+    // it's safe to keep — both pass the finish chunk through untouched.
     return wrapLanguageModel({
       model: base,
-      middleware: [toolCallRescueMiddleware],
+      middleware: [toolCallRescueMiddleware, this.usageMiddleware(cfg.id)],
     })
   }
 
