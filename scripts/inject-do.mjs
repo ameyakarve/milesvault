@@ -195,10 +195,21 @@ export default {
     // under a stale storage key (email) after a re-key to their uid. Remove
     // after recovery. Owner-gated exactly like /api/admin/workflows/.
     if (url.pathname === "/api/admin/dump-ledger" && request.method === "GET") {
-      const { key: authKey } = await __resolveAuth(request, env)
+      // getToken must read the prod `__Secure-` cookie over https — the shared
+      // __resolveAuth hardcodes secureCookie:false (only works on http/staging).
+      const isHttps = url.protocol === "https:"
+      const token = await __authGetToken({
+        req: request,
+        secret: env.AUTH_SECRET,
+        secureCookie: isHttps,
+        cookieName: isHttps ? "__Secure-authjs.session-token" : __SESSION_COOKIE,
+      }).catch(() => null)
+      const authKey = token?.key ?? null
       const ownerKey = __ownerKey(env)
       if (!ownerKey || authKey !== ownerKey) {
-        return new Response("forbidden", { status: 403 })
+        // Temp endpoint: surface the resolved key so we can tell a cookie/secure
+        // miss (null) from an owner-key mismatch.
+        return new Response("forbidden: resolved key=" + (authKey ?? "null"), { status: 403 })
       }
       const target = url.searchParams.get("key")
       if (!target) return new Response("missing ?key=<storage_key>", { status: 400 })
