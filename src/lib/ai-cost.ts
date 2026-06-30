@@ -19,3 +19,23 @@ export function costMicros(model: string, inputTokens: number, outputTokens: num
   const usd = (inputTokens / 1_000_000) * p.inPerMillion + (outputTokens / 1_000_000) * p.outPerMillion
   return Math.round(usd * 1_000_000)
 }
+
+// Fair-use ceiling per user per calendar month (USD). The enforcement wrapper
+// blocks a model call once the user's month-to-date spend reaches this.
+//
+// ⚠️ PLACEHOLDER — deliberately HIGH so it won't block any real user yet (at
+// gemma rates this is thousands of turns). Set the real number before relying
+// on it. Constant for now; move to a Flagship `getNumberValue` (with the user's
+// cohort as context) when per-tier limits are wanted — no code change at the
+// call site, it just reads a different source.
+export const MONTHLY_BUDGET_USD = 25
+
+// Thrown by the usage middleware when a user is over their monthly ceiling.
+// One typed error every surface can catch when breach messaging is wired later
+// (today it just surfaces as a turn error — messaging is deferred).
+export class BudgetExceededError extends Error {
+  constructor() {
+    super('monthly AI usage limit reached')
+    this.name = 'BudgetExceededError'
+  }
+}

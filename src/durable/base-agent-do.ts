@@ -25,6 +25,7 @@ import {
 } from './agents/runtime'
 import { makeHandoffTool, type HandoffResult } from './agents/tools/shared'
 import type { UsageDO } from './usage-do'
+import { MONTHLY_BUDGET_USD, BudgetExceededError } from '@/lib/ai-cost'
 import type {
   AgentDef,
   AgentState,
@@ -70,6 +71,10 @@ function recoverLeakedToolCalls(text: string): RecoveredCall[] {
 }
 
 const isTextish = (t: string | undefined) => t === 'text' || t === 'reasoning'
+
+// How long the enforcement wrapper caches a user's month-to-date spend, so it
+// reads the UsageDO ~once per turn instead of once per model step.
+const SPEND_TTL_MS = 5_000
 
 const toolCallRescueMiddleware: LanguageModelMiddleware = {
   specificationVersion: 'v3',
@@ -261,6 +266,30 @@ export abstract class BaseAgentDO<
     return 'unknown'
   }
 
+  // Cached month-to-date spend for the enforcement check, refreshed at most
+  // every SPEND_TTL_MS — so the wrapper does ~one UsageDO read per turn, not per
+  // step. Capture is async, so the cache lags by up to a turn: an over-budget
+  // user is caught at their NEXT turn's first model call, before any output
+  // streams. Fail-OPEN everywhere — a meter hiccup must never lock a user out.
+  private spendCache?: { usd: number; atMs: number }
+
+  private async overBudget(): Promise<boolean> {
+    const env = this.env as unknown as { USAGE_DO?: DurableObjectNamespace<UsageDO> }
+    const ns = env.USAGE_DO
+    if (!ns || !this.name) return false
+    const now = Date.now()
+    if (!this.spendCache || now - this.spendCache.atMs > SPEND_TTL_MS) {
+      try {
+        const { usd } = await ns.get(ns.idFromName(this.name)).spendUsd()
+        this.spendCache = { usd, atMs: now }
+      } catch (e) {
+        console.warn(`[usage] spend read failed: ${e}`)
+        return false
+      }
+    }
+    return this.spendCache.usd >= MONTHLY_BUDGET_USD
+  }
+
   // MONITORING-ONLY usage capture, wrapped around every model call. Reads each
   // generation's token usage and forwards it to the per-user UsageDO; cost is
   // computed there. Fire-and-forget: an outstanding cross-DO RPC keeps this DO
@@ -285,6 +314,7 @@ export abstract class BaseAgentDO<
     return {
       specificationVersion: 'v3',
       wrapGenerate: async ({ doGenerate }) => {
+        if (await this.overBudget()) throw new BudgetExceededError()
         const res = await doGenerate()
         this.recordUsageBestEffort(
           model,
@@ -293,6 +323,7 @@ export abstract class BaseAgentDO<
         return res
       },
       wrapStream: async ({ doStream }) => {
+        if (await this.overBudget()) throw new BudgetExceededError()
         const { stream, ...rest } = await doStream()
         const record = (u: { inputTokens?: number; outputTokens?: number } | undefined) =>
           this.recordUsageBestEffort(model, u)
