@@ -1,14 +1,10 @@
-import { generateText, streamText, stepCountIs, tool, type ToolSet } from 'ai'
+import { streamText, stepCountIs, tool, type ToolSet } from 'ai'
 import { createCodeTool } from '@cloudflare/codemode/ai'
 import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { buildConciergeSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
-import {
-  makeConciergeRegistry,
-  CONCIERGE_MODEL_ID,
-  type ConciergeAgentName,
-} from './agents/registries/concierge'
+import { makeConciergeRegistry, type ConciergeAgentName } from './agents/registries/concierge'
 import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airports-store'
 import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import type { KbHttp } from './agents/tools/concierge/kb-tools'
@@ -672,32 +668,36 @@ export class ConciergeDO
     return { links }
   }
 
-  // Headless one-shot turn for text-only channels (Telegram, WhatsApp …):
-  // the graph-walker's brain and read tools, minus everything interactive —
-  // ask_user suspends, show_award_options is gen-UI, handoff needs the chat
-  // loop. Stateless by design: each bot message is one self-contained turn,
-  // separate from the web chat's history. RPC for the bot adapter workers.
+  // Headless one-shot turn that RETURNS the answer text — for return-a-string
+  // bot channels (today: the Discord DM bridge, which posts the reply itself so
+  // the bot token never reaches Cloudflare). NOT a parallel turn implementation:
+  // it runs the SAME config as the live web/WhatsApp turn — `modelInvocation`
+  // (identical model build, repair hook, token + step budgets) + `streamText`
+  // consumed to completion + the registry agent's system & the canonical
+  // `conciergeTools()`. Streaming is just a consumption mode; awaiting the full
+  // text gives the same string the web client streams. Mirrors `__bench_run`.
+  //
+  // The only difference from web is the two tools a text-only one-shot can't
+  // honour, dropped here: `ask_user` SUSPENDS (no resume without history) and
+  // `show_award_options` is gen-UI (no renderer on a text channel). Everything
+  // else (kb_*, ledger_snapshot, query_sql, list_accounts, codemode,
+  // reward_accounts) runs exactly as on web; link formatting is handled at the
+  // channel boundary (the Discord bridge), so no channel-specific prompt suffix.
   async answerText(question: string): Promise<{ text: string }> {
-    const briefing = await fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch(() => '')
-    const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
-    const kb = makeKbTools(kbHttp)
-    const ledger_snapshot = ledgerSnapshotTool(() => this.ledgerStub().ledger_snapshot())
-    const query_sql = querySqlTool((sql, params) => this.ledgerStub().query_sql(sql, params))
-    const codemode = createCodeTool({
-      tools: { ...kb, ledger_snapshot, query_sql },
-      executor: new DynamicWorkerExecutor({ loader: this.env.LOADER }),
-    })
-    const system =
-      buildConciergeSystem(briefing) +
-      '\n\nChannel: plain-text chat (a messaging app). Reply concisely in plain text — no markdown tables, no in-app links. For questions about the user\'s own balances or history, use ledger_snapshot / query_sql.'
-    const result = await generateText({
-      model: this.buildModel({ id: CONCIERGE_MODEL_ID, reasoning: 'off' }),
-      system,
+    const briefing = await fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((): string => '')
+    const { ask_user: _askUser, show_award_options: _showAward, ...tools } = this.conciergeTools()
+    const inv = this.modelInvocation(this.registry.agents[this.registry.entry]!.model)
+    const stream = streamText({
+      model: inv.model,
+      experimental_repairToolCall: inv.repairToolCall,
+      system: buildConciergeSystem(briefing),
       prompt: question,
-      tools: { ...kb, ledger_snapshot, query_sql, codemode } as ToolSet,
-      stopWhen: stepCountIs(10),
+      tools,
+      ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
+      stopWhen: stepCountIs(inv.maxSteps ?? 10),
     })
-    const text = result.text.trim()
+    await stream.consumeStream()
+    const text = ((await stream.text) ?? '').trim()
     return { text: text || 'Sorry — I could not work out an answer to that.' }
   }
 
