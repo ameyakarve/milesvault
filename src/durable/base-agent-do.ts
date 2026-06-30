@@ -270,8 +270,11 @@ export abstract class BaseAgentDO<
     model: string,
     usage: { inputTokens?: number; outputTokens?: number } | undefined,
   ): void {
-    const inTok = usage?.inputTokens ?? 0
-    const outTok = usage?.outputTokens ?? 0
+    // Coerce with isFinite, not `?? 0`: providers sometimes report a NaN count,
+    // and `??` only catches null/undefined — a NaN would slip through, survive
+    // the structured-clone DO RPC, and bind as NULL (cost_micros NOT NULL trips).
+    const inTok = Number.isFinite(usage?.inputTokens) ? (usage!.inputTokens as number) : 0
+    const outTok = Number.isFinite(usage?.outputTokens) ? (usage!.outputTokens as number) : 0
     if (!inTok && !outTok) return
     const env = this.env as unknown as { USAGE_DO?: DurableObjectNamespace<UsageDO> }
     const ns = env.USAGE_DO
