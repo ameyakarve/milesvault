@@ -277,6 +277,24 @@ export function DraftChat({
     getInitialMessages: null,
   })
 
+  // TEMP DIAGNOSTIC (concierge codemode "Interrupted" hunt): trace every tool
+  // part's state alongside `status` on each change, so the browser console shows
+  // exactly when `status` leaves "streaming" while a part is still
+  // `input-streaming` (which is what renders as Interrupted). Remove once solved.
+  useEffect(() => {
+    if (!agentOptions.basePath.includes('concierge')) return
+    const tools: string[] = []
+    for (const m of messages) {
+      for (const p of m.parts ?? []) {
+        const t = (p as { type?: string }).type
+        if (t && (t.startsWith('tool-') || t === 'dynamic-tool')) {
+          tools.push(`${(p as { toolName?: string }).toolName ?? t}=${(p as { state?: string }).state}`)
+        }
+      }
+    }
+    console.log(`[diag ${new Date().toISOString().slice(11, 23)}] status=${status} | ${tools.join(' , ')}`)
+  }, [messages, status, agentOptions.basePath])
+
   const [submitStatus, setSubmitStatus] = useState<
     Record<string, 'idle' | 'submitting' | 'done' | 'failed'>
   >({})
