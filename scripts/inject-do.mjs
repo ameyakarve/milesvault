@@ -195,8 +195,8 @@ export default {
     // under a stale storage key (email) after a re-key to their uid. Remove
     // after recovery. Owner-gated exactly like /api/admin/workflows/.
     if (url.pathname === "/api/admin/dump-ledger" && request.method === "GET") {
-      // getToken must read the prod `__Secure-` cookie over https — the shared
-      // __resolveAuth hardcodes secureCookie:false (only works on http/staging).
+      // getToken must read the prod secure-prefixed cookie over https; the
+      // shared __resolveAuth hardcodes secureCookie:false (http/staging only).
       const isHttps = url.protocol === "https:"
       const token = await __authGetToken({
         req: request,
