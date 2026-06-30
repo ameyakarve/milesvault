@@ -106,7 +106,27 @@ const toolCallRescueMiddleware: LanguageModelMiddleware = {
       else if (t === 'text-delta' || t === 'reasoning-delta')
         text += (value as { delta?: string }).delta ?? ''
     }
-    let out = parts
+    // Drop the streaming tool-input prelude (`tool-input-start/delta/end`).
+    // gemma (via workers-ai-provider) streams a tool's input as these chunks
+    // WITHOUT the `dynamic` flag, so the client builds a static-typed, name-less
+    // `tool-<name>` part stuck at `input-streaming`. For codemode — a DYNAMIC tool
+    // (createCodeTool) — that transient never reconciles with its real identity,
+    // and the WS transport re-sets it on a tight synchronous loop → an unbounded
+    // setMessages cascade (React #185) that freezes the tab and reads as
+    // "Interrupted" until a reload re-fetches the settled message. Proven by a
+    // per-render client trace: the part shape `tool-codemode|input-streaming` (no
+    // toolName) repeats identically every render until the crash, whereas the
+    // persisted/reloaded shape (`tool-codemode` + toolName, output-available) is a
+    // single settled part that renders fine. The final `tool-call` chunk carries
+    // the complete, validated input, so dropping the prelude makes the client build
+    // exactly that one settled part — matching the persisted shape. The server is
+    // unaffected; only the client's progressive-args display (which we don't
+    // render) is dropped.
+    const TOOL_INPUT_STREAM = new Set(['tool-input-start', 'tool-input-delta', 'tool-input-end'])
+    const kept = parts.filter(
+      (p) => !TOOL_INPUT_STREAM.has(String((p as { type?: string }).type ?? '')),
+    )
+    let out = kept
     if (!hasToolCall && TOOL_CALL_SENTINEL.test(text)) {
       const calls = recoverLeakedToolCalls(text)
       if (calls.length > 0) {
@@ -121,7 +141,7 @@ const toolCallRescueMiddleware: LanguageModelMiddleware = {
           'reasoning-end',
         ])
         out = []
-        for (const p of parts) {
+        for (const p of kept) {
           const t = (p as { type?: string }).type
           if (t && textParts.has(t)) continue
           if (t === 'finish') {
