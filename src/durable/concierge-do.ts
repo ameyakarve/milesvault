@@ -148,6 +148,10 @@ export class ConciergeDO
     await sub.clearMessages()
   }
 
+  protected override surface(): string {
+    return 'concierge'
+  }
+
   protected override async beforeTurnFetch(): Promise<void> {
     // Kill switch: the concierge is gated behind the `concierge_enabled` flag.
     // `this.name` is the user's storage key — the key the Flagship admin rule
