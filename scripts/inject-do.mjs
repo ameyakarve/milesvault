@@ -190,6 +190,25 @@ export default {
       const instance = await wf.create()
       return Response.json({ id: instance.id, status: await instance.status() })
     }
+    // TEMP (member data recovery): owner-only dump of any user's ledger journal
+    // as beancount, by storage key. Used to recover a member whose data lives
+    // under a stale storage key (email) after a re-key to their uid. Remove
+    // after recovery. Owner-gated exactly like /api/admin/workflows/.
+    if (url.pathname === "/api/admin/dump-ledger" && request.method === "GET") {
+      const { key: authKey } = await __resolveAuth(request, env)
+      const ownerKey = __ownerKey(env)
+      if (!ownerKey || authKey !== ownerKey) {
+        return new Response("forbidden", { status: 403 })
+      }
+      const target = url.searchParams.get("key")
+      if (!target) return new Response("missing ?key=<storage_key>", { status: 400 })
+      const ns = env.LEDGER_DO
+      if (!ns) return new Response("LEDGER_DO binding missing", { status: 500 })
+      const { text } = await ns.get(ns.idFromName(target)).journal_get()
+      return new Response(text ?? "", {
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      })
+    }
     if (url.pathname === "/api/agents" || url.pathname.startsWith("/api/agents/")) {
       // Path shape: /api/agents/<product>[/anything]. parts[2] selects the
       // product DO; everything after is opaque to the wrapper and forwarded
