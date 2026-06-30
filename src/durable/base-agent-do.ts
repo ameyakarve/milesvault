@@ -133,6 +133,21 @@ const toolCallRescueMiddleware: LanguageModelMiddleware = {
         }
       }
     }
+    // TEMP DIAGNOSTIC (codemode interrupt hunt): log the EMITTED part sequence
+    // for tool-bearing turns so we can see whether an incomplete tool-input
+    // (orphan) reaches the client alongside a rescued call. Remove once solved.
+    if (out.some((p) => String((p as { type?: string }).type ?? '').startsWith('tool'))) {
+      const seq = out
+        .map((p) => {
+          const x = p as { type?: string; toolName?: string; toolCallId?: string }
+          const t = x.type ?? '?'
+          return t.startsWith('tool')
+            ? `${t}(${x.toolName ?? ''}#${(x.toolCallId ?? '').slice(0, 6)})`
+            : t
+        })
+        .join(' ')
+      console.log(`[rescue-diag] rebuilt=${out !== parts} | ${seq}`)
+    }
     return {
       ...result,
       stream: new ReadableStream<Part>({
