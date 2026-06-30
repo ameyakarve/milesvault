@@ -33,9 +33,20 @@ On the **existing** MilesVault app in the [Developer Portal](https://discord.com
 ## Provision the OCI box
 
 Always Free shape `VM.Standard.E2.1.Micro` (1 GB RAM) is plenty — the process
-idles ~100 MB. Use a **public subnet** + **assign a public IPv4** (needed only to
-SSH in for setup; the bridge itself is outbound-only). The default Oracle Linux
-image logs in as `opc`; an Ubuntu image as `ubuntu` — adjust the commands below.
+idles ~100 MB. The default Oracle Linux image logs in as `opc`; an Ubuntu image
+as `ubuntu` — adjust the commands below.
+
+Networking gotchas when creating the instance:
+- **Capacity type**: *On-demand* (the Always-Free-eligible one; not Preemptible).
+- **Public IP**: the "Assign public IPv4" toggle is greyed until a **public
+  subnet** exists — pick **Create new public subnet** (a private/unset subnet
+  can't take a public IP, and the flag is immutable after creation). The public
+  IP is only needed to SSH in for setup; the bridge itself is outbound-only.
+- Ignore the **$X/month** cost estimate — it "does not reflect tier pricing".
+  As long as the shape shows **Always Free Eligible**, the bill is $0.
+- If you forgot the public IP at create-time and the subnet is public, add one
+  later: Instance → Attached VNICs → the VNIC → IPv4 Addresses → Edit the private
+  IP → Public IP Type = *Ephemeral*.
 
 ```sh
 # 1 GB RAM is tight for installs — add swap first:
@@ -90,8 +101,55 @@ Generate once, set it in **both** places:
 openssl rand -hex 32   # use the same value in both commands below
 ```
 
-- Worker: `wrangler secret put DISCORD_BRIDGE_SECRET` (prod) and
-  `wrangler secret put DISCORD_BRIDGE_SECRET --env staging`.
+- Worker: `wrangler secret put DISCORD_BRIDGE_SECRET` (prod, top-level config)
+  and `wrangler secret put DISCORD_BRIDGE_SECRET --env staging`.
 - Bridge: `DISCORD_BRIDGE_SECRET=` in `.env`.
 
 Point `MILESVAULT_DM_URL` at staging first to test, then flip to prod.
+
+## Verify
+
+1. `journalctl -u discord-dm-bridge -n 20 --no-pager` → expect
+   `[bridge] connected as <bot>#0000`.
+2. Smoke-test the Worker endpoint directly (no Discord needed):
+   ```sh
+   curl -s -X POST "$MILESVAULT_DM_URL" \
+     -H 'authorization: Bearer <DISCORD_BRIDGE_SECRET>' \
+     -H 'content-type: application/json' \
+     -d '{"snowflake":"1","text":"hi"}'
+   # 403 = bad/missing secret; 200 {"text":"..."} = full path OK
+   ```
+3. DM the bot from a Discord account → reply within a few seconds (a "typing…"
+   indicator shows while the concierge turn runs).
+
+## Promote to production
+
+1. `wrangler secret put DISCORD_BRIDGE_SECRET` (no `--env` — prod is the
+   top-level Worker config).
+2. Deploy prod (manual `workflow_dispatch` "Deploy production") so the endpoint
+   is live there.
+3. On the box: set `MILESVAULT_DM_URL=https://milesvault.com/api/discord/dm` in
+   `.env`, then `sudo systemctl restart discord-dm-bridge`.
+
+There is one bot / one bridge, so this *moves* it from staging to prod (it
+doesn't run both). On prod the `concierge_enabled` flag gates who gets answers.
+
+## Troubleshooting
+
+- **SSH `Connection timed out during banner exchange`** — the box is wedged
+  (e.g. a crash-looping service thrashing 1 GB RAM). Force-reboot from the OCI
+  console; right after boot SSH in and `sudo systemctl stop discord-dm-bridge`
+  before it thrashes again, then fix the cause.
+- **SSH `Connection refused` right after a reboot** — sshd isn't up yet; wait
+  ~60–90 s and retry.
+- **systemd `Failed to load environment files: Permission denied`** — SELinux
+  blocking `/home`. Deploy under `/opt` and `restorecon -R` it (above).
+- **`dnf` gets `Killed`** — OOM on the 1 GB shape; use the Node tarball, not the
+  package manager (above).
+- **Bot connects but a DM produces no log line at all** — the message isn't
+  reaching the bot: confirm it shares a guild with you and `DIRECT_MESSAGES`
+  intent is set. Temporarily add a `console.log` at the top of the
+  `MessageCreate` handler to confirm the event fires.
+- **Links render as raw `[label](/path)`** — the bridge's `formatDiscordLinks`
+  rewrites these; make sure `/opt`'s `index.mjs` is the current version and the
+  service was restarted.
