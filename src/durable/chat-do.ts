@@ -628,19 +628,29 @@ ${consolidatedText}`,
         // re-mangle it). Best-effort: a failure here doesn't fail the draft (the
         // entries still land on the capture row via set_capture_drafts below).
         try {
-          await this.appendMessageToHistory({
-            id: crypto.randomUUID(),
-            role: 'assistant',
-            parts: [
-              {
-                type: 'dynamic-tool',
-                toolName: 'draft_transaction',
-                toolCallId: crypto.randomUUID(),
-                state: 'input-available',
-                input: { entries: recorded.map((text, i) => ({ id: String(i + 1), text })) },
-              },
-            ],
-          } as UIMessage)
+          // addMessages (NOT appendMessageToHistory): both PERSIST the injected
+          // draft card, but addMessages also BROADCASTS it to any client already
+          // connected to this statement thread. runDraftStatement runs as a
+          // SCHEDULED task (outside a turn), so the broadcast fires immediately.
+          // appendMessageToHistory only persisted — so an editor already open on
+          // the STMT thread while it processed stayed blank ("extracted but blank")
+          // until a reconnect re-read history; clients that mount AFTER `extracted`
+          // got it via the connect snapshot, which is why it was racy/intermittent.
+          await this.addMessages([
+            {
+              id: crypto.randomUUID(),
+              role: 'assistant',
+              parts: [
+                {
+                  type: 'dynamic-tool',
+                  toolName: 'draft_transaction',
+                  toolCallId: crypto.randomUUID(),
+                  state: 'input-available',
+                  input: { entries: recorded.map((text, i) => ({ id: String(i + 1), text })) },
+                },
+              ],
+            } as UIMessage,
+          ])
         } catch (e) {
           console.warn('[async-ingest] surface draft card failed', {
             statement_id: statementId,
