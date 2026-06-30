@@ -106,6 +106,27 @@ const toolCallRescueMiddleware: LanguageModelMiddleware = {
       else if (t === 'text-delta' || t === 'reasoning-delta')
         text += (value as { delta?: string }).delta ?? ''
     }
+    // Backfill tool-call ids onto their streaming input parts. gemma (via
+    // workers-ai-provider) streams `tool-input-start/delta/end` with an EMPTY
+    // toolCallId, while the final `tool-call` carries the real id. The client
+    // keys tool parts by toolCallId, so the id-less stream orphans into a stuck
+    // `input-streaming` part SEPARATE from the completed tool-call — which renders
+    // as "Interrupted" AND drives an unbounded setMessages render loop (React
+    // #185) once the args are large (codemode: hundreds of deltas). Stamp each
+    // tool-call's id onto its preceding id-less input parts so they merge into one.
+    {
+      const pending: Array<{ toolCallId?: string }> = []
+      for (const p of parts) {
+        const x = p as { type?: string; toolCallId?: string }
+        const t = x.type ?? ''
+        if (t === 'tool-input-start' || t === 'tool-input-delta' || t === 'tool-input-end') {
+          if (!x.toolCallId) pending.push(x)
+        } else if (t === 'tool-call' && x.toolCallId) {
+          for (const ip of pending) ip.toolCallId = x.toolCallId
+          pending.length = 0
+        }
+      }
+    }
     let out = parts
     if (!hasToolCall && TOOL_CALL_SENTINEL.test(text)) {
       const calls = recoverLeakedToolCalls(text)
@@ -132,21 +153,6 @@ const toolCallRescueMiddleware: LanguageModelMiddleware = {
           out.push(p)
         }
       }
-    }
-    // TEMP DIAGNOSTIC (codemode interrupt hunt): log the EMITTED part sequence
-    // for tool-bearing turns so we can see whether an incomplete tool-input
-    // (orphan) reaches the client alongside a rescued call. Remove once solved.
-    if (out.some((p) => String((p as { type?: string }).type ?? '').startsWith('tool'))) {
-      const seq = out
-        .map((p) => {
-          const x = p as { type?: string; toolName?: string; toolCallId?: string }
-          const t = x.type ?? '?'
-          return t.startsWith('tool')
-            ? `${t}(${x.toolName ?? ''}#${(x.toolCallId ?? '').slice(0, 6)})`
-            : t
-        })
-        .join(' ')
-      console.log(`[rescue-diag] rebuilt=${out !== parts} | ${seq}`)
     }
     return {
       ...result,
