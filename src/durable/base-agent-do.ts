@@ -162,6 +162,25 @@ export abstract class BaseAgentDO<
   Env extends Cloudflare.Env,
   State,
 > extends Think<Env, State> {
+  constructor(state: DurableObjectState, env: Env) {
+    super(state, env)
+    // Loosen Think's chat-recovery bounds for long agentic turns. Think 0.11
+    // made `maxRecoveryWork` a FINITE default (1000; it was Infinity pre-#1825),
+    // and added a 300s no-progress window + 10-attempt cap. A long turn — chiefly
+    // our `codemode` turns — that gets interrupted (a dropped WS) and re-run can
+    // exhaust those bounds and be SEALED instead of recovered, so the client is
+    // left showing the in-flight tool as "Interrupted" even though the server
+    // finished. These generous limits restore ~0.7 recovery for codemode-heavy
+    // turns while still capping a true runaway. `maxOomRetries` keeps its default
+    // — an OOM is a real signal we don't want to retry indefinitely.
+    // (Overrides Think's `this.chatRecovery = true` default.)
+    this.chatRecovery = {
+      maxRecoveryWork: 100_000,
+      maxAttempts: 50,
+      noProgressTimeoutMs: 600_000,
+    }
+  }
+
   // Subclass supplies its registry in its constructor (typically by calling
   // `makeXxxRegistry(this)` so the host can read live DO state in closures).
   protected abstract registry: Registry
