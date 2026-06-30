@@ -277,26 +277,6 @@ export function DraftChat({
     getInitialMessages: null,
   })
 
-  // TEMP DIAGNOSTIC (codemode React #185 hunt): log the last message's part
-  // shape on every render, capped so an infinite loop doesn't freeze the tab
-  // before the logs are copyable. If the part signature OSCILLATES between two
-  // shapes, that's the non-convergent store rewrite; if it's STABLE but floods,
-  // an unstable snapshot/effect dep is re-rendering. Remove once root-caused.
-  if (typeof window !== 'undefined') {
-    const w = window as unknown as { __dcrc?: number }
-    w.__dcrc = (w.__dcrc ?? 0) + 1
-    if (w.__dcrc <= 80) {
-      const last = messages[messages.length - 1] as { role?: string; parts?: unknown[] } | undefined
-      const sig = (last?.parts ?? [])
-        .map((p) => {
-          const x = p as { type?: string; toolName?: string; state?: string; toolCallId?: string }
-          return `${x.type}${x.toolName ? ':' + x.toolName : ''}|${x.state ?? '-'}|${(x.toolCallId ?? '').slice(0, 4)}`
-        })
-        .join('  ')
-      console.log(`[dc#${w.__dcrc}] n=${messages.length} status=${status} ${last?.role} :: ${sig}`)
-    }
-  }
-
   const [submitStatus, setSubmitStatus] = useState<
     Record<string, 'idle' | 'submitting' | 'done' | 'failed'>
   >({})
