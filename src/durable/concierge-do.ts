@@ -1,4 +1,4 @@
-import { streamText, stepCountIs, tool, type ToolSet } from 'ai'
+import { streamText, stepCountIs, tool, convertToModelMessages, type ToolSet, type UIMessage } from 'ai'
 import { createCodeTool } from '@cloudflare/codemode/ai'
 import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { buildConciergeSystem } from './agent-prompt'
@@ -146,6 +146,64 @@ export class ConciergeDO
       }
     ).subAgent(this.constructor, key)
     await sub.clearMessages()
+  }
+
+  // Discord DM entry (off-websocket). The bridge POSTs each inbound DM here via
+  // inject-do; we run it on the sender's OWN concierge sub-agent — a facet keyed
+  // by their storage key, exactly like WhatsApp: a separate persistent thread
+  // from the web chat, reading the same ledger (the facet's `this.name` is the
+  // storage key, so `ledgerStub()` resolves correctly). Returns the reply TEXT;
+  // the bridge sends it to Discord (the bot token lives only on the bridge — we
+  // don't import a heavyweight Discord SDK into the Worker bundle). Called on the
+  // `__discord_host__` instance; `subAgent` materializes the per-user facet.
+  async answerForDiscord(key: string, text: string): Promise<{ text: string }> {
+    const sub = await (
+      this as unknown as {
+        subAgent: (
+          cls: unknown,
+          name: string,
+        ) => Promise<{ answerForMessenger: (text: string) => Promise<{ text: string }> }>
+      }
+    ).subAgent(this.constructor, key)
+    return sub.answerForMessenger(text)
+  }
+
+  // One concierge turn on THIS facet, WITH the thread's history (memory across
+  // DMs) — the messenger counterpart to the web turn. Mirrors `answerText` (same
+  // modelInvocation: model build, repair hook, token/step budgets; same
+  // messenger-safe toolset minus `ask_user`/`show_award_options` — a text channel
+  // can't suspend on a client tool or render gen-UI) but feeds the persisted
+  // history instead of a bare prompt, and persists both sides so the next DM
+  // continues the conversation. Link formatting is handled at the channel
+  // boundary (the bridge).
+  async answerForMessenger(text: string): Promise<{ text: string }> {
+    const briefing = await fetchKbAgentsMd(this.KB_BASE, this.env.KB).catch((): string => '')
+    const { ask_user: _askUser, show_award_options: _showAward, ...tools } = this.conciergeTools()
+    await this.addMessages([
+      { id: crypto.randomUUID(), role: 'user', parts: [{ type: 'text', text }] } as UIMessage,
+    ])
+    const history = (await this.getMessages()) as UIMessage[]
+    const modelMessages = await convertToModelMessages(history, {
+      tools,
+      ignoreIncompleteToolCalls: true,
+    })
+    const inv = this.modelInvocation(this.registry.agents[this.registry.entry]!.model)
+    const stream = streamText({
+      model: inv.model,
+      experimental_repairToolCall: inv.repairToolCall,
+      system: buildConciergeSystem(briefing),
+      messages: modelMessages,
+      tools,
+      ...(inv.maxOutputTokens !== undefined ? { maxOutputTokens: inv.maxOutputTokens } : {}),
+      stopWhen: stepCountIs(inv.maxSteps ?? 10),
+    })
+    await stream.consumeStream()
+    const reply =
+      ((await stream.text) ?? '').trim() || 'Sorry — I could not work out an answer to that.'
+    await this.addMessages([
+      { id: crypto.randomUUID(), role: 'assistant', parts: [{ type: 'text', text: reply }] } as UIMessage,
+    ])
+    return { text: reply }
   }
 
   protected override surface(): string {

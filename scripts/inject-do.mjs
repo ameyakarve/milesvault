@@ -140,8 +140,9 @@ export default {
     // The Discord snowflake IS the identity (no pairing): resolveStorageKey maps
     // it to the user's durable storage key, exactly as web login does. We return
     // the reply TEXT to the bridge, which sends it to Discord — the bot token
-    // lives ONLY on the bridge, never in Cloudflare. One self-contained turn per
-    // DM (answerText), like the other text-only channels. (task #37)
+    // lives ONLY on the bridge, never in Cloudflare. The turn runs on the user's
+    // own concierge sub-agent (a facet keyed by storage key), so DMs carry memory
+    // across messages — same model as WhatsApp. (task #37)
     if (url.pathname === "/api/discord/dm" && request.method === "POST") {
       const secret = env.DISCORD_BRIDGE_SECRET
       if (!secret || request.headers.get("authorization") !== "Bearer " + secret) {
@@ -166,9 +167,14 @@ export default {
       if (!(await __conciergeEnabled(env, { email: key }))) {
         return Response.json({ text: "You don't have concierge access yet." })
       }
-      const stub = ns.get(ns.idFromName(key))
-      await stub.setName(key)
-      const { text: reply } = await stub.answerText(text)
+      // Run on the per-user concierge sub-agent (a facet keyed by storage key —
+      // a separate persistent thread from the web chat, same ledger), so Discord
+      // DMs have memory across messages, like WhatsApp. The facet is materialized
+      // by answerForDiscord on the shared __discord_host__ instance.
+      const hostName = "__discord_host__"
+      const stub = ns.get(ns.idFromName(hostName))
+      await stub.setName(hostName)
+      const { text: reply } = await stub.answerForDiscord(key, text)
       return Response.json({ text: reply })
     }
     if (
