@@ -1,0 +1,17 @@
+{
+  "name": "milesvault-discord-dm-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Always-on holder for the Discord Gateway socket; forwards DMs to the MilesVault concierge Worker.",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  }
+}

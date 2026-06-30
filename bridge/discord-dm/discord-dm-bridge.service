@@ -1,0 +1,28 @@
+# systemd unit for the Discord DM bridge on the OCI box.
+# Install: sudo cp discord-dm-bridge.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now discord-dm-bridge
+# Logs:    journalctl -u discord-dm-bridge -f
+#
+# Paths below assume Oracle Linux (Always Free default): user `opc`, home
+# /home/opc. On an Ubuntu image swap `opc` → `ubuntu` throughout. `node` is the
+# official tarball install at /usr/local/bin/node (see README).
+
+[Unit]
+Description=MilesVault Discord DM bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opc
+WorkingDirectory=/home/opc/discord-dm
+EnvironmentFile=/home/opc/discord-dm/.env
+ExecStart=/usr/local/bin/node index.mjs
+Restart=always
+RestartSec=5
+# Discord rate-limits aggressive reconnects; back off if it crash-loops.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target
