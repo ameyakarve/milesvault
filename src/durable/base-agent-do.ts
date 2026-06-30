@@ -266,12 +266,14 @@ export abstract class BaseAgentDO<
               chat_template_kwargs: { thinking: false } as { enable_thinking?: boolean },
             })
           : workersai(cfg.id, { reasoning_effort: cfg.reasoning })
-    // Recover gemma's tool-call-into-text leak (toolCallRescueMiddleware), and
-    // meter token usage for every gateway call (usageMiddleware) — the single
-    // chokepoint, so concierge/editor/messengers are all captured uniformly.
+    // DIAGNOSTIC (staging): usageMiddleware temporarily removed to isolate
+    // whether its stream tap is what's making concierge codemode turns show
+    // "Interrupted" on the client (server completes + persists; refresh shows
+    // the result). If interrupts stop without it, re-add metering WITHOUT a
+    // stream tap (capture usage via onChatResponse/onStepFinish instead).
     return wrapLanguageModel({
       model: base,
-      middleware: [toolCallRescueMiddleware, this.usageMiddleware(cfg.id)],
+      middleware: [toolCallRescueMiddleware],
     })
   }
 
