@@ -133,43 +133,26 @@ export default {
       }
       return new Response("Method not allowed", { status: 405 })
     }
-    // Discord DM bridge. Discord has NO HTTP path for DM text (only the Gateway
-    // delivers it), so a tiny always-on bridge (OCI box) holds the socket and
-    // POSTs each inbound DM here. Unauthenticated by session — the bridge has no
-    // MilesVault cookie; the trust boundary is the shared DISCORD_BRIDGE_SECRET.
-    // The Discord snowflake IS the identity (no pairing): resolveStorageKey maps
-    // it to the user's durable storage key, exactly as web login does. We return
-    // the reply TEXT to the bridge, which sends it to Discord — the bot token
-    // lives ONLY on the bridge, never in Cloudflare. One self-contained turn per
-    // DM (answerText), like the other text-only channels. (task #37)
-    if (url.pathname === "/api/discord/dm" && request.method === "POST") {
+    // Discord webhook (Think messenger on ConciergeDO). Discord has NO HTTP path
+    // for DM text (only the Gateway delivers it), so a tiny always-on bridge (OCI
+    // box) holds the socket and FORWARDS each event here as a DiscordForwardedEvent.
+    // Unauthenticated by session — the bridge has no MilesVault cookie; the trust
+    // boundary is the shared DISCORD_BRIDGE_SECRET (Discord doesn't sign forwarded
+    // Gateway events). The adapter handles the forwarded event, the messenger maps
+    // the snowflake to the user's concierge sub-agent, and the reply goes back over
+    // the Discord REST API (bot token lives on the Worker now). Keep this path in
+    // sync with DISCORD_WEBHOOK_PATH in discord.ts. (task #37)
+    if (url.pathname === "/api/discord/webhook" && request.method === "POST") {
       const secret = env.DISCORD_BRIDGE_SECRET
       if (!secret || request.headers.get("authorization") !== "Bearer " + secret) {
         return new Response("forbidden", { status: 403 })
       }
-      let body
-      try {
-        body = await request.json()
-      } catch {
-        return new Response("bad json", { status: 400 })
-      }
-      const snowflake = String(body?.snowflake ?? "").trim()
-      const text = String(body?.text ?? "").trim()
-      if (!snowflake || !text) {
-        return new Response("missing snowflake/text", { status: 400 })
-      }
-      if (!env.D1) return new Response("D1 binding missing", { status: 500 })
       const ns = env.CONCIERGE_DO
       if (!ns) return new Response("CONCIERGE_DO binding missing", { status: 500 })
-      const key = await __resolveStorageKey(env.D1, snowflake)
-      // Same fail-closed gate as every other concierge surface.
-      if (!(await __conciergeEnabled(env, { email: key }))) {
-        return Response.json({ text: "You don't have concierge access yet." })
-      }
-      const stub = ns.get(ns.idFromName(key))
-      await stub.setName(key)
-      const { text: reply } = await stub.answerText(text)
-      return Response.json({ text: reply })
+      const hostName = "__discord_host__"
+      const stub = ns.get(ns.idFromName(hostName))
+      await stub.setName(hostName)
+      return stub.fetch(request)
     }
     if (
       url.pathname.startsWith("/api/admin/workflows/") &&

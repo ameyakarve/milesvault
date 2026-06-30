@@ -43,6 +43,7 @@ import type { AgentHost, Registry } from './agents/types'
 import { baseAccount, isPending, kgLookupParts } from '@/lib/ledger-core/account-display'
 import { conciergeEnabled } from '@/lib/flags'
 import { buildWhatsappMessengers } from './agents/messengers/whatsapp'
+import { buildDiscordMessengers } from './agents/messengers/discord'
 import type { ThinkMessengers } from '@cloudflare/think/messengers'
 
 // The chat/agent runtime for the `/concierge` surface. Read-only Q&A — over
@@ -132,7 +133,9 @@ export class ConciergeDO
   // paired sender resolves to their own concierge sub-agent keyed by storage key
   // — a separate instance from the web chat, same ledger. (whatsapp.ts)
   override getMessengers(): ThinkMessengers {
-    return buildWhatsappMessengers(this.env as unknown as Parameters<typeof buildWhatsappMessengers>[0], this)
+    const e = this.env as unknown as Parameters<typeof buildWhatsappMessengers>[0] &
+      Parameters<typeof buildDiscordMessengers>[0]
+    return { ...buildWhatsappMessengers(e, this), ...buildDiscordMessengers(e, this) }
   }
 
   // Clear a paired messenger user's concierge history — their per-user sub-agent
