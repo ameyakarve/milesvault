@@ -106,24 +106,7 @@ const toolCallRescueMiddleware: LanguageModelMiddleware = {
       else if (t === 'text-delta' || t === 'reasoning-delta')
         text += (value as { delta?: string }).delta ?? ''
     }
-    // The client builds each tool part from the final `tool-call` chunk, which
-    // carries the complete, validated input. gemma (via workers-ai-provider) ALSO
-    // streams that input as `tool-input-start`/`-delta`/`-end`. For codemode — a
-    // dynamic tool whose program is large (hundreds of input-deltas) — the AI SDK
-    // builds a transient tool part from that prelude that never reconciles with the
-    // real `tool-call` part; the two representations fight, so the client's message
-    // store rewrites itself every render → an unbounded setMessages loop (React
-    // #185), surfaced as "Interrupted" until a reload re-fetches the clean persisted
-    // message. (The persisted shape — one tool part, no prelude — renders fine,
-    // which is why only the LIVE stream loops.) Drop the streaming prelude so the
-    // client builds exactly ONE part from `tool-call`, matching the persisted shape.
-    // The server still receives the full input; this only drops the client's
-    // progressive-args display, which we don't render.
-    const TOOL_INPUT_STREAM = new Set(['tool-input-start', 'tool-input-delta', 'tool-input-end'])
-    const kept = parts.filter(
-      (p) => !TOOL_INPUT_STREAM.has(String((p as { type?: string }).type ?? '')),
-    )
-    let out = kept
+    let out = parts
     if (!hasToolCall && TOOL_CALL_SENTINEL.test(text)) {
       const calls = recoverLeakedToolCalls(text)
       if (calls.length > 0) {
@@ -138,7 +121,7 @@ const toolCallRescueMiddleware: LanguageModelMiddleware = {
           'reasoning-end',
         ])
         out = []
-        for (const p of kept) {
+        for (const p of parts) {
           const t = (p as { type?: string }).type
           if (t && textParts.has(t)) continue
           if (t === 'finish') {
