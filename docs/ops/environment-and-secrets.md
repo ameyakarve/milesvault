@@ -65,7 +65,6 @@ content lives in per-env DOs).
 | `CLOUDFLARE_ACCOUNT_ID` | `e0bc1f55…` | same | tooling (no app code ref) |
 | `AI_GATEWAY_ID` | `milesvault` | `milesvault-staging` | `base-agent-do.ts`, `chat-do.ts` |
 | `INGEST_EMAIL_ADDRESS` | `ingest@milesvault.com` | `ingest-staging@…` | `ledger/forwarding-address` route |
-| `ENABLE_HYDRATE` | — | `1` | (no app code ref — verify) |
 
 ## Secrets (Cloudflare Worker secrets)
 
@@ -88,11 +87,8 @@ that worker** (from `wrangler secret list`, 2026-06-30).
 | `AERODATABOX_API_KEY` | ✓ | ✓ | `concierge-do.ts` | flight/airport data |
 | `FORWARDEMAIL_WEBHOOK_KEY` | ✓ | ✓ | `api/email/ingest` route | inbound-email webhook auth |
 | `LINEAR_API_KEY` / `_TEAM_ID` / `_STATE_ID` | ✓ | ✓ | `lib/linear.ts` | Linear issue creation |
-| `CF_AIG_TOKEN` | ✓ | ✓ | **none found** | legacy AI-gateway auth — likely dead |
 | `ALLOWED_EMAILS` | **✗** | ✓ | `membership.ts`, `inject-do.mjs` | owner/allowlist gate — **missing on prod** |
 | `TEST_USER_TOKEN` | **✗** | ✓ | `middleware.ts`, `auth.ts`, `api/test/*` | e2e test identity — correctly prod-absent |
-| `AI_GATEWAY_NAME` | ✗ | ✓ | **none found** | likely dead (superseded by `AI_GATEWAY_ID` var) |
-| `CHAT_MODEL` | ✗ | ✓ | **none found** | likely dead (model id is hardcoded in DOs) |
 
 Read in code but **not set on either worker** (so resolves to undefined —
 treated as optional): `LINEAR_LABEL_ID` (`lib/linear.ts`).
@@ -133,8 +129,7 @@ read via `process.env` by next-auth's provider config.)
 env (e.g. `~/.zshrc`) into `.dev.vars` — zshrc is the source of truth; wrangler
 can't reference env vars from `.dev.vars`, it reads literal values only.
 
-Both `.env` and `.dev.vars` are gitignored (`.gitignore` lines 41–42). `.env`
-additionally carries `PAYLOAD_SECRET` (no code refs — legacy, likely dead).
+Both `.env` and `.dev.vars` are gitignored (`.gitignore` lines 41–42).
 
 ## CI / CD secrets (GitHub Actions)
 
@@ -166,15 +161,16 @@ additionally carries `PAYLOAD_SECRET` (no code refs — legacy, likely dead).
    fail-closed (empty allowlist ⇒ all owner-only actions 403), so this is safe
    but means owner-gated admin actions can't run on prod. Confirm whether prod
    should have it (or whether prod intentionally relies on Flagship instead).
-2. **Likely-dead secrets** — no code references found: `CF_AIG_TOKEN` (both
-   envs), `AI_GATEWAY_NAME` + `CHAT_MODEL` (staging), `PAYLOAD_SECRET` (`.env`).
-   Verify, then prune (ties into hygiene task #36). Don't assume — grep once
-   more before deleting, in case of dynamic access.
+2. ~~Likely-dead secrets~~ **DONE (2026-06-30):** removed `CF_AIG_TOKEN` (both
+   workers), `AI_GATEWAY_NAME` + `CHAT_MODEL` (staging worker), and
+   `PAYLOAD_SECRET` (`.env`) after verifying zero code references. Types
+   regenerated. `PAYLOAD_SECRET` still appears in stale docs (`AGENTS.md`, the
+   cursor Payload rule) describing a CMS that isn't wired — clean up separately.
 3. **`LINEAR_LABEL_ID`** is read but unset everywhere — confirm it's optional.
 4. **Shared-secret rotation** (#36): `DISCORD_BRIDGE_SECRET`, the WhatsApp
    token/app-secret, and the Discord bot token were all handled in plaintext
    during setup — rotate and confirm they're only in the stores above.
-5. **`ENABLE_HYDRATE`** (staging var) has no code reference — verify it's still
-   consumed by the build, else drop it.
+5. ~~`ENABLE_HYDRATE`~~ **DONE (2026-06-30):** removed from the staging `vars`
+   (no code reference).
 6. **Single shared `D1`** across prod + staging — fine today (routing maps
    only), but worth keeping in mind: a bad write hits both environments.
