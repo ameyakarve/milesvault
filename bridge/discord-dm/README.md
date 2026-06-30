@@ -5,21 +5,18 @@ text **only** over the Gateway (no HTTP/webhook path for messages), and
 Cloudflare can't keep a persistent outbound socket open, so this runs on a tiny
 always-on box (OCI Always Free) instead.
 
-It holds no logic and no state: on each inbound DM it forwards a Discord
-"forwarded Gateway event" to the Worker (`/api/discord/webhook`). The Worker runs
-the real Think messenger — the `@chat-adapter/discord` adapter parses the event,
-maps the snowflake to the user's concierge sub-agent (their own persistent
-thread), runs the turn, and **sends the reply itself over the Discord REST API**.
-So the bot token now lives on the **Worker** (REST sends); this box keeps only the
-token to open the Gateway and the shared secret to authenticate the forward.
+It holds no logic and no state: on each inbound DM it `POST`s `{snowflake, text}`
+to the Worker (`/api/discord/dm`), then sends the reply back to the user. The bot
+token lives only here; the Worker holds only the shared secret. The concierge
+turn, identity resolution, and gating all happen in the Worker.
 
 ```
-Discord DM ──(Gateway WS)──▶ bridge ──(HTTPS POST, Bearer secret)──▶ Worker /api/discord/webhook
-                                                          └─ @chat-adapter/discord parses the event
-                                                          └─ resolveStorageKey(snowflake) → sub-agent
-                                                          └─ conciergeEnabled gate + concierge turn
-                                                          └─ adapter sends reply via Discord REST
-Discord DM ◀──(REST createMessage)── Worker
+Discord DM ──(Gateway WS)──▶ bridge ──(HTTPS POST)──▶ Worker /api/discord/dm
+                                                          └─ resolveStorageKey(snowflake)
+                                                          └─ conciergeEnabled gate
+                                                          └─ ConciergeDO.answerText()
+bridge ◀──(reply text)──────────────────────────────────┘
+Discord DM ◀──(channel.send)── bridge
 ```
 
 ## One-time Discord setup
@@ -108,37 +105,31 @@ openssl rand -hex 32   # use the same value in both commands below
   and `wrangler secret put DISCORD_BRIDGE_SECRET --env staging`.
 - Bridge: `DISCORD_BRIDGE_SECRET=` in `.env`.
 
-## Worker secrets (the messenger lives on the Worker now)
-
-The concierge turn + REST reply run on the Worker, so set these prod secrets
-(the bot token MOVES here from the bridge; the bridge still needs its own copy to
-open the Gateway):
-
-- `wrangler secret put DISCORD_BOT_TOKEN` — Dev Portal → Bot → Token.
-- `wrangler secret put DISCORD_PUBLIC_KEY` — Dev Portal → General Information.
-- `wrangler secret put DISCORD_APPLICATION_ID` — Dev Portal → General Information.
-
-Until all three (plus `D1`) are set, `getMessengers()` omits Discord and the
-`/api/discord/webhook` route is inert — safe to deploy ahead of the cutover.
+Point `MILESVAULT_DM_URL` at staging first to test, then flip to prod.
 
 ## Verify
 
 1. `journalctl -u discord-dm-bridge -n 20 --no-pager` → expect
    `[bridge] connected as <bot>#0000`.
-2. Smoke-test the webhook gate (no Discord needed): a POST with a bad/missing
-   bearer returns `403`; with the right bearer it forwards to the host DO.
+2. Smoke-test the Worker endpoint directly (no Discord needed):
+   ```sh
+   curl -s -X POST "$MILESVAULT_DM_URL" \
+     -H 'authorization: Bearer <DISCORD_BRIDGE_SECRET>' \
+     -H 'content-type: application/json' \
+     -d '{"snowflake":"1","text":"hi"}'
+   # 403 = bad/missing secret; 200 {"text":"..."} = full path OK
+   ```
 3. DM the bot from a Discord account → reply within a few seconds (a "typing…"
    indicator shows while the concierge turn runs).
 
-## Promote to production (coordinated cutover)
+## Promote to production
 
-Forwarding to `/api/discord/webhook` and the old `/api/discord/dm` removal land
-together, so flip the bridge and the Worker in the same window:
-
-1. Set the three Worker secrets above (prod).
-2. Deploy prod (manual `workflow_dispatch` "Deploy production").
-3. On the box: set `MILESVAULT_WEBHOOK_URL=https://milesvault.com/api/discord/webhook`
-   in `.env`, then `sudo systemctl restart discord-dm-bridge`.
+1. `wrangler secret put DISCORD_BRIDGE_SECRET` (no `--env` — prod is the
+   top-level Worker config).
+2. Deploy prod (manual `workflow_dispatch` "Deploy production") so the endpoint
+   is live there.
+3. On the box: set `MILESVAULT_DM_URL=https://milesvault.com/api/discord/dm` in
+   `.env`, then `sudo systemctl restart discord-dm-bridge`.
 
 There is one bot / one bridge, so this *moves* it from staging to prod (it
 doesn't run both). On prod the `concierge_enabled` flag gates who gets answers.
