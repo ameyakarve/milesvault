@@ -24,7 +24,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (typeof body.filename !== 'string' || body.filename.length === 0) {
     return NextResponse.json({ errors: ['filename required'] }, { status: 400 })
   }
-  if (typeof body.text !== 'string' || body.text.length === 0) {
+  if (typeof body.text !== 'string') {
     return NextResponse.json({ errors: ['text required'] }, { status: 400 })
   }
   // Defensive server caps (never trust the client): bounded text + a small
@@ -49,6 +49,12 @@ export async function POST(req: NextRequest): Promise<Response> {
       ? body.images.filter((x): x is string => typeof x === 'string')
       : []
   ).slice(0, MAX_PAGES)
+  // A statement must carry SOMETHING to read — the text layer, the page images,
+  // or both. Only an image-only PDF legitimately has empty text (the model reads
+  // the images); reject only when neither is present.
+  if (body.text.length === 0 && images.length === 0) {
+    return NextResponse.json({ errors: ['text or images required'] }, { status: 400 })
+  }
   const totalBytes = body.text.length + images.reduce((n, i) => n + i.length, 0)
   if (totalBytes > MAX_TOTAL) {
     return NextResponse.json({ errors: ['upload too large'] }, { status: 413 })
