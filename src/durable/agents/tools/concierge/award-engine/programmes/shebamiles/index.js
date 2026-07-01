@@ -70,6 +70,17 @@ function getZone(cc) {
 
 // Ethiopian-operated chart — one-way pricing
 // Key = pairKey(originZone, destZone), Value = [economy, bizFirst]
+//
+// TODO: this own-metal chart is STALE and reads low versus reality. Unlike the
+// Star Alliance chart, there is NO interactive Ethiopian-metal calculator on the
+// site, so it must be transcribed from the static published Ethiopian award chart.
+// Confirmed-low data points from seats.aero (source=ethiopian, one-way modal):
+//   CA->EAF (DEL-ADD):  25k/40k   (here 25k/35k — business low)
+//   EAF->NAM (ADD-IAD): 47.5k/76k (here 30k/42k — both low)
+//   CA->EU  (DEL-FRA):  49.5k/77k (here 30k/42k — both low)
+//   CA->NAM (India->US): no through inventory on seats — value unknown, still 25k/35k
+// Refresh from the official Ethiopian (not Star Alliance) flight-award chart, then
+// replace the eo(...) values below. Symmetric region pair; Business/First combined.
 const ET_OWN = {};
 function eo(a, b, e, bf) { ET_OWN[pairKey(a, b)] = [e, bf]; }
 
