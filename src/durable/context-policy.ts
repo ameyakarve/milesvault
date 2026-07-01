@@ -1,15 +1,15 @@
 // Context window policy — decides how much of a thread's history the model sees
 // each turn. A token-budget sliding window whose budget SHRINKS with idle time,
 // so it unifies two concerns into one knob:
-//   - idle reset: a stale thread gets a small budget, so old turns fall out (a
-//     "fresh start" that persists — the floor only advances).
+//   - idle reset: a stale thread gets a small budget, so old turns fall out.
 //   - size cap:   even an ACTIVE thread is capped at the profile ceiling, so a
 //     runaway conversation can't bloat cost / overflow context.
 //
 // The window is cut at USER-message boundaries (whole turns), so an assistant's
-// tool-call/result pair is never split. The floor (first kept message id) only
-// advances, so a trim/reset sticks across subsequent turns instead of snapping
-// back the moment the user is "active" again.
+// tool-call/result pair is never split. It is recomputed FRESH each turn from the
+// full history (no persisted floor), so returning to an active window ALWAYS
+// restores full context — a prior stale-trim never "sticks" and starves a live
+// conversation.
 //
 // GENERIC mechanism; the domain lives entirely in the PROFILES + which profile a
 // surface selects. No card/reward/ledger specifics here.
@@ -98,7 +98,6 @@ export function budgetFor(profile: ContextProfile, idleMs: number): number {
 
 export type WindowResult = {
   kept: UIMessage[]
-  floorId: string | null
   droppedTurns: number
   droppedMessages: number
   tokensBefore: number
@@ -107,14 +106,14 @@ export type WindowResult = {
   band: Band
 }
 
-// Slide the floor forward — a whole user-turn at a time — until the kept window
-// fits the idle-scaled budget, never dropping the final (current) turn. Starts
-// from the persisted floor id, so the window only ever shrinks/advances.
+// Recompute the window FRESH from the full history each turn: keep the most
+// recent whole turns that fit the idle-scaled budget, never dropping below the
+// profile's minKeepTurns trailing turns. No persisted floor — so an active turn
+// always restores full context regardless of any earlier stale-trim.
 export function windowMessages(
   messages: UIMessage[],
   profile: ContextProfile,
   idleMs: number,
-  floorId: string | null,
 ): WindowResult {
   const band = bandFor(profile, idleMs)
   const budget = budgetFor(profile, idleMs)
@@ -124,6 +123,7 @@ export function windowMessages(
     for (let i = from; i < messages.length; i++) t += perMsg[i]!
     return t
   }
+  const tokensBefore = suffixTokens(0)
   // Turn boundaries = indices of user messages (a turn starts at the user's msg).
   const turnStarts: number[] = []
   messages.forEach((m, i) => {
@@ -133,31 +133,23 @@ export function windowMessages(
   if (turnStarts.length === 0) {
     return {
       kept: messages,
-      floorId: messages[0]?.id ?? null,
       droppedTurns: 0,
       droppedMessages: 0,
-      tokensBefore: suffixTokens(0),
-      tokensAfter: suffixTokens(0),
+      tokensBefore,
+      tokensAfter: tokensBefore,
       budget,
       band,
     }
   }
-  // Initial floor position: the persisted floor id (monotonic), else the start.
-  let si = 0
-  if (floorId) {
-    const at = turnStarts.findIndex((idx) => messages[idx]!.id === floorId)
-    if (at >= 0) si = at
-  }
-  const tokensBefore = suffixTokens(turnStarts[si]!)
   // Advance a whole turn at a time until under budget, but never drop below the
   // profile's minKeepTurns trailing turns (so we never nuke to a single message).
   const minKeep = Math.max(1, profile.minKeepTurns)
+  let si = 0
   while (si < turnStarts.length - minKeep && suffixTokens(turnStarts[si]!) > budget) si++
   const start = turnStarts[si]!
   const kept = messages.slice(start)
   return {
     kept,
-    floorId: messages[start]?.id ?? null,
     droppedTurns: si,
     droppedMessages: start,
     tokensBefore,
