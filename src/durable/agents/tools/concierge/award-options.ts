@@ -150,20 +150,20 @@ async function ownMetalSlugs(kb: KbHttp, kgSlug: string): Promise<Set<string>> {
 // `award_options` agent tool and the read-only award-plan HTTP endpoint (which
 // joins this against the transfers graph to cost it in a card's points).
 export async function computeAwardOptions(
-  lookup: AirportLookup,
   db: SqlStorage,
   apiKey: string,
   kb: KbHttp,
   origin: string,
   destination: string,
-): Promise<AwardOptionsResult> {
+): Promise<AwardOptionsResult & { lookup: AirportLookup }> {
   const o = origin.toUpperCase()
   const d = destination.toUpperCase()
   const notes: string[] = []
 
   let routings: Routing[]
+  let lookup: AirportLookup
   try {
-    routings = await computeRoutings(db, apiKey, o, d)
+    ;({ routings, lookup } = await computeRoutings(db, apiKey, kb, o, d))
   } catch (err) {
     return {
       origin: o,
@@ -171,6 +171,7 @@ export async function computeAwardOptions(
       options: [],
       dests: [],
       notes: [`route lookup failed: ${String(err)}`],
+      lookup: () => null,
     }
   }
   if (routings.length === 0) {
@@ -180,6 +181,7 @@ export async function computeAwardOptions(
       options: [],
       dests: [],
       notes: ['no direct or one-stop routing found'],
+      lookup,
     }
   }
 
@@ -320,5 +322,5 @@ export async function computeAwardOptions(
 
   notes.push(`${options.length} fly-options (directs first)`)
 
-  return { origin: o, destination: d, options, dests: [], notes }
+  return { origin: o, destination: d, options, dests: [], notes, lookup }
 }

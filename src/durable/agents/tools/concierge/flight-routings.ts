@@ -1,5 +1,7 @@
 import { getAirportRoutes, type RouteOperator } from './routes-store'
-import { makeAirportLookup } from './airports-store'
+import { fetchAirports, makeAirportLookup } from './airports-store'
+import type { KbHttp } from './kb-tools'
+import type { AirportLookup } from './award-engine'
 
 // Shared routing computation over the 7-day-cached AeroDataBox route lists.
 // Both flight_search (presentation) and award_options (pricing) build on this,
@@ -40,9 +42,10 @@ export interface Routing {
 export async function computeRoutings(
   db: SqlStorage,
   apiKey: string,
+  kb: KbHttp,
   origin: string,
   destination: string,
-): Promise<Routing[]> {
+): Promise<{ routings: Routing[]; lookup: AirportLookup }> {
   const o = origin.toUpperCase()
   const d = destination.toUpperCase()
   const [oRoutes, dRoutes] = await Promise.all([
@@ -64,7 +67,12 @@ export async function computeRoutings(
   // Direct great-circle baseline for the detour filter (computable even when
   // there's no nonstop flight). Null coords → skip the filter (don't drop on
   // missing data).
-  const lookup = makeAirportLookup(db)
+  // Resolve every candidate airport (O&D + all one-stop hub candidates) from the
+  // KB in ONE batched call, then filter/price against the sync map-backed lookup.
+  const candidates = new Set<string>([o, d])
+  for (const r of oRoutes) candidates.add(r.dest)
+  for (const r of dRoutes) candidates.add(r.dest)
+  const lookup = makeAirportLookup(await fetchAirports(kb, candidates))
   const co = lookup(o)
   const cd = lookup(d)
   const maxOneStop =
@@ -95,5 +103,5 @@ export async function computeRoutings(
     })
   }
 
-  return routings
+  return { routings, lookup }
 }

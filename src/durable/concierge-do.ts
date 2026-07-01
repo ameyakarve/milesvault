@@ -5,8 +5,6 @@ import { buildConciergeSystem } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
 import { makeConciergeRegistry, type ConciergeAgentName } from './agents/registries/concierge'
-import { makeAirportLookup, seedAirports } from './agents/tools/concierge/airports-store'
-import type { AirportLookup } from './agents/tools/concierge/award-engine'
 import type { KbHttp } from './agents/tools/concierge/kb-tools'
 import {
   askUserTool,
@@ -104,10 +102,6 @@ export class ConciergeDO
   // Synthetic host for the kb service binding — only the path is used.
   private readonly KB_BASE = 'https://kb'
 
-  // IATA → [lat,lng,cc] over this DO's own SQLite, seeded once. Used by the
-  // award engine to resolve legs.
-  private readonly airportLookup: AirportLookup
-
   // This DO's own SQLite — also backs the 7-day route_cache that
   // flight_search reads/writes. (Named `routeSql` to avoid the inherited
   // `sql` tagged-template helper on the Think base class.)
@@ -117,9 +111,7 @@ export class ConciergeDO
     super(state, env)
     this.registry = makeConciergeRegistry(this)
     this.routeSql = state.storage.sql
-    seedAirports(state.storage.sql)
     ensureRouteCache(state.storage.sql)
-    this.airportLookup = makeAirportLookup(state.storage.sql)
   }
 
   private ledgerStub(): DurableObjectStub<LedgerDO> {
@@ -247,7 +239,6 @@ export class ConciergeDO
   async awardExplore(origin: string, destination: string): Promise<AwardExploreResult> {
     const kbHttp = kbHttpOverFetch(this.KB_BASE, this.env.KB)
     return buildAwardExplore(
-      this.airportLookup,
       this.routeSql,
       this.env.AERODATABOX_API_KEY,
       kbHttp,
