@@ -266,15 +266,16 @@ export function DraftChat({
     // and we await the next user message, Reject just dismisses it. Concierge
     // passes true (read-only tools; the agent should continue to its answer).
     autoContinueAfterToolResult,
-    // Skip the library's HTTP /get-messages fetch. On SSR `useAgent` builds
-    // a partysocket URL pointing at "dummy-domain.com" (its fallback when
-    // window is undefined), and `useAgentChat` then calls `use(fetch(...))`
-    // against that URL — the resulting snapshot diverges from client and
-    // causes React #418. Setting this to null short-circuits that path; the
-    // WebSocket connection still replays history via the resume flow.
-    // NOTE: every caller MUST mount-gate DraftChat (render only after hydration)
-    // so it never executes during SSR — editor-shell and concierge/chat both do.
-    getInitialMessages: null,
+    // We use the library's DEFAULT HTTP `/get-messages` loader (by NOT passing
+    // `getInitialMessages`) so a mount/refresh reloads the DURABLE persisted
+    // history over HTTP — independent of the WebSocket. Without it, refresh
+    // depends entirely on WS resume, so a turn that completed + persisted while
+    // the stream had dropped shows as a blank thread until a new message.
+    // The `null` hack that used to live here was to dodge a React #418 SSR
+    // hydration mismatch (on SSR `useAgent` builds a dummy-domain partysocket
+    // URL and `useAgentChat` fetches against it). That no longer applies: every
+    // caller mount-gates DraftChat (renders only after hydration), so this loader
+    // only ever runs client-side against the real URL. (editor-shell + concierge.)
   })
 
   const [submitStatus, setSubmitStatus] = useState<

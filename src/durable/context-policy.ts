@@ -39,6 +39,17 @@ export const PROFILES = {
     idleTokens: 4_000,
     floorTokens: 2_000,
   },
+  // Main (unscoped) editor. Turns are token-heavy — they carry draft_transaction
+  // tool payloads (~4–5k tokens/turn observed) — so a higher ceiling than the
+  // concierge, or you'd drop the previous exchange after barely one turn.
+  editor: {
+    name: 'editor',
+    activeWindowMs: 10 * 60_000,
+    staleAfterMs: 24 * 60 * 60_000,
+    ceilingTokens: 24_000,
+    idleTokens: 12_000,
+    floorTokens: 6_000,
+  },
   // Scoped statement / inbox threads: big + long-lived, and their anchor (the
   // statement text via read_statement, drafts on the capture row) lives OUTSIDE
   // the message history — so trimming the discussion is safe. Relaxed everywhere,

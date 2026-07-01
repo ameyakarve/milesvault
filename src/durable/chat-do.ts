@@ -746,9 +746,9 @@ ${consolidatedText}`,
   // Scoped statement/inbox threads (`key::captureId`) use the relaxed `document`
   // profile — big + long-lived, and their anchor (statement text + drafts) lives
   // outside the message history, so trimming discussion is safe. The main
-  // (unscoped) editor is a normal conversation.
+  // (unscoped) editor uses the token-heavier `editor` profile (draft payloads).
   protected override contextProfile(): ContextProfile {
-    return this.threadCaptureId() ? PROFILES.document : PROFILES.conversational
+    return this.threadCaptureId() ? PROFILES.document : PROFILES.editor
   }
 
   // Cost hygiene: when an Inbox item is posted or dismissed, its thread DO is
