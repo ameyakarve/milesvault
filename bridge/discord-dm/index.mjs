@@ -103,8 +103,19 @@ client.on(Events.MessageCreate, async (message) => {
     const text = (message.content ?? '').trim()
     if (!text) return // attachment-only / empty — nothing to answer
 
+    // Discord's typing indicator lasts only ~10s, but a concierge turn (gemma +
+    // tool loop + codemode) can run much longer, so re-send it every 8s until the
+    // reply lands — otherwise a slow turn looks dead. Cleared in `finally`.
     await message.channel.sendTyping().catch(() => {})
-    const reply = await askConcierge(message.author.id, text)
+    const keepTyping = setInterval(() => {
+      message.channel.sendTyping().catch(() => {})
+    }, 8000)
+    let reply
+    try {
+      reply = await askConcierge(message.author.id, text)
+    } finally {
+      clearInterval(keepTyping)
+    }
     const parts = chunk(
       formatDiscordLinks(reply || 'Sorry — I could not work out an answer to that.', DM_ORIGIN),
     )
