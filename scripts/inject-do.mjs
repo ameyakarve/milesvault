@@ -196,10 +196,18 @@ export default {
       const instance = await wf.create()
       return Response.json({ id: instance.id, status: await instance.status() })
     }
-    // TEMP (member data recovery): owner-only dump of any user's ledger journal
-    // as beancount, by storage key. Used to recover a member whose data lives
-    // under a stale storage key (email) after a re-key to their uid. Remove
-    // after recovery. Owner-gated exactly like /api/admin/workflows/.
+    // ADMIN: GET /api/admin/dump-ledger?key=<storage_key>[&t=<RECOVERY_TOKEN>]
+    // Dumps any user's ledger as beancount text (Content-Type text/plain). Used
+    // for member data recovery / support — e.g. a member whose data sits under a
+    // stale storage key (their old email) after a re-key to their uid; dump it so
+    // they can re-add it, or so we can inspect. Read-only (LedgerDO.journal_get).
+    //
+    // Auth — EITHER is accepted:
+    //   1) a valid OWNER session (open the URL in a browser while signed in as
+    //      the owner — key === ALLOWED_EMAILS[0]); or
+    //   2) the RECOVERY_TOKEN prod secret via `?t=` (for curl / no cookie).
+    // Runs BEFORE Next middleware; the matcher excludes /api/admin. Docs:
+    // docs/ops/admin-endpoints.md.
     if (url.pathname === "/api/admin/dump-ledger" && request.method === "GET") {
       // getToken must read the prod secure-prefixed cookie over https; the
       // shared __resolveAuth hardcodes secureCookie:false (http/staging only).
@@ -214,10 +222,9 @@ export default {
       }).catch(() => null)
       const authKey = token?.key ?? null
       const ownerKey = __ownerKey(env)
-      // Accept EITHER a valid owner session OR the one-time RECOVERY_TOKEN
-      // (set as a prod secret for this recovery; lets the operator fetch over
-      // curl without depending on session-cookie parsing). Remove with the
-      // endpoint.
+      // Accept EITHER a valid owner session OR the RECOVERY_TOKEN prod secret
+      // (via `?t=`) — the latter lets the operator fetch over curl without
+      // session-cookie parsing.
       const tokenOk = !!env.RECOVERY_TOKEN && url.searchParams.get("t") === env.RECOVERY_TOKEN
       const ownerOk = !!ownerKey && authKey === ownerKey
       if (!tokenOk && !ownerOk) {
