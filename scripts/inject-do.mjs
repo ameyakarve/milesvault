@@ -223,8 +223,8 @@ export default {
       const authKey = token?.key ?? null
       const ownerKey = __ownerKey(env)
       // Accept EITHER a valid owner session OR the RECOVERY_TOKEN prod secret
-      // (via `?t=`) — the latter lets the operator fetch over curl without
-      // session-cookie parsing.
+      // (via the t= query param) — the latter lets the operator fetch over curl
+      // without session-cookie parsing.
       const tokenOk = !!env.RECOVERY_TOKEN && url.searchParams.get("t") === env.RECOVERY_TOKEN
       const ownerOk = !!ownerKey && authKey === ownerKey
       if (!tokenOk && !ownerOk) {
