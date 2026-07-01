@@ -22,6 +22,9 @@ export interface KbHttp {
     },
   ): Promise<unknown>
   list(prefix: string, opts: { limit?: number; fields?: string[] }): Promise<unknown>
+  // Bulk exact get-by-ids: resolve a known set of slugs in one call, each with
+  // the requested attr `fields`. Maps to GET /api/kb/get?slugs=…&fields=….
+  getMany(slugs: string[], opts: { fields?: string[] }): Promise<unknown>
   // Bulk: every edge of one type (TRANSFERS / EARNS_INTO / …) in one query.
   edges(edge_type: string): Promise<unknown>
   // Whole source file (path from a node's `source_file`) — markdown sections
@@ -356,6 +359,12 @@ export function kbHttpOverFetch(
       const u = new URL(`${trimmed}/api/kb/list`)
       u.searchParams.set('prefix', prefix)
       if (opts.limit !== undefined) u.searchParams.set('limit', String(opts.limit))
+      if (opts.fields?.length) u.searchParams.set('fields', opts.fields.join(','))
+      return (await fetcher.fetch(u)).json()
+    },
+    async getMany(slugs, opts) {
+      const u = new URL(`${trimmed}/api/kb/get`)
+      u.searchParams.set('slugs', slugs.join(','))
       if (opts.fields?.length) u.searchParams.set('fields', opts.fields.join(','))
       return (await fetcher.fetch(u)).json()
     },

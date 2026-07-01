@@ -1,4 +1,3 @@
-import type { AirportLookup } from './award-engine'
 import type { KbHttp } from './kb-tools'
 import { computeAwardOptions } from './award-options'
 import type { AwardPlanRow } from './award-plan'
@@ -79,14 +78,13 @@ async function resolveNames(kb: KbHttp, rows: AwardPlanRow[]): Promise<Record<st
 }
 
 export async function buildAwardExplore(
-  lookup: AirportLookup,
   db: SqlStorage,
   apiKey: string,
   kb: KbHttp,
   origin: string,
   destination: string,
 ): Promise<AwardExploreResult> {
-  const opts = await computeAwardOptions(lookup, db, apiKey, kb, origin, destination)
+  const opts = await computeAwardOptions(db, apiKey, kb, origin, destination)
   const blankCost: AwardPlanRow['cost'] = {
     economy: null,
     premium_economy: null,
@@ -118,7 +116,7 @@ export async function buildAwardExplore(
   for (const r of rows) for (const rt of r.routings) if (rt.hub) codes.add(rt.hub)
   const airports: Record<string, [number, number]> = {}
   for (const c of codes) {
-    const a = lookup(c)
+    const a = opts.lookup(c)
     if (a) airports[c] = [a[0], a[1]]
   }
 
