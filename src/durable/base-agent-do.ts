@@ -335,6 +335,9 @@ export abstract class BaseAgentDO<
     // the structured-clone DO RPC, and bind as NULL (cost_micros NOT NULL trips).
     const inTok = Number.isFinite(usage?.inputTokens) ? (usage!.inputTokens as number) : 0
     const outTok = Number.isFinite(usage?.outputTokens) ? (usage!.outputTokens as number) : 0
+    console.log(
+      `[usage] surface=${this.surface()} name=${this.name} model=${model.split('/').pop()} in=${inTok} out=${outTok}`,
+    )
     if (!inTok && !outTok) return
     const env = this.env as unknown as { USAGE_DO?: DurableObjectNamespace<UsageDO> }
     const ns = env.USAGE_DO
