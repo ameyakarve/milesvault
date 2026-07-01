@@ -50,6 +50,12 @@ type UIMessagePart = UIMessage['parts'][number]
 // both the streaming (prod) and generate (bench) paths.
 const TOOL_CALL_LEAK = /<\|tool_call>\s*:?\s*([A-Za-z0-9_]+)\s*(\{[\s\S]*?\})\s*<tool_call\|>/g
 const TOOL_CALL_SENTINEL = /<\|?tool_call|tool_call\|>/
+// gemma occasionally leaks harmony channel markers into the VISIBLE text (e.g.
+// `<|channel>thought <channel|>`) even with thinking off — a provider/template
+// quirk, not content. Strip a channel open..close wrapper (with its inner
+// channel name) plus any stray marker token from the streamed text.
+const CHANNEL_LEAK =
+  /<\|?channel\|?>[^<]*<\|?channel\|?>|<\|?(?:channel|message|start|end|constrain|return)\|?>/gi
 
 type RecoveredCall = { type: 'tool-call'; toolCallId: string; toolName: string; input: string }
 
@@ -131,6 +137,14 @@ const toolCallRescueMiddleware: LanguageModelMiddleware = {
     const kept = parts.filter(
       (p) => !TOOL_INPUT_STREAM.has(String((p as { type?: string }).type ?? '')),
     )
+    // Strip leaked gemma channel markers from the visible text/reasoning stream.
+    for (const p of kept) {
+      const x = p as { type?: string; delta?: string; text?: string }
+      if ((x.type === 'text-delta' || x.type === 'reasoning-delta') && typeof x.delta === 'string')
+        x.delta = x.delta.replace(CHANNEL_LEAK, '')
+      else if ((x.type === 'text' || x.type === 'reasoning') && typeof x.text === 'string')
+        x.text = x.text.replace(CHANNEL_LEAK, '')
+    }
     let out = kept
     if (!hasToolCall && TOOL_CALL_SENTINEL.test(text)) {
       const calls = recoverLeakedToolCalls(text)
