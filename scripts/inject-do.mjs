@@ -205,7 +205,7 @@ export default {
     // Auth — EITHER is accepted:
     //   1) a valid OWNER session (open the URL in a browser while signed in as
     //      the owner — key === ALLOWED_EMAILS[0]); or
-    //   2) the RECOVERY_TOKEN prod secret via `?t=` (for curl / no cookie).
+    //   2) the RECOVERY_TOKEN prod secret via the t= query param (curl/no cookie).
     // Runs BEFORE Next middleware; the matcher excludes /api/admin. Docs:
     // docs/ops/admin-endpoints.md.
     if (url.pathname === "/api/admin/dump-ledger" && request.method === "GET") {
