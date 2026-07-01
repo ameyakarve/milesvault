@@ -57,6 +57,20 @@ const TOOL_CALL_SENTINEL = /<\|?tool_call|tool_call\|>/
 const CHANNEL_LEAK =
   /<\|?channel\|?>[^<]*<\|?channel\|?>|<\|?(?:channel|message|start|end|constrain|return)\|?>/gi
 
+// Rough token estimate (~4 chars/token) over request/response BODIES. Needed
+// because the workers-ai gemma STREAM path returns no `usage`, so the provider
+// maps it to 0 — we count the actual prompt (system + messages + tool schemas)
+// and generated output ourselves. Approximate (fine for fair-usage metering),
+// used only as a fallback when the provider reports no real token count.
+function estimateBodyTokens(...values: unknown[]): number {
+  let chars = 0
+  for (const v of values) {
+    if (v === undefined || v === null) continue
+    chars += typeof v === 'string' ? v.length : JSON.stringify(v).length
+  }
+  return Math.ceil(chars / 4)
+}
+
 type RecoveredCall = { type: 'tool-call'; toolCallId: string; toolName: string; input: string }
 
 function recoverLeakedToolCalls(text: string): RecoveredCall[] {
@@ -348,25 +362,40 @@ export abstract class BaseAgentDO<
   }
 
   private usageMiddleware(model: string): LanguageModelMiddleware {
+    // Prefer the provider's real token counts; fall back to a body-based estimate
+    // when it reports 0/NaN (the workers-ai gemma STREAM path returns no usage).
+    const pick = (reported: number | undefined, estimated: number): number =>
+      Number.isFinite(reported) && (reported as number) > 0 ? (reported as number) : estimated
     return {
       specificationVersion: 'v3',
-      wrapGenerate: async ({ doGenerate }) => {
+      wrapGenerate: async ({ doGenerate, params }) => {
         const res = await doGenerate()
-        this.recordUsageBestEffort(
-          model,
-          res.usage as unknown as { inputTokens?: number; outputTokens?: number },
-        )
+        const p = params as { prompt?: unknown; tools?: unknown }
+        const u = res.usage as unknown as { inputTokens?: number; outputTokens?: number } | undefined
+        this.recordUsageBestEffort(model, {
+          inputTokens: pick(u?.inputTokens, estimateBodyTokens(p.prompt, p.tools)),
+          outputTokens: pick(u?.outputTokens, estimateBodyTokens(res.content)),
+        })
         return res
       },
-      wrapStream: async ({ doStream }) => {
+      wrapStream: async ({ doStream, params }) => {
         const { stream, ...rest } = await doStream()
+        const p = params as { prompt?: unknown; tools?: unknown }
+        const estIn = estimateBodyTokens(p.prompt, p.tools)
+        let outChars = 0
         const record = (u: { inputTokens?: number; outputTokens?: number } | undefined) =>
-          this.recordUsageBestEffort(model, u)
+          this.recordUsageBestEffort(model, {
+            inputTokens: pick(u?.inputTokens, estIn),
+            outputTokens: pick(u?.outputTokens, Math.ceil(outChars / 4)),
+          })
         const tap = new TransformStream({
           transform(chunk, controller) {
-            if ((chunk as { type?: string }).type === 'finish') {
-              record((chunk as { usage?: { inputTokens?: number; outputTokens?: number } }).usage)
-            }
+            const c = chunk as { type?: string; delta?: string; usage?: unknown }
+            if (c.type === 'text-delta' || c.type === 'reasoning-delta')
+              outChars += (c.delta ?? '').length
+            else if (c.type === 'tool-call') outChars += JSON.stringify(chunk).length
+            else if (c.type === 'finish')
+              record(c.usage as { inputTokens?: number; outputTokens?: number } | undefined)
             controller.enqueue(chunk)
           },
         })
