@@ -1,8 +1,9 @@
 /**
  * Miles & More (Lufthansa Group)
  *
- * - Lufthansa Group own-metal (LH/LX/OS/SN/EN/EW/4Y): dynamic pricing (return [0,0])
- * - Partner (other Star Alliance): fixed zone-based chart, round-trip halved
+ * - LH Group own-metal (LH/LX/OS/VL/EN): dynamic pricing (return [0,0], incl. PE)
+ * - Partner chart (Star Alliance + Brussels/Discover, despite LH Group): fixed
+ *   zone-based, round-trip halved. Premium economy only on Europe-origin routes.
  *
  * Source: vault Award Charts/Miles & More/Miles & More Partner Chart.md
  * HOW TO REFRESH: Update CHARTS below from miles-and-more.com
@@ -12,8 +13,10 @@ import { pairKey } from "../../shared.js";
 
 const BOOKABLE = new Set(["4Y","A3","AC","AI","AV","AZ","BR","CA","CM","CX","EN","ET","EW","LA","LH","LO","LX","MS","NH","NZ","OA","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VL","ZH"]);
 
-// Lufthansa Group own metal — dynamically priced, not on the partner chart.
-const LH_GROUP = new Set(["LH","LX","OS","SN","EN","EW","4Y","VL"]);
+// LH Group own metal that M&M prices DYNAMICALLY. Note: Brussels (SN) and
+// Discover (4Y) are LH Group but use the fixed partner chart, so they are NOT
+// here. EN = Air Dolomiti (Lufthansa Regional). VL = Lufthansa City Airlines.
+const LH_GROUP = new Set(["LH","LX","OS","VL","EN"]);
 
 const ZONE = {
   GB: "EU", FR: "EU", DE: "EU", NL: "EU", BE: "EU", CH: "EU", AT: "EU",
@@ -48,22 +51,24 @@ function getZone(cc, airport) {
   return ZONE[cc] || null;
 }
 
-// Partner chart: round-trip values. Key = pairKey(z1,z2). [econ, biz, first]
+// Partner chart: round-trip values. Key = pairKey(z1,z2). Stored [econ, pe, biz,
+// first] — pe is null except on Europe-origin routes (the only ones M&M gives a
+// published premium-economy rate for). Optional trailing `pe` arg.
 const C = {};
-function a(z1, z2, e, b, f) { C[pairKey(z1, z2)] = [e, b, f]; }
+function a(z1, z2, e, b, f, pe = null) { C[pairKey(z1, z2)] = [e, pe, b, f]; }
 
-// Europe origin
-a("EU","EU", 28000, 50000, 50000);
-a("EU","NAM", 50000, 125000, 215000);
-a("EU","HI", 95000, 215000, 330000);
-a("CAM","EU", 70000, 140000, 225000);
-a("EU","SAM", 75000, 150000, 245000);
-a("EU","ME", 42000, 75000, 140000);
-a("EU","SAF", 50000, 125000, 215000);
-a("EU","IN", 50000, 125000, 215000);
-a("EU","SEA", 85000, 200000, 240000);
-a("EU","FE", 75000, 170000, 260000);
-a("EU","OC", 110000, 260000, 395000);
+// Europe origin (published premium-economy column)
+a("EU","EU", 28000, 50000, 50000, 28000);
+a("EU","NAM", 50000, 125000, 215000, 85000);
+a("EU","HI", 95000, 215000, 330000, 95000);
+a("CAM","EU", 70000, 140000, 225000, 95000);
+a("EU","SAM", 75000, 150000, 245000, 110000);
+a("EU","ME", 42000, 75000, 140000, 55000);
+a("EU","SAF", 50000, 125000, 215000, 85000);
+a("EU","IN", 50000, 125000, 215000, 85000);
+a("EU","SEA", 85000, 200000, 240000, 110000);
+a("EU","FE", 75000, 170000, 260000, 110000);
+a("EU","OC", 110000, 260000, 395000, 110000);
 // North America
 a("NAM","NAM", 35000, 60000, 80000);
 a("HI","NAM", 45000, 75000, 135000);
@@ -133,10 +138,10 @@ export const bookable = BOOKABLE;
 export function handle(legs) {
   const carriers = legs.map((l) => l.carrier).filter(Boolean);
 
-  // LH Group own-metal — dynamic
+  // LH Group own-metal — dynamic across every cabin (incl. premium economy).
   if (carriers.length > 0 && carriers.every((c) => LH_GROUP.has(c))) {
     return [{ programme: "milesmore", chart: "dynamic", season: "default",
-      economy: [0, 0], premium_economy: null, business: [0, 0], first: null }];
+      economy: [0, 0], premium_economy: [0, 0], business: [0, 0], first: [0, 0] }];
   }
 
   const oz = getZone(legs[0].origin_cc, legs[0].origin);
@@ -147,11 +152,12 @@ export function handle(legs) {
   const chart = CHARTS[key];
   if (!chart) return [];
 
-  const [e, b, f] = chart;
+  const [e, pe, b, f] = chart;
   // Round-trip halved for one-way
   const wrap = (v) => [v / 2, v / 2];
   return [{
     programme: "milesmore", chart: "partner", season: "default",
-    economy: wrap(e), premium_economy: null, business: wrap(b), first: wrap(f),
+    economy: wrap(e), premium_economy: pe == null ? null : wrap(pe),
+    business: wrap(b), first: wrap(f),
   }];
 }
