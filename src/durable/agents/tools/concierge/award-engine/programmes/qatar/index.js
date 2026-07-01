@@ -53,30 +53,55 @@ const LA_CHART = [
   [25750, 77250],
 ];
 
-// QR own-metal approximate pricing from Doha [econ_offpeak, econ_peak, biz_offpeak, biz_peak, first_offpeak, first_peak]
-// Peak ≈ 1.3x offpeak
+// QR own-metal Avios — SEASONAL off-peak/peak. Qatar charges roughly 2x the
+// off-peak rate in business during peak periods (verified: fare tiers track the
+// travel calendar, peak concentrated Dec–Feb). Economy peak premium varies by
+// region (near-flat on short hauls, ~2x on long hauls).
+//
+// [econ_off, econ_peak, biz_off, biz_peak, first_off, first_peak]  (0/0 => cabin
+// not offered; wrapped to null). Values reconstructed from seats.aero QR-operated
+// award data (source=qatar, Sep 2026–Mar 2027): off-peak = the lowest dominant
+// fare tier per region, peak = the highest. QR's own "My Calculator" is the
+// canonical source but is Akamai-blocked to automated access.
+//
+// First class kept ONLY where QR actually flies it (A380: Europe-long, SE Asia,
+// East Asia). NAM/SAM/OC/Africa/India show no first inventory — first dropped.
 const QR_OWN = {
   // Middle East short
-  ME_SHORT: [6000, 8000, 12500, 17000, 0, 0],
+  ME_SHORT: [7000, 8000, 14000, 28000, 0, 0],
   // Indian Subcontinent
-  IS: [15000, 20000, 30000, 40000, 0, 0],
-  // Europe short
-  EU_SHORT: [20000, 27000, 42500, 57000, 62500, 84000],
+  IS: [13000, 15000, 26000, 52000, 0, 0],
+  // Europe short (Greece, Turkey, Cyprus)
+  EU_SHORT: [17500, 35000, 35000, 70000, 0, 0],
   // Europe long
-  EU_LONG: [22500, 30000, 55000, 74000, 87500, 118000],
+  EU_LONG: [21500, 24500, 43000, 86000, 64500, 86000],
   // Southeast Asia
-  SEA: [25000, 34000, 55000, 74000, 75000, 101000],
+  SEA: [25000, 30000, 50000, 100000, 75000, 150000],
   // East Asia
-  EA: [30000, 40000, 70000, 94000, 90000, 121000],
-  // Africa
-  AF: [25000, 34000, 55000, 74000, 95000, 128000],
+  EA: [30000, 60000, 60000, 120000, 75000, 150000],
+  // Southern Africa (e.g. JNB, CPT) — farther from DOH, priced higher
+  AF_S: [22500, 45000, 45000, 90000, 0, 0],
+  // East Africa (e.g. NBO, DAR, ADD) — closer, priced lower
+  AF_E: [17500, 20000, 35000, 70000, 0, 0],
   // North America
-  NAM: [35000, 47000, 75000, 101000, 120000, 162000],
+  NAM: [35000, 70000, 70000, 140000, 0, 0],
   // South America
-  SAM: [40000, 54000, 90000, 121000, 150000, 203000],
+  SAM: [35000, 70000, 70000, 140000, 0, 0],
   // Oceania
-  OC: [35000, 47000, 80000, 108000, 135000, 182000],
+  OC: [35000, 70000, 70000, 140000, 0, 0],
 };
+
+// TODO (QR own-metal): values are seats-reconstructed because QR's My Calculator
+// is Akamai-blocked — refresh from the calculator when access is possible.
+// Known limitations:
+//  - Through-journeys via DOH price on the DESTINATION zone only (nonstop-equivalent);
+//    e.g. India->US via DOH bills at NAM peak 140k, but seats shows the through
+//    itinerary ~160k — the DEL–DOH feeder segment (~+20k) is not added.
+//  - AF_S / AF_E boundary below is a geographic approximation (QR may price by
+//    distance); West/Central Africa (NG, GH, etc.) is unmapped.
+//  - ME_SHORT/EU_SHORT business-peak partly inferred from the 2x pattern (thin data).
+//  - Route-level outliers exist (e.g. Kathmandu prices above the IS zone); the zone
+//    modal is used deliberately.
 
 const QR_DEST_ZONE = {
   // ME short
@@ -94,8 +119,11 @@ const QR_DEST_ZONE = {
   TH: "SEA", SG: "SEA", MY: "SEA", ID: "SEA", PH: "SEA", VN: "SEA",
   // East Asia
   JP: "EA", KR: "EA", CN: "EA", HK: "EA", TW: "EA",
-  // Africa
-  KE: "AF", ZA: "AF", TZ: "AF", ET: "AF",
+  // Southern Africa (farther from DOH)
+  ZA: "AF_S", AO: "AF_S", NA: "AF_S", BW: "AF_S", ZW: "AF_S", ZM: "AF_S",
+  MZ: "AF_S", MU: "AF_S", MG: "AF_S", MW: "AF_S",
+  // East Africa (closer to DOH)
+  KE: "AF_E", TZ: "AF_E", ET: "AF_E", UG: "AF_E", RW: "AF_E", DJ: "AF_E",
   // North America
   US: "NAM", CA: "NAM",
   // South America
