@@ -36,7 +36,7 @@ export const PROFILES = {
   // Concierge (web + Discord/WhatsApp) and the main (unscoped) editor.
   conversational: {
     name: 'conversational',
-    activeWindowMs: 60 * 60_000, // 60 min — a follow-up within the hour is active
+    activeWindowMs: 3 * 60 * 60_000, // 3 h — a follow-up within a few hours is still active
     staleAfterMs: 24 * 60 * 60_000, // 24 h
     ceilingTokens: 8_000,
     idleTokens: 6_000,
@@ -48,7 +48,7 @@ export const PROFILES = {
   // concierge, or you'd drop the previous exchange after barely one turn.
   editor: {
     name: 'editor',
-    activeWindowMs: 60 * 60_000,
+    activeWindowMs: 3 * 60 * 60_000,
     staleAfterMs: 24 * 60 * 60_000,
     ceilingTokens: 24_000,
     idleTokens: 16_000,
@@ -62,7 +62,7 @@ export const PROFILES = {
   // on one item" case.
   document: {
     name: 'document',
-    activeWindowMs: 60 * 60_000,
+    activeWindowMs: 3 * 60 * 60_000,
     staleAfterMs: 14 * 24 * 60 * 60_000, // 14 d
     ceilingTokens: 32_000,
     idleTokens: 24_000,
