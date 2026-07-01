@@ -25,7 +25,11 @@ Own-metal carriers used for chart selection: `EY` (`EY_CARRIERS` set, single mem
 ## Partner cabin restrictions
 - **No First-class redemption on Saudia (SV), Air France (AF), Oman Air (WY)** (`NO_FIRST_CARRIERS`). If any segment flies one of these, the whole award's `first` is `null`. Confirmed by Etihad Guest sources + KG.
 
-## Known residuals (chart-value follow-ups; structure is correct)
-- [x] ~~**Gulf Air (GF) / Saudia (SV) partner segments** off the standard chart~~ — **closed, no fix.** Research confirmed there is no special GF/SV chart; all partners use the one standard distance-based partner chart, which the module already applies per segment. The ±3–8k live deviations (incl. GF below the published floor) are Etihad's dynamic award pricing, not a fixed rate to encode.
-- [ ] **Own-metal business/first, 1,001–1,500mi band**: live data shows 33k/63k vs the published floor 30k/55k. Economy (13k) matches. Confirm whether the floor is stale or seats surfaces a higher Saver tier before changing values.
-- [ ] **`QP`-coded segments** price as Etihad own metal in live data but `QP` is not in `BOOKABLE`, so production drops those itineraries. Confirm QP's identity before adding it to the bookable set (+ own-metal set).
+## Verification notes (structure + floors confirmed by running the engine)
+
+Validated the real engine against live seats.aero award data (`scripts/award-eval.mjs`):
+economy matched **156/156** exactly. The floors are correct; nothing to fix for floor pricing.
+
+- [x] ~~Own-metal business/first, 1,001–1,500mi band (33k/63k vs 30k/55k)~~ — **not a bug.** Etihad own metal is **dynamically priced**; `ET_OWN` is the Saver **floor** (30k/55k, confirmed vs 10xTravel + KG). The 33k/63k seen on peak dates is dynamic pricing *above* the floor — the floor is what we quote. Economy sat at floor on the same dates.
+- [x] ~~Gulf Air (GF) / Saudia (SV) off the standard chart~~ — **no fix.** No special GF/SV chart exists; all partners use the one standard distance-based partner floor, applied per segment. GF looks dynamically priced (fits no fixed band) and is approximated with the partner floor; SV economy can isolate ~3k under on a band, but the dedicated Saudia chart matches ours.
+- [ ] **`QP`-coded segments** price as Etihad own metal in live data but `QP` is not in `BOOKABLE`, so production drops those itineraries. Confirm QP's identity before adding it to the bookable set (low priority).

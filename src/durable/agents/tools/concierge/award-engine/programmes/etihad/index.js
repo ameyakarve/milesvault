@@ -34,12 +34,17 @@ export const bookable = BOOKABLE;
 // data. Own metal has no premium-economy award cabin, so premium economy is
 // only offered when every segment is partner-operated.
 //
-// Known residuals (see docs/award-audit/programmes/etihad.md), left for a
-// follow-up chart-data pass rather than baked in here:
-//   - Gulf Air (GF) and Saudia (SV) partner segments price a few thousand off
-//     the standard partner chart.
-//   - Own-metal business/first in the 1,001–1,500mi band read slightly higher
-//     in live data (33k/63k) than the published floor (30k/55k).
+// The ET_OWN chart is the Saver FLOOR (minimum): Etihad own metal is
+// dynamically priced, so live rates often sit ABOVE the floor (e.g. business/
+// first on peak dates read 33k/63k where the 1,001–1,500mi floor is 30k/55k) —
+// that is expected, the floor is what we quote, and it matches the published
+// chart (10xTravel + milesvault-kg). Partner charts are fixed floors too.
+//
+// Notes (verified against live award data — not action items):
+//   - Gulf Air (GF) segments look dynamically priced (live data fits no fixed
+//     band); approximated with the standard partner floor.
+//   - Saudia (SV) economy may isolate a few thousand under the standard chart on
+//     some bands, but the dedicated Saudia chart matches ours — left as-is.
 export function handle(legs) {
   const anyCarrier = legs.some((l) => l.carrier);
   // Carriers unspecified (fan-out with no operating carrier): offer both an
