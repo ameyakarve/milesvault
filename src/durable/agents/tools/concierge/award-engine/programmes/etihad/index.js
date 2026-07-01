@@ -19,6 +19,9 @@ const ET_PTR = [
 
 const EY_CARRIERS = new Set(["EY"]);
 
+// Etihad Guest does not offer First-class redemptions on these partners.
+const NO_FIRST_CARRIERS = new Set(["SV", "AF", "WY"]); // Saudia, Air France, Oman Air
+
 export const slug = "etihad-guest";
 
 export const bookable = BOOKABLE;
@@ -50,10 +53,13 @@ export function handle(legs) {
 // mode: "own" | "partner" | null (null = decide per leg by its operating carrier)
 function sumSegments(legs, mode) {
   let economy = 0, premium = 0, business = 0, first = 0;
-  let sawOwn = false, sawPartner = false;
+  let sawOwn = false, sawPartner = false, noFirst = false;
   for (const leg of legs) {
     const idx = resolveBand(leg.distance, ET_BANDS);
     const own = mode ? mode === "own" : (!leg.carrier || EY_CARRIERS.has(leg.carrier));
+    // First class is unavailable on the whole award if any segment flies a
+    // partner Etihad Guest doesn't offer first-class redemption on.
+    if (leg.carrier && NO_FIRST_CARRIERS.has(leg.carrier)) noFirst = true;
     if (own) {
       sawOwn = true;
       const [e, b, f] = ET_OWN[idx];
@@ -73,6 +79,7 @@ function sumSegments(legs, mode) {
     // Premium economy exists only on the partner chart — null if any own segment.
     premium_economy: sawOwn ? null : [premium, premium],
     business: [business, business],
-    first: [first, first],
+    // First unavailable if any segment flies SV/AF/WY (no first-class redemption).
+    first: noFirst ? null : [first, first],
   };
 }

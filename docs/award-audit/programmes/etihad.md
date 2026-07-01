@@ -22,7 +22,10 @@ Own-metal carriers used for chart selection: `EY` (`EY_CARRIERS` set, single mem
 ## Output entries
 `handle()` returns a single summed entry when carriers are specified — chart `"own"` (all EY), `"partner"` (all partner), or `"mixed"` (both) — with season `"default"` and fixed `[v, v]` cabin values. When no leg carrier is specified (fan-out), it returns two entries: an all-own and an all-partner quote. The `programme` field is set to `"etihad"` (the engine canonicalizes it to the `etihad-guest` slug downstream).
 
+## Partner cabin restrictions
+- **No First-class redemption on Saudia (SV), Air France (AF), Oman Air (WY)** (`NO_FIRST_CARRIERS`). If any segment flies one of these, the whole award's `first` is `null`. Confirmed by Etihad Guest sources + KG.
+
 ## Known residuals (chart-value follow-ups; structure is correct)
-- [ ] **Gulf Air (GF) / Saudia (SV) partner segments** price ±3–5k off the standard partner chart (GF drifts both directions by origin; SV ~−3k). Needs carrier-specific partner rates.
+- [x] ~~**Gulf Air (GF) / Saudia (SV) partner segments** off the standard chart~~ — **closed, no fix.** Research confirmed there is no special GF/SV chart; all partners use the one standard distance-based partner chart, which the module already applies per segment. The ±3–8k live deviations (incl. GF below the published floor) are Etihad's dynamic award pricing, not a fixed rate to encode.
 - [ ] **Own-metal business/first, 1,001–1,500mi band**: live data shows 33k/63k vs the published floor 30k/55k. Economy (13k) matches. Confirm whether the floor is stale or seats surfaces a higher Saver tier before changing values.
 - [ ] **`QP`-coded segments** price as Etihad own metal in live data but `QP` is not in `BOOKABLE`, so production drops those itineraries. Confirm QP's identity before adding it to the bookable set (+ own-metal set).
