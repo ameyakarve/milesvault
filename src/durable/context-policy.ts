@@ -146,7 +146,11 @@ export function windowMessages(
   const minKeep = Math.max(1, profile.minKeepTurns)
   let si = 0
   while (si < turnStarts.length - minKeep && suffixTokens(turnStarts[si]!) > budget) si++
-  const start = turnStarts[si]!
+  // When NOT trimming, keep from the very start (index 0) so leading assistant /
+  // injected messages that precede the first user turn are retained — e.g. the
+  // ingest's draft_transaction card, which anchors an inbox thread. Only cut at a
+  // user-message boundary when we're actually dropping older turns (si > 0).
+  const start = si === 0 ? 0 : turnStarts[si]!
   const kept = messages.slice(start)
   return {
     kept,
