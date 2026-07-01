@@ -26,6 +26,9 @@ export type ContextProfile = {
   ceilingTokens: number // active band  (also the absolute max)
   idleTokens: number // activeWindow..staleAfter band
   floorTokens: number // >= staleAfter band
+  // Never trim below this many trailing turns — even a stale reset keeps some
+  // recent context rather than nuking to a single message.
+  minKeepTurns: number
 }
 
 // Rough starting numbers — tune from the [ctx-policy] staging logs.
@@ -33,22 +36,24 @@ export const PROFILES = {
   // Concierge (web + Discord/WhatsApp) and the main (unscoped) editor.
   conversational: {
     name: 'conversational',
-    activeWindowMs: 10 * 60_000, // 10 min
+    activeWindowMs: 60 * 60_000, // 60 min — a follow-up within the hour is active
     staleAfterMs: 24 * 60 * 60_000, // 24 h
     ceilingTokens: 8_000,
-    idleTokens: 4_000,
+    idleTokens: 6_000,
     floorTokens: 2_000,
+    minKeepTurns: 5,
   },
   // Main (unscoped) editor. Turns are token-heavy — they carry draft_transaction
   // tool payloads (~4–5k tokens/turn observed) — so a higher ceiling than the
   // concierge, or you'd drop the previous exchange after barely one turn.
   editor: {
     name: 'editor',
-    activeWindowMs: 10 * 60_000,
+    activeWindowMs: 60 * 60_000,
     staleAfterMs: 24 * 60 * 60_000,
     ceilingTokens: 24_000,
-    idleTokens: 12_000,
+    idleTokens: 16_000,
     floorTokens: 6_000,
+    minKeepTurns: 5,
   },
   // Scoped statement / inbox threads: big + long-lived, and their anchor (the
   // statement text via read_statement, drafts on the capture row) lives OUTSIDE
@@ -57,11 +62,12 @@ export const PROFILES = {
   // on one item" case.
   document: {
     name: 'document',
-    activeWindowMs: 10 * 60_000,
+    activeWindowMs: 60 * 60_000,
     staleAfterMs: 14 * 24 * 60 * 60_000, // 14 d
     ceilingTokens: 32_000,
     idleTokens: 24_000,
     floorTokens: 8_000,
+    minKeepTurns: 5,
   },
 } satisfies Record<string, ContextProfile>
 
@@ -143,8 +149,10 @@ export function windowMessages(
     if (at >= 0) si = at
   }
   const tokensBefore = suffixTokens(turnStarts[si]!)
-  // Advance a whole turn at a time until under budget, but always keep the last.
-  while (si < turnStarts.length - 1 && suffixTokens(turnStarts[si]!) > budget) si++
+  // Advance a whole turn at a time until under budget, but never drop below the
+  // profile's minKeepTurns trailing turns (so we never nuke to a single message).
+  const minKeep = Math.max(1, profile.minKeepTurns)
+  while (si < turnStarts.length - minKeep && suffixTokens(turnStarts[si]!) > budget) si++
   const start = turnStarts[si]!
   const kept = messages.slice(start)
   return {
