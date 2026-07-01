@@ -399,11 +399,11 @@ export abstract class BaseAgentDO<
     const nk = this.name || 'default'
     const now = Date.now()
     const lastTurnAt = (await store.get<number>(`mv:ctxLastTurnAt:${nk}`)) ?? now
-    const floorId = (await store.get<string>(`mv:ctxFloorId:${nk}`)) ?? null
     const idleMs = Math.max(0, now - lastTurnAt)
-    const r = windowMessages(messages, profile, idleMs, floorId)
+    // Non-destructive: this windows what the MODEL sees this turn; the full
+    // history stays in durable storage (recomputed fresh each turn, no floor).
+    const r = windowMessages(messages, profile, idleMs)
     await store.put(`mv:ctxLastTurnAt:${nk}`, now)
-    if (r.floorId && r.floorId !== floorId) await store.put(`mv:ctxFloorId:${nk}`, r.floorId)
     console.log(
       `[ctx-policy] surface=${this.surface()} name=${this.name} profile=${profile.name} ` +
         `band=${r.band} idleMs=${idleMs} budget=${r.budget} msgs=${messages.length} ` +
