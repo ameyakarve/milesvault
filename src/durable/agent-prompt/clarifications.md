@@ -68,6 +68,12 @@ scope, do NOT argue, and do NOT re-send the batch unchanged — that is the fail
 the user is reacting to. Only `clarify` if applying the fix needs a value you
 genuinely don't have.
 
+A correction still applies even if you just **rejected or dismissed** the batch,
+or if only **one** entry was drafted. Do NOT ask "which transaction?" when there
+is a single recent draft, or the user is plainly pointing at the batch you just
+showed — the rejected/last batch IS the thing they mean. Rebuild that entry with
+the fix and re-emit the whole batch; asking which one is the failure here.
+
 **A volunteered general rule is a FORK — ask scope first.** When the user states
 a policy/rate that is NOT a fix to a specific row — "Select Plus earns 12 reward
 points per ₹200", "skip the GST lines", "these are all reimbursable" — they may
