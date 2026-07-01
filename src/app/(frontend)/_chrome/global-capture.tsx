@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation'
 import { FileText, Loader2 } from 'lucide-react'
 import {
   loadStatement,
-  extractStatementText,
-  renderStatementImages,
+  extractStatement,
   MAX_STATEMENT_BYTES,
   StatementExtractError,
 } from '@/lib/pdf/extract'
@@ -147,10 +146,10 @@ export function GlobalCapture() {
     setOverlay({ kind: 'processing', filename: file.name })
     try {
       const { doc } = await loadStatement(file, password)
-      const text = await extractStatementText(doc)
+      const { text, images } = await extractStatement(doc)
       // Async ingestion (owner call): capture to the Inbox and draft in the
       // background — never block the user on a statement.
-      await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text })
+      await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text, images })
       setOverlay({ kind: 'captured', filename: file.name })
       window.dispatchEvent(new CustomEvent('mv:captured'))
       if (errorTimerRef.current) clearTimeout(errorTimerRef.current)
@@ -166,10 +165,6 @@ export function GlobalCapture() {
             file,
             wrong: e.detail.kind === 'wrong_password',
           })
-          return
-        }
-        if (e.detail.kind === 'image_only') {
-          showError('Image-only PDF — text extraction not supported yet.')
           return
         }
         showError(e.detail.kind === 'invalid_pdf' || e.detail.kind === 'unknown' ? e.detail.message : 'Failed to read PDF.')

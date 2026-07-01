@@ -156,6 +156,32 @@ export async function extractStatementText(doc: PDFDocumentProxy): Promise<strin
   return joined
 }
 
+// Read a statement as BOTH a text layer and page images — the model consumes
+// both (the text is authoritative where present; the images supply whatever the
+// text layer drops, and carry a scanned / image-only PDF that has no text at
+// all). We therefore always attempt both and only fail when NEITHER yields
+// anything. A missing/too-thin text layer is not an error here.
+export async function extractStatement(
+  doc: PDFDocumentProxy,
+): Promise<{ text: string; images: string[] }> {
+  let text = ''
+  try {
+    text = await extractStatementText(doc)
+  } catch (e) {
+    // Image-only / no text layer is expected for scanned PDFs — the page images
+    // carry it. Anything else is a real failure and propagates.
+    if (!(e instanceof StatementExtractError && e.detail.kind === 'image_only')) throw e
+  }
+  const images = await renderStatementImages(doc).catch((): string[] => [])
+  if (!text && images.length === 0) {
+    throw new StatementExtractError({
+      kind: 'unknown',
+      message: 'Couldn’t read this PDF — no extractable text or images.',
+    })
+  }
+  return { text, images }
+}
+
 function reconstructPageText(items: TextItem[]): string {
   const rows = new Map<number, TextItem[]>()
   for (const it of items) {

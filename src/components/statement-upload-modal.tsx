@@ -13,8 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   loadStatement,
-  extractStatementText,
-  renderStatementImages,
+  extractStatement,
   MAX_STATEMENT_BYTES,
   StatementExtractError,
 } from '@/lib/pdf/extract'
@@ -47,8 +46,7 @@ export function StatementUploadModal({
     setState({ kind: 'extracting', file })
     try {
       const { doc } = await loadStatement(file, password)
-      const text = await extractStatementText(doc)
-      const images = await renderStatementImages(doc).catch((): string[] => [])
+      const { text, images } = await extractStatement(doc)
       await ledgerClient.attachStatement({ mode: 'inbox', filename: file.name, text, images })
       window.dispatchEvent(new CustomEvent('mv:captured'))
       setState({ kind: 'captured', file })
@@ -66,10 +64,7 @@ export function StatementUploadModal({
         setState({
           kind: 'error',
           file,
-          message:
-            e.detail.kind === 'image_only'
-              ? 'Image-only PDF — text extraction not supported yet.'
-              : e.detail.message,
+          message: 'message' in e.detail ? e.detail.message : 'Failed to read PDF.',
         })
         return
       }
