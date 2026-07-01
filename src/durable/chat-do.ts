@@ -1079,8 +1079,15 @@ entries, or draft corrections.`
   // tools) have no headless equivalent. Returns the buffer for the caller.
   private captureDraftTools(): { tools: ToolSet; recorded: string[] } {
     const recorded: string[] = []
+    // RULE: statement/email ingest is WRITE-ONLY over the ledger. It transforms a
+    // statement into NEW drafts — the account list arrives via the system prompt,
+    // so it never needs to READ the ledger. Drop the ledger-read tools (`search`,
+    // `get_entry`); keep the KG lookups (kb_*, card_guide, reward_*) that drafting
+    // needs for reward math. (The LIVE editor keeps search/get_entry — it needs
+    // them to locate + edit/delete existing entries.)
+    const { search: _search, get_entry: _getEntry, ...kbLookups } = this.lookupTools()
     const tools = this.withToolLog('ledger', {
-      ...this.lookupTools(),
+      ...kbLookups,
       // The SAME draftTransactionTool the editor uses (dynamicTool — so garbled
       // args bounce a tool-error and the model re-emits), in RECORD mode: the
       // entry texts are captured here instead of suspending on a client.
