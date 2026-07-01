@@ -17,5 +17,8 @@ export const slug = "velocity-frequent-flyer";
 export const bookable = BOOKABLE;
 
 export function handle(legs) {
-  return [makeEntry("velocity", "dynamic", "default", 0, null, 0, null)];
+  // Fully dynamic across every cabin — VA has no published chart and its
+  // partners (SQ/EY/QR/…) sell premium economy and first too, so quote all four
+  // cabins as "varies" rather than nulling premium economy / first.
+  return [makeEntry("velocity", "dynamic", "default", 0, 0, 0, 0)];
 }

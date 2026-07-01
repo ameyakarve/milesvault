@@ -1,8 +1,8 @@
 /**
  * Miles & More (Lufthansa Group)
  *
- * - LH/LX/OS/VL own-metal: dynamic pricing (return [0,0])
- * - Partner (Star Alliance + Brussels/Discover): fixed zone-based chart, round-trip halved
+ * - Lufthansa Group own-metal (LH/LX/OS/SN/EN/EW/4Y): dynamic pricing (return [0,0])
+ * - Partner (other Star Alliance): fixed zone-based chart, round-trip halved
  *
  * Source: vault Award Charts/Miles & More/Miles & More Partner Chart.md
  * HOW TO REFRESH: Update CHARTS below from miles-and-more.com
@@ -12,7 +12,8 @@ import { pairKey } from "../../shared.js";
 
 const BOOKABLE = new Set(["4Y","A3","AC","AI","AV","AZ","BR","CA","CM","CX","EN","ET","EW","LA","LH","LO","LX","MS","NH","NZ","OA","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VL","ZH"]);
 
-const LH_GROUP = new Set(["LH","LX","OS","VL"]);
+// Lufthansa Group own metal — dynamically priced, not on the partner chart.
+const LH_GROUP = new Set(["LH","LX","OS","SN","EN","EW","4Y","VL"]);
 
 const ZONE = {
   GB: "EU", FR: "EU", DE: "EU", NL: "EU", BE: "EU", CH: "EU", AT: "EU",
