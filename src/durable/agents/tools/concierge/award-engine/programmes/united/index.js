@@ -15,7 +15,9 @@
  *   CSA|ME:  30K/55K    → 40K/75K        (DXB from DEL)
  *   CSA|SEA: 22.5K/45K  → varies: BKK/HKG 22.5K/65K, SIN-DEL 35K/90K, SIN-BOM 22.5K/65K
  *                          Business floor is 65K not 45K for most SEA; SIN from DEL is a separate tier
- *   First class missing  → 165K (EU/AF), 140K (OC), 110K (SIN-DEL), 75K (SIN-BOM, BKK-BOM)
+ *   First class: CSA→US = 220K WIRED (Air India, flat, verified). Still to verify+add
+ *     (prior obs, unconfirmed by the distribution method): 165K (EU/AF), 140K (OC),
+ *     110K (SIN-DEL), 75K (SIN-BOM, BKK-BOM) — run sources=united per band before adding.
  * United likely uses distance bands within zones, not pure zone-pair pricing for non-US origins.
  * Build a systematic Seats.aero scrape across all India origins × all destinations to map the real tiers.
  */
@@ -61,7 +63,9 @@ function getZone(cc, airport) {
   return ZONE[cc] || null;
 }
 
-// Observed saver floors: [own_econ_min, own_econ_max, own_biz, partner_econ, partner_biz]
+// Observed saver floors: [own_econ_min, own_econ_max, own_biz, partner_econ, partner_biz, partner_first?]
+// partner_first is optional (6th element) — present only where a partner sells
+// first on the route (UA own metal has no international first). null when absent.
 // FROM US to each zone
 const FLOORS_US = {
   US:  [5000, 17500, 25000, 12500, 25000],
@@ -76,7 +80,7 @@ const FLOORS_US = {
   ME:  [35000, 45000, 80000, 44000, 88000],
   NAF: [35000, 45000, 80000, 45000, 88000],
   AF:  [40000, 50000, 88000, 49500, 88000],
-  CSA: [40000, 55000, 88000, 49500, 88000],
+  CSA: [40000, 55000, 88000, 49500, 88000, 220000], // partner first: Air India DEL/BOM–US, flat 220K (verified sources=united, full 2mo)
   NA2: [40000, 55000, 100000, 60500, 110000],
   JP:  [40000, 55000, 100000, 60500, 110000],
   SEA: [40000, 55000, 100000, 60500, 110000],
@@ -130,9 +134,10 @@ export function handle(legs) {
     const zone = oz === "US" ? dz : oz;
     const floor = FLOORS_US[zone];
     if (!floor) return [];
-    const [ownEMin, ownEMax, ownBiz, ptrEcon, ptrBiz] = floor;
+    const [ownEMin, ownEMax, ownBiz, ptrEcon, ptrBiz, ptrFirst] = floor;
 
     if (isOwn) {
+      // UA own metal has no international first cabin.
       return [{
         programme: "united", chart: "saver_floor", season: "default",
         economy: [ownEMin, ownEMax],
@@ -146,7 +151,7 @@ export function handle(legs) {
       economy: [ptrEcon, ptrEcon],
       premium_economy: null,
       business: [ptrBiz, ptrBiz],
-      first: null,
+      first: ptrFirst ? [ptrFirst, ptrFirst] : null,
     }];
   }
 
@@ -154,13 +159,15 @@ export function handle(legs) {
   const key = pairKey(oz, dz);
   const nonUS = FLOORS_NONUS[key];
   if (nonUS) {
-    const [e, b] = nonUS;
+    // [partner_econ, partner_biz, partner_first?] — first optional (3rd),
+    // filled per band as it's verified from sources=united data.
+    const [e, b, f] = nonUS;
     return [{
       programme: "united", chart: "partner_floor", season: "default",
       economy: [e, e],
       premium_economy: null,
       business: [b, b],
-      first: null,
+      first: f ? [f, f] : null,
     }];
   }
 
