@@ -55,18 +55,28 @@ export const PROFILES = {
     floorTokens: 6_000,
     minKeepTurns: 5,
   },
-  // Scoped statement / inbox threads: big + long-lived, and their anchor (the
-  // statement text via read_statement, drafts on the capture row) lives OUTSIDE
-  // the message history — so trimming the discussion is safe. Relaxed everywhere,
-  // long stale window; the floor only bites the pathological "hundreds of turns
-  // on one item" case.
-  document: {
-    name: 'document',
+  // Uploaded STATEMENTS (scoped inbox threads, source=upload): big + multi-txn,
+  // and read_statement can pull the whole statement text into context. Long-lived;
+  // the anchor (statement text via read_statement, drafts on the capture row)
+  // lives OUTSIDE message history, so trimming discussion is safe. Keep high.
+  statement: {
+    name: 'statement',
     activeWindowMs: 3 * 60 * 60_000,
     staleAfterMs: 14 * 24 * 60 * 60_000, // 14 d
     ceilingTokens: 32_000,
     idleTokens: 24_000,
     floorTokens: 8_000,
+    minKeepTurns: 5,
+  },
+  // Forwarded transaction EMAILS (scoped inbox threads, source=email): a single
+  // transaction — tiny. Same long-lived inbox behavior, but a much lower budget.
+  email: {
+    name: 'email',
+    activeWindowMs: 3 * 60 * 60_000,
+    staleAfterMs: 14 * 24 * 60 * 60_000, // 14 d
+    ceilingTokens: 16_000,
+    idleTokens: 12_000,
+    floorTokens: 4_000,
     minKeepTurns: 5,
   },
 } satisfies Record<string, ContextProfile>

@@ -422,9 +422,9 @@ export abstract class BaseAgentDO<
   }
 
   // Which context-window profile this DO/thread uses. Base = conversational;
-  // subclasses override (e.g. ChatDO picks `document` for scoped statement
-  // threads). See context-policy.ts.
-  protected contextProfile(): ContextProfile {
+  // subclasses override (e.g. ChatDO picks statement/email for scoped inbox
+  // threads, which needs a source lookup — hence Promise-capable). context-policy.
+  protected contextProfile(): ContextProfile | Promise<ContextProfile> {
     return PROFILES.conversational
   }
 
@@ -437,7 +437,7 @@ export abstract class BaseAgentDO<
   protected async windowedModelMessages(force = false): Promise<ModelMessage[] | undefined> {
     const messages = (await this.getMessages()) as UIMessage[]
     if (messages.length === 0) return undefined
-    const profile = this.contextProfile()
+    const profile = await this.contextProfile()
     const store = this.ctx.storage
     // Namespace by this.name: messenger sub-agent FACETS share the host DO's
     // storage, so a fixed key would collide across users. this.name is the

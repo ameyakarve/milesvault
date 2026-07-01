@@ -743,12 +743,31 @@ ${consolidatedText}`,
     return i === -1 ? null : this.name.slice(i + 2)
   }
 
-  // Scoped statement/inbox threads (`key::captureId`) use the relaxed `document`
-  // profile — big + long-lived, and their anchor (statement text + drafts) lives
-  // outside the message history, so trimming discussion is safe. The main
+  // Cache the capture source for this thread (fixed per instance).
+  private _threadSource: 'upload' | 'email' | null | undefined = undefined
+
+  private async threadSource(captureId: string): Promise<'upload' | 'email' | null> {
+    if (this._threadSource !== undefined) return this._threadSource
+    try {
+      const row = (await this.ledgerStub().list_captures()).rows.find((r) => r.id === captureId)
+      this._threadSource =
+        row?.source === 'email' ? 'email' : row?.source === 'upload' ? 'upload' : null
+    } catch {
+      this._threadSource = null
+    }
+    return this._threadSource
+  }
+
+  // Scoped inbox threads (`key::captureId`) split by capture source: uploaded
+  // STATEMENTS get the high `statement` budget (multi-txn + read_statement),
+  // forwarded EMAILS get the lower `email` budget (single transaction). Both are
+  // long-lived with an external anchor, so trimming discussion is safe. The main
   // (unscoped) editor uses the token-heavier `editor` profile (draft payloads).
-  protected override contextProfile(): ContextProfile {
-    return this.threadCaptureId() ? PROFILES.document : PROFILES.editor
+  protected override async contextProfile(): Promise<ContextProfile> {
+    const captureId = this.threadCaptureId()
+    if (!captureId) return PROFILES.editor
+    const source = await this.threadSource(captureId)
+    return source === 'email' ? PROFILES.email : PROFILES.statement
   }
 
   // Cost hygiene: when an Inbox item is posted or dismissed, its thread DO is
