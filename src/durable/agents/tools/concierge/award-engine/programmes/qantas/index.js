@@ -44,46 +44,70 @@ export const slug = "qantas-frequent-flyer";
 export const bookable = BOOKABLE;
 
 export function handle(legs, totalDistance) {
-  // Qantas Classic Flight Rewards price on the TOTAL distance flown in ONE band
-  // (not per-segment additive) — confirmed against Qantas's published rule and
-  // live seats.aero floors. One band lookup on the whole journey.
-  const carriers = legs.map((l) => l.carrier).filter(Boolean);
-  const idx = resolveBand(totalDistance, QF_BANDS);
-  if (idx === undefined) return [];
+  // Qantas Classic Flight Rewards: the price is the SUM over each airline's
+  // PORTION — each airline's own total flown distance → one band → that
+  // airline's table. So a SINGLE-airline journey is just total distance on one
+  // table; MIXED airlines sum each part (Qantas docs: "single airline = distance
+  // flown"; "two partner airlines = sum of the individual airline portions";
+  // "partner + Qantas/Jetstar = sum of each part"). QF/AA/Fiji share the Qantas
+  // "own" table and combine into one portion; a Jetstar sector alongside them
+  // rides the own table; each partner airline is its own portion; Emirates its
+  // own. NOT per-segment (that double-counts within one airline's portion).
+  const wrap = (v) => (v == null || v === 0 ? null : [v, v]);
+  const withCarrier = legs.filter((l) => l.carrier);
 
-  // [e, pe, b, f] chart row → entry (0 → null).
-  const entry = (chart, name) => {
-    const r = chart[idx];
-    const wrap = (v) => (v == null || v === 0 ? null : [v, v]);
-    return {
-      programme: "qantas", chart: name, season: "default",
-      economy: wrap(r[0]), premium_economy: wrap(r[1]), business: wrap(r[2]), first: wrap(r[3]),
+  // No carrier specified — offer own/partner/emirates at the total distance.
+  if (withCarrier.length === 0) {
+    const i = resolveBand(totalDistance, QF_BANDS);
+    if (i === undefined) return [];
+    const at = (chart, name) => {
+      const r = chart[i];
+      return { programme: "qantas", chart: name, season: "default",
+        economy: wrap(r[0]), premium_economy: wrap(r[1]), business: wrap(r[2]), first: wrap(r[3]) };
     };
-  };
-
-  // No carrier specified — offer own + partner + emirates at the total-distance band.
-  if (carriers.length === 0) {
-    return [entry(QF_OWN, "own"), entry(QF_PARTNER, "partner"), entry(QF_EMIRATES, "emirates")];
+    return [at(QF_OWN, "own"), at(QF_PARTNER, "partner"), at(QF_EMIRATES, "emirates")];
   }
 
-  // One chart for the whole journey, by the carriers flown: any true partner →
-  // partner chart; else Emirates → emirates; else all-Jetstar → jetstar; else
-  // Qantas/AA/Fiji (incl. a Jetstar sector alongside them) → own.
-  const hasPartner = carriers.some(
-    (c) => !QF_CARRIERS.has(c) && !EK_CARRIERS.has(c) && !JQ_CARRIERS.has(c),
-  );
-  const hasEk = carriers.some((c) => EK_CARRIERS.has(c));
-  const allJq = carriers.every((c) => JQ_CARRIERS.has(c));
-
-  if (hasPartner) return [entry(QF_PARTNER, "partner")];
-  if (hasEk) return [entry(QF_EMIRATES, "emirates")];
-  if (allJq) {
-    const r = QF_JETSTAR[idx]; // [economy, business] only
-    const wrap = (v) => (v === 0 ? null : [v, v]);
-    return [{
-      programme: "qantas", chart: "jetstar", season: "default",
-      economy: wrap(r[0]), premium_economy: null, business: wrap(r[1]), first: null,
-    }];
+  const hasOwn = withCarrier.some((l) => QF_CARRIERS.has(l.carrier));
+  // Group flown distance by airline portion. Jetstar joins the own portion when
+  // Qantas/AA/Fiji are also flown, else it's its own (Jetstar-table) portion.
+  const groupDist = new Map();
+  for (const l of withCarrier) {
+    const c = l.carrier;
+    const key = EK_CARRIERS.has(c) ? "EK"
+      : QF_CARRIERS.has(c) ? "OWN"
+      : JQ_CARRIERS.has(c) ? (hasOwn ? "OWN" : "JQ")
+      : c; // each partner airline is its own portion
+    groupDist.set(key, (groupDist.get(key) || 0) + l.distance);
   }
-  return [entry(QF_OWN, "own")];
+
+  const totals = { economy: 0, premium_economy: 0, business: 0, first: 0 };
+  let anyPartner = false, anyEk = false, anyJq = false, anyOwn = false;
+  for (const [key, dist] of groupDist) {
+    const idx = resolveBand(dist, QF_BANDS);
+    if (idx === undefined) return [];
+    if (key === "JQ") {
+      const r = QF_JETSTAR[idx]; // [economy, business] only
+      totals.economy += r[0];
+      totals.business += r[1];
+      anyJq = true;
+    } else {
+      const table = key === "EK" ? QF_EMIRATES : key === "OWN" ? QF_OWN : QF_PARTNER;
+      const r = table[idx];
+      totals.economy += r[0];
+      totals.premium_economy += r[1] || 0;
+      totals.business += r[2];
+      totals.first += r[3] || 0;
+      if (key === "OWN") anyOwn = true;
+      else if (key === "EK") anyEk = true;
+      else anyPartner = true;
+    }
+  }
+
+  const chartName = anyPartner ? "partner" : anyEk ? "emirates" : (anyJq && !anyOwn) ? "jetstar" : "own";
+  return [{
+    programme: "qantas", chart: chartName, season: "default",
+    economy: wrap(totals.economy), premium_economy: wrap(totals.premium_economy),
+    business: wrap(totals.business), first: wrap(totals.first),
+  }];
 }
