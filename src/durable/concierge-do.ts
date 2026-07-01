@@ -1,4 +1,4 @@
-import { streamText, stepCountIs, tool, convertToModelMessages, type ToolSet, type UIMessage } from 'ai'
+import { streamText, stepCountIs, tool, type ToolSet, type UIMessage } from 'ai'
 import { createCodeTool } from '@cloudflare/codemode/ai'
 import { DynamicWorkerExecutor } from '@cloudflare/codemode'
 import { buildConciergeSystem } from './agent-prompt'
@@ -182,11 +182,9 @@ export class ConciergeDO
     await this.addMessages([
       { id: crypto.randomUUID(), role: 'user', parts: [{ type: 'text', text }] } as UIMessage,
     ])
-    const history = (await this.getMessages()) as UIMessage[]
-    const modelMessages = await convertToModelMessages(history, {
-      tools,
-      ignoreIncompleteToolCalls: true,
-    })
+    // Same context-window policy as the web turn (conversational profile) — the
+    // messenger path has no Think assembly to defer to, so force the windowed set.
+    const modelMessages = (await this.windowedModelMessages(true)) ?? []
     const inv = this.modelInvocation(this.registry.agents[this.registry.entry]!.model)
     const stream = streamText({
       model: inv.model,

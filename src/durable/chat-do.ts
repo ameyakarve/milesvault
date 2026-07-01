@@ -27,6 +27,7 @@ import {
 } from './agent-prompt'
 import type { LedgerDO } from './ledger-do'
 import { BaseAgentDO } from './base-agent-do'
+import { PROFILES, type ContextProfile } from './context-policy'
 import {
   makeEditorRegistry,
   STATEMENT_MODEL_ID,
@@ -740,6 +741,14 @@ ${consolidatedText}`,
   private threadCaptureId(): string | null {
     const i = this.name.indexOf('::')
     return i === -1 ? null : this.name.slice(i + 2)
+  }
+
+  // Scoped statement/inbox threads (`key::captureId`) use the relaxed `document`
+  // profile — big + long-lived, and their anchor (statement text + drafts) lives
+  // outside the message history, so trimming discussion is safe. The main
+  // (unscoped) editor is a normal conversation.
+  protected override contextProfile(): ContextProfile {
+    return this.threadCaptureId() ? PROFILES.document : PROFILES.conversational
   }
 
   // Cost hygiene: when an Inbox item is posted or dismissed, its thread DO is

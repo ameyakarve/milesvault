@@ -7,7 +7,12 @@ import {
   type TurnContext,
 } from '@cloudflare/think'
 import { createWorkersAI } from 'workers-ai-provider'
-import { wrapLanguageModel } from 'ai'
+import { wrapLanguageModel, convertToModelMessages } from 'ai'
+import {
+  PROFILES,
+  windowMessages,
+  type ContextProfile,
+} from './context-policy'
 import type {
   LanguageModel,
   LanguageModelMiddleware,
@@ -370,13 +375,55 @@ export abstract class BaseAgentDO<
     }
   }
 
+  // Which context-window profile this DO/thread uses. Base = conversational;
+  // subclasses override (e.g. ChatDO picks `document` for scoped statement
+  // threads). See context-policy.ts.
+  protected contextProfile(): ContextProfile {
+    return PROFILES.conversational
+  }
+
+  // Apply the context-window policy to this thread's persisted history: an
+  // idle-scaled token-budget window (see context-policy.ts). Returns the windowed
+  // model messages ONLY when it actually trims — otherwise undefined, so the
+  // caller falls back to Think's normal assembly (repair + per-message clip).
+  // `force` returns the converted window even when nothing was dropped, for the
+  // off-websocket messenger path that has no Think fallback to defer to.
+  protected async windowedModelMessages(force = false): Promise<ModelMessage[] | undefined> {
+    const messages = (await this.getMessages()) as UIMessage[]
+    if (messages.length === 0) return undefined
+    const profile = this.contextProfile()
+    const store = this.ctx.storage
+    // Namespace by this.name: messenger sub-agent FACETS share the host DO's
+    // storage, so a fixed key would collide across users. this.name is the
+    // per-user storage key (facet or standalone DO alike).
+    const nk = this.name || 'default'
+    const now = Date.now()
+    const lastTurnAt = (await store.get<number>(`mv:ctxLastTurnAt:${nk}`)) ?? now
+    const floorId = (await store.get<string>(`mv:ctxFloorId:${nk}`)) ?? null
+    const idleMs = Math.max(0, now - lastTurnAt)
+    const r = windowMessages(messages, profile, idleMs, floorId)
+    await store.put(`mv:ctxLastTurnAt:${nk}`, now)
+    if (r.floorId && r.floorId !== floorId) await store.put(`mv:ctxFloorId:${nk}`, r.floorId)
+    console.log(
+      `[ctx-policy] surface=${this.surface()} name=${this.name} profile=${profile.name} ` +
+        `band=${r.band} idleMs=${idleMs} budget=${r.budget} msgs=${messages.length} ` +
+        `kept=${r.kept.length} droppedTurns=${r.droppedTurns} droppedMsgs=${r.droppedMessages} ` +
+        `tokens=${r.tokensBefore}->${r.tokensAfter}`,
+    )
+    if (r.droppedMessages === 0 && !force) return undefined
+    return convertToModelMessages(r.kept, { ignoreIncompleteToolCalls: true })
+  }
+
   override async beforeTurn(ctx: TurnContext): Promise<TurnConfig> {
     await this.beforeTurnFetch()
     const cfg = this.activeAgentConfig()
-    // Let a subclass rewrite the assembled model messages for this turn only
-    // (e.g. expand an inline statement reference into its text) without touching
-    // stored history.
-    const messages = await this.transformTurnMessages(ctx.messages)
+    // Context-window policy first (may trim stale/oversized history), then let a
+    // subclass rewrite the model messages for THIS turn (e.g. expand an inline
+    // statement reference) — running on the windowed set when we trimmed.
+    const windowed = await this.windowedModelMessages()
+    const base = windowed ?? ctx.messages
+    const transformed = await this.transformTurnMessages(base)
+    const messages = transformed ?? windowed
     return messages ? { ...cfg, messages } : cfg
   }
 
