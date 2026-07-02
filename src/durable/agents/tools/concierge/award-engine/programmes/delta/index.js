@@ -99,6 +99,9 @@ export function handle(legs) {
 
   return [{
     programme: "delta", chart: "observed_floor", season: "default",
+    // Delta is fully dynamic ABOVE these observed floors (no published ceiling) —
+    // flag `floor` so the tier model reads {from, to:null} rather than a fixed price.
+    floor: true,
     economy: wrap(main || basic),
     premium_economy: null,
     business: wrap(deltaone),
