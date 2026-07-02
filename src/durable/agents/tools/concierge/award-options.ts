@@ -3,7 +3,7 @@ import { PROGRAMMES, priceProgramme } from './award-engine'
 import type { AirportLookup, Entry, CabinRange } from './award-engine'
 import { computeRoutings, type Routing } from './flight-routings'
 import type { KbHttp } from './kb-tools'
-import { AWARD, toAward, toCabinCell, type Award } from './award-price'
+import { AWARD, buildPrice, toCabinCell, type Award } from './award-price'
 
 // "Best award options for this O&D" — the objective fly-side only. Given just
 // origin + destination, it finds every nonstop + one-stop routing and prices
@@ -95,32 +95,6 @@ type CabinCell = CabinRange | 'dynamic'
 function isPublished(mod: unknown): boolean {
   return (mod as { published?: boolean }).published !== false
 }
-// Merge a programme's entries into one per-cabin set. A chart figure of 0 is not
-// a real price (the dynamic/phone-only modules emit [0,0] to mean "unpublished"),
-// so it collapses to "dynamic" ("varies") rather than a misleading 0 — but a
-// real figure for the same cabin always wins.
-function aggregateCabins(entries: Entry[]): Record<Cabin, CabinCell> {
-  const agg: Record<Cabin, CabinCell> = {
-    economy: null,
-    premium_economy: null,
-    business: null,
-    first: null,
-  }
-  for (const e of entries) {
-    for (const c of CABINS) {
-      const r = e[c]
-      if (!r) continue
-      if (r[0] <= 0) {
-        if (agg[c] == null) agg[c] = 'dynamic'
-        continue
-      }
-      const cur = agg[c]
-      agg[c] = Array.isArray(cur) ? [Math.min(cur[0], r[0]), Math.max(cur[1], r[1])] : [r[0], r[1]]
-    }
-  }
-  return agg
-}
-
 async function airlineSlugFor(kb: KbHttp, iata: string): Promise<string | null> {
   try {
     const r = (await kb.resolve(iata, { prefix: 'airline' })) as { items?: Array<{ slug: string }> }
@@ -246,18 +220,13 @@ export async function computeAwardOptions(
         const slugA = carrierAirline.get(iata)
         return slugA != null && metal!.has(slugA)
       })
-      // Build the richer tier model (source of truth), then derive the legacy
-      // per-cabin cells from it for display. For an unpublished programme every
-      // offered cabin becomes a fully-dynamic band (never the chart minimum,
-      // which lies low) — that falls out of toAward's !published branch.
+      // Build the richer tier model (source of truth) directly from the
+      // programme's entries — this PRESERVES real tiers (ANA's low/regular/high
+      // seasons, Alfursan's Reward/Reward+) that the old flatten collapsed. Then
+      // derive the legacy per-cabin cells from it for display (byte-identical).
+      // Unpublished programmes collapse every offered cabin to a dynamic band.
       const published = isPublished(mod)
-      const agg = aggregateCabins(priced.entries)
-      const price: Record<Cabin, Award> = {
-        economy: toAward(agg.economy, published),
-        premium_economy: toAward(agg.premium_economy, published),
-        business: toAward(agg.business, published),
-        first: toAward(agg.first, published),
-      }
+      const price = buildPrice(priced.entries as unknown as Array<Record<string, unknown>>, published)
       const cabins: Record<Cabin, CabinCell> = {
         economy: toCabinCell(price.economy),
         premium_economy: toCabinCell(price.premium_economy),

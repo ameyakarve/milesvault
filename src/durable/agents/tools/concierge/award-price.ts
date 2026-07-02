@@ -100,6 +100,70 @@ export function toAward(cell: CabinCell, published: boolean): Award {
   }
 }
 
+// Build the full tier model directly from a programme's engine entries — the
+// enrichment path that PRESERVES tiers the flatten used to drop. Each entry that
+// offers a cabin contributes one tier, labelled by its `season` (a module encodes
+// its tier dimension there: ANA "low"/"regular"/"high", Alfursan "Reward"/
+// "Reward+"; "default" → an unlabelled tier). Generic: no programme specifics.
+//
+//   - unpublished programme        → one dynamic band per offered cabin
+//   - a single entry with a range  → split into off-peak/peak fixed tiers
+//     (matches the legacy [min,max] behaviour for charts that pack seasons into
+//     one entry, e.g. Qatar)
+//   - multiple entries             → one tier each (deduped), real labelled tiers
+//   - a 0 value                    → a dynamic band tier
+//
+// toCabinCell(buildPrice(...)) reproduces the legacy display cell exactly.
+export function buildPrice(
+  entries: Array<Record<string, unknown>>,
+  published: boolean,
+): Record<'economy' | 'premium_economy' | 'business' | 'first', Award> {
+  const CABINS = ['economy', 'premium_economy', 'business', 'first'] as const
+  const label = (e: Record<string, unknown>): string | null => {
+    const s = e.season as string | undefined
+    return s && s !== 'default' ? s : null
+  }
+  const dynBand = (l: string | null): Tier => ({ label: l, requires: null, amount: { from: null, to: null } })
+  const out = {} as Record<(typeof CABINS)[number], Award>
+  for (const c of CABINS) {
+    const offering = entries.filter((e) => Array.isArray(e[c]))
+    if (offering.length === 0) {
+      out[c] = { status: 'not_offered' }
+      continue
+    }
+    if (!published) {
+      out[c] = { status: 'bookable', source: 'derived', price: [dynBand(null)] }
+      continue
+    }
+    let tiers: Tier[]
+    if (offering.length === 1) {
+      const [a, b] = offering[0][c] as [number, number]
+      const l = label(offering[0])
+      if (a <= 0) tiers = [dynBand(l)]
+      else if (a === b) tiers = [{ label: l, requires: null, amount: { fixed: a } }]
+      else
+        tiers = [
+          { label: 'off-peak', requires: null, amount: { fixed: a } },
+          { label: 'peak', requires: null, amount: { fixed: b } },
+        ]
+    } else {
+      const seen = new Set<string>()
+      tiers = []
+      for (const e of offering) {
+        const [a, b] = e[c] as [number, number]
+        const amount: Amount = a <= 0 ? { from: null, to: null } : a === b ? { fixed: a } : { from: a, to: b }
+        const t: Tier = { label: label(e), requires: null, amount }
+        const k = JSON.stringify(t)
+        if (seen.has(k)) continue
+        seen.add(k)
+        tiers.push(t)
+      }
+    }
+    out[c] = { status: 'bookable', source: 'published', price: tiers }
+  }
+  return out
+}
+
 // Project the model back to the legacy cell the UI renders: any dynamic band
 // collapses to "dynamic"; a set of fixed tiers becomes [min,max]; not_offered is
 // null. Derivable, lossless for display — nothing faked.

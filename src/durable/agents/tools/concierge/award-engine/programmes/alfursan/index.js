@@ -158,12 +158,12 @@ export function handle(legs) {
         const [e, b, f] = SV_OWN[zone];
         // Reward: [e, e], Reward+: [2*e, 2*e]. Return [Reward, Reward+].
         entries.push({
-          programme: "alfursan", chart: "own_reward", season: "default",
+          programme: "alfursan", chart: "own_reward", season: "Reward",
           economy: [e, e], premium_economy: null,
           business: [b, b], first: [f, f],
         });
         entries.push({
-          programme: "alfursan", chart: "own_reward_plus", season: "default",
+          programme: "alfursan", chart: "own_reward_plus", season: "Reward+",
           economy: [e * 2, e * 2], premium_economy: null,
           business: [b * 2, b * 2], first: null,  // No First on Reward+
         });
@@ -172,12 +172,12 @@ export function handle(legs) {
       // Domestic
       const [e, b, f] = SV_OWN["DOM"];
       entries.push({
-        programme: "alfursan", chart: "own_reward", season: "default",
+        programme: "alfursan", chart: "own_reward", season: "Reward",
         economy: [e, e], premium_economy: null,
         business: [b, b], first: [f, f],
       });
       entries.push({
-        programme: "alfursan", chart: "own_reward_plus", season: "default",
+        programme: "alfursan", chart: "own_reward_plus", season: "Reward+",
         economy: [e * 2, e * 2], premium_economy: null,
         business: [b * 2, b * 2], first: null,
       });
