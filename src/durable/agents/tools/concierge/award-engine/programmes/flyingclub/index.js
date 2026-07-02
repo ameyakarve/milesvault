@@ -164,8 +164,12 @@ export function handle(legs, totalDistance) {
       const caps = getVsCaps(destCC, legs[legs.length - 1].destination)
                 || getVsCaps(originCC, legs[0].origin);
       if (caps) {
+        // VS own metal is DYNAMIC between a floor (VS_MIN) and the peak saver cap
+        // — not two seasonal tiers. `floor: true` makes the tier model read it as
+        // a capped dynamic band {from: floor, to: cap} rather than off-peak/peak.
         entries.push({
           programme: "flyingclub", chart: "own", season: "default",
+          floor: true,
           economy: [VS_MIN[0], caps[0]],
           premium_economy: [VS_MIN[1], caps[1]],
           business: [VS_MIN[2], caps[2]],

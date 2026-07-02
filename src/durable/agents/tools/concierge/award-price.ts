@@ -129,7 +129,7 @@ export function buildPrice(
   // to a {from, to:null} band, not a fixed price that implies a hard ceiling.
   const amountOf = (a: number, b: number, floor: boolean): Amount => {
     if (a <= 0) return { from: null, to: null } // fully dynamic, no quotable floor
-    if (floor) return { from: a, to: null } // floor known, dynamic above
+    if (floor) return { from: a, to: b > a ? b : null } // floor known, dynamic above (capped at b if b>a, else open)
     if (a === b) return { fixed: a } // fixed
     return { from: a, to: b } // explicit range
   }
