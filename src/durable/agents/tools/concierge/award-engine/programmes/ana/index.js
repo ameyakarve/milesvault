@@ -135,6 +135,38 @@ ao("Asia 1", "Asia 2", {
   R: { economy: 45000, premium_economy: 60000, business: 99000, first: 150000 },
   H: { economy: 64000, premium_economy: 80000, business: 111000, first: 201000 },
 });
+// Asia1 long-haul pairs (ana.co.jp Seasonality/Required Mileage page, revised
+// chart effective 2025-06-24; values match the South Korea rows cell-for-cell)
+ao("Asia 1", "Hawaii", {
+  L: { economy: 40000, premium_economy: 60000, business: 95000, first: 150000 },
+  R: { economy: 50000, premium_economy: 70000, business: 107000, first: 189000 },
+  H: { economy: 81000, premium_economy: 102000, business: 161000, first: 276000 },
+});
+ao("Asia 1", "North America", {
+  L: { economy: 45000, premium_economy: 66000, business: 108000, first: 165000 },
+  R: { economy: 55000, premium_economy: 76000, business: 114000, first: 185000 },
+  H: { economy: 79000, premium_economy: 105000, business: 173000, first: 315000 },
+});
+ao("Asia 1", "Europe", {
+  L: { economy: 50000, premium_economy: 71000, business: 119000, first: 180000 },
+  R: { economy: 60000, premium_economy: 81000, business: 123000, first: 205000 },
+  H: { economy: 85000, premium_economy: 111000, business: 188000, first: 345000 },
+});
+ao("Asia 1", "Oceania", {
+  L: { economy: 40000, premium_economy: 62000, business: 95000, first: null },
+  R: { economy: 50000, premium_economy: 72000, business: 101000, first: null },
+  H: { economy: 72000, premium_economy: 98000, business: 148000, first: null },
+});
+ao("Asia 2", "Hawaii", {
+  L: { economy: 50000, premium_economy: 75000, business: 124000, first: 186000 },
+  R: { economy: 60000, premium_economy: 85000, business: 136000, first: 228000 },
+  H: { economy: 94000, premium_economy: 127000, business: 191000, first: 339000 },
+});
+ao("Hawaii", "Oceania", {
+  L: { economy: 50000, premium_economy: 84000, business: 130000, first: 180000 },
+  R: { economy: 60000, premium_economy: 94000, business: 140000, first: 219000 },
+  H: { economy: 88000, premium_economy: 135000, business: 215000, first: 275000 },
+});
 ao("Asia 2", "North America", {
   L: { economy: 55000, premium_economy: 84000, business: 137000, first: 200000 },
   R: { economy: 65000, premium_economy: 94000, business: 143000, first: 222000 },

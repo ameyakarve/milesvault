@@ -26,3 +26,35 @@ Up to 4 entries per itinerary: up to 3 own-metal season entries (`chart: "own"`,
 
 ## TODO
 - [ ] Audit multi-carrier award handling (itineraries with 2+ operating carriers).
+
+## Award chart verification notes (July 2026)
+
+Verified against ANA's live published pages (real-Chrome pull, 2026-07-02):
+`/en/jp/guide/amc/award/international/terms/` (own-metal, "Revised" chart
+effective for tickets issued on/after 2025-06-24) and
+`/en/us/amc/partner-flight-awards/` (partner chart, Apr-2024 "after revision"
+values; page states it is valid for tickets issued on/after 2025-06-24).
+
+- **Own-metal (`ANA_OWN`): all 19 existing zone pairs match the published
+  revised round-trip chart cell-for-cell** (every cabin, every L/R/H season).
+  One-way tables on the page equal revised-RT/2 everywhere, so the module's
+  halving is exact, not approximate.
+- **FIXED — 6 zone pairs were missing** and returned no own-metal price:
+  Asia1–Hawaii, Asia1–North America, Asia1–Europe, Asia1–Oceania (values equal
+  the South Korea rows cell-for-cell on the published chart), Asia2–Hawaii,
+  Hawaii–Oceania. Added from the published revised chart; spot-checked
+  HKG→HNL on NH prices L/R/H one-way Y 20,000/25,000/40,500 as published.
+- **Partner (`ANA_PTR`): all ~90 published zone pairs match exactly**,
+  including intra–Middle East/Africa and intra–Central/South America
+  (35,000/60,000/90,000 RT after-revision) and the Japan 1-A vs 1-B split.
+  Japan 1-A–Zone 8 and 1-A–Zone 9 are published N/A and correctly absent.
+- **Japan 1-A vs 1-B is NOT geographic** — the page defines 1-A as itineraries
+  containing only an international round trip (plus domestic JP connections);
+  1-B is everything else (complex multi-sector itineraries). The engine prices
+  simple itineraries, so its unconditional Japan→1-A normalization is correct
+  behaviour, not a bug. Documented here to stop future sessions "fixing" it.
+- **Known unmodelled edge:** ANA splits Russia into Russia 1 (Primorsky→Zone 2),
+  Russia 2 (European→Zone 7), Russia 3 (Siberia→Zone 4); the module maps all
+  RU→Europe. No NH service to Russia currently — left as documented gap.
+- The stale `mileage_chart_en_int.pdf` on ana.co.jp still carries the
+  pre-2025-06-24 chart; do not use it as a source.
