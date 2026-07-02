@@ -16,7 +16,8 @@ import { resolveChart, pairKey } from "../../shared.js";
 
 // SkyTeam members minus OK (Czech Airlines ceased operations)
 // Plus non-alliance partners: JL, CX, QF
-const BOOKABLE = new Set(["AF","AM","AR","CI","DL","GA","KE","KL","KQ","ME","MF","MU","QF","RO","SK","SV","UX","VN","VS"]);
+// JL added: present in ceair.com official redemption dropdown config
+const BOOKABLE = new Set(["AF","AM","AR","CI","DL","GA","JL","KE","KL","KQ","ME","MF","MU","QF","RO","SK","SV","UX","VN","VS"]);
 
 const MU_CARRIERS = new Set(["MU","FM"]); // MU = China Eastern, FM = Shanghai Airlines
 

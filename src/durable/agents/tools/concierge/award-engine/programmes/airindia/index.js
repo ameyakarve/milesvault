@@ -1,7 +1,8 @@
 import { pairKey, makeEntry } from "../../shared.js";
 import { ROUTES } from "./routes.js";
 
-const BOOKABLE = new Set(["A3","AC","AI","AV","BR","CA","CM","ET","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","ZH"]);
+// AZ added: airindia.com partner-airlines page lists ITA (Star Alliance member since Apr 2026)
+const BOOKABLE = new Set(["A3","AC","AI","AV","AZ","BR","CA","CM","ET","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","ZH"]);
 
 // Route data uses [min,max] ranges and 0 as "not available" sentinel,
 // so we use a custom wrap instead of makeEntry (which only handles single values).

@@ -11,7 +11,8 @@
 
 import { AS_CHART, AA_CHART, CX_CHART, IB_CHART, JL_CHART, MH_CHART, QR_CHART, QF_CHART, UL_CHART } from "./routes.js";
 
-const BOOKABLE = new Set(["AA","AS","AT","AY","BA","CX","FJ","HA","IB","JL","LA","MH","QF","QR","RJ","UL","WY"]);
+// JJ added: finnair.com lists LATAM Brazil as a separate redemption partner from LATAM Chile (LA)
+const BOOKABLE = new Set(["AA","AS","AT","AY","BA","CX","FJ","HA","IB","JJ","JL","LA","MH","QF","QR","RJ","UL","WY"]);
 
 const AY_CARRIERS = new Set(["AY"]);
 

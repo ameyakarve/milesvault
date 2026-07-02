@@ -9,6 +9,10 @@ import { SQ_ECO_S, SQ_ECO_A, SQ_BIZ_S, SQ_BIZ_A, SQ_FIRST_S, SQ_FIRST_A, SQ_PE_S
  * Multiply by 100 before returning.
  */
 
+// AS deliberately ABSENT: "From 1 October 2025, KrisFlyer and Alaska Airlines
+// will cease our frequent flyer partnership" (singaporeair.com earn page,
+// verified live 2026-07-02). The redeem page's prose still names Alaska but is
+// stale — note it links award charts only for VA/HO/MH/GA.
 const BOOKABLE = new Set(["A3","AC","AI","AV","BR","CA","CM","ET","GA","HO","LH","LO","LX","MH","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","TR","UA","VA","ZH"]);
 
 const SQ_CARRIERS = new Set(["SQ"]); // SQ metal only — Scoot (TR) has its own chart

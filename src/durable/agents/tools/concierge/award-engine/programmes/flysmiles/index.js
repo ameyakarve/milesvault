@@ -14,7 +14,7 @@
 
 import { makeEntry, resolveChart } from "../../shared.js";
 
-const BOOKABLE = new Set(["AA","AS","AT","AY","BA","CX","FJ","IB","JL","MH","QF","QR","RJ","UL",,"EY","WY"]);
+const BOOKABLE = new Set(["AA","AS","AT","AY","BA","CX","FJ","IB","JL","MH","QF","QR","RJ","UL","EY","WY"]);
 
 const UL_CARRIERS = new Set(["UL"]);
 

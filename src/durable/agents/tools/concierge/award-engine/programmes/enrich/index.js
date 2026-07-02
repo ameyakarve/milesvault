@@ -4,7 +4,8 @@
  * Partner: 7-band distance chart, one-way
  */
 import { makeEntry, resolveBand } from "../../shared.js";
-const BOOKABLE = new Set(["AA","AS","AT","AY","BA","CX","FJ","IB","JL","MH","QF","QR","RJ","UL","WY"]);
+// enrich.malaysiaairlines.com partner page with redemption minimums (SQ selected sectors only; EK excludes First)
+const BOOKABLE = new Set(["AA","AF","AS","AT","AY","BA","CX","EK","EY","FJ","FY","HA","IB","JL","KL","MH","QF","QR","RJ","S7","SQ","UL","WY"]);
 const MH_CARRIERS = new Set(["MH"]);
 const BANDS = [500, 1200, 2400, 4800, 7200, 10000, Infinity];
 const CHART = [

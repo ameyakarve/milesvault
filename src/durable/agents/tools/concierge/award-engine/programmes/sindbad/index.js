@@ -10,7 +10,8 @@
 
 import { makeEntry } from "../../shared.js";
 
-const BOOKABLE = new Set(["AA","AC","AS","AT","AY","BA","CX","EY","FJ","IB","JL","KL","MH","QF","QR","RJ","TK","UL","WY"]);
+// sindbad.omanair.com scopes redemption to the 15 oneworld members ONLY; AC/EY/KL/TK appear with earn rates only — removed
+const BOOKABLE = new Set(["AA","AS","AT","AY","BA","CX","FJ","IB","JL","MH","QF","QR","RJ","UL","WY"]);
 
 const WY_CARRIERS = new Set(["WY"]);
 

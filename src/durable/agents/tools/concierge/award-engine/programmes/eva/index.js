@@ -15,7 +15,8 @@
 import { resolveChart, pairKey } from "../../shared.js";
 
 // Star Alliance (26)
-const BOOKABLE = new Set(["A3","AC","AI","AV","BR","CA","CM","ET","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VL","ZH"]);
+// AZ added: evaair.com Star Alliance partner list names ITA
+const BOOKABLE = new Set(["A3","AC","AI","AV","AZ","BR","CA","CM","ET","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VL","ZH"]);
 
 const BR_CARRIERS = new Set(["BR"]);
 

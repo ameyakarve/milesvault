@@ -17,7 +17,8 @@
 import { resolveChart, pairKey } from "../../shared.js";
 
 // Star Alliance subset that CA books (13)
-const BOOKABLE = new Set(["AC","AI","BR","CA","ET","LH","LX","NH","OS","OZ","SQ","TK","UA","VL"]);
+// airchina.us: awards redeemable on ANY Star Alliance member — missing members added (SK excluded: left Star Alliance 2024; the page enumeration is stale there)
+const BOOKABLE = new Set(["A3","AC","AI","AV","AZ","BR","CA","CM","ET","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VL"]);
 
 const CA_CARRIERS = new Set(["CA"]);
 

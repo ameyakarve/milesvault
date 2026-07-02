@@ -10,7 +10,8 @@
 
 import { makeEntry, resolveChart, pairKey } from "../../shared.js";
 
-const BOOKABLE = new Set(["A3","AC","AD","AI","AV","BR","CA","CM","EK","ET","EY","G3","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VL","ZH"]);
+// flytap.com partners page: "Earn miles and redeem award tickets" — ITA, SAS, SATA Azores (OZ partnership ends 2026-12-16)
+const BOOKABLE = new Set(["A3","AC","AD","AI","AV","AZ","BR","CA","CM","EK","ET","EY","G3","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","S4","SA","SK","SN","SQ","TG","TK","TP","UA","VL","ZH"]);
 
 const TP_CARRIERS = new Set(["TP"]);
 

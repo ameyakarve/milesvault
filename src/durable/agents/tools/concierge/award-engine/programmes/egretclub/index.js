@@ -16,7 +16,8 @@
 import { resolveChart, resolveBand } from "../../shared.js";
 
 // SkyTeam members minus OK (Czech Airlines ceased operations)
-const BOOKABLE = new Set(["AF","AM","AR","AZ","CI","DL","GA","KE","KL","KQ","ME","MF","MU","RO","SK","SV","UX","VN","VS"]);
+// xiamenair page verbatim: partners = SkyTeam members, China Southern and Qatar Airways
+const BOOKABLE = new Set(["AF","AM","AR","AZ","CI","CZ","DL","GA","KE","KL","KQ","ME","MF","MU","QR","RO","SK","SV","UX","VN","VS"]);
 
 const MF_CARRIERS = new Set(["MF"]);
 

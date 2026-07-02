@@ -19,13 +19,19 @@
 
 import { makeEntry } from "../../shared.js";
 
-// GOL (own) + confirmed REDEEMABLE partners (all dynamic). Excludes Etihad (EY):
-// live site lists it but the partnership reportedly lapsed in 2021, unresolved.
-// Delta / Alitalia were dropped (2021); LATAM was never a Smiles partner.
+// GOL (own) + REDEEMABLE partners per smiles.com.br's official redeem pages
+// (companhias-aereas-parceiras + demais-cias-aereas, swept 2026-07-02 — page
+// heading: "Use suas milhas Smiles para resgatar passagens com as parceiras a
+// seguir"). All partner pricing is dynamic. EY is listed redeemable on the
+// current page (the old "lapsed 2021" doubt was blog-tier; page wins).
+// Delta was dropped (2021); LATAM was never a Smiles partner.
 const BOOKABLE = new Set([
   "G3", // GOL own metal
   "EK", "QR", "TK", "AF", "KL", "AA", "CM", "AR", "ET", "AZ", "TP", "IB", "BA",
   "NH", "KE", "TG", "SA", "AC", "AM", "UX",
+  "HX", "H2", "AS", "EY", "AT", "DT", "H1", "VY", "OB", "A3", "WS", "EI", "GQ",
+  "SN", "VA", "JQ", "V7", "OU", "HA", "UP", "KQ", "HO", "MS", "BW", "FZ", "MU",
+  "PG", "TR", "BT", "FA", "GA", "SV", "JX", "AI", "MH",
 ]);
 
 export const slug = "smiles";

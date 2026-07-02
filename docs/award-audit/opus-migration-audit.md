@@ -179,3 +179,19 @@ DB-backed lookup → static `routes.js` snapshot preserved behavior (multi-carri
 > - **lifemiles NO DATA (again):** feed empty across 6 routes/2 windows. Module remains unverified — flagged in KG.
 >
 > **Item-2 status: all 13 live-feed programmes audited.** Fixed: qatar (3-tier), delta (2 floors), eurobonus (NORDIC classification). Clean: turkish, aadvantage, club-premier, alfursan, azul, smiles, trueblue. Queued: velocity band-table build, atmos chart resolution. No-data: lifemiles.
+
+## Bookable-set sweep, all 47 remaining programmes (2026-07-02, night — 8-agent fan-out)
+
+> Protocol: airline's official page (or airline-issued release) = evidence; earn-only ≠ bookable; absence = suspect only; blocked sites reported, not paper-filled. 26 programmes BLOCKED (bot-walls/SPAs — retry queue via real-browser session), 3 re-verified CLEAN (emirates, azul-corroborated, latampass-primary), 17 modules changed on page evidence:
+> - **ITA Airways (AZ) post-Star-entry additions:** airindia, ana ("eligible from April 1, 2026" verbatim), eva, shebamiles, phoenixmiles, milesgo. (aeroplan/united already had it; blocked Star programmes queued.)
+> - **phoenixmiles**: +12 Star members (page policy: redeemable on ANY Star member; SK excluded — left Star 2024, page enumeration stale there).
+> - **delta**: +LY/AE/SK/FM (page-listed); −HA/−CZ (page-confirmed terminated, deadlines passed).
+> - **enrich**: +SQ/AF/EK/EY/KL/S7/HA/FY (page with redemption minimums).
+> - **smiles**: +35 partners from GOL's official redeem pages (heading verbatim: "use your miles to redeem with the following partners").
+> - **lotusmiles**: +NH/EY/CZ (SU excluded — SkyTeam-suspended). **easternmiles**: +JL (official dropdown config). **egretclub**: +CZ/QR (page verbatim). **finnair**: +JJ (LATAM Brasil ≠ LATAM Chile). **cosmile**: +AS (STARLUX-issued release). **milesgo**: +AZ/SK/S4.
+> - **sindbad**: −AC/−EY/−KL/−TK (page positively scopes redemption to the 15 oneworld members; those four shown with earn rates only).
+> - **latampass**: +JJ and a combined-itinerary guard — partner awards exist only WITH a LATAM-operated leg (page rule).
+> - **flysmiles**: stray sparse element (double comma) fixed.
+> - **OWNER CATCH — krisflyer AS reverted:** the sweep agent cited the redeem page's prose ("These include Alaska Airlines…"), but the live earn page states "From 1 October 2025, KrisFlyer and Alaska Airlines will cease our frequent flyer partnership" — the redeem prose is stale (no Alaska chart link). AS stays out, with a code comment.
+> - **Epistemic vindication:** VL turned out to be Lufthansa City Airlines (Star member since Sept 2025), NOT defunct Vistara — three modules would have been wrongly stripped had absence counted as proof.
+> - Leads NOT actioned (insufficient evidence): clubpremier +OK (stale page, airline wound down) & possible blanket partner-redemption suspension; milesmore +KC/+LG; lifemiles +AM; cedarmiles +CZ; dynastyflyer +HA; asiamiles list conflicts; krisflyer/others +AZ where only roster-inferred. All queued for the blocked-site retry pass.
