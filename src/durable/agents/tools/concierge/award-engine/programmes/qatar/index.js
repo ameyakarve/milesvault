@@ -53,10 +53,13 @@ const LA_CHART = [
   [25750, 77250],
 ];
 
-// QR own-metal Avios — SEASONAL off-peak/peak. Qatar charges roughly 2x the
-// off-peak rate in business during peak periods (verified: fare tiers track the
-// travel calendar, peak concentrated Dec–Feb). Economy peak premium varies by
-// region (near-flat on short hauls, ~2x on long hauls).
+// QR own-metal Avios — SEASONAL. Qatar actually runs THREE tiers: off-peak, peak
+// (~1.35x off-peak), and Flexi (~2x off-peak). We currently model only two values
+// per zone: the off-peak floor and the ~2x upper — so the upper number is really
+// FLEXI, and the middle "peak" tier (~1.35x, e.g. US-DOH business ~94.5k) is not
+// captured; the buildPrice split labels them off-peak/peak generically.
+// TODO(qatar 3-tier): add the middle peak value per zone and relabel the tiers
+// off-peak / peak / Flexi. First class and Flexi are unaffected by peak dates.
 //
 // [econ_off, econ_peak, biz_off, biz_peak, first_off, first_peak]  (0/0 => cabin
 // not offered; wrapped to null). Values reconstructed from seats.aero QR-operated
