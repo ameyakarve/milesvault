@@ -80,6 +80,10 @@ function sumSegments(legs, mode) {
     programme: "etihad",
     chart,
     season: "default",
+    // Own metal is a Saver FLOOR with dynamic pricing above it (partner charts are
+    // fixed). Any own segment ⇒ the summed total is floor+dynamic → tier model
+    // reads {from, to:null}. Pure-partner itineraries stay fixed.
+    floor: sawOwn,
     economy: [economy, economy],
     // Premium economy exists only on the partner chart — null if any own segment.
     premium_economy: sawOwn ? null : [premium, premium],
