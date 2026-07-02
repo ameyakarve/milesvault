@@ -84,13 +84,18 @@ export function handle(legs, _totalDistance) {
       const fs = SQ_FIRST_S[i]?.[j], fa = SQ_FIRST_A[i]?.[j];
 
       if (es !== null && es !== undefined) {
-        const wrap = (s, a) => (s == null) ? null : [s * 100, (a || s) * 100];
+        // Saver and Advantage are two fixed award LEVELS (Advantage = higher
+        // price / better availability) — emit as labelled tiers, not a range.
+        // Premium economy exists only at the Saver level. (A newer dynamic
+        // "Access" level exists too; not modelled — it has no fixed value.)
+        const m = (v) => (v == null) ? null : [v * 100, v * 100];
         entries.push({
-          programme: "krisflyer", chart: "own", season: "default",
-          economy: wrap(es, ea),
-          premium_economy: ps != null ? [ps * 100, ps * 100] : null,
-          business: wrap(bs, ba2),
-          first: wrap(fs, fa),
+          programme: "krisflyer", chart: "own", season: "Saver",
+          economy: m(es), premium_economy: m(ps), business: m(bs), first: m(fs),
+        });
+        entries.push({
+          programme: "krisflyer", chart: "own", season: "Advantage",
+          economy: m(ea || es), premium_economy: null, business: m(ba2 || bs), first: m(fa || fs),
         });
       }
     }
