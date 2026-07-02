@@ -129,19 +129,31 @@ export function handle(legs, totalDistance) {
     if (hasDynamic && hasFixed) break;
   }
 
-  if (hasDynamic && !hasFixed) {
-    return [makeEntry("aeroplan", "dynamic", "default", 0, null, 0, null)];
-  }
+  // Mixed dynamic + fixed carriers can't be priced on a single chart.
   if (hasDynamic && hasFixed) return [];
 
   const originZone = ZONE[legs[0].origin_cc];
   const destZone = ZONE[legs[legs.length - 1].destination_cc];
-  if (!originZone || !destZone) return [];
+  const chart = originZone && destZone ? CHARTS[pairKey(originZone, destZone)] : null;
+  const row = chart ? chart.find((band) => totalDistance <= band[0]) : null;
 
-  const chart = CHARTS[pairKey(originZone, destZone)];
-  if (!chart) return [];
+  if (hasDynamic) {
+    // AC own metal + "Select Partners" (UA/EK/EY/FZ): dynamic pricing ABOVE the
+    // base-chart floor, no published ceiling. Emit that floor with `floor: true`
+    // so the tier model reads {from, to:null}. If the zone can't be resolved,
+    // fall back to fully dynamic. (Aeroplan is surcharge-free on all partners.)
+    if (!row) return [makeEntry("aeroplan", "dynamic", "default", 0, null, 0, null)];
+    const [, econ, biz, first] = row;
+    return [{
+      programme: "aeroplan", chart: "dynamic", season: "default", floor: true,
+      economy: [econ, econ], premium_economy: null,
+      business: [biz, biz], first: first ? [first, first] : null,
+    }];
+  }
 
-  const row = chart.find((band) => totalDistance <= band[0]);
+  // Fixed partner chart. (TODO: chart lacks a Premium Economy column — Aeroplan
+  // does price PE; add the PE values when available.)
+  if (!row) return [];
   const [, econ, biz, first] = row;
   return [makeEntry("aeroplan", "partner", "default", econ, null, biz, first)];
 }

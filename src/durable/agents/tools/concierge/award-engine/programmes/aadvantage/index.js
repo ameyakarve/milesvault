@@ -211,6 +211,10 @@ export function handle(legs) {
       const [e, pe, bf] = floor;
       entries.push({
         programme: "aadvantage", chart: "own_floor", season: "default",
+        // AA own metal is fully dynamic ABOVE these observed saver floors (no
+        // published ceiling) — flag `floor` so the tier model reads {from, to:null}
+        // ("from X, varies up") rather than a fixed price implying a hard cap.
+        floor: true,
         economy: [e, e], premium_economy: pe ? [pe, pe] : null,
         business: [bf, bf], first: null,
       });
