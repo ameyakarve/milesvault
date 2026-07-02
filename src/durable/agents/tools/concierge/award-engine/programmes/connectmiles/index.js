@@ -198,7 +198,7 @@ export function handle(legs) {
       if (ecoS !== undefined || bizS !== undefined) {
         // Saver
         entries.push({
-          programme: "connectmiles", chart: "own_saver", season: "default",
+          programme: "connectmiles", chart: "own_saver", season: "Saver",
           economy: ecoS ? [ecoS, ecoS] : null,
           premium_economy: null,
           business: bizS ? [bizS, bizS] : null,
@@ -208,7 +208,7 @@ export function handle(legs) {
       if (ecoX !== undefined || bizX !== undefined) {
         // Standard
         entries.push({
-          programme: "connectmiles", chart: "own_standard", season: "default",
+          programme: "connectmiles", chart: "own_standard", season: "Standard",
           economy: ecoX ? [ecoX, ecoX] : null,
           premium_economy: null,
           business: bizX ? [bizX, bizX] : null,
