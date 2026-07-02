@@ -155,3 +155,10 @@ All 9 ana additions and all 3 turkish additions verified against the vault edge 
 ## airindia restructure — clean (checked inline)
 
 DB-backed lookup → static `routes.js` snapshot preserved behavior (multi-carrier rule, alphabetical pair key); only `VL` silently dropped from BOOKABLE, immaterial since the module was later reworked (`partner_dynamic`, Apr-2026 route refresh).
+
+## Live-feed programme audit, batch 1 (2026-07-02, late): qatar / turkish / delta
+
+> Protocol per owner: absence of feed data proves nothing; only positive, corroborated mismatches drive changes.
+> - **qatar CONFIRMED & FIXED (3-tier):** off-peak base values verified exactly on 4 routes; Flexi confirmed at exactly 2× off-peak on every observed route/cabin; the middle peak tier confirmed real (DEL–DOH Y 15,000 ×10; LHR F 86,000). Own-metal now emits three labelled tiers (off-peak / peak / flexi); peak values kept per cabin only where the stored column differs from 2× off (cells equal to 2× off were mislabelled Flexi — middle value unknown there). Every observed price now appears as a tier value.
+> - **turkish CLEAN + 1 documented tier:** promotion/standard verified exact on 7 of 8 route-cabin observations (DEL-IST, IST-BKK, IST-JFK, IST-LHR). A third tier at exactly 4/3× standard observed on IST-LHR only (Y 20,000; J 40,000 ×28) — real but single-route evidence; documented in KG, not modelled.
+> - **delta 2 FLOOR VIOLATIONS FIXED:** domestic Delta One observed at 46,700 (< the 63,000 floor); transatlantic-eastbound main observed at 29,200 ×12 (< the 37,000 floor). Both floors lowered to observed minima. Westbound/other zones consistent with existing floors.

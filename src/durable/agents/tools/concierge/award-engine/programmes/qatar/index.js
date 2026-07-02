@@ -162,14 +162,29 @@ export function handle(legs, _totalDistance) {
     const foreignCC = originCC === "QA" ? destCC : (destCC === "QA" ? originCC : destCC);
     const zone = QR_DEST_ZONE[foreignCC];
     if (zone) {
+      // THREE tiers, verified live 2026-07-02 (DOH-LHR/BKK/JFK, DEL-DOH):
+      // off-peak = the base column (matched observed exactly on all probes);
+      // Flexi = exactly 2x off-peak on every observed route/cabin;
+      // peak = the middle tier (~1.15-1.35x), kept per cabin ONLY where the
+      // stored "peak" column differs from 2x off (cells equal to 2x off are
+      // mislabelled Flexi — the true middle value is unknown there).
       const r = QR_OWN[zone];
-      const wrap = (lo, hi) => (lo === 0 && hi === 0) ? null : [lo, hi];
+      const one = (v) => (v ? [v, v] : null);
       entries.push({
-        programme: "qatar", chart: "own", season: "default",
-        economy: [r[0], r[1]],
-        premium_economy: null,
-        business: [r[2], r[3]],
-        first: wrap(r[4], r[5]),
+        programme: "qatar", chart: "own", season: "off-peak",
+        economy: one(r[0]), premium_economy: null, business: one(r[2]), first: one(r[4]),
+      });
+      const peak = (off, p) => (p && off && p !== off * 2 ? [p, p] : null);
+      const pe2 = peak(r[0], r[1]), pj = peak(r[2], r[3]), pf = peak(r[4], r[5]);
+      if (pe2 || pj || pf) {
+        entries.push({
+          programme: "qatar", chart: "own", season: "peak",
+          economy: pe2, premium_economy: null, business: pj, first: pf,
+        });
+      }
+      entries.push({
+        programme: "qatar", chart: "own", season: "flexi",
+        economy: one(r[0] * 2), premium_economy: null, business: one(r[2] * 2), first: one(r[4] * 2),
       });
     } else {
       entries.push(makeEntry("qatar", "own", "default", 0, null, 0, null));

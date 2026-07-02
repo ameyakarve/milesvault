@@ -48,14 +48,14 @@ function getZone(cc, airport) {
 // Observed minimums from US [basic_min, main_min, deltaone_min]
 // 0 = not available or no data
 const FLOORS = {
-  US:  [3000, 5500, 63000],
+  US:  [3000, 5500, 46700], // D1 floor lowered: 46,700 observed live (ATL-LAX, 2026-07-02); prior 63,000 sat above real prices
   AK:  [6000, 11500, 0],
   HI:  [7500, 17000, 90000],
   CB:  [5500, 6000, 36000],
   CA:  [6000, 14000, 0],
   NSA: [5000, 25000, 38000],
   SSA: [19000, 35000, 135000],
-  EU:  [20000, 37000, 170000],
+  EU:  [20000, 29200, 170000], // main floor lowered: 29,200 observed live x12 (JFK-LHR + eastbound connections, 2026-07-02)
   ME:  [52000, 58000, 235000],
   IS:  [0, 0, 0],  // No direct DL service — return [0,0]
   EA:  [23000, 25000, 145000],
