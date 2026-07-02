@@ -124,6 +124,15 @@ export function buildPrice(
     return s && s !== 'default' ? s : null
   }
   const dynBand = (l: string | null): Tier => ({ label: l, requires: null, amount: { from: null, to: null } })
+  // An entry flagged `floor: true` is a saver floor with dynamic pricing ABOVE it
+  // (e.g. AAdvantage own metal, Aeroplan Select Partners) — its fixed value maps
+  // to a {from, to:null} band, not a fixed price that implies a hard ceiling.
+  const amountOf = (a: number, b: number, floor: boolean): Amount => {
+    if (a <= 0) return { from: null, to: null } // fully dynamic, no quotable floor
+    if (floor) return { from: a, to: null } // floor known, dynamic above
+    if (a === b) return { fixed: a } // fixed
+    return { from: a, to: b } // explicit range
+  }
   const out = {} as Record<(typeof CABINS)[number], Award>
   for (const c of CABINS) {
     const offering = entries.filter((e) => Array.isArray(e[c]))
@@ -136,7 +145,9 @@ export function buildPrice(
       continue
     }
     let tiers: Tier[]
-    if (offering.length === 1) {
+    // A single non-floor entry that packs a range means seasons-in-one-entry
+    // (e.g. Qatar off/peak) → split into two fixed tiers.
+    if (offering.length === 1 && offering[0].floor !== true) {
       const [a, b] = offering[0][c] as [number, number]
       const l = label(offering[0])
       if (a <= 0) tiers = [dynBand(l)]
@@ -151,8 +162,7 @@ export function buildPrice(
       tiers = []
       for (const e of offering) {
         const [a, b] = e[c] as [number, number]
-        const amount: Amount = a <= 0 ? { from: null, to: null } : a === b ? { fixed: a } : { from: a, to: b }
-        const t: Tier = { label: label(e), requires: null, amount }
+        const t: Tier = { label: label(e), requires: null, amount: amountOf(a, b, e.floor === true) }
         const k = JSON.stringify(t)
         if (seen.has(k)) continue
         seen.add(k)
@@ -169,8 +179,19 @@ export function buildPrice(
 // null. Derivable, lossless for display — nothing faked.
 export function toCabinCell(award: Award): CabinCell {
   if (award.status === 'not_offered') return null
-  const amounts = award.price.map((t) => t.amount)
-  if (amounts.some((a) => 'from' in a)) return 'dynamic'
-  const fixed = (amounts as { fixed: number }[]).map((a) => a.fixed)
-  return [Math.min(...fixed), Math.max(...fixed)]
+  // Collect every numeric endpoint: a fixed value, or the known end(s) of a band.
+  // A floor band {from:N, to:null} contributes N (so it displays as its floor,
+  // like today's flat value); a fully-open band {from:null, to:null} contributes
+  // nothing → "dynamic". No numbers anywhere ⇒ "dynamic".
+  const nums: number[] = []
+  for (const t of award.price) {
+    const a = t.amount
+    if ('fixed' in a) nums.push(a.fixed)
+    else {
+      if (typeof a.from === 'number') nums.push(a.from)
+      if (typeof a.to === 'number') nums.push(a.to)
+    }
+  }
+  if (nums.length === 0) return 'dynamic'
+  return [Math.min(...nums), Math.max(...nums)]
 }

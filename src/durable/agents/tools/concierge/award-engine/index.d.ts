@@ -19,6 +19,9 @@ export interface Entry {
   programme: string
   chart: string
   season: string
+  // When true, the cabin values are saver FLOORS with dynamic pricing above them
+  // (no published ceiling) — surfaced by the tier model as {from, to:null}.
+  floor?: boolean
   economy: CabinRange
   premium_economy: CabinRange
   business: CabinRange
