@@ -24,7 +24,7 @@
 
 import { makeEntry } from "../../shared.js";
 
-const BOOKABLE = new Set(["3M","9K","A3","AC","AD","AI","AV","BR","CA","CM","EI","EN","ET","EW","HA","LH","LO","LX","MS","NH","NZ","OA","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VA","ZH"]);
+const BOOKABLE = new Set(["2L","3M","9K","A3","AC","AD","AI","AV","AZ","BR","CA","CM","EI","EN","ET","EW","HA","LH","LO","LX","MS","NH","NZ","OA","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VA","ZH"]);
 
 const UA_CARRIERS = new Set(["UA"]);
 

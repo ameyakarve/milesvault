@@ -33,7 +33,7 @@ export const ROUTES = {
   "TSN": [10000, 0, 24000, 0, 0, 0],            // Tianjin
   "HKG": [11000, 16000, 26000, 36000, 43000, 50000], // Hong Kong
   "ICN": [7500, 0, 18000, 0, 0, 0],             // Seoul
-  "PUS": [7500, 0, 18000, 30000, 30000, 30000], // Busan (flat 30K First per vault)
+  "PUS": [7500, 0, 18000, 0, 0, 0], // Busan (Y/J = Seoul; no First — old flat-30K claim unsupported, route absent from the live jal.co.jp chart)
 
   // Taipei — varies by departure airport
   "TPE_HND": [11000, 0, 26000, 0, 0, 0],        // Taipei from Tokyo Haneda

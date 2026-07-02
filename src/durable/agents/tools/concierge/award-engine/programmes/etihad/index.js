@@ -1,6 +1,11 @@
 import { resolveBand } from "../../shared.js";
 
-const BOOKABLE = new Set(["AA","AC","AD","AF","AT","B6","DE","ET","EY","GA","GF","HU","HX","JU","KL","LY","MH","MU","NH","NZ","OZ","SK","SN","SV","TP","UL","UX","VN","WY"]);
+// Verified against etihad.com "Airline Partners – Earn & redeem miles" +
+// live award feed, 2026-07-02. KE/VA are no longer partners (removed upstream);
+// AD/MU/ET confirmed (MU observed live); QP observed live though the page lags;
+// HX per Feb-2026 sources, page omits it — kept pending clarity. DE removed
+// (no source lists Condor as a redemption partner).
+const BOOKABLE = new Set(["AA","AC","AD","AF","AT","B6","ET","EY","GA","GF","HU","HX","JU","KL","LY","MH","MU","NH","NZ","OZ","QP","SK","SN","SV","TP","UL","UX","VN","WY"]);
 
 const ET_BANDS = [500, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 6000, Infinity];
 // Etihad-operated ("own metal") Saver floors by distance band: [economy, business, first]

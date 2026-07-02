@@ -1,7 +1,8 @@
 import { makeEntry, resolveChart, resolveBand } from "../../shared.js";
 
-// Initial set — will be updated after deep research
-const BOOKABLE = new Set(["AA","AF","AS","AT","AY","BA","CI","CX","EK","FJ","HA","IB","JL","KL","LA","LY","MH","MU","NZ","PG","QF","QR","RJ","UL","WS","WY"]);
+// JQ/GK/3K (Jetstar family) verified bookable 2026-07-02: 421 live Jetstar trips
+// observed via the Qantas award feed, priced exactly off the Jetstar chart.
+const BOOKABLE = new Set(["3K","AA","AF","AS","AT","AY","BA","CI","CX","EK","FJ","GK","HA","IB","JL","JQ","KL","LA","LY","MH","MU","NZ","PG","QF","QR","RJ","UL","WS","WY"]);
 
 const QF_BANDS = [600, 1200, 2400, 3600, 4800, 5800, 7000, 8400, 9600, 15000];
 
@@ -36,6 +37,7 @@ const QF_JETSTAR = [
 ];
 
 const QF_CARRIERS = new Set(["QF", "AA", "FJ"]);
+const PE_PARTNERS = new Set(["AA", "BA", "CX", "CI", "LY", "AY", "IB", "JL"]);
 const EK_CARRIERS = new Set(["EK"]);
 const JQ_CARRIERS = new Set(["JQ", "GK", "3K"]); // Jetstar variants
 
@@ -44,6 +46,12 @@ export const slug = "qantas-frequent-flyer";
 export const bookable = BOOKABLE;
 
 export function handle(legs, totalDistance) {
+  // NOT MODELLED: the oneworld Classic Flight Reward chart (2+ oneworld
+  // carriers besides QF) — it is ROUND-TRIP-ONLY (return leg required, up to 5
+  // stopovers, 35,000-mile cap), so it cannot price the one-way itineraries
+  // this engine quotes. One-way multi-partner itineraries book as ordinary
+  // partner awards, which the portion-sum below prices correctly.
+  //
   // Qantas Classic Flight Rewards: the price is the SUM over each airline's
   // PORTION — each airline's own total flown distance → one band → that
   // airline's table. So a SINGLE-airline journey is just total distance on one
@@ -68,15 +76,58 @@ export function handle(legs, totalDistance) {
     return [at(QF_OWN, "own"), at(QF_PARTNER, "partner"), at(QF_EMIRATES, "emirates")];
   }
 
-  const hasOwn = withCarrier.some((l) => QF_CARRIERS.has(l.carrier));
-  // Group flown distance by airline portion. Jetstar joins the own portion when
-  // Qantas/AA/Fiji are also flown, else it's its own (Jetstar-table) portion.
+  // QF-family itineraries (Qantas/AA/Fiji/Jetstar only): price at the LOWER of
+  // (a) the Qantas table on TOTAL journey distance, or (b) the per-segment sum,
+  // each segment on its own airline's table — "the Qantas table applies to total
+  // distance, but if summing individual segments is cheaper, that lower price
+  // wins". Verified live 2026-07-02: SYD-MEL+MEL-OOL all-Jetstar = 16,700
+  // (segment sum wins); SYD-MEL+MEL-DPS = 23,300 (QF-on-total wins); mixed
+  // QF+JQ priced identically to all-JQ. (Some Bali connections observed at
+  // 24,500 fit neither candidate — unexplained, see audit doc.)
+  const isQfFamily = withCarrier.every((l) => QF_CARRIERS.has(l.carrier) || JQ_CARRIERS.has(l.carrier));
+  if (isQfFamily) {
+    const ti = resolveBand(totalDistance, QF_BANDS);
+    if (ti === undefined) return [];
+    const onTotal = QF_OWN[ti];
+    const allJq = withCarrier.every((l) => JQ_CARRIERS.has(l.carrier));
+    // Per-segment candidate only when every leg has a known carrier.
+    let seg = null;
+    if (withCarrier.length === legs.length) {
+      seg = { y: 0, pe: 0, j: 0, f: 0, hasPeF: true };
+      for (const l of legs) {
+        const si = resolveBand(l.distance, QF_BANDS);
+        if (si === undefined) { seg = null; break; }
+        if (JQ_CARRIERS.has(l.carrier)) {
+          const r = QF_JETSTAR[si];
+          seg.y += r[0]; seg.j += r[1]; seg.hasPeF = false;
+        } else {
+          const r = QF_OWN[si];
+          seg.y += r[0]; seg.pe += r[1]; seg.j += r[2]; seg.f += r[3];
+        }
+      }
+    }
+    const min2 = (a, b) => (b == null ? a : Math.min(a, b));
+    const y = min2(onTotal[0], seg ? seg.y : null);
+    const j = min2(onTotal[2], seg ? seg.j : null);
+    // Jetstar sells no Premium Economy or First: a pure-Jetstar itinerary has
+    // neither cabin regardless of what the QF table would charge.
+    const pe = allJq ? null : min2(onTotal[1], seg && seg.hasPeF ? seg.pe : null);
+    const f = allJq ? null : min2(onTotal[3], seg && seg.hasPeF ? seg.f : null);
+    return [{
+      programme: "qantas", chart: allJq ? "jetstar" : "own", season: "default",
+      economy: wrap(y), premium_economy: wrap(pe), business: wrap(j), first: wrap(f),
+    }];
+  }
+
+  // Partner/Emirates itineraries: sum per-airline PORTIONS — each airline's own
+  // flown distance → one band → that airline's table ("two partner airlines =
+  // sum of the individual airline portions"; "partner + Qantas/Jetstar = sum of
+  // each part"). Jetstar alongside partners rides the own table.
   const groupDist = new Map();
   for (const l of withCarrier) {
     const c = l.carrier;
     const key = EK_CARRIERS.has(c) ? "EK"
-      : QF_CARRIERS.has(c) ? "OWN"
-      : JQ_CARRIERS.has(c) ? (hasOwn ? "OWN" : "JQ")
+      : QF_CARRIERS.has(c) || JQ_CARRIERS.has(c) ? "OWN"
       : c; // each partner airline is its own portion
     groupDist.set(key, (groupDist.get(key) || 0) + l.distance);
   }
@@ -95,7 +146,11 @@ export function handle(legs, totalDistance) {
       const table = key === "EK" ? QF_EMIRATES : key === "OWN" ? QF_OWN : QF_PARTNER;
       const r = table[idx];
       totals.economy += r[0];
-      totals.premium_economy += r[1] || 0;
+      // Premium Economy Classic Rewards exist only on specific partners
+      // (AA/BA/CX/CI/LY + AY/IB added Feb 2026 + JL; AF/KL announced but never
+      // added) — other partners' PE cabins aren't bookable with points.
+      const peOk = key === "EK" || key === "OWN" || PE_PARTNERS.has(key);
+      totals.premium_economy += peOk ? (r[1] || 0) : 0;
       totals.business += r[2];
       totals.first += r[3] || 0;
       if (key === "OWN") anyOwn = true;

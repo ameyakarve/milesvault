@@ -1,9 +1,16 @@
 /**
  * JAL Mileage Bank
  *
- * - JL own-metal: city-pair pricing from static route data
- * - Non-oneworld partner chart: distance-based, one-way
- * - Oneworld multi-carrier: cumulative distance, round-trip (not implemented)
+ * - JL own-metal: city-pair pricing from static route data — verified row-by-row
+ *   against the live jal.co.jp required-mileage chart 2026-07-02 (base awards +
+ *   seasonal First; the site's third table set is the dynamic "PLUS" maximums,
+ *   intentionally unmodelled).
+ * - Non-oneworld partner chart: distance-based, one-way.
+ * - Oneworld multi-carrier chart: ROUND-TRIP-ONLY product (like Qantas's) —
+ *   cannot price the one-way itineraries this engine quotes; one-way
+ *   multi-partner itineraries book on the partner chart.
+ * - JL DOMESTIC awards (zone A–G chart on jal.co.jp): NOT modelled — pure
+ *   domestic itineraries return []. Known gap.
  */
 
 import { makeEntry, resolveChart, resolveBand } from "../../shared.js";

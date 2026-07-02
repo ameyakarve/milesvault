@@ -35,6 +35,10 @@ export interface ResolvedLeg {
   distance: number
   origin_cc: string
   destination_cc: string
+  origin_lat: number
+  origin_lng: number
+  destination_lat: number
+  destination_lng: number
 }
 
 export interface ProgrammeModule {

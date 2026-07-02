@@ -38,6 +38,21 @@ export const slug = "emirates-skywards";
 
 export const bookable = BOOKABLE;
 
+// Skywards partner rewards are priced PER DIRECT FLIGHT: "Miles stated are for
+// direct flights only. Where no direct service is operated, two or more rewards
+// may be required" (emirates.com partner pages, verified 2026-07-02 on the
+// Qantas and GOL pages). Band each leg on its own distance and sum.
+function sumPerLeg(legs, bands, chart) {
+  const tot = [0, 0, 0]
+  const seen = [false, false, false]
+  for (const l of legs) {
+    const row = chart[resolveBand(l.distance, bands)]
+    for (let i = 0; i < 3; i++) if (row[i] != null) { tot[i] += row[i]; seen[i] = true }
+  }
+  // A cabin the chart never prices (null cells, e.g. legacy PE) stays null.
+  return tot.map((v, i) => (seen[i] ? v : null))
+}
+
 export function handle(legs, distance) {
   const carriers = legs.map((l) => l.carrier).filter(Boolean);
   const entries = [];
@@ -56,16 +71,18 @@ export function handle(legs, distance) {
   if (nonEkCarriers.length > 0) {
     for (const carrier of new Set(nonEkCarriers)) {
       if (carrier === "QF") {
-        const idx = resolveBand(distance, QF_BANDS);
-        const [e, pe, b] = QF_CHART[idx];
+        const [e, pe, b] = sumPerLeg(legs, QF_BANDS, QF_CHART);
         entries.push(makeEntry("emirates", "partner_qantas", "default", e, pe, b, null));
       } else if (LEGACY_PARTNERS.has(carrier)) {
-        const idx = resolveBand(distance, LEGACY_BANDS);
-        const [e, pe, b] = LEGACY_CHART[idx];
+        const [e, pe, b] = sumPerLeg(legs, LEGACY_BANDS, LEGACY_CHART);
         entries.push(makeEntry("emirates", "partner_legacy", "default", e, pe, b, null));
+      } else if (carrier === "G3") {
+        // GOL sells only Economy + GOL Premium (prices at the PE column) — no
+        // business/first cabin exists (emirates.com GOL page, 2026-07-02).
+        const [e, pe] = sumPerLeg(legs, STD_BANDS, STD_CHART);
+        entries.push(makeEntry("emirates", "partner", "default", e, pe, null, null));
       } else if (STD_PARTNERS.has(carrier)) {
-        const idx = resolveBand(distance, STD_BANDS);
-        const [e, pe, b] = STD_CHART[idx];
+        const [e, pe, b] = sumPerLeg(legs, STD_BANDS, STD_CHART);
         entries.push(makeEntry("emirates", "partner", "default", e, pe, b, null));
       } else if (DYNAMIC_PARTNERS.has(carrier)) {
         // Dynamic pricing — no fixed chart, return [0,0] ranges
@@ -73,17 +90,14 @@ export function handle(legs, distance) {
       }
     }
   } else {
-    // No carrier specified — return standard chart as default
-    const stdIdx = resolveBand(distance, STD_BANDS);
-    const [se, spe, sb] = STD_CHART[stdIdx];
+    // No carrier specified — return all three fixed charts as alternatives
+    const [se, spe, sb] = sumPerLeg(legs, STD_BANDS, STD_CHART);
     entries.push(makeEntry("emirates", "partner", "default", se, spe, sb, null));
 
-    const legIdx = resolveBand(distance, LEGACY_BANDS);
-    const [le, lpe, lb] = LEGACY_CHART[legIdx];
+    const [le, lpe, lb] = sumPerLeg(legs, LEGACY_BANDS, LEGACY_CHART);
     entries.push(makeEntry("emirates", "partner_legacy", "default", le, lpe, lb, null));
 
-    const qfIdx = resolveBand(distance, QF_BANDS);
-    const [qe, qpe, qb] = QF_CHART[qfIdx];
+    const [qe, qpe, qb] = sumPerLeg(legs, QF_BANDS, QF_CHART);
     entries.push(makeEntry("emirates", "partner_qantas", "default", qe, qpe, qb, null));
   }
 

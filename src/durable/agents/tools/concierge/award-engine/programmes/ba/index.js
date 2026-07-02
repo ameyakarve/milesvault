@@ -30,76 +30,55 @@ export const slug = "avios";
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {
-  // BA uses per-segment additive pricing — sum each leg independently
+  // BA prices PER SEGMENT. A mixed own+partner itinerary prices each leg on
+  // its OWN carrier's table and sums to ONE combined price — not the whole
+  // journey on both tables as two alternatives. Carrier-unspecified
+  // itineraries return the all-own and all-partner interpretations.
+  //
+  // KNOWN GAPS (unverifiable without a published chart — BA is calculator-only
+  // and blogs publish images; see docs/award-audit/opus-migration-audit.md):
+  // CX/JL higher partner rates, the AA/AS US-domestic table, the QR/AY
+  // Dec-2025 exemption, and the multi-carrier (2+ oneworld) chart.
   const carriers = legs.map((l) => l.carrier).filter(Boolean);
   const chart = resolveChart(legs, BA_CARRIERS);
+  const wrap = (v) => (v === 0 ? null : [v, v]);
 
-  // For per-segment pricing, sum costs across all legs
-  if (chart !== "partner") {
-    const offpeak = { economy: 0, premium_economy: 0, business: 0, first: 0 };
-    const peak = { economy: 0, premium_economy: 0, business: 0, first: 0 };
-    let valid = true;
-
+  const sumWith = (legIsOwn) => {
+    const offpeak = { e: 0, pe: 0, b: 0, f: 0 }, peak = { e: 0, pe: 0, b: 0, f: 0 };
     for (const leg of legs) {
       const idx = resolveBand(leg.distance, BA_BANDS);
-      const op = BA_OWN_OFFPEAK[idx];
-      const pk = BA_OWN_PEAK[idx];
-      if (!op) { valid = false; break; }
-      offpeak.economy += op[0];
-      offpeak.premium_economy += op[1] || 0;
-      offpeak.business += op[2];
-      offpeak.first += op[3] || 0;
-      peak.economy += pk[0];
-      peak.premium_economy += pk[1] || 0;
-      peak.business += pk[2];
-      peak.first += pk[3] || 0;
+      if (legIsOwn(leg)) {
+        const op = BA_OWN_OFFPEAK[idx], pk = BA_OWN_PEAK[idx];
+        if (!op) return null;
+        offpeak.e += op[0]; offpeak.pe += op[1] || 0; offpeak.b += op[2]; offpeak.f += op[3] || 0;
+        peak.e += pk[0]; peak.pe += pk[1] || 0; peak.b += pk[2]; peak.f += pk[3] || 0;
+      } else {
+        const row = BA_PARTNER[idx];
+        if (!row) return null;
+        for (const t of [offpeak, peak]) { t.e += row[0]; t.pe += row[1]; t.b += row[2]; t.f += row[3]; }
+      }
     }
+    return { offpeak, peak };
+  };
+  const toEntries = (s, chartName) => {
+    if (!s) return [];
+    const mk = (season, t) => ({
+      programme: "ba", chart: chartName, season,
+      economy: wrap(t.e), premium_economy: wrap(t.pe), business: wrap(t.b), first: wrap(t.f),
+    });
+    const same = s.offpeak.e === s.peak.e && s.offpeak.pe === s.peak.pe
+      && s.offpeak.b === s.peak.b && s.offpeak.f === s.peak.f;
+    return same ? [mk("default", s.offpeak)] : [mk("off-peak", s.offpeak), mk("peak", s.peak)];
+  };
 
-    if (valid) {
-      const wrap = (v) => v === 0 ? null : [v, v];
-      const entries = [];
-      entries.push({
-        programme: "ba", chart: "own", season: "off-peak",
-        economy: wrap(offpeak.economy), premium_economy: wrap(offpeak.premium_economy),
-        business: wrap(offpeak.business), first: wrap(offpeak.first),
-      });
-      entries.push({
-        programme: "ba", chart: "own", season: "peak",
-        economy: wrap(peak.economy), premium_economy: wrap(peak.premium_economy),
-        business: wrap(peak.business), first: wrap(peak.first),
-      });
-      // Return own entries separately if chart is "own" only
-      if (chart === "own") return entries;
-      // For "both", continue to add partner below
-      var ownEntries = entries;
-    }
+  if (carriers.length === 0) {
+    return [
+      ...toEntries(sumWith(() => true), "own"),
+      ...toEntries(sumWith(() => false), "partner"),
+    ];
   }
-
-  const partnerEntries = [];
-  if (chart !== "own") {
-    const totals = { economy: 0, premium_economy: 0, business: 0, first: 0 };
-    let valid = true;
-
-    for (const leg of legs) {
-      const idx = resolveBand(leg.distance, BA_BANDS);
-      const row = BA_PARTNER[idx];
-      if (!row) { valid = false; break; }
-      totals.economy += row[0];
-      totals.premium_economy += row[1];
-      totals.business += row[2];
-      totals.first += row[3];
-    }
-
-    if (valid) {
-      const wrap = (v) => v === 0 ? null : [v, v];
-      partnerEntries.push({
-        programme: "ba", chart: "partner", season: "default",
-        economy: wrap(totals.economy), premium_economy: wrap(totals.premium_economy),
-        business: wrap(totals.business), first: wrap(totals.first),
-      });
-    }
-  }
-
-  if (chart === "both") return [...(ownEntries || []), ...partnerEntries];
-  return partnerEntries;
+  if (chart === "own") return toEntries(sumWith(() => true), "own");
+  if (chart === "partner") return toEntries(sumWith(() => false), "partner");
+  // Mixed itinerary: leg-by-leg carrier match; unspecified legs ride the own table.
+  return toEntries(sumWith((l) => !l.carrier || BA_CARRIERS.has(l.carrier)), "mixed");
 }
