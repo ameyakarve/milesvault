@@ -16,10 +16,15 @@ const BOOKABLE = new Set(["AA","AS","AT","AY","BA","CX","DE","EI","FI","FJ","HU"
 
 const OWN_CARRIERS = new Set(["AS", "HA"]);
 
-// Own-metal chart [economy, first]
+// Own-metal chart [economy, first]. Bands 3-4 economy raised to the minima
+// observed across TWO independent instruments (seats.aero + Roame SkyView,
+// 2026-07-02): band 3 SEA-ANC bottoms at 12,500 (never 10,000); band 4
+// SEA-JFK bottoms at 17,500 (never 12,500). Band-2 Y 7,500 and F 25,000
+// verified exact. (A seats.aero "business 20,000" sighting on LAX-SEA was a
+// cabin-mapping artifact — Roame shows First at exactly 25,000.)
 const OWN_BANDS = [700, 1400, 2100, 3500, Infinity];
 const OWN_CHART = [
-  [4500, 15000], [7500, 25000], [10000, 25000], [12500, 30000], [20000, 60000],
+  [4500, 15000], [7500, 25000], [12500, 25000], [17500, 30000], [20000, 60000],
 ];
 
 // Americas partner chart [econ, premEcon, biz, first]
