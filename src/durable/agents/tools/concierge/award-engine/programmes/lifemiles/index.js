@@ -2,10 +2,15 @@
  * LifeMiles (Avianca)
  *
  * - Avianca own-metal: dynamic (return [0,0])
- * - Star Alliance partners: unpublished zone-based chart with crowd-sourced ranges
+ * - Star Alliance partners: unpublished zone-based chart. Live Roame skyview
+ *   observations (July 2026) show partner pricing is now TIERED SEMI-DYNAMIC:
+ *   2-3 non-round price points per route/cabin (e.g. US-EU economy 41,100 and
+ *   48,400 on both UA and LH metal), not the old fixed saver levels. Ranges
+ *   below are observed envelopes where live-verified (marked), crowd-sourced
+ *   elsewhere.
  * - No fuel surcharges on partner awards
  *
- * Source: crowd-sourced data, last updated Mar 2026
+ * Source: crowd-sourced data (Mar 2026) + Roame live observations (Jul 2026)
  * HOW TO REFRESH: Update the CHARTS object below with new zone-pair pricing
  */
 
@@ -51,17 +56,19 @@ const ZONE = {
 function pk(a, b) { return a <= b ? `${a}|${b}` : `${b}|${a}`; }
 
 const CHARTS = {
-  // US domestic
-  [pk("US","US")]: [7500, 15000, 15000, 25000, 35000, 35000],
-  // US — Canada (distance-based, use range)
-  [pk("US","CA")]: [6000, 12500, 15000, 25000, 0, 0],
+  // US domestic — Y max raised: SFO-ORD observed 17,800 on UA (x23, Jul 2026)
+  [pk("US","US")]: [7500, 17800, 15000, 25000, 35000, 35000],
+  // US — Canada (distance-based, use range) — Y 10,200/12,100 observed within
+  // range (ORD-YYZ, UA+AC); J max raised: 34,100 observed (ORD-YYZ UA, Jul 2026)
+  [pk("US","CA")]: [6000, 12500, 15000, 34100, 0, 0],
   // US — Mexico/Caribbean/Central America
   [pk("US","MX")]: [15000, 20000, 25000, 35000, 0, 0],
   [pk("US","CB")]: [15000, 20000, 25000, 35000, 0, 0],
   [pk("US","CA_AM")]: [15000, 20000, 25000, 35000, 0, 0],
-  // US — Europe
+  // US — Europe — EU2 Y envelope observed live: 41,100 / 48,400 on both UA and
+  // LH metal (EWR-FRA, Jul 2026). EU1/EU3 unobserved, left at crowd values.
   [pk("US","EU1")]: [40000, 40000, 80000, 80000, 130000, 130000],
-  [pk("US","EU2")]: [40000, 40000, 80000, 80000, 130000, 130000],
+  [pk("US","EU2")]: [40000, 48400, 80000, 80000, 130000, 130000],
   [pk("US","EU3")]: [40000, 40000, 80000, 80000, 130000, 130000],
   // US — Middle East
   [pk("US","ME")]: [40000, 45000, 78000, 78000, 130000, 130000],
@@ -69,8 +76,9 @@ const CHARTS = {
   [pk("US","AF")]: [45000, 50000, 78000, 78000, 0, 0],
   // US — South Asia (India)
   [pk("US","SA_ASIA")]: [45000, 55000, 78000, 90000, 120000, 120000],
-  // US — North Asia
-  [pk("US","NA_ASIA")]: [55000, 55000, 100000, 100000, 120000, 120000],
+  // US — North Asia — Y max raised: SFO-NRT observed 55,100 / 64,900 on both
+  // UA and NH metal (x768 fares, Jul 2026)
+  [pk("US","NA_ASIA")]: [55000, 64900, 100000, 100000, 120000, 120000],
   // US — Southeast Asia
   [pk("US","SEA")]: [50000, 55000, 90000, 100000, 120000, 120000],
   // US — Oceania
@@ -79,7 +87,8 @@ const CHARTS = {
   // Intra-Europe
   [pk("EU1","EU1")]: [12500, 12500, 20000, 20000, 30000, 30000],
   [pk("EU2","EU2")]: [12500, 12500, 20000, 20000, 30000, 30000],
-  [pk("EU1","EU2")]: [12500, 12500, 20000, 20000, 30000, 30000],
+  // EU1-EU2 Y min lowered: FRA-LHR observed 8,200 / 9,600 on LH (Jul 2026)
+  [pk("EU1","EU2")]: [8200, 12500, 20000, 20000, 30000, 30000],
   [pk("EU1","EU3")]: [15000, 15000, 27000, 27000, 39000, 39000],
   [pk("EU2","EU3")]: [15000, 15000, 27000, 27000, 39000, 39000],
   [pk("EU3","EU3")]: [12500, 12500, 20000, 20000, 30000, 30000],
@@ -89,8 +98,9 @@ const CHARTS = {
   [pk("SA_ASIA","EU2")]: [28000, 30000, 51000, 87000, 80000, 87000],
   // South Asia — North Asia
   [pk("SA_ASIA","NA_ASIA")]: [28000, 35000, 48000, 55000, 60000, 80000],
-  // South Asia — Southeast Asia
-  [pk("SA_ASIA","SEA")]: [17000, 22000, 35000, 45000, 0, 0],
+  // South Asia — Southeast Asia — J max raised: DEL-SIN observed 55,400 on SQ
+  // (single observation, Jul 2026)
+  [pk("SA_ASIA","SEA")]: [17000, 22000, 35000, 55400, 0, 0],
   // South Asia — Africa
   [pk("SA_ASIA","AF")]: [28000, 35000, 40000, 55000, 0, 0],
   // South Asia — US
