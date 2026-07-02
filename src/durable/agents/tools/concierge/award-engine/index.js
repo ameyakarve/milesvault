@@ -13,6 +13,7 @@ import * as alfursan from './programmes/alfursan/index.js'
 import * as ana from './programmes/ana/index.js'
 import * as asiamiles from './programmes/asiamiles/index.js'
 import * as atmos from './programmes/atmos/index.js'
+import * as azul from './programmes/azul/index.js'
 import * as ba from './programmes/ba/index.js'
 import * as cedarmiles from './programmes/cedarmiles/index.js'
 import * as clubpremier from './programmes/clubpremier/index.js'
@@ -49,6 +50,8 @@ import * as shebamiles from './programmes/shebamiles/index.js'
 import * as shenzhen from './programmes/shenzhen/index.js'
 import * as sindbad from './programmes/sindbad/index.js'
 import * as skypass from './programmes/skypass/index.js'
+import * as smiles from './programmes/smiles/index.js'
+import * as trueblue from './programmes/trueblue/index.js'
 import * as turkish from './programmes/turkish/index.js'
 import * as united from './programmes/united/index.js'
 import * as velocity from './programmes/velocity/index.js'
@@ -58,13 +61,13 @@ import * as velocity from './programmes/velocity/index.js'
 // the engine, the KB graph, and the agent all speak one set of programme ids
 // with no translation table: the module owns its id, the map is derived.
 const MODULES = [
-  aadvantage, aeroplan, airindia, alfursan, ana, asiamiles, atmos, ba,
+  aadvantage, aeroplan, airindia, alfursan, ana, asiamiles, atmos, azul, ba,
   cedarmiles, clubpremier, connectmiles, cosmile, delta, dynastyflyer, easternmiles,
   egretclub, emirates, enrich, etihad, eurobonus, eva, finnair, flyingblue,
   flyingclub, flysmiles, iberia, jalmb, krisflyer, latampass, lifemiles,
   lotusmiles, mabuhay, milesbonus, milesgo, milesmore, phoenixmiles, qantas,
-  qatar, royalorchid, shebamiles, shenzhen, sindbad, skypass, turkish, united,
-  velocity,
+  qatar, royalorchid, shebamiles, shenzhen, sindbad, skypass, smiles, trueblue,
+  turkish, united, velocity,
 ]
 
 export const PROGRAMMES = Object.fromEntries(MODULES.map((m) => [m.slug, m]))
@@ -117,6 +120,9 @@ const ALIASES = {
   'turkish airlines': 'turkish-miles-and-smiles', 'miles and smiles': 'turkish-miles-and-smiles', 'miles&smiles': 'turkish-miles-and-smiles', tk: 'turkish-miles-and-smiles',
   mileageplus: 'united-mileageplus', ua: 'united-mileageplus',
   'virgin australia': 'velocity-frequent-flyer', va: 'velocity-frequent-flyer',
+  gol: 'smiles', smiles: 'smiles', g3: 'smiles',
+  azul: 'azul-fidelidade', tudoazul: 'azul-fidelidade', 'azul fidelidade': 'azul-fidelidade', ad: 'azul-fidelidade',
+  jetblue: 'trueblue', trueblue: 'trueblue', 'true blue': 'trueblue', b6: 'trueblue',
 }
 
 export function resolveProgrammeId(text) {
