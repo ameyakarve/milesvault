@@ -137,9 +137,12 @@ export function handle(legs) {
     const [ownEMin, ownEMax, ownBiz, ptrEcon, ptrBiz, ptrFirst] = floor;
 
     if (isOwn) {
-      // UA own metal has no international first cabin.
+      // UA own metal has no international first cabin. Fully dynamic above these
+      // observed saver floors → floor:true so the tier model reads {from, to}
+      // rather than a fixed price / fake off-peak-peak split.
       return [{
         programme: "united", chart: "saver_floor", season: "default",
+        floor: true,
         economy: [ownEMin, ownEMax],
         premium_economy: null,
         business: [ownBiz, ownBiz],
@@ -148,6 +151,7 @@ export function handle(legs) {
     }
     return [{
       programme: "united", chart: "partner_floor", season: "default",
+      floor: true,
       economy: [ptrEcon, ptrEcon],
       premium_economy: null,
       business: [ptrBiz, ptrBiz],
@@ -164,6 +168,7 @@ export function handle(legs) {
     const [e, b, f] = nonUS;
     return [{
       programme: "united", chart: "partner_floor", season: "default",
+      floor: true,
       economy: [e, e],
       premium_economy: null,
       business: [b, b],
