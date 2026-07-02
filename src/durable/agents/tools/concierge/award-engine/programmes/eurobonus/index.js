@@ -212,11 +212,10 @@ export function handle(legs) {
       // Determine zone of the non-Scandinavian end
       let zone;
       if (isScanOrigin && isScanDest) {
-        // Domestic or Nordic
-        const foreignCC = destCC;
-        zone = SK_ZONE[foreignCC] || null;
-        // If both are in DK/NO/SE, it's domestic
-        if (originCC === destCC) zone = "DOM_SCAN";
+        // Same country = domestic; cross-country Scandinavia = NORDIC.
+        // (Verified live 2026-07-02: OSL-CPH prices 10,000 Y / 20,000 J — the
+        // NORDIC row — not the 5,000 DOM_SCAN row it previously resolved to.)
+        zone = originCC === destCC ? "DOM_SCAN" : "NORDIC";
       } else {
         const foreignCC = isScanOrigin ? destCC : originCC;
         zone = SK_ZONE[foreignCC] || null;
