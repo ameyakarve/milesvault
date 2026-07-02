@@ -12,7 +12,7 @@
  * - Other non-chart partners (SA, WS, 6E, LY, VA, EL AL): return [0,0]
  */
 
-import { makeEntry, resolveBand } from "../../shared.js";
+import { haversine, makeEntry, resolveBand } from "../../shared.js";
 
 const BOOKABLE = new Set(["6E","AF","AM","AR","CI","DL","GA","KE","KL","KQ","LA","LY","ME","MF","MU","NH","NZ","RO","SA","SK","SV","UX","VA","VN","VS","WS"]);
 
@@ -146,6 +146,29 @@ export const slug = "flying-club";
 
 export const bookable = BOOKABLE;
 
+// SkyTeam general and Delta partner charts are PER-SEGMENT ADDITIVE: each leg
+// is banded on its own great-circle distance and the values are summed —
+// verified against seats.aero (KQ BOM-NBO-CDG J = 40k + 75k = 115k observed).
+function sumPerLeg(legs, bands, chart) {
+  let e = 0, b = 0;
+  for (const l of legs) {
+    const [le, lb] = chart[resolveBand(l.distance, bands)];
+    e += le;
+    b += lb;
+  }
+  return [e, b];
+}
+
+// AF/KL short-haul bands on the DIRECT origin→final-destination distance, not
+// cumulative segment distance — a connection via AMS/CDG can price at the
+// lowest tier when the endpoints are close. Falls back to null when legs were
+// built without coordinates.
+function directDistance(legs) {
+  const o = legs[0], d = legs[legs.length - 1];
+  if (o.origin_lat == null || d.destination_lat == null) return null;
+  return haversine(o.origin_lat, o.origin_lng, d.destination_lat, d.destination_lng);
+}
+
 export function handle(legs, totalDistance) {
   const carriers = legs.map((l) => l.carrier).filter(Boolean);
   const entries = [];
@@ -153,8 +176,7 @@ export function handle(legs, totalDistance) {
   const destCC = legs[legs.length - 1].destination_cc;
 
   if (carriers.length === 0) {
-    const idx = resolveBand(totalDistance, ST_BANDS);
-    const [e, b] = ST_CHART[idx];
+    const [e, b] = sumPerLeg(legs, ST_BANDS, ST_CHART);
     entries.push(makeEntry("flyingclub", "skyteam_partner", "default", e, null, b, null));
     return entries;
   }
@@ -180,8 +202,7 @@ export function handle(legs, totalDistance) {
       }
 
     } else if (DL_CARRIERS.has(carrier)) {
-      const idx = resolveBand(totalDistance, DL_BANDS);
-      const [e, b] = DL_DIST[idx];
+      const [e, b] = sumPerLeg(legs, DL_BANDS, DL_DIST);
       entries.push(makeEntry("flyingclub", "delta", "default", e, null, b, null));
 
     } else if (ANA_CARRIERS.has(carrier)) {
@@ -214,9 +235,10 @@ export function handle(legs, totalDistance) {
       }
 
     } else if (AFKL_CARRIERS.has(carrier)) {
-      if (totalDistance <= 1749) {
+      const direct = directDistance(legs) ?? totalDistance;
+      if (direct <= 1749) {
         // Short-haul: distance-based with [offpeak, peak] ranges
-        const idx = resolveBand(totalDistance, AFKL_SH_BANDS);
+        const idx = resolveBand(direct, AFKL_SH_BANDS);
         const row = AFKL_SH_CHART[idx];
         entries.push({
           programme: "flyingclub", chart: "afkl", season: "default",
@@ -262,8 +284,7 @@ export function handle(legs, totalDistance) {
       entries.push(makeEntry("flyingclub", "airnz", "default", 0, null, 0, null));
 
     } else if (SKYTEAM_PARTNERS.has(carrier)) {
-      const idx = resolveBand(totalDistance, ST_BANDS);
-      const [e, b] = ST_CHART[idx];
+      const [e, b] = sumPerLeg(legs, ST_BANDS, ST_CHART);
       entries.push(makeEntry("flyingclub", "skyteam_partner", "default", e, null, b, null));
 
     } else if (NO_CHART_PARTNERS.has(carrier)) {

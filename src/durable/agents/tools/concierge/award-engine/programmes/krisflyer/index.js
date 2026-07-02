@@ -11,7 +11,7 @@ import { SQ_ECO_S, SQ_ECO_A, SQ_BIZ_S, SQ_BIZ_A, SQ_FIRST_S, SQ_FIRST_A, SQ_PE_S
 
 const BOOKABLE = new Set(["A3","AC","AI","AV","BR","CA","CM","ET","GA","HO","LH","LO","LX","MH","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","TR","UA","VA","ZH"]);
 
-const SQ_CARRIERS = new Set(["SQ", "TR"]); // SQ metal + Scoot
+const SQ_CARRIERS = new Set(["SQ"]); // SQ metal only — Scoot (TR) has its own chart
 
 // ── SQ Metal Zone mapping (13 zones) ──
 // Z1=Singapore, Z2=SEA1, Z3=SEA2, Z4=NorthAsia1, Z5=NorthAsia2,
@@ -41,6 +41,9 @@ const SQ_ZONE = {
 
 // Perth/Darwin/Western & Northern Australia = Z8
 const SQ_Z8_AIRPORTS = new Set(["PER","DRW","BME","KTA","PHE","KNX","ASP","BNK"]);
+// Partner chart: "NORTH AMERICA: Canada, USA (except Hawaii)" — Hawaii belongs
+// to the HAWAII/CENTRAL AMERICA zone (official Star Alliance chart, 1 Nov 2025).
+const HAWAII_PTR_AIRPORTS = new Set(["HNL","OGG","KOA","LIH","ITO","MKK","LNY","JHM"]);
 // West coast US & Canada = Z12 (SQ flies LAX/SFO/SEA but zone covers all west coast)
 const SQ_Z12_AIRPORTS = new Set([
   "LAX","SFO","SEA","SAN","PDX","SMF","SJC","OAK","ONT","SNA","BUR",
@@ -63,8 +66,47 @@ export const slug = "krisflyer";
 
 export const bookable = BOOKABLE;
 
+// Scoot (TR) has its OWN fixed per-route chart (Aug 2025) — single fixed rate,
+// Economy + ScootPlus cabins only; NOT the SQ Saver/Advantage matrix. Values
+// one-way from/to Singapore, keyed by the non-SIN endpoint. Priced per segment;
+// connections sum. (Vault Scoot chart; 5,500 / 8,500 tiers corroborated on
+// pelago.com, a Singapore Airlines Group site, 2026-07-02.)
+const SCOOT_RATES = [
+  [["KUL","PEN","IPH","LGK","KCH"], 5500, 10500],
+  [["BKK","HDY","KBV","HKT","CNX","CGK","SUB","DPS","KNO","BPN","SGN","HAN","DAD","MNL","CEB","CRK","PNH","REP","RGN"], 8500, 16500],
+  [["TPE","HKG","CAN","NNG","FOC","JJN","TSN"], 13000, 25000],
+  [["ICN","NRT","KIX","CTS"], 16500, 32000],
+  [["PER","DEL","MAA","ATQ","HYD","COK","TRZ","BLR"], 14000, 27000],
+  [["SYD","MEL","OOL"], 19500, 38000],
+  [["JED"], 16500, 32000],
+  [["ATH","BER"], 26000, 50000],
+];
+const SCOOT_BY_AIRPORT = new Map(
+  SCOOT_RATES.flatMap(([codes, e, sp]) => codes.map((c) => [c, [e, sp]])),
+);
+
+function scootEntries(legs) {
+  let e = 0, sp = 0;
+  for (const l of legs) {
+    const other = l.origin === "SIN" ? l.destination : l.destination === "SIN" ? l.origin : null;
+    const rate = other ? SCOOT_BY_AIRPORT.get(other) : null;
+    if (!rate) return []; // route not on the published Scoot list
+    e += rate[0]; sp += rate[1];
+  }
+  return [{
+    programme: "krisflyer", chart: "scoot", season: "default",
+    economy: [e, e], premium_economy: [sp, sp], business: null, first: null,
+  }];
+}
+
 export function handle(legs, _totalDistance) {
   const carriers = legs.map((l) => l.carrier).filter(Boolean);
+
+  // Scoot-only itineraries use the Scoot chart; mixed Scoot+other book as
+  // separate awards and aren't modelled as one price.
+  if (carriers.length > 0 && carriers.every((c) => c === "TR")) return scootEntries(legs);
+  if (carriers.some((c) => c === "TR")) return [];
+
   const isSqMetal = carriers.length > 0 && carriers.every((c) => SQ_CARRIERS.has(c));
   const isPartner = carriers.length > 0 && carriers.every((c) => !SQ_CARRIERS.has(c));
 
@@ -103,8 +145,10 @@ export function handle(legs, _totalDistance) {
 
   // Partner chart
   if (!isSqMetal) {
-    const oz = PTR_ZONE[originCC];
-    const dz = PTR_ZONE[destCC];
+    const ptrZone = (cc, iata) =>
+      cc === "US" && HAWAII_PTR_AIRPORTS.has(iata) ? 7 : PTR_ZONE[cc];
+    const oz = ptrZone(originCC, legs[0].origin);
+    const dz = ptrZone(destCC, legs[legs.length - 1].destination);
     if (oz !== undefined && dz !== undefined) {
       const i = oz - 1, j = dz - 1;
       const e = PTR_ECO[i]?.[j];

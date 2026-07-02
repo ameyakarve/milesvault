@@ -104,6 +104,7 @@ export function handle(legs, _totalDistance) {
 
   return [{
     programme: "flyingblue", chart: "dynamic_floor", season: "default",
+    floor: true,
     economy: wrap(e), premium_economy: wrap(pe), business: wrap(b), first: null,
   }];
 }

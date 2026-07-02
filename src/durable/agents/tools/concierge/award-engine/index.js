@@ -168,6 +168,13 @@ export function resolveLegs(legs, lookup) {
       distance: haversine(a[0], a[1], b[0], b[1]),
       origin_cc: a[2],
       destination_cc: b[2],
+      // Coordinates ride along so programme modules can price on DIRECT
+      // origin→final-destination distance where a chart requires it (AF/KL
+      // short-haul) — cumulative leg distance is not always the right input.
+      origin_lat: a[0],
+      origin_lng: a[1],
+      destination_lat: b[0],
+      destination_lng: b[1],
     })
   }
   return { legs: enriched, total_distance: enriched.reduce((s, l) => s + l.distance, 0) }

@@ -1,9 +1,11 @@
 import { makeEntry, pairKey } from "../../shared.js";
 
-const BOOKABLE = new Set(["A3","AC","AD","AI","AV","AZ","BR","BT","CA","CM","CX","EK","EN","ET","EW","EY","FZ","G3","GF","HO","JU","LH","LO","LX","MK","MS","NH","NZ","OA","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VA","VL","WY","XQ","ZH","4Y"]);
+const BOOKABLE = new Set(["A3","AC","AD","AI","AV","AZ","BR","BT","CA","CM","CX","EK","EN","ET","EW","EY","FZ","G3","GF","HO","JU","LH","LO","LX","MK","MO","MS","NH","NZ","OA","OS","OU","OZ","PB","SA","SN","SQ","TG","TK","TP","UA","VA","VL","WY","XQ","ZH","4Y","5T"]);
 
-// Select Partners use dynamic pricing — return [0,0]
-const DYNAMIC_PARTNERS = new Set(["AC","UA","EK","EY","FZ"]);
+// Select Partners (dynamic pricing above the published Start table). MO/5T/PB
+// (Calm Air, Canadian North, PAL) per Air Canada's March-2025 Select Partners
+// announcement.
+const DYNAMIC_PARTNERS = new Set(["AC","UA","EK","EY","FZ","MO","5T","PB"]);
 
 // Zone assignments by country code
 const ZONE = {
@@ -114,6 +116,40 @@ const CHARTS = {
   ],
 };
 
+// "Select Partners" published Start (minimum) prices — a SEPARATE table from the
+// fixed partner chart, with a Premium Economy column the fixed chart lacks.
+// Only the four NA-anchored zone pairs are published. Values = the pre-June-2026
+// published table with the June 1 2026 revaluation deltas applied (web-verified:
+// Milesopedia + Upgraded Points; within-NA 2,751+ Y Start 17,500 also confirmed
+// by live observation, which occasionally dips ~8% BELOW Start in saver troughs —
+// Start is a published minimum, not a hard floor).
+// [maxDist, econ, prem_econ, biz, first]
+const SELECT_START = {
+  "NA|NA": [
+    [500, 6000, 10000, 15000, null],
+    [1500, 10000, 15000, 20000, null],
+    [2750, 12500, 20000, 25000, null],
+    [Infinity, 17500, 30000, 35000, null],
+  ],
+  "AT|NA": [
+    [4000, 32500, 50000, 60000, 90000],
+    [6000, 42500, 60000, 75000, 100000],
+    [8000, 55000, 70000, 90000, 120000],
+    [Infinity, 70000, 85000, 110000, 130000],
+  ],
+  "NA|PA": [
+    [5000, 32500, 45000, 55000, 90000],
+    [7500, 45000, 60000, 85000, 110000],
+    [11000, 50000, 85000, 85000, 130000],
+    [Infinity, 70000, 95000, 105000, 150000],
+  ],
+  "NA|SA": [
+    [2500, 20000, 35000, 40000, 60000],
+    [4500, 30000, 45000, 50000, 80000],
+    [Infinity, 40000, 55000, 60000, 100000],
+  ],
+};
+
 export const slug = "aeroplan";
 
 export const bookable = BOOKABLE;
@@ -139,9 +175,20 @@ export function handle(legs, totalDistance) {
 
   if (hasDynamic) {
     // AC own metal + "Select Partners" (UA/EK/EY/FZ): dynamic pricing ABOVE the
-    // base-chart floor, no published ceiling. Emit that floor with `floor: true`
-    // so the tier model reads {from, to:null}. If the zone can't be resolved,
-    // fall back to fully dynamic. (Aeroplan is surcharge-free on all partners.)
+    // published Start price, no published ceiling. Emit the Start as a floor with
+    // `floor: true` so the tier model reads {from, to:null}. Starts are published
+    // only for NA-anchored pairs — elsewhere fall back to the fixed-chart values
+    // as an approximate floor, or fully dynamic when the zone can't be resolved.
+    const startChart = originZone && destZone ? SELECT_START[pairKey(originZone, destZone)] : null;
+    const startRow = startChart ? startChart.find((band) => totalDistance <= band[0]) : null;
+    if (startRow) {
+      const [, econ, pe, biz, first] = startRow;
+      return [{
+        programme: "aeroplan", chart: "dynamic", season: "default", floor: true,
+        economy: [econ, econ], premium_economy: pe ? [pe, pe] : null,
+        business: [biz, biz], first: first ? [first, first] : null,
+      }];
+    }
     if (!row) return [makeEntry("aeroplan", "dynamic", "default", 0, null, 0, null)];
     const [, econ, biz, first] = row;
     return [{
@@ -151,8 +198,8 @@ export function handle(legs, totalDistance) {
     }];
   }
 
-  // Fixed partner chart. (TODO: chart lacks a Premium Economy column — Aeroplan
-  // does price PE; add the PE values when available.)
+  // Fixed partner chart. (No Premium Economy column BY DESIGN — Aeroplan does not
+  // sell PE on fixed-chart partners; PE exists only on the Select Partners chart.)
   if (!row) return [];
   const [, econ, biz, first] = row;
   return [makeEntry("aeroplan", "partner", "default", econ, null, biz, first)];
