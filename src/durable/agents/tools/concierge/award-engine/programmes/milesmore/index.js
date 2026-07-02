@@ -13,10 +13,11 @@ import { pairKey } from "../../shared.js";
 
 const BOOKABLE = new Set(["4Y","A3","AC","AI","AV","AZ","BR","CA","CM","CX","EN","ET","EW","LA","LH","LO","LX","MS","NH","NZ","OA","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","VL","ZH"]);
 
-// LH Group own metal that M&M prices DYNAMICALLY. Note: Brussels (SN) and
-// Discover (4Y) are LH Group but use the fixed partner chart, so they are NOT
-// here. EN = Air Dolomiti (Lufthansa Regional). VL = Lufthansa City Airlines.
-const LH_GROUP = new Set(["LH","LX","OS","VL","EN"]);
+// LH Group own metal that M&M prices DYNAMICALLY. Discover (4Y) and Air Dolomiti
+// (EN) moved to "Flexible" (dynamic) awards effective 2026-03-03, so both are here
+// now. Brussels (SN) and Eurowings (EW) still use the fixed partner chart.
+// VL = Lufthansa City Airlines.
+const LH_GROUP = new Set(["LH","LX","OS","VL","EN","4Y"]);
 
 const ZONE = {
   GB: "EU", FR: "EU", DE: "EU", NL: "EU", BE: "EU", CH: "EU", AT: "EU",
