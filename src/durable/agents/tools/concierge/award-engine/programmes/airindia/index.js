@@ -9,6 +9,20 @@ const wrap = (lo, hi) => (lo === 0 && hi === 0) ? null : [lo, hi];
 
 export const slug = "maharaja-club";
 
+// Air India overhauled Maharaja Club on 2026-04-01 and the old Star Alliance award
+// PDF appears to be defunct — pricing now comes from Air India's points calculator,
+// so we can't confirm the ROUTES values below are the live rates (the US economy
+// floor of 40k did match the announced new rate, but business/first are unverified).
+// Mark the whole programme as VARIES (dynamic) rather than assert unconfirmed fixed
+// fares: the ROUTES table still gates which routes/cabins are bookable, but every
+// cabin surfaces as "varies".
+//
+// TODO(maharaja-club): verify current pricing against Air India's live points
+// calculator (airindia.com/.../points-calculator). The Star Alliance redemption
+// PDF is no longer the source. If a verifiable fixed/banded chart exists, restore
+// concrete values and remove this flag; otherwise keep dynamic.
+export const published = false;
+
 export const bookable = BOOKABLE;
 
 export function handle(legs) {
