@@ -21,9 +21,11 @@ const SQ_ZONE = {
   SG: 1,
   MY: 2, ID: 2, BN: 2,
   PH: 3, TH: 3, VN: 3, MM: 3, KH: 3, LA: 3,
+  // Zone 4 = SOUTH China + HK/Macau/Taiwan; Zone 5 = North China (Beijing &
+  // Shanghai ONLY, per the official chart) — airport carve-out in getSqZone.
   HK: 4, TW: 4, MO: 4,
-  CN: 5,
-  IN: 6, LK: 6, MV: 6, BD: 6,
+  CN: 4,
+  IN: 6, LK: 6, MV: 6, BD: 6, NP: 6,
   JP: 7, KR: 7,
   // Z8/Z9 need airport-level resolution for Australia; default to Z9
   AU: 9, NZ: 9,
@@ -50,9 +52,13 @@ const SQ_Z12_AIRPORTS = new Set([
   "LGB","PSP","GEG","BOI","RNO","ANC","FAI","YVR","YYJ","YLW",
 ]);
 
+// North China (Zone 5) = Beijing & Shanghai airports only.
+const SQ_Z5_AIRPORTS = new Set(["PEK", "PKX", "PVG", "SHA"]);
+
 function getSqZone(cc, airport) {
   if (cc === "AU" && SQ_Z8_AIRPORTS.has(airport)) return 8;
   if (cc === "US" && SQ_Z12_AIRPORTS.has(airport)) return 12;
+  if (cc === "CN" && SQ_Z5_AIRPORTS.has(airport)) return 5;
   return SQ_ZONE[cc] || null;
 }
 
