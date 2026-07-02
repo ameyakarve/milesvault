@@ -90,6 +90,19 @@ export const slug = "club-premier";
 
 export const bookable = BOOKABLE;
 
+// Aeromexico Classic awards are Low / High season — emit as two labelled tiers
+// (el/bl = low, eh/bh = high) so the tier model carries the real season names.
+function pushSeasons(entries, el, eh, bl, bh) {
+  entries.push({
+    programme: "clubpremier", chart: "classic", season: "low",
+    economy: [el, el], premium_economy: null, business: [bl, bl], first: null,
+  });
+  entries.push({
+    programme: "clubpremier", chart: "classic", season: "high",
+    economy: [eh, eh], premium_economy: null, business: [bh, bh], first: null,
+  });
+}
+
 export function handle(legs) {
   const originCC = legs[0].origin_cc;
   const destCC = legs[legs.length - 1].destination_cc;
@@ -105,11 +118,7 @@ export function handle(legs) {
       // Domestic
       if (isMXOrigin && isMXDest) {
         const [el, eh, bl, bh] = AM_FROM_MX["MX"];
-        entries.push({
-          programme: "clubpremier", chart: "classic", season: "default",
-          economy: [el, eh], premium_economy: null,
-          business: [bl, bh], first: null,
-        });
+        pushSeasons(entries, el, eh, bl, bh);
       } else {
         const foreignCC = isMXOrigin ? destCC : originCC;
         const foreignApt = isMXOrigin ? legs[legs.length - 1].destination : legs[0].origin;
@@ -117,11 +126,7 @@ export function handle(legs) {
 
         if (zone && AM_FROM_MX[zone]) {
           const [el, eh, bl, bh] = AM_FROM_MX[zone];
-          entries.push({
-            programme: "clubpremier", chart: "classic", season: "default",
-            economy: [el, eh], premium_economy: null,
-            business: [bl, bh], first: null,
-          });
+          pushSeasons(entries, el, eh, bl, bh);
         }
       }
     }
