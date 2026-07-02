@@ -101,6 +101,7 @@ export async function buildAwardExplore(
       total_distance: o.total_distance,
       published: o.published,
       miles: o.cabins as AwardPlanRow['miles'],
+      price: o.price,
       reachable: false,
       multiplier: null,
       hops: null,

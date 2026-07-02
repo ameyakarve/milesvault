@@ -3,6 +3,7 @@ import { PROGRAMMES, priceProgramme } from './award-engine'
 import type { AirportLookup, Entry, CabinRange } from './award-engine'
 import { computeRoutings, type Routing } from './flight-routings'
 import type { KbHttp } from './kb-tools'
+import { AWARD, toAward, toCabinCell, type Award } from './award-price'
 
 // "Best award options for this O&D" — the objective fly-side only. Given just
 // origin + destination, it finds every nonstop + one-stop routing and prices
@@ -62,8 +63,13 @@ const awardOptionsOutputSchema = z.object({
           'False = no published award chart; every cabin is "dynamic" — show "varies, confirm live", never a number.',
         ),
       cabins: CABIN_SET.describe(
-        'Per-cabin published [min,max] miles, "dynamic", or null. See `published`.',
+        'Per-cabin published [min,max] miles, "dynamic", or null. See `published`. DERIVED from `price` for display — `price` is the source of truth.',
       ),
+      price: z
+        .object({ economy: AWARD, premium_economy: AWARD, business: AWARD, first: AWARD })
+        .describe(
+          'Per-cabin award price in the full tier model (source of truth). Each cabin: {status:"not_offered"} or {status:"bookable", price:[tiers]}. `cabins` above is the flattened display view of this.',
+        ),
     }),
   ),
   dests: z
@@ -89,16 +95,6 @@ type CabinCell = CabinRange | 'dynamic'
 function isPublished(mod: unknown): boolean {
   return (mod as { published?: boolean }).published !== false
 }
-// Offered cabins → "dynamic" for an unpublished programme; null stays null.
-function asDynamic(cabins: Record<Cabin, CabinCell>): Record<Cabin, CabinCell> {
-  return {
-    economy: cabins.economy ? 'dynamic' : null,
-    premium_economy: cabins.premium_economy ? 'dynamic' : null,
-    business: cabins.business ? 'dynamic' : null,
-    first: cabins.first ? 'dynamic' : null,
-  }
-}
-
 // Merge a programme's entries into one per-cabin set. A chart figure of 0 is not
 // a real price (the dynamic/phone-only modules emit [0,0] to mean "unpublished"),
 // so it collapses to "dynamic" ("varies") rather than a misleading 0 — but a
@@ -205,6 +201,7 @@ export async function computeAwardOptions(
     distance: number
     published: boolean
     cabins: Record<Cabin, CabinCell>
+    price: Record<Cabin, Award>
   }
   const flat: Flat[] = []
   const ownMetalCache = new Map<string, Set<string>>()
@@ -249,10 +246,24 @@ export async function computeAwardOptions(
         const slugA = carrierAirline.get(iata)
         return slugA != null && metal!.has(slugA)
       })
-      // Unpublished programmes: keep the option (it IS bookable) but surface
-      // its cabins as "dynamic", never the chart minimum (which lies low).
+      // Build the richer tier model (source of truth), then derive the legacy
+      // per-cabin cells from it for display. For an unpublished programme every
+      // offered cabin becomes a fully-dynamic band (never the chart minimum,
+      // which lies low) — that falls out of toAward's !published branch.
       const published = isPublished(mod)
       const agg = aggregateCabins(priced.entries)
+      const price: Record<Cabin, Award> = {
+        economy: toAward(agg.economy, published),
+        premium_economy: toAward(agg.premium_economy, published),
+        business: toAward(agg.business, published),
+        first: toAward(agg.first, published),
+      }
+      const cabins: Record<Cabin, CabinCell> = {
+        economy: toCabinCell(price.economy),
+        premium_economy: toCabinCell(price.premium_economy),
+        business: toCabinCell(price.business),
+        first: toCabinCell(price.first),
+      }
       flat.push({
         programme: slug,
         own_metal: isOwnMetal,
@@ -261,7 +272,8 @@ export async function computeAwardOptions(
         carriers: chosen,
         distance: Math.round(priced.resolved.total_distance),
         published,
-        cabins: published ? agg : asDynamic(agg),
+        cabins,
+        price,
       })
     }
   }
@@ -298,6 +310,9 @@ export async function computeAwardOptions(
           business: c.business,
           first: c.first,
         },
+        // Interchangeable routings in a group share identical cabins (the group
+        // key), so their `price` is identical too — take the first.
+        price: f.price,
       }
       groups.set(key, g)
     }
