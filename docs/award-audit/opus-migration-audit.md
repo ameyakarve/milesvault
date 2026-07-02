@@ -169,3 +169,13 @@ DB-backed lookup → static `routes.js` snapshot preserved behavior (multi-carri
 > - **eurobonus 1 FIX:** own-metal chart values verified exact on 3 zones (intercontinental 30,000/60,000; Europe 15,000/35,000; Nordic 10,000/20,000) — but cross-country Scandinavia (OSL–CPH, ×46 economy / ×36 business observations) was resolving to the DOM_SCAN row (5,000) instead of NORDIC (10,000/20,000). Zone classification fixed: same-country → DOM_SCAN, cross-country Scandinavia → NORDIC. DOM_SCAN's own values remain unprobed (no same-country pairs observed) — untouched.
 > - **velocity CONFIRMED GAP, QUEUED:** the module returns the pure-dynamic [0,0] sentinel, but VA own-metal domestic shows clean fixed tiers (Y 7,900/9,900/12,900; J 15,500 — identical on SYD–MEL and BNE–SYD), and web corroboration confirms banded Reward Seat pricing (band 1: economy from 5,900, business 15,500). Modelling needs the full Velocity band table — queued as its own build; not shipping single-band data.
 > - **lifemiles NO DATA:** zero feed records on FRA–JFK / DEL–FRA / BOG–MIA in the window — no verdict either way; retry with different routes/windows.
+
+## Live-feed programme audit, batch 3 (2026-07-02, late): club-premier / atmos / azul / smiles / alfursan / trueblue / lifemiles
+
+> - **club-premier CLEAN:** low-season business exact on all 3 zones (MEX–CUN 23,000 ×40; MEX–JFK 52,000; MEX–MAD 150,000, incl. via-MTY connections).
+> - **alfursan CLEAN (exact ×190):** Reward/Reward+ tiers exact (RUH–JED J 15,000 ×97 + 30,000 ×2; RUH–DXB 24,000 ×31); O&D through-pricing on connections verified (RUH–JED–DXB = 24,000 ×59, not a segment sum).
+> - **azul / smiles / trueblue CLEAN (dynamic confirmed):** continuous non-quantized spreads validate the [0,0] dynamic sentinels as the correct model.
+> - **atmos PARKED (1 finding):** LAX–SEA Y 7,500 ✓ and SEA–ANC F 25,000 ✓ exact; but SEA–ANC economy floor observed 12,500 (chart 10,000) and LAX–SEA front cabin from 20,000 (below chart F 25,000). Resolution needs the published Atmos chart (alaskaair.com blocks automation) or cabin-mapping clarity. Not changed.
+> - **lifemiles NO DATA (again):** feed empty across 6 routes/2 windows. Module remains unverified — flagged in KG.
+>
+> **Item-2 status: all 13 live-feed programmes audited.** Fixed: qatar (3-tier), delta (2 floors), eurobonus (NORDIC classification). Clean: turkish, aadvantage, club-premier, alfursan, azul, smiles, trueblue. Queued: velocity band-table build, atmos chart resolution. No-data: lifemiles.
