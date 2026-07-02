@@ -9,12 +9,14 @@
  * - SkyTeam general: distance-based
  * - Air NZ: zone-based (return [0,0] — route-specific)
  * - LATAM: short-haul distance + long-haul zone
- * - Other non-chart partners (SA, WS, 6E, LY, VA, EL AL): return [0,0]
+ * - Other non-chart partners (SA, WS, LY, VA, EL AL): return [0,0]
  */
 
 import { haversine, makeEntry, resolveBand } from "../../shared.js";
 
-const BOOKABLE = new Set(["6E","AF","AM","AR","CI","DL","GA","KE","KL","KQ","LA","LY","ME","MF","MU","NH","NZ","RO","SA","SK","SV","UX","VA","VN","VS","WS"]);
+// IndiGo (6E) removed: the VS-IndiGo partnership is EARN-ONLY — Flying Club
+// points cannot be redeemed on IndiGo at all (virginatlantic.com, 2026-07-02).
+const BOOKABLE = new Set(["AF","AM","AR","CI","DL","GA","KE","KL","KQ","LA","LY","ME","MF","MU","NH","NZ","RO","SA","SK","SV","UX","VA","VN","VS","WS"]);
 
 const VS_CARRIERS = new Set(["VS"]);
 const DL_CARRIERS = new Set(["DL"]);
@@ -27,7 +29,7 @@ const LA_CARRIERS = new Set(["LA"]);
 const SKYTEAM_PARTNERS = new Set(["AM","AR","UX","GA","KQ","KE","ME","SK","VN","MF","CI"]);
 
 // Partners without a published chart — return [0,0]
-const NO_CHART_PARTNERS = new Set(["6E","LY","SA","VA","WS","MU","RO"]);
+const NO_CHART_PARTNERS = new Set(["LY","SA","VA","WS","MU","RO"]);
 
 // ── VS own-metal dynamic pricing (one-way from/to UK) ──
 // [econ_peak_cap, prem_peak_cap, upper_peak_cap]

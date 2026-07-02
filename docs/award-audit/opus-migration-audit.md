@@ -38,6 +38,13 @@ Clean: own/partner per-segment additive model, all band boundaries, own+standard
 
 Clean: non-oneworld partner chart (basis, bands, all 13 rows), BOOKABLE (21/21), own-metal city-pair lookup.
 
+## Parked-items round (2026-07-02, evening)
+
+> - **BA1–3 CONFIRMED UNVERIFIABLE:** ba.com's Reward Flight Finder autocomplete requires an authenticated session; blog tables are images with no transcriptions; no seats.aero feed. The only remaining instrument is a logged-in ba.com session. Left parked.
+> - **J2 IMPLEMENTED:** JL domestic zone chart (A–G) transcribed from the live jal.co.jp city-pair tables; single-sector awards priced (economy + Class J-as-business); First and dynamic PLUS unmodelled; multi-sector domestic returns [] (JAL uses discounted itinerary lists). Zone-A 4,500 corroborated by JAL's own connecting tables.
+> - **ET-QP RESOLVED & FIXED:** Akasa prices at OWN-metal rates — nonstop QP BOM–AUH 13,000 and BLR–AUH 15,000 match ET_OWN bands exactly (partner bands: 15,000/23,000). QP moved to the own-chart carrier set; the original 7 BELOW_MIN trips now pass. **Regression vet: 161/164 OK, zero pricing flags** (3 remaining = Delta dynamic sentinels).
+> - **Q-ANOMALY BOUNDED, UNRESOLVED:** reproducible on fresh dates — MEL–SYD–DPS / MEL–PER–DPS Jetstar connections always 24,500 (= pre-Aug-2025 partner z4, curiously), SYD–BNE/AVV/ADL–DPS always 23,300 (= model ✓), MEL–ADL–DPS 22,300 (unexplained). Forced-airport-change shapes (MEL–WSI + SYD–DPS) price 26,400 = pure per-segment sum, further confirming the model. Residual ≤1,200 points on a narrow shape family; open.
+
 ## Final verdict round (2026-07-02, continued): qantas Q1/Q2/Q5, ba, jalmb, aeroplan A4
 
 > - **Q1 FIXED:** QF-family itineraries now price at min(QF-table-on-total-distance, per-segment sum on each segment's own table) — fits all clean observations (16,700 / 23,300 / 13,800 / mixed-QF+JQ ≡ all-JQ). Partner portion-sum retained per AFF. The 24,500 Bali anomaly remains open.

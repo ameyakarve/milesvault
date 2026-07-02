@@ -22,7 +22,11 @@ const ET_PTR = [
   [75000,90000,140000,200000],
 ];
 
-const EY_CARRIERS = new Set(["EY"]);
+// Carriers priced on the OWN-metal chart. Akasa (QP) prices at own rates, not
+// partner rates — verified live 2026-07-02: nonstop QP BOM-AUH 13,000 and
+// BLR-AUH 15,000 economy match ET_OWN bands exactly (partner bands would be
+// 15,000 / 23,000), and mixed QP+EY itineraries sum to the observed 43,000.
+const EY_CARRIERS = new Set(["EY", "QP"]);
 
 // Etihad Guest does not offer First-class redemptions on these partners.
 const NO_FIRST_CARRIERS = new Set(["SV", "AF", "WY"]); // Saudia, Air France, Oman Air
@@ -51,6 +55,12 @@ export const bookable = BOOKABLE;
 //   - Saudia (SV) economy may isolate a few thousand under the standard chart on
 //     some bands, but the dedicated Saudia chart matches ours — left as-is.
 export function handle(legs) {
+  // Akasa (QP) awards exist only on the EY-codeshare network — India↔Abu Dhabi
+  // sectors ticketed under EY flight numbers, standalone or connecting through
+  // AUH. QP legs not touching AUH (e.g. Indian domestic) are not redeemable.
+  for (const l of legs) {
+    if (l.carrier === "QP" && l.origin !== "AUH" && l.destination !== "AUH") return [];
+  }
   const anyCarrier = legs.some((l) => l.carrier);
   // Carriers unspecified (fan-out with no operating carrier): offer both an
   // all-own and an all-partner quote so the caller sees each possibility.

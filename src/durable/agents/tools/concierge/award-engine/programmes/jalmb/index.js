@@ -43,11 +43,72 @@ export const slug = "jal-mileage-bank";
 
 export const bookable = BOOKABLE;
 
+// ── JL DOMESTIC award chart (zones A–G, one way / one flight sector) ──
+// City-pair zone lists transcribed from the live jal.co.jp "Domestic Award
+// Tickets required mileage chart" (2026-07-02). Values are per-sector base
+// miles [economy, Class J]; Zone A economy 4,500 corroborated by JAL's own
+// connecting-itinerary tables. First class and the dynamic PLUS tiers are not
+// modelled; multi-sector domestic itineraries use JAL's own discounted
+// itinerary lists and are not priced here.
+const DOM_ZONE_MILES = { A: [4500, 5500], B: [5500, 6500], C: [6000, 7000], D: [7500, 8500], E: [8500, 9500], F: [9500, 11000], G: [10500, 12500] };
+const DOM_CITY = { // JAL city label → IATA airports
+  "Sapporo": ["CTS"], "Hakodate": ["HKD"], "Okushiri": ["OIR"], "Rishiri": ["RIS"],
+  "Memanbetsu": ["MMB"], "Nemuro-Nakashibetsu": ["SHB"], "Kushiro": ["KUH"],
+  "Asahikawa": ["AKJ"], "Obihiro": ["OBO"], "Aomori": ["AOJ"], "Misawa": ["MSJ"],
+  "Akita": ["AXT"], "Hanamaki": ["HNA"], "Sendai": ["SDJ"], "Yamagata": ["GAJ"],
+  "Niigata": ["KIJ"], "Tokyo": ["HND", "NRT"], "Nagoya": ["NGO"], "Matsumoto": ["MMJ"],
+  "Shizuoka": ["FSZ"], "Komatsu": ["KMQ"], "Osaka": ["ITM", "KIX"],
+  "Nanki-Shirahama": ["SHM"], "Tajima": ["TJH"], "Okayama": ["OKJ"], "Hiroshima": ["HIJ"],
+  "Yamaguchiube": ["UBJ"], "Izumo": ["IZO"], "Oki": ["OKI"], "Tokushima": ["TKS"],
+  "Takamatsu": ["TAK"], "Matsuyama": ["MYJ"], "Kochi": ["KCZ"], "Fukuoka": ["FUK"],
+  "Kitakyushu": ["KKJ"], "Oita": ["OIT"], "Nagasaki": ["NGS"], "Tsushima": ["TSJ"],
+  "Iki": ["IKI"], "Goto Fukue": ["FUJ"], "Kumamoto": ["KMJ"], "Amakusa": ["AXJ"],
+  "Miyazaki": ["KMI"], "Kagoshima": ["KOJ"], "Tanegashima": ["TNE"], "Yakushima": ["KUM"],
+  "Amamioshima": ["ASJ"], "Kikaijima": ["KKX"], "Tokunoshima": ["TKN"], "Okinoerabu": ["OKE"],
+  "Yoron": ["RNJ"], "Okinawa (Naha)": ["OKA"], "Kumejima": ["UEO"], "Miyako": ["MMY"],
+  "Tarama": ["TRA"], "Ishigaki": ["ISG"], "Yonaguni": ["OGN"], "Minamidaito": ["MMD"],
+  "Kitadaito": ["KTD"],
+};
+const DOM_PAIRS = {
+  A: [["Sapporo","Hakodate, Okushiri"],["Hakodate","Okushiri"],["Osaka","Tajima, Kochi"],["Izumo","Oki"],["Fukuoka","Matsuyama, Tsushima, Goto Fukue, Amakusa, Miyazaki, Kagoshima"],["Nagasaki","Tsushima, Iki, Goto Fukue"],["Kumamoto","Amakusa"],["Kagoshima","Tanegashima, Yakushima"],["Amamioshima","Kikaijima, Tokunoshima, Yoron"],["Tokunoshima","Okinoerabu"],["Okinawa (Naha)","Okinoerabu, Yoron, Kumejima"],["Ishigaki","Miyako, Yonaguni"],["Miyako","Tarama"],["Minamidaito","Kitadaito"]],
+  B: [["Sapporo","Rishiri, Memanbetsu, Nemuro-Nakashibetsu, Kushiro, Aomori, Misawa"],["Tokyo","Sendai, Yamagata, Niigata, Nagoya"],["Osaka","Matsumoto, Oki, Izumo, Matsuyama"],["Matsuyama","Kagoshima"],["Fukuoka","Izumo, Kochi"],["Okinawa (Naha)","Amamioshima, Miyako"]],
+  C: [["Sapporo","Akita, Hanamaki"],["Tokyo","Akita, Hanamaki, Komatsu, Osaka"],["Nagoya","Niigata, Izumo, Kochi"],["Osaka","Fukuoka, Oita, Kumamoto, Miyazaki"],["Fukuoka","Tokushima, Yakushima"],["Kagoshima","Kikaijima, Amamioshima, Tokunoshima"],["Okinawa (Naha)","Ishigaki, Kitadaito, Minamidaito"]],
+  D: [["Sapporo","Sendai, Yamagata, Niigata"],["Sendai","Izumo"],["Tokyo","Hakodate, Aomori, Misawa, Nanki-Shirahama, Okayama, Izumo, Hiroshima, Tokushima, Takamatsu, Kochi, Matsuyama, Oita"],["Nagoya","Aomori, Hanamaki, Yamagata, Fukuoka, Kumamoto"],["Shizuoka","Izumo, Kumamoto, Kagoshima"],["Osaka","Akita, Hanamaki, Sendai, Yamagata, Niigata, Nagasaki, Kagoshima, Tanegashima, Yakushima"],["Fukuoka","Matsumoto, Shizuoka, Amamioshima"],["Kagoshima","Okinoerabu, Yoron"],["Okinawa (Naha)","Yonaguni"]],
+  E: [["Sapporo","Matsumoto, Shizuoka, Izumo, Tokushima"],["Tokyo","Sapporo, Memanbetsu, Asahikawa, Kushiro, Obihiro, Yamaguchiube, Fukuoka, Kitakyushu, Nagasaki, Kumamoto, Miyazaki, Kagoshima"],["Nagoya","Obihiro, Kushiro, Sapporo"],["Osaka","Sapporo, Asahikawa, Hakodate, Aomori, Misawa, Amamioshima, Tokunoshima, Okinawa (Naha)"],["Fukuoka","Hanamaki, Sendai, Niigata, Okinawa (Naha)"],["Okinawa (Naha)","Okayama"]],
+  F: [["Sapporo","Hiroshima"],["Tokyo","Amamioshima, Okinawa (Naha)"],["Nagoya","Okinawa (Naha)"],["Osaka","Memanbetsu, Miyako, Ishigaki"],["Fukuoka","Sapporo"],["Okinawa (Naha)","Komatsu"]],
+  G: [["Tokyo","Kumejima, Miyako, Ishigaki"],["Nagoya","Miyako, Ishigaki"]],
+};
+const DOM_ZONE = new Map(); // "AAA|BBB" (sorted) → zone letter
+for (const [zone, rows] of Object.entries(DOM_PAIRS)) {
+  for (const [from, tos] of rows) {
+    for (const a of DOM_CITY[from] ?? []) {
+      for (const toName of tos.split(", ")) {
+        for (const b of DOM_CITY[toName] ?? []) {
+          DOM_ZONE.set(a < b ? a + "|" + b : b + "|" + a, zone);
+        }
+      }
+    }
+  }
+}
+
 export function handle(legs, totalDistance) {
   const carriers = legs.map((l) => l.carrier).filter(Boolean);
   const chart = resolveChart(legs, JL_CARRIERS);
 
   const entries = [];
+
+  // JL domestic (both endpoints in Japan): zone chart, single sector only.
+  if (legs[0].origin_cc === "JP" && legs[legs.length - 1].destination_cc === "JP") {
+    if (chart === "partner" || legs.length !== 1) return [];
+    const key = legs[0].origin < legs[0].destination
+      ? legs[0].origin + "|" + legs[0].destination
+      : legs[0].destination + "|" + legs[0].origin;
+    const zone = DOM_ZONE.get(key);
+    if (!zone) return [];
+    const [e, j] = DOM_ZONE_MILES[zone];
+    // Class J is JAL's domestic premium cabin — surfaced as business.
+    return [makeEntry("jalmb", "domestic", "default", e, null, j, null)];
+  }
 
   // JL own-metal — city-pair lookup
   if (chart !== "partner") {
