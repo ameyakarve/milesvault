@@ -10,7 +10,8 @@
 
 import { makeEntry } from "../../shared.js";
 
-const BOOKABLE = new Set(["9K","AF","AM","AR","CI","CZ","DL","GA","HA","KE","KL","KQ","LA","ME","MF","MU","RO","SV","TN","UX","VN","VS","WS"]);
+// delta.com sweep 2026-07-02: +El Al/Mandarin/SAS/Shanghai (page-listed redeemable); -Hawaiian & China Southern (page-confirmed terminated, redemption deadlines passed)
+const BOOKABLE = new Set(["9K","AE","AF","AM","AR","CI","DL","FM","GA","KE","KL","KQ","LA","LY","ME","MF","MU","RO","SK","SV","TN","UX","VN","VS","WS"]);
 
 const DL_CARRIERS = new Set(["DL"]);
 

@@ -10,7 +10,8 @@
 
 import { makeEntry } from "../../shared.js";
 
-const BOOKABLE = new Set(["JX"]);
+// AS added: STARLUX-issued press release — "COSMILE members can now redeem mileage on Alaska flights"
+const BOOKABLE = new Set(["AS","JX"]);
 
 // [economy, premiumEconomy, business, first] — one-way award cost
 const WITHIN_ASIA = [15000, 20000, 27500, 40000];

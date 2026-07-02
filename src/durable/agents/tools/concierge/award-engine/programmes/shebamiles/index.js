@@ -16,7 +16,8 @@
 import { pairKey } from "../../shared.js";
 
 // Star Alliance members (26)
-const BOOKABLE = new Set(["A3","AC","AI","AV","BR","CA","CM","ET","G3","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","ZH"]);
+// AZ added: redemption policy covers all Star Alliance members; ITA joined Apr 2026
+const BOOKABLE = new Set(["A3","AC","AI","AV","AZ","BR","CA","CM","ET","G3","LH","LO","LX","MS","NH","NZ","OS","OU","OZ","SA","SN","SQ","TG","TK","TP","UA","ZH"]);
 
 const ET_CARRIERS = new Set(["ET"]);
 

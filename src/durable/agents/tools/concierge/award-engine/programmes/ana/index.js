@@ -1,6 +1,7 @@
 import { makeEntry, resolveChart, pairKey } from "../../shared.js";
 
-const BOOKABLE = new Set(["A3","AC","AI","AV","BR","CA","CM","EN","ET","EW","EY","HO","LH","LO","LX","MS","NH","NX","NZ","OA","OS","OU","OZ","PR","SA","SN","SQ","TG","TK","TP","UA","VA","VL","VN","VS","ZH"]);
+// AZ added: ana.co.jp — "ITA Airways (AZ) eligible for award booking from April 1, 2026"
+const BOOKABLE = new Set(["A3","AC","AI","AV","AZ","BR","CA","CM","EN","ET","EW","EY","HO","LH","LO","LX","MS","NH","NX","NZ","OA","OS","OU","OZ","PR","SA","SN","SQ","TG","TK","TP","UA","VA","VL","VN","VS","ZH"]);
 
 const HAWAII_AIRPORTS = new Set(["HNL","OGG","KOA","LIH","ITO","MKK","LNY","JHM","HPH"]);
 

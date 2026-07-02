@@ -13,7 +13,8 @@
 import { resolveChart } from "../../shared.js";
 
 // SkyTeam members minus OK (Czech Airlines ceased operations)
-const BOOKABLE = new Set(["AF","AM","AR","CI","DL","GA","KE","KL","KQ","ME","MF","MU","RO","SK","SV","UX","VN","VS"]);
+// vietnamairlines.com redemption page lists ANA, Etihad, China Southern (SU listed too but sanctions-suspended — excluded)
+const BOOKABLE = new Set(["AF","AM","AR","CI","CZ","DL","EY","GA","KE","KL","KQ","ME","MF","MU","NH","RO","SK","SV","UX","VN","VS"]);
 
 const VN_CARRIERS = new Set(["VN"]);
 
