@@ -23,6 +23,9 @@ export type AwardPlanRow = {
   published: boolean
   // Per-cabin award price in the PROGRAMME's own miles (the chart figure).
   miles: Record<Cabin, CabinCell>
+  // Full tier model (source of truth) for the programme's own miles; `miles`
+  // above is its flattened display view. Optional — populated by the explorer.
+  price?: AwardOptionsResult['options'][number]['price']
   // Transfer/cost fields — blanked by the explorer (no card costing here).
   reachable: boolean
   multiplier: number | null
