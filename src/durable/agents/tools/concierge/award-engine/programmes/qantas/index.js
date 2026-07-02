@@ -2,7 +2,7 @@ import { makeEntry, resolveChart, resolveBand } from "../../shared.js";
 
 // JQ/GK/3K (Jetstar family) verified bookable 2026-07-02: 421 live Jetstar trips
 // observed via the Qantas award feed, priced exactly off the Jetstar chart.
-const BOOKABLE = new Set(["3K","AA","AF","AS","AT","AY","BA","CI","CX","EK","FJ","GK","HA","IB","JL","JQ","KL","LA","LY","MH","MU","NZ","PG","QF","QR","RJ","UL","WS","WY"]);
+const BOOKABLE = new Set(["3K","6E","AA","AF","AS","AT","AY","BA","CI","CX","EK","FJ","GK","HA","IB","JL","JQ","KL","LA","LY","MH","MU","NZ","PG","QF","QR","RJ","UL","WS","WY"]);
 
 const QF_BANDS = [600, 1200, 2400, 3600, 4800, 5800, 7000, 8400, 9600, 15000];
 
@@ -84,7 +84,17 @@ export function handle(legs, totalDistance) {
   // (segment sum wins); SYD-MEL+MEL-DPS = 23,300 (QF-on-total wins); mixed
   // QF+JQ priced identically to all-JQ. (Some Bali connections observed at
   // 24,500 fit neither candidate — unexplained, see audit doc.)
-  const isQfFamily = withCarrier.every((l) => QF_CARRIERS.has(l.carrier) || JQ_CARRIERS.has(l.carrier));
+  // IndiGo (6E): QF-coded codeshare sectors (Indian domestic) are redeemable
+  // ONLY as connections within a Qantas itinerary — no standalone/domestic-only
+  // 6E awards (qantas.com IndiGo partner page, verified 2026-07-02). A 6E leg
+  // rides the QF own table like Jetstar does in mixed itineraries.
+  const has6E = withCarrier.some((l) => l.carrier === "6E");
+  if (has6E) {
+    const hasQf = withCarrier.some((l) => QF_CARRIERS.has(l.carrier));
+    const domesticOk = legs.every((l) => l.carrier !== "6E" || (l.origin_cc === "IN" && l.destination_cc === "IN"));
+    if (!hasQf || !domesticOk) return [];
+  }
+  const isQfFamily = withCarrier.every((l) => QF_CARRIERS.has(l.carrier) || JQ_CARRIERS.has(l.carrier) || l.carrier === "6E");
   if (isQfFamily) {
     const ti = resolveBand(totalDistance, QF_BANDS);
     if (ti === undefined) return [];

@@ -13,9 +13,12 @@
 
 import { makeEntry, resolveBand } from "../../shared.js";
 
-const BOOKABLE = new Set(["AA","AS","AT","AY","B6","BA","CX","FJ","GA","HA","IB","JL","LA","ME","MF","MH","PG","QF","QR","RJ","UL","VA","WY"]);
+const BOOKABLE = new Set(["6E","AA","AS","AT","AY","B6","BA","CX","FJ","GA","HA","IB","JL","LA","ME","MF","MH","PG","QF","QR","RJ","UL","VA","WY"]);
 
-const QR_CARRIERS = new Set(["QR"]);
+// IndiGo (6E) flies QR-codeshare sectors between India and Doha only; Avios
+// redemptions exist solely on those codeshare legs (priced as QR flights) —
+// no standalone or India-domestic 6E awards (qatarairways.com, 2026-07-02).
+const QR_CARRIERS = new Set(["QR", "6E"]);
 const AA_AS_CARRIERS = new Set(["AA", "AS"]);
 const LA_CARRIERS = new Set(["LA"]);
 
@@ -140,6 +143,14 @@ export const slug = "qatar-privilege-club";
 export const bookable = BOOKABLE;
 
 export function handle(legs, _totalDistance) {
+  // IndiGo codeshare legs are valid only on India↔Qatar sectors.
+  for (const l of legs) {
+    if (l.carrier === "6E") {
+      const ok = (l.origin_cc === "IN" && l.destination_cc === "QA")
+        || (l.origin_cc === "QA" && l.destination_cc === "IN");
+      if (!ok) return [];
+    }
+  }
   const carriers = legs.map((l) => l.carrier).filter(Boolean);
   const entries = [];
 
